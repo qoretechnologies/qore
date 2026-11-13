@@ -424,6 +424,47 @@ private:
 
     WebSocketFrameDecoder decoder;          //!< stateful frame decoder
     WebSocketFrameReassembler reassembler;  //!< fragment reassembler
+    //! the size of the fragments received of the message being reassembled, checked against the maximum frame size
+    //! as they arrive (issue #5861)
+    size_t fragment_bytes = 0;
+
+    //! the bytes still to discard of a frame rejected on its header (issue #5878)
+    uint64_t skip_bytes = 0;
+
+    //! set when the peer sent a frame that is a protocol error: once the close frame is written, the connection ends
+    //! with 1002 without waiting for the peer's close, which cannot be read any more (issue #5878)
+    bool protocol_failed = false;
+    //! the reason of the protocol error
+    std::string protocol_reason;
+
+    //! Rejects the message being received: discards what was received of it, and starts closing with the code given
+    /** Data frames are discarded from then on, whether or not the close frame could be queued (issue #5878)
+    */
+    DLLLOCAL void rejectMessage(uint16_t code, const char* reason, ExceptionSink* xsink);
+
+    //! Ends the operation for a lost connection: with 1006, or with the protocol error that the server closed for
+    /** After a protocol error of the client, the connection is reported closed with it, also when the client closes
+        the connection before the server's close frame is written (issue #5878)
+    */
+    DLLLOCAL void setConnectionLost() {
+        if (protocol_failed) {
+            setClosed(WSCC_ProtocolError, protocol_reason.c_str());
+        } else {
+            setClosed(1006, "Connection lost");
+        }
+    }
+
+    //! Appends received data to the decoder, after discarding the rest of a frame rejected on its header
+    DLLLOCAL void feedDecoder(const void* data, size_t len);
+
+    //! Rejects the next frame on its header (issue #5878)
+    /** A data frame whose declared length takes the message over the limit is rejected with 1009, and its payload
+        is discarded as it arrives, so it is never buffered; an invalid length, a control frame over 125 bytes or a
+        reserved opcode is a protocol error, rejected with 1002, after which everything received is discarded.
+
+        @return true if a frame was rejected
+    */
+    DLLLOCAL bool rejectOversizedFrame(ExceptionSink* xsink);
 
     //! Current send inner operation (nullptr when not sending); guarded by @ref m
     SocketSendPollOperation* send_op = nullptr;

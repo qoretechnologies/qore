@@ -3486,6 +3486,7 @@ QoreValue QoreClass::evalPseudoMethod(const QoreValue n, const char* nme, const 
 
 QoreValue QoreClass::evalPseudoMethod(const QoreMethod* m, const QoreExternalMethodVariant* variant,
         const QoreValue n, const QoreListNode* args, ExceptionSink* xsink) const {
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
     assert(isPseudoClass());
     RuntimeConfig& rc = rc_get_current_ref();
     return priv->evalPseudoMethod(m, reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), n, args, rc,
@@ -4852,6 +4853,7 @@ QoreObject* QoreClass::execConstructor(const QoreClass& obj_cls, const QoreListN
 QoreObject* QoreClass::execConstructorVariant(const QoreExternalMethodVariant* mv, const QoreListNode *args,
         ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
     return priv->execConstructor(xsink, rc, reinterpret_cast<const ConstructorMethodVariant*>(mv), args);
 }
 
@@ -4872,13 +4874,14 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
 
 QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, const QoreListNode* args,
         const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreProgram* pgm_ctx) const {
     QORE_TRACE("qore_class_private::evalMethod()");
     assert(self);
 
+    qore_object_private* self_priv = qore_object_private::get(*self);
     // Dynamic dispatch can fall back to a pseudo-method without constructing a CodeEvaluationHelper
     // with self.  Check the receiver here so that those calls reject destroyed weak-reference targets too.
-    if (!self->isValid()) {
+    if (self_priv->status == OS_DELETED) {
         qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
             "already been deleted", self->getClassName(), nme);
         return QoreValue();
@@ -4892,13 +4895,13 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
         return execCopy(self, xsink);
     }
 
-    const QoreMethod* w = getMethodForEval(nme, self->getProgram(), class_ctx, xsink);
+    const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
     if (w) {
-        return qore_method_private::eval(*w, xsink, rc, self, args, class_ctx, nullptr, nullptr,
+        return qore_method_private::eval(*w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
             explicit_type_param_instantiation);
     }
 
@@ -7055,13 +7058,27 @@ MethodVariantBase* MethodFunctionBase::runtimeHasVariantWithSignature(MethodVari
 
 QoreValue UserMethodVariant::evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
     //QORE_TRACE("UserMethodVariant::evalMethod()");
-    VRMutexOptionalLockHelper vrmolh(synchronized ? (
-        self
-            ? qore_object_private::get(*self)->getGate()
-            : ceh.getClass()->getGate()
-        ) : nullptr, xsink);
-    if (*xsink)
+    if (synchronized) {
+        return evalSynchronizedMethod(self, ceh, xsink);
+    }
+    // the callers have returned already if setting up the call (CodeEvaluationHelper) raised an exception
+    assert(!*xsink);
+    // Inherited methods are copied into the child class, but user variants are
+    // shared with the original declaring method. Execute the body in the
+    // declaring class context so self-member access resolves private:internal
+    // storage from the class where the body was parsed.
+    return eval(qmethod->getName(), &ceh, self, xsink, getClassPriv());
+}
+
+QoreValue UserMethodVariant::evalSynchronizedMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+        ExceptionSink* xsink) const {
+    assert(synchronized);
+    VRMutexOptionalLockHelper vrmolh(self
+        ? qore_object_private::get(*self)->getGate()
+        : ceh.getClass()->getGate(), xsink);
+    if (*xsink) {
         return QoreValue();
+    }
     //printd(5, "UserMethodVariant::evalMethod() this: %p %s::%s() self: %p cctx: %p (%s)\n", this,
     //    getClassPriv()->name.c_str(), qmethod->getName(), self, runtime_get_class(),
     //    runtime_get_class() ? runtime_get_class()->name.c_str() : "n/a");
@@ -7164,6 +7181,10 @@ int UserConstructorVariant::parseInit(QoreFunction* f) {
     // push return type on stack (no return value can be used)
     ParseCodeInfoHelper rtih("constructor", nothingTypeInfo);
 
+    // the implicit arguments of the body are those of its own call; a read of them outside any operator that sets
+    // them is noted (qore#5805)
+    ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
+
     int err = 0;
 
     if (bcal && !parent_class.hasParentClass()) {
@@ -7260,6 +7281,10 @@ int UserCopyVariant::parseInit(QoreFunction* f) {
 
     // push return type on stack (no return value can be used)
     ParseCodeInfoHelper rtih("copy", nothingTypeInfo);
+
+    // the implicit arguments of the body are those of its own call; a read of them outside any operator that sets
+    // them is noted (qore#5805)
+    ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
 
     // For AOT-compiled methods, statements is null (pre-compiled code)
     if (statements) {
@@ -7365,7 +7390,7 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     // run between a call site and the frame that takes it, as when a temporary value is released
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "destructor", (QoreListNode*)nullptr, self,
         qore_class_private::get(thisclass), ct, false, nullptr,
-        qore_get_method_pgm_context(thisclass, spgm_holder), nullptr, nullptr, false, true);
+        qore_get_method_pgm_context(thisclass, spgm_holder), nullptr, nullptr, 0, true);
     if (*xsink) return;
 
     DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);
@@ -7402,6 +7427,16 @@ QoreValue NormalMethodFunction::evalMethod(ExceptionSink* xsink, RuntimeConfig& 
     return mv->evalMethod(self, ceh, xsink);
 }
 
+// raises the exception for a call of an abstract variant
+/** Outlined from NormalMethodFunction::evalMethodTmpArgs(), whose frame is on the stack at every level of a recursion
+    of a method (issue #5852)
+*/
+static QORE_INTERN_NOINLINE void raise_abstract_variant_call(ExceptionSink* xsink, const NormalMethodFunction* f,
+        const MethodVariant* mv) {
+    xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly",
+        f->getClassName(), f->getName(), mv->getSignature()->getSignatureText());
+}
+
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified
 // at run time
 QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc,
@@ -7409,7 +7444,6 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
         const qore_class_private* cctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const AbstractQoreFunctionVariant** resolved_variant) const {
     //QORE_TRACE("NormalMethodFunction::evalMethodTmpArgs()");
-    const char* cname = getClassName();
     const char* mname = getName();
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s() v: %d\n", cname, mname, self->isValid());
 
@@ -7426,8 +7460,7 @@ QoreValue NormalMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     }
     const MethodVariant* mv = METHV_const(variant);
     if (mv->isAbstract()) {
-        xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly", cname,
-            mname, mv->getSignature()->getSignatureText());
+        raise_abstract_variant_call(xsink, this, mv);
         return QoreValue();
     }
     //printd(5, "NormalMethodFunction::evalMethod() %s::%s(%s) (self: %s) variant: %p, mv: %p priv: %d access: %d "

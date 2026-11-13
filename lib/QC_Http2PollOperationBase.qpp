@@ -33,6 +33,7 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/QC_Http2PollOperationBase.h"
+#include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
@@ -153,6 +154,22 @@ void Http2PollOperationPriv::abort(ExceptionSink* xsink) {
     if (qobj) {
         qobj->deref(xsink);
     }
+}
+
+int Http2PollOperationPriv::sendShutdownGoaway(ExceptionSink* xsink) {
+    QoreSocketObject* s;
+    {
+        AutoLocker al(op_lock);
+        if (!sock || h2_state == H2ServerState::CLOSED) {
+            return 0;
+        }
+        s = sock;
+        s->ref();
+    }
+    // the write waits for the socket's I/O thread, whose continuePoll() takes op_lock, so it is made without the lock
+    int rv = s->sendHttp2ShutdownGoaway(xsink);
+    s->deref(xsink);
+    return rv;
 }
 
 QoreValue Http2PollOperationPriv::getOutput() const {
@@ -455,10 +472,13 @@ QoreHashNode* Http2PollOperationPriv::makeBodyIncompleteError(int32_t stream_id,
 
 void Http2PollOperationPriv::pushStreamEnd(int32_t stream_id, const StreamQueueInfo& info, bool complete,
         const char* reason, ExceptionSink* xsink) {
-    // the queue takes the reference
-    info.queue->pushAndTakeRef(info.request_body && !complete
+    // the queue takes the reference; the end is pushed even if the queue is full, after the stream's data, and a
+    // queue that refuses it (one whose reader cancelled the body read, or a deleted queue) discards it (issue #5859)
+    ExceptionSink push_xsink;
+    info.queue->tryPush(&push_xsink, info.request_body && !complete
         ? QoreValue(makeBodyIncompleteError(stream_id, reason, xsink))
-        : QoreValue());
+        : QoreValue(), true);
+    push_xsink.clear();
 }
 
 void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue,
@@ -497,6 +517,11 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
     // registration is visible to the I/O thread, so that the drain cannot complete the Queue before
     if (request_body) {
         sock->setHttp2StreamBodyConsumer(stream_id);
+    }
+    // the data that a bounded queue has no room for stays in the stream without stream credit, so the client cannot
+    // send more than the stream's window beyond what the queue holds (issue #5859)
+    if (queue->getMax() > 0) {
+        sock->setHttp2StreamCreditOnConsume(stream_id);
     }
     {
         AutoLocker al(sq_lock);
@@ -560,7 +585,7 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendHttp2StreamDataForAsyncPoll(stream_id, *holder, false, &cxsink);
+            int rv = sock_ptr->sendHttp2StreamControlFrameForAsyncPoll(stream_id, *holder, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path.
                 cxsink.clear();
@@ -717,18 +742,44 @@ void Http2PollOperationPriv::deliverPersistentSessionClose(ExceptionSink* xsink)
     ReferenceHolder<QoreHashNode> close_entry(new QoreHashNode(autoTypeInfo), xsink);
     close_entry->setKeyValue("type", new QoreStringNode("close"), xsink);
     if (!*xsink) {
-        // Queue::push takes the ref on success; on error the caller derefs
-        // (mirrors drainStreamQueues()).
-        QoreHashNode* entry = close_entry.release();
-        q->push(xsink, entry);
-        if (*xsink) {
-            entry->deref(xsink);
-        }
+        // the queue takes the reference, also when it refuses the value; a queue that refuses it (one in an error
+        // state) has its error for the consumer already (issue #5840)
+        ExceptionSink push_xsink;
+        // pushed without waiting, even if the queue is bounded and full (issue #5859)
+        q->tryPush(&push_xsink, close_entry.release(), true);
+        push_xsink.clear();
     }
     q->deref(xsink);
     if (qobj) {
         qobj->deref(xsink);
     }
+}
+
+int Http2PollOperationPriv::pushStreamQueueData(StreamQueueInfo& info, BinaryNode* data) {
+    assert(!info.pending);
+    // the queue's exceptions are not raised: a queue that refuses data discards it (see drainStreamQueues())
+    ExceptionSink push_xsink;
+    QoreQueue::TryPushResult rc = info.queue->tryPush(&push_xsink, data);
+    push_xsink.clear();
+    if (rc != QoreQueue::QTP_FULL) {
+        return 0;
+    }
+    // the data is kept, and the drain resumes when the queue has room; the listener is added to the queue once
+    info.pending = data;
+    if (!info.room) {
+        info.room = std::make_shared<HttpStreamQueueRoomListener>(sock->getIoIdentityHash());
+        info.queue->addRoomListener(info.room);
+        // room may have appeared before the listener was added
+        info.pending = nullptr;
+        ExceptionSink retry_xsink;
+        rc = info.queue->tryPush(&retry_xsink, data);
+        retry_xsink.clear();
+        if (rc != QoreQueue::QTP_FULL) {
+            return 0;
+        }
+        info.pending = data;
+    }
+    return 1;
 }
 
 void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
@@ -744,7 +795,21 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 if (it->second.notifier_obj && it->second.notifier_obj != info.notifier_obj) {
                     it->second.notifier_obj->deref(xsink);
                 }
-                if (it->second.queue != info.queue) {
+                // the old registration's room listener is removed from its queue; the data that it had no room for was
+                // taken from the stream, so it goes to the new registration's queue first (issue #5859)
+                if (it->second.room) {
+                    it->second.queue->removeRoomListener(it->second.room.get());
+                }
+                // a frame state gets the stream's data itself, so raw data for its queue is released
+                if (info.frame_state) {
+                    if (it->second.pending) {
+                        it->second.pending->deref(xsink);
+                    }
+                } else {
+                    info.pending = it->second.pending;
+                }
+                // in frame-state mode the Queue reference is owned by the frame state
+                if (!it->second.frame_state && it->second.queue != info.queue) {
                     it->second.queue->deref(xsink);
                 }
                 if (it->second.queue_obj != info.queue_obj) {
@@ -766,7 +831,19 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
     for (auto& [stream_id, info] : stream_queues) {
         // Drain all available data from the per-stream buffer
         int drain_count = 0;
-        while (true) {
+        // set when the queue is bounded and full: the stream's data stays in the stream until it has room
+        bool full = false;
+        // the data that the queue had no room for is pushed first (issue #5859)
+        if (!info.frame_state && info.pending) {
+            BinaryNode* data = info.pending;
+            info.pending = nullptr;
+            if (pushStreamQueueData(info, data)) {
+                full = true;
+            } else {
+                ++drain_count;
+            }
+        }
+        while (!full) {
             BinaryNode* data = sock->readHttp2StreamDataForAsyncPoll(stream_id, 0, xsink);
             if (*xsink) {
                 return;
@@ -792,11 +869,14 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                     return;
                 }
             } else {
-                ++drain_count;
-                // the queue takes the reference; a queue whose reader cancelled the body read (Queue::setError(),
-                // e.g. for a service stop) or that was deleted discards the value instead: data received for a
-                // body that is no longer read affects neither the other streams nor the connection
-                info.queue->pushAndTakeRef(data);
+                // a queue whose reader cancelled the body read (Queue::setError(), e.g. for a service stop) or that
+                // was deleted discards the value: data received for a body that is no longer read affects neither
+                // the other streams nor the connection; a full bounded queue leaves it pending (issue #5859)
+                if (pushStreamQueueData(info, data)) {
+                    full = true;
+                } else {
+                    ++drain_count;
+                }
             }
         }
 
@@ -804,6 +884,26 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         // dispatch onStreamData() to the worker pool after continuePoll returns
         if (drain_count > 0) {
             data_ready_streams.push_back(stream_id);
+        }
+        // the stream does not end before the queue has taken its data, unless it was reset or its connection
+        // closed: no more data comes, and the data that the queue has no room for is released with the
+        // registration, which ends with the error for an incomplete body (issue #5859); a stream that ended
+        // normally keeps its data for a reader that reads the queue to its end
+        if (full) {
+            if (sock->isHttp2StreamResetForAsyncPoll(stream_id) || !sock->isOpen()) {
+                if (info.pending) {
+                    info.pending->deref(xsink);
+                    info.pending = nullptr;
+                }
+                pushStreamEnd(stream_id, info, false,
+                    sock->isOpen() ? "the stream was closed" : "the connection was closed", xsink);
+                if (std::find(data_ready_streams.begin(), data_ready_streams.end(), stream_id)
+                        == data_ready_streams.end()) {
+                    data_ready_streams.push_back(stream_id);
+                }
+                completed.push_back(stream_id);
+            }
+            continue;
         }
 
         // An oversized request body ends with an error instead of the NOTHING sentinel, so a consumer can never
@@ -814,7 +914,10 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
             err->setKeyValue("err", new QoreStringNode("HTTP-BODY-TOO-LARGE"), xsink);
             err->setKeyValue("desc", new QoreStringNodeMaker("HTTP/2 request body on stream %d exceeds the "
                 "maximum request body size", stream_id), xsink);
-            info.queue->pushAndTakeRef(err.release());
+            // pushed even if the queue is full, after the stream's data (issue #5859)
+            ExceptionSink push_xsink;
+            info.queue->tryPush(&push_xsink, err.release(), true);
+            push_xsink.clear();
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
                 data_ready_streams.push_back(stream_id);
@@ -850,6 +953,14 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         auto it = stream_queues.find(sid);
         if (it != stream_queues.end()) {
             bool request_body = it->second.request_body;
+            assert(!it->second.pending);
+            // release any pending data defensively in release builds
+            if (it->second.pending) {
+                it->second.pending->deref(xsink);
+            }
+            if (it->second.room) {
+                it->second.queue->removeRoomListener(it->second.room.get());
+            }
             // In frame-state mode the Queue ref is owned by the frame state
             // (its destructor derefs it when the shared_ptr drops).  Skip the
             // direct Queue deref to avoid a double-free.
@@ -883,13 +994,47 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         AutoLocker al(sq_lock);
         stream_queues_closed = true;
         for (auto& [sid, info] : pending_stream_registrations) {
-            stream_queues[sid] = info;
+            auto it = stream_queues.find(sid);
+            if (it != stream_queues.end()) {
+                // a registration that replaces another: the old references that the new one does not hold are
+                // released, and the old one's pending data and room listener with them
+                StreamQueueInfo& old = it->second;
+                if (old.room) {
+                    old.queue->removeRoomListener(old.room.get());
+                }
+                if (old.pending) {
+                    old.pending->deref(xsink);
+                }
+                if (old.notifier && old.notifier != info.notifier) {
+                    old.notifier->deref(xsink);
+                }
+                if (old.notifier_obj && old.notifier_obj != info.notifier_obj) {
+                    old.notifier_obj->deref(xsink);
+                }
+                if (!old.frame_state && old.queue != info.queue) {
+                    old.queue->deref(xsink);
+                }
+                if (old.queue_obj != info.queue_obj) {
+                    old.queue_obj->deref(xsink);
+                }
+                it->second = info;
+            } else {
+                stream_queues[sid] = info;
+            }
         }
         pending_stream_registrations.clear();
     }
     for (auto& [stream_id, info] : stream_queues) {
         // Push the end of the stream so handler threads wake up and see closure; a stream still registered has not
         // been ended by END_STREAM, so a request body ends with an error
+        // data that the queue never took is released; the end follows the data that it took
+        if (info.pending) {
+            info.pending->deref(xsink);
+            info.pending = nullptr;
+        }
+        if (info.room) {
+            info.queue->removeRoomListener(info.room.get());
+        }
         pushStreamEnd(stream_id, info, false, "the connection was closed or the server stopped reading it", xsink);
         if (info.notifier) {
             info.notifier->notify();
@@ -1082,6 +1227,27 @@ bool Http2PollOperationBase::isStreamPeerClosed(int stream_id) [flags=RET_VALUE_
     return priv->isStreamPeerClosed((int32_t)stream_id);
 }
 
+//! Sends a GOAWAY frame with error code \c NO_ERROR to tell the client that the server is closing the connection
+/** Used when the server stops: the frame gives the client the ID of the last stream that the server processed, so
+    that the client knows which of its requests it can retry on another connection, and tells it to send no more
+    requests on this one (RFC 9113 section 6.8).
+
+    Does nothing if the connection is closed, if the server has not sent its connection preface yet, or if a
+    \c GOAWAY frame was sent already.  The frame is written on the I/O thread of the socket without blocking; if the
+    socket cannot take it, or if the peer has closed the connection, it is not sent and no error is raised.  Called
+    on an async I/O thread or in a \c continuePoll worker, the frame is only queued and the call does not wait for
+    it to be written.
+
+    @throw HTTP2-ERROR the frame could not be submitted
+    @throw SOCKET-CLOSED the socket was closed before the frame could be handed to its I/O thread
+    @throw ASYNC-IO-ERROR the async I/O controller could not run the operation
+
+    @since %Qore 3.0
+*/
+nothing Http2PollOperationBase::sendShutdownGoaway() {
+    priv->sendShutdownGoaway(xsink);
+}
+
 //! Registers the watch of the response on a stream so that the result of its transmission is reported
 /** Must be called before the response is submitted.  One result is then reported for the stream with
     @ref onStreamSendResult(): @ref True "True" once the frame carrying the response's \c END_STREAM flag has been
@@ -1265,14 +1431,17 @@ nothing Http2PollOperationBase::continueReading() {
         it; the data received is only a part of the body
 
     @param stream_id the HTTP/2 stream ID
-    @param queue the Queue for data delivery; must be unlimited (size -1); once the reader sets an error on the Queue
-    (@ref Qore::Thread::Queue::setError() "Queue::setError()", e.g. to cancel the read), the data received for the
-    stream is discarded
+    @param queue the Queue for data delivery; once the reader sets an error on the Queue
+    (@ref Qore::Thread::Queue::setError() "Queue::setError()", e.g. to cancel the read), or deletes it, the data
+    received for the stream is discarded.  A Queue with a maximum size is supported: the I/O thread never waits for
+    room in it; the data that it has no room for stays in the stream, whose window is not credited for it, so the
+    client cannot send more than a window beyond what the Queue holds.  A reader that stops reading a bounded Queue
+    before the end of the stream must set an error on it or delete it, or the stream's data is kept until the stream
+    is reset or the connection is closed.  The end of the stream (@ref nothing or an error hash) is added even if the
+    Queue is full, so it can hold one more value than its maximum size
     @param notifier optional EventNotifier for cross-thread wake-up
     @param request_body @ref True if the Queue receives a request body, whose end without END_STREAM is reported with
     an \c HTTP-BODY-INCOMPLETE error; @ref False for a CONNECT tunnel, whose data always ends with @ref nothing
-
-    @throw HTTP2-QUEUE-ERROR the Queue has a maximum size
 
     @note Must be called on the I/O controller thread before the handler starts reading.
 
@@ -1281,12 +1450,8 @@ nothing Http2PollOperationBase::continueReading() {
 nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
         Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier,
         bool request_body = False) [flags=NAMED_ARGS] {
-    // the I/O thread must never block pushing to the queue
-    if (queue->getMax() != -1) {
-        xsink->raiseException("HTTP2-QUEUE-ERROR", "the Queue passed to register a stream's body has a maximum size "
-            "of " QLLD "; an unlimited Queue (size -1) is required", (int64)(queue->getMax()));
-        return QoreValue();
-    }
+    // a bounded Queue is supported: the I/O thread never waits for room in it, and the stream's data stays in the
+    // stream, without stream credit, until the Queue has room (issue #5859)
     // Transfer the Queue ref from the ReferenceHolder to the C++ priv
     Queue* queue_ptr = queue.release();
     // Ref the QoreObject for DGC preventing garbage collection

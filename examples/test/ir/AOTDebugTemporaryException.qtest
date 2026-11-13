@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT linking and debugger callbacks while temporary arguments are destroyed
+# test-exec-mode: children - its checks run in child processes that select their execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTDebugTemporaryExceptionTest
+
+class AOTDebugTemporaryExceptionTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        # QORE_BINARY can be the CI selector script; sibling tools belong to the running executable.
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? dirname(QORE_ARGV[0]) + "/qcc";
+        string worker = get_script_dir() + "/aot-debug-temporary-exception-worker.q";
+        string prefix;
+        const Result = "caught assigned DTOR\ncaught ignored DTOR\ncaught indirect DTOR\nlocal DTOR\n"
+            "indirect-local DTOR\nplain PLAIN\nstatic DTOR\nselfArgument DTOR\nscopedArgument DTOR\nnormal normal\n";
+    }
+
+    constructor() : QUnit::Test("AOT debug temporary exceptions", "1.0", \ARGV) {
+        # Preserve the selected library across the shell on macOS as well.
+        foreach string name in (("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")) {
+            if (ENV{name}) {
+                prefix += name + "=" + shellQuote(ENV{name}) + " ";
+            }
+        }
+        addTestCase("temporary cleanup exceptions and their debugger locations match AST", \parityTest());
+        set_return_value(main());
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    parityTest() {
+        string ast = ExecModeHarness::run(prefix + shellQuote(qore_bin)
+            + " -b --enable-debug --exec-mode=ast " + shellQuote(worker) + " debug",
+            ExecModeHarness::NativeCheck::None);
+        assertTrue(ast.startsWith(Result), "AST propagates both calls and catches the local exception");
+        list<string> lines = ReadOnlyFile::readTextFile(worker).split("\n");
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<string> tag = lines[i] =~ x/#! (assigned|ignored|local|indirect|indirect-local|plain|static|self|scoped)$/;
+            if (tag) {
+                assertTrue(ast.find(sprintf("event %s %s:%d\n", tag[0], basename(worker), i + 1)) >= 0,
+                    "AST debugger sees the exception at the " + tag[0] + " call statement");
+            }
+        }
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, ExecModeHarness::run(prefix + shellQuote(qore_bin)
+                + " -b --enable-debug --exec-mode=" + mode + " " + shellQuote(worker) + " debug",
+                ExecModeHarness::NativeCheck::None), mode + " debugger events");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Result, ExecModeHarness::run(prefix + shellQuote(qore_bin)
+                + " -b --enable-debug --exec-mode=" + mode + " " + shellQuote(worker) + " native"),
+                mode + " without a debugger");
+        }
+        TmpDir tmp("qore-aot-debug-temporary-");
+        foreach bool strip in ((False, True)) {
+            string exe = tmp.path + "/worker" + (strip ? "-stripped" : "");
+            ExecModeHarness::run_any(prefix + shellQuote(qcc_bin) + " -O2"
+                + (strip ? " --strip-source" : "") + " -o " + shellQuote(exe) + " " + shellQuote(worker));
+            assertEq(Result, ExecModeHarness::run_any(prefix + shellQuote(exe) + " -b --enable-debug native"), "native AOT");
+            assertEq(ast, ExecModeHarness::run_any(prefix + shellQuote(exe) + " -b --enable-debug debug"),
+                sprintf("AOT debugger events (strip-source: %y)", strip));
+        }
+    }
+}

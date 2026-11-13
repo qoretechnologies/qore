@@ -101,6 +101,16 @@
     With @ref Qore::PO_STRICT_ARGS or @ref Qore::PO_REQUIRE_TYPES (as with @ref modern "%modern"), @ref NOOP variants
     are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and one with no value at run time, for
     example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR instead of returning a constant.
+
+    @par Debugger Callbacks Run With the Cancellation Deferred
+    The notification methods of a @ref Qore::DebugProgram "DebugProgram" run with the cancellation of the thread
+    deferred, so a thread that is cancelled or interrupted while it is stopped in the debugger stays stopped until the
+    debugger resumes it (issue #5794).
+
+    @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
+    With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
+    flagged @ref NOOP are no longer resolved at run time, as at parse time: the no-op calls, for example
+    <tt>chr()</tt> of an unassigned member, raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant value.
     The most common cases keep their results with regular variants:
     - <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing return \c 0;
     - <tt>sort()</tt>, <tt>sort_descending()</tt>, <tt>sort_stable()</tt> and <tt>sort_descending_stable()</tt> of
@@ -518,6 +528,10 @@
     - a value returned by builtin code together with an exception is released, so API callers receive no value
       with an exception (see \c q_func_t)
     - \c QoreFile::write() returns \c int64
+    - \c QoreProgram::deref() without an \c ExceptionSink releases the Program's own dependency reference with the last
+      reference, and the Program is destroyed once nothing depends on it, instead of at once, so a Program must first
+      be cleared with \c QoreProgram::waitForTerminationAndDeref() or \c QoreProgram::deref(ExceptionSink*) (see
+      \c QoreProgram::deref())
     @endparblock
 
     @par qget Command-Line Changes
@@ -596,6 +610,17 @@
     another @ref Qore::Program "Program" reads or writes its values, calls its code, or creates objects in it; see
     @ref reflection_caller_privilege (<a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>).
 
+    @par Reflection Respects the Export Boundary of User Modules
+    Sandboxed and restricted code no longer finds, calls, reads or writes through reflection what a user module does
+    not export, nor constructs or uses the static members of a class it does not export; see
+    @ref reflection_module_exports (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
+    @par Call References to Builtin Methods Run in the Program That Made Them
+    A call reference to a builtin method of an object (<tt>\\o.readLock()</tt>) runs with the parse options of the
+    %Program that made it, wherever it is called, so restricted code's reference is refused like its direct call, also
+    for an object that module code created, and it raises \c PROGRAM-ERROR once that %Program is deleted; see
+    @ref call_reference_program (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
     @par CsvUtil Writes and Reads RFC 4180 CSV Data by Default
     The @ref csvutilintro "CsvUtil" writers escape quotes by doubling them and the readers read a backslash as an
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
@@ -614,7 +639,19 @@
     send to several streams raises nothing for one of them; see @ref httpserverasyncio_sse_buffer
     (<a href="https://github.com/qoretechnologies/qore/issues/5792">issue 5792</a>).
 
+    @par The Signal Handling Thread Is Woken With SIGRTMIN+1 on Linux
+    On Linux, the signal that wakes the signal handling thread is the real-time signal \c SIGRTMIN+1 instead of
+    @ref Qore::SIGSYS "SIGSYS", so \c SIGRTMIN+1 is reserved by the library and @ref Qore::SIGSYS "SIGSYS" can have
+    a %Qore-language handler; valgrind no longer kills or hangs the process at the wake-up (see
+    @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Debugger Exception IDs
+    The exception hash of @ref Qore::DebugProgram::onException() "DebugProgram::onException()" has the
+    \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo", the same in each event of an exception, so that
+    @ref dc_v0_1_3 "DebugProgramControl" stops once per exception and a step after an exception stop goes to its
+    handler (<a href="https://github.com/qoretechnologies/qore/issues/5906">issue 5906</a>).
+
     @par Functional-Domain Declarations on Functions and Methods
     Functions and methods written in %Qore declare the @ref function_domains "functional domains" they provide with an
     attribute list (<tt>sub f() [dom=PROCESS_CONTROL]</tt>), which a restricted Program cannot reference or call, and a
@@ -626,7 +663,8 @@
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
     @ref Qore::Program::waitForThread() "waitForThread()" provide cancellable, condition-driven waits for Program
     activity. @ref Qore::Program::cancelThread() "cancelThread()" and
-    @ref Qore::Program::cancelThreads() "cancelThreads()" request cooperative cancellation scoped to that Program.
+    @ref Qore::Program::cancelThreads() "cancelThreads()" request cooperative cancellation scoped to that Program,
+    as @ref Qore::ProgramControl::cancelThread() "ProgramControl::cancelThread()" does for a debugger.
     The all-thread request includes starting threads and descendants until the Program becomes idle. These APIs
     allow an embedding UI to keep responding while waiting for the Program to become safe to parse or reset;
     they do not enable concurrent parsing or forcibly kill native threads.
@@ -834,6 +872,9 @@
       @ref Qore::SQL::make_datasource_string() "make_datasource_string()",
       @ref Qore::get_value_byte_size() "get_value_byte_size()", @ref <binary>::toHexArray() "<binary>::toHexArray()",
       and @ref Qore::ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()"
+    - @ref Qore::get_qore_library_info() "get_qore_library_info()" also reports the compiler version and target, the
+      build type and its compiler flags, the hardening options the compiler applied, whether link-time optimization
+      was used and whether the library was compiled as a single compilation unit
     @endparblock
 
     @par Generic Builtin Classes and Result Records
@@ -1620,6 +1661,15 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a block whose @ref on_exit "on_exit" or @ref on_success "on_success" handler raised a
+      @ref thread_exit "thread_exit" ran its @ref on_error "on_error" handlers with no exception, which crashed the
+      process
+    - a @ref rethrow "rethrow" in an @ref on_error "on_error" handler discarded a pending
+      @ref thread_exit "thread_exit" that another handler had executed, so the thread continued
+      (<a href="https://github.com/qoretechnologies/qore/issues/5904">issue 5904</a>)
+    - a @ref closure "closure" in a member initializer or in the default value of a method's parameter ran in the class
+      context of the caller or of the object's class instead of the class that declares it, so it read a subclass's
+      \c private:internal member with the same name or raised \c PRIVATE-MEMBER for a member read at run time
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
@@ -1629,6 +1679,26 @@
     - a hash or list whose value type is \c date&lt;absolute&gt; or \c date&lt;relative&gt; took a container of
       \c date values without checking them and then had the value type \c date; it now checks each value and has
       its declared type (see @ref date_literal_subtypes)
+    - a @ref call_reference "call reference" to a method of a builtin object (<tt>\\o.write()</tt>) ran with the
+      parse options of the object's @ref Qore::Program "Program", and one to an inherited method with those of the
+      Program calling it, so restricted code could use a privileged Program's object past the checks that a direct
+      call makes; it now runs as a direct call in the Program that created the reference
+    - a call through a fixed function variant (ex: <tt>FunctionVariant::call()</tt>) with arguments that only another
+      variant accepts called that variant without its arguments
+    - @ref Qore::set_signal_handler() "set_signal_handler()" and @ref Qore::remove_signal_handler()
+      "remove_signal_handler()" accepted a signal number one past the end of the library's signal table, which
+      corrupted memory, and a number that the platform has no signal for; both are refused now
+      (<a href="https://github.com/qoretechnologies/qore/issues/5829">issue 5829</a>)
+    - a @ref foreach "foreach" loop over a slice of a list read from a variable (ex:
+      <tt>foreach auto v in (l[1..2])</tt>) read freed memory when its body removed or assigned the variable; the loop
+      now keeps the list until it ends (issue #5770)
+    - @ref Qore::Program::getCallReference() "Program::getCallReference()" resolved a name as a method of the
+      @ref Qore::Program "Program" object first, so a function of the Program with the name of a method of the class
+      (ex: \c run()) could not be referenced; a class path naming a non-static method of the Program class no longer
+      returns a reference bound to the Program object (issue #5863)
+    - @ref WebSocketUtil::ws_read_message() "ws_read_message()" read a 64-bit WebSocket frame length with its most
+      significant bit set as a negative length, and then read the socket until the peer closed it, buffering without
+      limit; such a frame is now an error (issue #5878)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)
@@ -1878,6 +1948,9 @@
       yet, of a class that declares no members, crashed the process
     - resolving a long chain of references, as made by a recursion that passes on a reference, could overflow the
       stack and crash the process instead of raising \c STACK-LIMIT-EXCEEDED, seen in JIT and AOT code on Linux
+    - each level of a recursion of interpreted function, method and closure calls uses less stack (on Alpine Linux,
+      a third less with the IR interpreter), so that a deeper recursion fits in a thread's stack before
+      \c STACK-LIMIT-EXCEEDED is raised, as on Alpine Linux, whose threads have 8 MB stacks
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date
@@ -2357,6 +2430,10 @@
     - a function first referenced in a method was parse-initialized in the method's class, namespace and local
       variables, so its body and default argument values could call the class's private methods or read the
       method's locals, also when called from elsewhere; see @ref private_methods
+    - the frame of the top-level code of a Program, including the main Program, was not reachable by
+      @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
+      from the calls it makes or from a debugger's callbacks in the same thread
+      (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

@@ -3749,6 +3749,7 @@ static void aotOutlineForEachValueUse(const QoreIRInstruction* inst, F&& cb) {
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
         case QoreIROpcode::IteratorCreateSelectors:
+        case QoreIROpcode::IteratorCreateSource:
             // IteratorCreateReverse carries its iterable in operands (above)
             cb(static_cast<const QoreIRIteratorCreateInstruction*>(inst)->iterable);
             break;
@@ -23753,11 +23754,19 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
     @param po the parse options of the code once its source is parsed
     @param source the source file or label, for the diagnostic
     @param error set to the diagnostic if the code is rejected
+    @param pgm the parsed Program, including the lexical eligibility of all its bodies and initializers
 
     @return true if the code may be compiled, false if not, in which case @a error is set
 */
-static bool qore_aot_check_parse_options(const QoreParseOptions& po, const std::string& source, std::string& error) {
+static bool qore_aot_check_parse_options(const QoreParseOptions& po, const std::string& source, std::string& error,
+        QoreProgram* pgm) {
+    const QoreNativeParseInfo& info = qore_program_private::get(*pgm)->native_parse_info;
     if (qore_parse_options_support_ir(po)) {
+        if (info.legacy_location) {
+            error = (source.empty() ? std::string("<unknown source>") : source)
+                + ": AOT compilation: " + info.describe();
+            return false;
+        }
         return true;
     }
     error = (source.empty() ? std::string("<unknown source>") : source)
@@ -23782,7 +23791,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         error = "no Program to compile";
         return false;
     }
-    if (!qore_aot_check_parse_options(pgm->getParseOptions(), label ? label : "", error)) {
+    if (!qore_aot_check_parse_options(pgm->getParseOptions(), label ? label : "", error, pgm)) {
         return false;
     }
 
@@ -23923,6 +23932,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
     {
         TopLevelStatementBlock& sb = pp->sb;
         QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
+        // The IR is also serialized as the top-level code's source-stripped debug IR, which runs in the IR interpreter
+        // while a debugger is attached (TopLevelStatementBlock::execImpl()), as that of a function does: in a Program
+        // that can be debugged it has the debugger's statements (qore#5851); native code makes no step events for
+        // them in AOT mode, but updates the runtime location at each of them, as for a function (#5558)
+        ir_func->emit_debug_statements = qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
 
         // Collect nested body locals from the statement tree.  Root top-level
         // locals are program-scope variables owned by QoreProgram; they must be
@@ -23966,6 +23980,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             std::string verify_error;
             if (QoreIRVerifier::verify(*ir_func, verify_error)) {
+                // the LLVM lowering needs the closure-bound locals marked in the instructions: without the flag, a
+                // closure-bound local of a block was not popped at the end of the block, so that the closures of all
+                // iterations of a loop shared one variable (#5869); the slot IDs are not embedded, as the local
+                // slots of the top-level code are those of buildAOTSlotMap() below, which the runtime rebuilds
+                ir_func->embedLocalClosureFlags();
                 // Classify locals as IR-only vs AST-visible for optimization
                 ir_func->computeIROnlyLocals();
 
@@ -24006,6 +24025,21 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     cf.source_file = aotIRFunctionSourceFile(*ir_func);
+                    // the debug IR of the top-level code (qore#5851): the IR interpreter needs the slot IDs and the
+                    // IR of the handlers, which are made after the native code, which does not use them; if the
+                    // handlers cannot be lowered, the image has no debug IR for the top-level code, which then runs
+                    // as native code while a debugger is attached, as before
+                    if (ir_func->emit_debug_statements) {
+                        ir_func->computeSlotIdsAndEmbed();
+                        std::string handler_error;
+                        if (lowering.compileAllHandlerIRs(handler_error) < 0) {
+                            printd(1, "AOT: no debug IR for _toplevel: handler IR compilation failed: %s\n",
+                                handler_error.c_str());
+                        } else {
+                            cf.debug_ir.reset(ir_func);
+                            ir_func = nullptr;
+                        }
+                    }
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
@@ -24202,7 +24236,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         if (!attachAOTProgramStatementLocs(pgm, func_slots, error)) {
             return false;
         }
-        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, pgm)) {
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots, "",
@@ -26453,7 +26487,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         error = "module parsing failed";
         return false;
     }
-    if (!qore_aot_check_parse_options(parsed_po, label ? label : "", error)) {
+    if (!qore_aot_check_parse_options(parsed_po, label ? label : "", error, *qpgm)) {
         return false;
     }
 
@@ -26635,7 +26669,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
             return false;
         }
-        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -26854,7 +26888,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -26911,7 +26945,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
-                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                     mod_ctx.close();
                     return false;
                 }
@@ -27126,7 +27160,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
                 return false;
             }
             if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -27784,7 +27818,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
                 shared_statement_locs)) {
             return false;
         }
-        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, qpgm)) {
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -28839,7 +28873,7 @@ bool QoreAOT::compileScriptFilesBatch(
             error = "parse error in target file: " + e.canon;
             return false;
         }
-        if (!qore_aot_check_parse_options(file_po, e.canon, error)) {
+        if (!qore_aot_check_parse_options(file_po, e.canon, error, *qpgm)) {
             return false;
         }
         e.module_cmd_end = batch_pp->module_parse_commands.size();
@@ -29553,7 +29587,7 @@ bool QoreAOT::compileScriptAggregate(
                 error = "parse error in target file: " + e.canon;
                 return false;
             }
-            if (!qore_aot_check_parse_options(file_po, e.canon, error)) {
+            if (!qore_aot_check_parse_options(file_po, e.canon, error, qpgm)) {
                 return false;
             }
         }
@@ -29731,7 +29765,7 @@ bool QoreAOT::compileScriptAggregate(
             if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, nullptr, &target_set)) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, qpgm)) {
                 return false;
             }
             // Script aggregates provide declaration/dependency metadata only.
@@ -29763,7 +29797,7 @@ bool QoreAOT::compileScriptAggregate(
             // any per-function payload.
             const std::vector<AOTCompiledFuncWithSlots> no_func_slots;
             if (!serializeSlotMaps(writer, no_func_slots,
-                    &const_reverse_map, error)) {
+                    &const_reverse_map, error, qpgm)) {
                 return false;
             }
         }
@@ -30203,7 +30237,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         error = "parse commit failed: " + target_canon;
         return false;
     }
-    if (!qore_aot_check_parse_options(qpgm->getParseOptions(), target_canon, error)) {
+    if (!qore_aot_check_parse_options(qpgm->getParseOptions(), target_canon, error, *qpgm)) {
         return false;
     }
 
@@ -30419,7 +30453,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
             return false;
         }
-        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -30717,7 +30751,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -30785,7 +30819,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 error = "parse error in component file: " + file_path;
                 return false;
             }
-            if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+            if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                 mod_ctx.close();
                 return false;
             }
@@ -31004,7 +31038,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
                 return false;
             }
             if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -31286,7 +31320,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -31335,7 +31369,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
-                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                     mod_ctx.close();
                     return false;
                 }
@@ -31510,7 +31544,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
                 return false;
             }
             if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -31839,7 +31873,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             error = "parse error in main module file: " + qm_path;
             return false;
         }
-        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error)) {
+        if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
             return false;
         }
@@ -31888,7 +31922,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
-                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error)) {
+                if (!qore_aot_check_parse_options(qpgm->getParseOptions(), file_path, error, *qpgm)) {
                     mod_ctx.close();
                     return false;
                 }
@@ -32047,7 +32081,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
                 return false;
             }
             if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -35204,15 +35238,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             // the providers of other objects are keyed by the path without the leading "::" of a root function
             id.reloc_qore_path = getVariantKey(aotRelocStripLeadingColons(id.ref1.c_str()).c_str(), v);
         }
-        if (const QoreTypeParamInstantiation* inst =
-                call->getExplicitTypeParamInstantiation()) {
-            id.ref2 += "\ntypeargs:";
-            id.ref2 += std::to_string(inst->type_args.size());
-            for (const QoreTypeInfo* type_arg : inst->type_args) {
-                id.ref2 += "\n";
-                id.ref2 += qore_get_aot_serializable_type_path(type_arg);
-            }
-        }
+        qore_aot_append_call_type_args(id.ref2, call->getExplicitTypeParamInstantiation());
         return id;
     }
 
@@ -35231,8 +35257,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // at deserialization has size() > 1, causing evalImpl to use the method pointer directly
         // instead of virtual dispatch — preventing infinite recursion for explicit base class calls)
         const AbstractQoreFunctionVariant* call_variant = call->getVariant();
+        // with the explicit type arguments of the call (qore#5818)
         id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
-            call_variant ? nullptr : &call->getParsedArgTypeInfo());
+            call_variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
         if (method && call->getVariant()) {
             id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), call->getVariant());
         }
@@ -35461,9 +35488,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
         id.kind = AOTExprKind::CLOSURE_CREATE;
         UserClosureFunction* ucf = closure->getFunction();
-        // ref1 = flags: "lambda,in_method" (comma-separated booleans)
+        // ref1 = flags: "lambda,in_method,type_context" (comma-separated booleans; type_context: the closure is in
+        // generic code, qore#5733)
         id.ref1 = std::string(closure->isLambda() ? "1" : "0") + ","
-                + (closure->isInMethod() ? "1" : "0");
+                + (closure->isInMethod() ? "1" : "0") + "," + (closure->needsTypeContext() ? "1" : "0");
         // ref2 = class type path (empty if no class context)
         const QoreTypeInfo* cti = ucf->getClassType();
         if (cti) {
@@ -35561,6 +35589,14 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.ref1 = cit->second.path;
             return id;
         }
+    }
+
+    // a hash or list value of a hashdecl or a complex type (such as the hash<ExceptionInfo> of a %try-module error
+    // variable) is the value itself, which keeps its type, keys and key order (#5895)
+    if (qore_aot_value_container_is_typed(node)) {
+        id.kind = AOTExprKind::CONST_VALUE;
+        id.child_expr = v;
+        return id;
     }
 
     // Hash/list literals and hash dereferences are first-class AOTExprKind
@@ -36055,14 +36091,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 }
             }
             // the explicit type arguments of the call (obj.method<T>()): the target has no expression node to hold them
-            if (const QoreTypeParamInstantiation* inst = mc->getExplicitTypeParamInstantiation()) {
-                id.ref2 += "\ntypeargs:";
-                id.ref2 += std::to_string(inst->type_args.size());
-                for (const QoreTypeInfo* type_arg : inst->type_args) {
-                    id.ref2 += "\n";
-                    id.ref2 += qore_get_aot_serializable_type_path(type_arg);
-                }
-            }
+            qore_aot_append_call_type_args(id.ref2, mc->getExplicitTypeParamInstantiation());
             id.flags = is_pseudo ? 1 : 0;
             return id;
         }
@@ -36807,6 +36836,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             }
             lvid.steps.push_back(std::move(sid));
         }
+        lvid.slice_ranges = pi->slice_ranges;
     }
 
     collectAOTStaticVarRefs(func, out.static_var_refs);

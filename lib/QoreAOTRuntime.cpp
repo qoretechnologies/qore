@@ -1284,7 +1284,7 @@ static QoreValue makeDeferredObjectSlotCall(QoreProgram* pgm, const char* class_
     @param pgm the QoreProgram for namespace lookups
     @return NaN-boxed bits, or 0 if unresolvable
 */
-static bool applyAOTExplicitTypeArgs(FunctionCallBase& call,
+bool qore_aot_apply_explicit_type_args(FunctionCallBase& call,
         const QoreAOTStaticMethodRef& method_ref, QoreProgram* pgm,
         const UserSignature* containing_signature) {
     if (!method_ref.explicit_type_args_present) {
@@ -1458,8 +1458,8 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             FunctionCallNode* fcn = new FunctionCallNode(
                 &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
             std::string encoded_ref = ref2 ? ref2 : "";
-            static constexpr const char* type_arg_marker = "\ntypeargs:";
-            size_t type_arg_pos = encoded_ref.find(type_arg_marker);
+            // the last marker: a default value in the signature text can have the marker too
+            size_t type_arg_pos = encoded_ref.rfind(QORE_AOT_CALL_TYPE_ARGS_MARKER);
             std::string variant_ref = type_arg_pos == std::string::npos
                 ? encoded_ref : encoded_ref.substr(0, type_arg_pos);
             const AbstractQoreFunctionVariant* variant = nullptr;
@@ -1472,51 +1472,17 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 }
             }
             if (type_arg_pos != std::string::npos) {
-                size_t count_start = type_arg_pos + strlen(type_arg_marker);
-                size_t count_end = encoded_ref.find('\n', count_start);
-                std::string count_text = encoded_ref.substr(count_start,
-                    count_end == std::string::npos
-                        ? std::string::npos : count_end - count_start);
-                char* count_tail = nullptr;
-                unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
                 const UserVariantBase* uvb = variant
                     ? variant->getUserVariantBase() : nullptr;
-                const UserSignature* callee_signature = uvb
-                    ? uvb->getUserSignature() : nullptr;
-                // a call whose variant is chosen at run time has no signature here; its type arguments are checked
-                // against the variant chosen then, as for the parsed call, which has no owner either (qore#5791)
-                if (!count_tail || *count_tail || (callee_signature
-                        && count != callee_signature->getTypeParameterCount())) {
+                QoreTypeParamInstantiation inst;
+                if (!qore_aot_decode_call_type_args(pgm, encoded_ref.c_str() + type_arg_pos,
+                        uvb ? uvb->getUserSignature() : nullptr, containing_signature, inst)) {
                     delete fcn;
                     return 0;
                 }
-                QoreTypeParamInstantiation inst;
-                inst.owner = callee_signature;
-                QoreAOTTypeResolver type_resolver(pgm);
-                size_t path_start = count_end;
-                for (unsigned long i = 0; i < count; ++i) {
-                    if (path_start == std::string::npos) {
-                        delete fcn;
-                        return 0;
-                    }
-                    ++path_start;
-                    size_t path_end = encoded_ref.find('\n', path_start);
-                    std::string path = encoded_ref.substr(path_start,
-                        path_end == std::string::npos
-                            ? std::string::npos : path_end - path_start);
-                    std::string type_error;
-                    const QoreTypeInfo* type_arg = containing_signature
-                        ? type_resolver.resolveForSignature(path.c_str(),
-                            type_error, containing_signature)
-                        : type_resolver.resolve(path.c_str(), type_error);
-                    if (!type_arg || !type_error.empty()) {
-                        delete fcn;
-                        return 0;
-                    }
-                    inst.type_args.push_back(type_arg);
-                    path_start = path_end;
+                if (!inst.type_args.empty()) {
+                    fcn->setExplicitTypeParamInstantiation(std::move(inst));
                 }
-                fcn->setExplicitTypeParamInstantiation(std::move(inst));
             }
             return toBitsNB(QoreValue(fcn));
         }
@@ -1549,7 +1515,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                         fcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                     }
                 }
-                if (!applyAOTExplicitTypeArgs(*fcn, method_ref, pgm,
+                if (!qore_aot_apply_explicit_type_args(*fcn, method_ref, pgm,
                         containing_signature)) {
                     delete fcn;
                     return 0;
@@ -1604,7 +1570,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                         sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                     }
                 }
-                if (!applyAOTExplicitTypeArgs(*sfcn, method_ref, pgm,
+                if (!qore_aot_apply_explicit_type_args(*sfcn, method_ref, pgm,
                         containing_signature)) {
                     delete sfcn;
                     return 0;
@@ -1626,7 +1592,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     smcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                 }
             }
-            if (!applyAOTExplicitTypeArgs(*smcn, method_ref, pgm,
+            if (!qore_aot_apply_explicit_type_args(*smcn, method_ref, pgm,
                     containing_signature)) {
                 delete smcn;
                 return 0;
@@ -1671,8 +1637,14 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!m) {
                 printd(2, "AOT SLOT: deferring self method '%s::%s' to name-based dispatch\n",
                     ref1 ? ref1 : "", method_name);
-                return toBitsNB(QoreValue(new SelfFunctionCallNode(
-                    &loc_builtin, strdup(method_full_name), nullptr, qc, qcp)));
+                SelfFunctionCallNode* deferred = new SelfFunctionCallNode(&loc_builtin, strdup(method_full_name),
+                    nullptr, qc, qcp);
+                // the explicit type arguments of the call (qore#5818)
+                if (!qore_aot_apply_explicit_type_args(*deferred, method_ref, pgm, containing_signature)) {
+                    deferred->deref(nullptr);
+                    return 0;
+                }
+                return toBitsNB(QoreValue(deferred));
             }
             const AbstractQoreFunctionVariant* resolved_variant = nullptr;
             QoreTypeParamInstantiation type_param_instantiation;
@@ -1695,6 +1667,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                         smcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                     }
                 }
+                // the explicit type arguments of the call (qore#5818)
+                if (!qore_aot_apply_explicit_type_args(*smcn, method_ref, pgm, containing_signature)) {
+                    delete smcn;
+                    return 0;
+                }
                 return toBitsNB(QoreValue(smcn));
             }
             // Use the full ref2 for NamedScope: qualified names ("ClassName::method") produce
@@ -1707,6 +1684,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 if (!type_param_instantiation.type_args.empty()) {
                     sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                 }
+            }
+            // the explicit type arguments of the call (qore#5818)
+            if (!qore_aot_apply_explicit_type_args(*sfcn, method_ref, pgm, containing_signature)) {
+                sfcn->deref(nullptr);
+                return 0;
             }
             return toBitsNB(QoreValue(sfcn));
         }
@@ -2701,348 +2683,23 @@ static Var* resolveGlobalVarRefPayload(const char* ref, QoreProgram* pgm,
     return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns);
 }
 
-//! Advance pointer past one AOTExprKind-encoded expression without allocating objects
-static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e) {
-    if (p >= e) { return; }
-    uint8_t ekind = QoreAOTBinaryReader::readU8(p);
-    AOTExprKind ek = static_cast<AOTExprKind>(ekind);
-
-    if (ek == AOTExprKind::HASH_DEREF) {
-        skipOneExpr(rdr, p, e);  // left (base expression)
-        skipOneExpr(rdr, p, e);  // right (key expression)
-        return;
+const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        QoreProgram* pgm) {
+    int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+    int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+    int64_t offset = QoreAOTBinaryReader::readI64(ptr);
+    const char* file = reader.readStringRef(ptr);
+    const char* source = reader.readStringRef(ptr);
+    if (start_line <= 0 || !file || !*file || !pgm) {
+        return nullptr;
     }
-    if (ek == AOTExprKind::PLUS || ek == AOTExprKind::SQUARE_BRACKET
-            || ek == AOTExprKind::MULTIPLY || ek == AOTExprKind::DIVIDE
-            || ek == AOTExprKind::MODULO || ek == AOTExprKind::PUSH
-            || ek == AOTExprKind::UNSHIFT || ek == AOTExprKind::NULL_COAL
-            || ek == AOTExprKind::VALUE_COAL || ek == AOTExprKind::FOLDL
-            || ek == AOTExprKind::FOLDR || ek == AOTExprKind::MAP
-            || ek == AOTExprKind::SELECT || ek == AOTExprKind::RANGE
-            || ek == AOTExprKind::ASSIGN || ek == AOTExprKind::LOG_AND
-            || ek == AOTExprKind::LOG_OR || ek == AOTExprKind::BIT_AND
-            || ek == AOTExprKind::BIT_OR || ek == AOTExprKind::BIT_XOR
-            || ek == AOTExprKind::SHIFT_LEFT || ek == AOTExprKind::SHIFT_RIGHT
-            || ek == AOTExprKind::PLUS_EQ || ek == AOTExprKind::MINUS_EQ
-            || ek == AOTExprKind::MULTIPLY_EQ || ek == AOTExprKind::DIVIDE_EQ
-            || ek == AOTExprKind::MODULO_EQ || ek == AOTExprKind::AND_EQ
-            || ek == AOTExprKind::OR_EQ || ek == AOTExprKind::XOR_EQ
-            || ek == AOTExprKind::SHL_EQ || ek == AOTExprKind::SHR_EQ) {
-        skipOneExpr(rdr, p, e);  // left operand
-        skipOneExpr(rdr, p, e);  // right operand
-        return;
-    }
-    if (ek == AOTExprKind::ITERATE) {
-        skipOneExpr(rdr, p, e);
-        return;
-    }
-    if (ek == AOTExprKind::STREAMING) {
-        if (p < e) {
-            ++p;  // streaming operator kind
-        }
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        return;
-    }
-    if (ek == AOTExprKind::SQUARE_BRACKET_RANGE) {
-        skipOneExpr(rdr, p, e);  // source expression
-        skipOneExpr(rdr, p, e);  // start expression
-        skipOneExpr(rdr, p, e);  // stop expression
-        return;
-    }
-    if (ek == AOTExprKind::MAP_SELECT || ek == AOTExprKind::HASH_MAP_OP) {
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        return;
-    }
-    if (ek == AOTExprKind::HASH_MAP_SELECT_OP) {
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        skipOneExpr(rdr, p, e);
-        return;
-    }
-    if (ek == AOTExprKind::PARSE_REF) {
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_PARSE_REF_TYPE) != 0) {
-            rdr.readStringRef(p);  // reference type path
-        }
-        skipOneExpr(rdr, p, e);  // inner lvalue expression
-        return;
-    }
-    if (ek == AOTExprKind::EXISTS) {
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::IMPLICIT_ARG) {
-        (void)QoreAOTBinaryReader::readI64(p);  // offset
-        return;
-    }
-    if (ek == AOTExprKind::KEYS) {
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::IMPLICIT_ELEM) {
-        return;
-    }
-    if (ek == AOTExprKind::INSTANCEOF) {
-        rdr.readStringRef(p);  // type path
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::REGEX_MATCH || ek == AOTExprKind::REGEX_NMATCH
-            || ek == AOTExprKind::REGEX_EXTRACT) {
-        rdr.readStringRef(p);  // pattern
-        (void)QoreAOTBinaryReader::readI64(p);  // options
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::PRE_INC || ek == AOTExprKind::PRE_DEC
-            || ek == AOTExprKind::POST_INC || ek == AOTExprKind::POST_DEC) {
-        skipOneExpr(rdr, p, e);  // lvalue operand
-        return;
-    }
-    if (ek == AOTExprKind::LOG_EQ || ek == AOTExprKind::LOG_NE
-            || ek == AOTExprKind::LOG_LT || ek == AOTExprKind::LOG_GT
-            || ek == AOTExprKind::LOG_LE || ek == AOTExprKind::LOG_GE) {
-        skipOneExpr(rdr, p, e);  // left operand
-        skipOneExpr(rdr, p, e);  // right operand
-        return;
-    }
-    if (ek == AOTExprKind::LOG_NOT || ek == AOTExprKind::UNARY_MINUS) {
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::QUESTION) {
-        skipOneExpr(rdr, p, e);  // condition
-        skipOneExpr(rdr, p, e);  // true expression
-        skipOneExpr(rdr, p, e);  // false expression
-        return;
-    }
-    if (ek == AOTExprKind::TRIM || ek == AOTExprKind::CHOMP
-            || ek == AOTExprKind::POP || ek == AOTExprKind::SHIFT
-            || ek == AOTExprKind::ELEMENTS || ek == AOTExprKind::DELETE
-            || ek == AOTExprKind::REMOVE || ek == AOTExprKind::BACKGROUND) {
-        skipOneExpr(rdr, p, e);  // operand
-        return;
-    }
-    if (ek == AOTExprKind::CONTEXT_REF) {
-        rdr.readStringRef(p);  // member
-        return;
-    }
-    if (ek == AOTExprKind::CONTEXT_ROW) {
-        return;
-    }
-    if (ek == AOTExprKind::COMPLEX_CONTEXT_REF) {
-        rdr.readStringRef(p);  // context name
-        rdr.readStringRef(p);  // member
-        (void)QoreAOTBinaryReader::readI64(p);  // stack offset
-        return;
-    }
-    if (ek == AOTExprKind::MINUS) {
-        skipOneExpr(rdr, p, e);  // left operand
-        skipOneExpr(rdr, p, e);  // right operand
-        return;
-    }
-    if (ek == AOTExprKind::HASH_LITERAL) {
-        uint8_t n = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < n; ++i) {
-            rdr.readStringRef(p);  // key
-            skipOneExpr(rdr, p, e);  // value (recursive)
-        }
-        return;
-    }
-    if (ek == AOTExprKind::PARSE_HASH) {
-        uint8_t n = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < n; ++i) {
-            skipOneExpr(rdr, p, e);  // key expression
-            skipOneExpr(rdr, p, e);  // value expression
-        }
-        return;
-    }
-    if (ek == AOTExprKind::LIST_LITERAL) {
-        uint8_t n = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < n; ++i) {
-            skipOneExpr(rdr, p, e);  // each element (recursive)
-        }
-        return;
-    }
-    if (ek == AOTExprKind::NEW_OBJECT || ek == AOTExprKind::SCOPED_NEW_OBJECT) {
-        rdr.readStringRef(p);  // class path
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
-            rdr.readStringRef(p);  // instantiated object type path
-        }
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    if (ek == AOTExprKind::CALLREF_CALL) {
-        skipOneExpr(rdr, p, e);  // callee expression
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    // STATIC_METHOD_CALL: ref1(stringref) + ref2(stringref) + optional receiver type + num_args(u8)
-    // + N×skipOneExpr
-    if (ek == AOTExprKind::STATIC_METHOD_CALL) {
-        rdr.readStringRef(p);  // class path
-        rdr.readStringRef(p);  // method name
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
-            rdr.readStringRef(p);  // receiver type path
-        }
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    if (ek == AOTExprKind::SELF_METHOD_CALL) {
-        rdr.readStringRef(p);
-        rdr.readStringRef(p);
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_SELF_CALL_ARGS) != 0) {
-            uint8_t na = QoreAOTBinaryReader::readU8(p);
-            for (uint8_t i = 0; i < na; ++i) {
-                skipOneExpr(rdr, p, e);
-            }
-        }
-        return;
-    }
-    // Two-stringref kinds
-    if (ek == AOTExprKind::STATIC_VARREF || ek == AOTExprKind::CONST_ENUM) {
-        rdr.readStringRef(p);
-        rdr.readStringRef(p);
-        return;
-    }
-    // HASHDECL_NEW: stringref + u8 num_args + N×classifyAndWriteExpr-encoded args
-    if (ek == AOTExprKind::HASHDECL_NEW) {
-        rdr.readStringRef(p);  // hashdecl path
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    // COMPLEX_HASH_NEW/COMPLEX_LIST_NEW: stringref + u8 num_args + N×encoded args
-    // COMPLEX_BUFFER_NEW recursive expressions always carry an init-kind byte.
-    if (ek == AOTExprKind::COMPLEX_HASH_NEW || ek == AOTExprKind::COMPLEX_LIST_NEW
-            || ek == AOTExprKind::COMPLEX_BUFFER_NEW) {
-        rdr.readStringRef(p);  // type path
-        if (ek == AOTExprKind::COMPLEX_BUFFER_NEW) {
-            QoreAOTBinaryReader::readU8(p);  // QoreComplexBufferInitKind
-        }
-        uint8_t na = QoreAOTBinaryReader::readU8(p);
-        for (uint8_t i = 0; i < na; ++i) {
-            skipOneExpr(rdr, p, e);  // each arg
-        }
-        return;
-    }
-    // CLOSURE_CREATE: flags(stringref) + class_type_path(stringref)
-    //   + optional native_body_key(stringref) + return_type(stringref)
-    //   + num_params(u16) + params + varargs flags + num_captured(u16) + captured
-    //   + has_ir(u8) + [ir_size(u32) + ir_data]
-    if (ek == AOTExprKind::CLOSURE_CREATE) {
-        rdr.readStringRef(p);  // flags
-        rdr.readStringRef(p);  // class_type_path
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
-            rdr.readStringRef(p);  // native body key
-        }
-        rdr.readStringRef(p);  // return type
-        uint16_t np = QoreAOTBinaryReader::readU16(p);
-        for (uint16_t i = 0; i < np; ++i) {
-            rdr.readStringRef(p);  // param name
-            rdr.readStringRef(p);  // param type
-            uint8_t hd = QoreAOTBinaryReader::readU8(p);
-            if (hd) {
-                std::string val_error;
-                QoreValue dv = rdr.readValue(p, e, val_error);
-                dv.discard(nullptr);
-            }
-        }
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
-            QoreAOTBinaryReader::readU16(p);  // closure flags
-        } else {
-            QoreAOTBinaryReader::readU8(p);  // legacy varargs
-        }
-        uint16_t nc = QoreAOTBinaryReader::readU16(p);
-        for (uint16_t i = 0; i < nc; ++i) {
-            rdr.readStringRef(p);  // captured name
-            QoreAOTBinaryReader::readU32(p);  // parent slot
-        }
-        uint8_t has_ir = QoreAOTBinaryReader::readU8(p);
-        if (has_ir) {
-            uint32_t ir_size = QoreAOTBinaryReader::readU32(p);
-            p += ir_size;  // skip IR data
-        }
-        return;
-    }
-    // Inline FUNC_CALL: function name + optional variant signature + optional serialized args.
-    // Expression slots use a separate compact slot payload and are not skipped here.
-    if (ek == AOTExprKind::FUNC_CALL) {
-        rdr.readStringRef(p);
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_FUNC_CALL_VARIANT) != 0) {
-            rdr.readStringRef(p);
-        }
-        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_INLINE_CALL_ARGS) != 0) {
-            uint8_t na = QoreAOTBinaryReader::readU8(p);
-            for (uint8_t i = 0; i < na; ++i) {
-                skipOneExpr(rdr, p, e);
-            }
-        }
-        return;
-    }
-    // CONST_NUMBER carries its precision in a second stringref from
-    // QORE_AOT_NUMBER_PRECISION_VERSION; skipping only the digits would desynchronise the stream
-    if (ek == AOTExprKind::CONST_NUMBER) {
-        rdr.readStringRef(p);
-        if (rdr.getHeader().version >= QORE_AOT_NUMBER_PRECISION_VERSION) {
-            rdr.readStringRef(p);
-        }
-        return;
-    }
-    // One-stringref kinds
-    if (ek == AOTExprKind::RUNTIME_CONST_REF
-            || ek == AOTExprKind::CONST_BINARY
-            || ek == AOTExprKind::CONST_STRING || ek == AOTExprKind::SELF_VARREF
-            || ek == AOTExprKind::LOCAL_VARREF || ek == AOTExprKind::GLOBAL_VARREF) {
-        rdr.readStringRef(p);
-        return;
-    }
-    // Cast kinds: stringref + u8 or_nothing + u8 has_inner + optional inner expression
-    if (ek == AOTExprKind::CAST_HASHDECL || ek == AOTExprKind::CAST_COMPLEX_HASH
-            || ek == AOTExprKind::CAST_COMPLEX_LIST || ek == AOTExprKind::CAST_CLASS
-            || ek == AOTExprKind::CAST_ENUM || ek == AOTExprKind::CAST_SCALAR) {
-        rdr.readStringRef(p);
-        QoreAOTBinaryReader::readU8(p);
-        uint8_t has_inner = QoreAOTBinaryReader::readU8(p);
-        if (has_inner) {
-            skipOneExpr(rdr, p, e);
-        }
-        return;
-    }
-    // Inline constants
-    if (ek == AOTExprKind::CONST_INT) {
-        p += 8;
-        return;
-    }
-    if (ek == AOTExprKind::CONST_FLOAT) {
-        p += 8;
-        return;
-    }
-    if (ek == AOTExprKind::CONST_BOOL) {
-        QoreAOTBinaryReader::readU8(p);
-        return;
-    }
-    if (ek == AOTExprKind::CONST_VALUE) {
-        std::string value_error;
-        QoreValue v = rdr.readValue(p, e, value_error);
-        v.discard(nullptr);
-        return;
-    }
-    // CONST_NOTHING, GENERIC_EVAL or unknown: no bytes to skip
+    // interned in the Program, as the locations of parsed code; the Program's runtime metadata lock protects its
+    // strings and locations, so that this can run when code is deserialized lazily
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const char* interned_file = pp->addString(file);
+    const char* interned_source = source && *source ? pp->addString(source) : nullptr;
+    QoreProgramLocation tmp(interned_file, start_line, end_line, interned_source, static_cast<int>(offset));
+    return pp->getLocation(tmp, start_line, end_line);
 }
 
 // Forward declaration for use by expression registry handlers (Phase 3.2)
@@ -3591,6 +3248,21 @@ using AOTClosureRuntimeBindingMap =
     @param name the function name (for debug output)
     @return heap-allocated QoreAOTContext, or nullptr on failure
 */
+static thread_local const UserSignature* qore_aot_type_param_owner = nullptr;
+
+const UserSignature* qore_aot_get_type_param_owner() {
+    return qore_aot_type_param_owner;
+}
+
+QoreAOTTypeParamOwnerHelper::QoreAOTTypeParamOwnerHelper(const UserSignature* owner)
+        : old_owner(qore_aot_type_param_owner) {
+    qore_aot_type_param_owner = owner;
+}
+
+QoreAOTTypeParamOwnerHelper::~QoreAOTTypeParamOwnerHelper() {
+    qore_aot_type_param_owner = old_owner;
+}
+
 static QoreAOTContext* buildContextFromSlotMap(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end,
@@ -3605,6 +3277,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         const std::vector<LocalVar*>* direct_local_slots = nullptr,
         AOTClosureRuntimeBindingMap* closure_bindings = nullptr,
         QoreProgram* local_owner_pgm = nullptr) {
+    // the closures read in the context name the type parameters of the function (qore#5733)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
     const uint8_t* entry_payload_start = ptr;
     auto setBuildError = [name, build_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
@@ -3968,6 +3642,14 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     };
     for (int i = 0; i < num_exprs; ++i) {
+        // a slot whose value could not be read leaves the read pointer at the end of the data if the value was
+        // malformed (QoreAOTBinaryReader::readValue()): the entry has no more slots to read (qore#5848)
+        if (ptr >= end || (entry_end && ptr >= entry_end)) {
+            setBuildError("slot map entry ends before expression slot " + std::to_string(i) + " of "
+                + std::to_string(num_exprs));
+            delete ctx;
+            return nullptr;
+        }
         const uint8_t* before_expr = ptr;  // Track ptr position for validation
         uint8_t kind_byte = QoreAOTBinaryReader::readU8(ptr);
         AOTExprKind kind = static_cast<AOTExprKind>(kind_byte);
@@ -4406,10 +4088,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Dot-eval method target: resolve class/method from strings
                 // and populate call_targets directly — no AST node needed
                 ref1 = reader.readStringRef(ptr);    // class_path
-                // method_name[\nvariant_class\nvariant_signature][\ntypeargs:N\npath...]
+                // method_name[\nvariant_class\nvariant_signature][QORE_AOT_CALL_TYPE_ARGS_MARKER N\npath...]
                 const std::string encoded_target = reader.readStringRef(ptr);
-                static constexpr const char* target_type_arg_marker = "\ntypeargs:";
-                const size_t target_type_arg_pos = encoded_target.find(target_type_arg_marker);
+                const size_t target_type_arg_pos = encoded_target.rfind(QORE_AOT_CALL_TYPE_ARGS_MARKER);
                 const std::string target_method_text = target_type_arg_pos == std::string::npos
                     ? encoded_target : encoded_target.substr(0, target_type_arg_pos);
                 AOTEncodedMethodRef method_ref(target_method_text.c_str());
@@ -4431,47 +4112,20 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // the explicit type arguments of the call; the owner is not known before the call chooses its
                 // variant, and an instantiation without an owner applies to the variant that is called
                 if (target_type_arg_pos != std::string::npos) {
-                    const size_t count_start = target_type_arg_pos + strlen(target_type_arg_marker);
-                    size_t count_end = encoded_target.find('\n', count_start);
-                    // a named string: count_tail points into it and is read after strtoul() returns (a pointer into a
-                    // temporary is dangling then, which clang's stack reuse made fail on macOS)
-                    const std::string count_text = encoded_target.substr(count_start,
-                        count_end == std::string::npos ? std::string::npos : count_end - count_start);
-                    char* count_tail = nullptr;
-                    const unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
                     auto inst = std::make_shared<QoreTypeParamInstantiation>();
-                    QoreAOTTypeResolver type_resolver(pgm);
                     const UserSignature* target_signature = uvb ? uvb->getUserSignature() : nullptr;
-                    bool type_args_ok = count_tail && !*count_tail;
-                    size_t path_start = count_end;
-                    for (unsigned long a = 0; type_args_ok && a < count; ++a) {
-                        if (path_start == std::string::npos) {
-                            type_args_ok = false;
-                            break;
-                        }
-                        ++path_start;
-                        const size_t path_end = encoded_target.find('\n', path_start);
-                        const std::string path = encoded_target.substr(path_start,
-                            path_end == std::string::npos ? std::string::npos : path_end - path_start);
-                        std::string type_error;
-                        const QoreTypeInfo* type_arg = target_signature
-                            ? type_resolver.resolveForSignature(path.c_str(), type_error, target_signature)
-                            : type_resolver.resolve(path.c_str(), type_error);
-                        if (!type_arg || !type_error.empty()) {
-                            type_args_ok = false;
-                            break;
-                        }
-                        inst->type_args.push_back(type_arg);
-                        path_start = path_end;
-                    }
+                    bool type_args_ok = qore_aot_decode_call_type_args(pgm,
+                        encoded_target.c_str() + target_type_arg_pos, nullptr, target_signature, *inst);
                     if (!type_args_ok) {
                         printd(0, "AOT v2: cannot resolve the explicit type arguments of method call '%s'\n",
                             method_ref.method_name ? method_ref.method_name : "(null)");
                         has_unsupported = true;
                         continue;
                     }
-                    ctx->owned_explicit_type_param_insts.push_back(inst);
-                    ctx->call_targets[i].explicit_type_param_instantiation = inst.get();
+                    if (!inst->type_args.empty()) {
+                        ctx->owned_explicit_type_param_insts.push_back(inst);
+                        ctx->call_targets[i].explicit_type_param_instantiation = inst.get();
+                    }
                 }
                 if (variant) {
                     ctx->call_targets[i].variant = variant;
@@ -4696,7 +4350,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                     // Build the base (method/class/variant-resolved) self-call node, then wrap it
                     // with the args via the copy constructor (mirrors read_node_EN_SELF_CALL).
-                    uint64_t base_bits = resolveExprSlot(kind, ref1, ref2, pgm);
+                    uint64_t base_bits = resolveExprSlot(kind, ref1, ref2, pgm,
+                        uvb ? uvb->getUserSignature() : nullptr);
                     if (base_bits) {
                         QoreValue base_val = fromBits(base_bits);
                         const SelfFunctionCallNode* base_sfcn = dynamic_cast<const SelfFunctionCallNode*>(
@@ -4862,7 +4517,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                                     "serialized variant signature or arg types for '%s::%s'\n",
                                     name, i, ref1 ? ref1 : "", method_name ? method_name : "");
                             }
-                            if (!applyAOTExplicitTypeArgs(*call_node, method_ref,
+                            if (!qore_aot_apply_explicit_type_args(*call_node, method_ref,
                                     pgm, uvb ? uvb->getUserSignature() : nullptr)) {
                                 setAOTExprSlotResolveError(i, expr_kind_name,
                                     "cannot apply the explicit type arguments recorded for the call to '"
@@ -5833,6 +5488,21 @@ static QoreAOTContext* buildContextFromSlotMap(
                 continue;
             }
             case AOTExprKind::CLOSURE_CREATE: {
+                // Establish a current-Program context for the whole closure record: the types and default values
+                // of its parameters (a default can be an expression tree that calls a function of the Program,
+                // qore#5827), the class-ref resolution below and the closure constructor are all resolved in the
+                // closure's Program, which the value reader takes from the current one.  Class resolution can fall
+                // back to parseFindClass() (for private/internal classes that are not in the committed runtime
+                // maps), which reads the parse options of the *current* Program; without this context
+                // getProgram() is null and the lookup dereferences it — crashing, e.g., for a closure inside a
+                // method capturing a parameter, where the method's class is resolved here at load time.
+                //
+                // A plain current-Program context (not a parse lock) is used: this AOT slot-map reconstruction can
+                // run while the global AOT init lock is held, and taking a Program parse lock here can invert lock
+                // order with another loader thread that already holds the Program parse lock and is waiting for AOT
+                // init.
+                QoreProgramContextHelper closure_pch(pgm);
+
                 // Read flags
                 const char* flags_str = reader.readStringRef(ptr);
                 const char* class_type_path = reader.readStringRef(ptr);
@@ -5840,19 +5510,29 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
                     native_body_key = reader.readStringRef(ptr);
                 }
+                // the location of the closure (see v26), which its signature gets
+                const QoreProgramLocation* closure_loc = nullptr;
+                if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                    closure_loc = qore_aot_read_source_location(reader, ptr, pgm);
+                }
 
-                bool is_lambda = false, is_in_method = false;
+                bool is_lambda = false, is_in_method = false, closure_needs_type_context = false;
                 if (flags_str) {
                     is_lambda = (flags_str[0] == '1');
                     is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
+                    closure_needs_type_context = (strlen(flags_str) >= 5 && flags_str[4] == '1');
                 }
 
                 // Read return type
                 const char* ret_type_path = reader.readStringRef(ptr);
                 std::string type_error;
                 QoreAOTTypeResolver type_resolver(pgm);
+                // the closure's types name the type parameters of the function that creates it (qore#5733)
+                const UserSignature* closure_type_param_owner = uvb
+                    ? uvb->getUserSignature()->getTypeParamOwner() : nullptr;
                 const QoreTypeInfo* ret_type = (ret_type_path && *ret_type_path)
-                    ? type_resolver.resolve(ret_type_path, type_error) : nullptr;
+                    ? type_resolver.resolveForSignature(ret_type_path, type_error, closure_type_param_owner)
+                    : nullptr;
 
                 // Read params
                 uint16_t closure_num_params = QoreAOTBinaryReader::readU16(ptr);
@@ -5864,11 +5544,23 @@ static QoreAOTContext* buildContextFromSlotMap(
                     param_names[p] = pname ? pname : "";
                     const char* ptype = reader.readStringRef(ptr);
                     param_types[p] = (ptype && *ptype)
-                        ? type_resolver.resolve(ptype, type_error) : nullptr;
+                        ? type_resolver.resolveForSignature(ptype, type_error, closure_type_param_owner) : nullptr;
                     uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
                     if (has_default) {
                         std::string val_error;
                         defaults[p] = reader.readValue(ptr, end, val_error);
+                        if (!val_error.empty()) {
+                            // a closure without the default would run with another value: the function is not
+                            // registered; the record is not read further, as the read pointer can be at the end of
+                            // the data after a malformed value (qore#5848)
+                            for (QoreValue& v : defaults) {
+                                v.discard(nullptr);
+                            }
+                            setBuildError("closure expression slot " + std::to_string(i) + " parameter '"
+                                + param_names[p] + "' default: " + val_error);
+                            delete ctx;
+                            return nullptr;
+                        }
                     }
                 }
                 bool closure_sig_has_varargs = false;
@@ -5904,6 +5596,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         fprintf(stderr, "[aot-slot-reg] '%s': %s\n", name, msg.c_str());
                     }
                     closure_ir_missing = true;
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
                     continue;
                 }
 
@@ -5917,27 +5612,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                     setClosureIRError(msg);
                     closure_ir_missing = true;
                     ptr = ir_boundary;
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
                     continue;
                 }
                 const uint8_t* ir_end_ptr = ptr + ir_size;
 
-                // Resolve class for method context
-                // Establish a current-Program context for BOTH the class-ref
-                // resolution below and the closure constructor.  Class resolution
-                // can fall back to parseFindClass() (for private/internal classes
-                // that are not in the committed runtime maps), which reads the parse
-                // options of the *current* Program; without this context getProgram()
-                // is null and the lookup dereferences it — crashing, e.g., for a
-                // closure inside a method capturing a parameter, where the method's
-                // class is resolved here at load time.
-                //
-                // A plain current-Program context (not a parse lock) is used: this
-                // AOT slot-map reconstruction can run while the global AOT init lock
-                // is held, and taking a Program parse lock here can invert lock order
-                // with another loader thread that already holds the Program parse lock
-                // and is waiting for AOT init.
-                QoreProgramContextHelper closure_pch(pgm);
-
+                // Resolve class for method context (in the closure's Program; see closure_pch above)
                 const QoreClass* closure_class = nullptr;
                 if (class_type_path && *class_type_path) {
                     closure_class = qore_aot_resolve_class_ref(pgm, class_type_path, false);
@@ -5949,10 +5631,13 @@ static QoreAOTContext* buildContextFromSlotMap(
                 auto* closure_variant = static_cast<UserClosureVariant*>(
                     const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
                 UserSignature* closure_sig = closure_variant->getUserSignature();
+                // the closure names the type parameters of the function that creates it (qore#5733)
+                closure_sig->enclosing_signature = closure_type_param_owner;
                 closure_sig->setupFromAOTMetadata(
                     pgm, ret_type,
                     std::move(param_names), std::move(param_types), std::move(defaults),
-                    closure_sig_has_varargs, closure_class, nullptr, 0, 0,
+                    closure_sig_has_varargs, closure_class, closure_loc ? closure_loc->getFile() : nullptr,
+                    closure_loc ? closure_loc->start_line : 0, closure_loc ? closure_loc->end_line : 0,
                     std::vector<uint8_t>(), local_owner_pgm);
                 if (closure_needs_extra_args) {
                     closure_variant->setFlag(QCF_USES_EXTRA_ARGS);
@@ -6199,6 +5884,7 @@ static QoreAOTContext* buildContextFromSlotMap(
 
                 // Create QoreClosureParseNode
                 auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+                closure_node->setNeedsTypeContext(closure_needs_type_context);
                 ctx->exprs[i] = toBitsNB(QoreValue(closure_node));
                 continue;
             }
@@ -6219,7 +5905,19 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::CONST_VALUE: {
                 std::string value_error;
-                QoreValue value = reader.readValue(ptr, end, value_error);
+                // the Program resolves the hashdecls and types of typed container values (#5895)
+                QoreValue value;
+                {
+                    QoreProgramContextHelper value_pch(pgm);
+                    value = reader.readValue(ptr, end, value_error);
+                }
+                if (!value_error.empty() && (ptr >= end || (entry_end && ptr >= entry_end))) {
+                    // a malformed value: the read pointer is at the end of the data, and the rest of the entry
+                    // cannot be read (qore#5848)
+                    setBuildError("expression slot " + std::to_string(i) + ": " + value_error);
+                    delete ctx;
+                    return nullptr;
+                }
                 if (!value_error.empty()) {
                     printd(0, "AOT v2: error reading const value for '%s' expr slot %d: %s\n",
                         name, i, value_error.c_str());
@@ -6401,6 +6099,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             ctx->call_targets[i].class_ctx = self_call->getClassContext();
             ctx->call_targets[i].is_self_method = true;
+            // the explicit type arguments of the call (qore#5818)
+            ctx->call_targets[i].explicit_type_param_instantiation = self_call->getExplicitTypeParamInstantiation();
             ctx->call_targets[i].self_ns_single = self_call->hasSingleName();
             ctx->call_targets[i].self_is_copy = self_call->isCopyCall();
             ctx->call_targets[i].self_is_abstract = self_call->isAbstractCall();
@@ -6653,6 +6353,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                     for (uint32_t k = 0; k < num_slice_ops; ++k) {
                         step.slice_operand_ids.push_back(
                                 QoreAOTBinaryReader::readU32(ptr));
+                    }
+                    // which selectors of a list of selectors are ranges (qore#5736, QORE_AOT_SLICE_RANGES_VERSION); an
+                    // older step takes each as a range, as before
+                    if (step.kind == LVPathStepKind::ListIndexSlice) {
+                        pi->slice_ranges.clear();
+                        if (reader.getHeader().version >= QORE_AOT_SLICE_RANGES_VERSION) {
+                            pi->slice_ranges.reserve(num_slice_ops);
+                            for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                                pi->slice_ranges.push_back(QoreAOTBinaryReader::readU8(ptr) != 0);
+                            }
+                        } else {
+                            pi->slice_ranges.assign(num_slice_ops, true);
+                        }
                     }
                 }
                 // Resolve ref_ptr from context locals/globals
@@ -6960,12 +6673,18 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t opcode_raw = QoreAOTBinaryReader::readU16(ptr);
+    if (!validateAOTIROpcode(opcode_raw, error)) {
+        return nullptr;
+    }
     auto opcode = static_cast<QoreIROpcode>(opcode_raw);
     if (!need(1, "instruction group")) {
         return nullptr;
     }
     uint8_t group_byte = QoreAOTBinaryReader::readU8(ptr);
     auto group = static_cast<QoreIRInstGroup>(group_byte);
+    if (!qore_aot_validate_ir_layout(opcode_raw, group_byte, error)) {
+        return nullptr;
+    }
 
     // Read base fields: result, operands, exception_target
     if (!need(4, "result id")) {
@@ -6984,6 +6703,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         }
         num_operands = QoreAOTBinaryReader::readU8(ptr);
     }
+    if (!qore_aot_validate_ir_operands(opcode_raw, num_operands, result_id != 0, error)) {
+        return nullptr;
+    }
     if (num_operands > 0 && !need(static_cast<size_t>(num_operands) * 4, "operands")) {
         return nullptr;
     }
@@ -6991,6 +6713,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     operands.reserve(num_operands);
     for (uint32_t j = 0; j < num_operands; ++j) {
         uint32_t op_id = QoreAOTBinaryReader::readU32(ptr);
+        if (!QoreIRValue(op_id).isValid()) {
+            error = "invalid AOT IR operand value id";
+            return nullptr;
+        }
         operands.push_back(QoreIRValue(op_id));
     }
     if (!need(2, "exception target")) {
@@ -7817,6 +7543,19 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                         step.slice_operand_ids.push_back(
                                 QoreAOTBinaryReader::readU32(ptr));
                     }
+                    // which selectors of a list of selectors are ranges (qore#5736, QORE_AOT_SLICE_RANGES_VERSION); an
+                    // older step takes each as a range, as before
+                    if (step.kind == LVPathStepKind::ListIndexSlice) {
+                        pi->slice_ranges.clear();
+                        if (reader.getHeader().version >= QORE_AOT_SLICE_RANGES_VERSION) {
+                            pi->slice_ranges.reserve(num_slice_ops);
+                            for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                                pi->slice_ranges.push_back(QoreAOTBinaryReader::readU8(ptr) != 0);
+                            }
+                        } else {
+                            pi->slice_ranges.assign(num_slice_ops, true);
+                        }
+                    }
                 }
                 // Resolve local vars from AOT locals
                 if ((step.kind == LVPathStepKind::LocalVar || step.kind == LVPathStepKind::ClosureVar)
@@ -7927,6 +7666,15 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                     QoreIRValue(iterator_id), resolveBlock(done_idx), resolveBlock(continue_idx));
                 next->opcode = opcode;
                 inst.reset(next);
+            }
+            // the values that it releases after the previous element (see QORE_AOT_ITERATOR_RELEASES_VERSION)
+            if (reader.getHeader().version >= QORE_AOT_ITERATOR_RELEASES_VERSION) {
+                auto* next = static_cast<QoreIRIteratorNextInstruction*>(inst.get());
+                uint16_t count = QoreAOTBinaryReader::readU16(ptr);
+                next->release_values.reserve(count);
+                for (uint16_t i = 0; i < count; ++i) {
+                    next->release_values.push_back(QoreIRValue(QoreAOTBinaryReader::readU32(ptr)));
+                }
             }
             break;
         }

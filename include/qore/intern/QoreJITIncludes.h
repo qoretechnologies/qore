@@ -23,19 +23,26 @@
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/JITRuntime.h"
 
+#include <bit>
 #include <cstring>
+#include <type_traits>
 
 // NaN-boxing helpers shared between JITRuntime.cpp and QoreIRInterpreter.cpp
+/* They convert with std::bit_cast and not std::memcpy: a C library whose headers fortify memcpy() (musl with
+   fortify-headers, as on Alpine Linux, where GCC defines _FORTIFY_SOURCE by default) makes each memcpy() an inlined
+   function that compares the addresses of its arguments, which keeps both values in memory; inlined more than a
+   hundred times into the IR interpreter, that made the frame of QoreIRInterpreter::execute() 6016 bytes instead of
+   3600 (issue #5852).  A bit cast between two values of the same size has nothing to check.
+*/
+static_assert(std::is_trivially_copyable_v<QoreValue>, "QoreValue must be trivially copyable for bit casts");
+static_assert(sizeof(QoreValue) == sizeof(uint64_t), "QoreValue must have the size of its 64-bit representation");
+
 static inline QoreValue fromBits(uint64_t bits) {
-    QoreValue v;
-    std::memcpy(&v, &bits, sizeof(v));
-    return v;
+    return std::bit_cast<QoreValue>(bits);
 }
 
 static inline uint64_t toBits(const QoreValue& v) {
-    uint64_t bits;
-    std::memcpy(&bits, &v, sizeof(bits));
-    return bits;
+    return std::bit_cast<uint64_t>(v);
 }
 
 static inline uint64_t toBitsNB(const QoreValue& v) {

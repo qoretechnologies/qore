@@ -92,7 +92,7 @@ p_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow a
 p_module_call_ref: \"RWLock|WaitGroup\"
 p_module_call_function: \"RWLock|WaitGroup\"
 p_overloaded_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
-p_call_ref_to_module_object_method: \"used\"
+p_call_ref_to_module_object_method: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
 p_closure_method_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
 p_call_function_overloaded_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'save_thread_data(string key, auto value)'; functional domain: THREAD_CONTROL (restricted by PO_NO_THREAD_CONTROL)
 p_call_ref_overloaded_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'save_thread_data'; functional domain: THREAD_CONTROL (restricted by PO_NO_THREAD_CONTROL)

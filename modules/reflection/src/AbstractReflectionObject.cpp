@@ -80,6 +80,57 @@ int reflection_check_class_call(const QoreReflectionCaller& caller, const QoreCl
     return -1;
 }
 
+int reflection_check_class_export(const QoreReflectionCaller& caller, const QoreClass* cls,
+        const QoreProgram* target, ExceptionSink* xsink) {
+    return caller.checkModuleExport(caller.canSeeClass(target, cls), "class", cls->getName(), xsink);
+}
+
+bool reflection_can_see_typed_hash(const QoreReflectionCaller& caller, const TypedHashDecl* th) {
+    // a system hashdecl runs no user code
+    if (th->isSystem()) {
+        return true;
+    }
+    // the caller could name the typed hash in the language: it is declared in, imported into or inherited by the
+    // caller's Program (a module's exported typed hash is imported into the Programs that load the module; a
+    // non-exported one, or a parent's that a child does not inherit, is not found there)
+    const QoreProgram* caller_pgm = caller.getProgram();
+    if (!caller_pgm) {
+        return false;
+    }
+    if (th->getProgram() == caller_pgm) {
+        return true;
+    }
+    const QoreNamespace* pns = nullptr;
+    const TypedHashDecl* found = caller_pgm->findHashDecl(th->getNamespacePath().c_str(), pns);
+    return found && (found == th || found->equal(th));
+}
+
+int reflection_check_typed_hash_init(const QoreReflectionCaller& caller, const QoreProgram* target,
+        const TypedHashDecl* th, ExceptionSink* xsink) {
+    // a typed hash that the caller could name: a cast that it could make itself in the language
+    if (reflection_can_see_typed_hash(caller, th)) {
+        return 0;
+    }
+    // otherwise the caller must have access to the Program of the handle, as for any initializer
+    if (caller.checkProgramAccess(target, "evaluate typed hash initializers in",
+            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+        return -1;
+    }
+    // and a caller to which the language's access rules apply must be able to name it
+    if (!caller.appliesMemberAccess()) {
+        return 0;
+    }
+    const QoreProgram* decl_pgm = th->getProgram();
+    if (decl_pgm && decl_pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+        return caller.checkModuleExport(false, "typed hash", th->getName(), xsink);
+    }
+    // a typed hash of another Program that the caller's Program does not inherit or import
+    xsink->raiseException("REFLECTION-ACCESS-ERROR", "typed hash '%s' is not visible in the Program of the calling "
+        "code and cannot be used through reflection by code that a sandbox governs or whose functional domains are "
+        "restricted", th->getName());
+    return -1;
+}
+
 int reflection_check_class_value_access(const QoreReflectionCaller& caller, const QoreClass* cls,
         const QoreProgram* target, ExceptionSink* xsink) {
     bool caller_refused = false;

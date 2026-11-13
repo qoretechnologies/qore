@@ -65,13 +65,40 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define YY_USER_ACTION { yylloc->update(yylineno, yyleng, yytext); }
+#define YY_USER_ACTION { yylloc->update(yylineno, yyleng, yytext); \
+    set_native_token_info(yylloc, yyextra); }
 
 int yyparse(yyscan_t yyscanner);
 
 static const QoreProgramLocation* get_loc(YYLTYPE* yylloc) {
     return qore_program_private::get(*getProgram())->getLocation(yylloc->first_line, yylloc->last_line,
         yylloc->first_col, yylloc->last_col);
+}
+
+// Capture token context, not the options in effect when bison eventually reduces a statement: lookahead may
+// already have consumed a restoring directive, and an expression may contain several option changes.
+static void set_native_token_info(YYLTYPE* loc, QoreParseState* state) {
+    const QoreParseOptions& po = qore_program_private::getParseOptions(*getProgram());
+    if (qore_parse_options_support_ir(po) && !(po & qore_program_private_base::modernIncompatibleOptions())) {
+        state->native_parse_info = {};
+        loc->native_parse_info = {nullptr, nullptr, true};
+    } else {
+        if (!state->native_parse_info.legacy_location) {
+            state->native_parse_info.legacy_location = get_loc(loc);
+        }
+        loc->native_parse_info = state->native_parse_info;
+    }
+}
+
+static void record_native_directive(YYLTYPE* loc, QoreParseState* state, const char* text, bool was_modern) {
+    if (qore_parse_options_support_ir(getProgram()->getParseOptions())) {
+        state->native_parse_info = {};
+    } else if (was_modern) {
+        // The scanner matches trailing whitespace too; retain just the directive in Program-owned storage.
+        std::string directive(text, strcspn(text, " \t\r\n"));
+        state->native_parse_info.legacy_location = get_loc(loc);
+        state->native_parse_info.directive = qore_program_private::get(*getProgram())->addString(directive.c_str());
+    }
 }
 
 static void check_broken_op(YYLTYPE* yylloc, const char* got, const char* expected) {
@@ -1040,13 +1067,25 @@ static bool is_identifier(const char *str) {
     return true;
 }
 
-static void parse_set_parse_options(YYLTYPE* yylloc, const QoreParseOptions& po) {
-    qore_program_private::get(*getProgram())->parseSetParseOptions(get_loc(yylloc), po);
+static void parse_set_parse_options_intern(YYLTYPE* yylloc, QoreParseState* state, const char* text,
+        const QoreParseOptions& po) {
+    bool was_modern = qore_parse_options_support_ir(getProgram()->getParseOptions());
+    if (!qore_program_private::get(*getProgram())->parseSetParseOptions(get_loc(yylloc), po)) {
+        record_native_directive(yylloc, state, text, was_modern);
+    }
 }
 
-static void parse_disable_parse_options(YYLTYPE* yylloc, const QoreParseOptions& po) {
-    qore_program_private::get(*getProgram())->parseDisableParseOptions(get_loc(yylloc), po);
+static void parse_disable_parse_options_intern(YYLTYPE* yylloc, QoreParseState* state, const char* text,
+        const QoreParseOptions& po) {
+    bool was_modern = qore_parse_options_support_ir(getProgram()->getParseOptions());
+    if (!qore_program_private::get(*getProgram())->parseDisableParseOptions(get_loc(yylloc), po)) {
+        record_native_directive(yylloc, state, text, was_modern);
+    }
 }
+
+// Supply scanner-local provenance without changing the option-directive rules below.
+#define parse_set_parse_options(loc, po) parse_set_parse_options_intern(loc, yyextra, yytext, po)
+#define parse_disable_parse_options(loc, po) parse_disable_parse_options_intern(loc, yyextra, yytext, po)
 
 static int finish_char_literal(const QoreStringNode& str, YYLTYPE* yylloc, int64& out, ExceptionSink* xsink) {
     if (str.empty()) {

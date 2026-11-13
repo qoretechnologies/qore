@@ -445,6 +445,26 @@ public class HttpAsyncSocketIoController {
                 logShutdownException("cancelling delayed response timer " + timer_id.toString(), ex);
             }
         }
+        # Tell each HTTP/2 client that the connection is closing before it is aborted: the GOAWAY frame gives the last
+        # stream processed, so the client knows which requests it can retry elsewhere (RFC 9113 section 6.8).  The
+        # frame is written on the connection's I/O thread, which the abort below would otherwise race (qore#5899)
+        if (stream_ops_to_abort) {
+            foreach AbstractPollOperation sop in (stream_ops_to_abort) {
+                if (sop instanceof Http2PollOperation) {
+                    try {
+                        cast<Http2PollOperation>(sop).sendShutdownGoaway();
+                    } catch (hash<ExceptionInfo> ex) {
+                        # a connection that is gone already needs no GOAWAY
+                        if (ex.err =~ /^SOCKET-/) {
+                            log(LoggerLevel::DEBUG, "Async HTTP shutdown: no HTTP/2 GOAWAY sent on a closed "
+                                "connection: %s: %s", ex.err, ex.desc);
+                        } else {
+                            logShutdownException("sending HTTP/2 GOAWAY", ex);
+                        }
+                    }
+                }
+            }
+        }
         # Abort each stream_op so its clearStreamQueues() fires immediately,
         # pushing NOTHING sentinels onto any registered body_queue and
         # unblocking handler threads stuck in body_queue.get(timeout).
@@ -532,7 +552,14 @@ public class HttpAsyncSocketIoController {
                 logShutdownException("destroying detached connections", ex);
             }
         }
+        # the UDP sockets of the HTTP/3 listeners, closed below once no operation uses them
+        *list<Socket> h3_sockets;
         if (detached_listeners) {
+            foreach hash<HttpListenerInfo> linfo in (detached_listeners.iterator()) {
+                if (linfo.http_version == HttpVersionMode::H3) {
+                    push h3_sockets, linfo.listener;
+                }
+            }
             try {
                 detached_listeners = NOTHING;
             } catch (hash<ExceptionInfo> ex) {
@@ -568,6 +595,15 @@ public class HttpAsyncSocketIoController {
                 logShutdownException("cancelling late connection owner " + uh, ex);
             }
         }
+        # an accept or read operation of a listener that a callback resubmitted after checking the stopping flag
+        # before it was set; every callback that runs after the first flush sees the flag
+        foreach string lhash in (listener_keys) {
+            try {
+                controller.cancelByOwner(lhash);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("cancelling late listener owner " + lhash, ex);
+            }
+        }
         foreach Socket sock in (conn_sockets) {
             try {
                 controller.cancelAndClose(sock);
@@ -586,6 +622,18 @@ public class HttpAsyncSocketIoController {
                 race_connections = NOTHING;
             } catch (hash<ExceptionInfo> ex) {
                 logShutdownException("destroying late connections", ex);
+            }
+        }
+        # the UDP socket of an HTTP/3 listener is closed here, as removeListener() does, now that no operation uses it
+        # (an operation that holds the descriptor would only shut it down): otherwise it is closed only when its last
+        # reference goes, an unknown time after stop() returns, and its port stays bound (qore#5812).  Its sessions
+        # were ended when their operation was aborted above: each client was sent an HTTP/3 GOAWAY and a QUIC
+        # CONNECTION_CLOSE (SocketQuicServerPollOperation::abort()).  A TCP listener is closed by its HttpListener.
+        foreach Socket sock in (h3_sockets) {
+            try {
+                sock.close();
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("closing an HTTP/3 listener socket", ex);
             }
         }
     }
@@ -1802,13 +1850,17 @@ public class HttpAsyncSocketIoController {
         # HTTP/3 request is ready — dispatch it
         *hash<auto> request = h3op.getOutput();
         if (!request) {
-            # No request yet, continue reading
-            h3op.continueReading();
+            # No request yet, continue reading, unless the controller is stopping or the listener was removed: its
+            # socket is closed then (qore#5812)
             int seq;
             {
                 AutoWriteLock al(m);
+                if (stopping || !listeners{owner}) {
+                    return;
+                }
                 seq = ++accept_seq;
             }
+            h3op.continueReading();
             h3op.setCompletionContext(self, listener, target, owner);
             controller.submit(<SocketPollOperationInfo>{
                 "sock": listener,
@@ -4574,7 +4626,8 @@ public class HttpAsyncSocketIoController {
                 # Async-body opt-in: handlers that want inbound DATA frames
                 # delivered via a Qore Queue (instead of the handler-thread
                 # sync Socket::readHttp2StreamDataBlock() path) call this
-                # closure with an unlimited (max=-1) Queue.  The I/O thread
+                # closure with a Queue (a bounded Queue is supported: the I/O
+                # thread never waits for room in it).  The I/O thread
                 # drains previously-buffered frames into the Queue at
                 # registration time and pushes subsequent frames as they
                 # arrive; a NOTHING sentinel marks END_STREAM, and a body that

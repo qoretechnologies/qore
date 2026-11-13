@@ -39,6 +39,7 @@
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 
@@ -912,8 +913,16 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
     // another thread's `rc.get()` safe — the other thread either
     // completes its call first (we wait) or gets a clean Qore exception
     // (we've already invalidated).  See HttpClientConnection.h.
+#ifdef DEBUG
+    // tests check that no two closes of the connection run at the same time
+    QoreDbgHttpCloseScope dbg_close_scope(this);
+#endif
     markInvalidated();
     drainInFlight();
+#ifdef DEBUG
+    // tests hold the close here, after new calls are refused and before the connection is closed
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+#endif
     finishStreamingSend();
 
     if (!poll_op_priv) {

@@ -413,7 +413,8 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorCreate
                     || inst->opcode == QoreIROpcode::IteratorCreateIterate
-                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
+                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors
+                    || inst->opcode == QoreIROpcode::IteratorCreateSource) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (!iter || !iter->iterable.isValid()) {
                     error = "iterator.create missing iterable";
@@ -2675,6 +2676,18 @@ void QoreIRFunction::restoreHandlerPreInstantiatedLocals() {
     }
 }
 
+void QoreIRFunction::embedLocalClosureFlags() {
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (auto* local_inst = dynamic_cast<QoreIRLocalInstruction*>(inst.get())) {
+                if (local_inst->local) {
+                    local_inst->is_closure = local_inst->local->closureUse();
+                }
+            }
+        }
+    }
+}
+
 void QoreIRFunction::computeSlotIdsAndEmbed() {
     // Pass 1: Compute max value ID for right-sizing interpreter value vector
     // AND compute local variable slot IDs for flat array access in interpreter
@@ -2852,6 +2865,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             }
             if (inst->opcode == QoreIROpcode::IteratorCreate || inst->opcode == QoreIROpcode::IteratorCreateIterate
                     || inst->opcode == QoreIROpcode::IteratorCreateSelectors
+                    || inst->opcode == QoreIROpcode::IteratorCreateSource
                     || inst->opcode == QoreIROpcode::IteratorCreateReverse) {
                 interpreter_iterator_slot_boundary[inst.get()] = seen_slots;
                 pending_iterator = inst.get();
@@ -2896,6 +2910,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                     if (it != slot_map.end()) {
                         local_inst->slot_id = it->second;
                     }
+                    // the flag that embedLocalClosureFlags() embeds alone
                     local_inst->is_closure = local_inst->local->closureUse();
                     local_inst->is_ref = localMayHoldReference(local_inst->local,
                         creates_reference, body_local_keys);

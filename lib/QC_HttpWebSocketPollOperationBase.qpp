@@ -107,7 +107,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     // Check if socket is still open — skip in CLOSING state because the
     // peer's TCP FIN may have arrived before the close echo is sent
     if (!sock->isOpen() && (ws_state != WsState::CLOSING || waitsForPeerClose())) {
-        setClosed(1006, "Connection lost");
+        setConnectionLost();
         return nullptr;
     }
 
@@ -157,7 +157,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             xsink->clear();
             if (waitsForPeerClose()) {
                 // the client's close frame can no longer arrive
-                setClosed(1006, "Connection lost");
+                setConnectionLost();
                 return nullptr;
             }
         } else if (!recv_info) {
@@ -167,13 +167,13 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
                 if (output.getType() == NT_BINARY) {
                     const BinaryNode* bin = output.get<const BinaryNode>();
                     if (bin && bin->size() > 0) {
-                        decoder.appendData(bin->getPtr(), bin->size());
+                        feedDecoder(bin->getPtr(), bin->size());
                     }
                     output.discard(xsink);
                 } else if (output.getType() == NT_STRING) {
                     QoreStringValueHelper str(output);
                     if (str && str->size() > 0) {
-                        decoder.appendData(str->c_str(), str->size());
+                        feedDecoder(str->c_str(), str->size());
                     }
                     output.discard(xsink);
                 } else {
@@ -198,7 +198,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             // If frames were pushed in this cycle, defer the close to keep
             // the op alive for the worker to send responses (echo).
             if (!sock->isOpen() && !frames_pushed_in_cycle) {
-                setClosed(1006, "Connection lost");
+                setConnectionLost();
                 return nullptr;
             }
         } else {
@@ -217,7 +217,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     if (!recv_op && !goalReached()) {
         SimpleRefHolder<BinaryNode> pending(sock->drainPendingBuffer());
         if (pending && pending->size() > 0) {
-            decoder.appendData(reinterpret_cast<const char*>(pending->getPtr()),
+            feedDecoder(reinterpret_cast<const char*>(pending->getPtr()),
                 pending->size());
             processDecodedFrames(xsink);
             if (*xsink) {
@@ -410,8 +410,75 @@ const char* HttpWebSocketPollOperationPriv::getStateImpl() const {
     return getWsState();
 }
 
+void HttpWebSocketPollOperationPriv::feedDecoder(const void* data, size_t len) {
+    const char* p = static_cast<const char*>(data);
+    // the payload of a frame rejected on its header is discarded as it arrives (issue #5878)
+    if (skip_bytes) {
+        size_t n = skip_bytes < len ? static_cast<size_t>(skip_bytes) : len;
+        skip_bytes -= n;
+        p += n;
+        len -= n;
+    }
+    if (len) {
+        decoder.appendData(p, len);
+    }
+}
+
+void HttpWebSocketPollOperationPriv::rejectMessage(uint16_t code, const char* reason, ExceptionSink* xsink) {
+    // what was received of the message is discarded, and so are the data frames that follow (issue #5878)
+    reassembler.clear(xsink);
+    fragment_bytes = 0;
+    queueSendClose(code, reason, xsink);
+}
+
+bool HttpWebSocketPollOperationPriv::rejectOversizedFrame(ExceptionSink* xsink) {
+    WsFrameHeader h;
+    if (!decoder.peekHeader(h)) {
+        return false;
+    }
+    bool data = h.opcode == WSOP_TEXT || h.opcode == WSOP_BINARY || h.opcode == WSOP_CONTINUATION;
+    bool control = h.opcode == WSOP_CLOSE || h.opcode == WSOP_PING || h.opcode == WSOP_PONG;
+    // an invalid length, a control frame over 125 bytes (RFC 6455 section 5.5) or a reserved opcode is a protocol
+    // error: the stream cannot be resynchronized after it, so everything that follows is discarded
+    if (h.invalid_length || (!data && !control) || (control && h.payload_len > 125)) {
+        decoder.clear();
+        skip_bytes = UINT64_MAX;
+        protocol_failed = true;
+        protocol_reason = h.invalid_length ? "Invalid frame length"
+            : (control ? "Control frame too big" : "Reserved opcode");
+        rejectMessage(WSCC_ProtocolError, protocol_reason.c_str(), xsink);
+        return true;
+    }
+    if (!data) {
+        return false;
+    }
+    // the size of the message so far plus the frame's, without overflow
+    uint64_t so_far = h.opcode == WSOP_CONTINUATION ? fragment_bytes : 0;
+    if (h.payload_len <= max_frame_size && so_far <= max_frame_size - h.payload_len) {
+        return false;
+    }
+    // the frame is rejected before its payload is buffered: its header and the payload received so far are
+    // discarded now, and the rest as it arrives; the length is valid, so the frame's size does not wrap
+    uint64_t frame_bytes = h.header_size + h.payload_len;
+    size_t avail = decoder.bufferedBytes();
+    size_t n = decoder.discardBytes(frame_bytes < avail ? static_cast<size_t>(frame_bytes) : avail);
+    skip_bytes = frame_bytes - n;
+    rejectMessage(WSCC_MessageTooBig, "Message too big", xsink);
+    return true;
+}
+
 void HttpWebSocketPollOperationPriv::processDecodedFrames(ExceptionSink* xsink) {
-    while (decoder.hasCompleteFrame()) {
+    while (true) {
+        // a frame whose declared length is over the limit is rejected on its header (issue #5878)
+        if (rejectOversizedFrame(xsink)) {
+            if (*xsink) {
+                return;
+            }
+            continue;
+        }
+        if (!decoder.hasCompleteFrame()) {
+            break;
+        }
         WsFrame frame = decoder.nextFrame(xsink);
         if (*xsink) {
             // Protocol error — transition to error state
@@ -428,7 +495,7 @@ void HttpWebSocketPollOperationPriv::processDecodedFrames(ExceptionSink* xsink) 
                 frame.payload->deref(xsink);
             }
             // Send close with 1009 (Message Too Big)
-            queueSendClose(WSCC_MessageTooBig, "Message too big", xsink);
+            rejectMessage(WSCC_MessageTooBig, "Message too big", xsink);
             return;
         }
 
@@ -492,9 +559,13 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                 }
                 close_received = true;
                 // the close code and reason are those of the client's close frame (RFC 6455 sections 7.1.5 and
-                // 7.1.6), also after a close the server started
+                // 7.1.6), also after a close the server started; when the client answers the server's close with
+                // the same code and no reason, the server's reason is kept, so that a close for an error (for
+                // example 1009 for a message that is too big) keeps its description (issue #5861)
+                if (!(close_sent && reason.empty() && code == close_code)) {
+                    close_reason = reason;
+                }
                 close_code = code;
-                close_reason = reason;
 
                 // Push close frame to recv_queue
                 pushRecvCloseFrame(code, reason.c_str(), xsink);
@@ -521,6 +592,18 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
     // the connection's handler gets no more messages
     if (close_sent) {
         return;
+    }
+
+    // a fragmented message is checked as its fragments arrive, not once it is complete (issue #5861)
+    if (frame.opcode == WSOP_CONTINUATION || !frame.fin) {
+        size_t total = (frame.opcode == WSOP_CONTINUATION ? fragment_bytes : 0)
+            + (frame.payload ? frame.payload->size() : 0);
+        if (total > max_frame_size) {
+            fragment_bytes = 0;
+            rejectMessage(WSCC_MessageTooBig, "Message too big", xsink);
+            return;
+        }
+        fragment_bytes = frame.fin ? 0 : total;
     }
 
     // Data frames: use reassembler for fragmentation support
@@ -760,6 +843,12 @@ int HttpWebSocketPollOperationPriv::checkClosing(ExceptionSink* xsink) {
     if (ws_state != WsState::CLOSING || send_op || !send_queue->empty()) {
         return 0;
     }
+    // after a protocol error of the client, the connection ends once the close frame is written: the client's close
+    // frame cannot be read any more (RFC 6455 section 7.1.7, issue #5878)
+    if (protocol_failed) {
+        setClosed(WSCC_ProtocolError, protocol_reason.c_str());
+        return -1;
+    }
     // the connection is lost, or both close frames have been exchanged and ours has been written
     if (!sock->isOpen() || (close_sent && close_received)) {
         setClosed(close_code, close_reason.c_str());
@@ -880,6 +969,10 @@ void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {
     releaseRecvOp(xsink);
     reassembler.clear(xsink);
     decoder.clear();
+    skip_bytes = 0;
+    fragment_bytes = 0;
+    protocol_failed = false;
+    protocol_reason.clear();
 
     if (recv_queue) {
         recv_queue->deref(xsink);
@@ -1124,8 +1217,9 @@ nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason
 }
 
 //! Sets the maximum frame/message size in bytes
-/** Frames larger than this are rejected with close code 1009 (Message Too Big).
-    @param max_frame_size the maximum size in bytes (0 = unlimited, default = 16MB)
+/** Frames larger than this, and fragmented messages whose fragments together exceed it, are rejected with close code
+    1009 (Message Too Big).
+    @param max_frame_size the maximum size in bytes; 0 or less means the default of 16 MiB
     @since %Qore 3.0
 */
 nothing HttpWebSocketPollOperationBase::setMaxFrameSize(int max_frame_size) [flags=NAMED_ARGS] {

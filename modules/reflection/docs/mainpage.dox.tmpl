@@ -144,6 +144,44 @@
     serializers rely on it.  Trusted code must therefore not rely on @ref private_members "private:internal" alone
     to keep a capability or other state from code that is itself trusted.
 
+    @subsection reflection_module_exports The Export Boundary of User Modules
+
+    The same callers (code that a @ref Qore::SandboxManager "SandboxManager" governs, or whose parse options restrict
+    a functional domain) reach through reflection only what a @ref user_modules "user module" exports, that is, what
+    it declares \c public, and builtin declarations, also when they reflect on the module's own %Program (for example
+    through <tt>Class::getClass(obj).getNamespace()</tt> for an object that module code created):
+    - a lookup by name in a namespace of the module, such as
+      @ref Qore::Reflection::Namespace::getFunction() "Namespace::getFunction()", or by path or pattern in the
+      module's %Program, does not find a declaration that the module does not export, nor anything in a namespace that
+      it does not export, and raises the same exception as for a declaration that does not exist; a listing, such as
+      @ref Qore::Reflection::Namespace::getFunctions() "Namespace::getFunctions()", leaves it out
+    - a function that the module declares with \c public and other variants exports only its public variants: the
+      other variants are not listed, not found by
+      @ref Qore::Reflection::Function::getVariant() "Function::getVariant()" and the like, and a call such as
+      @ref Qore::Reflection::Function::call() "Function::call()" selects the variant among the public ones, as a call
+      from a %Program that imports the module does; a public variant given arguments that only another variant
+      accepts selects that variant among the public ones as well
+    - a reflection handle of such a function, function variant, global variable, constant or typed hash, which the
+      module itself created and handed out, cannot call the function or variant, read or write the variable, read the
+      constant, nor can a handle of a \c public function or function variant in a namespace that the module does
+      not export
+    - the initializers of a typed hash (@ref Qore::Reflection::TypedHash::doCast() "TypedHash::doCast()" and member
+      default values), also of a handle obtained from the type of a value
+      (<tt>Type::getType(value).getTypedHash()</tt>), are evaluated only if the caller could name the typed hash in
+      the language: a system typed hash, or one that the caller's %Program declares, imports (a module's exported
+      typed hash) or inherits; they then run under the caller's sandbox and restrictions, as a cast by the caller
+      does; a typed hash that a module does not export, or a parent's that a child %Program does not inherit, is
+      refused
+    - a @ref call_reference "call reference" to a method of a reflection handle (<tt>\\f.call()</tt>) is checked
+      as a direct call of the method by the code that created the reference
+    - a class that the module does not export cannot be constructed, and its static methods, static members,
+      constants and member initializers cannot be used; its normal methods and members can be used with an object of
+      the class, subject to @ref reflection_member_access "member access", as in source code
+
+    Otherwise \c REFLECTION-ACCESS-ERROR is raised.  A declaration that the module imported from another module is
+    checked against the module that declares it: what that module exports remains reachable.  Code that runs in the
+    module's own %Program, and other callers, reach every declaration, as before.
+
     @section reflectionqlibmodules Qore User Modules
 
     - @ref connectionproviderintro "ConnectionProvider" — API for pluggable connection providers to Qore

@@ -627,6 +627,13 @@ int result = pgm.callFunction("compute");
     (executables, <tt>.qo</tt> objects and archives, and modules) with an error naming the source file and the missing
     options, without writing any output.
 
+    Native eligibility also applies to every statement and expression in a body, including nested blocks, closures
+    and parameter defaults. Restoring \c %%modern after legacy code does not make that code eligible. A body with
+    mixed modern and legacy contexts runs on the AST tier in tiered mode; explicit IR and JIT execution reject it
+    with a diagnostic naming the directive and source line. Separately parsed wholly legacy callees remain callable
+    from modern code on the AST tier. qcc checks all bodies and initializers, including source omitted from a
+    relocatable fragment, and rejects any legacy context before writing output.
+
     LLVM 16 or later is required for JIT and AOT support.
 
     @see

@@ -37,9 +37,12 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <memory>
 #include <string>
 
 class Queue;
+class QoreConsumeHook;
+class QueueItemConsumeHook;
 
 //! Per-stream WebSocket frame decode/reassemble/dispatch state machine
 /** Designed to be driven from the I/O thread of a multiplexed transport
@@ -184,13 +187,42 @@ public:
     */
     DLLLOCAL Queue* getMsgQueue() const { return msg_queue; }
 
+    //! Has the stream credit of the data granted as the messages made from it are taken from the queue (#5820)
+    /** @param stream_hook the hook of the stream; the messages of the queue, and data that makes no message
+        (control frames, or every message without a queue), are reported to it
+
+        @return true: the frame state always reports the data (an interface shared with the actions)
+    */
+    DLLLOCAL bool setConsumeHook(std::shared_ptr<QoreConsumeHook> stream_hook);
+
 private:
+    //! reports the data that the messages were made from, if the stream's credit is granted as they are taken
+    std::shared_ptr<QueueItemConsumeHook> item_hook;
+    //! the hook of the stream, which the data is reported to
+    std::shared_ptr<QoreConsumeHook> stream_hook;
+    //! the data fed since the last message, which no message has been made from yet
+    size_t pending_bytes = 0;
+    //! the part of pending_bytes reported to the stream hook as the data of a message in progress
+    size_t progress_bytes = 0;
+
+    //! Ends the message in progress for the stream hook: its data is reported with the message, or at once
+    DLLLOCAL void closeItem();
+
+    //! Reports the data of the message in progress that was not reported yet (it can exceed the stream's window)
+    DLLLOCAL void reportProgress();
+
+    //! Reports the data fed since the last message at once if the decoder holds no partial frame
+    DLLLOCAL void creditUnusedData();
+
     Queue* msg_queue;
     SendCallback send_cb;
     bool is_server;
 
     WebSocketFrameDecoder decoder;
     WebSocketFrameReassembler reassembler;
+    //! the size of the fragments received of the message being reassembled, checked against the maximum message
+    //! size as they arrive (issue #5861)
+    size_t fragment_bytes = 0;
 
     size_t max_message_size = WS_DEFAULT_MAX_FRAME_SIZE;
     int messages_pushed = 0;

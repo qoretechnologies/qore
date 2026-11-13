@@ -518,6 +518,22 @@ public:
     LocalVar* argvid;
     LocalVar* selfid;
     bool resolved;
+    //! true for the signature of a closure, which names the type parameters of the code that it is in (qore#5733)
+    bool closure = false;
+    //! for the signature of a closure: the signature whose type parameters the closure names, if any (qore#5733)
+    /** Set when the closure's signature is resolved in its code at parse time, and when a qcc-compiled closure is
+        loaded in the function that creates it
+    */
+    const UserSignature* enclosing_signature = nullptr;
+
+    //! returns the signature whose type parameters this signature names: its own, or for a closure the enclosing one
+    DLLLOCAL const UserSignature* getTypeParamOwner() const {
+        const UserSignature* rv = this;
+        while (rv->closure && rv->type_params.empty() && rv->enclosing_signature) {
+            rv = rv->enclosing_signature;
+        }
+        return rv;
+    }
     int err = 0;
 
     DLLLOCAL UserSignature(int n_first_line, int n_last_line, QoreValue params, RetTypeInfo* retTypeInfo, const QoreParseOptions& po);
@@ -672,10 +688,63 @@ public:
 class AbstractQoreFunctionVariant;
 class RuntimeConfig;
 
+#ifdef DEBUG
+//! Set for the next call of a variant that the caller chose at runtime (the reflection API), which the parser did not
+/** CodeEvaluationHelper::init() checks the invariant of the parse-time variant commitment for the other calls: only a
+    variant committed at parse time is known to match the types of its arguments.  It reads and clears the flag, so
+    that the calls that the variant makes are checked.
+*/
+DLLLOCAL extern thread_local bool qore_dbg_runtime_chosen_variant;
+
+class QoreDbgRuntimeChosenVariantHelper {
+public:
+    DLLLOCAL QoreDbgRuntimeChosenVariantHelper() {
+        qore_dbg_runtime_chosen_variant = true;
+    }
+
+    DLLLOCAL ~QoreDbgRuntimeChosenVariantHelper() {
+        qore_dbg_runtime_chosen_variant = false;
+    }
+};
+#define QORE_DBG_RUNTIME_CHOSEN_VARIANT() QoreDbgRuntimeChosenVariantHelper qore_dbg_runtime_chosen_variant_helper
+#else
+#define QORE_DBG_RUNTIME_CHOSEN_VARIANT()
+#endif
+
 #define ARG_DEF   (1 << 0)
 #define ARG_OTHER (1 << 1)
 
 class RuntimeParseOptionsOverrideHelper;
+
+//! The name of the call stack frame of a call, built when it is first read
+/** Only call stacks and error messages read it, so a call does not build (and, for a name longer than the short
+    string buffer, allocate) "Class::method" (issue #5852).  The frame can be read by another thread walking the
+    thread's call stack (QoreThreadList::walkCallStack()) while the thread reads it itself, so the name is installed
+    atomically; the destructor runs after the frame has been removed from the stack.
+*/
+class CodeEvaluationCallName {
+public:
+    DLLLOCAL CodeEvaluationCallName() = default;
+
+    DLLLOCAL ~CodeEvaluationCallName() {
+        delete name.load(std::memory_order_acquire);
+    }
+
+    CodeEvaluationCallName(const CodeEvaluationCallName&) = delete;
+    CodeEvaluationCallName& operator=(const CodeEvaluationCallName&) = delete;
+
+    //! returns the name of the call of \a func: "[Class::]function", empty if \a func is nullptr
+    DLLLOCAL const std::string& get(const qore_class_private* qc, const QoreFunction* func) const {
+        std::string* n = name.load(std::memory_order_acquire);
+        return n ? *n : build(qc, func);
+    }
+
+private:
+    mutable std::atomic<std::string*> name{nullptr};
+
+    DLLLOCAL QORE_INTERN_NOINLINE const std::string& build(const qore_class_private* qc, const QoreFunction* func)
+        const;
+};
 
 class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
 public:
@@ -698,7 +767,7 @@ public:
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool n_defer_domain_po = false);
+            unsigned n_call_flags = 0);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -725,7 +794,7 @@ public:
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool n_defer_domain_po = false, bool n_hide_call_site = false);
+            unsigned n_call_flags = 0, bool n_hide_call_site = false);
 
     DLLLOCAL ~CodeEvaluationHelper();
 
@@ -813,7 +882,7 @@ public:
 
     //! returns the name of the function or method call (ex: "[Class::]method")
     DLLLOCAL virtual const std::string& getCallName() const override {
-        return callName;
+        return call_name.get(qc, call_func);
     }
 
     DLLLOCAL virtual qore_call_t getCallType() const override {
@@ -836,8 +905,37 @@ public:
 
     //! returns true if the call entered a module's Program from another Program and set its runtime parse options
     //! override (see qore_get_module_call_runtime_po_override()), which is computed once for the crossing
+    /** The helper of that override is borrowed by UserVariantBase::eval() and UserClosureVariant::evalClosure() for
+        the override of the variant's code if the call did not set one (borrowPoOverride()); this must be asked before,
+        as the borrowed helper is set too
+    */
     DLLLOCAL bool hasModuleCallOverride() const {
-        return module_po_override.isSet();
+        assert(!po_override_borrowed);
+        return module_po_override.isSet() && !po_override_borrowed;
+    }
+
+    //! borrows the runtime parse options override helper of the call for the override of the variant's code
+    /** @return the helper, or nullptr if the call entered a module's Program and set its override already
+        (hasModuleCallOverride())
+
+        The helper is not set otherwise, so the variant's evaluation sets the override of its code in it instead of a
+        helper of its own, which would make its frame, on the stack at every level of a recursion, 120 bytes larger
+        (issue #5852); it is returned (restored and cleared) with returnPoOverride(), see CodeEvaluationPoOverrideBorrow
+    */
+    DLLLOCAL RuntimeParseOptionsOverrideHelper* borrowPoOverride() {
+        assert(!po_override_borrowed);
+        if (module_po_override.isSet()) {
+            return nullptr;
+        }
+        po_override_borrowed = true;
+        return &module_po_override;
+    }
+
+    //! restores the override that the borrowed helper set, if it set one, and returns the helper
+    DLLLOCAL void returnPoOverride() {
+        assert(po_override_borrowed);
+        module_po_override.reset();
+        po_override_borrowed = false;
     }
 
     DLLLOCAL virtual const AbstractStatement* getStatement() const override {
@@ -852,6 +950,18 @@ public:
 protected:
     QoreSandboxProvenanceHelper sandbox_provenance;
     qore_call_t ct;
+    // the flags follow ct, which would otherwise be followed by padding
+    bool variant_needs_type_param_substitution = false;
+    //! true if the variant was selected at runtime by checking the elements of an argument, so that another call
+    //! with arguments of the same types could select another variant
+    bool variant_content_dependent = false;
+    bool restore_stack = false;
+    bool restore_runtime_ctx = false;
+    bool restore_receiver_type_info = false;
+    bool restore_type_param_instantiation = false;
+    bool restore_rtflags = false;
+    //! true while the variant's evaluation has borrowed module_po_override; see borrowPoOverride()
+    bool po_override_borrowed = false;
     const char* name;
     ExceptionSink* xsink;
     RuntimeConfig& rc;
@@ -862,11 +972,22 @@ protected:
     const QoreProgramLocation* hidden_call_site = nullptr;
     const QoreProgramLocation* loc;
     QoreListNodeEvalOptionalRefHolder tmp;
+    //! QCEF_DEFER_DOMAIN_PO and the QRFV_* filter of the variants that the call can select (see
+    //! QoreFunction::runtimeFindVariant()); with QCEF_DEFER_DOMAIN_PO, the switch of the runtime parse options to
+    //! the called Program is deferred until *after* argument evaluation, variant resolution and the
+    //! functional-domain (dom=...) check, so that a deliberate cross-Program QoreProgram::callFunction() evaluates
+    //! the dom check against the CALLER's parse options (the cross-Program privilege model); for everything else
+    //! (direct calls, method calls, call references, closures) the switch happens before the dom check, so the
+    //! check runs against the target/creation Program's options
+    unsigned call_flags;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
     const QoreTypeInfo* receiver_type_info = nullptr;
     QoreProgram* pgm = nullptr; // program used when evaluated (to find stacks for references)
     const AbstractStatement* stmt = nullptr; // the current statement for the call stack entry
-    std::string callName;
+    //! the function or method called, which names the call stack frame; nullptr if the call did not start
+    const QoreFunction* call_func = nullptr;
+    //! the name of the call stack frame, built when it is first read; see getCallName()
+    CodeEvaluationCallName call_name;
     const QoreStackLocation* stack_loc = nullptr;
     const QoreProgramLocation* old_runtime_loc = nullptr;
     const AbstractStatement* old_runtime_stmt = nullptr;
@@ -890,23 +1011,7 @@ protected:
     QoreTypeParamInstantiation type_param_instantiation;
     const QoreTypeParamInstantiation* old_type_param_instantiation = nullptr;
     q_rt_flags_t old_rtflags = 0;
-    bool variant_needs_type_param_substitution = false;
-    //! true if the variant was selected at runtime by checking the elements of an argument, so that another call
-    //! with arguments of the same types could select another variant
-    bool variant_content_dependent = false;
-    bool restore_stack = false;
-    bool restore_runtime_ctx = false;
-    bool restore_receiver_type_info = false;
-    bool restore_type_param_instantiation = false;
-    bool restore_rtflags = false;
     bool restore_call_program_context = false;
-    // when true, defer switching the runtime parse options to the called Program until *after* argument
-    // evaluation + variant resolution + the functional-domain (dom=...) check, so that a deliberate
-    // cross-Program QoreProgram::callFunction() evaluates the dom check against the CALLER's parse
-    // options (the cross-Program privilege model).  For everything else (direct calls, method calls,
-    // call references, closures) the switch happens before the dom check, so the check runs against the
-    // target/creation Program's options.
-    bool defer_domain_po = false;
 
 #ifdef DEBUG
     //! the resolved variant, recorded once init() has committed to actually running the call
@@ -925,10 +1030,52 @@ protected:
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 
+    //! the variant search of findVariant() with the QRFV_* filter of the call flags (not 0); out of line, as it is
+    //! not on a call's common path
+    DLLLOCAL QORE_INTERN_NOINLINE const AbstractQoreFunctionVariant* findFilteredVariant(const QoreFunction* func,
+        const qore_class_private* class_ctx);
+
     DLLLOCAL int setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
         const AbstractFunctionSignature* sig);
 
-    DLLLOCAL void setCallName(const QoreFunction* func);
+    //! sets the function that names the call stack frame of the call; see getCallName()
+    DLLLOCAL void setCallName(const QoreFunction* func) {
+        call_func = func;
+    }
+};
+
+//! Borrows the runtime parse options override helper of a call for the override of a user variant's code
+/** See CodeEvaluationHelper::borrowPoOverride(); the override is restored where the variant's own helper was
+    destroyed before, as this object is
+*/
+class CodeEvaluationPoOverrideBorrow {
+public:
+    //! borrows the helper of \a ceh, unless the call set the override of a crossing into a module's Program
+    DLLLOCAL CodeEvaluationPoOverrideBorrow(CodeEvaluationHelper& ceh)
+            : ceh(ceh.hasModuleCallOverride() ? nullptr : &ceh) {
+        if (this->ceh) {
+            helper = this->ceh->borrowPoOverride();
+            assert(helper);
+        }
+    }
+
+    DLLLOCAL ~CodeEvaluationPoOverrideBorrow() {
+        if (ceh) {
+            ceh->returnPoOverride();
+        }
+    }
+
+    CodeEvaluationPoOverrideBorrow(const CodeEvaluationPoOverrideBorrow&) = delete;
+    CodeEvaluationPoOverrideBorrow& operator=(const CodeEvaluationPoOverrideBorrow&) = delete;
+
+    //! returns the borrowed helper, or nullptr if the call set the override of a crossing into a module's Program
+    DLLLOCAL RuntimeParseOptionsOverrideHelper* get() const {
+        return helper;
+    }
+
+private:
+    CodeEvaluationHelper* ceh;
+    RuntimeParseOptionsOverrideHelper* helper = nullptr;
 };
 
 class UserVariantBase;
@@ -1285,13 +1432,22 @@ public:
         setProgram() is called only before the variant can be called
     */
     mutable std::atomic<bool> pgm_module_lifetime{false};
+    //! true once the deletion of \a pgm has started: a fast path that evaluates the variant's code without entering
+    //! the Program takes the call path then, which refuses the call (qore#5822)
+    mutable std::atomic<bool> pgm_deleted{false};
+    //! the previous variant in its Program's list of variants; protected by the Program's user_variant_lock (see
+    //! qore_program_private::registerUserVariant())
+    mutable const UserVariantBase* uv_prev = nullptr;
+    //! the next variant in its Program's list of variants; protected by the Program's user_variant_lock
+    mutable const UserVariantBase* uv_next = nullptr;
 
-    //! sets the Program of the variant
-    DLLLOCAL void setProgram(QoreProgram* p) {
-        pgm = p;
-        pgm_id = p ? p->getProgramId() : 0;
-        pgm_module_lifetime.store(false, std::memory_order_relaxed);
-    }
+    //! sets the Program of the variant, which stays allocated while the variant lives
+    /** A variant can outlive its Program: another Program calls it through an imported function, a call reference,
+        a closure or an object, and the call is refused once the Program is deleted (PROGRAM-ERROR).  The checks made
+        before the call is refused read the Program (whether a debugger is attached to it, for example), so the
+        variant holds a dependency reference to it, which keeps its memory but not its data (qore#5822)
+    */
+    DLLLOCAL void setProgram(QoreProgram* p);
 
 protected:
     // flag to recheck params against committed after type resolution
@@ -1336,6 +1492,11 @@ protected:
     // that sees them instead of the values of a body published at the same time only instantiates more.
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
     mutable std::atomic<bool> all_body_locals_ir_only{false};
+    //! True if the body reads the implicit arguments ($1, $$) of its own call outside any operator that sets them
+    /** such a variant is not called through the fast, inlined or native entries, which set no implicit arguments for
+        it (qore#5805); set by the parse of the body
+    */
+    bool reads_implicit_args = false;
     //! True if argv is actually referenced in the function body
     mutable std::atomic<bool> uses_argv{true};
     //! True if self is actually referenced in the function body
@@ -1382,6 +1543,9 @@ protected:
             ExceptionSink* xsink) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr, bool ref_obj = true) const;
+    //! eval() for a call without a CodeEvaluationHelper (destructors), which has a helper of its own for the override
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalWithoutHelper(const char* name, QoreObject* self,
+            ExceptionSink* xsink, const qore_class_private* qc, bool ref_obj) const;
     DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)
             const;
 
@@ -1766,7 +1930,7 @@ public:
     //! is checked separately by qore_rt_call_fast() which falls back if not ready.
     //! @param allow_type_parameters allow a separately validated concrete specialization
     DLLLOCAL bool isStaticallyFastCallEligible(bool allow_type_parameters = false) const {
-        if (isSynchronized()) {
+        if (isSynchronized() || reads_implicit_args) {
             return false;
         }
         if (!allow_type_parameters && signature.hasTypeParameters()) {
@@ -1945,6 +2109,25 @@ struct IList : public ilist_t {
     DLLLOCAL QoreFunction* getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
         const_iterator aqfi, bool& internal_access, bool& stop) const;
 };
+
+//! variant filter of QoreFunction::runtimeFindVariant(): only user variants
+#define QRFV_ONLY_USER     (1 << 0)
+//! variant filter of QoreFunction::runtimeFindVariant(): no user variant that a user module does not export
+/** For a caller that the export boundary of the module applies to (see QoreReflectionCaller::appliesModuleExports()):
+    it can call only the variants that an importer of the module sees.
+*/
+#define QRFV_EXPORTED_ONLY (1 << 1)
+//! call flag of CodeEvaluationHelper and QoreFunction::evalFunction(): defer the switch of the runtime parse options
+/** to the called Program until the functional-domain check has been made with the caller's (a deliberate
+    cross-Program QoreProgram::callFunction()); the bits in QRFV_MASK of the call flags are QRFV_* variant filters,
+    so that one argument carries both
+*/
+#define QCEF_DEFER_DOMAIN_PO (1u << 8)
+//! the bits of the call flags of CodeEvaluationHelper that hold the QRFV_* variant filter
+/** The filter has a byte of its own, and QCEF_DEFER_DOMAIN_PO is outside it, so that each is read with a single
+    byte access on a call's path
+*/
+#define QRFV_MASK 0xffu
 
 class QoreFunction : protected QoreReferenceCounter {
 friend class QoreFunctionIterator;
@@ -2263,17 +2446,20 @@ public:
     }
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
+    //! \a call_flags: QCEF_DEFER_DOMAIN_PO and a QRFV_* variant filter (see QRFV_EXPORTED_ONLY), which applies when
+    //! the variant is selected for the arguments, also when the given variant does not accept them
     DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool defer_domain_po = false) const;
+            unsigned call_flags = 0) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // this function will use destructive evaluation of "args"
+    //! \a call_flags: see evalFunction()
     DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
             QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            bool defer_domain_po = false) const;
+            unsigned call_flags = 0) const;
 
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
@@ -2375,18 +2561,28 @@ public:
     // find variant at runtime
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's reachable from the object being executed
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
-            bool only_user, const qore_class_private* class_ctx,
+            unsigned variant_filter, const qore_class_private* class_ctx,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
             bool* content_dependent = nullptr, const QoreParseOptions* user_dom_po = nullptr,
             const QoreProgram* user_dom_code_pgm = nullptr) const;
 
-    // finds the best match with the given arg types
+    // finds the best match with the given arg types; \a variant_filter: see QRFV_ONLY_USER and QRFV_EXPORTED_ONLY
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
             const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
+            unsigned variant_filter = 0) const;
+
+    //! returns true if \a v is skipped by a runtime variant search with the given QRFV_* filter (not 0)
+    DLLLOCAL static bool skipFilteredVariant(unsigned variant_filter, const AbstractQoreFunctionVariant* v) {
+        if ((variant_filter & QRFV_ONLY_USER) && !v->isUser()) {
+            return true;
+        }
+        // a user module's variant that the module does not export
+        return (variant_filter & QRFV_EXPORTED_ONLY) && v->isUser() && !v->isModulePublic();
+    }
     // finds only an exact match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
 
@@ -2573,7 +2769,7 @@ protected:
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
         bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant,
         const QoreTypeInfo* receiver_type_info = nullptr,
-        const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
+        const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr, unsigned variant_filter = 0) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* checkVariantDomain(ExceptionSink* xsink, const QoreParseOptions& ppo,
         const AbstractQoreFunctionVariant* variant) const;
@@ -2822,6 +3018,7 @@ protected:
 public:
     DLLLOCAL UserClosureVariant(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced = false, int64 n_flags = QCF_NO_FLAGS) : UserFunctionVariant(b, n_sig_first_line, n_sig_last_line, params, rv, synced, n_flags) {
         is_closure = true;
+        signature.closure = true;
     }
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);

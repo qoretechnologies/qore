@@ -184,6 +184,9 @@ class QoreValue;
 typedef std::vector<const QoreClass*> class_vec_t;
 typedef std::vector<std::pair<const TypedHashDecl*, const QoreNamespace*>> hashdecl_vec_t;
 typedef std::vector<const QoreExternalFunction*> func_vec_t;
+//! a list of functions, each with the namespace it was found in
+/** @since %Qore 3.0 */
+typedef std::vector<std::pair<const QoreExternalFunction*, const QoreNamespace*>> func_ns_vec_t;
 typedef std::vector<const QoreNamespace*> ns_vec_t;
 typedef std::vector<std::pair<const QoreExternalGlobalVar*, const QoreNamespace*>> gvar_vec_t;
 typedef std::vector<std::pair<const QoreExternalConstant*, const QoreNamespace*>> const_vec_t;

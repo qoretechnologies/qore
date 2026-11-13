@@ -172,8 +172,12 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - nested-module-parse: the module is loaded in a child process whose module path holds it (#5803, #5938)
         # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
         #   WebSocket client in the test's own process only drives it
+        # - callref-object-method-program and reflection-typed-hash-visibility (#5692): their probes run in child
+        #   processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
+                                 "examples/test/qore/misc/callref-object-method-program.qtest",
+                                 "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest",
                                  "examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest",

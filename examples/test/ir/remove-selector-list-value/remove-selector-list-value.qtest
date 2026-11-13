@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class RemoveSelectorListValueTest
+
+#! issues #5736 and #5777: remove and delete with a selector whose value is a list, and with a range on a value that
+#! is not a container
+/** In a list of selectors, IR, JIT, tiered and AOT code took a selector that is not a range but whose value is a list
+    as a list of indexes and removed each of them; the AST interpreter, and every mode for the expression as a value
+    and for its iteration, take it as one index.  Only a range selects each index of its value.  The same held for a
+    list of hash keys, where a key whose value is a list is one key; and AOT code removed nothing for a single
+    list-valued index on a value that is not a list, a string or a binary, which the AST interpreter removes.
+
+    With a single range on a value that is not a list, a string, a binary or a buffer, the AST interpreter raises
+    ILLEGAL-EXPRESSION, as the value form does in every mode, while IR, JIT, tiered and AOT code removed nothing.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
+    must be that of the AST interpreter.
+*/
+class RemoveSelectorListValueTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "selector-list-value-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("remove and delete with a selector whose value is a list", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        list<string> lines = out.split("\n");
+        assertEq(49, (select lines, $1 =~ /^[a-z][a-z ]*:$/).size(), "every case ran");
+        # a selector whose value is a list is one index (0), in the value, the iteration and remove and delete
+        assertTrue(out =~ /^value list selector:\n  = \[10, 10, 13\]\n/, "value");
+        assertTrue(out =~ /\niterate list selector:\n  = \[10, 10, 13\]\n/, "iteration");
+        assertTrue(out =~ /\nremove list selector:\n  = \[\[10, 10, 13\], \[11, 12\]\]\n/, "remove");
+        assertTrue(out =~ /\ndelete list selector:\n  = \[11, 12\]\n/, "delete");
+        assertTrue(out =~ /\nremove list selector first:\n  = \[\[10, 12\], \[11, 13\]\]\n/, "first selector");
+        assertTrue(out =~ /\nremove string list selector:\n  = \["aad", "bc"\]\n/, "string");
+        assertTrue(out =~ /\nremove binary list selector:\n  = \[!!binary AAAD, !!binary AQI=\]\n/, "binary");
+        assertTrue(out =~ /\nremove global list selector:\n  = \[\[10, 10\], \[11, 12, 13\]\]\n/, "global");
+        assertTrue(out =~ /\nremove path list selector:\n  = \[\[10, 10\], \{a: \[11, 12, 13\]\}\]\n/, "path");
+        # a ternary is not a range even when its value is that of a range
+        assertTrue(out =~ /\nremove ternary selector:\n  = \[\[10, 10\], \[11, 12, 13\]\]\n/, "ternary list");
+        assertTrue(out =~ /\nremove ternary range selector:\n  = \[\[10, 10\], \[11, 12, 13\]\]\n/, "ternary");
+        assertTrue(out =~ /\ndelete object list selector:\n  destroy d2\n  destroy d0\n/, "delete objects");
+        # the selectors before one that raises remove what they select
+        assertTrue(out =~ /\npartial remove list selector:\n  caught SEL-ERROR\n  = \[11, 12\]\n/, "partial");
+        assertTrue(out =~ /\npartial remove string list selector:\n  caught SEL-ERROR\n  = "bc"\n/, "partial string");
+        assertTrue(out =~ /\ndelete string list selector:\n  = "bc"\n/, "delete string");
+        assertTrue(out =~ /\ndelete binary list selector:\n  = !!binary AQI=\n/, "delete binary");
+        assertTrue(out =~ /\nremove reference list selector:\n  = \[\[10, 10\], \[11, 12, 13\]\]\n/, "reference");
+        assertTrue(out =~ /\nremove member list selector:\n  = \[\[10, 10\], \[11, 12, 13\]\]\n/, "member");
+        assertTrue(out =~ /\nremove nested list selector:\n  = \[\[10, 10\], \[1, \[11, 12\]\]\]\n/, "nested selectors");
+        assertTrue(out =~ /\nremove nested range:\n  = \[\[10, 11\], \[1, \[12\]\]\]\n/, "nested range");
+        # in a list of hash keys, a key whose value is a list is one key; a single list-valued key is a slice
+        assertTrue(out =~ /\nremove hash list key:\n  = \[\{a: 1\}, \{b: 2, c: 3, b c: 4\}\]\n/, "hash key");
+        assertTrue(out =~ /\ndelete hash list key:\n  = \{b: 2, c: 3\}\n/, "delete hash key");
+        assertTrue(out =~ /\nremove object list key:\n  ! INVALID-MEMBER: /, "object key");
+        assertTrue(out =~ /\nremove hash single list key:\n  = \[\{b: 2, c: 3\}, \{a: 1\}\]\n/, "hash slice");
+        # a single list-valued index on a value that is not a list, a string or a binary removes the value
+        assertTrue(out =~ /\nremove single list index int:\n  = \[5, null\]\n/, "single list index int");
+        assertTrue(out =~ /\nremove single list index hash:\n  = \[\{a: 1\}, null\]\n/, "single list index hash");
+        assertTrue(out =~ /\nremove single list index path:\n  = \[5, \{a: null\}\]\n/, "single list index path");
+        assertTrue(out =~ /\ndelete single list index int:\n  = null\n/, "delete single list index");
+        # ranges select each index; a single index whose value is a list is a slice
+        assertTrue(out =~ /\nremove range selectors:\n  = \[\[10, 11, 12\], \[13\]\]\n/, "ranges");
+        assertTrue(out =~ /\nremove single list index:\n  = \[\[11, 12\], \[10, 13\]\]\n/, "single list index");
+        # a range on a value that is not a container raises, as the value form does
+        string illegal = "  ! ILLEGAL-EXPRESSION: Index range can be applied only to lists, strings, binaries, and "
+            "buffers\n";
+        foreach string name in ("value range int", "remove range nothing", "delete range nothing",
+                "remove range int", "delete range int", "remove range hash", "remove range path int",
+                "remove range global nothing", "remove range through reference") {
+            assertTrue(out.find(sprintf("\n%s:\n%s", name, illegal)) >= 0, name);
+        }
+        assertTrue(out =~ /\nremove range object:\n  destroy ro\n  ! ILLEGAL-EXPRESSION: /, "object");
+        # a missing path is not created; a buffer has nothing removed
+        assertTrue(out =~ /\nremove range missing path:\n  = \[null, \{\}\]\n/, "missing path");
+        assertTrue(out =~ /\nremove range buffer:\n  = \[null, 3\]\n/, "buffer");
+        assertTrue(out =~ /\nremove selectors int:\n  = \[null, 5\]\n/, "list of selectors on an int");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("remove-selector-list-value-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

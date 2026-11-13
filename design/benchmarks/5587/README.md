@@ -25,6 +25,12 @@ targeted cancel/close of `AsyncIoControllerPriv` (`getSocketThreadIndexes()`) in
   10 ms) read when the client asks it to quit.  Server CPU per request is `(user + sys) * 10000 / (requests + 51)`
   microseconds; a run of one request costs about 17 ticks (start-up, module load and the 50 warm-up requests), which
   is not a per-request cost.
+  The server listens on a port of its own and prints it in its `ready <port>` line, which the scripts give to the
+  client, so that concurrent runs on a host do not share a server; `HTTP_BENCH_PORT=<port>` makes it listen on a fixed
+  port, for `loadgen`.  The server stops once the response to `GET /quit` has been sent (its `after_send` callback):
+  `HttpServer::stop()` cancels the sends that are still pending, so stopping the server as soon as the request arrived
+  could close the connection before the response was sent, which failed the client with `SOCKET-CLOSED` after all the
+  measured requests (#5811); the server now stops once the response has been written to the socket.
 
 Modules loaded from a worktree's `qlib/` run interpreted unless their `-qmod` target is built: the first measurement
 of the handler path below (3.3 ms per request) was interpreted and is not what an installed Qore does.
@@ -128,11 +134,12 @@ its lock once a second), and a change of the routes copied the whole table under
 state is published with hazard pointers (`HttpFastPublished`) and the serialized responses are cached per thread, so the
 I/O thread takes no lock (`design/http-server-fast-routes.md`, "Publishing state without a lock").
 
-Method: `HTTP_BENCH_FAST=1 design/benchmarks/5587/run-http.sh ...` serves `GET /` from a fast route; `loadgen.c` (build with
-`gcc -O2 -pthread -o loadgen loadgen.c`; `loadgen <port> <threads> <requests per thread>`) sends keep-alive requests from
-many threads, far more load than the Qore client can.  The same `qore` executable ran with the `libqore` from before the
-change and with the new one (the executable has a `RUNPATH`, so `LD_LIBRARY_PATH` selects the library).  The futex waits
-of the server process are counted with `strace -f -e trace=futex` over the requests (the traced run is slower).
+Method: `HTTP_BENCH_FAST=1 HTTP_BENCH_PORT=38765 design/benchmarks/5587/run-http.sh ...` serves `GET /` from a fast
+route; `loadgen.c` (build with `gcc -O2 -pthread -o loadgen loadgen.c`; `loadgen 38765 <threads> <requests per thread>`)
+sends keep-alive requests from many threads, far more load than the Qore client can. The same `qore` executable ran with
+the `libqore` from before the change and with the new one (the executable has a `RUNPATH`, so `LD_LIBRARY_PATH` selects
+the library). The futex waits of the server process are counted with `strace -f -e trace=futex` over the requests (the
+traced run is slower).
 
 |!Measure|!Before|!After
 |futex waits per 64,000 requests, 4 and 8 I/O threads (three runs each, interleaved)|749 to 1130 (mean about 900)|302 to 405 (mean about 350)

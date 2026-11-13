@@ -166,8 +166,11 @@ public:
             // Push the NOTHING sentinel so the handler thread's read loop
             // exits cleanly.  Don't deref the Queue — the QoreObject ref is
             // held in the QPP layer's `stream_queue_objs` member hash and
-            // is released by the standard internal_members deref path.
-            queue->pushAndTakeRef(QoreValue());
+            // is released by the standard internal_members deref path.  Pushed
+            // without waiting, even if the Queue is bounded and full (issue #5859).
+            ExceptionSink push_xsink;
+            queue->tryPush(&push_xsink, QoreValue(), true);
+            push_xsink.clear();
             return;
         }
         stream_queues[stream_key] = queue;

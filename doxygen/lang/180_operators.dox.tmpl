@@ -2405,6 +2405,16 @@ if (x || y)
     |\a lvalue (@ref nothing)|if the \a lvalue's type has a default value (ex: @ref int_type "int", @ref string_type "string"), the \a lvalue first takes that value and is processed as above; an or-nothing lvalue (ex: \c *string) takes the default value of its plain type, unless \a expression has no value, which leaves it with no value; otherwise the \a lvalue will be assigned to the value of \a expression.
     |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer, and the \a expression will be evaluated and converted to an integer if necessary, and then the result will be added to the \a lvalue.
 
+    @anchor compound_assignment_union_nothing
+    @note A union type (ex: <tt>union&lt;int, float&gt;</tt>, <tt>*union&lt;int, float&gt;</tt>) has no default value,
+    and its \a lvalue is not a list or a hash \a lvalue even if a member of the union is a list or a hash; an or-nothing
+    union with no value is therefore assigned the value of the \a expression, which the union must accept, or
+    \c RUNTIME-TYPE-ERROR is raised; ex:
+    - <tt>*union&lt;int, float&gt; u; u += 2.5;</tt> gives \c 2.5
+    - <tt>*union&lt;float, int&gt; u; u += 2;</tt> gives \c 2.0
+    - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u += 2;</tt> gives \c 2
+    - <tt>*union&lt;int, float&gt; u; u += 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
+
     <hr>
     @subsection minus_equals_operator Minus Equals Operator (-=)
 
@@ -2434,6 +2444,13 @@ if (x || y)
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref list_type "list")|each element in the list will be converted to a string (if necessary) and the key represented by each string will be removed from the hash or object
     |\a lvalue (@ref nothing), \a expression (any type)|a hash lvalue is left with no value; otherwise, if the \a lvalue's type, or for an or-nothing lvalue (ex: \c *int) its plain type, has a default value, the \a lvalue first takes that value and is processed as above (ex: <tt>int i; i -= 0;</tt> gives 0); otherwise the negated \a expression will be assigned to \a lvalue; an \a expression with no value leaves the \a lvalue unchanged
     |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer (if necessary), and the \a expression will be evaluated and converted to an integer (if necessary), and then the result will be subtracted from the \a lvalue; for an lvalue of an int type and a date \a expression, the \a lvalue is assigned the result of <tt>lvalue - expression</tt>, a date, which an \c int or \c *int lvalue (including an int member of a typed hash) refuses with \c RUNTIME-TYPE-ERROR and a \c softint lvalue converts to an int; a \c timeout lvalue subtracts the date in milliseconds
+
+    @note A union type has no default value (see @ref compound_assignment_union_nothing "+="): an or-nothing union with
+    no value is assigned the negated \a expression, which the union must accept, or \c RUNTIME-TYPE-ERROR is raised;
+    ex:
+    - <tt>*union&lt;int, float&gt; u; u -= 2.5;</tt> gives \c -2.5
+    - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u -= 2;</tt> gives \c -2
+    - <tt>*union&lt;int, float&gt; u; u -= 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
 
     <hr>
     @subsection and_equals_operator And Equals Operator (&=)

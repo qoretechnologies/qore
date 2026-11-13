@@ -109,6 +109,7 @@ private:
     friend RuntimeConfig rc_get_parse_time();
     friend RuntimeConfig& rc_get_current_ref();
     friend RuntimeConfig& rc_get_tls_ref();
+    friend QoreProgram* rc_get_current_program(const RuntimeConfig& rc);
     friend void rc_sync_to_thread(const RuntimeConfig& rc);
     friend class RuntimeConfigHelper;
     friend class RuntimeConfigCallRefAccess;

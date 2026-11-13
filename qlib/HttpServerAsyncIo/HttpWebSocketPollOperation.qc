@@ -672,7 +672,7 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
                 if (handler) {
                     handler.logError("WebSocket message rejected: %s", ex.desc);
                 }
-                sendClose(WSCC_MessageTooBig);
+                sendClose(WSCC_MessageTooBig, "Message too big");
                 return;
             }
             call_object_method(wsc, "validateIncomingMessage", \msg);

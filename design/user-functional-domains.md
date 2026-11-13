@@ -151,7 +151,7 @@ the inherited options before the `FUNCTIONAL_DOMAIN` check (`AOT-MODULE-RESTRICT
 
 ## AOT format
 
-v25: signature flag bit 4 (`0x0010`) + `i64` declared domains after the variant parse options
+v29 (v25 before the merge of develop, whose batch F used v25-v28): signature flag bit 4 (`0x0010`) + `i64` declared domains after the variant parse options
 (`writeVariantSignature()`, `readAndSetupVariantSignature()`, `skipAOTVariantSignature()`); included in the variant
 declaration digests.  `MODULE_DOMAINS` section (33).  AOT identity changes (generated from the format sources).
 
