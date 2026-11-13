@@ -1688,6 +1688,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
+      compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash
