@@ -7,10 +7,6 @@
 // raise STACK-LIMIT-EXCEEDED, and the thread must run code again afterwards.
 #include <qore/Qore.h>
 
-#ifdef NDEBUG
-#undef NDEBUG
-#endif
-#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -49,19 +45,28 @@ static const char* expected_result = "1837.50 3:m n0 {a: [1, 2]} 117.74 MiB";
 
 static unsigned failures = 0;
 
-//! returns the lowest address of the calling thread's stack and its size as the C library reports it
-static void current_stack_bounds(uintptr_t& base, size_t& size) {
+//! gets the lowest address of the calling thread's stack and its size as the C library reports it
+/** @return 0 for success, -1 if the stack could not be determined
+*/
+static int current_stack_bounds(uintptr_t& base, size_t& size) {
 #ifdef __APPLE__
     size = pthread_get_stacksize_np(pthread_self());
     // the address of the top of the stack
     base = reinterpret_cast<uintptr_t>(pthread_get_stackaddr_np(pthread_self())) - size;
+    return 0;
 #else
     pthread_attr_t attr;
-    assert(!pthread_getattr_np(pthread_self(), &attr));
+    if (pthread_getattr_np(pthread_self(), &attr)) {
+        return -1;
+    }
     void* addr = nullptr;
-    assert(!pthread_attr_getstack(&attr, &addr, &size));
-    assert(!pthread_attr_destroy(&attr));
+    int rc = pthread_attr_getstack(&attr, &addr, &size);
+    pthread_attr_destroy(&attr);
+    if (rc) {
+        return -1;
+    }
     base = reinterpret_cast<uintptr_t>(addr);
+    return 0;
 #endif
 }
 
@@ -89,11 +94,20 @@ static void run_code() {
         ExceptionSink xsink;
         QoreProgramHelper program(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS, xsink);
         QoreExternalProgramContextHelper context(&xsink, *program);
-        assert(!xsink);
+        if (xsink) {
+            std::fprintf(stderr, "mode %d: program context: %s\n", static_cast<int>(mode), describe(xsink).c_str());
+            xsink.clear();
+            ++failures;
+            continue;
+        }
         program->setExecMode(mode, true);
         {
             ProgramRuntimeExternalParseContextHelper parse(*program);
-            assert(parse);
+            if (!parse) {
+                std::fprintf(stderr, "mode %d: the program cannot be parsed\n", static_cast<int>(mode));
+                ++failures;
+                continue;
+            }
             program->parse(ordinary_code, "small-thread-stack", &xsink);
         }
         if (xsink) {
@@ -124,11 +138,14 @@ static void run_code() {
 static void* work(void*) {
     uintptr_t base = 0;
     size_t size = 0;
-    current_stack_bounds(base, size);
     // the stack below this frame is what the thread has for its own use
     char marker = 0;
     uintptr_t here = reinterpret_cast<uintptr_t>(&marker);
-    assert(here > base);
+    if (current_stack_bounds(base, size) || here <= base) {
+        std::fprintf(stderr, "the thread's stack cannot be determined\n");
+        ++failures;
+        return nullptr;
+    }
     size_t available = here - base;
     if (available + MAX_STACK_OVERHEAD < SMALL_STACK_SIZE) {
         std::fprintf(stderr, "the thread's stack of %zu bytes (%zu reported) has only %zu bytes below its entry "
@@ -143,13 +160,22 @@ static void* work(void*) {
 int main() {
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
     pthread_attr_t attr;
-    assert(!pthread_attr_init(&attr));
-    assert(!pthread_attr_setstacksize(&attr, SMALL_STACK_SIZE));
+    if (pthread_attr_init(&attr)) {
+        std::fprintf(stderr, "pthread_attr_init() failed\n");
+        qore_cleanup();
+        return 1;
+    }
     pthread_t thread;
-    int rc = pthread_create(&thread, &attr, work, nullptr);
-    assert(!pthread_attr_destroy(&attr));
-    assert(!rc);
-    assert(!pthread_join(thread, nullptr));
+    int rc = pthread_attr_setstacksize(&attr, SMALL_STACK_SIZE);
+    if (!rc) {
+        rc = pthread_create(&thread, &attr, work, nullptr);
+    }
+    pthread_attr_destroy(&attr);
+    if (rc || pthread_join(thread, nullptr)) {
+        std::fprintf(stderr, "the thread with a %zu byte stack cannot be run\n", SMALL_STACK_SIZE);
+        qore_cleanup();
+        return 1;
+    }
     qore_cleanup();
     if (failures) {
         return 1;

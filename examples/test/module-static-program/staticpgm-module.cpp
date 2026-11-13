@@ -141,7 +141,8 @@ class Teardown {
             hash<string, code> hc = {"a": int sub (int x) { return x + total; }, "b": int sub (int x) { return x * 2; }};
             total += hc.a(1) + hc.b(2);
         }
-        # channel_select() in the main thread at exit, after the thread's data was deleted
+        # channel_select() in the main thread from a static destructor at exit: exit() ends the process without
+        # qore_cleanup(), so the thread's data, and its generator, are those that the Program used when it ran
         for (int i = 0; i < 5; ++i) {
             total += select_one();
         }
