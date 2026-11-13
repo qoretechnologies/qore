@@ -1645,6 +1645,12 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a statically linked AOT module registered by native code (the \c qore_<name>_register() function that qcc
+      emits for a \c .qo module, or \c ModuleManager::registerAOTStaticModule()) skipped the checks of a module loaded
+      from outside the module path: registered for code that a sandbox governs or whose functional domains are
+      restricted, it could take the name of a library module, replacing it for every later user, and a module with
+      a name of its own was given to other code; it is now checked as a load of the same module's \c .qmod by path
+      (<a href="https://github.com/qoretechnologies/qore/issues/5986">issue 5986</a>)
     - a block whose @ref on_exit "on_exit" or @ref on_success "on_success" handler raised a
       @ref thread_exit "thread_exit" ran its @ref on_error "on_error" handlers with no exception, which crashed the
       process

@@ -1,0 +1,218 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - .qo modules statically linked into a C++ host by the system linker, the module path trust
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class AOTStaticModuleShadowingTest
+
+#! A statically registered module is checked as a file load of the same module from outside the module path is
+/** A module that qcc compiled to a .qo and that is linked into a program is registered with its register function
+    (qore_<name>_register(), qore_aot_register_into_program_v2()), not loaded from a file.  It is not library code:
+    its code is linked into the program, not loaded from the process-wide module path.  Registered for code that is
+    not trusted (here: by the code of a Program whose parse options restrict a functional domain), it is checked as a
+    load of the module's .qmod from outside the module path (issue #5986):
+    - it cannot have the name of a library module, which it would replace for every later user;
+    - with a name of its own, it is registered as chosen by that code, and is not given to other code;
+    and a registration for trusted code is not restricted, as for a file load.
+
+    The registration is made by the code of a Program of a C++ host (aot-static-shadowing/host.cpp), which calls a
+    native function of the host that registers the module, into its own Program or into another one.  Each case
+    runs the host twice, once registering the statically linked modules and once loading the .qmod files of the same
+    modules by path, and the two must give the same result.
+*/
+class AOTStaticModuleShadowingTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string source_root;
+        string env;
+
+        #! the temporary directory with the modules and the host
+        *TmpDir tmp;
+        #! the host program, if it could be built
+        *string exe;
+        #! the reason the host could not be built, if it could not
+        *string skip_reason;
+        #! the directory of the library module
+        string lib_dir;
+        #! the directory of the .qmod files of the modules
+        string qmod_dir;
+    }
+
+    constructor() : QUnit::Test("AOTStaticModuleShadowingTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        source_root = realpath(dirname(get_script_path()) + "/../../..");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("a static registration for restricted code cannot shadow a library module",
+            \shadowRestrictedTest());
+        addTestCase("a static registration into another Program for restricted code cannot shadow a library module",
+            \shadowRestrictedOtherTest());
+        addTestCase("a static registration for trusted code may have a library module's name",
+            \shadowTrustedTest());
+        addTestCase("a static registration for restricted code is not given to other code", \ownRestrictedTest());
+        addTestCase("a static registration for trusted code is given to any code", \ownTrustedTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        # removes the temporary directory
+        remove tmp;
+    }
+
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private static write(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    #! writes the source of a module whose value() returns the given string
+    private static writeModule(string dir, string name, string value) {
+        AOTStaticModuleShadowingTest::write(sprintf("%s/%s.qm", dir, name), sprintf("%%modern\nmodule %s { "
+            "version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\npublic namespace %s { "
+            "public string sub value() { return %y; } }\n", name, name, value));
+    }
+
+    #! builds the modules and the host once; returns the host, or skips the test case if it cannot be built
+    private string getHost() {
+        if (exe) {
+            return exe;
+        }
+        if (skip_reason) {
+            testSkip(skip_reason);
+        }
+        tmp = new TmpDir("qore-aot-static-shadow-");
+        string src_dir = tmp.path + "/src";
+        lib_dir = tmp.path + "/lib";
+        qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(lib_dir);
+        mkdir(qmod_dir);
+        # the library module, in the module path of the host
+        AOTStaticModuleShadowingTest::writeModule(lib_dir, "ShadowLib", "library");
+        # the module that is linked into the host (and its .qmod) with the library module's name, and one with a
+        # name of its own
+        AOTStaticModuleShadowingTest::writeModule(src_dir, "ShadowLib", "tenant");
+        AOTStaticModuleShadowingTest::writeModule(src_dir, "TenantMod", "own");
+        list<string> objs;
+        foreach string name in ("ShadowLib", "TenantMod") {
+            string obj = sprintf("%s/%s.qo", tmp.path, name);
+            string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -c -o %s %s/%s.qm", env, src_dir, qcc_bin, obj,
+                src_dir, name));
+            assertTrue(is_file(obj), "compiled the module object: " + out);
+            objs += obj;
+            string qmod = sprintf("%s/%s.qmod", qmod_dir, name);
+            out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s %s/%s.qm", env, src_dir, qcc_bin, qmod, src_dir,
+                name));
+            assertTrue(is_file(qmod), "compiled the module: " + out);
+        }
+
+        # the host: see aot-static-shadowing/host.cpp
+        string host = get_script_dir() + "/aot-static-shadowing/host.cpp";
+        string host_exe = tmp.path + "/static-host";
+        string cxx = ENV.CXX ?? "c++";
+        string out = run(sprintf("%s -std=c++17 -I%s -I%s %s %s -L%s -Wl,-rpath,%s -lqore -o %s %s", cxx,
+            source_root + "/include", libqore_dir + "/include", host, objs.join(" "), libqore_dir, libqore_dir,
+            host_exe, AOTStaticModuleShadowingTest::libqoreTargetFlags().join(" ")));
+        if (!is_file(host_exe)) {
+            if (out =~ /not found/) {
+                skip_reason = "no C++ compiler to build the host: " + out;
+                testSkip(skip_reason);
+            }
+            assertTrue(False, "linked the C++ host: " + out);
+        }
+        return exe = host_exe;
+    }
+
+    #! runs a scenario with the statically linked modules and with their .qmod files; returns the outputs
+    private hash<auto> runScenario(string scenario) {
+        string host = getHost();
+        hash<auto> rv;
+        foreach string mode in ("static", "file") {
+            rv{mode} = trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s %s %s", env, lib_dir, host, mode, scenario,
+                qmod_dir)));
+        }
+        return rv;
+    }
+
+    #! returns the step result lines of a host's output, without the exceptions
+    private static list<string> steps(string out) {
+        return map $1, out.split("\n"), $1 =~ /^[a-z-]+: (loaded|refused|value=)/;
+    }
+
+    #! checks that the module was refused because it has the name of the library module
+    private checkShadowRefused(string mode, string out) {
+        assertEq(("register: refused", "library: value=library"), AOTStaticModuleShadowingTest::steps(out),
+            mode + ": " + out);
+        assertRegex("LOAD-MODULE-ERROR: cannot load module 'ShadowLib' from path '[^']+': code that a sandbox "
+            "governs or whose functional domains are restricted cannot load a module outside the module path under "
+            "the name of module '[^']*/lib/ShadowLib.qm' in the module path", out, mode + ": " + out);
+    }
+
+    shadowRestrictedTest() {
+        hash<auto> out = runScenario("shadow-restricted");
+        foreach string mode in (out.keyIterator()) {
+            checkShadowRefused(mode, out{mode});
+        }
+    }
+
+    shadowRestrictedOtherTest() {
+        hash<auto> out = runScenario("shadow-restricted-other");
+        foreach string mode in (out.keyIterator()) {
+            checkShadowRefused(mode, out{mode});
+        }
+    }
+
+    shadowTrustedTest() {
+        hash<auto> out = runScenario("shadow-trusted");
+        foreach string mode in (out.keyIterator()) {
+            assertEq(("register: loaded", "use: value=tenant"), AOTStaticModuleShadowingTest::steps(out{mode}),
+                mode + ": " + out{mode});
+            assertFalse(out{mode} =~ /LOAD-MODULE-ERROR/, mode + ": " + out{mode});
+        }
+    }
+
+    ownRestrictedTest() {
+        hash<auto> out = runScenario("own-restricted");
+        foreach string mode in (out.keyIterator()) {
+            assertEq(("register: loaded", "use: value=own", "other-register: refused", "other-require: refused"),
+                AOTStaticModuleShadowingTest::steps(out{mode}), mode + ": " + out{mode});
+            # refused for each of the two later users
+            string err = "LOAD-MODULE-ERROR: cannot use module 'TenantMod' \\([^)]+\\): it was loaded from outside "
+                "the module path by code that a sandbox governs or whose functional domains are restricted";
+            assertEq(2, (map $1, out{mode}.split("\n"), regex($1, err)).size(), mode + ": " + out{mode});
+        }
+    }
+
+    ownTrustedTest() {
+        hash<auto> out = runScenario("own-trusted");
+        foreach string mode in (out.keyIterator()) {
+            assertEq(("register: loaded", "use: value=own", "other-register: loaded", "other-use: value=own",
+                "other-require: value=own"), AOTStaticModuleShadowingTest::steps(out{mode}), mode + ": " + out{mode});
+            assertFalse(out{mode} =~ /LOAD-MODULE-ERROR/, mode + ": " + out{mode});
+        }
+    }
+}

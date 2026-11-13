@@ -2461,7 +2461,31 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
     // see if the module is already registered with QMM; if so skip the init path
     // and just stitch it into the target program
     QoreAbstractModule* mi = findModuleUnlocked(feature);
+    // as for a file load (see loadModuleIntern()): a module that code that is not trusted chose is used only by code
+    // with the same sandbox, and not by other code (issue #5986)
+    if (mi && mi->isTenantChosen() && !mayUseTenantModule(*mi, tpgm)) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot use module '%s' (%s): it "
+            "was loaded from outside the module path by code that a sandbox governs or whose functional domains are "
+            "restricted, and cannot be used by other code, nor by code with another sandbox", feature,
+            mi->getFileName());
+        return -1;
+    }
     if (!mi) {
+        // a statically linked module is not library code: its code is linked into the program, not loaded from the
+        // process-wide module path, whatever path label it was given.  It is checked as a file load of the module
+        // from outside the module path (see loadBinaryModuleFromPath()), for the code that calls the registration
+        // (the code running in this thread; QoreCallerSandboxHelper keeps it the caller when the module is
+        // registered into another Program): when that code is not trusted, the module cannot have the name of a
+        // library module, and it is recorded as chosen by that code otherwise (issue #5986)
+        bool tenant_chosen;
+        QoreSandboxManager* owner;
+        qore_program_id_t owner_pgm_id;
+        if (checkShadowingLoad(xsink, path, feature, false, tenant_chosen, owner, owner_pgm_id)) {
+            return -1;
+        }
+        // recorded on the module when it is registered; takes over the reference of owner
+        QoreModuleLoadFrameHelper load_frame(feature, false, tenant_chosen, owner, owner_pgm_id);
+
         // the metadata record linked with the module: as for a .qmod (see loadBinaryModuleFromPath()), the module
         // must be the one it describes, an optional module it was compiled without must not be available now, and its
         // dependencies are found with its own module path directives

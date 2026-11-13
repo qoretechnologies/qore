@@ -295,6 +295,13 @@ public:
         by qcc as <tt>&lt;name&gt;_qore_module_desc</tt>); the descriptor is invoked, validated and
         routed through the standard module registration path, skipping the filesystem
         search and dlopen that the normal loader uses.
+
+        The module is not library code: it is checked as a load of the same module by path from outside the module
+        path, for the code that calls the registration (also when it registers the module into another Program):
+        when that code is not trusted (code that a sandbox governs, or whose parse options restrict a functional
+        domain), the module cannot have the name of a module in the process-wide module path, and with a name of its
+        own it is used only by that code; a module of that name that such code chose is not given to other code
+        either.
         @param xsink if any errors occur, a Qore-language "LOAD-MODULE-ERROR" exception is raised here
         @param tpgm the target QoreProgram to register the module into; must be non-null
         @param desc_fn the module descriptor function pointer
