@@ -13239,6 +13239,15 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
     return result;
 }
 
+//! returns true if a list literal whose parse element type is \a elem_type cannot hold a value of a more specific type
+/** A scalar type with a single return type that does not accept NOTHING: the run-time type of each value is then the
+    type itself, and the common type of the values is the parse type (qore#5970)
+*/
+static bool qoreIrListLiteralElementTypeIsExact(const QoreTypeInfo* elem_type) {
+    return elem_type == bigIntTypeInfo || elem_type == floatTypeInfo || elem_type == stringTypeInfo
+        || elem_type == boolTypeInfo || elem_type == numberTypeInfo || elem_type == binaryTypeInfo;
+}
+
 QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     // Phase 3b diag: trace the pre-dynamic_cast pointer so a crashing
@@ -13266,14 +13275,16 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
     // Get parse-time type info from the QoreParseListNode
     // Pass nullptr for auto/unspecific types so the IR interpreter computes from runtime values
     // (lvalues can return NOTHING despite their declared type)
+    // the AST interpreter gives a list literal the common type of its values' run-time types, which can be more
+    // specific than the literal's parse type (a cast that gives a list the type of its closures, an or-nothing
+    // arithmetic result, a code value with a signature, an object of a subclass): the parse type is used only when
+    // the values cannot have a more specific type, a single scalar element type that does not accept NOTHING; the
+    // other literals are typed from their values at run time (qore#5970).  MakeList's declared type is exact
+    // otherwise (constants, typed local initialization)
     const QoreTypeInfo* parse_ti = list->getParseTypeInfo();
-    if (parse_ti == autoListTypeInfo) {
-        parse_ti = nullptr;
-    } else if (parse_ti) {
-        // Also clear for list types with auto element types (e.g., list<hash<auto>>)
+    if (parse_ti) {
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(parse_ti);
-        if (elem_type && (elem_type == autoTypeInfo || elem_type == autoHashTypeInfo
-            || elem_type == autoHashOrNothingTypeInfo)) {
+        if (!qoreIrListLiteralElementTypeIsExact(elem_type)) {
             parse_ti = nullptr;
         }
     }

@@ -257,8 +257,17 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
                 vtype = QoreTypeInfo::getRuntimeValueType(vtypes[0]);
                 vcommon = true;
             }
-        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, QoreTypeInfo::getRuntimeValueType(vtypes[i]))) {
-            vcommon = false;
+        } else if (vcommon) {
+            const QoreTypeInfo* vt = QoreTypeInfo::getRuntimeValueType(vtypes[i]);
+            // the common type of a type parameter and another type is not known before the type parameter is
+            // substituted (QoreTypeInfo::matchCommonType() would treat the type parameter as NOTHING and give the
+            // or-nothing type of the other type): the container's value type is then auto (qore#6000)
+            if (vt != vtype && (qore_type_contains_type_parameter(vtype) || qore_type_contains_type_parameter(vt))) {
+                vtype = nullptr;
+                vcommon = false;
+            } else if (!QoreTypeInfo::matchCommonType(vtype, vt)) {
+                vcommon = false;
+            }
         }
 
         if (!needs_eval && values[i].needsEval()) {
