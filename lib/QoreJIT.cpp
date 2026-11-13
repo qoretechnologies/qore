@@ -1189,6 +1189,8 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
     if (!lockForSyncCompile(compile_lock, error)) {
         return false;
     }
+    // the code units released while the lock was held are removed before it is released
+    PendingCodeReleaseGuard release_guard(*this);
     if (!initializeLocked(error)) {
         return false;
     }
@@ -1285,10 +1287,12 @@ static bool jit_check_size_budget(const std::string& func_name, size_t instructi
     return false;
 }
 
-int QoreJIT::adoptDefinedFunction(const std::string& name, std::string& error) {
+int QoreJIT::adoptDefinedFunction(const std::string& name, const void* owner, std::string& error) {
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         if (compiled_functions.find(name) != compiled_functions.end()) {
+            // the code that the function runs is in the unit that defines it
+            addCodeOwnerLocked(name, owner);
             return 1;
         }
         if (!defined_batch_symbols.count(name)) {
@@ -1307,12 +1311,189 @@ int QoreJIT::adoptDefinedFunction(const std::string& name, std::string& error) {
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         compiled_functions[name] = fn_ptr;
+        addCodeOwnerLocked(name, owner);
     }
     if (q_env_is_set("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] reused '%s' compiled in an earlier batch\n", name.c_str());
     }
     return 1;
 }
+
+const void* QoreJIT::getCodeOwner(const QoreIRFunction& func) {
+    return func.jit_owner ? func.jit_owner : static_cast<const void*>(func.pgm);
+}
+
+std::vector<std::string> QoreJIT::getLinkedSymbols(const llvm::Module& module) {
+    // the module declares the runtime helpers and the functions of other units that it calls; only the latter are
+    // recorded in symbol_units, which addCodeUnitLocked() checks
+    std::vector<std::string> linked;
+    for (const llvm::Function& f : module.functions()) {
+        if (f.isDeclaration() && !f.isIntrinsic()) {
+            linked.push_back(f.getName().str());
+        }
+    }
+    return linked;
+}
+
+void QoreJIT::addCodeUnitLocked(llvm::orc::ResourceTrackerSP rt, const std::vector<std::string>& linked,
+        std::vector<std::string> symbols, const std::vector<const void*>& owners) {
+    std::unique_ptr<CodeUnit> unit(new CodeUnit);
+    unit->rt = std::move(rt);
+    std::sort(symbols.begin(), symbols.end());
+    symbols.erase(std::unique(symbols.begin(), symbols.end()), symbols.end());
+    unit->symbols = std::move(symbols);
+
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    // the units that the code links to stay while it does: compile_mutex is held since the module was built, so none
+    // of them has been removed
+    for (const std::string& name : linked) {
+        auto i = symbol_units.find(name);
+        if (i == symbol_units.end()) {
+            continue;
+        }
+        CodeUnit* dep = i->second;
+        if (std::find(unit->deps.begin(), unit->deps.end(), dep) == unit->deps.end()) {
+            unit->deps.push_back(dep);
+            ++dep->refs;
+        }
+    }
+    for (const void* owner : owners) {
+        if (!owner) {
+            continue;
+        }
+        std::vector<CodeUnit*>& units = owner_units[owner];
+        if (std::find(units.begin(), units.end(), unit.get()) == units.end()) {
+            units.push_back(unit.get());
+            ++unit->refs;
+        }
+    }
+    // a unit without an owner (code compiled from AOT IR, which has no Program) stays for the life of the process,
+    // as do the units that it links to
+    if (!unit->refs) {
+        unit->refs = 1;
+    }
+    for (const std::string& name : unit->symbols) {
+        symbol_units[name] = unit.get();
+    }
+    code_units.insert(unit.get());
+    unit.release();
+}
+
+void QoreJIT::addCodeOwnerLocked(const std::string& symbol, const void* owner) {
+    if (!owner) {
+        return;
+    }
+    auto i = symbol_units.find(symbol);
+    if (i == symbol_units.end()) {
+        return;
+    }
+    std::vector<CodeUnit*>& units = owner_units[owner];
+    if (std::find(units.begin(), units.end(), i->second) == units.end()) {
+        units.push_back(i->second);
+        ++i->second->refs;
+    }
+}
+
+void QoreJIT::releaseCodeOwner(const void* owner) noexcept {
+    if (!owner) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        auto i = owner_units.find(owner);
+        if (i == owner_units.end()) {
+            return;
+        }
+        // the references are taken from the owner at once, as its address can be reused by a new owner
+        pending_unit_unrefs.insert(pending_unit_unrefs.end(), i->second.begin(), i->second.end());
+        owner_units.erase(i);
+    }
+    // never waits: a compile that holds the lock (possibly without bound, when detached) processes the releases when
+    // it releases the lock (PendingCodeReleaseGuard)
+    if (compile_mutex.try_lock()) {
+        processPendingCodeReleasesLocked();
+        compile_mutex.unlock();
+    }
+}
+
+void QoreJIT::processPendingCodeReleasesLocked() noexcept {
+    // the compile thread abandoned at process exit can be in LLVM: nothing is removed then, as the engine is left to
+    // the operating system (see shutdown())
+    if (bg_thread_abandoned.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::vector<CodeUnit*> removed;
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (pending_unit_unrefs.empty()) {
+            return;
+        }
+        // a unit no longer referenced is removed after the units that link to it, which release it
+        std::vector<CodeUnit*> work;
+        work.swap(pending_unit_unrefs);
+        while (!work.empty()) {
+            CodeUnit* unit = work.back();
+            work.pop_back();
+            assert(unit->refs);
+            if (--unit->refs) {
+                continue;
+            }
+            // its functions can no longer be looked up, and a later compile defines them again if it needs them
+            for (const std::string& name : unit->symbols) {
+                compiled_functions.erase(name);
+                defined_batch_symbols.erase(name);
+                defined_fast_entry_abi.erase(name);
+                auto i = symbol_units.find(name);
+                if (i != symbol_units.end() && i->second == unit) {
+                    symbol_units.erase(i);
+                }
+            }
+            work.insert(work.end(), unit->deps.begin(), unit->deps.end());
+            code_units.erase(unit);
+            removed.push_back(unit);
+        }
+    }
+    for (CodeUnit* unit : removed) {
+        if (unusable_after_fork || !jit) {
+            // the LLVM objects of a child process created with fork() while the parent was compiling can be
+            // inconsistent: the tracker is neither used nor destroyed, as the JIT itself (see shutdown()); the extra
+            // reference keeps it
+            if (unit->rt) {
+                unit->rt->Retain();
+            }
+        } else if (unit->rt) {
+            // removes the module's symbols and frees its code, which no thread runs (see releaseCodeOwner())
+            if (llvm::Error err = unit->rt->remove()) {
+                printd(0, "QoreJIT: failed to remove a code unit: %s\n", llvm::toString(std::move(err)).c_str());
+            }
+        }
+        delete unit;
+    }
+}
+
+#ifdef DEBUG
+size_t QoreJIT::dbgGetCodeUnitCount() {
+    // waits for a compile that holds the lock, which processes the releases when it releases it, unless it can hold it
+    // without bound
+    {
+        std::unique_lock<std::mutex> compile_lock(compile_mutex, std::try_to_lock);
+        if (!compile_lock && !bg_in_progress_detached.load(std::memory_order_acquire)
+                && !bg_thread_abandoned.load(std::memory_order_acquire)) {
+            compile_lock.lock();
+        }
+        if (compile_lock) {
+            processPendingCodeReleasesLocked();
+        }
+    }
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    return code_units.size();
+}
+
+size_t QoreJIT::dbgGetCompiledFunctionCount() const {
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    return compiled_functions.size();
+}
+#endif
 
 bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& error,
         void* deopt_counter, const std::string* symbol_name) {
@@ -1322,11 +1503,16 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     // or functions with complex IR patterns.  The local copy is made before any LLVM
     // heap activity and remains valid even if the original is corrupted.
     const std::string func_name = symbol_name ? *symbol_name : func.name;
+    // taken before the lowering ends: a background compile reads nothing of the Program afterwards
+    const void* code_owner = getCodeOwner(func);
+
+    // the units released while no compile held the lock are removed before the JIT is looked up or changed
+    processPendingCodeReleasesLocked();
 
     // Re-check under compile lock: another thread may have compiled this function, or a batch module may have
     // defined it
     {
-        int rc = adoptDefinedFunction(func_name, error);
+        int rc = adoptDefinedFunction(func_name, code_owner, error);
         if (rc) {
             return rc > 0;
         }
@@ -1384,16 +1570,15 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
         return false;
     }
 
-    // A background compile adds its module with a resource tracker of its own, so that a detached compile can remove
-    // its module, with the symbols it defines and its code, from the JIT again
-    llvm::orc::ResourceTrackerSP rt;
-    if (bg_compile_ctx) {
-        rt = jit->getMainJITDylib().createResourceTracker();
-    }
+    // every module is added with a resource tracker of its own, so that it can be removed from the JIT again, with the
+    // symbols it defines and its code: by a detached compile, or when its owners are gone (qore#5772)
+    llvm::orc::ResourceTrackerSP rt = jit->getMainJITDylib().createResourceTracker();
+    // the functions of other units that the module links to, which must stay while it does
+    std::vector<std::string> linked = getLinkedSymbols(*module);
 
     // Add the module to the JIT
     auto tsm = llvm::orc::ThreadSafeModule(std::move(module), std::move(ctx));
-    auto err = rt ? jit->addIRModule(rt, std::move(tsm)) : jit->addIRModule(std::move(tsm));
+    auto err = jit->addIRModule(rt, std::move(tsm));
     if (err) {
         error = "failed to add module to JIT: " + llvm::toString(std::move(err));
         // the module was not added: a detached compile has nothing to remove
@@ -1413,6 +1598,9 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
         error = "failed to look up compiled function '" + func_name + "': " + llvm::toString(sym.takeError());
         if (!bgBeginInstall()) {
             bgDiscardModule(rt.get(), func_name);
+        } else {
+            // the module stays in the JIT: its owner removes it
+            addCodeUnitLocked(std::move(rt), linked, {}, {code_owner});
         }
         return false;
     }
@@ -1434,6 +1622,7 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
         std::lock_guard<std::mutex> lock(cache_mutex);
         compiled_functions[func_name] = fn_ptr;
     }
+    addCodeUnitLocked(std::move(rt), linked, {func_name}, {code_owner});
 
     return true;
 }
@@ -1454,6 +1643,8 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
     if (!lockForSyncCompile(compile_lock, error)) {
         return false;
     }
+    // the code units released while the lock was held are removed before it is released
+    PendingCodeReleaseGuard release_guard(*this);
     if (!initializeLocked(error)) {
         return false;
     }
@@ -1505,11 +1696,24 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // Copy root_func.name before any LLVM operations (same heap-corruption workaround
     // as compileFunctionInternal — see comment there for details).
     const std::string root_func_name = root_func.name;
+    // the owners of the functions that the module defines, taken before the lowering ends: a background compile reads
+    // nothing of a Program afterwards
+    std::vector<const void*> code_owners;
+    code_owners.reserve(callees.size() + 1);
+    code_owners.push_back(getCodeOwner(root_func));
+    for (const auto& callee : callees) {
+        if (callee.ir_func) {
+            code_owners.push_back(getCodeOwner(*callee.ir_func));
+        }
+    }
+
+    // the units released while no compile held the lock are removed before the JIT is looked up or changed
+    processPendingCodeReleasesLocked();
 
     // Re-check under compile lock: another thread may have compiled the root function, or an earlier batch module
     // may have defined it
     {
-        int rc = adoptDefinedFunction(root_func_name, error);
+        int rc = adoptDefinedFunction(root_func_name, code_owners.front(), error);
         if (rc) {
             return rc > 0;
         }
@@ -1919,16 +2123,15 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         return false;
     }
 
-    // A background compile adds its module with a resource tracker of its own, so that a detached compile can remove
-    // its module, with the symbols it defines and its code, from the JIT again
-    llvm::orc::ResourceTrackerSP rt;
-    if (bg_compile_ctx) {
-        rt = jit->getMainJITDylib().createResourceTracker();
-    }
+    // every module is added with a resource tracker of its own, so that it can be removed from the JIT again, with the
+    // symbols it defines and its code: by a detached compile, or when its owners are gone (qore#5772)
+    llvm::orc::ResourceTrackerSP rt = jit->getMainJITDylib().createResourceTracker();
+    // the functions of earlier units that the module only declares and links to, which must stay while it does
+    std::vector<std::string> linked = getLinkedSymbols(*module);
 
     // Add the module to the JIT
     auto tsm = llvm::orc::ThreadSafeModule(std::move(module), std::move(ctx));
-    auto err = rt ? jit->addIRModule(rt, std::move(tsm)) : jit->addIRModule(std::move(tsm));
+    auto err = jit->addIRModule(rt, std::move(tsm));
     if (err) {
         error = "failed to add batch module to JIT: " + llvm::toString(std::move(err));
         // the module was not added: a detached compile has nothing to remove
@@ -1940,6 +2143,11 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // declares them, as they cannot be defined a second time.  They are recorded even if the code cannot be looked up,
     // as the module stays in the JIT then.  compile_mutex is held from the addition of the module to here, and the
     // records are only read under it, so no other compile sees the module before its symbols are recorded.
+    // the symbols that the unit defines and records: those of the batch, and the entries cached below
+    std::vector<std::string> unit_symbols = new_batch_symbols;
+    for (const auto& fast_abi : new_fast_entry_abis) {
+        unit_symbols.push_back(fast_abi.first);
+    }
     auto record_batch_symbols = [&]() {
         std::lock_guard<std::mutex> lock(cache_mutex);
         for (auto& name : new_batch_symbols) {
@@ -1963,6 +2171,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             + llvm::toString(sym.takeError());
         if (bgBeginInstall()) {
             record_batch_symbols();
+            // the module stays in the JIT: its owners remove it
+            addCodeUnitLocked(std::move(rt), linked, std::move(unit_symbols), code_owners);
         } else {
             bgDiscardModule(rt.get(), root_func_name);
         }
@@ -2015,6 +2225,13 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             }
         }
     }
+    unit_symbols.push_back(root_func_name);
+    for (size_t i = 0; i < callees.size(); ++i) {
+        if (callee_fn_ptrs[i]) {
+            unit_symbols.push_back(callee_names[i]);
+        }
+    }
+    addCodeUnitLocked(std::move(rt), linked, std::move(unit_symbols), code_owners);
 
     return true;
 }
@@ -2480,6 +2697,8 @@ void QoreJIT::bgCompileThreadLoop() {
         // work item would make the teardown of its Programs wait for that run although nothing of them was read yet.
         // Unclaimed work is still in the queue, where a teardown cancels it.
         std::unique_lock<std::mutex> compile_lock(compile_mutex);
+        // the code units released while this thread holds the lock are removed before it releases it
+        PendingCodeReleaseGuard release_guard(*this);
         {
             std::unique_lock<std::mutex> lock(bg_queue_mutex);
             // once the compiler stops, the queued work is left to stopBackgroundCompiler(), which cancels it: it
@@ -3181,6 +3400,21 @@ void QoreJIT::releaseEngine() {
     // Acquiring compile_mutex also documents and enforces serialization with compilation even if
     // shutdown() is called independently of the normal two-phase qore_cleanup() path.
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
+    {
+        // the code units go with the JIT: their trackers are released before the ExecutionSession that they belong to
+        // is destroyed, and are kept as the JIT is when its LLVM objects can be inconsistent
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        for (CodeUnit* unit : code_units) {
+            if (unusable_after_fork && unit->rt) {
+                unit->rt->Retain();
+            }
+            delete unit;
+        }
+        symbol_units.clear();
+        owner_units.clear();
+        pending_unit_unrefs.clear();
+        code_units.clear();
+    }
     if (unusable_after_fork) {
         // in a child process created with fork() while another thread of the parent was compiling, the LLVM
         // objects can be inconsistent, so they are not destroyed; the process is exiting
@@ -3247,5 +3481,7 @@ bool QoreJIT::tryAcquireCompileLock() {
 }
 
 void QoreJIT::releaseCompileLock() {
+    // the code units released while the lock was held are removed before it is released
+    processPendingCodeReleasesLocked();
     compile_mutex.unlock();
 }

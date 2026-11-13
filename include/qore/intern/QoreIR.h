@@ -3905,6 +3905,10 @@ public:
     //! the ID of \a pgm, taken when it is set: a background compile checks that the Program with this ID is still
     //! the one at \a pgm, as a deleted Program's address can be reused (see QoreJIT::enqueueBgCompile())
     qore_program_id_t pgm_id = 0;
+    //! the owner of the native code compiled from this function when it is not \a pgm: the generic specialization
+    //! (QoreSpecializedIR) whose code is removed when the specialization is freed; the code of a function with
+    //! neither stays in the JIT for the life of the process (see QoreJIT::releaseCodeOwner())
+    const void* jit_owner = nullptr;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
 
     //! Transient SSA facts used by IR optimization and native lowering.

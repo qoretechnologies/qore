@@ -922,6 +922,31 @@ public:
     //! Release the compilation mutex after a successful tryAcquireCompileLock().
     void releaseCompileLock();
 
+    //! Releases the native code that \a owner owns: a Program when it is torn down, or a generic specialization
+    /** Each module added to the JIT is a code unit with a resource tracker of its own, owned by the Programs (or the
+        specialization) whose functions it defines and by the units that link to its symbols; a unit that no owner
+        and no other unit references any more is removed from the JIT, with its symbols and its code (qore#5772).
+
+        It must be called only when no code of \a owner can run any more: by the teardown of a Program once no thread
+        runs in it, its background compiles are drained and its code is deleted, and when the last reference to a
+        specialization is released.  The units are removed at once if no compile holds the compilation lock, and
+        otherwise by the compile when it releases the lock, so that the call never waits for a compile.
+
+        @param owner the Program or the specialization; nullptr does nothing
+    */
+    void releaseCodeOwner(const void* owner) noexcept;
+
+    //! Returns the owner of the native code of \a func: the specialization or the Program that owns it
+    static const void* getCodeOwner(const QoreIRFunction& func);
+
+#ifdef DEBUG
+    //! For tests: the number of code units in the JIT, once the pending releases are processed
+    size_t dbgGetCodeUnitCount();
+
+    //! For tests: the number of compiled functions that can be looked up
+    size_t dbgGetCompiledFunctionCount() const;
+#endif
+
     //! Returns true in a child process created with fork() while another thread of the parent was compiling
     /** The JIT compiles nothing in such a child; see forkChild()
     */
@@ -1086,6 +1111,64 @@ private:
     std::unordered_set<std::string> defined_batch_symbols;
     //! The ABI of each defined fast entry; a later batch can only call one whose ABI matches its own analysis
     std::unordered_map<std::string, std::string> defined_fast_entry_abi;
+
+    //! A module added to the JIT: removing its tracker removes its symbols and frees its code (qore#5772)
+    struct CodeUnit {
+        //! the tracker that the module was added with
+        llvm::orc::ResourceTrackerSP rt;
+        //! the symbols that the unit defines and that are recorded in compiled_functions, defined_batch_symbols,
+        //! defined_fast_entry_abi and symbol_units
+        std::vector<std::string> symbols;
+        //! the units whose symbols this unit's code links to; each is referenced by this unit
+        std::vector<CodeUnit*> deps;
+        //! the owners and the units that reference this unit; protected by cache_mutex
+        unsigned refs = 0;
+    };
+    //! The unit that defines each recorded symbol; protected by cache_mutex
+    std::unordered_map<std::string, CodeUnit*> symbol_units;
+    //! The units that each owner (a Program or a specialization) references; protected by cache_mutex
+    std::unordered_map<const void*, std::vector<CodeUnit*>> owner_units;
+    //! The owner references released while a compile held compile_mutex; protected by cache_mutex, processed under
+    //! compile_mutex (see processPendingCodeReleasesLocked())
+    std::vector<CodeUnit*> pending_unit_unrefs;
+    //! Every unit in the JIT; protected by cache_mutex
+    std::unordered_set<CodeUnit*> code_units;
+
+    //! Returns the names of the functions that \a module declares and links to: those defined by other units
+    static std::vector<std::string> getLinkedSymbols(const llvm::Module& module);
+
+    //! Records a module added to the JIT as a code unit; compile_mutex must be held
+    /** @param rt the tracker that the module was added with
+        @param linked the symbols that the module declares (see getLinkedSymbols())
+        @param symbols the symbols that the unit defines and that were recorded
+        @param owners the owners of the functions that the unit defines; nullptr entries are ignored, and a unit
+        without an owner stays in the JIT
+    */
+    void addCodeUnitLocked(llvm::orc::ResourceTrackerSP rt, const std::vector<std::string>& linked,
+            std::vector<std::string> symbols, const std::vector<const void*>& owners);
+
+    //! Makes \a owner an owner of the unit that defines \a symbol, if it is recorded; cache_mutex must be held
+    void addCodeOwnerLocked(const std::string& symbol, const void* owner);
+
+    //! Drops the references released by releaseCodeOwner() and removes the units that are no longer referenced
+    /** compile_mutex must be held; called before the lock is released
+    */
+    void processPendingCodeReleasesLocked() noexcept;
+
+    //! Releases the units that each acquisition of compile_mutex leaves pending when the lock is released
+    class PendingCodeReleaseGuard {
+    public:
+        PendingCodeReleaseGuard(QoreJIT& jit) : jit(jit) {
+        }
+        ~PendingCodeReleaseGuard() {
+            jit.processPendingCodeReleasesLocked();
+        }
+        PendingCodeReleaseGuard(const PendingCodeReleaseGuard&) = delete;
+        PendingCodeReleaseGuard& operator=(const PendingCodeReleaseGuard&) = delete;
+
+    private:
+        QoreJIT& jit;
+    };
     //! true once initialize() has run; protected by compile_mutex
     bool init_done = false;
     //! the result of initialize(); protected by compile_mutex
@@ -1129,11 +1212,13 @@ private:
         Assumes compile_mutex is held.
 
         @param name the symbol of the function's standard entry
+        @param owner the owner of the function's code (see getCodeOwner()), which becomes an owner of the unit that
+        defines the entry
         @param error set to the reason when the defined entry cannot be looked up
 
         @return 1 if the entry is now cached, 0 if it is not defined and must be compiled, -1 on error
     */
-    int adoptDefinedFunction(const std::string& name, std::string& error);
+    int adoptDefinedFunction(const std::string& name, const void* owner, std::string& error);
 
     //! Background compilation work item
     struct BgCompileWork {

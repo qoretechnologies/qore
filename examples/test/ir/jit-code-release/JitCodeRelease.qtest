@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT code generation, linking and removal of compiled code, in threads
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class JitCodeReleaseTest
+
+#! issue #5772: the native code compiled for a Program is removed from the JIT when the Program is deleted
+/** The code that the JIT compiles for a Program (its functions, methods, closures and the generic specializations
+    made for its types) is held by the Program, and by the code of other Programs that calls it; it is removed from
+    the JIT when the last of them is deleted.  Before, it stayed in the JIT until the process ended, so a process that
+    created and deleted Programs grew without bound.
+
+    The script creates and deletes Programs and checks with debug builtins that the number of code units and compiled
+    functions returns to its base, also when another Program called a function of a deleted one.  With the AST
+    interpreter and the IR interpreter nothing is compiled, and the counts stay the same.  It needs library debugging
+    (dbg_get_jit_code_unit_count()).
+*/
+class JitCodeReleaseTest inherits QUnit::Test {
+    public {
+        #! the checks that the script reports in every mode
+        const Checks = (
+            "deleted Programs leave no code",
+            "the caller deleted first: the callee runs",
+            "the caller deleted first: no code left",
+            "the callee deleted first: the call is refused",
+            "the callee deleted first: no code left",
+        );
+        #! the check that the script reports when the code is compiled (JIT and tiered execution)
+        const CompiledCheck = "the code of a live Program is compiled";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("JIT code release", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/JitCodeRelease.qr";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("background compiles", \backgroundTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! skips the test case without library debugging, which the script needs
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_get_jit_code_unit_count() requires library debugging");
+        }
+    }
+
+    #! checks the output of the script
+    private checkOutput(string out, bool compiles, string what) {
+        list<string> expected = Checks;
+        if (compiles) {
+            expected = (Checks[0], CompiledCheck) + Checks[1..];
+        }
+        assertEq((map $1 + ": ok", expected), (out =~ x/^([^\n]+)$/gm), what);
+    }
+
+    #! runs the script in every execution mode, with synchronous compiles
+    private modesTest() {
+        checkDebugging();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s "
+                "--exec-mode=%s %s", env, qore_bin, mode, script));
+            checkOutput(out, mode == "jit" || mode == "tiered", mode);
+        }
+    }
+
+    #! runs the script with background compiles
+    private backgroundTest() {
+        checkDebugging();
+        foreach string mode in (("jit", "tiered")) {
+            string out = backquote(sprintf("env -u QORE_JIT_SYNC_COMPILE %s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+                "%s --exec-mode=%s %s 2>&1", env, qore_bin, mode, script));
+            checkOutput(out, True, mode + " with background compiles");
+        }
+    }
+
+    #! compiles the script with qcc: the executable's Programs are parsed at run time (tiered execution, the default)
+    private aotTest(string opt) {
+        checkDebugging();
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("jit-code-release-aot-");
+        string exe = dir.path + "/jit-code-release";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        checkOutput(ExecModeHarness::run_any(sprintf("%s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s", env, exe)), True,
+            "AOT " + opt);
+    }
+}

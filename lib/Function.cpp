@@ -6373,6 +6373,9 @@ QoreSpecializedIRRef qore_ref_helper_specialization(const QoreIRFunction* helper
 
 void qore_free_specialized_ir(QoreSpecializedIR* s) {
     qore_live_generic_specializations.fetch_sub(1, std::memory_order_relaxed);
+    // no call runs the specialization any more: its native code is removed before the IR that the code refers to is
+    // deleted (qore#5772)
+    QoreJIT::instance().releaseCodeOwner(s);
     delete s->ir;
     delete s;
 }
@@ -8118,7 +8121,11 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     }
     // counted while it lives, for the debug checks of the cache eviction (issue #5765)
     qore_live_generic_specializations.fetch_add(1, std::memory_order_relaxed);
-    QoreSpecializedIRRef rv(new QoreSpecializedIR(ir.release()));
+    QoreSpecializedIR* entry = new QoreSpecializedIR(ir.get());
+    // the native code compiled from the specialization is its own, and is removed when it is freed (qore#5772)
+    ir->jit_owner = entry;
+    ir.release();
+    QoreSpecializedIRRef rv(entry);
     // a thread that runs a background helper of the specialization takes a reference to it
     qore_mark_specialization_helpers(*rv.get(), rv.getEntry());
     SpecializedIRCache* registration;

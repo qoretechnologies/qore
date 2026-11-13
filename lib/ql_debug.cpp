@@ -19147,6 +19147,23 @@ static QoreValue f_dbg_get_live_bigint_count(const QoreListNode* params, Runtime
     return q_get_live_bigint_count();
 }
 
+//! returns the number of code units (modules) in the JIT, once the releases that wait for a compile are processed
+/** Each module added to the JIT is removed when its owners (the Programs whose functions it defines, or a generic
+    specialization) are gone and no other module links to it (qore#5772), so tests compare the count before and after
+    creating and deleting Programs whose code is compiled.
+*/
+static QoreValue f_dbg_get_jit_code_unit_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreJIT::init();
+    return static_cast<int64>(QoreJIT::instance().dbgGetCodeUnitCount());
+}
+
+//! returns the number of compiled functions that the JIT can look up
+static QoreValue f_dbg_get_jit_compiled_function_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreJIT::init();
+    return static_cast<int64>(QoreJIT::instance().dbgGetCompiledFunctionCount());
+}
+
 //! returns the number of heap floats that exist in the process
 /** A double whose NaN-boxed encoding would collide with a value tag (a negative NaN, or a finite negative double from
     about -2.18e307 to about -8.71e307) is a heap object; code that does not release one leaks it, so tests compare
@@ -22410,6 +22427,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
     qns.addBuiltinVariant("dbg_get_batch_collection_refusals", f_dbg_get_batch_collection_refusals, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_jit_code_unit_count", f_dbg_get_jit_code_unit_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_jit_compiled_function_count", f_dbg_get_jit_compiled_function_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_hash_create_count", f_dbg_get_hash_create_count, QCF_NO_FLAGS,
