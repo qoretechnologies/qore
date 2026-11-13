@@ -173,26 +173,28 @@ const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
 //! Gives a value to @a f with the pseudo-class that its pseudo-methods are called in, as pseudo_classes_eval() does
 /** The evaluation of a pseudo-method and the check of its existence (issue #5784) use the same dispatch.
 */
-template <typename F>
-static QoreValue pseudo_classes_dispatch(const QoreValue n, ExceptionSink* xsink, F&& f) {
+// Keep invocation arguments as scalar values instead of addresses captured by the evaluation lambdas.  This lets
+// SCU inline the thin eval entries without reserving capture/parameter storage in ordinary object dot-call frames.
+template <typename F, typename... Args>
+static QoreValue pseudo_classes_dispatch(const QoreValue n, ExceptionSink* xsink, F f, Args... args) {
     switch (n.getType()) {
         case NT_STRING:
             if (n.isShortString()) {
                 char buf[7];
                 n.getShortString(buf);
                 ValueHolder str(new QoreStringNode(buf, n.shortStringLen(), QCS_UTF8), xsink);
-                return f(po_list[NT_STRING], *str);
+                return f(po_list[NT_STRING], *str, args...);
             }
             break;
 
         case NT_WEAKREF:
-            return f(po_list[NT_OBJECT], QoreValue(n.get<WeakReferenceNode>()->get()));
+            return f(po_list[NT_OBJECT], QoreValue(n.get<WeakReferenceNode>()->get()), args...);
 
         case NT_WEAKREF_HASH:
-            return f(po_list[NT_HASH], QoreValue(n.get<WeakHashReferenceNode>()->get()));
+            return f(po_list[NT_HASH], QoreValue(n.get<WeakHashReferenceNode>()->get()), args...);
 
         case NT_WEAKREF_LIST:
-            return f(po_list[NT_LIST], QoreValue(n.get<WeakListReferenceNode>()->get()));
+            return f(po_list[NT_LIST], QoreValue(n.get<WeakListReferenceNode>()->get()), args...);
 
         case NT_REFERENCE: {
             const ReferenceNode* r = n.get<const ReferenceNode>();
@@ -202,29 +204,31 @@ static QoreValue pseudo_classes_dispatch(const QoreValue n, ExceptionSink* xsink
                 return QoreValue();
             }
 
-            return pseudo_classes_dispatch(ref.getValue(), xsink, f);
+            return pseudo_classes_dispatch(ref.getValue(), xsink, f, args...);
         }
 
         default:
             break;
     }
 
-    return f(pseudo_get_class(n.getType()), n);
+    return f(pseudo_get_class(n.getType()), n, args...);
 }
 
-QoreValue pseudo_classes_eval(const QoreValue n, const char *name, const QoreListNode *args, ExceptionSink *xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return pseudo_classes_dispatch(n, xsink, [&] (const QoreClass* qc, const QoreValue v) {
-        return qore_class_private::evalPseudoMethod(qc, v, name, args, rc, xsink);
-    });
+QoreValue pseudo_classes_eval(const QoreValue n, const char* name, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    return pseudo_classes_dispatch(n, xsink, [] (const QoreClass* qc, const QoreValue v, const char* name,
+            const QoreListNode* args, ExceptionSink* xsink) {
+        return qore_class_private::evalPseudoMethod(qc, v, name, args, rc_get_current_ref(), xsink);
+    }, name, args, xsink);
 }
 
 QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreValue n, const char* name,
         const QoreListNode* args, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return pseudo_classes_dispatch(n, xsink, [&] (const QoreClass* qc, const QoreValue v) {
-        return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<true>(policy, v, name, args, rc, xsink);
-    });
+    return pseudo_classes_dispatch(n, xsink, [] (const QoreClass* qc, const QoreValue v, LexicalSemanticPolicy policy,
+            const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+        return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<true>(policy, v, name, args,
+            rc_get_current_ref(), xsink);
+    }, policy, name, args, xsink);
 }
 
 int pseudo_classes_check_method(const QoreValue n, const char* name, ExceptionSink* xsink) {

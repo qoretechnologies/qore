@@ -22,6 +22,31 @@
 # Originally surfaced as a >30s load of the Qorus Business-Impact Dashboard,
 # pinned in a uniqueInts() id-dedup helper (foreach + hash membership test +
 # hash insert + list append: 10k elements took ~20s).
+#
+# The dedup loop is checked with counters of library debugging, which make the
+# check deterministic (it replaced a wall-clock check that 4x the input cost no
+# more than ~8x the time, which failed on loaded CI hosts).  The loop runs in a
+# child Program in each execution mode, where
+# - dbg_get_container_copy_count() counts the hashes and lists that the loop
+#   copies: none when the stores change the containers in place, one for each
+#   store when they copy them (defect 2)
+# - dbg_get_ir_cleanup_entries() and dbg_get_ir_instantiated_local_entries(),
+#   read before and after the loop, give the entries of the cleanup ledger and
+#   of the list of instantiated locals of the innermost IR interpreter frame:
+#   the loop must leave none behind, while a loop that leaves entries for each
+#   iteration (such as the break/continue leaks that
+#   design/ir-loop-jump-temp-scope.md describes, or temps that a statement end
+#   does not release) makes every later scan of them slower.  The values of
+#   this loop are statement temps, which each statement end releases, so the
+#   duplicate entries of defect 1 can no longer accumulate in it; IRCleanupSlots
+#   keeps a ledger free of duplicates by construction.  The ledger is only read
+#   in IR interpreter frames: when the loop runs compiled code (the JIT and
+#   tiered modes can promote it), another frame is read, whose entries the loop
+#   does not change, and only the copy count applies.
+# A control loop that stores to a hash that a second variable also holds must
+# copy it at each store, which proves that the count sees the copies.  Without
+# library debugging the counters do not exist and the check is skipped: the
+# Linux CI jobs build libqore with CMAKE_BUILD_TYPE=debug, so they run it.
 
 %modern
 %no-child-restrictions
@@ -40,7 +65,8 @@ class IRContainerStoreScalingTest inherits QUnit::Test {
         addTestCase("hash self-assignment stores pre-CoW value", \testHashSelfAssign());
         addTestCase("read+write dedup loop correctness", \testDedupLoopCorrectness());
         addTestCase("exception paths in read+write loops", \testExceptionPaths());
-        addTestCase("read+write dedup loop scales linearly", \testDedupLoopScaling());
+        addTestCase("read+write dedup loop copies no container and keeps its cleanup ledger bounded",
+            \testDedupLoopCounts());
         set_return_value(main());
     }
 
@@ -146,30 +172,115 @@ class IRContainerStoreScalingTest inherits QUnit::Test {
         assertEq(51, seen.size());
     }
 
-    private static int timeDedup(int n) {
-        list<int> vals = map $1 % (n / 2), xrange(n);
-        # monotonic: a wall-clock step on a CI VM otherwise shows up as a scaling failure
-        int t0 = clock_get_monotonic_us();
-        list<int> rv = IRContainerStoreScalingTest::uniqueInts(vals);
-        int us = clock_get_monotonic_us() - t0;
-        if (rv.size() != n / 2) {
-            throw "SCALING-TEST-ERROR", sprintf("dedup returned %d elements, expected %d", rv.size(), n / 2);
-        }
-        return us;
-    }
+    #! the elements of the dedup loop: half of them are distinct, so it makes this many / 2 hash and list stores
+    const DedupCount = 8000;
 
-    testDedupLoopScaling() {
-        # warm up (JIT promotion, allocator)
-        IRContainerStoreScalingTest::timeDedup(1000);
-        # the fastest of three runs of each size: a single run on a loaded CI runner can be stalled (a 32k run took
-        # 335ms against 16ms for 8k on an arm64 runner), while a quadratic loop is slow in every run
-        int t1 = min(map IRContainerStoreScalingTest::timeDedup(8000), xrange(3));
-        int t2 = min(map IRContainerStoreScalingTest::timeDedup(32000), xrange(3));
-        # 4x the input must not cost more than ~8x the time (linear is ~4x,
-        # quadratic is ~16x and hundreds of ms even on fast machines); the
-        # absolute bound keeps timer noise from failing fast runs
-        bool linear = t2 < 8 * t1 || t2 < 250000;
-        assertTrue(linear,
-            sprintf("dedup scaling: 8k=%dus 32k=%dus (ratio %.1f)", t1, t2, t1 ? float(t2) / t1 : 0.0));
+    #! the most copies and frame entries left behind of a dedup loop that changes its containers in place and leaves
+    #! no entries behind; a regression copies a container at each store or leaves entries for each iteration
+    const MaxCount = DedupCount / 20;
+
+    #! the code of the child Programs: the dedup loop, a control loop, and the functions that count what they do
+    const DedupCode = "%modern
+int sub copies() {
+    return call_function(\"dbg_get_container_copy_count\");
+}
+
+# the entries that the loop of uniqueInts() left in the innermost IR interpreter frame of the thread, which is its own
+# frame when the IR interpreter runs it; -1 until uniqueInts() sets them.  uniqueInts() calls the counters itself: a
+# function that called them would read its own frame
+int cleanup_growth;
+int local_growth;
+
+list<int> sub uniqueInts(list<int> values) {
+    list<int> rv = ();
+    hash<string, bool> seen = {};
+    int cleanup_before = call_function(\"dbg_get_ir_cleanup_entries\");
+    int local_before = call_function(\"dbg_get_ir_instantiated_local_entries\");
+    foreach int value in (values) {
+        string key = value.toString();
+        if (seen{key}) {
+            continue;
+        }
+        seen{key} = True;
+        rv += value;
+    }
+    cleanup_growth = call_function(\"dbg_get_ir_cleanup_entries\") - cleanup_before;
+    local_growth = call_function(\"dbg_get_ir_instantiated_local_entries\") - local_before;
+    return rv;
+}
+
+# the sizes of the snapshots of uniqueIntsShared(), which uses each snapshot so that no optimization removes it
+int snapshot_sizes;
+
+# the control: a second variable holds the hash at each store, which must copy it
+list<int> sub uniqueIntsShared(list<int> values) {
+    list<int> rv = ();
+    hash<string, bool> seen = {};
+    int sizes = 0;
+    foreach int value in (values) {
+        string key = value.toString();
+        if (seen{key}) {
+            continue;
+        }
+        hash<string, bool> snapshot = seen;
+        seen{key} = True;
+        rv += value;
+        sizes += snapshot.size();
+    }
+    snapshot_sizes = sizes;
+    return rv;
+}
+
+hash<auto> sub measure(code<list<int>(list<int>)> dedup, list<int> values) {
+    cleanup_growth = -1;
+    local_growth = -1;
+    int before = copies();
+    list<int> rv = dedup(values);
+    return {
+        \"copies\": copies() - before,
+        \"cleanup_growth\": cleanup_growth,
+        \"local_growth\": local_growth,
+        \"size\": rv.size(),
+    };
+}
+
+hash<auto> sub measureUnique(list<int> values) {
+    return measure(\\uniqueInts(), values);
+}
+
+hash<auto> sub measureShared(list<int> values) {
+    return measure(\\uniqueIntsShared(), values);
+}
+";
+
+    testDedupLoopCounts() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the counters need library debugging");
+        }
+        list<int> vals = map $1 % (DedupCount / 2), xrange(DedupCount);
+        foreach hash<auto> i in ({"ast": EM_AST, "ir": EM_IR, "tiered": EM_TIERED, "jit": EM_JIT}.pairIterator()) {
+            Program pgm();
+            pgm.setExecMode(i.value);
+            pgm.parse(DedupCode, "dedup-" + i.key);
+            # a first call and a second call: the tiered and JIT modes run the first in the IR interpreter and can
+            # promote the function to compiled code (with a background compile, at a call that depends on timing)
+            foreach string call in ("first", "second") {
+                hash<auto> h = pgm.callFunction("measureUnique", vals);
+                string label = sprintf("%s mode, %s call: %y", i.key, call, h);
+                assertEq(DedupCount / 2, h.size, label);
+                # the entries that the loop left behind: they cannot be negative, and -1 means they were not read
+                assertGe(0, h.cleanup_growth, label);
+                assertLt(MaxCount, h.cleanup_growth, label);
+                assertGe(0, h.local_growth, label);
+                assertLt(MaxCount, h.local_growth, label);
+                assertLt(MaxCount, h.copies, label);
+            }
+            # the control: a store to a hash that a second variable also holds copies it, once for each store
+            hash<auto> h = pgm.callFunction("measureShared", vals);
+            string label = sprintf("%s mode, shared hash: %y (snapshot sizes: %d)", i.key, h,
+                pgm.getGlobalVariable("snapshot_sizes"));
+            assertEq(DedupCount / 2, h.size, label);
+            assertGe(DedupCount / 2, h.copies, label);
+        }
     }
 }

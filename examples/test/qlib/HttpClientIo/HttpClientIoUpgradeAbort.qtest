@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    An HTTP/1.1 connection whose poll operation is aborted after a 101 Switching Protocols response was delivered to
+    its stream, and before the operation sets its protocol-switched state (issue #5985).
+
+    The caller of the stream takes the socket over with the 101 response (a WebSocket client does), so the
+    operation reports the protocol switched also when the abort comes first, and its completion, which the async I/O
+    controller delivers on a worker at any time, does not close the connection and with it the socket of the new
+    protocol.  A raw server holds the 101 response until the abort is armed at that point with the debug hook of
+    the operation's state changes, so the order does not depend on timing.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+%requires AsyncSocketIo
+
+%exec-class HttpClientIoUpgradeAbortTest
+
+#! A server that answers the first request of one connection with a 101 response when it is released
+class UpgradeServer {
+    public {
+        #! the port of the listener
+        int port;
+        #! released with a push to send the 101 response
+        Queue send_response();
+        #! released with a push to close the connection
+        Queue finish();
+        #! gets the request header, then whether the client closed the connection before finish() was released
+        Queue events();
+    }
+
+    private {
+        Socket listener();
+        Counter running(1);
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0", True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background run();
+    }
+
+    #! releases the server and waits for its thread
+    stop() {
+        send_response.push(False);
+        finish.push(True);
+        running.waitForZero();
+        listener.close();
+    }
+
+    private run() {
+        on_exit running.dec();
+        Socket s;
+        try {
+            # bounded, so the thread ends when the client never connects (stop() waits for it)
+            s = listener.accept(30s);
+        } catch (hash<ExceptionInfo> ex) {
+            events.push(sprintf("%s: %s", ex.err, ex.desc));
+            return;
+        }
+        on_exit s.close();
+        hash<auto> hdr = s.readHTTPHeader(30s);
+        events.push(hdr);
+        if (!send_response.get()) {
+            return;
+        }
+        s.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: test\r\nConnection: Upgrade\r\n\r\n");
+        finish.get();
+        # the client keeps the connection open: no end of stream is pending
+        events.push(s.isDataAvailable(0) ? "client-closed" : "open");
+    }
+}
+
+public class HttpClientIoUpgradeAbortTest inherits QUnit::Test {
+    constructor() : Test("HttpClientIoUpgradeAbortTest", "1.0") {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("an operation aborted after its 101 response was delivered reports the protocol switched",
+                \abortAfterDeliveryTest());
+        }
+        set_return_value(main());
+    }
+
+    abortAfterDeliveryTest() {
+        UpgradeServer server();
+        on_exit server.stop();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(sprintf("http://127.0.0.1:%d", server.port),
+            "GET", "/", {"Upgrade": "test", "Connection": "Upgrade"}, False);
+        hash<auto> req = server.events.get(30s);
+        assertEq("GET", req.method);
+
+        HttpClientConnection conn = stream.getConnection();
+        Http1ClientPollOperation op = cast<Http1ClientPollOperation>(conn.getPollOperation());
+        Socket sock = conn.getSocket();
+
+        # the operation is aborted as another thread aborts it when the I/O thread sets the protocol-switched state,
+        # after the 101 response was delivered to the stream
+        on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        call_function("dbg_poll_close_before_open_state", op, "protocol-switched");
+        server.send_response.push(True);
+        *bool closed_after_store = call_function("dbg_poll_wait_close_before_open_state", 30000);
+        assertEq(True, closed_after_store, "the abort fired, and the operation stayed closed");
+
+        hash<auto> resp = stream.readData(30s);
+        assertEq(101, resp.status_code, "the stream got the 101 response");
+        assertTrue(op.isClosed(), "the operation is closed");
+        assertTrue(op.isProtocolSwitched(), "the operation reports the protocol switched");
+
+        # the completion, as the async I/O controller delivers it on a worker after the operation reached its goal
+        op.onComplete(<SocketPollResultInfo>{"sock": sock, "spop": op});
+        assertTrue(sock.isOpen(), "the socket taken over with the 101 response is not closed");
+
+        server.finish.push(True);
+        assertEq("open", server.events.get(30s), "the server's connection was not closed by the client");
+    }
+}
