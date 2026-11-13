@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CharNumberArithmeticTest
+
+#! Regression test for qore#6020: a char converts to number as its code point in arithmetic and comparisons
+/** A \c char operand of an operator with a \c number operand counted as 0: the conversion of a value to a number
+    (<tt>QoreNumberNode(const QoreValue)</tt>) fell back to 0 for the char type, and the comparison operators converted
+    the internal node of the value, which a char, an inline value, does not have; so <tt>c'a' - 1.5n</tt> gave
+    \c -1.5n, <tt>c'a' * 2n</tt> gave \c 0n, <tt>c'a' >= 97n</tt> was \c False and <tt>min(c'a', 1n)</tt> gave
+    <tt>c'a'</tt>.  A char now converts to its code point, as it does with an \c int or \c float operand.
+
+    The script applies <tt>-</tt>, <tt>*</tt>, <tt>/</tt>, <tt>%</tt>, the comparison operators, \c min(), \c max(),
+    the number conversions and the compound assignment operators to chars and numbers, with typed and untyped
+    operands, typed results (parse-time types), constant expressions folded at parse time, multibyte chars and
+    list and hash elements; each function is called three times, in every execution mode and as qcc executables
+    compiled with \c -O0 and \c -O3 (see ExecModeOutputTest).  The \c + operator treats a char as a string, and is
+    tested with the char concatenation tests.
+*/
+class CharNumberArithmeticTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+
+string sub t(auto v) {
+    return sprintf("%y:%s", v, v.fullType());
+}
+
+string sub arith(char c, number n) {
+    return sprintf("%s %s %s %s %s %s", t(c - n), t(n - c), t(c * n), t(n * c), t(c / n), t(c % n));
+}
+
+string sub rdiv(number n, char c) {
+    try {
+        return t(n / c);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub compareOps(char c, number n) {
+    return sprintf("%y %y %y %y %y %y %y %y", c < n, c <= n, c > n, c >= n, c == n, c != n, c <=> n, n <=> c);
+}
+
+string sub untyped(auto c, auto n) {
+    return sprintf("%s %s %s %y %y %y", t(c - n), t(c * n), t(c / n), c < n, c >= n, c <=> n);
+}
+
+# the parse-time result type of each operator is number
+string sub typed(char c, number n) {
+    number d = c - n;
+    number m = c * n;
+    number q = c / n;
+    return sprintf("%y %y %y", d, m, q);
+}
+
+string sub minmax(char c, number n) {
+    return sprintf("%s %s %s %s", t(min(c, n)), t(max(c, n)), t(min(n, c)), t(max(n, c)));
+}
+
+string sub conv(char c) {
+    return sprintf("%s %s", t(number(c)), t(cast<number>(c)));
+}
+
+# compound assignment: a number lvalue with a char operand, and a char in an untyped lvalue with a number operand;
+# -= on a char in an untyped lvalue does integer arithmetic, as it does on an int
+string sub lvalues(char c, number n) {
+    number a = n;
+    a -= c;
+    number b = n;
+    b *= c;
+    number d = n;
+    d /= c;
+    auto x = c;
+    x *= n;
+    auto y = c;
+    y /= n;
+    auto z = c;
+    z -= n;
+    return sprintf("%s %s %s %s %s %s", t(a), t(b), t(d), t(x), t(y), t(z));
+}
+
+string sub containerElements(char c, number n) {
+    list l = (c,);
+    l[0] *= n;
+    hash h = {"k": c};
+    h.k /= n;
+    return sprintf("%s %s", t(l[0]), t(h.k));
+}
+
+# folded at parse time
+const Folded = (c"a" - 1.5n, c"a" * 2n, c"a" / 2n, c"a" < 50n, c"a" >= 97n, 100.5n - c"a");
+
+for (int i = 0; i < 3; ++i) {
+    printf("%d arith %s | %s | %s %s\n", i, arith(c"a", 2n), arith(c"\u{e9}", 4n), rdiv(194n, c"a"),
+        rdiv(466n, c"\u{e9}"));
+    printf("%d compare %s | %s | %s\n", i, compareOps(c"a", 97n), compareOps(c"a", 50n), compareOps(c"\u{1F600}", 128512n));
+    printf("%d untyped %s\n", i, untyped(c"a", 2n));
+    printf("%d typed %s | %s\n", i, typed(c"a", 2n), typed(c"\u{1F600}", 2n));
+    printf("%d minmax %s | %s\n", i, minmax(c"a", 1n), minmax(c"a", 98n));
+    printf("%d conv %s\n", i, conv(c"a"));
+    printf("%d lvalues %s\n", i, lvalues(c"a", 194n));
+    printf("%d elements %s\n", i, containerElements(c"a", 2n));
+    printf("%d folded %y\n", i, Folded);
+}
+';
+
+        #! the expected output (the code points: a = 97, U+E9 = 233, U+1F600 = 128512)
+        const Lines = (
+            "arith 95:number -95:number 194:number 194:number 48.5:number 1:integer"
+                + " | 229:number -229:number 932:number 932:number 58.25:number 1:integer | 2:number 2:number",
+            "compare False True False True True False 0 0 | False False True True False True 1 -1"
+                + " | False True False True True False 0 0",
+            "untyped 95:number 194:number 48.5:number False True 1",
+            "typed 95 194 48.5 | 128510 257024 64256",
+            "minmax 1:number a:char 1:number a:char | a:char 98:number a:char 98:number",
+            "conv 97:number 97:number",
+            "lvalues 97:number 18818:number 2:number 18818:number 0.5:number -97:integer",
+            "elements 194:number 48.5:number",
+            "folded [95.5, 194, 48.5, False, True, 3.5]",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CharNumberArithmetic", Script, CharNumberArithmeticTest::expected(),
+            "converts a char to number as its code point", NOTHING, NOTHING, ("-O0", "-O3")) {
+    }
+
+    static string expected() {
+        string rv;
+        for (int i = 0; i < 3; ++i) {
+            rv += foldl $1 + $2, (map sprintf("%d %s\n", i, $1), Lines);
+        }
+        return rv;
+    }
+}

@@ -202,7 +202,7 @@ bool QoreLogicalGreaterThanOperatorNode::doGreaterThan(const QoreValue& lh, cons
             case NT_INT:
                 return l.get<const QoreNumberNode>()->greaterThan(r.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
                 return l.get<const QoreNumberNode>()->greaterThan(**rn);
             }
         }
@@ -217,7 +217,7 @@ bool QoreLogicalGreaterThanOperatorNode::doGreaterThan(const QoreValue& lh, cons
             case NT_INT:
                 return r.get<const QoreNumberNode>()->lessThan(l.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
                 return r.get<const QoreNumberNode>()->lessThan(**ln);
             }
         }
