@@ -9,9 +9,12 @@
 # response to a HEAD request, error responses returned by a handler, the error response to an invalid handler response,
 # the response of the server when no handler matches, and responses that close the connection; also configured
 # headers that a subclass changes after the server's constructor (with canonical names and with names of managed
-# fields in another case), configured headers changed while the server serves requests, and configured headers whose
+# fields in another case), configured headers changed while the server serves requests, handler headers in another
+# case that replace such configured headers or the Alt-Svc field of a listener (#5966), and configured headers whose
 # values all have one type.  The order of the header fields is that of the hash the server builds, and the tests pin it
-# so that it does not change (#5759): the expected values were taken from the server before #5759.
+# so that it does not change (#5759): the expected values were taken from the server before #5759, except those of the
+# #5966 cases, where a handler's field replaces a configured field in another case: the configured field is removed and
+# the handler's field is in the place it has in the handler's headers, as when the headers are merged.
 
 %modern
 
@@ -46,6 +49,16 @@ class ReplyHeadersHandler inherits AbstractHttpRequestHandler {
                     "x-powered-by": "handler",
                     "x-instance": "h",
                 });
+            # the headers that the servers of the subclasses add, with names in another case
+            case "replace-lower":
+                return makeResponse(200, "ok", {
+                    "Content-Type": MimeTypeText,
+                    "x-frame-options": "DENY",
+                    "x-late": "h",
+                });
+            # the Alt-Svc field of the listener with a name in another case
+            case "alt-svc":
+                return makeResponse(200, "ok", {"Content-Type": MimeTypeText, "alt-svc": "clear"});
             # a handler that closes the connection
             case "close":
                 hash<HttpResponseInfo> rv = makeResponse(200, "ok", {"Content-Type": MimeTypeText});
@@ -97,6 +110,10 @@ class ChangingSubclassServer inherits HttpServer {
 
     setConfiguredHeader(string name, string value) {
         hdr{name} = value;
+    }
+
+    setConfiguredHeaders(hash<auto> h) {
+        hdr = h;
     }
 }
 
@@ -816,6 +833,7 @@ class HttpServerReplyHeadersTest inherits QUnit::Test {
         addTestCase("HTTP/1.1 keep-alive", \keepAliveTest());
         addTestCase("HTTP/2", \h2Test());
         addTestCase("configured headers of a subclass", \subclassTest());
+        addTestCase("handler headers replace the configured headers of a subclass", \subclassReplaceTest());
         addTestCase("configured headers changed while serving", \changedHeadersTest());
         addTestCase("configured headers with values of one type", \narrowedHeadersTest());
         set_return_value(main());
@@ -855,6 +873,15 @@ class HttpServerReplyHeadersTest inherits QUnit::Test {
     # the TLS listener has the Alt-Svc header of its HTTP/3 listener
     tlsH1Test() {
         checkH1(h2_port, "tls", True);
+        # a handler's Alt-Svc field in another case replaces the listener's and takes the place of the handler's field
+        Socket s();
+        s.connect(sprintf("127.0.0.1:%d", h2_port), 30s);
+        on_exit s.close();
+        s.upgradeClientToSSL(30s);
+        list<string> l = getHeaderLines(s, "GET /h/alt-svc", "tls alt-svc");
+        assertEq(("Alt-Svc: clear",), (select l, $1 =~ /^alt-svc:/i), "tls alt-svc");
+        assertEq(("HTTP/1.1 200 OK", "X-Powered-By: Qore/<version>", "X-Instance: srv",
+            "Content-Type: text/plain;charset=utf-8", "Alt-Svc: clear"), l[0..4], "tls alt-svc order");
     }
 
     # several requests on one connection have the same headers as the first one
@@ -933,6 +960,69 @@ class HttpServerReplyHeadersTest inherits QUnit::Test {
                 });
             on_exit delete srv;
             checkServed(ExpectedSubclass{label}, serve(srv, label), label);
+        }
+    }
+
+    # a handler's header replaces a configured header of the same name in another case when the configured headers
+    # were added by a subclass after the server's constructor or changed while the server serves requests (#5966)
+    subclassReplaceTest() {
+        {
+            CanonicalSubclassServer srv(<HttpServerOptionInfo>{
+                "logger": new Logger("server", LoggerLevel::getLevelError()),
+            });
+            on_exit delete srv;
+            list<string> l = serve(srv, "canonical", ("GET /h/replace-lower",))."GET /h/replace-lower";
+            assertEq(("x-frame-options: DENY",), (select l, $1 =~ /^x-frame-options:/i), "canonical subclass");
+            assertEq((
+                "HTTP/1.1 200 OK",
+                "Server: sub-server",
+                "Content-Type: text/plain;charset=utf-8",
+                "x-frame-options: DENY",
+                "x-late: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Content-Length: 2",
+            ), l, "canonical subclass order");
+        }
+        {
+            ChangingSubclassServer srv(<HttpServerOptionInfo>{
+                "logger": new Logger("server", LoggerLevel::getLevelError()),
+            });
+            on_exit delete srv;
+            list<string> l = serve(srv, "before change", ("GET /h/replace-lower",))."GET /h/replace-lower";
+            assertEq(("x-late: h",), (select l, $1 =~ /^x-late:/i), "before change");
+            # configured headers added while the server serves requests
+            int port = srv.getListeners().firstValue().port;
+            foreach string name in ("X-Late", "X-Frame-Options") {
+                srv.setConfiguredHeader(name, "configured");
+                Socket s();
+                s.connect(sprintf("127.0.0.1:%d", port), 30s);
+                on_exit s.close();
+                l = getHeaderLines(s, "GET /h/replace-lower", "after " + name);
+                assertEq(("x-late: h",), (select l, $1 =~ /^x-late:/i), "x-late after " + name);
+                assertEq(("x-frame-options: DENY",), (select l, $1 =~ /^x-frame-options:/i),
+                    "x-frame-options after " + name);
+            }
+            # the configured headers in another order are sent in that order, and a configured header that is
+            # removed is no longer sent, nor replaced
+            code get_lines = list<string> sub (string label) {
+                Socket s();
+                s.connect(sprintf("127.0.0.1:%d", port), 30s);
+                on_exit s.close();
+                return getHeaderLines(s, "GET /h/default", label);
+            };
+            srv.setConfiguredHeaders({"X-A": "a", "X-B": "b"});
+            assertEq(("X-A: a", "X-B: b"), (select get_lines("a b"), $1 =~ /^x-[ab]:/i), "a b");
+            srv.setConfiguredHeaders({"X-B": "b", "X-A": "a"});
+            assertEq(("X-B: b", "X-A: a"), (select get_lines("b a"), $1 =~ /^x-[ab]:/i), "b a");
+            srv.setConfiguredHeaders({"X-B": "b"});
+            assertEq(("X-B: b",), (select get_lines("b"), $1 =~ /^x-[ab]:/i), "b");
+            Socket s();
+            s.connect(sprintf("127.0.0.1:%d", port), 30s);
+            on_exit s.close();
+            l = getHeaderLines(s, "GET /h/replace-lower", "removed");
+            assertEq(("x-frame-options: DENY",), (select l, $1 =~ /^x-frame-options:/i), "x-frame-options removed");
+            assertEq(("x-late: h",), (select l, $1 =~ /^x-late:/i), "x-late removed");
         }
     }
 
