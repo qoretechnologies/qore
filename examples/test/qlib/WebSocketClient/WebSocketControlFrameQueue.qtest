@@ -395,6 +395,10 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
         on_exit done.waitForZero(HangGuard);
         assertRegex("sent the close frame: close code 1001", capture.lines.get(HangGuard),
             "the client queued its close frame");
+        # disconnect() logs the close frame with the client's lock held, and releases the lock only once it has taken
+        # the connection (and cleared its callbacks, with the close timer): isOpen() takes the lock, so the frame below
+        # is rejected after that, when the error no longer finds the close timer
+        assertFalse(wsc.isOpen(), "disconnect() took the connection");
         # the frame state rejects a frame while the close frame waits
         node.process.write("big-header\n");
         assertEq("SENT BIG-HEADER", readLine(\node), "the server announced a frame over the limit");
