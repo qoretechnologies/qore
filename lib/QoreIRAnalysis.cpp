@@ -7060,12 +7060,51 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
         return 0;
     }
 
+    // the values defined in the blocks that are kept
+    std::unordered_set<uint32_t> reachable_defs;
+    for (const auto& block : func.blocks) {
+        if (!reachable.count(block.get())) {
+            continue;
+        }
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid()) {
+                reachable_defs.insert(inst->result.id);
+            }
+        }
+    }
     std::unordered_set<QoreIRBasicBlock*> removed;
     removed.reserve(func.blocks.size() - reachable.size());
     for (const auto& block : func.blocks) {
-        if (!reachable.count(block.get())) {
-            removed.insert(block.get());
+        if (reachable.count(block.get())) {
+            continue;
         }
+        // a Return with a value in an unreachable block (the exit of a return statement after a handler that throws
+        // or exits the thread) is kept, alone in its block: the IR interpreter and native code take the slot of every
+        // Return's value for a return value, which an exception that interrupts the return keeps until after the
+        // locals (qore#5941); without it, the value was released with the temporaries, before the locals (#6028)
+        auto ret = std::find_if(block->instructions.begin(), block->instructions.end(),
+            [&](const std::unique_ptr<QoreIRInstruction>& inst) {
+                if (inst->opcode != QoreIROpcode::Return) {
+                    return false;
+                }
+                // only a value that executed code defines: the value of a return statement that cannot be reached
+                // itself has no definition after the pruning
+                const auto& r = static_cast<const QoreIRReturnInstruction&>(*inst);
+                return r.has_value && r.value.isValid() && reachable_defs.count(r.value.id);
+            });
+        if (ret != block->instructions.end()) {
+            std::unique_ptr<QoreIRInstruction> kept = std::move(*ret);
+            // it cannot raise, and the blocks that it could name are removed
+            kept->exception_target = nullptr;
+            block->instructions.clear();
+            block->instructions.push_back(std::move(kept));
+            block->enclosing_loop_exit = nullptr;
+            continue;
+        }
+        removed.insert(block.get());
+    }
+    if (removed.empty()) {
+        return 0;
     }
 
     // The removal decision is committed.  Finish all pointer and phi rewrites
