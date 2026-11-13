@@ -9090,6 +9090,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // design/ir-exception-branch-temp-scope.md).  The computation is out of line, as only exceptions need it
     // (qore_ir_exception_branch_temp_scope()).
     auto exceptionBranchTempScope = [&](const QoreIRInstruction* raising) -> uint32_t {
+        // the value of a return that the exception interrupts is kept, as the frame's exit keeps it
+        // (unwindForException(), #5920): the temps that the branch releases hold it, and the exception can leave the
+        // frame through the handlers and cleanup blocks of the frame; a try statement of the frame that catches the
+        // exception releases it before its catch block (CatchException), as the AST interpreter releases it when the
+        // exception leaves the statements of the try block, and the frame's exit after its locals (#6031)
+        for (size_t id = 0, e = std::min(frame.cleanup.slotTableSize(), values.size()); id < e; ++id) {
+            if (frame.cleanup.isReturnSlot(static_cast<uint32_t>(id)) && values[id].hasNode()) {
+                frame.locals_slot_cache.holdReturn(values[id].refSelf());
+            }
+        }
         return qore_ir_exception_branch_temp_scope(raising, temp_cleanup_marks);
     };
 
@@ -10703,6 +10713,13 @@ next_instruction:
                 // A thread_exit is not an exception: the catch block is not entered, and the unwind continues
                 // through the propagation block; an exception pending with it is deleted, as
                 // TryStatement::execImpl() does (qore_catch_thread_exit())
+                // the values of the returns that the exception (or thread_exit) interrupted, which the branches to
+                // the handlers of the frame kept (see exceptionBranchTempScope()), are released at the try statement,
+                // before its catch block, as the AST interpreter releases them while the exception or thread_exit is
+                // pending (#6031)
+                if (xsink && *xsink) {
+                    frame.locals_slot_cache.releaseHeldReturns(xsink);
+                }
                 if (inst->exception_target && qore_catch_thread_exit(xsink)) {
                     // the pending exception, if any, was deleted: an exception raised later is another one
                     dbg_state.exc_reported = nullptr;
