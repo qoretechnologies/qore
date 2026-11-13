@@ -1091,6 +1091,25 @@ DLLLOCAL int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeI
 // makes sure the lvalue can be assigned a string value, else raises a parse exception and returns -1
 DLLLOCAL int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 
+//! returns the one-character UTF-8 string that the += operator adds for a char operand (a new reference)
+/** a char operand of += is added exactly as the one-character string is, for every lvalue type
+*/
+DLLLOCAL QoreStringNode* qore_plus_equals_char_string(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for a char operand: the char converted as its
+//! one-character string is (\c "5" gives 5, \c "a" 0)
+DLLLOCAL int64 qore_plus_equals_char_int_operand(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for an operand: a char is converted as its one-character
+//! string is (qore_plus_equals_char_int_operand()), any other value with QoreValue::getAsBigInt()
+DLLLOCAL inline int64 qore_plus_equals_int_operand(const QoreValue v) {
+    // an inline integer first, as the most common operand
+    if (v.isInt()) {
+        return v.getInt();
+    }
+    return v.isChar() ? qore_plus_equals_char_int_operand(v) : v.getAsBigInt();
+}
+
 DLLLOCAL extern QoreClass* QC_PSEUDOVALUE;
 DLLLOCAL extern QoreClass* QC_PSEUDONOTHING;
 

@@ -3878,6 +3878,19 @@ int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typ
     return 0;
 }
 
+QoreStringNode* qore_plus_equals_char_string(const QoreValue v) {
+    assert(v.isChar());
+    // a char holds a valid codepoint, which UTF-8 always represents; a string that cannot be made is empty
+    QoreStringNode* rv = QoreValue::makeCharString(v.getChar(), QCS_UTF8, nullptr);
+    return rv ? rv : new QoreStringNode;
+}
+
+int64 qore_plus_equals_char_int_operand(const QoreValue v) {
+    assert(v.isChar());
+    SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(v));
+    return str->getAsBigInt();
+}
+
 int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
     // make sure the lvalue can be assigned a floating-point value
     // raise a parse exception only if parse exceptions are not suppressed

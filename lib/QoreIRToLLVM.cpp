@@ -2431,7 +2431,15 @@ llvm::Value* QoreIRToLLVM::ensureIntTypeInline(llvm::Value* val, uint32_t value_
 }
 
 // documented in QoreIRToLLVM.h
-llvm::Value* QoreIRToLLVM::emitBoxedToIntInline(llvm::Value* val) {
+llvm::Value* QoreIRToLLVM::ensurePlusEqualsIntOperandInline(llvm::Value* val, uint32_t value_id) {
+    // a native value is never a char
+    if (!nanboxed_values.count(value_id)) {
+        return ensureIntTypeInline(val, value_id);
+    }
+    return emitBoxedToIntInline(val, "qore_rt_plus_equals_operand_to_int");
+}
+
+llvm::Value* QoreIRToLLVM::emitBoxedToIntInline(llvm::Value* val, const char* slow_helper) {
     // Inline tag check + sign-extend for INT48, runtime call for QoreBigIntNode
     auto* cur_func = builder->GetInsertBlock()->getParent();
     auto* fast_bb = llvm::BasicBlock::Create(ctx, "int48_fast", cur_func);
@@ -2452,7 +2460,7 @@ llvm::Value* QoreIRToLLVM::emitBoxedToIntInline(llvm::Value* val) {
 
     // Slow path: call runtime (handles QoreBigIntNode)
     builder->SetInsertPoint(slow_bb);
-    auto to_int = current_module->getOrInsertFunction("qore_rt_to_int",
+    auto to_int = current_module->getOrInsertFunction(slow_helper,
             llvm::FunctionType::get(i64_type, {i64_type}, false));
     llvm::Value* slow_result = builder->CreateCall(to_int, {val});
     builder->CreateBr(merge_bb);
@@ -15804,9 +15812,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return nullptr;
         }
     };
+    // to_int_helper converts a boxed value that is not an inline integer: qore_rt_to_int(), or
+    // qore_rt_plus_equals_operand_to_int() for the value added by +=, which converts a char as its one-character
+    // string is
     auto load_local_int_for_fused = [&](LocalVar* local, const void* key,
             LocalAllocaMap::iterator alloca_it,
-            const char* name) -> llvm::Value* {
+            const char* name, const char* to_int_helper = "qore_rt_to_int") -> llvm::Value* {
         // a local whose type allows a reference reads the referenced lvalue if it holds one, which raises an
         // exception if the lvalue is gone: the runtime reads below are followed by the check that takes the fused
         // instruction's exception edge, as for LoadLocal; a local of another type cannot raise, and is not checked
@@ -15834,7 +15845,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 boxed = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
             }
 
-            auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+            auto to_int = module.getOrInsertFunction(to_int_helper,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
             llvm::Value* rv = builder->CreateCall(to_int, {boxed});
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
@@ -15866,7 +15877,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(local)), ptr_type);
                 loaded = builder->CreateCall(load_fn, {var_as_ptr, owned_flag, xsink_arg});
             }
-            auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+            auto to_int = module.getOrInsertFunction(to_int_helper,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
             llvm::Value* rv = builder->CreateCall(to_int, {loaded});
             llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "fused_weak_release", llvm_func);
@@ -15909,7 +15920,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 raw = emitReferenceLocalRead(key, raw, module, llvm_func, inst);
             }
             // an integer in the boxed value is converted inline, without the runtime call
-            return emitBoxedToIntInline(raw);
+            return emitBoxedToIntInline(raw, to_int_helper);
         }
 
         llvm::Value* boxed;
@@ -15928,7 +15939,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             boxed = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
         }
 
-        auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+        auto to_int = module.getOrInsertFunction(to_int_helper,
                 llvm::FunctionType::get(i64_type, {i64_type}, false));
         llvm::Value* rv = builder->CreateCall(to_int, {boxed});
         auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
@@ -19382,8 +19393,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto source_key = reinterpret_cast<const void*>(fused->source);
             auto target_it = local_allocas.find(target_key);
             auto source_it = local_allocas.find(source_key);
+            // a char that a local of no type holds is added as its one-character string is
             llvm::Value* source_int = load_local_int_for_fused(
-                    fused->source, source_key, source_it, "add.source");
+                    fused->source, source_key, source_it, "add.source", "qore_rt_plus_equals_operand_to_int");
             bool target_ir_only = ir_only_locals_set && ir_only_locals_set->count(target_key);
             llvm::Value* result;
             if (fused->target && !fused->target->closureUse() && !target_ir_only) {
@@ -32682,9 +32694,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
+            // a char operand is added as its one-character string is
             values[inst->result.id] = builder->CreateAdd(
                 ensureIntTypeInline(lhs, inst->operands[0].id),
-                ensureIntTypeInline(rhs, inst->operands[1].id));
+                ensurePlusEqualsIntOperandInline(rhs, inst->operands[1].id));
             return true;
         }
         case QoreIROpcode::SubAssignInt: {
@@ -37006,9 +37019,17 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
 
         // Nothing path: Phase 4 - inline qore_rt_ref using select
         // Checks if rhs has a node inline via NaN-boxing, selects refself result or original value
+        // a char is added as its one-character string, which the runtime helper makes (qore_compound_assign_value())
         builder->SetInsertPoint(nothing_bb);
+        llvm::Value* rhs_is_char = builder->CreateICmpEQ(
+            builder->CreateLShr(rhs, llvm::ConstantInt::get(i64_type, 48)),
+            llvm::ConstantInt::get(i64_type, TAG_CHAR >> 48));
+        llvm::BasicBlock* nothing_ref_bb = llvm::BasicBlock::Create(ctx, "ca_nothing_ref", llvm_func);
+        builder->CreateCondBr(rhs_is_char, slow_bb, nothing_ref_bb);
+        builder->SetInsertPoint(nothing_ref_bb);
         nothing_result = emitHelperRef(module, rhs);
         builder->CreateBr(merge_bb);
+        nothing_bb = builder->GetInsertBlock();
     }
 
     // Check if both are int48-tagged
@@ -37173,6 +37194,13 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
     llvm::BasicBlock* nothing_end = nullptr;
     if (handle_nothing) {
         builder->SetInsertPoint(nothing_bb);
+        // a char is added as its one-character string, which the slow path makes (doPlusEqualsOnLValue())
+        llvm::Value* rhs_is_char = builder->CreateICmpEQ(
+            builder->CreateLShr(val_boxed, llvm::ConstantInt::get(i64_type, 48)),
+            llvm::ConstantInt::get(i64_type, TAG_CHAR >> 48));
+        llvm::BasicBlock* nothing_store_bb = llvm::BasicBlock::Create(ctx, "lca_nothing_store", llvm_func);
+        builder->CreateCondBr(rhs_is_char, slow_bb, nothing_store_bb);
+        builder->SetInsertPoint(nothing_store_bb);
         nothing_result = emitLValueStore(val_boxed);
         // current is NOTHING here — no decref needed (scalar, no refcount)
         builder->CreateBr(merge_bb);

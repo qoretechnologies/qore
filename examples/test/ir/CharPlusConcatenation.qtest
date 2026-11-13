@@ -112,11 +112,20 @@ string sub folds(string s, list<char> l) {
     return sprintf("%s %s", t(foldl $1 + $2, s.iterator()), t(foldl $1 + $2, l));
 }
 
+# map and foldl over a list of chars with constants: the parse-time type of each expression is string
+string sub listOps(list<char> l) {
+    list<string> m1 = map $1 + 1, l;
+    list<string> m2 = map "-" + $1, l;
+    string f1 = foldl $1 + "," + $2, l;
+    string f2 = foldl $1 + $2 + 1, l;
+    return sprintf("%y %y %y %y", m1, m2, f1, f2);
+}
+
 string sub codePoints(char a, char b) {
     return sprintf("%s %s", t(int(a) + int(b)), t(int(a) + 1));
 }
 
-# += on an lvalue that holds a char gives a string; a numeric lvalue adds the code point
+# += on an lvalue that holds a char gives a string; a numeric lvalue adds the char as its one-character string
 string sub plusEquals(char c) {
     auto a = c;
     a += c"b";
@@ -179,6 +188,7 @@ for (int i = 0; i < 3; ++i) {
     printf("%d rtf %s %s\n", i, rtf("\\" + chr(39) + "e9", 2), rtf("ab", 1));
     printf("%d reverse %y\n", i, reverseChars("ab\u{e9}"));
     printf("%d folds %s\n", i, folds("abc", (c"x", c"y", c"z")));
+    printf("%d listops %s\n", i, listOps((c"x", c"y", c"z")));
     printf("%d codepoints %s\n", i, codePoints(c"a", c"b"));
     printf("%d plusequals %s\n", i, plusEquals(c"a"));
     printf("%d elements %s\n", i, plusEqualsElements(c"a"));
@@ -203,9 +213,10 @@ for (int i = 0; i < 3; ++i) {
             "rtf \"e9\" 2 \"b\" 1",
             "reverse \"\u{e9}ba\"",
             "folds \"abc\":string \"xyz\":string",
+            "listops [\"x1\", \"y1\", \"z1\"] [\"-x\", \"-y\", \"-z\"] \"x,y,z\" \"xy1z1\"",
             "codepoints 195:integer 98:integer",
             "plusequals \"ab\":string \"abc\":string \"a1\":string \"a\":string \"a1.5\":string \"a\":string"
-                + " \"xa\":string 98:integer",
+                + " \"xa\":string 1:integer",
             "elements \"ab\":string \"az\":string \"xa\":string",
             "softchar a:char INVALID-CHAR-CONVERSION",
             "folded [\"ab\", \"a1\", \"1a\", \"abc\", \"abc\", \"a1.5\"]",

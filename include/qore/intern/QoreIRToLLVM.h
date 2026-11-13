@@ -1492,9 +1492,13 @@ private:
     // Uses LLVM branches to check INT48 tag and sign-extend inline, falling back to runtime
     // only for QoreBigIntNode values.  ~2x faster than ensureIntType for common INT48 values.
     llvm::Value* ensureIntTypeInline(llvm::Value* val, uint32_t value_id);
-    //! Converts a boxed value to a native int: an integer in the boxed value inline, any other value with
-    //! qore_rt_to_int()
-    llvm::Value* emitBoxedToIntInline(llvm::Value* val);
+    //! Converts a boxed value to a native int: an integer in the boxed value inline, any other value with the
+    //! runtime helper given (qore_rt_to_int() by default)
+    llvm::Value* emitBoxedToIntInline(llvm::Value* val, const char* slow_helper = "qore_rt_to_int");
+    //! Converts the operand of += on an integer lvalue to a native int: as ensureIntTypeInline(), except that a
+    //! char is converted as its one-character string is (qore_rt_plus_equals_operand_to_int()); the result is not
+    //! cached as the value's int conversion
+    llvm::Value* ensurePlusEqualsIntOperandInline(llvm::Value* val, uint32_t value_id);
     //! Returns the type path argument of the return type of a method that AOT-compiled code reads a member for
     //! directly (a getter, an assignment or a compound assignment that returns the member), or a null pointer
     //! when the return type accepts no value

@@ -2424,6 +2424,11 @@ if (x || y)
     @note Values replaced in a hash or object are released after the merge finishes and its lvalue locks are
     released, including after a partial merge fails; their destructors can read or modify the target.
 
+    A @ref char "char" \a expression is added exactly as its one-character string is, whatever the type of the
+    \a lvalue: <tt>int i = 1; i += c'5';</tt> gives \c 6, as <tt>i += "5"</tt> does, a list \a lvalue is appended
+    the string, and an \a lvalue with no value is assigned it; code-point addition takes \c int()
+    (<tt>i += int(c'5')</tt> gives \c 54).  See @ref char_plus.
+
     <b>Arguments Processed by +=</b>
     |!Argument|!Processing
     |\a lvalue (@ref list_type "list")|the expression will be evaluated and concatenated to the \a lvalue. If \a expression is a list, the lists will be concatenated, to ensure adding a single element to a list, use the @ref push "push operator"

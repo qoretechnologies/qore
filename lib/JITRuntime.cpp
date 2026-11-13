@@ -140,6 +140,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_mod_int", reinterpret_cast<void*>(&qore_rt_mod_int) },
     { "qore_rt_div_float", reinterpret_cast<void*>(&qore_rt_div_float) },
     { "qore_rt_to_int", reinterpret_cast<void*>(&qore_rt_to_int) },
+    { "qore_rt_plus_equals_operand_to_int", reinterpret_cast<void*>(&qore_rt_plus_equals_operand_to_int) },
     { "qore_rt_to_timeout", reinterpret_cast<void*>(&qore_rt_to_timeout) },
     { "qore_rt_coerce_optional_timeout",
         reinterpret_cast<void*>(&qore_rt_coerce_optional_timeout) },
@@ -980,6 +981,11 @@ extern "C" DLLEXPORT double qore_rt_div_float(double left, double right, Excepti
 extern "C" DLLEXPORT int64_t qore_rt_to_int(uint64_t val) {
     QoreValue v = fromBits(val);
     return v.getAsBigInt();
+}
+
+//! converts the operand of += on an integer lvalue to an int: a char as its one-character string is
+extern "C" DLLEXPORT int64_t qore_rt_plus_equals_operand_to_int(uint64_t val) {
+    return qore_plus_equals_int_operand(fromBits(val));
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_float_to_int(double val) {
@@ -15512,6 +15518,10 @@ QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, con
     // reference, while the assignment to the temporary lvalue below would store the referenced value; the native
     // fast path gives the same (QoreIRToLLVM::emitAnyCompoundAssignFastPath())
     if (op == LVCompoundOp::AddAssign && left.isNullOrNothing() && !right.isNothing()) {
+        // a char is added as its one-character string is: the lvalue is assigned the string
+        if (right.isChar()) {
+            return qore_plus_equals_char_string(right);
+        }
         return right.refSelf();
     }
     // += takes the operand's reference when it stores the value; the holder must be declared before the

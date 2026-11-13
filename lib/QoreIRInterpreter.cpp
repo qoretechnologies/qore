@@ -11964,6 +11964,7 @@ load_local_done:
                     }
                 }
                 // Read source from slot cache (fast path) or eval (cold path)
+                // a char that a local of no type holds is added as its one-character string is
                 int64_t source_val = 0;
                 // the value added can be that of any local, such as the variable of a foreach loop that holds a
                 // weak reference, which is read as its target
@@ -11986,12 +11987,12 @@ load_local_done:
                         cleanupLocalCaches();
                         return exitAfterUnwind();
                     }
-                    source_val = rv.getAsBigInt();
+                    source_val = qore_plus_equals_int_operand(rv);
                     if (ref_needs_deref) {
                         rv.discard(xsink);
                     }
                 } else if (!source_cached.isNothing()) {
-                    source_val = source_cached.getAsBigInt();
+                    source_val = qore_plus_equals_int_operand(source_cached);
                 } else {
                     ensureLocalInstantiated(fused_inst->source, instantiated_locals, instantiated_locals_ordered,
                         pre_instantiated, function_own_locals, &locally_uninstantiated);
@@ -12011,7 +12012,7 @@ load_local_done:
                         cleanupLocalCaches();
                         return exitAfterUnwind();
                     }
-                    source_val = sv.getAsBigInt();
+                    source_val = qore_plus_equals_int_operand(sv);
                     // the slot caches the value the variable holds, as LoadLocal does, never the int it is read as:
                     // the source keeps its value, whatever it is (ex: an int local with no value stays without one),
                     // and the slot of an IR-only local, now marked instantiated, is the variable itself; the target
@@ -19757,7 +19758,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return evalAndRef(*node, xsink);
         }
         case QoreIROpcode::AddAssignInt:
-            return QoreValue(left.getAsBigInt() + right.getAsBigInt());
+            // a char operand is added as its one-character string is (qore_plus_equals_int_operand())
+            return QoreValue(left.getAsBigInt() + qore_plus_equals_int_operand(right));
         case QoreIROpcode::AddAssignFloat:
             return QoreValue(left.getAsFloat() + right.getAsFloat());
         case QoreIROpcode::AddAssignAny:
@@ -21182,6 +21184,13 @@ private:
 };
 
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
+//! replaces the char that \a right_holder holds with its one-character string, which += adds in its place, and
+//! returns the string (kept out of line, as a char operand is rare)
+static QORE_INTERN_NOINLINE QoreValue qore_plus_equals_replace_char(ValueHolder& right_holder) {
+    right_holder = qore_plus_equals_char_string(*right_holder);
+    return *right_holder;
+}
+
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
 // documented in QoreIRInterpreter.h
@@ -21195,8 +21204,11 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             return v.assign(value, description);
         }
     };
-    const QoreValue right = *right_holder;
+    QoreValue right = *right_holder;
     qore_type_t vtype = v.getType();
+    // a char is added exactly as its one-character string is, whatever the type of the lvalue: the branches whose
+    // operation differs for a char replace it with the string (qore_plus_equals_replace_char()); the string, char,
+    // binary and hash branches convert or ignore a char as they do its string, so the common string case is unchanged
 
     if (vtype == NT_NOTHING || vtype == NT_NULL) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
@@ -21229,6 +21241,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
         } else {
             // assign rhs to lhs
             // the reference held for the value is handed over to the lvalue, as the AST interpreter does
+            if (right.isChar()) {
+                right = qore_plus_equals_replace_char(right_holder);
+            }
             if (assign(right_holder.release(), "<lvalue for += operator>")) {
                 return QoreValue();
             }
@@ -21264,6 +21279,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
     }
 
     if (vtype == NT_LIST) {
+        if (right.isChar()) {
+            right = qore_plus_equals_replace_char(right_holder);
+        }
         v.ensureUnique();
         QoreListNode* l = v.getValue().get<QoreListNode>();
         if (right.getType() == NT_LIST) {
@@ -21308,6 +21326,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             }
         }
     } else if (vtype == NT_OBJECT) {
+        if (right.isChar()) {
+            right = qore_plus_equals_replace_char(right_holder);
+        }
         LValueMergeDerefHelper sdh(v, xsink);
         QoreObject* o = v.getValue().get<QoreObject>();
         if constexpr (Lexical) {
@@ -21323,10 +21344,19 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             vs->concat(*str, xsink);
         }
     } else if (vtype == NT_NUMBER) {
+        if (right.isChar()) {
+            right = qore_plus_equals_replace_char(right_holder);
+        }
         v.plusEqualsNumber(right, "<+= operator>");
     } else if (vtype == NT_FLOAT) {
+        if (right.isChar()) {
+            right = qore_plus_equals_replace_char(right_holder);
+        }
         v.plusEqualsFloat(right.getAsFloat());
     } else if (vtype == NT_DATE) {
+        if (right.isChar()) {
+            right = qore_plus_equals_replace_char(right_holder);
+        }
         if (!right.isNullOrNothing()) {
             DateTime date(right);
             assign(v.getValue().get<DateTimeNode>()->add(date), "<lvalue for += operator>");
@@ -21351,8 +21381,8 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
             return v.plusEqualsBigInt(ms);
         }
-        // do integer plus-equals
-        v.plusEqualsBigInt(right.getAsBigInt());
+        // do integer plus-equals; a char is added as its one-character string is
+        v.plusEqualsBigInt(qore_plus_equals_int_operand(right));
     }
 
     if (*xsink) {
