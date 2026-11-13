@@ -39,6 +39,8 @@ module HttpServerUtil {
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code starts the background thread of a streamed response producer
+    domains = "THREAD_CONTROL";
 }
 
 /** @mainpage HttpServerUtil Module

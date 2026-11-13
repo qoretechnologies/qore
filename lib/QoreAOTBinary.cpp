@@ -10210,6 +10210,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     //   bit  1 = is_user
     //   bit  2 = signature literally has the `...` ellipsis (sig->hasVarargs())
     //   bit  3 = callable type-parameter declarations follow parse options
+    //   bit  4 = the declared functional domains (i64) follow the parse options (v33)
     //   bit 15 = format marker: "bits 2+ are meaningful" (new-format qmod)
     //
     // Bits 0 and 2 together let the reader separate two distinct
@@ -10256,6 +10257,11 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     if (usig && usig->hasTypeParameters()) {
         flags |= 0x0008;
     }
+    // bit 4: the functional domains declared on the user variant in Qore source follow its parse options (v33)
+    int64 declared_domain = uvb ? uvb->getDeclaredDomain() : QDOM_DEFAULT;
+    if (declared_domain) {
+        flags |= 0x0010;
+    }
     writer.writeU16(flags);
 
     // Per-variant signature start/end lines — plumbed into the reader's
@@ -10301,6 +10307,10 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     }
     writer.writeI64(variant_po.getLo());
     writer.writeI64(variant_po.getHi());
+
+    if (flags & 0x0010) {
+        writer.writeI64(declared_domain);
+    }
 
     if (flags & 0x0008) {
         assert(usig);
@@ -19004,6 +19014,9 @@ static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
         QoreAOTBinaryReader::readI64(ptr);
         QoreAOTBinaryReader::readI64(ptr);
     }
+    if (reader.getHeader().version >= QORE_AOT_DECLARED_DOMAIN_VERSION && (sig_flags & 0x0010)) {
+        QoreAOTBinaryReader::readI64(ptr);
+    }
 
     if (reader.getHeader().version >= 10 && (sig_flags & 0x0008)) {
         uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
@@ -19131,6 +19144,15 @@ static bool readAndSetupVariantSignature(
         variant_parse_options = QoreParseOptions(po_lo, po_hi);
     } else {
         variant_parse_options = pgm ? pgm->getParseOptions() : QoreParseOptions();
+    }
+    // the functional domains declared on the variant in Qore source
+    if (reader.getHeader().version >= QORE_AOT_DECLARED_DOMAIN_VERSION && (sig_flags & 0x0010)) {
+        int64 declared_domain = QoreAOTBinaryReader::readI64(ptr);
+        if (declared_domain & ~QDOM_ALL) {
+            error = "invalid declared functional domain: " + std::to_string(declared_domain);
+            return false;
+        }
+        uvb->setDeclaredDomain(declared_domain);
     }
 
     UserSignature* sig = uvb->getUserSignature();
@@ -21502,6 +21524,34 @@ bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& d
     uint64_t lo = QoreAOTBinaryReader::readU64(ptr);
     uint64_t hi = QoreAOTBinaryReader::readU64(ptr);
     dom = QoreParseOptions(static_cast<int64_t>(lo), static_cast<int64_t>(hi));
+    return true;
+}
+
+void serializeModuleDomains(QoreAOTBinaryWriter& writer, int64 dom) {
+    if (!dom) {
+        return;
+    }
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::MODULE_DOMAINS);
+    writer.writeU64(static_cast<uint64_t>(dom));
+    writer.endSection(sec_idx);
+}
+
+bool readModuleDomains(const QoreAOTBinaryReader& reader, int64& dom, std::string& error) {
+    dom = QDOM_DEFAULT;
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::MODULE_DOMAINS);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr || sec->size < 8) {
+        error = "invalid MODULE_DOMAINS section";
+        return false;
+    }
+    dom = static_cast<int64>(QoreAOTBinaryReader::readU64(ptr));
+    if (dom & ~QDOM_ALL) {
+        error = "invalid MODULE_DOMAINS section: unknown functional domain bits";
+        return false;
+    }
     return true;
 }
 

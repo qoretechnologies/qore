@@ -870,6 +870,11 @@ public class CSTTranslator {
         if (exists mods) {
             result.modifiers = mods;
         }
+        # the attribute list after the parameters (ex: [dom=PROCESS_CONTROL])
+        *hash<auto> callableAttrs = findType(node, "callable_attributes");
+        if (exists callableAttrs) {
+            result.callableAttributes = extractText(callableAttrs);
+        }
         if (exists paramList) {
             result.params = translateExpression(paramList);
         }
@@ -944,6 +949,11 @@ public class CSTTranslator {
         if (hasConstMethodQualifier(node)) {
             result.isConstMethod = True;
         }
+        # the attribute list after the parameters (ex: [dom=PROCESS_CONTROL])
+        *hash<auto> callableAttrs = findType(node, "callable_attributes");
+        if (exists callableAttrs) {
+            result.callableAttributes = extractText(callableAttrs);
+        }
         if (exists returnsType) {
             result.returnsType = {"nodetype": ANT_Expression, "kind": AEK_Name,
                 "name": {"name": extractText(returnsType)}, "loc": returnsType.loc};
@@ -990,6 +1000,11 @@ public class CSTTranslator {
         }
         if (hasConstMethodQualifier(node)) {
             result.isConstMethod = True;
+        }
+        # the attribute list after the parameters (ex: [dom=PROCESS_CONTROL])
+        *hash<auto> callableAttrs = findType(node, "callable_attributes");
+        if (exists callableAttrs) {
+            result.callableAttributes = extractText(callableAttrs);
         }
         if (exists returnsType) {
             result.returnsType = {"nodetype": ANT_Expression, "kind": AEK_Name,

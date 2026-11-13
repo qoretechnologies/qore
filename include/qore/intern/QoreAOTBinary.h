@@ -448,6 +448,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      (ConstantEntry::explicit_type); the pending flag is bit 0x01.  The value of a constant that its init function
 //!      computes is retyped to the declared type only when the constant has one, as with the AST interpreter
 //!      (#5925); a v9-v31 constant is taken to have one, as before.
+//! v33: a user variant's signature flags have bit 4 (0x0010) when the variant declares functional domains in Qore
+//!      source (\c [dom=...]); the declared QDOM_* bits follow the variant's parse options as an i64.  A v9-v32
+//!      variant declares none (#5803).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -467,15 +470,17 @@ constexpr uint16_t QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION = 29;
 constexpr uint16_t QORE_AOT_SCOPE_LOCALS_VERSION = 30;
 //! First format version whose DebugBlock instructions record the locals of their block (see v31 above).
 constexpr uint16_t QORE_AOT_DEBUG_BLOCK_LOCALS_VERSION = 31;
-//! The current format version: the newest feature version above (a merge with another format change takes the next
-//! version after the newest, here and in the history above)
 //! First format version whose constant flag bytes record an explicit declared type (see v32 above).
 constexpr uint16_t QORE_AOT_CONST_EXPLICIT_TYPE_VERSION = 32;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CONST_EXPLICIT_TYPE_VERSION;
 //! Bit of the pending flag byte of a constant: the constant has an init expression (QORE_AOT_FEAT_CONST_PENDING)
 constexpr uint8_t QORE_AOT_CONST_FLAG_PENDING = 0x01;
 //! Bit of the pending flag byte of a constant: the constant has an explicit declared type (see v32 above)
 constexpr uint8_t QORE_AOT_CONST_FLAG_EXPLICIT_TYPE = 0x02;
+//! First format version whose user variant signatures can carry declared functional domains (see v33 above).
+constexpr uint16_t QORE_AOT_DECLARED_DOMAIN_VERSION = 33;
+//! The current format version: the newest feature version above (a merge with another format change takes the next
+//! version after the newest, here and in the history above)
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DECLARED_DOMAIN_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -615,6 +620,7 @@ enum class QoreAOTSectionType : uint16_t {
     SOURCE_STAT_FINGERPRINT = 30,  //!< Source size and nanosecond mtime; written by earlier qcc versions only
     UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
     FUNCTIONAL_DOMAIN    = 32,  //!< The functional domains the code uses (u64 lo + u64 hi); absent if none
+    MODULE_DOMAINS       = 33,  //!< The functional domains a user module declares in its header (u64); absent if none
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -2116,6 +2122,13 @@ void serializeFunctionalDomain(QoreAOTBinaryWriter& writer, const QoreParseOptio
 
 //! Read the functional domains recorded in the FUNCTIONAL_DOMAIN section; empty if there is no such section
 bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& dom, std::string& error);
+
+//! Serialize the functional domains that a user module declares in its module header (\c domains) into the
+//! MODULE_DOMAINS section; nothing is written if \a dom is QDOM_DEFAULT
+void serializeModuleDomains(QoreAOTBinaryWriter& writer, int64 dom);
+
+//! Read the functional domains recorded in the MODULE_DOMAINS section; QDOM_DEFAULT if there is no such section
+bool readModuleDomains(const QoreAOTBinaryReader& reader, int64& dom, std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).

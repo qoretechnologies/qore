@@ -506,6 +506,10 @@ public:
     DLLLOCAL ~QoreModuleContextHelper();
 };
 
+//! Returns true if the innermost module load in progress in this thread is library code (see
+//! QoreModuleManager::isTrustedModulePath())
+DLLLOCAL bool qore_module_load_is_trusted();
+
 class QoreModuleDefContextHelper : public QoreModuleDefContext {
 protected:
     QoreModuleDefContext* old;
@@ -1666,6 +1670,11 @@ public:
     }
 
     DLLLOCAL void setNameInit(const char* name);
+
+    //! applies the declared domains to the module's Program and lifts them from the header's own restrictions
+    DLLLOCAL virtual int64 applyDomains(int64 dom) override;
+
+    DLLLOCAL virtual const QoreProgram* getDefinitionProgram() const override;
 
     DLLLOCAL void close();
 

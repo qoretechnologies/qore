@@ -62,6 +62,8 @@ module RestClient {
         ConnectionSchemeCache::registerScheme("rests", RestConnection::ConnectionScheme);
     };
 %endif
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /*  Version History - see below in docs

@@ -20025,7 +20025,11 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         rc_get_current_ref(), object, *arg_list, class_ctx, nullptr,
         receiver_type_info, explicit_type_param_instantiation,
         &resolved_variant);
-    if (cacheable && resolved_variant && !*xsink) {
+    // a variant with functional domains declared in Qore source is checked against the caller's effective
+    // restrictions on each call that resolves it at run time (see qore_get_variant_denied_domains()), which the
+    // cache key does not hold, so it is not cached
+    if (cacheable && resolved_variant && !*xsink
+        && !(resolved_variant->isUser() && resolved_variant->getUserVariantBase()->getDeclaredDomain())) {
         qore_rt_add_aot_method_dispatch_cache_entry(cache,
             object->getClass(), receiver_type_info, class_ctx, caller_program_id,
             object_program_id, parse_options, dispatch_epoch, arg_types,

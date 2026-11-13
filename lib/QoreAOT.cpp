@@ -2091,6 +2091,7 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
     // the functional domains the Program's code uses: loading a module checks them against the restrictions of the
     // Program loading it, as parsing the module's source checks its code (issue #5556)
     serializeFunctionalDomain(writer, pp->aot_used_dom);
+    serializeModuleDomains(writer, pp->module_own_dom);
     writer.feature_flags = feature_flags;
     return true;
 }

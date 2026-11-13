@@ -1578,7 +1578,7 @@ public class DataProviderActionCatalog {
 
         @since DataProvider 3.0
     */
-    static registerPendingApp(string app, code init, *string module_context) {
+    static registerPendingApp(string app, code init, *string module_context) [dom=PROCESS_CONTROL] {
         # an app name taken by sandboxed code would be denied to the module that owns it
         DataProviderSandboxState::checkRegistration("application", app);
         # without a catalog worker (see initLazyWorker()), and for code that a sandbox governs, the registration runs
@@ -1642,7 +1642,7 @@ public class DataProviderActionCatalog {
 
         @since DataProvider 3.0
     */
-    static registerPendingAppAction(string app, string action, code init) {
+    static registerPendingAppAction(string app, string action, code init) [dom=PROCESS_CONTROL] {
         DataProviderSandboxState::checkRegistration("action", app + "/" + action);
         # without a catalog worker, and for code that a sandbox governs, the registration runs now, on this thread
         # (see registerPendingApp())
@@ -1730,7 +1730,7 @@ DataProviderActionCatalog::registerLazyAppActions(AppName, sub () {
 
         @since %DataProvider 3.11
     */
-    static registerLazyAppActions(string app, code init) {
+    static registerLazyAppActions(string app, code init) [dom=PROCESS_CONTROL] {
         DataProviderSandboxState::checkRegistration("lazy action registration", app);
         # without a catalog worker (see initLazyWorker()), and for code that a sandbox governs (a module that sandboxed
         # code loads, also under a policy barrier), the
@@ -2255,7 +2255,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
 
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
-    static setDeliveryTestHook(*code hook) {
+    static setDeliveryTestHook(*code hook) [dom=PROCESS_CONTROL] {
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
             throw "PERMISSION-DENIED", "cannot set a catalog test hook from a context with restricted process control";
         }
@@ -2347,7 +2347,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         @since %DataProvider 3.8
     */
     static registerDiscoveryInventoryProvider(string name,
-            code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()> provider) {
+            code<list<hash<DataProviderDiscoveryExpectedIdentityInfo>>()> provider) [dom=PROCESS_CONTROL] {
         # it would run in every index build, and could take a provider name from trusted code
         DataProviderSandboxState::checkRegistration("discovery inventory provider", name);
         if (!name.val()) {
@@ -2410,7 +2410,7 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
 
         @since %DataProvider 3.8
     */
-    static deregisterDiscoveryInventoryProvider(string name) {
+    static deregisterDiscoveryInventoryProvider(string name) [dom=PROCESS_CONTROL] {
         DataProviderSandboxState::checkRegistration("discovery inventory provider", name, True);
         DataProviderCatalogLock al(lck, \DataProviderActionCatalog::deliverCatalogChanges());
         if (!exists discovery_inventory_provider_map{name}) {
@@ -3050,7 +3050,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the app is sandboxed
         (Qore::SandboxManager::isSandboxed()) (since %DataProvider 3.12)
     */
-    static registerApp(hash<DataProviderAppInfo> app) {
+    static registerApp(hash<DataProviderAppInfo> app) [dom=PROCESS_CONTROL] {
         # an app name taken by sandboxed code would be denied to the module that owns it
         DataProviderSandboxState::checkRegistration("application", app.name ?? "");
         # check for required keys
@@ -3385,7 +3385,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @since DataProvider 3.5
     */
     static bool setGenericApiCallActionBuilder(
-            code<hash<DataProviderActionInfo>(hash<DataProviderAppInfo>)> builder) {
+            code<hash<DataProviderActionInfo>(hash<DataProviderAppInfo>)> builder) [dom=PROCESS_CONTROL] {
         # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
         DataProviderActionCatalog::checkNotGoverned("set the generic API call action builder");
         list<hash<DataProviderAppInfo>> to_register;
@@ -3427,7 +3427,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         @since DataProvider 3.5
     */
-    static clearGenericApiCallActionBuilder() {
+    static clearGenericApiCallActionBuilder() [dom=PROCESS_CONTROL] {
         # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
         DataProviderActionCatalog::checkNotGoverned("clear the generic API call action builder");
         bool needs_lock = !lck.lockOwner();
@@ -3471,7 +3471,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         @since DataProvider 3.5
     */
-    static bool setSchemeLookupCallback(code<*hash<auto>(string)> cb) {
+    static bool setSchemeLookupCallback(code<*hash<auto>(string)> cb) [dom=PROCESS_CONTROL] {
         # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
         DataProviderActionCatalog::checkNotGoverned("set the scheme lookup callback");
         bool needs_lock = !lck.lockOwner();
@@ -3496,7 +3496,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         @since DataProvider 3.5
     */
-    static clearSchemeLookupCallback() {
+    static clearSchemeLookupCallback() [dom=PROCESS_CONTROL] {
         # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
         DataProviderActionCatalog::checkNotGoverned("clear the scheme lookup callback");
         bool needs_lock = !lck.lockOwner();
@@ -3599,7 +3599,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw PERMISSION-DENIED if the app is not dynamic or the caller is restricted with
             @ref Qore::PO_NO_PROCESS_CONTROL
     */
-    static *hash<DataProviderAppInfo> deregisterDynamicApp(string name) {
+    static *hash<DataProviderAppInfo> deregisterDynamicApp(string name) [dom=PROCESS_CONTROL] {
         # sandboxed code would remove an app that it does not own from every caller
         DataProviderSandboxState::checkRegistration("application", name, True);
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
@@ -3707,7 +3707,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
         The \c app and \c action attributes must be unique for every action registered
     */
-    static registerAction(hash<DataProviderActionInfo> action) {
+    static registerAction(hash<DataProviderActionInfo> action) [dom=PROCESS_CONTROL] {
         # an action registered by sandboxed code would be decided by the declarations of an app it does not own
         DataProviderSandboxState::checkRegistration("action", sprintf("%s/%s", action.app ?? "", action.action ?? ""));
         *string module_path = DataProviderActionCatalog::registrationModulePath();
@@ -4514,7 +4514,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
 
         @return the number of applications added to the cache
     */
-    static int cacheAllRegisteredApps() {
+    static int cacheAllRegisteredApps() [dom=PROCESS_CONTROL] {
         int count = 0;
         foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllApps()) {
             try {
@@ -4709,7 +4709,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
 
         @see getAppFileApi()
     */
-    static registerAppFileApi(string app, hash<DataProviderFileApiInfo> info) {
+    static registerAppFileApi(string app, hash<DataProviderFileApiInfo> info) [dom=PROCESS_CONTROL] {
         # sandboxed code would attach a file API to an app that it does not own
         DataProviderSandboxState::checkRegistration("file API", app);
         if (info.read_mode != DPFR_DATA && info.read_mode != DPFR_URL) {
@@ -4782,7 +4782,7 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
 
         @since %DataProvider 3.6
     */
-    static *hash<DataProviderFileApiInfo> deregisterAppFileApi(string app) {
+    static *hash<DataProviderFileApiInfo> deregisterAppFileApi(string app) [dom=PROCESS_CONTROL] {
         DataProviderSandboxState::checkRegistration("file API", app, True);
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {

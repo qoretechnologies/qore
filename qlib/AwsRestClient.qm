@@ -51,6 +51,9 @@ module AwsRestClient {
         ConnectionSchemeCache::registerScheme("s3", AwsS3RestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("s3compatible", AwsS3CompatibleRestConnection::ConnectionScheme);
     };
+    # the module's own code defers thread cancellation while it completes a request (defer_thread_cancel())
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage AwsRestClient Module

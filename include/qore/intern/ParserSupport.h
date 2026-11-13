@@ -41,6 +41,14 @@
 #include <cstring>
 #include "qore/intern/QoreNativeParseInfo.h"
 
+//! a method qualifier and the functional domains declared in a callable's attribute list (\c [dom=...])
+struct CallableQualifier {
+    //! the method modifier bits from the qualifier (OFM_CONST)
+    int mod;
+    //! the declared functional domain bits (QDOM_*), or keys seen while parsing an attribute list
+    int64 dom;
+};
+
 class QoreParserLocation {
 public:
    int first_line = 1;

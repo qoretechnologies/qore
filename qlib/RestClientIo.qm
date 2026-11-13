@@ -51,6 +51,9 @@ module RestClientIo {
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
+    # the module's own code waits between request retries with usleep()
+    # and defers thread cancellation while it completes a request (defer_thread_cancel())
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage RestClientIo Module
