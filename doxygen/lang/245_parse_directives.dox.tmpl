@@ -13,6 +13,19 @@
 
     @note The individual parse directives (@ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref enable-all-warnings "%enable-all-warnings", @ref strict-warnings "%strict-warnings") are still supported for backward compatibility and fine-grained control.
 
+    @anchor lexical_compatibility_options
+    @par Lexical compatibility semantics
+    Compatibility settings for strict boolean evaluation, broken soft types, ranges, list ranges, sprintf,
+    namespace resolution and loop statements are saved with the code parsed under those settings. Changing
+    the corresponding options on a @ref Qore::Program later affects newly parsed code; it does not change
+    existing expressions, conversions or control-flow operations. Security restrictions retain their own rules.
+
+    User functions, methods and closures retain the settings of their declarations, including parameter and
+    return conversions and default arguments. Builtin calls, dynamic calls to builtins and reflection invocations
+    use the settings at the call site. Values themselves do not carry compatibility settings: a conversion or
+    mutation follows the operation that performs it. Legacy code remains interpreted; @ref modern "%modern"
+    code retains the default compatibility semantics in every execution mode.
+
     <b>Parse Directives</b>
     |!Directive|!Description
     |@ref allow-bare-refs "%allow-bare-refs"|Prohibits the use of the \c "$" character in variable names, method calls, and object member references. This makes %Qore scripts appear superficially more like C++ or Java programs.<br/><br/>This parse option is set by default with @ref new-style "%new-style".<br/><br/>Name resolution is made in the following order when this option is set: local variables, class constants and static class vars (when parsing in class code), global variables, and (non-class) constants.<br/><br/>Note that @ref implicit_arguments "implicit arguments" are still referenced with the \c "$" character even when this parse option is set; see also @ref require-dollar "%require-dollar" <br/><br/>Since %Qore 0.8.1

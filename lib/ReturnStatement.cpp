@@ -59,6 +59,21 @@ static bool qore_return_expr_is_deferred_static_method_call(const QoreValue& exp
         && args->retrieveEntry(1).getType() == NT_STRING;
 }
 
+AbstractStatement* ReturnStatement::bindDeclarationPolicy(AbstractStatement* statement) {
+    const UserSignature* signature = parse_get_declaration_signature();
+    if (!signature || !signature->getDeclarationPolicy().needsFilter()) {
+        return statement;
+    }
+    auto* source = dynamic_cast<ReturnStatement*>(statement);
+    if (!source || dynamic_cast<LexicalReturnStatement*>(source)) {
+        return statement;
+    }
+    // No debugger or scope metadata exists yet: StatementBlock registers the new node at parseCommit().
+    auto* replacement = new LexicalReturnStatement(*source, signature->getDeclarationPolicy());
+    delete source;
+    return replacement;
+}
+
 int ReturnStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     //QORE_TRACE("ReturnStatement::execImpl()");
     // a value that a return statement left when it raised an exception, such as one that the declared return type
@@ -88,6 +103,42 @@ int ReturnStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
 
         const QoreTypeInfo* returnTypeInfo = getReturnTypeInfo();
         QoreTypeInfo::acceptAssignment(returnTypeInfo, "<return statement>", return_value, xsink);
+    } else {
+        return_value.clear();
+    }
+
+    return RC_RETURN;
+}
+
+int LexicalReturnStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    //QORE_TRACE("ReturnStatement::execImpl()");
+    // a value that a return statement left when it raised an exception, such as one that the declared return type
+    // rejected in a try block whose catch block returns, is replaced and released
+    ValueHolder replaced(return_value, xsink);
+    return_value.clear();
+    ValueEvalOptimizedRefHolder val(exp, xsink);
+    if (!*xsink) {
+        return_value = val.takeReferencedValue();
+
+        const QoreTypeInfo* returnTypeInfo = getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(returnTypeInfo, "<return statement>", return_value, xsink, return_policy);
+    } else {
+        return_value.clear();
+    }
+
+    return RC_RETURN;
+}
+
+int LexicalReturnStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    // a value that a return statement left when it raised an exception is replaced and released (see above)
+    ValueHolder replaced(return_value, xsink);
+    return_value.clear();
+    ValueEvalRefHolder val(rc, exp, xsink);
+    if (!*xsink) {
+        return_value = val.takeReferencedValue();
+
+        const QoreTypeInfo* returnTypeInfo = getReturnTypeInfo();
+        QoreTypeInfo::acceptAssignment(returnTypeInfo, "<return statement>", return_value, xsink, return_policy);
     } else {
         return_value.clear();
     }

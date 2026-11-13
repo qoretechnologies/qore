@@ -610,6 +610,30 @@ private:
     //! Returns true if evaluating an argument of a call can have an effect that the order of evaluation can show
     //! (issue #5784); conservative: only a value and a read of a local variable have none
     bool callArgsMayHaveSideEffects(const QoreParseListNode* parse_args, const QoreListNode* args) const;
+
+public:
+    //! Gives the "self" local of the method lowered, the object that a call through self or an unqualified call to a
+    //! method is made on; null (the default) for code without one
+    void setSelfLocal(LocalVar* n_self_local) {
+        self_local = n_self_local;
+    }
+
+private:
+    //! the "self" local of the method lowered, if any (see setSelfLocal())
+    LocalVar* self_local = nullptr;
+
+    //! Emits the check of the object of a call through self (issue #5823), before the arguments are evaluated
+    /** The direct calls of a method of a final class or of a final method on self (CallMethodDirect,
+        InvokeMethodDirect) call the method without checking the object, so they are always checked; a call that is
+        dispatched at run time checks the object itself, after its arguments, so it is checked here only when the
+        arguments can show the order (callArgsMayHaveSideEffects()).
+
+        The check has no operand: it takes the current object (see QoreIRBuilder::createCheckCallTarget()).
+
+        @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
+        @param loc the location of the call
+    */
+    void emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc);
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
@@ -734,6 +758,10 @@ private:
     */
     DLLLOCAL bool returnCleanupObservesError(const LocalVar* returned_local) const;
 
+    //! Returns true if a return statement here runs a handler before it returns: an on_exit or on_success handler
+    //! of a block that it leaves
+    DLLLOCAL bool returnRunsHandlers() const;
+
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:
      *  - OBE_Unconditional: always executes
@@ -810,6 +838,9 @@ private:
     std::vector<FunctionalSourceCapture> functional_source_captures;
     //! Releases the temporary that a functional operator's source gave once the operator has run (see the definition)
     class FunctionalSourceRelease;
+    //! returns true if the source of the functional operator being lowered is released after the operator (a
+    //! temporary or a plain read of a local, see FunctionalSourceRelease)
+    DLLLOCAL bool functionalSourceReleased() const;
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
@@ -995,6 +1026,9 @@ private:
         stay active (see catchScopesLeftByThrow()).
     */
     std::vector<int> try_catch_cleanup_depth_stack;
+    //! the values of the Return instructions in the try block of each enclosing try statement, innermost last (see
+    //! QoreIRFunction::catch_interrupted_returns)
+    std::vector<std::vector<uint32_t>> try_return_value_stack;
     //! the depth of the statements lowered, for the nesting of DebugStatement instructions (#5816)
     uint16_t debug_nest_depth = 0;
     //! the depth of the statements of the catch block lowered, or -1 (QORE_IR_DEBUG_NEST_IN_CATCH)

@@ -3081,6 +3081,9 @@ set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 # .cpp files, but this custom command does not inherit compiler depfile
 # scanning from the libqore/qcc compilation rules.
 set(_qcc_format_sources
+    # Lexical compatibility semantics change AST/native runtime boundaries without changing the AOT layout.
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/LexicalSemanticPolicy.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/ParseNode.h
     # Lexical native eligibility changes which source bodies/initializers qcc can compile.
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreNativeParseInfo.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/ParserSupport.h

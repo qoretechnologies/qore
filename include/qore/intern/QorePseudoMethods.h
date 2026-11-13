@@ -36,6 +36,8 @@
 DLLLOCAL void pseudo_classes_init();
 DLLLOCAL void pseudo_classes_del();
 DLLLOCAL QoreValue pseudo_classes_eval(const QoreValue n, const char* name, const QoreListNode* args, ExceptionSink* xsink);
+DLLLOCAL QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreValue n, const char* name,
+    const QoreListNode* args, ExceptionSink* xsink);
 
 //! Raises the exception that pseudo_classes_eval() raises for a method that does not exist before it evaluates the
 //! arguments (issue #5784)

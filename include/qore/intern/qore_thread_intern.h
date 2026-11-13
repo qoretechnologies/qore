@@ -205,7 +205,7 @@ public:
     DLLLOCAL QoreModuleDefContext() {
     }
 
-    DLLLOCAL ~QoreModuleDefContext() {
+    DLLLOCAL virtual ~QoreModuleDefContext() {
         init_c.discard(nullptr);
         del_c.discard(nullptr);
     }
@@ -217,6 +217,26 @@ public:
     strmap_t vmap;
 
     DLLLOCAL int set(const QoreProgramLocation* loc, const char* key, QoreValue val);
+
+    //! sets the \c domains key: the functional domains that the module declares (see
+    //! qore_program_private::setModuleOwnDomains())
+    DLLLOCAL int setDomains(const QoreProgramLocation* loc, QoreValue val);
+
+    //! applies the functional domains that the module declares (\c domains) to its Program; returns the inherited
+    //! restrictions that were removed
+    DLLLOCAL virtual int64 applyDomains(int64 dom);
+
+    //! returns the Program of the module that this context defines, if known; the context applies only to the parse of
+    //! that Program, not to another Program parsed while the module is loaded (ex: from its init closure)
+    DLLLOCAL virtual const QoreProgram* getDefinitionProgram() const {
+        return nullptr;
+    }
+
+protected:
+    //! the restrictions that the module's \c domains key removed from its Program (see setDomains())
+    int64 dom_removed = QDOM_DEFAULT;
+
+public:
 
     //! Records a child module declared with %try-child-module in this module
     /** @param loc the location of the directive
@@ -328,12 +348,24 @@ DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 
 DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
+//! returns the module Program whose code runs with the restrictions of a sandboxed caller on this thread, if any
+DLLLOCAL const QoreProgram* runtime_get_module_call_program();
 
 //! Returns the number of cancellations and interrupts that cancellation points have raised in the current thread
 /** A caller that runs code on behalf of the thread compares the number before and after the code to know whether the
     code raised a cancellation, which it may have handled (see QoreDebugProgramWithQoreObject)
 */
 DLLLOCAL unsigned qore_get_cancel_raise_count();
+
+//! Requests the cancellation of the current thread, scoped to a Program, as a cancellation of another thread
+/** Program::cancelThread() refuses the current thread; a debugger callback that ends the thread while it raises
+    another exception (the one that the callback was made for) makes the end of the thread stick with it: the next
+    cancellation point of the thread raises it, also when the program catches the other exception (qore#5987)
+
+    @param reason the reason of the cancellation, which ends the description of the exception that it raises
+    @param scope_pgm_id the Program whose code the request applies to (see QoreThreadList::cancelThread())
+*/
+DLLLOCAL void qore_request_current_thread_cancel(const char* reason, qore_program_id_t scope_pgm_id);
 
 //! Returns the location of the call stack frame of code being called, and clears the call site
 /** The location of a frame is the location of the call expression that called the code, set by the call site with
@@ -515,6 +547,8 @@ DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
     that call is made on behalf of the helper's Program, so the options are those of that Program
 */
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options();
+//! as runtime_take_call_caller_parse_options(), and returns the Program of the code making the call in \a code_pgm
+DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm);
 
 //! returns the parse options of \a pgm with the active runtime parse options override applied
 /** for a call that has already switched to the Program it runs in; \a pgm is the calling Program
@@ -901,6 +935,60 @@ private:
     qore_program_id_t old_app_pgm_id;
     bool old_sandboxed;
     const QoreProgram* old_override_pgm;
+};
+
+//! Makes the next call on the current thread a call made through a call reference
+/** A call reference runs with the permissions of the context that created it, like a closure: the functional domains
+    declared on a user function or method in Qore source (\c [dom=...]) are checked against the effective parse
+    options of the context that created the reference value, not against the code that calls the reference.  The call
+    with the reference's arguments takes the marker (runtime_take_call_reference_call()); a call with other arguments,
+    such as one in an argument expression, does not.  A path that passes other arguments to the reference's call
+    leaves the marker, and the call is then checked against its caller, the stricter check.  The helper restores the
+    previous state when the reference's call returns.
+*/
+class RuntimeConfig;
+
+class QoreCallReferenceCallHelper {
+public:
+    //! marks the next call on the thread of \a rc with the given arguments as the call of a call reference created
+    //! with \a creator_po
+    /** if \a creator_po is nullptr (a reference that its own code calls in place), nothing is marked
+    */
+    DLLLOCAL QoreCallReferenceCallHelper(RuntimeConfig& rc, const QoreListNode* args,
+            const QoreParseOptions* creator_po);
+    DLLLOCAL ~QoreCallReferenceCallHelper();
+
+    QoreCallReferenceCallHelper(const QoreCallReferenceCallHelper&) = delete;
+    QoreCallReferenceCallHelper& operator=(const QoreCallReferenceCallHelper&) = delete;
+
+private:
+    RuntimeConfig* rc = nullptr;
+    const QoreParseOptions* old_po = nullptr;
+    const QoreListNode* old_args = nullptr;
+};
+
+//! Hides the pending call of a call reference while the arguments of that call are evaluated
+/** Calls made while the arguments are evaluated are not the reference's call; afterwards the pending call is for the
+    evaluated arguments (see evaluated())
+*/
+class QoreCallReferenceArgEvalHelper {
+public:
+    //! hides the pending call on the thread of \a rc while \a args are evaluated
+    DLLLOCAL QoreCallReferenceArgEvalHelper(RuntimeConfig& rc, const QoreListNode* args);
+    //! restores the pending call
+    DLLLOCAL ~QoreCallReferenceArgEvalHelper();
+
+    //! the call is made with \a evaluated_args instead of the arguments given to the constructor
+    DLLLOCAL void evaluated(const QoreListNode* evaluated_args);
+
+    QoreCallReferenceArgEvalHelper(const QoreCallReferenceArgEvalHelper&) = delete;
+    QoreCallReferenceArgEvalHelper& operator=(const QoreCallReferenceArgEvalHelper&) = delete;
+
+private:
+    RuntimeConfig& rc;
+    const QoreParseOptions* saved_po;
+    const QoreListNode* saved_args;
+    const QoreListNode* args;
 };
 
 //! Makes the next user call on the current thread a call made on behalf of another Program
@@ -1310,6 +1398,17 @@ private:
     a Program without a manager has none afterwards either.
 */
 DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
+
+//! The number of sandbox managers whose interrupt is requested (QoreSandboxManager::requestInterrupt())
+/** A cancellation point resolves the sandbox manager that governs the thread only while it is not 0, so that a check
+    with no request pending costs no lookup (see qore_check_cancel() and "Cost of a check" in
+    design/cooperative-cancellation.md).  Changed only when a manager's QSB_INTR_REQUESTED bit changes, in the same
+    seq_cst order as the bit, and before requestInterrupt() wakes the waiting threads: a waiter that registers its wait
+    and then reads 0 is woken by the wakeup that follows.  It can be negative for a moment, while a clear that
+    follows a request decrements it before the request increments it; a value other than 0 only makes the check look
+    up the manager.
+*/
+DLLLOCAL extern std::atomic<int> qore_sandbox_interrupt_count;
 
 //! Gives the Program of a module (a registered user module, or an AOT module) module lifetime
 /** The Program stays allocated (with a dependency reference) until qore_release_module_program_pins(), which

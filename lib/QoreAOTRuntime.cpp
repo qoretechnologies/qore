@@ -1031,6 +1031,8 @@ static const AbstractQoreFunctionVariant* resolveAOTConstructorVariant(const Qor
 struct AOTSlotResolutionCache {
     QoreProgram* pgm;
     std::unordered_map<std::string, const FunctionEntry*> functions;
+    //! the functions of calls left to other source objects, which can be found by their names alone
+    std::unordered_map<std::string, const FunctionEntry*> deferred_source_functions;
     std::unordered_map<std::string, const QoreClass*> classes;
 };
 
@@ -1161,7 +1163,8 @@ LocalFunctionCallReferenceNode* qore_aot_make_function_ref(QoreProgram* pgm, con
     return fcr;
 }
 
-static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* pgm, const char* name) {
+static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* pgm, const char* name,
+        bool deferred_source) {
     qore_program_private* pp = qore_program_private::get(*pgm);
     // "::name": the function of the root namespace itself, never the builtin of the same name that the root function
     // index would find first
@@ -1171,7 +1174,7 @@ static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* 
         }
         return nullptr;
     }
-    if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, name)) {
+    if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, name, LexicalSemanticPolicy{})) {
         return fe;
     }
 
@@ -1200,34 +1203,50 @@ static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* 
             }
         }
 
-        // Standalone script fragments can serialize an unqualified function
-        // call as current-namespace qualified (for example OMQ::QDBG_LOG),
-        // while the aggregate metadata resolves the same symbol through the
-        // root function index.  Try the terminal identifier as a final
-        // pending-safe fallback after exact scoped lookup fails.
-        if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-                *pp->RootNS, nscope.getIdentifier())) {
-            return fe;
+        // A standalone script fragment records a call that another source object provides with the path of the
+        // source manifest, which for a call written without a namespace path can be the namespace of the call (for
+        // example OMQ::QDBG_LOG), while the program that links the objects has the function elsewhere: it is found
+        // by its name alone, as the parser finds it (qore_aot_resolve_deferred_source_function_entry()).  A name that
+        // the compiler recorded for a function it resolved names that function, and finding another one with the same
+        // name bound the reference to the wrong function silently (qore#5956)
+        if (deferred_source) {
+            if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
+                    *pp->RootNS, nscope.getIdentifier(), LexicalSemanticPolicy{})) {
+                return fe;
+            }
         }
     }
     return nullptr;
 }
 
-const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name) {
+static const FunctionEntry* resolveAOTFunctionEntryForSlot(QoreProgram* pgm, const char* name, bool deferred_source) {
+    if (!name || !*name) {
+        return nullptr;
+    }
     AOTSlotResolutionCache* cache = current_aot_slot_resolution_cache;
-    if (!cache || cache->pgm != pgm || !name || !*name) {
-        return resolveAOTFunctionEntryForSlotUncached(pgm, name);
+    if (!cache || cache->pgm != pgm) {
+        return resolveAOTFunctionEntryForSlotUncached(pgm, name, deferred_source);
     }
 
-    auto i = cache->functions.find(name);
-    if (i != cache->functions.end()) {
+    std::unordered_map<std::string, const FunctionEntry*>& functions = deferred_source
+        ? cache->deferred_source_functions : cache->functions;
+    auto i = functions.find(name);
+    if (i != functions.end()) {
         return i->second;
     }
-    const FunctionEntry* fe = resolveAOTFunctionEntryForSlotUncached(pgm, name);
+    const FunctionEntry* fe = resolveAOTFunctionEntryForSlotUncached(pgm, name, deferred_source);
     if (fe) {
-        cache->functions.emplace(name, fe);
+        functions.emplace(name, fe);
     }
     return fe;
+}
+
+const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name) {
+    return resolveAOTFunctionEntryForSlot(pgm, name, false);
+}
+
+const FunctionEntry* qore_aot_resolve_deferred_source_function_entry(QoreProgram* pgm, const char* name) {
+    return resolveAOTFunctionEntryForSlot(pgm, name, true);
 }
 
 QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* name, QoreParseListNode* args) {
@@ -1440,8 +1459,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            // Look up function by name
-            const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, ref1);
+            // Look up function by name: a call left to another source object by the name of its source, every other
+            // exactly by the identity of the function the compiler resolved
+            const FunctionEntry* fe = ref2 && !strcmp(ref2, QORE_AOT_DEFERRED_SOURCE_CALL_SLOT)
+                ? qore_aot_resolve_deferred_source_function_entry(pgm, ref1)
+                : qore_aot_resolve_function_entry_for_slot(pgm, ref1);
             if (!fe) {
                 printd(0, "AOT v2: cannot resolve function '%s' for expr slot\n", ref1);
                 aot_slot_resolve_error = describeUnresolvedAOTSymbol("function", ref1, pgm);
@@ -1918,7 +1940,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 return 0;
             }
             const QoreNamespace* pns = nullptr;
-            const QoreEnumDecl* ed = pgm->findEnum(ref1, pns);
+            const QoreEnumDecl* ed = qore_program_private::get(*pgm)->findEnumCanonical(ref1, pns);
             if (!ed) {
                 printd(0, "AOT v2: cannot resolve enum '%s' for const enum\n", ref1);
                 aot_slot_resolve_error = describeUnresolvedAOTSymbol("enum", ref1, pgm);
@@ -2218,10 +2240,10 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_path, found_ns);
+        *pp->RootNS, class_path, found_ns, LexicalSemanticPolicy{});
     if (!qc && class_path[0] == ':' && class_path[1] == ':') {
         qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS,
-            class_path + 2, found_ns);
+            class_path + 2, found_ns, LexicalSemanticPolicy{});
     }
     if (!qc) {
         // AOT metadata is emitted from source parse, where private/internal
@@ -2591,6 +2613,18 @@ static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
     return variant;
 }
 
+const AbstractQoreFunctionVariant* qore_aot_find_method_variant(QoreProgram* pgm, const QoreMethod*& method,
+        const char* method_name, const char* variant_ref, bool pseudo) {
+    if (!method || !method_name || !variant_ref || !*variant_ref) {
+        return nullptr;
+    }
+    std::string encoded(method_name);
+    encoded += "\n";
+    encoded += variant_ref;
+    AOTEncodedMethodRef method_ref(encoded.c_str());
+    return findAOTMethodVariantByRef(pgm, method, method_ref, pseudo);
+}
+
 static const QoreMethod* findAOTStaticCallMethodByName(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
@@ -2676,7 +2710,7 @@ static Var* resolveGlobalVarRefPayload(const char* ref, QoreProgram* pgm,
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* vns = nullptr;
-    return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns);
+    return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns, LexicalSemanticPolicy{});
 }
 
 const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
@@ -2705,6 +2739,8 @@ QoreValue readOneExpr(
         LocalVar** locals, int num_locals,
         Var** globals, int num_globals,
         QoreProgram* local_owner_pgm) {
+    // Deferred defaults can be reconstructed after the main load phases, even during a legacy source parse.
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     uint8_t ekind = QoreAOTBinaryReader::readU8(p);
     AOTExprKind ek = static_cast<AOTExprKind>(ekind);
 
@@ -2717,7 +2753,9 @@ QoreValue readOneExpr(
     AOTExprReadCtx rctx{
         rdr, p, e, pgm, err, locals, num_locals, globals, num_globals, local_owner_pgm
     };
-    return kinfo->read_fn(rctx);
+    QoreValue value = kinfo->read_fn(rctx);
+    ParseNode::bindSemanticPolicy(value, LexicalSemanticPolicy());
+    return value;
 }
 
 QoreValue readOneTopLevelIRExpr(
@@ -2866,11 +2904,13 @@ public:
 
     //! Deserialize an expression tree from the blob and return NaN-boxed bits
     uint64_t deserialize() {
+        LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
         QoreValue v = deserializeValue();
         if (failed) {
             v.discard(nullptr);
             return 0;
         }
+        ParseNode::bindSemanticPolicy(v, LexicalSemanticPolicy());
         return toBitsNB(v);
     }
 
@@ -3288,6 +3328,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         QoreProgram* local_owner_pgm = nullptr) {
     // the closures read in the context name the type parameters of the function (qore#5733)
     QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
+    // The slot-map roots are reconstructed here, outside the scopes used to read their nested expressions.
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     const uint8_t* entry_payload_start = ptr;
     auto setBuildError = [name, build_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
@@ -3625,7 +3667,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (gname && *gname) {
             // Look up global variable by name across all namespaces
             const qore_ns_private* vns = nullptr;
-            Var* v = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, gname, vns);
+            Var* v = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, gname, vns, LexicalSemanticPolicy{});
             if (v) {
                 ctx->globals[i] = v;
             } else {
@@ -3906,10 +3948,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             printd(0, "AOT v2: error reading complex hash arg %d for '%s': %s\n",
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(*call_args, QoreValue(), nullptr);
                             has_unsupported = true;
                         } else {
-                            call_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(*call_args, arg, nullptr);
                         }
                     }
                 }
@@ -4063,10 +4105,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             printd(0, "AOT v2: error reading hashdecl arg %d for '%s': %s\n",
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(*call_args, QoreValue(), nullptr);
                             has_unsupported = true;
                         } else {
-                            call_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(*call_args, arg, nullptr);
                         }
                     }
                 }
@@ -4370,10 +4412,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             local_owner_pgm);
                         if (!arg_err.empty()) {
                             arg.discard(nullptr);
-                            self_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(**self_args, QoreValue(), nullptr);
                             self_args_ok = false;
                         } else {
-                            self_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(**self_args, arg, nullptr);
                         }
                     }
                     // Build the base (method/class/variant-resolved) self-call node, then wrap it
@@ -4428,10 +4470,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 "cannot read argument " + std::to_string(j) + " of the call to '"
                                     + describeAOTStaticCallTarget(ref1, method_name) + "': " + arg_err);
                             arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(*call_args, QoreValue(), nullptr);
                             has_unsupported = true;
                         } else {
-                            call_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(*call_args, arg, nullptr);
                         }
                     }
                 }
@@ -5459,6 +5501,62 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::REGEX_SUBST:
+            case AOTExprKind::TRANSLIT: {
+                // issue #5947
+                const char* s1 = reader.readStringRef(ptr);
+                const char* s2 = reader.readStringRef(ptr);
+                int64_t options = 0;
+                bool global = false;
+                if (kind == AOTExprKind::REGEX_SUBST) {
+                    options = QoreAOTBinaryReader::readI64(ptr);
+                    global = QoreAOTBinaryReader::readU8(ptr) != 0;
+                }
+                std::string err;
+                QoreValue operand = readOneExpr(reader, ptr, end, err, pgm, ctx->locals, num_locals, ctx->globals,
+                    num_globals, local_owner_pgm);
+                if (!err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                    continue;
+                }
+                QoreValue node = kind == AOTExprKind::REGEX_SUBST
+                    ? qore_aot_make_regex_subst(s1, s2, options, global, operand, err)
+                    : qore_aot_make_transliteration(s1, s2, operand);
+                if (!err.empty()) {
+                    has_unsupported = true;
+                    continue;
+                }
+                ctx->exprs[i] = toBitsNB(node);
+                continue;
+            }
+            case AOTExprKind::SPLICE:
+            case AOTExprKind::EXTRACT: {
+                // lvalue, offset, length, new value (issue #5947)
+                QoreValue v[4];
+                bool read_error = false;
+                for (unsigned j = 0; j < 4; ++j) {
+                    std::string err;
+                    v[j] = readOneExpr(reader, ptr, end, err, pgm, ctx->locals, num_locals, ctx->globals,
+                        num_globals, local_owner_pgm);
+                    if (!err.empty()) {
+                        read_error = true;
+                    }
+                }
+                if (read_error) {
+                    for (QoreValue& x : v) {
+                        x.discard(nullptr);
+                    }
+                    has_unsupported = true;
+                } else if (kind == AOTExprKind::SPLICE) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(new QoreSpliceOperatorNode(&loc_builtin, v[0], v[1], v[2],
+                        v[3])));
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(new QoreExtractOperatorNode(&loc_builtin, v[0], v[1], v[2],
+                        v[3])));
+                }
+                continue;
+            }
             case AOTExprKind::PUSH:
             case AOTExprKind::UNSHIFT: {
                 std::string left_err;
@@ -5480,7 +5578,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
-            case AOTExprKind::DOT_EVAL_EXPR: {
+            case AOTExprKind::AST_EXPR: {
                 std::string dot_err;
                 QoreValue dot_expr = readOneExpr(reader, ptr, end, dot_err, pgm,
                     ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);
@@ -6436,7 +6534,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         && !step.name.empty()) {
                     const qore_ns_private* vns = nullptr;
                     step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
-                        *pp->RootNS, step.name.c_str(), vns);
+                        *pp->RootNS, step.name.c_str(), vns, LexicalSemanticPolicy{});
                 } else if (step.kind == LVPathStepKind::StaticVar
                         && !step.name.empty()) {
                     // Keep the symbolic path. Standalone-compiled fragments can
@@ -6876,7 +6974,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                     const char* member_name = reader.readStringRef(ptr);
                     if (enum_path && *enum_path && member_name && *member_name) {
                         const QoreNamespace* pns = nullptr;
-                        const QoreEnumDecl* ed = pgm->findEnum(enum_path, pns);
+                        const QoreEnumDecl* ed = qore_program_private::get(*pgm)->findEnumCanonical(enum_path, pns);
                         if (ed) {
                             ci->constant.enum_member = ed->findMember(member_name);
                             if (ci->constant.enum_member) {
@@ -6978,7 +7076,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (vname && *vname) {
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 const qore_ns_private* vns = nullptr;
-                var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns);
+                var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns, LexicalSemanticPolicy{});
             }
             auto* vi = new QoreIRVarInstruction(opcode, var);
             vi->mode = mode;
@@ -8783,6 +8881,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
 */
 static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* name,
         QoreProgram* pgm, const QoreAOTFunc& aot_func) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         printd(1, "AOT: buildContextForVariant '%s': no statement block\n", name);
@@ -8813,6 +8912,11 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
+    // the object of the calls through self, as tryLowerFunction() lowers them, so that the expression slots are
+    // walked in the same order (issue #5823)
+    if (const UserSignature* self_sig = uvb->getUserSignature()) {
+        lowering.setSelfLocal(self_sig->selfid);
+    }
     std::string lower_error;
     if (!lowering.lowerStatementBlock(statements, lower_error)) {
         printd(1, "AOT: buildContextForVariant '%s': IR lowering failed: %s\n", name, lower_error.c_str());
@@ -9219,7 +9323,7 @@ static void registerAOTFunctionsFromSlotMaps(
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 const qore_ns_private* found_ns = nullptr;
                 qc = qore_root_ns_private::runtimeFindClass(
-                    *pp->RootNS, class_name.c_str(), found_ns);
+                    *pp->RootNS, class_name.c_str(), found_ns, LexicalSemanticPolicy{});
                 last_qc = qc;
                 last_class_name = class_name;
             }
@@ -10692,7 +10796,7 @@ static void registerFallbackFunctionsOnMainVariants(
                 // Find matching method variant in MAIN program
                 qore_program_private* main_pp = qore_program_private::get(*main_pgm);
                 const QoreClass* main_qc = qore_root_ns_private::runtimeFindClass(
-                    *main_pp->RootNS, class_path);
+                    *main_pp->RootNS, class_path, LexicalSemanticPolicy{});
                 UserVariantBase* main_uvb = nullptr;
                 if (main_qc) {
                     qore_class_private* main_qcp = qore_class_private::get(
@@ -11135,7 +11239,9 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
 
         ExceptionSink xsink;
         QoreString qcmd(command.command.c_str());
-        int rc = MM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink);
+        // the command is the Program's own recorded `%module-cmd` directive, not one from the loading code to
+        // another Program: a sandboxed loader can load a compiled module as it can its source (issue #5905)
+        int rc = QMM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink, QoreModuleCmdOrigin::OwnDirective);
         if (rc < 0 || xsink.isException()) {
             error = "AOT module command failed";
             if (label && *label) {
@@ -12290,7 +12396,7 @@ static bool aotInitDescriptorNeedsExecution(const AOTInitFuncDescriptor& desc, Q
                 }
                 const qore_ns_private* found_ns = nullptr;
                 const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                    *p->RootNS, desc.ns_path.c_str(), found_ns);
+                    *p->RootNS, desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
                 return qc ? qore_class_private::get(*const_cast<QoreClass*>(qc))->vars.find(
                     desc.item_name.c_str()) : nullptr;
             };
@@ -13452,6 +13558,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
+    // the module's Program is governed by the sandbox that its source module's Program would get, before its
+    // source is parsed in it and before any of its code runs (issue #5913)
+    QMM.inheritAOTModuleSandbox(*local_pgm, aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm,
+        mod_name, label);
 
     // Set JIT execution mode so functions without pre-compiled code will JIT on demand
     local_pgm->setExecMode(QEM_JIT);
@@ -13497,12 +13607,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
     // the "module Name" declaration, and calling it twice triggers an assertion.
-    QoreUserModuleDefContextHelper mod_ctx(mod_name, label, local_pgm, xsink);
+    // the module is a binary module: the user modules that its code loads are not recorded as its dependencies, only
+    // the binary modules, which are released if the initialization fails (#5953)
+    QoreUserModuleDefContextHelper mod_ctx(mod_name, label, local_pgm, xsink, QMRL_BINARY);
     {
-        // Strip %requires directives from embedded source to avoid deadlock.
-        // The module manager holds a lock when calling this init function, and
-        // parsing %requires would try to acquire the same lock.
-        // Note: We've already imported the dependency namespaces above.
+        // Strip %requires directives from the embedded source: the dependencies were loaded and their namespaces
+        // imported above.  This init function runs without the module manager's mutex (loadBinaryModuleFromDesc()
+        // releases it for the module's initialization), but the module's load is still in progress, so a %requires
+        // of a module that requires this one would wait for it.
         std::string stripped_src = stripRequiresDirectives(source, source_len, local_pgm);
 
         printd(2, "AOT module '%s': source_len=%d stripped_len=%d deps=%d\n",
@@ -13638,6 +13750,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         aot_module_map[mod_name] = std::move(state);
     }
 
+    // the module keeps the records of the binary modules that it requires
+    mod_ctx.setRegistered();
     return nullptr;  // success
 }
 
@@ -14075,6 +14189,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
+    // the module's Program is governed by the sandbox that its source module's Program would get, before its
+    // recorded module commands are replayed in it and before any of its code runs (issue #5913)
+    QMM.inheritAOTModuleSandbox(*local_pgm, aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm,
+        mod_name, label);
 
     // Set JIT execution mode
     local_pgm->setExecMode(QEM_JIT);
@@ -14399,7 +14517,7 @@ static void aotFindInitConstantEntries(const AOTInitFuncDescriptor& desc, QorePr
             return nullptr;
         }
         const qore_ns_private* found_ns = nullptr;
-        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*p->RootNS, desc.ns_path.c_str(), found_ns);
+        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*p->RootNS, desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
         if (!qc) {
             return nullptr;
         }
@@ -14898,10 +15016,10 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
             QoreProgram* class_pgm = shadow_ctx && rec->shadow_pgm ? rec->shadow_pgm : init_pgm;
             const qore_ns_private* found_ns = nullptr;
             const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *qore_program_private::get(*class_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns);
+                *qore_program_private::get(*class_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
             if (!qc && class_pgm != init_pgm) {
                 qc = qore_root_ns_private::runtimeFindClass(
-                    *qore_program_private::get(*init_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns);
+                    *qore_program_private::get(*init_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
             }
             if (qc) {
                 parse_ctx.reset(new QoreParseClassHelper(const_cast<QoreClass*>(qc)));
@@ -15065,7 +15183,7 @@ static int executeInitFunctions(
         }
         const qore_ns_private* found_ns = nullptr;
         const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-            *class_pp->RootNS, class_path.c_str(), found_ns);
+            *class_pp->RootNS, class_path.c_str(), found_ns, LexicalSemanticPolicy{});
         return const_cast<QoreClass*>(qc);
     };
     auto make_parse_context = [&](const AOTInitFuncDescriptor& desc,
@@ -15466,7 +15584,7 @@ static int executeInitFunctions(
                 {
                     const qore_ns_private* found_ns = nullptr;
                     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, desc.ns_path.c_str(), found_ns);
+                        *pp->RootNS, desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
                     if (qc) {
                         qore_class_private* qcp = qore_class_private::get(
                             *const_cast<QoreClass*>(qc));
@@ -15477,7 +15595,7 @@ static int executeInitFunctions(
                 if (shadow_pp) {
                     const qore_ns_private* found_ns = nullptr;
                     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *shadow_pp->RootNS, desc.ns_path.c_str(), found_ns);
+                        *shadow_pp->RootNS, desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
                     if (qc) {
                         qore_class_private* qcp = qore_class_private::get(
                             *const_cast<QoreClass*>(qc));
@@ -15868,6 +15986,10 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
+    // the module's Program is governed by the sandbox that its source module's Program would get, before its
+    // recorded module commands are replayed in it and before any of its code runs (issue #5913)
+    QMM.inheritAOTModuleSandbox(*local_pgm, aot_module_init_loader_pgm ? aot_module_init_loader_pgm : parent_pgm,
+        mod_name, module_context_path);
 
     // Set JIT execution mode
     local_pgm->setExecMode(QEM_JIT);
@@ -15899,6 +16021,27 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                 reader_error.c_str());
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
+        }
+    }
+
+    // The functional domains that the module declares in its header (domains): library code does not inherit their
+    // restrictions from the loading Program, as when its source is parsed (see QoreModuleDefContext::setDomains())
+    {
+        int64 own_dom;
+        std::string dom_error;
+        if (!readModuleDomains(metadata_reader, own_dom, dom_error)) {
+            QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): %s",
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(), dom_error.c_str());
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
+        }
+        if (own_dom) {
+            int64 removed = qore_program_private::setModuleOwnDomains(*local_pgm, own_dom,
+                qore_module_load_is_trusted());
+            if (removed) {
+                inherited_po &= ~QoreParseOptions(removed);
+                qore_program_private::setAOTInheritedParseOptions(*local_pgm, inherited_po);
+            }
         }
     }
 

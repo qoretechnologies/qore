@@ -67,6 +67,12 @@ protected:
     const QoreTypeInfo *returnTypeInfo;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalWithBaseCommon(QoreValue base, ExceptionSink* xsink) const;
+
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
@@ -158,5 +164,23 @@ public:
     */
     DLLLOCAL int checkReceiver(QoreValue base, ExceptionSink* xsink) const;
 };
+
+//! Parse-time choice of invocation entry; ordinary dot calls keep their existing virtual dispatch.
+class LexicalDotEvalOperatorNode : public QoreDotEvalOperatorNode {
+public:
+    using QoreDotEvalOperatorNode::QoreDotEvalOperatorNode;
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(needs_deref, xsink);
+    }
+};
+
+template <typename... Args>
+QoreDotEvalOperatorNode* qore_make_dot_call(LexicalSemanticPolicy policy, Args&&... args) {
+    QoreDotEvalOperatorNode* node = policy.isDefault() ? new QoreDotEvalOperatorNode(std::forward<Args>(args)...)
+        : new LexicalDotEvalOperatorNode(std::forward<Args>(args)...);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
 
 #endif

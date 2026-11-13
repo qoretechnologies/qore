@@ -13,6 +13,22 @@
 
 %exec-class ReflectionTest
 
+# code that declares functional domains (issue #5803)
+int sub reflect_tagged() [dom=PROCESS_CONTROL,NETWORK] {
+    return 1;
+}
+
+# the qpp names are accepted for PROCESS_CONTROL and MODULE (issue #5843)
+int sub reflect_alias() [dom=PROCESS,MODULES] {
+    return 3;
+}
+
+class ReflectTagged {
+    int m() [dom=PROCESS_CONTROL] {
+        return 2;
+    }
+}
+
 class Base {
     public {
         int bi = 1;
@@ -245,6 +261,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("type member pseudo-method dispatch", \typeMemberPseudoMethodDispatchTest());
         addTestCase("program tests", \programTests());
         addTestCase("static variant tests", \staticVariantTests());
+        addTestCase("user functional domain tests", \userDomainTests());
         addTestCase("method enumeration tests", \methodEnumerationTests());
         addTestCase("cross-module namespace test", \crossModuleNamespaceTest());
         addTestCase("typed hash serialization", \typedHashSerializationTest());
@@ -1260,6 +1277,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Socket", "startPollSendHttp2ConnectResponse",
             ("stream_id", "status_code", "headers"));
         assertNamedClassMethodVariantCount("Socket", "waitForHttp2StreamDrain", ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "waitForHttp2StreamFlushed", ("stream_id", "timeout_ms"));
         assertNamedClassMethodVariantCount("Socket", "submitHttp2StreamingResponseHeaders",
             ("stream_id", "status_code", "headers"));
         assertNamedClassMethodVariantCount("Socket", "sendHttp2StreamData", ("stream_id", "data", "end_stream"));
@@ -1281,6 +1299,8 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Socket", "sendQuicClientStreamData",
             ("stream_id", "body", "end_stream"));
         assertNamedClassMethodVariantCount("Socket", "waitForQuicClientStreamDrain",
+            ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "waitForQuicClientStreamFlushed",
             ("stream_id", "timeout_ms"));
         assertNamedClassMethodVariantCount("Socket", "cancelQuicStream", ("session_id", "stream_id"));
         assertNamedClassMethodVariantCount("Socket", "submitQuicResponse",
@@ -3679,6 +3699,51 @@ class ReflectionTest inherits QUnit::Test {
             assertTrue(all.getValue);
         }
 
+    }
+
+    userDomainTests() {
+        # the functional domains declared on user code are reported (issue #5803)
+        AbstractReflectionFunction f = Function::forName("reflect_tagged");
+        assertEq(DOM_PROCESS_CONTROL | DOM_NETWORK, f.getDomain());
+        assertEq(DOM_PROCESS_CONTROL | DOM_NETWORK, f.getVariants()[0].getDomain());
+        # the names are those of the DOM_* constants (issue #5843)
+        assertEq(("NETWORK", "PROCESS_CONTROL"), sort(f.getDomainStringList()));
+        AbstractReflectionFunction alias = Function::forName("reflect_alias");
+        assertEq(DOM_PROCESS_CONTROL | DOM_MODULE, alias.getDomain());
+        assertEq(("MODULE", "PROCESS_CONTROL"), sort(alias.getDomainStringList()));
+        AbstractMethod m = Class::forName("ReflectTagged").getNormalMethod("m");
+        assertEq(DOM_PROCESS_CONTROL, m.getVariants()[0].getDomain());
+
+        # a restricted Program is refused calls through reflection
+        Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        p.parse("%requires reflection
+int sub tagged() [dom=PROCESS_CONTROL] { return 1; }
+class T { int m() [dom=PROCESS_CONTROL] { return 2; } }
+auto sub fcall() { return Function::forName(\"tagged\").call(); }
+auto sub vcall() { return Function::forName(\"tagged\").getVariants()[0].call(); }
+auto sub mcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").call(t); }
+auto sub mvcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").getVariants()[0].call(t); }
+", "reflect");
+        # every refusal names the denied functional domain (issue #5843)
+        foreach string fn in ("fcall", "vcall", "mcall", "mvcall") {
+            assertThrows("INVALID-FUNCTION-ACCESS", "do not allow access to .*; functional domain: PROCESS_CONTROL "
+                "\\(restricted by PO_NO_PROCESS_CONTROL\\)$", \p.callFunction(), fn, fn);
+        }
+
+        # of the declared domains, only those that are restricted are named
+        Program p2(PO_NEW_STYLE | PO_NO_NETWORK);
+        p2.parse("%requires reflection
+int sub tagged() [dom=NETWORK,FILESYSTEM] { return 1; }
+class T { int m() [dom=NETWORK,FILESYSTEM] { return 2; } }
+auto sub fcall() { return Function::forName(\"tagged\").call(); }
+auto sub vcall() { return Function::forName(\"tagged\").getVariants()[0].call(); }
+auto sub mcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").call(t); }
+auto sub mvcall() { T t(); return Class::forName(\"T\").getNormalMethod(\"m\").getVariants()[0].call(t); }
+", "reflect2");
+        foreach string fn in ("fcall", "vcall", "mcall", "mvcall") {
+            assertThrows("INVALID-FUNCTION-ACCESS", "do not allow access to .*; functional domain: NETWORK "
+                "\\(restricted by PO_NO_NETWORK\\)$", \p2.callFunction(), fn, fn);
+        }
     }
 
     staticVariantTests() {

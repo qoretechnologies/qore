@@ -33,6 +33,33 @@
 
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
+
+namespace {
+class StrictBooleanValueCoalescingOperatorNode : public QoreValueCoalescingOperatorNode {
+public:
+    using QoreValueCoalescingOperatorNode::QoreValueCoalescingOperatorNode;
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        return copyBackgroundExplicit<StrictBooleanValueCoalescingOperatorNode>(xsink);
+    }
+private:
+    QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(rc, needs_deref, xsink);
+    }
+};
+}
+
+QoreValueCoalescingOperatorNode* QoreValueCoalescingOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue left, QoreValue right) {
+    QoreValueCoalescingOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanValueCoalescingOperatorNode(loc, left, right)
+        : new QoreValueCoalescingOperatorNode(loc, left, right);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
+QoreValue QoreValueCoalescingOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(rc, needs_deref, xsink);
+}
+
 //#include <qore/intern/qore_program_private.h>
 
 QoreString QoreValueCoalescingOperatorNode::value_coalescing_str("value coalescing operator");
@@ -99,14 +126,14 @@ QoreValue QoreValueCoalescingOperatorNode::evalImpl(bool& needs_deref, Exception
     return evalImpl(rc, needs_deref, xsink);
 }
 
-QoreValue QoreValueCoalescingOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref,
-        ExceptionSink* xsink) const {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreValueCoalescingOperatorNode::evalCommon(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     {
         ValueEvalRefHolder arg(rc, left, xsink);
         if (*xsink)
         return QoreValue();
 
-        if (arg->getAsBool())
+        if (LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*arg))
         return arg.takeValue(needs_deref);
     }
 

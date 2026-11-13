@@ -32,6 +32,33 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreStatementTemps.h"
 
+namespace {
+class StrictBooleanLogicalAndOperatorNode : public QoreLogicalAndOperatorNode {
+public:
+    using QoreLogicalAndOperatorNode::QoreLogicalAndOperatorNode;
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        return copyBackgroundExplicit<StrictBooleanLogicalAndOperatorNode>(xsink);
+    }
+private:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreLogicalAndOperatorNode* QoreLogicalAndOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue left, QoreValue right) {
+    QoreLogicalAndOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanLogicalAndOperatorNode(loc, left, right)
+        : new QoreLogicalAndOperatorNode(loc, left, right);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
+QoreValue QoreLogicalAndOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+
 QoreString QoreLogicalAndOperatorNode::logical_and_str("logical and (&&) operator expression");
 
 static void set_binary_analysis_and(QoreParseContext& parse_context,
@@ -47,19 +74,20 @@ static void set_binary_analysis_and(QoreParseContext& parse_context,
     }
 }
 
-QoreValue QoreLogicalAndOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreLogicalAndOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     // if left side is 0, then do not evaluate right side (logical short circuiting)
     QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
-    if (!lh->getAsBool()) {
+    if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*lh)) {
         return false;
     }
 
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
-    return rh->getAsBool();
+    return LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*rh);
 }
 
 int QoreLogicalAndOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {

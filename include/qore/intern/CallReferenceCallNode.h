@@ -63,6 +63,13 @@ private:
         return nullptr;
     }
 
+protected:
+    template <bool LexicalInvocation>
+    DLLLOCAL QoreValue evalImplInternal(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
 public:
     DLLLOCAL CallReferenceCallNode(const QoreProgramLocation* loc, QoreValue exp, QoreParseListNode* n_args);
 
@@ -89,5 +96,25 @@ public:
     //! returns the arguments (for background operator processing)
     DLLLOCAL const QoreListNode* getArgs() const { return args; }
 };
+
+class LexicalCallReferenceCallNode : public CallReferenceCallNode {
+public:
+    using CallReferenceCallNode::CallReferenceCallNode;
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(needs_deref, xsink);
+    }
+
+    QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(rc, needs_deref, xsink);
+    }
+};
+
+template <typename... Args>
+CallReferenceCallNode* qore_make_reference_call(LexicalSemanticPolicy policy, Args&&... args) {
+    return policy.isDefault() ? new CallReferenceCallNode(std::forward<Args>(args)...)
+        : new LexicalCallReferenceCallNode(std::forward<Args>(args)...);
+}
 
 #endif

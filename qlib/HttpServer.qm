@@ -332,7 +332,8 @@ log("started listener on %s", lh.desc);
     - fixed sending two conflicting response header fields when a handler or the server configuration used a
       name in another case than the server, as with \c "content-type": the server added its own
       \c Content-Type, \c Date, \c Server, or \c Connection field, and a configured header was not replaced by
-      the handler's; header names are now matched case-insensitively (see
+      the handler's; header names are now matched case-insensitively, also for the configured headers that a
+      subclass sets or changes after the constructor, such as security headers like \c X-Frame-Options (see
       @ref HttpServer::http_canonicalize_reply_header_names() "http_canonicalize_reply_header_names()")
     - a multipart request body is delivered to the handler as binary data, since the request charset describes
       neither the container nor the parts inside it, each of which carries its own encoding
@@ -1113,10 +1114,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # other misc response headers
         hash<auto> hdr;
 
-        # the lower-case names of the configured response headers that are not managed by the server, each between
-        # newlines; see getMergedResponseHeaders()
-        list<string> hdr_merge_names();
-
         #! override message body encoding if none is received from the sender
         /** @note http://tools.ietf.org/html/rfc2616#section-3.7.1 states that it must be iso-8850-1
         */
@@ -1228,6 +1225,16 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         const MaxCachedEncodingPreferences = 64;
         const MaxCachedEncodingHeaderLength = 256;
+    }
+
+    private:internal {
+        #! The information about the names of the fields of the configured response headers (\c hdr)
+        /** A subclass can change \c hdr after the constructor and while requests are served; each response reads
+            \c hdr and this once and compares the headers that this was made for with its own, so that the names are
+            examined again only when the headers change (see getConfiguredHeaderInfo()).  It is replaced as a whole,
+            so that the information read is that of the headers that it was made for
+        */
+        *hash<Priv::ConfiguredHeaderInfo> hdr_info;
     }
     #! @endcond
 
@@ -3577,11 +3584,6 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         hdr = opts.hdr.val()
             ? http_canonicalize_reply_header_names(opts.hdr)
             : {"X-Powered-By": "Qore/" + Qore::VersionString};
-        {
-            # see getMergedResponseHeaders()
-            hash<string, bool> managed = map {$1.lwr(): True}, HttpServerManagedHeaderNames;
-            hdr_merge_names = map "\n" + $1.lwr() + "\n", keys hdr, !managed{$1.lwr()};
-        }
         protect_last_listener = opts.protect_last_listener ?? False;
         logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
         date effective_ttl = opts.ttl ? opts.ttl : HttpServer::DefaultTtl;
@@ -3719,7 +3721,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     /** @param listener_id the TCP listener ID (from cx."listener-id")
         @return the base response headers with Alt-Svc for this listener's QUIC counterpart
     */
-    private hash<auto> getResponseHeaders(int listener_id) {
+    private:internal hash<auto> getResponseHeaders(int listener_id) {
         # the headers are copied to an "auto!" local: the hdr option may be narrowed (e.g. hash<string, int> for
         # {"X-Instance": 1}), and every response adds string headers to them
         hash<auto!> rv = self.hdr;
@@ -3750,29 +3752,59 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     }
 
     #! Returns the configured response headers of the listener merged with a handler's response headers
-    /** @param listener_id the listener ID
+    /** @param conf_hdr the configured response headers (\c hdr), read once for the response
+        @param info the information about the names of the fields of \a conf_hdr; see getConfiguredHeaderInfo()
+        @param listener_id the listener ID
         @param hdr the response headers of the handler; the names of the fields managed by the server must be
         canonical (see @ref HttpServer::http_canonicalize_reply_header_names())
 
         @return the merged headers; a field in \a hdr replaces the configured fields with the same name in any case
     */
-
-    private hash<auto> getMergedResponseHeaders(int listener_id, *hash<auto> hdr) {
-        hash<auto> base = getResponseHeaders(listener_id);
+    private:internal hash<auto> getMergedResponseHeaders(hash<auto> conf_hdr, hash<Priv::ConfiguredHeaderInfo> info,
+            int listener_id, *hash<auto> hdr) {
+        # the headers of getResponseHeaders(), built here, as this is called for every response and a call of that
+        # method costs more than building them
+        hash<auto!> base = conf_hdr;
+        *string alt_svc = listener_alt_svc{listener_id};
+        if (alt_svc) {
+            base."Alt-Svc" = alt_svc;
+        }
         if (!hdr) {
             return base;
         }
-        # this is called for every response: the managed fields have canonical names in both hashes, so they are
-        # replaced by the plain hash addition, and only the other configured fields can be named in another case
-        if (hdr_merge_names) {
+        # this is called for every response: the plain hash addition gives the merged headers when the handler's
+        # headers have no field of the configured headers in any case; when they have one, the merge removes the
+        # configured field, so that the handler's field is sent in its own place, as any other field of the handler
+        if (info.merge_names || alt_svc) {
             string names = "\n" + (keys hdr).join("\n").lwr() + "\n";
-            foreach string name in (hdr_merge_names) {
+            if (alt_svc && names.find("\nalt-svc\n") >= 0) {
+                return mergeResponseHeaders(base, hdr);
+            }
+            foreach string name in (info.merge_names) {
                 if (names.find(name) >= 0) {
                     return mergeResponseHeaders(base, hdr);
                 }
             }
         }
         return base + hdr;
+    }
+
+    #! Returns the information about the names of the fields of the configured response headers given
+    /** Called by sendReply() when the configured headers (\c hdr) of a response are not equal to those that
+        \c hdr_info was made for (a subclass can change \c hdr after the constructor and while requests are served);
+        the information is kept in \c hdr_info for the next responses.  It depends only on the names of the fields,
+        which equal headers share, so a response uses it with its own configured headers, whose fields can be in
+        another order
+    */
+    private:internal hash<Priv::ConfiguredHeaderInfo> getConfiguredHeaderInfo(hash<auto> conf_hdr) {
+        hash<Priv::ConfiguredHeaderInfo> info = <Priv::ConfiguredHeaderInfo>{
+            "hdr": conf_hdr,
+            # the canonical names replace the others, so the keys differ unless they are all canonical
+            "canonical": http_canonicalize_reply_header_names(conf_hdr) == conf_hdr,
+            "merge_names": map "\n" + $1.lwr() + "\n", keys conf_hdr,
+        };
+        hdr_info = info;
+        return info;
     }
 
     #! Returns \a hdr merged into \a base; a field in \a hdr replaces the fields of \a base with the same name in any case
@@ -5168,8 +5200,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         # MUST NOT include a message-body. All other responses do include a
         # message-body, although it MAY be of zero length.
 
+        # the configured headers of this response, read once, as a subclass can change them while requests are served,
+        # and the information about their names, made again only when they change
+        hash<auto> conf_hdr = self.hdr;
+        *hash<Priv::ConfiguredHeaderInfo> hdr_info = self.hdr_info;
+        if (!hdr_info || hdr_info.hdr !== conf_hdr) {
+            hdr_info = getConfiguredHeaderInfo(conf_hdr);
+        }
         # the names of the fields managed by the server are canonical from here on
-        rv.hdr = getMergedResponseHeaders(cx."listener-id", http_canonicalize_reply_header_names(rv.hdr));
+        rv.hdr = getMergedResponseHeaders(conf_hdr, hdr_info, cx."listener-id",
+            http_canonicalize_reply_header_names(rv.hdr));
 
         # a response to a HEAD request has the headers of the GET response (RFC 9110 section 9.3.2)
         if (head && rv."code" >= 200 && rv."code" != 204 && rv."code" != 304) {
@@ -5255,7 +5295,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         rv.hdr.Date = getDateHeader();
 
-        HttpServer::http_set_reply_headers(s, cx, \rv);
+        # the names of the fields managed by the server are canonical since getMergedResponseHeaders() above if they
+        # are canonical in the configured headers, as the handler's headers were made canonical and the server sets
+        # only canonical names after that; whether they are canonical in the configured headers merged above is known
+        # from getConfiguredHeaderInfo(), which costs less than finding the names of the merged headers canonical again
+        HttpServer::http_set_reply_headers(s, cx, \rv, NOTHING, hdr_info.canonical);
 
         # Detect HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)
         bool ext_connect = is_extended_connect(cx, hdr);
@@ -5282,13 +5326,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # the headers of the handler's response describe the representation that is not sent (ETag,
             # Content-Range, Set-Cookie, ...): the refusal has only the listener's headers and the standard ones
             # (RFC 9110 sections 8.8 and 14.4)
-            rv.hdr = getMergedResponseHeaders(cx."listener-id", NOTHING) + {"Date": getDateHeader()};
+            rv.hdr = getMergedResponseHeaders(conf_hdr, hdr_info, cx."listener-id", NOTHING)
+                + {"Date": getDateHeader()};
             HttpServer::http_set_reply_headers(s, cx, \rv);
         }
 
         if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
-            doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
+            doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out,
+                request_helper.log_info);
         } else if (rv."code" >= 400) {
             # a send_callback provides the message body
             if (!head && !rv.body && !rv.hasKeyValue("chunked_body") && !rv.send_callback) {
@@ -5307,7 +5353,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         rv.hdr."Content-Type" = default_content_type;
                     }
                 }
-                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out,
+                    request_helper.log_info);
             } else {
                 sendHttpError(listener, cx, s, rv."code", rv.body,
                     rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
@@ -5323,9 +5370,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             #    rv.hdr."Transfer-Encoding", cx.encoding, rv.body);
 
             # the Content-Type of a body without one depends on the data, which compression below turns into
-            # binary data
-            *string default_content_type = getDefaultContentType(rv, cx."response-encoding"
-                ?? s.getEncoding().lwr());
+            # binary data; compression does not set a Content-Type, so it is determined only for a response without one
+            *string default_content_type = rv.hdr."Content-Type"
+                ? NOTHING
+                : getDefaultContentType(rv, cx."response-encoding" ?? s.getEncoding().lwr());
 
             # compress body if eligible for compression; skip InputStream bodies (streaming),
             # send_callback responses, and handlers that manage their own content encoding
@@ -5365,7 +5413,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # For HTTP/2 and HTTP/3 extended CONNECT streaming, don't send response here -
             # it's handled in the dedicated socket section
             if (!rv.streaming || !ext_connect) {
-                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out,
+                    request_helper.log_info);
             }
         }
 
@@ -6070,8 +6119,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
     # chunked_allowed: False for a response to an HTTP/1.0 request, where a streamed message body is delimited by
     # closing the connection instead of chunked transfer encoding
+    # log_info: if True, the request's INFO messages are logged (RequestHelper::log_info)
     private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv, bool chunked_allowed,
-            *ResponseAfterSendNotifier after_send, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            *ResponseAfterSendNotifier after_send, *reference<hash<HttpAsyncResponseInfo>> async_response_out,
+            bool log_info) {
         # Handle send_callback responses (e.g. DataStream protocol)
         if (rv.send_callback) {
             # Capture callback for the response-sending code
@@ -6146,8 +6197,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             is.unassignThread();
             body = NOTHING;
         }
-        listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
-            rv."code", body ? body.size() : 0, exists is);
+        # the message is built only if it is logged; whether it is was decided when the request started
+        if (log_info) {
+            listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
+                rv."code", body ? body.size() : 0, exists is);
+        }
         async_response_out = <HttpAsyncResponseInfo>{
             "code": rv."code",
             "hdr": rv.hdr ?? {},
@@ -8724,6 +8778,16 @@ hashdecl ControllerLoggerInfo {
     LoggerInterface logger;
     #! the controller's logger that the server's replaced, restored when the server stops
     *LoggerInterfaceBase prev;
+}
+
+#! the information about the names of the fields of the configured response headers of a server (HttpServer::hdr_info)
+hashdecl ConfiguredHeaderInfo {
+    #! the configured response headers that the information is about
+    hash<auto> hdr;
+    #! @ref True if the names of the fields managed by the server are canonical in \c hdr
+    bool canonical;
+    #! the lower-case names of the fields in \c hdr, each between newlines
+    list<string> merge_names;
 }
 
 # class containing handler info

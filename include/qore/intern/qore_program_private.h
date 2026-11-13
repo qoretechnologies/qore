@@ -954,6 +954,17 @@ public:
         the functionality the module's code uses, as parsing the module's source does (see qore_aot_module_init_v3())
     */
     QoreParseOptions aot_used_dom;
+    //! the functional domains that a user module declares in its module header (\c domains), which its Program does
+    //! not inherit from the Program loading it when the module is library code (see setModuleOwnDomains())
+    int64 module_own_dom = QDOM_DEFAULT;
+    //! the domains of \c module_own_dom that apply, as the module is library code (see setModuleOwnDomains()): the
+    //! module's own code may use the functionality of these domains for any caller, also when a call is resolved at
+    //! run time (see qore_relieve_module_declared_domains())
+    int64 module_trusted_dom = QDOM_DEFAULT;
+    //! the restrictions that a user module header adds to the module's Program while its header is parsed
+    //! (MOD_HEADER_PO), which do not apply to the functional domains declared on user code (see
+    //! qore_program_private::parseDeniedDomains())
+    int64 mod_header_dom = QDOM_DEFAULT;
 
     //! the restrictions that an AOT module Program inherited from the Program that loaded it
     /** source modules are parsed with these restrictions; AOT module code runs with them (see
@@ -1524,6 +1535,9 @@ protected:
     DLLLOCAL void newProgram();
 
     DLLLOCAL void setDefines();
+
+    //! see setModuleOwnDomains()
+    DLLLOCAL int64 setModuleOwnDomainsIntern(int64 dom, bool apply);
 };
 
 class PreParseHelper {
@@ -2489,7 +2503,10 @@ public:
         yy_scan_string(code, lexer);
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
-        yyparse(lexer);
+        {
+            LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+            yyparse(lexer);
+        }
         // the parser returns before the end of the input if its stack is exhausted
         qore_scanner_end_input(lexer);
 
@@ -2766,7 +2783,10 @@ public:
             yylex_init_extra(&state, &lexer);
             yyset_in(fp, lexer);
             // yyparse() will call endParsing() and restore old pgm position
-            yyparse(lexer);
+            {
+                LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+                yyparse(lexer);
+            }
             // the parser returns before the end of the input if its stack is exhausted
             qore_scanner_end_input(lexer);
 
@@ -4072,6 +4092,19 @@ public:
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* class_name, ExceptionSink* xsink) const;
 
+    //! Compiled metadata keeps canonical lookup semantics, including pending declarations and parse access guards.
+    DLLLOCAL const QoreClass* findClassCanonical(const char* path, ExceptionSink* xsink) const;
+    DLLLOCAL const TypedHashDecl* findHashDeclCanonical(const char* path, const QoreNamespace*& pns) const;
+    DLLLOCAL const QoreEnumDecl* findEnumCanonical(const char* path, const QoreNamespace*& pns) const;
+
+    template <bool Native>
+    DLLLOCAL const QoreClass* runtimeFindClassImpl(const char* path, ExceptionSink* xsink) const;
+    template <bool Native>
+    DLLLOCAL const TypedHashDecl* findHashDeclImpl(const char* path, const QoreNamespace*& pns) const;
+    template <bool Native>
+    DLLLOCAL const QoreEnumDecl* findEnumImpl(const char* path, const QoreNamespace*& pns) const;
+
+
     //! waits until no child Program copies the external data of this Program; plock must be held
     DLLLOCAL void waitForExternalDataCopiesIntern() {
         while (ext_copy_count) {
@@ -4303,6 +4336,14 @@ public:
 
     DLLLOCAL static bool runWithRegisteredPrograms(
             const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f);
+
+    //! Explicit invocation policy for source-bound dynamic forwarding; the public C++ entry is canonical.
+    DLLLOCAL QoreValue callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool LexicalInvocation>
+    DLLLOCAL QoreValue callFunctionImpl(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;
@@ -4689,6 +4730,47 @@ public:
 
     DLLLOCAL static void setAOTInheritedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         pgm.priv->aot_inherited_po = po;
+    }
+
+    //! Records the functional domains that a user module declares in its module header (\c domains)
+    /** If \a apply is true (the module is library code: see QoreModuleManager::isTrustedModulePath()), the Program no
+        longer has the restrictions of these domains, which it inherited from the Program loading it, nor their parse
+        defines, so the module's own code may use them; the code calling the module is still checked against its own
+        restrictions.
+
+        @return the restrictions that were removed
+    */
+    DLLLOCAL static int64 setModuleOwnDomains(QoreProgram& pgm, int64 dom, bool apply) {
+        return pgm.priv->setModuleOwnDomainsIntern(dom, apply);
+    }
+
+    //! Returns the functional domain bits of \a dom that the parse options of \a pgm do not allow, and records them
+    /** as parseAddDomain(); the restrictions that a module header adds for its own code do not apply to the domains
+        declared on user code (\a user_declared): the header's \c init and \c del closures may call user code that
+        declares a domain, which the code loading the module is checked for when it calls the module
+    */
+    DLLLOCAL static QoreParseOptions parseDeniedDomains(QoreProgram* pgm, int64 dom, int64 user_declared) {
+        QoreParseOptions denied = parseAddDomain(pgm, dom);
+        if (denied && user_declared && pgm->priv->mod_header_dom) {
+            denied &= ~QoreParseOptions(user_declared & pgm->priv->mod_header_dom & ~(dom & ~user_declared));
+        }
+        return denied;
+    }
+
+    //! Sets the restrictions that a user module header adds to the module's Program while its header is parsed
+    DLLLOCAL static void setModuleHeaderDomains(QoreProgram& pgm, int64 dom) {
+        pgm.priv->mod_header_dom = dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header (\c domains)
+    DLLLOCAL static int64 getModuleOwnDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_own_dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header and that apply to it, as it is
+    //! library code
+    DLLLOCAL static int64 getModuleTrustedDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_trusted_dom;
     }
 
     DLLLOCAL static QoreParseOptions getDomain(const QoreProgram& pgm) {

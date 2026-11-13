@@ -133,6 +133,7 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
 #ifdef DEBUG
     else assert(!parseTypeInfo);
 #endif
+    refreshInitializationFilter();
 
     if (!exp) {
         return err;
@@ -173,6 +174,7 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
 HashDeclMemberInfo* HashDeclMemberInfo::instantiate(const QoreTypeInfo* receiver_type_info) const {
     HashDeclMemberInfo* rv = new HashDeclMemberInfo(*this);
     rv->typeInfo = qore_substitute_type_params_if_needed(typeInfo, receiver_type_info);
+    rv->refreshInitializationFilter();
     return rv;
 }
 
@@ -259,6 +261,10 @@ int typed_hash_decl_private::parseInit() {
 
     {
         HashDeclTypeParamContextHelper hashdecl_type_param_context(this);
+        // the members are parsed in the namespace of the hashdecl and in no class context, as the members of a
+        // namespace are, also when the hashdecl is first used in a class's code (a closure in a member initializer
+        // keeps the class that it is parsed in; issue #5961)
+        QoreParseClassHelper qpch(nullptr, ns ? ns : qore_ns_private::get(*getRootNS()));
 
         // Initialize own members
         for (auto& i : members.member_list) {
@@ -743,6 +749,26 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreParseListNode* args, bo
     return newHash(init, runtime_check, xsink);
 }
 
+QoreHashNode* typed_hash_decl_private::newHash(const QoreParseListNode* args, bool runtime_check,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
+    assert(!args || args->empty() || args->size() == 1);
+    ValueEvalOptimizedRefHolder a(args && !args->empty() ? args->get(0) : QoreValue(), xsink);
+    if (*xsink)
+        return nullptr;
+
+    const QoreHashNode* init = nullptr;
+    if (a->getType() != NT_NOTHING) {
+        if (runtime_check && a->getType() != NT_HASH) {
+            xsink->raiseException("HASHDECL-INIT-ERROR", "hashdecl '%s' hash initializer value must be a hash; got type '%s' instead", name.c_str(), a->getTypeName());
+            return nullptr;
+        }
+
+        init = a->get<const QoreHashNode>();
+    }
+
+    return newHash(init, runtime_check, xsink, policy);
+}
+
 QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink,
         QoreHashNode* rv) const {
     if (runtime_check) {
@@ -769,6 +795,17 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool ru
 
 QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, const QoreHashNode* overrides,
         bool runtime_check, ExceptionSink* xsink) const {
+    return newHashWithOverridesImpl<false>(init, overrides, runtime_check, xsink, {});
+}
+
+QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, const QoreHashNode* overrides,
+        bool runtime_check, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
+    return newHashWithOverridesImpl<true>(init, overrides, runtime_check, xsink, policy);
+}
+
+template <bool Lexical>
+QoreHashNode* typed_hash_decl_private::newHashWithOverridesImpl(const QoreHashNode* init,
+        const QoreHashNode* overrides, bool runtime_check, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
     if (runtime_check) {
         for (const QoreHashNode* source : {init, overrides}) {
             ConstHashIterator i(source);
@@ -788,7 +825,21 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, const Q
     }
 
     ReferenceHolder<QoreHashNode> h(qore_hash_private::newHashDecl(thd), xsink);
-    initHash(*h, init, overrides, xsink);
+    if constexpr (Lexical) {
+        QoreDeclaringProgramHelper src_pgm_helper;
+        if (needsInitEntry() && enterSourcePrograms(src_pgm_helper, init, overrides, xsink)) {
+            xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+            return nullptr;
+        }
+        if (initHashIntern(*h, init, overrides, xsink, policy)) {
+            if (*xsink) {
+                xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+            }
+            return nullptr;
+        }
+    } else {
+        initHash(*h, init, overrides, xsink);
+    }
     return *xsink ? nullptr : h.release();
 }
 
@@ -873,6 +924,50 @@ QoreHashNode* typed_hash_decl_private::newHashFromType(const QoreHashNode* init,
         return nullptr;
     }
     return newHash(init, true, xsink);
+}
+
+QoreHashNode* typed_hash_decl_private::newHashFromType(const QoreHashNode* init, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) const {
+    // Like the canonical API entry, keep every declaring Program before evaluating any default initializer.
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (enterSourceProgramsForApi(src_pgm_helper, init, nullptr, xsink)) {
+        if (xsink && *xsink) {
+            xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+        }
+        return nullptr;
+    }
+    return newHash(init, true, xsink, policy);
+}
+
+QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) const {
+    ConstHashIterator i(init);
+    size_t count = 0;
+    while (runtime_check && i.next()) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "typed hash initializer key validation")) {
+            return nullptr;
+        }
+        if (!findMember(i.getKey())) {
+            if (xsink) {
+                xsink->raiseException("HASHDECL-INIT-ERROR",
+                    "hashdecl '%s' hash initializer value contains unknown key '%s'", name.c_str(), i.getKey());
+            }
+            return nullptr;
+        }
+    }
+    ReferenceHolder<QoreHashNode> h(qore_hash_private::newHashDecl(thd), xsink);
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (needsInitEntry() && enterSourcePrograms(src_pgm_helper, init, nullptr, xsink)) {
+        if (xsink && *xsink) {
+            xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+        }
+        return nullptr;
+    }
+    int rc = initHashIntern(*h, init, nullptr, xsink, policy);
+    if (rc && xsink && *xsink) {
+        xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+    }
+    return rc || (xsink && *xsink) ? nullptr : h.release();
 }
 
 int typed_hash_decl_private::enterSourcePrograms(QoreDeclaringProgramHelper& h, const QoreHashNode* init,
@@ -979,6 +1074,17 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
 
 int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init,
         const QoreHashNode* overrides, ExceptionSink* xsink) const {
+    return initHashInternImpl<false>(h, init, overrides, xsink, {});
+}
+
+int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init,
+        const QoreHashNode* overrides, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
+    return initHashInternImpl<true>(h, init, overrides, xsink, policy);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int typed_hash_decl_private::initHashInternImpl(QoreHashNode* h, const QoreHashNode* init,
+        const QoreHashNode* overrides, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
 #ifdef QORE_MANAGE_STACK
     if (xsink && check_stack(xsink)) {
         return -1;
@@ -987,7 +1093,13 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
 
     // Initialize parent members first
     if (parentHashDecl) {
-        if (get(*parentHashDecl)->initHashIntern(h, init, overrides, xsink)) {
+        int rc;
+        if constexpr (Lexical) {
+            rc = get(*parentHashDecl)->initHashIntern(h, init, overrides, xsink, policy);
+        } else {
+            rc = get(*parentHashDecl)->initHashIntern(h, init, overrides, xsink);
+        }
+        if (rc) {
             return -1;
         }
     }
@@ -1011,7 +1123,11 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
                 // the outcome must reflect only this type check; see ScopedTypeCheckSink.  Without this a caller
                 // reusing a long-lived sink gets an unpopulated hashdecl with no failure of its own
                 ScopedTypeCheckSink ts(xsink);
-                QoreTypeInfo::acceptInputKey(i.second->getTypeInfo(), i.first, *val, *ts);
+                if constexpr (Lexical) {
+                    QoreTypeInfo::acceptInputKey(i.second->getTypeInfo(), i.first, *val, *ts, policy);
+                } else {
+                    QoreTypeInfo::acceptInputKey(i.second->getTypeInfo(), i.first, *val, *ts);
+                }
                 if (ts.raised()) {
                     return -1;
                 }
@@ -1071,7 +1187,7 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             // see the acceptInputKey() call above
             {
                 ScopedTypeCheckSink ts(sink);
-                QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *val, *ts);
+                QoreTypeInfo::acceptInputMember(i.second->getInitializerTypeInfo(), i.first, *val, *ts);
                 if (ts.raised()) {
                     describe_local();
                     return -1;
@@ -1146,7 +1262,7 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
             return -1;
         }
         default_val.ensureReferencedValue();
-        QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *default_val, xsink);
+        QoreTypeInfo::acceptInputMember(i.second->getInitializerTypeInfo(), i.first, *default_val, xsink);
         if (*xsink) {
             return -1;
         }
@@ -1260,7 +1376,8 @@ const QoreNamespace* TypedHashDecl::getNamespace() const {
 }
 
 QoreHashNode* TypedHashDecl::doRuntimeCast(const QoreHashNode* h, ExceptionSink* xsink) const {
-    return priv->newHashFromType(h, xsink);
+    auto policy = qore_get_native_semantic_policy();
+    return policy.needsFilter() ? priv->newHashFromType(h, xsink, policy) : priv->newHashFromType(h, xsink);
 }
 
 QoreHashNode* TypedHashDecl::doRuntimeCastWithOverrides(const QoreHashNode* h, const QoreHashNode* overrides,
@@ -1270,7 +1387,9 @@ QoreHashNode* TypedHashDecl::doRuntimeCastWithOverrides(const QoreHashNode* h, c
     if (priv->enterSourceProgramsForApi(src_pgm_helper, h, overrides, xsink)) {
         return nullptr;
     }
-    return priv->newHash(h, overrides, true, xsink);
+    auto policy = qore_get_native_semantic_policy();
+    return policy.needsFilter() ? priv->newHash(h, overrides, true, xsink, policy)
+        : priv->newHash(h, overrides, true, xsink);
 }
 
 const TypedHashDecl* TypedHashDecl::getParentHashDecl() const {
