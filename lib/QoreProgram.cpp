@@ -2111,6 +2111,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exec_class_inst.discard(xsink);
         exec_class_inst = QoreValue();
 
+        // the del closures of the local modules that a compiled script embeds run while the data of the Program
+        // exists, as the del closure of a source module that a script loads does (qore#6015)
+        runAOTScriptDelClosures();
+
         // release objects captured from languages without deterministic GC (jni, python) while the
         // program is still valid (data not yet cleared, ptid == tid), so their destructors run in a
         // valid program context instead of failing against a half-destroyed program

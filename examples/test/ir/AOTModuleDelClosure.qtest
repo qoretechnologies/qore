@@ -39,6 +39,9 @@ class AOTModuleDelClosureTest inherits QUnit::Test {
         addTestCase("the del closure runs when the module is unloaded", \testDelRuns());
         addTestCase("the del closure of a module that is imported by two programs runs once", \testDelRunsOnce());
         addTestCase("the del closure uses the static data of its module", \testDelUsesModuleState());
+        addTestCase("the del closure of a module runs before those of the modules it requires, indirectly too",
+            \testDelOrder());
+        addTestCase("the del closure of a local module of a compiled script runs", \testScriptLocalModuleDel());
 
         set_return_value(main());
     }
@@ -227,6 +230,117 @@ public class Holder {
             assertEq("STATIC\n", result[0], "output with " + opt);
             assertEq("s=STATIC\n", result[1], "del closure of the compiled module (" + opt + ") reads its static data: "
                 + result[0]);
+        }
+    }
+
+    #! the module source for the order test: requires the given modules and appends its name to the marker file
+    private string orderModuleSource(string name, string marker, string requires_name = "", bool has_del = True) {
+        string del = has_del ? sprintf("    del = sub () {
+        File f();
+        f.open2(%y, O_WRONLY | O_CREAT | O_APPEND);
+        f.write(\"%s\\n\");
+    };
+", marker, name) : "";
+        return sprintf("%%modern
+%s
+module %s {
+    version = \"1.0\";
+    desc = \"del closure order probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    domains = \"FILESYSTEM\";
+%s}
+public namespace %s {
+public int sub value() { return %d; }
+}
+", requires_name.empty() ? "" : "%requires " + requires_name, name, del, name,
+            requires_name.empty() ? 1 : 2);
+    }
+
+    #! A requires B requires C; A and C have del closures and B has none: the closure of A runs before that of C
+    /** The closure of a module can use the modules that it requires, which the teardown of those modules ends: so it
+        runs first, whether the modules are required directly or through others.  Without the transitive order the
+        two closures have no order of their own: the modules are kept in an unordered map, whose order depends on the
+        names, so several chains of names are used.
+    */
+    testDelOrder() {
+        foreach string opt in ("-O0", "-O3") {
+            TmpDir tmp("qore-aot-del-order-");
+            string dir = tmp.path;
+            mkdir(dir + "/mods");
+            string qm_env = sprintf("%s QORE_MODULE_DIR=%s/mods", env(), dir);
+            # the chains: the first of each requires the second, which requires the third
+            list<list<string>> chains = (
+                ("AotOrderA", "AotOrderB", "AotOrderC"),
+                ("AotOrderZ", "AotOrderY", "AotOrderX"),
+                ("AotChainOne", "AotChainTwo", "AotChainThree"),
+                ("AotChainThree2", "AotChainTwo2", "AotChainOne2"),
+                ("AotLeadM", "AotMidM", "AotTailM"),
+                ("AotTailN", "AotMidN", "AotLeadN"),
+            );
+            foreach list<string> chain in (chains) {
+                string marker = dir + "/marker-" + chain[0] + ".txt";
+                # compiled in the order of the dependencies
+                for (int i = 2; i >= 0; --i) {
+                    string name = chain[i];
+                    write(dir + "/" + name + ".qm", orderModuleSource(name, marker, i == 2 ? "" : chain[i + 1], i != 1));
+                    string qmod = dir + "/mods/" + name + ".qmod";
+                    string out = run(sprintf("%s %s --module %s --output %s %s/%s.qm", qm_env, qcc_bin, opt, qmod, dir,
+                        name));
+                    assertTrue(is_file(qmod), name + " compiled with " + opt + ": " + out);
+                }
+                string probe = dir + "/probe-" + chain[0] + ".qr";
+                write(probe, sprintf("%%modern
+%%no-child-restrictions
+%%append-module-path %s/mods
+%%requires %s
+printf(\"value=%%d\\n\", %s::value());
+", dir, chain[0], chain[0]));
+                # qcc loads the compiled modules that a module requires, and runs their del closures when it ends
+                unlink(marker);
+                # the hook starts the closures in the reverse of the order of the module map, which for modules that were
+                # loaded after the modules they require would be the order that the dependencies give
+                string out = run(sprintf("QORE_AOT_TEST_REVERSE_DEL_ORDER=1 %s %s -b %s", env(), qore_bin, probe));
+                assertEq("value=2\n", out, "output with " + opt);
+                assertEq(chain[0] + "\n" + chain[2] + "\n",
+                    is_file(marker) ? ReadOnlyFile::readTextFile(marker) : "",
+                    "the del closure of " + chain[0] + " runs before that of " + chain[2] + " with " + opt);
+            }
+        }
+    }
+
+    #! the del closure of a source module that a script loads runs when the script ends; compiled with the module
+    #! embedded (qcc -c with local source modules) it runs when the compiled script's Program is cleared
+    testScriptLocalModuleDel() {
+        TmpDir tmp("qore-aot-del-script-");
+        string dir = tmp.path;
+        mkdir(dir + "/mods");
+        string marker = dir + "/marker.txt";
+        write(dir + "/mods/AotScriptDel.qm", markerModuleSource("AotScriptDel", marker));
+        string script = dir + "/script.qr";
+        write(script, sprintf("%%modern
+%%no-child-restrictions
+%%append-module-path %s/mods
+%%requires AotScriptDel
+printf(\"value=%%d\\n\", AotScriptDel::value());
+", dir));
+        # the reference: the interpreter and the source module
+        unlink(marker);
+        string expected = run(sprintf("%s %s -b %s", env(), qore_bin, script));
+        assertEq("value=42\n", expected, "interpreter output");
+        assertEq("del\n", is_file(marker) ? ReadOnlyFile::readTextFile(marker) : "", "the source module's del closure ran");
+
+        foreach string opt in ("-O0", "-O3") {
+            unlink(marker);
+            string exe = dir + "/script" + opt;
+            unlink(exe);
+            string out = run(sprintf("%s %s %s -o %s %s", env(), qcc_bin, opt, exe, script));
+            assertTrue(is_file(exe), "executable compiled with " + opt + ": " + out);
+            unlink(marker);
+            string result = run(sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, exe));
+            assertEq(expected, result, "output of the executable with " + opt);
+            assertEq("del\n", is_file(marker) ? ReadOnlyFile::readTextFile(marker) : "",
+                "the del closure of the embedded local module runs with " + opt + ": " + result);
         }
     }
 

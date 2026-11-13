@@ -14056,11 +14056,15 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init_v2(QoreNamespace* root_ns, Qor
 //! Runs the compiled \c del closure of an AOT module in the module's own Program, as QoreUserModule::runDelCallback()
 //! runs the del closure of a source module
 static void runAOTModuleDelClosure(const std::string& mod_name, const std::string& mod_path, QoreProgram* pgm,
-        QoreAOTContext* ctx, AotFunctionPtr fn_ptr) {
+        QoreAOTContext* ctx, AotFunctionPtr fn_ptr, bool count_thread = true) {
     assert(ctx && fn_ptr);
     ExceptionSink xsink;
     if (pgm) {
-        ProgramThreadCountContextHelper tch(&xsink, pgm, true);
+        // a script's Program that is being cleared has no thread to count: the thread that clears it runs the closure
+        std::unique_ptr<ProgramThreadCountContextHelper> tch;
+        if (count_thread) {
+            tch.reset(new ProgramThreadCountContextHelper(&xsink, pgm, true));
+        }
         if (!xsink) {
             // the module's code runs in its own Program, as the init closure does
             ProgramCallContextHelper call_ctx(pgm);
@@ -14254,6 +14258,15 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) 
     return xsink ? -1 : 0;
 }
 
+//! Test hook: the del closures start in the reverse of the order in which the modules are kept, so that a test sees
+//! the order that the dependencies give rather than the order of the unordered map (see
+//! qore_aot_run_all_module_del_closures())
+static bool aotReverseDelOrderTestHook() {
+    static constinit QoreEnvFlag enabled_env("QORE_AOT_TEST_REVERSE_DEL_ORDER");
+    const bool enabled = enabled_env.get();
+    return enabled;
+}
+
 DLLLOCAL void qore_aot_run_all_module_del_closures() {
     struct DelInfo {
         std::string name;
@@ -14272,19 +14285,40 @@ DLLLOCAL void qore_aot_run_all_module_del_closures() {
             }
         }
     }
-    // the closure of a module that requires another module runs before that of the module it requires, which it can
-    // use; a cycle (not possible for loaded modules) runs the rest in any order
+    if (aotReverseDelOrderTestHook()) {
+        std::reverse(dels.begin(), dels.end());
+    }
+    // the closure of a module that requires another module, directly or through other modules, runs before that of
+    // the module it requires, which it can use; a cycle (not possible for loaded modules) runs the rest in any order
+    auto requires_module = [](const std::string& from, const std::string& target) {
+        std::unordered_set<std::string> seen;
+        std::vector<std::string> todo{from};
+        while (!todo.empty()) {
+            std::string name = std::move(todo.back());
+            todo.pop_back();
+            if (!seen.insert(name).second) {
+                continue;
+            }
+            std::vector<std::string> deps;
+            if (!qore_aot_get_module_dependencies(name.c_str(), deps)) {
+                continue;
+            }
+            for (const std::string& d : deps) {
+                if (d == target) {
+                    return true;
+                }
+                todo.push_back(d);
+            }
+        }
+        return false;
+    };
     while (!dels.empty()) {
         size_t pick = 0;
         for (size_t i = 0; i < dels.size(); ++i) {
             bool required = false;
             for (size_t j = 0; j < dels.size() && !required; ++j) {
-                if (i == j) {
-                    continue;
-                }
-                std::vector<std::string> deps;
-                if (qore_aot_get_module_dependencies(dels[j].name.c_str(), deps)) {
-                    required = std::find(deps.begin(), deps.end(), dels[i].name) != deps.end();
+                if (i != j) {
+                    required = requires_module(dels[j].name, dels[i].name);
                 }
             }
             if (!required) {
@@ -16090,8 +16124,9 @@ static int executeInitFunctions(
 
     // The context of the module's del closure is built in the module's own Program by the pass that populates the
     // shadow (see AotModuleState::del_ctx), so only that pass keeps it; the context of any other import is freed
-    // with the others, as the closure runs only once, when the module is unloaded (#6015)
-    if (write_shadow && shadow_pgm && mod_name) {
+    // with the others, as the closure runs only once, when the module is unloaded (#6015).  A compiled script holds
+    // the closures of the local modules that it embeds in its Program, which runs them when it is cleared.
+    if (write_shadow && (shadow_pgm || pgm)) {
         for (size_t di = 0; di < descriptors.size(); ++di) {
             if (descriptors[di].target_type != AOTCompiledInitFunc::MODULE_DEL) {
                 continue;
@@ -16100,11 +16135,39 @@ static int executeInitFunctions(
             if (it == exec_map.end() || !it->second->ctx || !it->second->fn_ptr) {
                 continue;
             }
-            AutoLocker aot_state_al(get_aot_module_state_lock());
-            auto sit = aot_module_map.find(mod_name);
-            if (sit != aot_module_map.end() && !sit->second.del_ctx) {
-                sit->second.del_ctx.reset(it->second->ctx);
-                sit->second.del_fn = it->second->fn_ptr;
+            bool is_module = false;
+            if (mod_name) {
+                AutoLocker aot_state_al(get_aot_module_state_lock());
+                auto sit = aot_module_map.find(mod_name);
+                if (sit != aot_module_map.end()) {
+                    is_module = true;
+                    if (shadow_pgm && !sit->second.del_ctx) {
+                        sit->second.del_ctx.reset(it->second->ctx);
+                        sit->second.del_fn = it->second->fn_ptr;
+                        deferred_contexts.insert(it->second->ctx);
+                    }
+                }
+            }
+            if (!is_module && !shadow_pgm && pgm) {
+                // a script: the Program that the closure was built for owns it and runs it when it is cleared
+                struct ScriptDel : public AOTScriptDelClosure {
+                    QoreProgram* pgm;
+                    std::string name;
+                    std::string path;
+                    std::unique_ptr<QoreAOTContext> ctx;
+                    AotFunctionPtr fn;
+
+                    ScriptDel(QoreProgram* pgm, const std::string& name, const std::string& path,
+                            QoreAOTContext* ctx, AotFunctionPtr fn) : pgm(pgm), name(name), path(path), ctx(ctx),
+                            fn(fn) {
+                    }
+
+                    void run() override {
+                        runAOTModuleDelClosure(name, path, pgm, ctx.release(), fn, true);
+                    }
+                };
+                qore_program_private::get(*pgm)->aot_script_dels.push_back(std::make_unique<ScriptDel>(pgm,
+                    descriptors[di].ns_path, descriptors[di].item_name, it->second->ctx, it->second->fn_ptr));
                 deferred_contexts.insert(it->second->ctx);
             }
         }

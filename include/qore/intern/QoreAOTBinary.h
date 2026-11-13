@@ -460,7 +460,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      so that a find expression can be nested in the expressions of another one (#5974); the earlier formats have no
 //!      such expression, and a reader of them refuses the kind.
 //!      An init function descriptor can have the target type MODULE_DEL (7): the compiled body of the module's \c del
-//!      closure, which is loaded with the module but run when the module is unloaded (#6015); a reader of the earlier
+//!      closure, which is loaded with the module but run when the module is unloaded (#6015), or, for a local source
+//!      module that a compiled script embeds, when the script's Program is cleared; a reader of the earlier
 //!      formats refuses the type, and a module has none without a \c del closure.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).

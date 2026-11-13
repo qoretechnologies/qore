@@ -23964,6 +23964,28 @@ bool QoreAOT::compile(QoreProgram* pgm,
             return false;
         }
     }
+    // the del closures of the local modules run when the compiled script's Program is cleared (qore#6015); a module
+    // without an init closure can have one
+    for (auto& root : local_module_roots) {
+        QoreAbstractModule* mod = QMM.findModule(root.first.c_str());
+        QoreUserModule* user_mod = mod && mod->isUser() ? dynamic_cast<QoreUserModule*>(mod) : nullptr;
+        if (!user_mod) {
+            continue;
+        }
+        QoreValue del_c = user_mod->refDelClosure();
+        if (!del_c) {
+            continue;
+        }
+        std::string del_error;
+        bool del_ok = compileModuleInitClosureAsInitFunc(del_c, root.first.c_str(), user_mod->getProgram(),
+            ctx, *module, di_builder, di_cu, compiled_init_funcs, &const_reverse_map,
+            del_error, user_mod->getFileName(), true);
+        del_c.discard(nullptr);
+        if (!del_ok) {
+            error = del_error;
+            return false;
+        }
+    }
 
     // Step 2: Try to compile top-level code with AOT mode
     {
