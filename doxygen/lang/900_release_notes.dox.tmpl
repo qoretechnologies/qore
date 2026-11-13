@@ -1050,6 +1050,11 @@
     The new @ref discard_statement "@@discard" statement evaluates an expression and discards its result without a
     @ref return-value-ignored "return-value-ignored" warning.
 
+    @par ThreadPool Workers Can Leave the Pool
+    A task that keeps its thread for a long time can take its worker out of the pool with
+    @ref Qore::Thread::ThreadPool::detachCurrentThread() "ThreadPool::detachCurrentThread()", so that it no longer
+    counts against the pool's limit; the HTTP server does so for the thread of a persistent HTTP/1.x connection.
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
       @ref Qore::ParseOptions, which holds all 128 option bits; the constants of options beyond bit 63 are \c 0
@@ -1198,6 +1203,8 @@
         @ref httpserverhttp3)
       - limits on decompressed request bodies, HTTP/1.0 compliance fixes, and the \c after_send callback (see
         @ref httpserver_after_send)
+      - the thread of a persistent HTTP/1.x connection does not count against \c max_handler_threads
+        (<a href="https://github.com/qoretechnologies/qore/issues/5758">issue 5758</a>)
       - see @ref http1_7 for all changes
 
     - @ref httpserverutilintro "HttpServerUtil" module
