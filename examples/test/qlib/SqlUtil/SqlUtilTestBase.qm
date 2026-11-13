@@ -584,6 +584,14 @@ public class SqlTestBase inherits QUnit::Test {
             record2.id = rand();
             assertThrows("DUPLICATE-RECORD", \dp.createRecord(), record2);
         }
+        # the bulk and shaped create paths report a duplicate row as the single-record path does
+        {
+            hash<auto> bulk = map {$1.key: ($1.value,)}, record.pairIterator();
+            assertThrows("DUPLICATE-RECORD", \dp.createRecordsBulk(), bulk);
+            assertThrows("DUPLICATE-RECORD", \dp.createRecordsShape(), (bulk, DataProviderShape::HashOfLists));
+            # nothing of a refused batch was written
+            assertEq(1, dp.searchRecords({"id": record.id}).size());
+        }
 
         # create a dependent table
         string name2 = "test_table_" + get_random_string();
@@ -627,6 +635,10 @@ public class SqlTestBase inherits QUnit::Test {
         {
             child_record.id = rand();
             assertThrows("CREATE-RECORD-ERROR", \dp2.createRecord(), child_record);
+            # an error other than a duplicate row stays CREATE-RECORD-ERROR on the bulk and shaped paths
+            hash<auto> bulk = map {$1.key: ($1.value,)}, child_record.pairIterator();
+            assertThrows("CREATE-RECORD-ERROR", \dp2.createRecordsBulk(), bulk);
+            assertThrows("CREATE-RECORD-ERROR", \dp2.createRecordsShape(), (bulk, DataProviderShape::HashOfLists));
         }
 
         dp2.addField(new QoreDataField("comment", "comment field",
