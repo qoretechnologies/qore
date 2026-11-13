@@ -3100,7 +3100,11 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                         alloca_builder.CreateStore(alloca_builder.CreateCall(is_ref_fn, {arg_val}), ref_flag);
                     }
                 };
-                if (fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
+                // an `any` parameter strips the complex type of a list or hash argument, as the call path does
+                // (UserVariantBase::setupCall(), instantiateFastCallParams()), which can make a new value that the
+                // parameter owns: it is not borrowed (qore#6032)
+                const bool strip_any = var->getTypeInfo() == anyTypeInfo;
+                if (!strip_any && fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
                     alloca_builder.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
                     local_allocas[key] = LocalCacheSlot(alloca);
@@ -3133,6 +3137,11 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                     alloca_builder.CreateStore(native_val, alloca);
                     preinstantiated_entry_loads.push_back(arg_val);
                 } else {
+                    if (strip_any) {
+                        auto strip_fn = module.getOrInsertFunction("qore_rt_strip_any_param",
+                                llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        arg_val = alloca_builder.CreateCall(strip_fn, {arg_val});
+                    }
                     alloca_builder.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
                     // NaN-boxed: track alloca for load+decref at exit.  Combined with

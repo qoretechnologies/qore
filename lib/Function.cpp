@@ -6806,12 +6806,20 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
                 = needs_type_param_substitution
                     ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
                     : signature.getParamTypeInfo(i);
-            // Apply type filtering for complex hash parameters
-            if (paramTypeInfo && val.getType() == NT_HASH) {
+            // the value's type is read once for the checks below (QoreValue::getType() is not inlined)
+            qore_type_t val_type = val.getType();
+            // Apply type filtering for complex hash parameters, and strip the complex type of a list passed to an
+            // untyped parameter (`any`), as the IR engines do (instantiateFastCallParams()); a typed list parameter
+            // was filtered with the arguments (qore#6032)
+            if (paramTypeInfo && (val_type == NT_HASH
+                    || (val_type == NT_LIST && !QoreTypeInfo::hasType(paramTypeInfo)
+                        && QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)))) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, signature.getName(i), val, xsink);
                 if (*xsink) {
                     return -1;
                 }
+                // the filter can convert the value (ex: a hash for a softlist parameter)
+                val_type = val.getType();
             }
             // hash<auto!>/list<auto!> (no-narrow) parameters: strip a narrowed
             // complex type or top-level hashdecl from the incoming container
@@ -6822,7 +6830,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
             // function observes in an auto! parameter is engine-independent
             // (previously the AST engine raised RUNTIME-TYPE-ERROR on stores
             // into narrowed containers that the IR pipeline accepted).
-            if (val.getType() == NT_HASH || val.getType() == NT_LIST) {
+            if (val_type == NT_HASH || val_type == NT_LIST) {
                 QoreTypeInfo::applyNoNarrowCoercion(paramTypeInfo, val, xsink);
                 if (*xsink) {
                     val.discard(xsink);

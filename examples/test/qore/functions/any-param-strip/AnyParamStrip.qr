@@ -1,0 +1,37 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A typed list or hash passed to a parameter of type `any` has its complex type stripped, as on assignment to an
+# `any` variable, in every execution mode and in qcc-compiled code (issue #6032); `auto` and typed parameters keep
+# it, and the caller's value keeps it as well; see AnyParamStrip.qtest.
+
+hashdecl AnyParamStripHd {
+    int a;
+}
+
+string sub any_param(any p) { return p.fullType(); }
+string sub auto_param(auto p) { return p.fullType(); }
+string sub list_param(list<int> p) { return p.fullType(); }
+string sub hash_param(hash<string, int> p) { return p.fullType(); }
+# an `any` parameter of a method and of a closure strips as well
+class AnyParamStripC {
+    string m(any p) { return p.fullType(); }
+}
+
+list<int> li = (1, 2);
+hash<string, int> hi = {"a": 1};
+hash<AnyParamStripHd> hd = <AnyParamStripHd>{"a": 1};
+list<auto> la = (1, "x");
+code c = string sub (any p) { return p.fullType(); };
+
+printf("any list<int>: %s\n", any_param(li));
+printf("any hash<string, int>: %s\n", any_param(hi));
+printf("any hashdecl: %s\n", any_param(hd));
+printf("any list<auto>: %s\n", any_param(la));
+printf("any method list<int>: %s\n", (new AnyParamStripC()).m(li));
+printf("any closure hash<string, int>: %s\n", c(hi));
+printf("auto list<int>: %s\n", auto_param(li));
+printf("auto hash<string, int>: %s\n", auto_param(hi));
+printf("typed list<int>: %s\n", list_param(li));
+printf("typed hash<string, int>: %s\n", hash_param(hi));
+printf("caller: %s %s %s\n", li.fullType(), hi.fullType(), hd.fullType());
