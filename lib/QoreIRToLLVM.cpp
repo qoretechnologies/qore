@@ -4735,6 +4735,21 @@ bool QoreIRToLLVM::orderExceptionTemps(const std::vector<size_t>& indices, bool 
 
 // documented in QoreIRToLLVM.h
 void QoreIRToLLVM::emitOrderedErrorReturnTemps(llvm::Module& module, const std::vector<llvm::Value*>& temps) {
+    // the value of a return that the exception interrupts is kept until after the locals by the exit (see
+    // holding_return_values, qore#5941): a throw or rethrow without a handler in the frame releases the statement's
+    // temporaries here first, as from the exception cleanup block of a handler lowered inline that raises during a
+    // return (#6002)
+    if (!return_value_ids.empty()) {
+        std::vector<llvm::Value*> kept;
+        kept.reserve(temps.size());
+        for (llvm::Value* a : temps) {
+            if (!isReturnValueAlloca(a)) {
+                kept.push_back(a);
+            }
+        }
+        emitTempReleaseSequence(module, kept, 0, kept.size());
+        return;
+    }
     emitTempReleaseSequence(module, temps, 0, temps.size());
 }
 
