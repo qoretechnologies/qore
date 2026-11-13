@@ -2675,9 +2675,12 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     // the closure-bound locals that an on_block_exit handler declares are its own, as the body locals of a function
     // are: a catch variable of a catch block that ends in a throw or rethrow has no InstantiateLocal or
     // UninstantiateLocal, so it was taken for a variable of an outer scope, read from the runtime stack where it had
-    // never been instantiated, and a closure capturing it failed to find it
+    // never been instantiated, and a closure capturing it failed to find it; the handler's other locals have the
+    // variables on the runtime stack that the function instantiated (see getExitReleaseSequence(), #6002)
     for (const LocalVar* lv : func.handler_own_locals) {
-        current_body_locals.insert(reinterpret_cast<const void*>(lv));
+        if (lv->closureUse()) {
+            current_body_locals.insert(reinterpret_cast<const void*>(lv));
+        }
     }
 
     // First pass: identify block-scoped locals (those with explicit UninstantiateLocal
@@ -3709,6 +3712,34 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
             }
         }
     }
+    // the locals that an on_block_exit handler declares are released by the handler (#6002): they are no body locals
+    // of its IR function, as their variables on the runtime stack are those that the function the handler belongs to
+    // instantiated, so the handler releases their values, in the order of their slots, which the function reserved
+    // in declaration order (see QoreIRLowering::compileBlockHandlerIRs()); the function removes the variables
+    if (current_ir_func->parent_slot_count && !current_ir_func->handler_own_locals.empty()) {
+        std::vector<std::pair<uint32_t, const LocalVar*>> own;
+        for (const LocalVar* var : current_ir_func->handler_own_locals) {
+            if (!var || var->closureUse()) {
+                continue;
+            }
+            auto slot_it = current_ir_func->local_var_slots.find(var);
+            if (slot_it != current_ir_func->local_var_slots.end()) {
+                own.emplace_back(slot_it->second, var);
+            }
+        }
+        std::sort(own.begin(), own.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+        for (const auto& [slot, var] : own) {
+            const void* key = reinterpret_cast<const void*>(var);
+            ExitReleaseEntry entry{nullptr, const_cast<LocalVar*>(var)};
+            if (aot_mode) {
+                if (!aot_slots || !aot_slots->hasLocalSlot(key)) {
+                    continue;
+                }
+                entry.aot_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+            }
+            push_body(var, entry);
+        }
+    }
     // the iterator of a foreach statement goes before the first local whose slot is from its boundary on: the locals
     // of the loop body are released before it, and the loop variable and the locals declared before the statement
     // after it, as the AST interpreter releases the value the statement iterates when the statement ends; iterators
@@ -4704,6 +4735,21 @@ bool QoreIRToLLVM::orderExceptionTemps(const std::vector<size_t>& indices, bool 
 
 // documented in QoreIRToLLVM.h
 void QoreIRToLLVM::emitOrderedErrorReturnTemps(llvm::Module& module, const std::vector<llvm::Value*>& temps) {
+    // the value of a return that the exception interrupts is kept until after the locals by the exit (see
+    // holding_return_values, qore#5941): a throw or rethrow without a handler in the frame releases the statement's
+    // temporaries here first, as from the exception cleanup block of a handler lowered inline that raises during a
+    // return (#6002)
+    if (!return_value_ids.empty()) {
+        std::vector<llvm::Value*> kept;
+        kept.reserve(temps.size());
+        for (llvm::Value* a : temps) {
+            if (!isReturnValueAlloca(a)) {
+                kept.push_back(a);
+            }
+        }
+        emitTempReleaseSequence(module, kept, 0, kept.size());
+        return;
+    }
     emitTempReleaseSequence(module, temps, 0, temps.size());
 }
 
@@ -12791,6 +12837,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // reference enclosing function params).  A nullptr disables outer-scope
     // checks entirely.
     pre_instantiated_locals = &func.pre_instantiated_locals;
+    // the locals that an on_block_exit handler declares, other than closure-bound ones, have the variables on the
+    // runtime stack that the function the handler belongs to instantiated: native code accesses them there, as those
+    // of the function (the IR interpreter takes them for the handler's own, which is what they are, and native code
+    // releases them at the exception exit of the handler; see getExitReleaseSequence(), #6002)
+    if (func.parent_slot_count && !func.handler_own_locals.empty()) {
+        handler_pre_instantiated_locals = func.pre_instantiated_locals;
+        for (const LocalVar* lv : func.handler_own_locals) {
+            if (lv && !lv->closureUse()) {
+                handler_pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+            }
+        }
+        pre_instantiated_locals = &handler_pre_instantiated_locals;
+    }
 
     // Propagate IR-only locals set for optimization (skip runtime sync for these); the locals that keep a reference
     // they hold in their cache are stored as IR-only locals (see QoreIRFunction::reference_slot_locals)

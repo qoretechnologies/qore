@@ -3290,11 +3290,15 @@ public:
         @param cls the class being initialized
         @param final_func the parent class's method with final variants
         @param local true if this function is the class's own method, whose variants checkFinal() checks
+        @param hierarchy the functions of the method's name in the class hierarchy in the order of the inheritance
+        list, computed from the hierarchy as it is now; the inheritance list of the function itself is used if it is
+        not given.  The inheritance list is built when the method is added, and is incomplete if a parent class had
+        not resolved its own parent classes then (qore#5994)
 
         @return 0 for OK, -1 if a parse exception was raised
     */
     DLLLOCAL int checkFinalResolution(const qore_class_private& cls, const MethodFunctionBase& final_func,
-            bool local) const;
+            bool local, const ilist_t* hierarchy = nullptr) const;
 
     // virtual copy constructor
     DLLLOCAL virtual MethodFunctionBase* copy(const QoreClass* n_qc) const = 0;
