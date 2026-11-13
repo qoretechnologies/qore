@@ -7242,22 +7242,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             if (!inv->operands.empty()) {
                 auto* io_node = static_cast<const QoreInstanceOfOperatorNode*>(
                     inv->expr.getInternalNode());
-                const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                // the type parameters of a specialized function are bound statically; any others are those of the
+                // code that runs (qore#6016)
+                const QoreTypeInfo* ti = func->specializeType(io_node->getInstanceTypeInfo());
                 QoreValue val = getIRValue(values, inv->operands[0]);
-                qore_type_t t = val.getType();
-                switch (t) {
-                    case NT_WEAKREF:
-                        return QoreTypeInfo::runtimeAcceptsValue(ti,
-                            **val.get<const WeakReferenceNode>()) ? true : false;
-                    case NT_WEAKREF_HASH:
-                        return QoreTypeInfo::runtimeAcceptsValue(ti,
-                            **val.get<const WeakHashReferenceNode>()) ? true : false;
-                    case NT_WEAKREF_LIST:
-                        return QoreTypeInfo::runtimeAcceptsValue(ti,
-                            **val.get<const WeakListReferenceNode>()) ? true : false;
-                    default:
-                        return QoreTypeInfo::runtimeAcceptsValue(ti, val) ? true : false;
-                }
+                return QoreInstanceOfOperatorNode::runtimeInstanceOf(ti, val);
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
@@ -18953,27 +18942,12 @@ load_local_done:
                 if (!expr_inst->operands.empty()) {
                     auto* io_node = static_cast<const QoreInstanceOfOperatorNode*>(
                         expr_inst->expr.getInternalNode());
-                    const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                    // the type parameters of a specialized function are bound statically; any others are those of
+                    // the code that runs (qore#6016)
+                    const QoreTypeInfo* ti = func.specializeType(io_node->getInstanceTypeInfo());
                     QoreValue val = getIRValue(values, expr_inst->operands[0]);
-                    // Handle weak reference types like AST evalImpl
-                    qore_type_t t = val.getType();
-                    switch (t) {
-                        case NT_WEAKREF:
-                            res = QoreTypeInfo::runtimeAcceptsValue(ti,
-                                **val.get<const WeakReferenceNode>()) ? true : false;
-                            break;
-                        case NT_WEAKREF_HASH:
-                            res = QoreTypeInfo::runtimeAcceptsValue(ti,
-                                **val.get<const WeakHashReferenceNode>()) ? true : false;
-                            break;
-                        case NT_WEAKREF_LIST:
-                            res = QoreTypeInfo::runtimeAcceptsValue(ti,
-                                **val.get<const WeakListReferenceNode>()) ? true : false;
-                            break;
-                        default:
-                            res = QoreTypeInfo::runtimeAcceptsValue(ti, val) ? true : false;
-                            break;
-                    }
+                    // weak references are checked as their targets, as in the AST interpreter
+                    res = QoreInstanceOfOperatorNode::runtimeInstanceOf(ti, val);
                 } else {
                     res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
                         expr_inst->expr);
