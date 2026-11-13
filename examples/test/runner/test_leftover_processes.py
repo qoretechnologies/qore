@@ -10,8 +10,10 @@ needs, and ending it broke all the rootless containers of the host (found on a h
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
+import fcntl
 import os
 from pathlib import Path
+import select
 import shutil
 import signal
 import subprocess
@@ -22,7 +24,7 @@ import textwrap
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_watchdog import BUILD_DIR, HAVE_QORE, HAVE_TIMEOUT, ROOT, RunnerTree  # noqa: E402
+from test_watchdog import BUILD_DIR, HAVE_QORE, HAVE_TIMEOUT, ROOT, RUN_TESTS, RunnerTree, no_core_dumps  # noqa: E402
 
 PODMAN_TEST = ROOT / "examples/test/qlib/RestClient/RestClientPoolPerf.qtest"
 
@@ -93,10 +95,68 @@ class LeftoverProcessesTest(unittest.TestCase):
             self.assertIn("sleep 302", result.output)
             self.assertNotIn("FAILURE: the test left processes running; they are killed: ***\n  pid %d" % helper_pid,
                              result.output)
-            self.assertIn("not ending process %d" % helper_pid, result.output, "the skipped helper is not noted")
+            self.assertEqual(1, result.output.count("not ending process %d:" % helper_pid),
+                             "the skipped helper is noted once\n" + result.output)
             self.assertTrue(alive(helper_pid), "the user's helper was killed by the runner\n" + result.output)
             # the leak is killed with SIGKILL before the runner returns (a zombie is not running)
             self.assertFalse(alive(leaked_pid), "the process the test leaked was not killed")
+
+    def test_interrupted_run_notes_an_excused_helper_once(self):
+        # an interrupted runner looks for survivors twice (when its trap ends the test, and when it has waited for it),
+        # and finds the excused helper both times: the note is printed once
+        if not can_make_user_namespace():
+            self.skipTest("user namespaces are not available")
+        with tempfile.TemporaryDirectory(prefix="qore-runner-leftover-") as directory:
+            tree = RunnerTree(directory)
+            ready_r, ready_w = os.pipe()
+            # at a descriptor that the runner does not use (it uses 4 and 5)
+            ready_fd = fcntl.fcntl(ready_w, fcntl.F_DUPFD, 50)
+            os.close(ready_w)
+            hold = tree.root / "hold"
+            os.mkfifo(hold)
+            tree.add_test("blocks.qtest", f"""\
+                # test-timeout: 600
+                import os
+                import subprocess
+                import sys
+                import time
+                helper = subprocess.Popen(["unshare", "-U", "--map-root-user", "sleep", "306"],
+                                          start_new_session=True, stdin=subprocess.DEVNULL,
+                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                mine = os.readlink("/proc/self/ns/user")
+                deadline = time.monotonic() + 30
+                while os.readlink("/proc/%d/ns/user" % helper.pid) == mine:
+                    if helper.poll() is not None or time.monotonic() > deadline:
+                        sys.exit("the helper did not make its user namespace")
+                    os.sched_yield()
+                os.write({ready_fd}, b"%d\\n" % helper.pid)
+                open({str(hold)!r}).read()
+                """)
+            runner = None
+            try:
+                output_path = tree.root / "runner.out"
+                with open(output_path, "wb") as output_file:
+                    runner = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree.root, env=tree.env(),
+                                              stdout=output_file, stderr=subprocess.STDOUT, pass_fds=(ready_fd,),
+                                              preexec_fn=no_core_dumps)
+                os.close(ready_fd)
+                readable, _, _ = select.select([ready_r], [], [], 120)
+                self.assertEqual([ready_r], readable, "the test did not start")
+                data = os.read(ready_r, 100)
+                self.assertNotEqual(b"", data, "the run ended before the test started")
+                helper_pid = int(data)
+                self.pids.append(helper_pid)
+                runner.send_signal(signal.SIGTERM)
+                runner.wait(timeout=120)
+                output = output_path.read_text()
+                self.assertEqual(-signal.SIGTERM, runner.returncode, output)
+                self.assertEqual(1, output.count("not ending process %d:" % helper_pid), output)
+                self.assertTrue(alive(helper_pid), "the runner ended the user's helper\n" + output)
+            finally:
+                if runner is not None and runner.poll() is None:
+                    runner.kill()
+                    runner.wait()
+                os.close(ready_r)
 
     def test_namespaced_leak_that_holds_the_output_of_the_test_is_reported(self):
         # a leak in a user namespace of its own that holds the test's output keeps a CI job from ending, so the

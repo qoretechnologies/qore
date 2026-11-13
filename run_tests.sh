@@ -928,6 +928,8 @@ runner_descendants() {
 # process tree (adopted by init after its parent ended) holding the output is not found.  The output of a test of a
 # parallel run is its log, in the run's own directory, which no other runner holds: every process that holds it is
 # one, wherever it is in the process tree.
+# SURVIVORS_NOTED: the "mark/pid" of each process that find_test_survivors has noted as excused
+SURVIVORS_NOTED=""
 find_test_survivors() {
     TEST_SURVIVORS=""
     if [ ! -r /proc/self/environ ]; then
@@ -1007,9 +1009,17 @@ find_test_survivors() {
             if [ -z "$survivor_ns" ] || [ "$survivor_ns" = "$survivor_runner_ns" ]; then
                 survivors_reported="$survivors_reported$survivor_pid "
             else
-                survivor_cmd=`tr '\0' ' ' < /proc/$survivor_pid/cmdline 2>/dev/null`
-                echo "note: not ending process $survivor_pid: $survivor_cmd: it is in a user namespace of its own" \
-                    "and holds no output of the test" >&2
+                # find_test_survivors runs more than once for a test (after it, and when a run is interrupted): the
+                # note is printed once per process of a test
+                case "$SURVIVORS_NOTED" in
+                    *" $1/$survivor_pid "*) ;;
+                    *)
+                        SURVIVORS_NOTED="$SURVIVORS_NOTED $1/$survivor_pid "
+                        survivor_cmd=`tr '\0' ' ' < /proc/$survivor_pid/cmdline 2>/dev/null`
+                        echo "note: not ending process $survivor_pid: $survivor_cmd: it is in a user namespace of" \
+                            "its own and holds no output of the test" >&2
+                        ;;
+                esac
             fi
         done
         TEST_SURVIVORS=$survivors_reported
