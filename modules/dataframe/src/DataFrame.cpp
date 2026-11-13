@@ -406,6 +406,7 @@ static bool qoreDataFrameLessThan(QoreValue lhs, QoreValue rhs, ExceptionSink* x
             case NT_FLOAT:
                 return l.get<const QoreNumberNode>()->lessThan(r.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return l.get<const QoreNumberNode>()->lessThan(r.getAsBigInt());
             default: {
@@ -419,6 +420,7 @@ static bool qoreDataFrameLessThan(QoreValue lhs, QoreValue rhs, ExceptionSink* x
             case NT_FLOAT:
                 return r.get<const QoreNumberNode>()->greaterThan(l.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return r.get<const QoreNumberNode>()->greaterThan(l.getAsBigInt());
             default: {

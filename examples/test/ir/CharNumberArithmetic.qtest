@@ -25,8 +25,9 @@
     the number conversions and the compound assignment operators to chars and numbers, with typed and untyped
     operands, typed results (parse-time types), constant expressions folded at parse time, multibyte chars and
     list and hash elements; each function is called three times, in every execution mode and as qcc executables
-    compiled with \c -O0 and \c -O3 (see ExecModeOutputTest).  The \c + operator treats a char as a string, and is
-    tested with the char concatenation tests.
+    compiled with \c -O0 and \c -O3 (see ExecModeOutputTest).  The \c + operator with a char is not tested here: a
+    change pending on the feature/char-plus-concatenation branch makes it add a char as a one-character string, and
+    its tests cover it; \c += on a \c number lvalue, which adds the code point either way, is tested here.
 */
 class CharNumberArithmeticTest inherits ExecModeOutputTest {
     public {
@@ -82,13 +83,16 @@ string sub lvalues(char c, number n) {
     b *= c;
     number d = n;
     d /= c;
+    # a number lvalue adds the code point, whatever the + operator does with a char
+    number e = n;
+    e += c;
     auto x = c;
     x *= n;
     auto y = c;
     y /= n;
     auto z = c;
     z -= n;
-    return sprintf("%s %s %s %s %s %s", t(a), t(b), t(d), t(x), t(y), t(z));
+    return sprintf("%s %s %s %s %s %s %s", t(a), t(b), t(d), t(e), t(x), t(y), t(z));
 }
 
 string sub containerElements(char c, number n) {
@@ -126,7 +130,7 @@ for (int i = 0; i < 3; ++i) {
             "typed 95 194 48.5 | 128510 257024 64256",
             "minmax 1:number a:char 1:number a:char | a:char 98:number a:char 98:number",
             "conv 97:number 97:number",
-            "lvalues 97:number 18818:number 2:number 18818:number 0.5:number -97:integer",
+            "lvalues 97:number 18818:number 2:number 291:number 18818:number 0.5:number -97:integer",
             "elements 194:number 48.5:number",
             "folded [95.5, 194, 48.5, False, True, 3.5]",
         );

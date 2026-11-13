@@ -200,6 +200,7 @@ bool QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals(const Qor
             case NT_FLOAT:
                 return l.get<const QoreNumberNode>()->greaterThanOrEqual(r.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return l.get<const QoreNumberNode>()->greaterThanOrEqual(r.getAsBigInt());
             default: {
@@ -215,6 +216,7 @@ bool QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals(const Qor
             case NT_FLOAT:
                 return r.get<const QoreNumberNode>()->lessThanOrEqual(l.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return r.get<const QoreNumberNode>()->lessThanOrEqual(l.getAsBigInt());
             default: {
