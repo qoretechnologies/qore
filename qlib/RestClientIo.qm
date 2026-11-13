@@ -1084,7 +1084,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! Canonical set of option keys accepted by @ref RestClientIo::constructor()
             /** Other keys are ignored, so that a subclass or a connection can pass options of its own in the same
                 hash; this set includes the options of @ref RestClient::RestConnection "RestConnection", so that
-                @ref RestClient::RestConnection::getAsyncImpl() "getAsyncImpl()" can pass its full options hash
+                @ref RestClient::AbstractRestConnection::getAsyncImpl() "getAsyncImpl()" can pass its full options hash
                 verbatim.
             */
             const hash<string, bool> KnownOptions = {
@@ -5487,6 +5487,16 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
             saved_client_opts = client_opts;
         }
 
+        #! Returns the statistics of the connection pool
+        /** @return the statistics of the connection pool, as
+            @ref Qore::Thread::AbstractConnectionPool::getStats() "AbstractConnectionPool::getStats()" returns them;
+            this overrides both @ref RestClientIo::getStats() "RestClientIo::getStats()" and the pool's method, so
+            a call typed against either class gets the same statistics (issue #5838)
+        */
+        hash<ConnectionPoolStats> getStats() {
+            return AbstractConnectionPool::getStats();
+        }
+
         #! Shuts down the pool and closes the connection
         shutdown() {
             AbstractConnectionPool::shutdown();
@@ -6724,7 +6734,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
 
     private {
         #! Strong reference to the connection for the lifetime of this polling operation
-        RestClient::RestConnection conn;
+        RestClient::AbstractRestConnection conn;
 
         #! Ping options
         hash<auto> ping_opts;
@@ -6854,7 +6864,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
             openapi3, swagger, oauth2_auto_refresh, etc.)
         @param logger optional logger
     */
-    constructor(RestClient::RestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
+    constructor(RestClient::AbstractRestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
         self.conn = conn;
         self.ping_opts = ping_opts;
         self.logger = logger;

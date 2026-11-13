@@ -181,6 +181,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - @ref ConnectionProvider::AbstractConnection::parseUrl() "AbstractConnection::parseUrl()" is declared to return
+      \c hash<auto>, as a connection with another URL scheme returns its own hash (see @ref override_return_types)
     - a sandboxed caller is refused the I/O of a connection whose class belongs to a module that registers a data
       provider app with external I/O that is not sandbox-aware (\c APP-SANDBOX-ACCESS-DENIED), also when trusted code
       created the connection: @ref ConnectionProvider::AbstractConnection::get() "AbstractConnection::get()",

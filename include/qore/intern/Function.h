@@ -2946,6 +2946,16 @@ public:
     DLLLOCAL int checkFinal() const;
     DLLLOCAL int checkConstOverrides() const;
 
+    //! raises a parse exception if a variant that calls of the class resolve before the parent class method returns a
+    //! type that the parent class method's return type does not accept, when a call of it can select the variant
+    /** This method is the method that calls of the class \a cls start at (its own method of the name, or the one
+        that it inherits first); the variants of the methods before \a parent_func in its resolution order are
+        selected before the parent class method's, and all of them when \a parent_func is not in it; with \a own_only,
+        only the variants of this method itself (issue #5838)
+    */
+    DLLLOCAL int checkReturnTypeResolution(const qore_class_private& cls, const MethodFunctionBase& parent_func,
+            bool own_only) const;
+
     //! returns true if the method has a final variant
     DLLLOCAL bool hasFinal() const {
         return has_final;

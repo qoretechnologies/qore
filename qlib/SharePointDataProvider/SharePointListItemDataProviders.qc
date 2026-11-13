@@ -126,7 +126,7 @@ public class SharePointListItemsDataProvider inherits SharePointDataProviderBase
         return RecordType.getFields();
     }
 
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return new DefaultRecordIterator<hash<auto>>(
             new ListIterator<hash<auto>>(getItems(search_options)), where_cond);

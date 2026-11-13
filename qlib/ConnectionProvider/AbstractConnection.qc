@@ -1205,7 +1205,9 @@ conn.checkSandboxAccess(True);
         Reimplement \c parseUrl() if your connection uses different URL scheme.
         Like eg. Qore::Datasource connection string.
     */
-    private hash<UrlInfo> parseUrl(string url) {
+    # returns hash<auto>: a connection with another URL scheme returns its own hash (DatasourceConnection returns the
+    # hash of parse_datasource()), which is stored in urlh (issue #5838)
+    private hash<auto> parseUrl(string url) {
         return Qore::parse_url(url);
     }
 

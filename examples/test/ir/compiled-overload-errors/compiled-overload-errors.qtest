@@ -28,6 +28,8 @@
     - a variant resolved again at run time and found to be another one (a base class's, another overload) is called
       with the arguments as the caller gave them; the AST interpreter called it without arguments, and with the
       arguments converted for the variant that did not match
+    - #5838: a call typed against a parent class trusts its return type, so a child class variant that it can select
+      must return a compatible type, which the parser enforces: the output is the same in every mode
 
     The scripts next to the test run in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
     their output must be that of the AST interpreter, which the test runs first.  The output of the AST interpreter
@@ -37,7 +39,7 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
     public {
         #! the scripts
         const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins", "assigned", "named",
-            "access-control", "or-nothing-casts");
+            "access-control", "or-nothing-casts", "override-returns");
     }
 
     private {
@@ -55,9 +57,12 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
         dir = get_script_dir();
         foreach string script in (Scripts) {
-            addTestCase(script + ": execution modes", sub () { modesTest(script); });
-            addTestCase(script + ": AOT executable -O0", sub () { aotTest(script, "-O0"); });
-            addTestCase(script + ": AOT executable -O3", sub () { aotTest(script, "-O3"); });
+            # a local of the loop's block is a new variable in each iteration; the loop variable itself is one
+            # variable, which all closures would see with its last value
+            string name = script;
+            addTestCase(name + ": execution modes", sub () { modesTest(name); });
+            addTestCase(name + ": AOT executable -O0", sub () { aotTest(name, "-O0"); });
+            addTestCase(name + ": AOT executable -O3", sub () { aotTest(name, "-O3"); });
         }
         addTestCase("named call binding conflict", \namedBindingConflictTest());
         set_return_value(main());

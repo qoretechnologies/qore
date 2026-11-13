@@ -345,6 +345,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - \c WebSocketConnectionObject::getImpl() is declared to return a
+      @ref WebSocketClient::WebSocketClient "WebSocketClient", as subclasses return other clients (see
+      @ref override_return_types); \c getAsync() raises \c CONNECTION-ASYNC-UNSUPPORTED for a connection whose client
+      is not a @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization"
     - a connection closed because a message was larger than the maximum message size of 16 MiB is reported with its
       close code 1009 (Message Too Big) and reason, on HTTP/1.1, HTTP/2 and HTTP/3: added
       @ref WebSocketClient::WebSocketClient::getCloseCode() "WebSocketClient::getCloseCode()" and
@@ -6375,7 +6379,9 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 
         @return a @ref WebSocketClient object
     */
-    private WebSocketClientWithSerialization getImpl(bool connect = True, *hash<auto> rtopts) {
+    # returns a WebSocketClient: a subclass's connection can return another WebSocketClient (SewioWebSocketClient);
+    # this class's own client is a WebSocketClientWithSerialization (issue #5838)
+    private WebSocketClient getImpl(bool connect = True, *hash<auto> rtopts) {
         # to avoid type issues with rtopts
         if (rtopts) {
             rtopts = {} + rtopts;
@@ -6402,10 +6408,19 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 
         @return an async-I/O-capable @ref WebSocketClientWithSerialization object
 
+        @throw CONNECTION-ASYNC-UNSUPPORTED the client of the connection (from a subclass's getImpl()) is not a
+        @ref WebSocketClientWithSerialization object
+
         @since WebSocketClient 2.5
     */
     private WebSocketClientWithSerialization getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
-        return getImpl(connect, rtopts);
+        WebSocketClient client = getImpl(connect, rtopts);
+        if (!(client instanceof WebSocketClientWithSerialization)) {
+            throw "CONNECTION-ASYNC-UNSUPPORTED", sprintf("connection %y (%s) does not provide an async-I/O-capable "
+                "WebSocketClientWithSerialization object; its client is %y", name, self.className(),
+                client.className());
+        }
+        return cast<WebSocketClientWithSerialization>(client);
     }
 
     #! returns an WebSocketClientDelayedDataProvider object for this connection

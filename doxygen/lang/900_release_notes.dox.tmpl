@@ -85,6 +85,17 @@
     as it does when it adds the value at the end (ex: \c list&lt;int&gt; for <tt>1 + l</tt> for a \c list&lt;int&gt;
     \c l); it gave a \c list&lt;auto&gt;, so a value of another type could be assigned to an element of the result.
 
+    @par Child Class Methods Must Return a Type Compatible With the Parent Class Method
+    A child class method variant that overrides a parent class variant, or that a call typed against the parent class
+    can select, must return the parent class variant's type or a narrower one, or the class raises a
+    \c PARSE-TYPE-ERROR; see @ref override_return_types.
+
+    @par Builtin Methods That Subclasses Override Return Wider Types
+    @ref Qore::HTTPClient::get() "HTTPClient::get()" and @ref Qore::HTTPClient::post() "HTTPClient::post()" return
+    <tt>union&lt;*data, hash&lt;auto&gt;&gt;</tt>, @ref Qore::HTTPClient::getDefaultHeaders() "HTTPClient::getDefaultHeaders()"
+    <tt>hash&lt;auto&gt;</tt> and @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()" an or-nothing
+    hash, as subclasses return; code that assigns their results to narrower types must accept the wider ones.
+
     @par Plain Function Bodies No Longer Inherit a Caller's Class Context
     A plain function's body could be parse-initialized in the class context of the method that first called it, which
     gave it access to that class's private and static members depending on the parse order; such code now raises a
@@ -1296,6 +1307,9 @@
         killed (ex: during RAC rolling patching) or the connection is lost
       - see @ref sqlutilv3_11_0 for all changes
 
+    - @ref tablemapperintro "TableMapper" module
+      - see @ref tablemapperv1_3_1 for all changes
+
     - @ref utilintro "Util" module
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
         use @ref httpclientiointro "HttpClientIo"
@@ -1329,6 +1343,9 @@
       - @ref WebUtil::FileHandler "FileHandler" sends caching headers, answers conditional and range requests, and
         serves pre-compressed files
       - see @ref webutil_v1_8_1 for all changes
+
+    - @ref zeyosrestclientintro "ZeyosRestClient" module
+      - see @ref Zeyosrestclientv1_2 for all changes
 
     @subsection qore_3_0_0_new_builtin_modules New Builtin Modules
 
