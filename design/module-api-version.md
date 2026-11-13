@@ -111,3 +111,9 @@ ordinary slot, preserving one virtual dispatch and using their declaration-bound
 The public vtable changes, so `QORE_MODULE_API_MINOR` is incremented in the same change. The provisional assigned version is 2.3. `qore_mod_api_list` continues to contain only the current API, and older
 modules are refused by the existing API-mismatch path. Rebuild every external module against the new headers.
 No AOT serialization layout, opcode, or feature bit is added; the runtime identity changes.
+
+The same unpublished API 2.3 change adds an internal `AbstractCallReferenceNode::getSandboxBoundCallback()`
+slot. Its default returns no edge; the runtime sandbox wrapper exposes its borrowed, immutable callback through
+an override. Cycle scanning therefore identifies wrappers without RTTI name comparisons on ordinary callbacks.
+Existing native subclasses inherit the default unchanged. This slot also applies safely to unresolved call
+references; no data member or node type is added.

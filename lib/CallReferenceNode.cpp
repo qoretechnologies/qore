@@ -323,6 +323,10 @@ AbstractCallReferenceNode::AbstractCallReferenceNode(bool n_needs_eval, bool n_t
 AbstractCallReferenceNode::~AbstractCallReferenceNode() {
 }
 
+const ResolvedCallReferenceNode* AbstractCallReferenceNode::getSandboxBoundCallback() const {
+    return nullptr;
+}
+
 // parse types should never be copied
 AbstractQoreNode* AbstractCallReferenceNode::realCopy() const {
     assert(false);
@@ -1695,6 +1699,7 @@ public:
     QoreFunction* getFunction() const override { return callback->getFunction(); }
     QoreProgram* getProgram() const override { return callback->getProgram(); }
     const ResolvedCallReferenceNode* getCallback() const { return callback; }
+    const ResolvedCallReferenceNode* getSandboxBoundCallback() const override { return callback; }
     bool isTrusted() const { return trusted; }
 
 protected:
@@ -1715,8 +1720,10 @@ private:
 }
 
 const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback) {
-    const auto* bound = dynamic_cast<const SandboxBoundCallReference*>(callback);
-    return bound ? bound->getCallback() : nullptr;
+    if (!callback || callback->getType() != NT_FUNCREF) {
+        return nullptr;
+    }
+    return static_cast<const AbstractCallReferenceNode*>(callback)->getSandboxBoundCallback();
 }
 
 ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,

@@ -34,6 +34,7 @@
 #define _QORE_FUNCTIONREFERENCENODE_H
 
 class RuntimeConfig;
+class ResolvedCallReferenceNode;
 
 //! base class for call references, reference-counted, dynamically allocated only
 /** cannot be a ParseNode or SimpleQoreNode because we require deref(xsink)
@@ -110,6 +111,18 @@ private:
     /** in debug mode this function calls assert(false)
     */
     DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
+
+    friend const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback);
+
+    //! Internal cycle-collector edge for a sandbox-bound callback.
+    /** The default returns nullptr for ordinary and unresolved call references. The runtime's sandbox wrapper
+        overrides this entry to expose its immutable, borrowed callback without RTTI or a reference-count change.
+        Native subclasses inherit the default; they do not need to implement this entry.
+
+        @return the borrowed wrapped callback, or nullptr for a call reference that is not sandbox-bound
+        @note This entry is part of the module API 2.3 vtable change; modules must rebuild for that API.
+    */
+    DLLEXPORT virtual const ResolvedCallReferenceNode* getSandboxBoundCallback() const;
 };
 
 class QoreFunction;
