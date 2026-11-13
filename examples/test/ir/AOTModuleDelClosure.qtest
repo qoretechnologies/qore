@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - the checks compile modules with qcc and run the interpreter in child processes
+# test-platform: macos - qcc compiles the module to native code and the interpreter loads it as a binary module
 
 %modern
 %no-child-restrictions
