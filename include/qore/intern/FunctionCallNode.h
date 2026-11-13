@@ -463,7 +463,14 @@ public:
     */
     DLLLOCAL int parseInitReplacementCall(QoreValue& val, QoreParseContext& parse_context) {
         int rc = parseInitFinalizedCall(val, parse_context);
-        setParseAnalysis(parse_context.analysis);
+        // parseInitFinalizedCall() can replace this call in val and release it (a named call whose variant is
+        // resolved at run time becomes a RuntimeNamedFunctionCallNode: makeRuntimeNamed()), so this call must not be
+        // used after it: the analysis is recorded on the node that val holds, which is this call or its replacement
+        ParseNode* call = dynamic_cast<ParseNode*>(val.getInternalNode());
+        assert(call);
+        if (call) {
+            call->setParseAnalysis(parse_context.analysis);
+        }
         return rc;
     }
 
