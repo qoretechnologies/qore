@@ -3517,6 +3517,11 @@ static bool methodVariantInlineEligibleForInterpreter(const AbstractQoreFunction
 }
 
 static inline bool exactPrimitiveTypeAcceptsValue(const QoreTypeInfo* type_info, const QoreValue& value) {
+    // an enum member has the type of its base value, but is not a value of the plain type: the assignment converts it
+    // to the declared type (qore#6042)
+    if (value.isEnum()) {
+        return false;
+    }
     qore_type_t value_type = value.getType();
     return (type_info == bigIntTypeInfo && value_type == NT_INT)
         || (type_info == floatTypeInfo && value_type == NT_FLOAT)
@@ -8030,14 +8035,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         val.refSelf();
                     }
 
-                    // Apply type filter like JIT path: match instantiateFastCallParams in JITRuntime.cpp
+                    // Apply type filter like JIT path: match instantiateFastCallParams in JITRuntime.cpp; an enum
+                    // member takes the parameter's type (the base value for a plain type), which needs no filter of
+                    // the type, so it is converted too (qore#6042)
                     const LocalVar* lv = i < static_cast<int>(func.interpreter_param_local_vars.size())
                         ? func.interpreter_param_local_vars[static_cast<size_t>(i)]
                         : nullptr;
                     if (lv) {
                         const QoreTypeInfo* paramTypeInfo = lv->getTypeInfo();
                         if (!exactPrimitiveTypeAcceptsValue(paramTypeInfo, val)
-                                && QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+                                && (val.isEnum() || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val))) {
                             QoreTypeInfo::acceptInputParam(paramTypeInfo, i, lv->getName(), val, xsink);
                             if (*xsink) {
                                 val.discard(xsink);
