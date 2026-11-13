@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT code for hash literals in generic classes and functions
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class GenericHashLiteralTypeParamTest
+
+#! A hash literal that takes its value type from a type with a type parameter has the type argument (qore#5872)
+/** A hash literal assigned to an lvalue whose type has a type parameter (a member, a local variable) takes the value
+    type of the lvalue; the AST interpreter created the hash with the type parameter itself as its value type, so the
+    first value raised RUNTIME-TYPE-ERROR (ex: <tt>key 'a' expects type 'T'</tt>), and an empty hash literal could not
+    be assigned.  The probes (generic-hash-literal-type-param/probes.q: members, or-nothing members, local variables,
+    values from calls, an empty literal, a literal in a closure and in a background thread, nested list values, a
+    value of a wrong type, a generic function) run at the top level and in a child Program, in each execution mode in
+    a child process, at the IR tier and promoted to native code with tiered execution, and as qcc-compiled
+    executables (-O0, -O3), and in a child Program with %strict-bool-eval (a lexical semantic policy that filters
+    values) in the AST interpreter.
+*/
+class GenericHashLiteralTypeParamTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "{a: 1} (hash<string, int>)\n"
+            "{b: 1, c: 1} (hash<string, int>)\n"
+            "{d: 1} (hash<string, int>)\n"
+            "{} (hash<string, int>)\n"
+            "[1, 1] (list<int>)\n"
+            "{e: [\"x\"]} (hash<string, list<string>>)\n"
+            "[{f: \"x\"}] (list<hash<string, string>>)\n"
+            "{g: 1} (hash<string, int>)\n"
+            "{i: 1} (hash<string, int>)\n"
+            "{j: 1} (hash<string, int>)\n"
+            "RUNTIME-TYPE-ERROR: key 'k' expects type 'int', but got type 'string' instead\n"
+            "{m: 3} (hash<string, int>)\n"
+            "{m: \"y\"} (hash<string, string>)\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probes;
+    }
+
+    constructor() : QUnit::Test("GenericHashLiteralTypeParam", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        probes = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "generic-hash-literal-type-param" + DirSep
+            + "probes.q");
+
+        addTestCase("a hash literal with a generic value type has the type argument in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-generic-hash-literal-type-param-");
+        # the probes at the top level, and in a child Program whose source is the same file
+        string top = tmp.path + DirSep + "top.q";
+        writeFile(top, probes + "\nprint(probes() + \"\\n\");\n");
+        string probes_file = tmp.path + DirSep + "probes.q";
+        writeFile(probes_file, probes);
+        string child = tmp.path + DirSep + "child.q";
+        writeFile(child, sprintf("%%modern\nProgram p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS "
+            "| PO_STRONG_ENCAPSULATION);\np.parse(ReadOnlyFile::readTextFile(%y), \"probes\");\n"
+            "print(p.callFunction(\"probes\") + \"\\n\");\n", probes_file));
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        # the probes in a child Program with a lexical semantic policy that filters values (%strict-bool-eval), whose
+        # literals have classes of their own; only the AST interpreter runs code without %modern
+        string strict = tmp.path + DirSep + "strict.q";
+        writeFile(strict, sprintf("%%new-style\n%%require-types\n%%strict-args\nProgram p(PO_NEW_STYLE "
+            "| PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRICT_BOOLEAN_EVAL);\nstring src = "
+            "ReadOnlyFile::readTextFile(%y);\nsrc =~ s/^%%modern\\n//;\np.parse(src, \"probes\");\n"
+            "print(p.callFunction(\"probes\") + \"\\n\");\n", probes_file));
+        assertEq(Expected, backquote(sprintf("%s %s --exec-mode=ast %s 2>&1", env, qore_bin, strict)),
+            "strict.q: ast");
+        foreach string file in (top, child) {
+            string label = basename(file);
+            foreach string mode in (ExecModes) {
+                assertEq(Expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)),
+                    sprintf("%s: %s", label, mode));
+            }
+            # tiered execution kept at the IR tier, and promoted to native code
+            assertEq(Expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), label + ": tiered, IR tier");
+            assertEq(Expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1 %s 2>&1", env, qore_bin, file)), label + ": tiered, promoted");
+
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = file + opt;
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                    file));
+                assertTrue(is_file(exe), sprintf("%s: qcc %s compiled the executable: %s", label, opt, out));
+                assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                    libqore_dir, exe)), sprintf("%s: qcc %s", label, opt));
+            }
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}
