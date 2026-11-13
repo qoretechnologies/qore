@@ -7786,18 +7786,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Dirty parent-slot writeback uses this to read the authoritative runtime
     // local value instead of an invalidated cache entry.
     std::vector<LocalVar*> parent_slot_to_lvar;
-    // the parent slots of the closure-bound locals that this handler declares itself (see the handler's own locals in
+    // the parent slots of the locals that this handler declares itself (see the handler's own locals in
     // buildInterpreterAnalysis()): they do not hold the parent's values, so they are neither read from nor written
-    // back to the parent; written back, the variable, uninstantiated by then, raised an LVALUE-ERROR after the
-    // handler, which was chained to the exception that ran it (qore#5653)
+    // back to the parent; written back, a closure-bound variable, uninstantiated by then, raised an LVALUE-ERROR
+    // after the handler, which was chained to the exception that ran it (qore#5653), and the value of another one was
+    // kept by the function until its end (#6002)
     std::vector<bool> handler_own_slot(func.parent_slot_count, false);
+    // the locals of those slots, which the handler releases at its exit (#6002)
+    std::vector<const LocalVar*> handler_own_slot_lvar;
     if (func.parent_slot_count > 0) {
         parent_slot_to_lvar.resize(func.parent_slot_count, nullptr);
         for (auto& [lvar, slot_id] : func.local_var_slots) {
             if (lvar && slot_id < func.parent_slot_count) {
-                if (lvar->closureUse()
-                        && !func.pre_instantiated_locals.count(reinterpret_cast<const void*>(lvar))) {
+                if (!func.pre_instantiated_locals.count(reinterpret_cast<const void*>(lvar))) {
                     handler_own_slot[slot_id] = true;
+                    if (handler_own_slot_lvar.empty()) {
+                        handler_own_slot_lvar.resize(func.parent_slot_count, nullptr);
+                    }
+                    handler_own_slot_lvar[slot_id] = lvar;
                     continue;
                 }
                 parent_slot_to_lvar[slot_id] = const_cast<LocalVar*>(lvar);
@@ -7836,6 +7842,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     if (func.parent_slot_count > 0 && parent_slot_cache) {
         assert(parent_slot_cache->size() >= func.parent_slot_count);
         for (uint32_t i = 0; i < func.parent_slot_count; ++i) {
+            // a local that the handler declares starts without a value in the handler (#6002)
+            if (handler_own_slot[i]) {
+                continue;
+            }
             // Copy parent's value into handler's slot (with reference counting); raw slot: the value is copied
             // as it is stored
             const QoreValue& parent_val = (*parent_slot_cache)[i];
@@ -8238,6 +8248,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
             locals_slot_cache.release(i, xsink);
             locals_slot_cache.set(i, QoreValue());
+            // a local that a handler declares is released at the exit of the handler, whose frame it belongs to,
+            // though its variable on the runtime stack is the function's (#6002)
+            if (!preserve_ir_only && i < handler_own_slot_lvar.size() && handler_own_slot_lvar[i]
+                    && !handler_own_slot_lvar[i]->closureUse()) {
+                if (LocalVarValue* lvv = thread_try_find_lvar(handler_own_slot_lvar[i])) {
+                    lvv->del(xsink);
+                }
+            }
             // at the exit of the function, the value of a local on the runtime stack is released at its slot's
             // place too (see SlotCacheCleanup)
             if (!preserve_ir_only && i < func.interpreter_slot_locals.size()

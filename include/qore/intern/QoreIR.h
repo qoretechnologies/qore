@@ -3929,11 +3929,11 @@ public:
     // At runtime, parent's local values are copied into these inherited slots
     uint32_t parent_slot_count = 0;
 
-    //! For handler IR functions: the closure-bound parent-slot locals that the handler declares itself
-    /** The lowering of a handler records the closure-bound locals of the handler code (including those of its
-        nested handlers), which it does not mark pre-instantiated, and the IR serialization writes their slots
-        (from QORE_AOT_HANDLER_OWN_LOCALS_VERSION), so that a handler read from serialized IR gets the same
-        pre-instantiated locals (see restoreHandlerPreInstantiatedLocals()).
+    //! For handler IR functions: the parent-slot locals that the handler declares itself
+    /** The lowering of a handler records the locals of the handler code (including those of its nested handlers),
+        which it does not mark pre-instantiated (closure-bound ones since qore#5653, the others since #6002), and the
+        IR serialization writes their slots (from QORE_AOT_HANDLER_OWN_LOCALS_VERSION), so that a handler read from
+        serialized IR gets the same pre-instantiated locals (see restoreHandlerPreInstantiatedLocals()).
     */
     std::unordered_set<const LocalVar*> handler_own_locals;
 
@@ -4252,9 +4252,9 @@ public:
     std::unordered_set<const LocalVar*> deriveHandlerOwnClosureLocalsFromIR() const;
 
     //! Marks the parent-slot locals of an on_block_exit handler read from serialized IR pre-instantiated
-    /** The lowering of a handler marks every parent slot pre-instantiated except the closure-bound locals that the
-        handler declares (handler_own_locals), and the IR interpreter reads and writes back the values of the parent's
-        variables only for the pre-instantiated ones.  Serialized IR has no pre-instantiated locals, so a handler read
+    /** The lowering of a handler marks every parent slot pre-instantiated except the locals that the handler declares
+        (handler_own_locals), and the IR interpreter reads and writes back the values of the parent's variables only
+        for the pre-instantiated ones.  Serialized IR has no pre-instantiated locals, so a handler read
         from it (an AOT closure run from its IR, or lazy debugger IR) has to restore them from the handler's own locals
         that the artifact records (or, for an older artifact, that its IR gives; see
         deriveHandlerOwnClosureLocalsFromIR()): without them, the handler took every closure-bound variable of the
