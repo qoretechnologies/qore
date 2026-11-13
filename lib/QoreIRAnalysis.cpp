@@ -14441,6 +14441,18 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
             && (type != NT_INT
                 || !QoreTypeInfo::getReturnEnum(value_type));
     };
+    //! returns true if the value may be NOTHING: its type allows NOTHING and nothing proves that it is not
+    /** The specialization of an operator to native arithmetic converts NOTHING to 0 or 0.0, where the operators give
+        NOTHING for two operands with no value and the other operand, in its own type, for one (qore#5889)
+    */
+    auto may_be_nothing = [&](QoreIRValue value) {
+        const QoreIRValueFacts* facts = func.getValueFacts(value);
+        if (!facts || !facts->type_info) {
+            return true;
+        }
+        return !facts->never_nothing
+            && QoreTypeInfo::parseReturns(facts->type_info, NT_NOTHING) != QTI_NOT_EQUAL;
+    };
     auto int_opcode = [&](QoreIROpcode opcode) {
         switch (opcode) {
             case QoreIROpcode::AddAny: return QoreIROpcode::AddInt;
@@ -14594,8 +14606,12 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
             || inst->opcode == QoreIROpcode::XorAny
             || inst->opcode == QoreIROpcode::ShlAny
             || inst->opcode == QoreIROpcode::ShrAny;
+        // two operands that may both have no value give NOTHING, not 0 (qore#5889): one of them must have a value
+        bool lhs_optional = may_be_nothing(inst->operands[0]);
+        bool rhs_optional = may_be_nothing(inst->operands[1]);
+        bool one_has_value = !lhs_optional || !rhs_optional;
         if (lhs_exact_int && rhs_exact_int
-                && ((lhs_int && rhs_int) || optional_int_safe)) {
+                && ((lhs_int && rhs_int) || (optional_int_safe && one_has_value))) {
             replacement = int_opcode(inst->opcode);
             representation = QoreIRValueRepresentation::NativeInt;
             type_info = bigIntTypeInfo;
@@ -14633,10 +14649,16 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
                 default:
                     break;
             }
+            // an operand with no value gives the other operand in its own type, so a float operand that may have
+            // none needs a float partner that has a value (the result of the operator is then a float whichever has
+            // the value), and two operands that may both have none give NOTHING (qore#5889)
+            bool optional_float_ok = one_has_value
+                && (!(lhs_exact_float && lhs_optional) || (rhs_exact_float && !rhs_optional))
+                && (!(rhs_exact_float && rhs_optional) || (lhs_exact_float && !lhs_optional));
             if (compound_float_safe && (proven_numeric
                     || (lhs_numeric && rhs_numeric
                         && (lhs_exact_float || rhs_exact_float)
-                        && optional_float_safe))) {
+                        && optional_float_safe && optional_float_ok))) {
                 replacement = float_opcode(inst->opcode);
                 representation = QoreIRValueRepresentation::NativeFloat;
                 type_info = floatTypeInfo;
