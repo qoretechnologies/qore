@@ -167,13 +167,16 @@
 // Forward declaration from Function.cpp - collects all locals from a statement tree
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
-//! Removes the closure-bound locals that an on_block_exit handler declares from its pre-instantiated locals
+//! Removes the locals that an on_block_exit handler declares from its pre-instantiated locals
 /** A handler starts with the slots of the function it belongs to, all of them marked pre-instantiated, as its code
     reads the variables of the enclosing scope.  The function also has slots for the variables that the handler body
     declares, as it lowers the handler inline on its normal exit paths; a closure-bound one is instantiated at its
     block by the InstantiateLocal of the handler body, which the IR interpreter skips for a pre-instantiated local.
     The handler body run out of line, on an exception, then found no value container for the variable, and the
-    handler stopped at its first access with an LVALUE-ERROR (qore#5653).  As in the function itself (see
+    handler stopped at its first access with an LVALUE-ERROR (qore#5653).  The other locals that it declares are its
+    own too: taken for variables of the function, they were released with the function's when the handler raised an
+    exception, after the handlers that ran after it, while the AST interpreter releases them at the end of their
+    blocks (#6002).  As in the function itself (see
     UserVariantBase's IR compilation), a closure-bound body local is instantiated at its lexical scope, so it is not
     pre-instantiated; the InstantiateLocal makes it a local of the handler (see QoreIRInterpreter's own locals).
 */
@@ -186,11 +189,11 @@ static void qore_ir_reserve_handler_local_slots(QoreIRFunction& parent_func, con
     }
 }
 
-static void qore_ir_scope_handler_closure_locals(QoreIRFunction& handler_func, const StatementBlock* handler_code) {
+static void qore_ir_scope_handler_own_locals(QoreIRFunction& handler_func, const StatementBlock* handler_code) {
     std::vector<LocalVar*> handler_locals;
     collectAllStatementLocals(handler_code, handler_locals);
     for (LocalVar* lv : handler_locals) {
-        if (lv && lv->closureUse()) {
+        if (lv) {
             handler_func.pre_instantiated_locals.erase(reinterpret_cast<const void*>(lv));
             handler_func.pre_instantiated_cache.erase(lv);
             // serialized with the handler's IR, so that a handler read from it is not given them pre-instantiated
@@ -4117,10 +4120,17 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // a block without an exception path of its own: an exception leaves the frame through the unwind path of the
     // interpreter, which releases the locals of the block that ScopeEnter records after its handlers, before the
     // events of the statements that contain it (#5867)
-    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget())) {
+    // the body of a handler lowered inline releases its locals, and those of the blocks in it, before the handlers
+    // that run after it when it raises an exception, those registered before it in its block and those of the
+    // enclosing blocks, as the AST interpreter releases them at the end of their blocks (#6002): it has an exception
+    // path of its own, which the blocks in it take as theirs
+    const bool inline_handler_body = inline_handler_block == block;
+    inline_handler_block = nullptr;
+    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget() || inline_handler_body)) {
         scope_enter->locals = lvars->lv;
     }
-    if (needs_handler_anchor || ((lvars || has_on_block_exit) && getCurrentExceptionTarget())) {
+    if (needs_handler_anchor || ((lvars || has_on_block_exit) && getCurrentExceptionTarget())
+            || (inline_handler_body && (lvars || qoreIrBlockEnclosesScopeLocals(block)))) {
         // Exceptions raised inside this lexical block must destroy its block-scoped
         // locals before control reaches the enclosing catch.  Normal fall-through
         // cleanup below only handles non-exception exits.
@@ -4729,7 +4739,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
                 handler_func->pre_instantiated_cache.insert(lvar);
             }
         }
-        qore_ir_scope_handler_closure_locals(*handler_func, handler.code);
+        qore_ir_scope_handler_own_locals(*handler_func, handler.code);
 
         // Create entry block for handler
         QoreIRBasicBlock* entry = handler_func->createBlock("entry");
@@ -4865,7 +4875,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
                 handler_func->pre_instantiated_cache.insert(lvar);
             }
         }
-        qore_ir_scope_handler_closure_locals(*handler_func, handler.code);
+        qore_ir_scope_handler_own_locals(*handler_func, handler.code);
 
         // Create entry block for handler
         QoreIRBasicBlock* entry = handler_func->createBlock("entry");
@@ -5081,8 +5091,10 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
         if (handler_exception_target) {
             exception_stack.push_back(handler_exception_target);
         }
+        inline_handler_block = handler.code;
         ok = lowerStatementBlock(handler.code, error);
     } else {
+        inline_handler_block = handler.code;
         ok = lowerStatementBlock(handler.code, error);
     }
 
