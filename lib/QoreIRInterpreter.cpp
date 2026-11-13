@@ -7169,7 +7169,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                     if (type == OBE_Error) {
                         if (qore_es_private::get(obe_xsink)->rethrown) {
                             if (xsink) {
-                                xsink->clear();
+                                qore_es_private::clearForRethrow(*xsink);
                             }
                         }
                     }
@@ -7178,7 +7178,8 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                     if (xsink) {
                         xsink->assimilate(obe_xsink);
                     }
-                    if (!error) {
+                    // a thread_exit is not an exception: the scope's on_error handlers do not run after it (#5893)
+                    if (!error && xsink && xsink->isException()) {
                         error = true;
                     }
                 }
@@ -7888,7 +7889,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                             if (type == OBE_Error) {
                                 if (qore_es_private::get(obe_xsink)->rethrown) {
                                     if (xsink) {
-                                        xsink->clear();
+                                        qore_es_private::clearForRethrow(*xsink);
                                     }
                                 }
                             }
@@ -7896,7 +7897,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 if (xsink) {
                                     xsink->assimilate(obe_xsink);
                                 }
-                                if (!error) {
+                                // a thread_exit is not an exception: the scope's on_error handlers do not run after it (#5893)
+                                if (!error && xsink && xsink->isException()) {
                                     error = true;
                                 }
                             }
@@ -10342,7 +10344,7 @@ next_instruction:
                                     if (type == OBE_Error) {
                                         if (qore_es_private::get(obe_xsink)->rethrown) {
                                             if (xsink) {
-                                                xsink->clear();
+                                                qore_es_private::clearForRethrow(*xsink);
                                             }
                                         }
                                     }
@@ -10351,7 +10353,8 @@ next_instruction:
                                     if (xsink) {
                                         xsink->assimilate(obe_xsink);
                                     }
-                                    if (!error) {
+                                    // a thread_exit is not an exception: the scope's on_error handlers do not run after it (#5893)
+                                    if (!error && xsink && xsink->isException()) {
                                         error = true;
                                     }
                                 }
@@ -14991,7 +14994,7 @@ load_local_done:
                                     if (type == OBE_Error) {
                                         if (qore_es_private::get(obe_xsink)->rethrown) {
                                             if (xsink) {
-                                                xsink->clear();
+                                                qore_es_private::clearForRethrow(*xsink);
                                             }
                                         }
                                     }
@@ -14999,7 +15002,8 @@ load_local_done:
                                         if (xsink) {
                                             xsink->assimilate(obe_xsink);
                                         }
-                                        if (!error) {
+                                        // a thread_exit is not an exception: the scope's on_error handlers do not run after it (#5893)
+                                        if (!error && xsink && xsink->isException()) {
                                             error = true;
                                         }
                                     }

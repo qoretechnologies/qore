@@ -1501,6 +1501,8 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
         if (!self->getClass()->getClass(*meth->getClass(), priv)) {
             xsink->raiseException("CALL-REFERENCE-ERROR", "\"%s\" is not accessible from an object of " \
                 "class '%s' as the classes are not in the same hierarchy", name, self->getClassName());
+            // no call reference with the error (issue #5866)
+            return QoreValue();
         }
     }
     if (self) {

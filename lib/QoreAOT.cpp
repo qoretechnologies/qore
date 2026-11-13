@@ -23979,6 +23979,11 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             std::string verify_error;
             if (QoreIRVerifier::verify(*ir_func, verify_error)) {
+                // the LLVM lowering needs the closure-bound locals marked in the instructions: without the flag, a
+                // closure-bound local of a block was not popped at the end of the block, so that the closures of all
+                // iterations of a loop shared one variable (#5869); the slot IDs are not embedded, as the local
+                // slots of the top-level code are those of buildAOTSlotMap() below, which the runtime rebuilds
+                ir_func->embedLocalClosureFlags();
                 // Classify locals as IR-only vs AST-visible for optimization
                 ir_func->computeIROnlyLocals();
 
@@ -24230,7 +24235,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         if (!attachAOTProgramStatementLocs(pgm, func_slots, error)) {
             return false;
         }
-        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, pgm)) {
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots, "",
@@ -26663,7 +26668,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
             return false;
         }
-        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -27154,7 +27159,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
                 return false;
             }
             if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -27812,7 +27817,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
                 shared_statement_locs)) {
             return false;
         }
-        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, qpgm)) {
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -29759,7 +29764,7 @@ bool QoreAOT::compileScriptAggregate(
             if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, nullptr, &target_set)) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, qpgm)) {
                 return false;
             }
             // Script aggregates provide declaration/dependency metadata only.
@@ -29791,7 +29796,7 @@ bool QoreAOT::compileScriptAggregate(
             // any per-function payload.
             const std::vector<AOTCompiledFuncWithSlots> no_func_slots;
             if (!serializeSlotMaps(writer, no_func_slots,
-                    &const_reverse_map, error)) {
+                    &const_reverse_map, error, qpgm)) {
                 return false;
             }
         }
@@ -30447,7 +30452,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
             return false;
         }
-        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+        if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -31032,7 +31037,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
                 return false;
             }
             if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -31538,7 +31543,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
                 return false;
             }
             if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -32075,7 +32080,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
                 return false;
             }
-            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
+            if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error, *qpgm)) {
                 return false;
             }
             if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
@@ -35232,15 +35237,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             // the providers of other objects are keyed by the path without the leading "::" of a root function
             id.reloc_qore_path = getVariantKey(aotRelocStripLeadingColons(id.ref1.c_str()).c_str(), v);
         }
-        if (const QoreTypeParamInstantiation* inst =
-                call->getExplicitTypeParamInstantiation()) {
-            id.ref2 += "\ntypeargs:";
-            id.ref2 += std::to_string(inst->type_args.size());
-            for (const QoreTypeInfo* type_arg : inst->type_args) {
-                id.ref2 += "\n";
-                id.ref2 += qore_get_aot_serializable_type_path(type_arg);
-            }
-        }
+        qore_aot_append_call_type_args(id.ref2, call->getExplicitTypeParamInstantiation());
         return id;
     }
 
@@ -35591,6 +35588,14 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.ref1 = cit->second.path;
             return id;
         }
+    }
+
+    // a hash or list value of a hashdecl or a complex type (such as the hash<ExceptionInfo> of a %try-module error
+    // variable) is the value itself, which keeps its type, keys and key order (#5895)
+    if (qore_aot_value_container_is_typed(node)) {
+        id.kind = AOTExprKind::CONST_VALUE;
+        id.child_expr = v;
+        return id;
     }
 
     // Hash/list literals and hash dereferences are first-class AOTExprKind
@@ -36085,14 +36090,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 }
             }
             // the explicit type arguments of the call (obj.method<T>()): the target has no expression node to hold them
-            if (const QoreTypeParamInstantiation* inst = mc->getExplicitTypeParamInstantiation()) {
-                id.ref2 += "\ntypeargs:";
-                id.ref2 += std::to_string(inst->type_args.size());
-                for (const QoreTypeInfo* type_arg : inst->type_args) {
-                    id.ref2 += "\n";
-                    id.ref2 += qore_get_aot_serializable_type_path(type_arg);
-                }
-            }
+            qore_aot_append_call_type_args(id.ref2, mc->getExplicitTypeParamInstantiation());
             id.flags = is_pseudo ? 1 : 0;
             return id;
         }
