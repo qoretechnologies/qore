@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class ListLiteralValueTypeTest
+
+#! a list literal has the common type of its values in every mode and in AOT, as in the AST interpreter (qore#5970)
+/** The IR interpreter and native code gave a list literal its parse type when the lowering passed one, which is less
+    specific than the values when an element's run-time type is more specific than its parse type (a cast that gives a
+    list the type of its closure).
+*/
+class ListLiteralValueTypeTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/ListLiteralValueType/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("list literal value types", "1.0", \ARGV) {
+        addTestCase("AST gives the values' common type", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        string out = getAst();
+        assertRegex("(?m)^cast: list<list<code<nothing\\(\\)>>>$", out, out);
+        assertRegex("(?m)^cast nested: list<list<list<code<nothing\\(\\)>>>>$", out, out);
+        assertRegex("(?m)^cast two: list<list<code<nothing\\(\\)>>>$", out, out);
+        assertRegex("(?m)^top cast: list<list<code<nothing\\(\\)>>>$", out, out);
+        assertRegex("(?m)^int and string: list<auto>$", out, out);
+        assertRegex("(?m)^NOTHING and int: list<\\*int>$", out, out);
+        assertRegex("(?m)^empty: list<auto>$", out, out);
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-list-literal-value-type-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

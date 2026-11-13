@@ -9256,7 +9256,8 @@ next_instruction:
                     QoreValue value = getIRValue(values, operand);
                     QoreValue stored = value.needsRef() ? value.refSelf() : value;
                     const QoreTypeInfo* vt = stored.getTypeInfo();
-                    if (!vtype) {
+                    // the first value's type, as in the AST interpreter
+                    if (!i) {
                         vtype = vt;
                         vcommon = true;
                     } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
@@ -9276,14 +9277,9 @@ next_instruction:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                if (declared_type) {
-                    qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(declared_vtype);
-                } else {
-                    if (!vtype || vtype == anyTypeInfo || !vcommon) {
-                        vtype = autoTypeInfo;
-                    }
-                    qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(vtype);
-                }
+                // the type of the values, as in the AST interpreter, also with a declared type, which can be less
+                // specific (qore#5970)
+                qore_list_private::get(*list)->complexTypeInfo = qore_list_private::getLiteralTypeInfo(vtype);
                 QoreListNode* raw_list = list.release();
                 setOwnedValueSlot(values, cleanup, inst->result.id, QoreValue(raw_list), xsink);
                 ++ip;

@@ -5727,7 +5727,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, const
             v.refSelf();
         }
         const QoreTypeInfo* vt = v.getTypeInfo();
-        if (!vtype) {
+        // the first value's type, as in the AST interpreter
+        if (!i) {
             vtype = vt;
             vcommon = true;
         } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
@@ -5737,14 +5738,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, const
             return toBits(QoreValue());
         }
     }
-    if (declared_type) {
-        priv->complexTypeInfo = qore_get_complex_list_type(declared_vtype);
-    } else {
-        if (!vtype || vtype == anyTypeInfo || !vcommon) {
-            vtype = autoTypeInfo;
-        }
-        priv->complexTypeInfo = qore_get_complex_list_type(vtype);
-    }
+    // the type of the values, as in the AST interpreter, also with a declared type, which can be less specific
+    // (qore#5970)
+    priv->complexTypeInfo = qore_list_private::getLiteralTypeInfo(vtype);
     return toBits(QoreValue(list.release()));
 }
 
