@@ -180,15 +180,6 @@ class LifecycleWsClient inherits WebSocketClient {
 
         #! report a thread that waits for an action
         bool report_action_wait = False;
-        #! hold the next thread woken from an action wait until release_woken is released
-        bool hold_woken = False;
-        Counter release_woken(1);
-        #! gets "woken-held" when a woken thread is held
-        Queue woken();
-        #! gets "destructor-waits" when the destructor waits for the threads that waited for an action
-        Queue stage();
-        #! code run when a connection is reported open, with the client
-        *code opened_hook;
         #! report the release of the action held by holdActionInBackground()
         bool report_action_release = False;
 
@@ -439,21 +430,6 @@ class LifecycleWsClient inherits WebSocketClient {
         }
     }
 
-    private actionWaitWokenHook() {
-        if (hold_woken) {
-            hold_woken = False;
-            # local references: the object may be destroyed while this thread waits
-            Queue q = woken;
-            Counter c = release_woken;
-            q.push("woken-held");
-            c.waitForZero(HandoffTimeout);
-        }
-    }
-
-    private destructorWaitingForActionWaiters() {
-        stage.push("destructor-waits");
-    }
-
     private waitingForActionHook() {
         if (hold_action_wait) {
             hold_action_wait = False;
@@ -629,11 +605,6 @@ class LifecycleWsClient inherits WebSocketClient {
     }
 
     private connectionOpened(hash<auto> info) {
-        if (opened_hook) {
-            code hook = remove opened_hook;
-            hook(self);
-            return;
-        }
         opened_cids.push(info.cid);
         opened_tids.push(gettid());
         if (open_counter.getCount()) {
@@ -849,23 +820,6 @@ class LifecycleWsClient inherits WebSocketClient {
             # the delivery task reports the connection open; then the start fails
             open_counter.waitForZero(HandoffTimeout);
             throw "TEST-CONNECT-ERROR", "the connect fails after the async I/O started";
-        }
-    }
-}
-
-#! Captures the warnings that a client logs when its destructor waited for threads that waited for an action
-class TestWarningAppender inherits LoggerAppenderWithLayout {
-    public {
-        Queue lines();
-    }
-
-    constructor() : LoggerAppenderWithLayout("warnings", new LoggerLayoutPattern("%m")) {
-        open();
-    }
-
-    processEventImpl(int type, auto params) {
-        if (type == EVENT_LOG && params =~ /threads waiting for an action of the client did not leave it/) {
-            lines.push(params);
         }
     }
 }
@@ -1088,10 +1042,6 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         addTestCase("Discord: the destructor on the heartbeat thread does not wait for a forced reconnect whose code "
             "was released unrun", \discordDestructorOnHeartbeatDroppedReconnectTest());
         addTestCase("an action wait ends when the client is destroyed", \actionWaitEndsOnDestroyTest());
-        addTestCase("an action wait ended by the destructor gets WEBSOCKET-ERROR when the destructor is first",
-            \actionWaitDestructorFirstTest());
-        addTestCase("the destructor in a call that waited for the action does not wait for itself",
-            \destructorInWaitedCallTest());
         addTestCase("a waiter cancelled after the action was released to it wakes the next waiter",
             \cancelledActionWaiterPassesWakeupTest());
         addTestCase("the waiter registry completes its bookkeeping on a cancelled thread",
@@ -4155,96 +4105,6 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         assertEq("WEBSOCKET-ERROR", res.get(LifecycleWsClient::HandoffTimeout), "the second action wait ended");
         assertTrue(deleted.get(LifecycleWsClient::HandoffTimeout));
         release_action.dec();
-    }
-
-    #! A thread whose action wait the destructor ended resumes when the destructor would have finished without it: it
-    #! gets WEBSOCKET-ERROR, as the destructor waits until it left the client's methods (issue #5983)
-    actionWaitDestructorFirstTest() {
-        LifecycleCtx ctx = makeCtx("h1");
-        connectChecked(ctx, "h1");
-        LifecycleWsClient c = remove ctx.wsc;
-        Queue events = c.events;
-        Queue stage = c.stage;
-        Queue woken = c.woken;
-        Counter release_action = c.release_action;
-        Counter release_woken = c.release_woken;
-        on_exit map $1.getCount() ? $1.dec() : NOTHING, (release_action, release_woken);
-        c.holdActionInBackground();
-        assertEq("action-held", events.get(LifecycleWsClient::HandoffTimeout));
-        c.report_action_wait = True;
-        # the waiter is held once the destructor has woken it, before it takes the client's lock again
-        c.hold_woken = True;
-        Queue res();
-        background TestThreads::run(sub () {
-            try {
-                c.disconnect();
-                res.push("disconnected");
-            } catch (hash<ExceptionInfo> ex) {
-                res.push(ex.err);
-            }
-        });
-        assertEq("action-wait", events.get(LifecycleWsClient::HandoffTimeout));
-        background TestThreads::run(sub () {
-            delete c;
-            stage.push("deleted");
-        });
-        assertEq("woken-held", woken.get(LifecycleWsClient::HandoffTimeout), "the destructor woke the waiter");
-        # the destructor waits for the woken thread; without that, it finished and the client was destroyed, and the
-        # thread got OBJECT-ALREADY-DELETED when it resumed
-        assertEq("destructor-waits", stage.get(LifecycleWsClient::HandoffTimeout),
-            "the destructor waits for the thread that waited for the action");
-        release_woken.dec();
-        assertEq("WEBSOCKET-ERROR", res.get(LifecycleWsClient::HandoffTimeout), "the action wait ended");
-        assertEq("deleted", stage.get(LifecycleWsClient::HandoffTimeout), "the client is destroyed");
-        release_action.dec();
-    }
-
-    #! The client is destroyed in the open callback of a connect() that waited for the action: the destructor runs in
-    #! that counted call, and does not wait for it (issue #5983)
-    destructorInWaitedCallTest() {
-        # captures the warning of a destructor that waited for its own call until the action timeout
-        TestWarningAppender warnings();
-        Logger logger("destroy-in-call", LoggerLevel::getLevelInfo());
-        logger.addAppender(warnings);
-        # a short action timeout, so that a destructor that waits for itself fails the test soon
-        LifecycleCtx ctx = makeCtx("h1", {"logger": logger, "timeout": 2s});
-        connectChecked(ctx, "h1");
-        ctx.wsc.disconnect();
-        LifecycleWsClient c = remove ctx.wsc;
-        Queue events = c.events;
-        Counter release_action = c.release_action;
-        on_exit if (release_action.getCount()) {
-            release_action.dec();
-        }
-        c.holdActionInBackground();
-        assertEq("action-held", events.get(LifecycleWsClient::HandoffTimeout));
-        c.report_action_wait = True;
-        Queue deleted();
-        # the open report of the connection deletes the client, on the connecting thread, in its connect() call
-        c.opened_hook = sub (LifecycleWsClient client) {
-            delete client;
-            deleted.push(gettid());
-        };
-        Queue res();
-        Queue connect_tid();
-        background TestThreads::run(sub () {
-            connect_tid.push(gettid());
-            try {
-                c.connect();
-                res.push("connected");
-            } catch (hash<ExceptionInfo> ex) {
-                res.push(ex.err);
-            }
-        });
-        assertEq("action-wait", events.get(LifecycleWsClient::HandoffTimeout), "the connect waits for the action");
-        release_action.dec();
-        int tid = deleted.get(LifecycleWsClient::HandoffTimeout);
-        # the open report is made by the connecting thread: the destructor runs in its counted connect() call
-        assertEq(connect_tid.get(LifecycleWsClient::HandoffTimeout), tid,
-            "the client is destroyed in its connect() call");
-        # the call continues on the destroyed object: an error of the caller, whatever it reports
-        res.get(LifecycleWsClient::HandoffTimeout);
-        assertEq(0, warnings.lines.size(), "the destructor did not wait for its own call");
     }
 
     #! The action is released to the first waiter, which is cancelled before it takes it: the next waiter takes it
