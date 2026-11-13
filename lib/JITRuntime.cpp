@@ -20170,6 +20170,15 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
     assert(object && method_name);
 
+    // a deleted object: the exception of the AST interpreter, which dispatches the call by name for an object of
+    // another class than the parse-time class or the method's class, and names the object's class then (qore#6025);
+    // otherwise the call would reach CodeEvaluationHelper, which names the class of the method found
+    if (!object->isValid()) {
+        qore_raise_deleted_method_call(xsink, object, method_name, target.qc, target.method, target.variant);
+        clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
+        return toBits(QoreValue());
+    }
+
     const qore_class_private* class_ctx = runtime_get_class();
     // checked against the committed hierarchy, as in MethodCallNode::exec()
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(
