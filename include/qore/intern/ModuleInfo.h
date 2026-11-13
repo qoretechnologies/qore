@@ -648,6 +648,17 @@ struct DLHelper {
 class ModuleLoadMapHelper;
 struct QoreAOTModuleFileInfo;
 
+//! Where a module command issued with QoreModuleManager::issueRuntimeCmd() comes from
+enum class QoreModuleCmdOrigin {
+    //! A command issued by the calling code at run time (Program::issueModuleCmd()); a command for another Program
+    //! is checked against the calling code's sandbox and restrictions
+    Caller,
+    //! The target Program's own `%module-cmd` directive, replayed from its compiled (AOT) metadata when the Program
+    //! is created, as the directive runs when the Program's source is parsed in it: it is not a command from the
+    //! calling code to another Program
+    OwnDirective,
+};
+
 //! The attributes of the module manager's mutex: an error-checking mutex in a debug build, the default otherwise
 DLLLOCAL const pthread_mutexattr_t* qore_module_manager_mutex_attr();
 
@@ -670,7 +681,12 @@ public:
 
     DLLLOCAL void issueParseCmd(const QoreProgramLocation* loc, const char* mname, const QoreString& cmd);
 
-    DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink);
+    //! Issues a module command to \a pgm at run time, loading the module in \a pgm if necessary
+    /** @param origin whether the command is issued by the calling code or is \a pgm's own replayed directive; only
+        a command issued by the calling code to another Program is checked as a cross-Program command
+    */
+    DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink,
+            QoreModuleCmdOrigin origin = QoreModuleCmdOrigin::Caller);
 
     //! Registers a module under its current name
     /** The first time a module is registered, what was decided when it was loaded (see
@@ -800,6 +816,25 @@ public:
         Reads only data that is set once by init(), so it needs no lock.
     */
     DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr) const;
+
+    //! Gives the Program of an AOT module being initialized the sandbox that the Program of its source module gets
+    /** As for a source module (see loadSeparatedModule()), a module that is not library code (see
+        isTrustedModulePath()) is governed by the sandbox of the Program loading it, or of the sandboxed code that
+        chose it; it must be called before any of the module's code runs and before its recorded module commands are
+        replayed in its Program (issue #5913)
+
+        Whether the module is library code is the decision recorded when its load started (QoreModuleLoadFrameHelper,
+        pushed by every load by the module manager, including registerAOTStaticModuleIntern()), so that it agrees
+        with the trusted flag that addModule() records on the module; \a path is used only for a module whose
+        initialization runs outside such a load (an init function called directly)
+
+        @param module_pgm the AOT module's new Program
+        @param loader_pgm the Program loading the module, if any
+        @param feature the module's feature name
+        @param path the path of the module's file, if known
+    */
+    DLLLOCAL void inheritAOTModuleSandbox(QoreProgram& module_pgm, QoreProgram* loader_pgm, const char* feature,
+            const char* path) const;
 
     //! Returns the path of a module with the name given in a directory of library code, or an empty string
     /** Looks in each directory of library code (see isTrustedModulePath()) for every form that the module search

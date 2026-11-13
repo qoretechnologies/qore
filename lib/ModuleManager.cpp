@@ -2525,6 +2525,10 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         }
         // restore info hash for the descriptor handoff
         mod_info.info = info_holder.release();
+        // whether the module is library code is decided by its file name, once: addModule() records it on the
+        // module, and the module's initialization gives its Program the sandbox that it decides
+        // (inheritAOTModuleSandbox()) (issue #5913)
+        QoreModuleLoadFrameHelper load_frame(feature, isTrustedModulePath(path));
         mi = loadBinaryModuleFromDesc(xsink, nullptr, mod_info, path, feature, false,
             nullptr, tpgm, QMLO_NONE);
         if (!mi || xsink) {
@@ -3550,7 +3554,12 @@ bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_
             }
         }
     }
-    // the file it is, under a directory's canonical path
+    // the file it is, under a directory's canonical path; a relative path is resolved against the current
+    // directory, which is safe: it is resolved exactly as open() or dlopen() will resolve it, and a trusted load
+    // uses the resolved canonical path (load_path), so the file loaded is always the file judged here.  Relative
+    // paths are legitimate here: a binary or AOT module found by name in a relative module directory (a relative
+    // QORE_MODULE_DIR entry, for example) keeps a relative path, while explicit paths from a Program are made
+    // absolute before they reach this check
     std::unique_ptr<char, decltype(&free)> real(realpath(path, nullptr), &free);
     if (!real) {
         return false;
@@ -3705,6 +3714,17 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     if (sm) {
         sm->deref(nullptr);
     }
+}
+
+void QoreModuleManager::inheritAOTModuleSandbox(QoreProgram& module_pgm, QoreProgram* loader_pgm,
+        const char* feature, const char* path) const {
+    // whether the module is library code was decided when its load started (every load by the module manager,
+    // also the registration of a statically linked module, records it), as for a source module and as addModule()
+    // records it on the module; a module initialized outside a load by the module manager (an init function called
+    // directly) is judged by the path it was initialized with
+    const QoreModuleLoadFrame* f = module_load_frame;
+    const bool trusted = (f && feature && !strcmp(f->feature, feature)) ? f->trusted : isTrustedModulePath(path);
+    inherit_module_sandbox_manager(module_pgm, loader_pgm, trusted);
 }
 
 //! Returns the parse options of the Program loading a user module that the module inherits
@@ -6064,7 +6084,9 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
 
 #define QORE_MAX_MODULE_ERROR_DESC 200
 int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, QoreModuleCmdOrigin origin) {
+    // a replayed directive is always issued to the Program whose directive it is
+    assert(origin == QoreModuleCmdOrigin::Caller || pgm);
     // a sandboxed caller stays the caller of the load and of the command, which runs in the target Program below; a
     // module that it chose by path is checked and governed as one that it loads itself (issue #5659)
     QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
@@ -6075,8 +6097,10 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     // a command issued to another Program runs there, and the module decides what it allows by that Program's
     // parse options and sandbox: code that is not trusted would get what its own Program does not allow, such as a
     // Python interpreter with native file access (issue #5659).  It may issue a command to another Program only if its
-    // own Program is not sandboxed and the target has every restriction that its code has
-    if (pgm && pgm != getProgram()) {
+    // own Program is not sandboxed and the target has every restriction that its code has.  A Program's own
+    // directive replayed from its compiled metadata is not such a command: it runs in its Program as when the
+    // Program's source is parsed there (see issueParseCmd()), whatever code loads the Program
+    if (origin == QoreModuleCmdOrigin::Caller && pgm && pgm != getProgram()) {
         static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
             & ~QoreParseOptions(QDOM_IN_MODULE);
         if (qore_program_is_sandboxed(getProgram())) {
