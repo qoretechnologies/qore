@@ -127,6 +127,23 @@ check-fast-routes-core-sanitizers:
     - . test/docker_test/tree-tested-skip.sh
     - test/cpp/run-sanitizers.sh
 
+# The core library, qore, qcc and the binary modules with a single compilation unit build compile and link from
+# separate compilation units (-DSINGLE_COMPILATION_UNIT=OFF): the build jobs compile each of them as one unit, in which
+# a source file that does not include what it uses, or a template that is not instantiated where it is defined, still
+# compiles and links.  Build only, without the AOT modules and without tests (test/docker_test/build-separate-units.sh);
+# it runs in the build stage, on one platform, and stops at the first error
+check-build-separate-units:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - . test/docker_test/tree-tested-skip.sh
+    - test/docker_test/build-separate-units.sh
+
 # The qmod build cache (design/qmod-build-cache.md): every job that builds Qore reuses the AOT modules that earlier
 # jobs compiled, from a directory of the host that its runner mounts into the job and names in QORE_QMOD_CACHE_DIR (the
 # runner sets it; without it, or when the directory is not mounted, the build runs without the cache).  A module is
