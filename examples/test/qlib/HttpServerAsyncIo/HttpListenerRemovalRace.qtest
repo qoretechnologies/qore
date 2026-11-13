@@ -1,6 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# test-platform: macos - the end of HTTP/1.1 SSE streams and keep-alive connections when their listener is removed
+# test-platform: macos - the end of HTTP/1.1, HTTP/2 and HTTP/3 SSE streams and keep-alive connections when their listener is removed
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -32,6 +32,10 @@
     The race is made deterministic: the server's async target is wrapped, and the wrapper returns the request's
     result only once the controller has logged the removal of the listener, which another thread runs with
     HttpServer::stopListenerID() (the stop itself waits for the request).
+
+    The SSE case is run over HTTP/1.1, HTTP/2 and HTTP/3: a stream of an HTTP/2 or HTTP/3 connection is added to the
+    connection's operation rather than submitted, and that operation, which the removal cancels (HTTP/2) or whose
+    streams it ends (HTTP/3), must end a stream added after that too.
 */
 
 %modern
@@ -45,24 +49,44 @@
 %requires ServerSentEventHandler
 %requires HttpClientIo
 %requires HttpClientStreamingIo
+%requires ../../TestCertificates.qm
 
 %exec-class HttpListenerRemovalRaceTest
 
 #! Upper bound for any wait that a regression turns into a hang
 const HangTimeout = 30s;
 
-#! Signals the removal of a listener from the controller's log
+#! Signals the removal of the listeners of a listener ID from the controller's log
+/** An HTTP/3 listener is a TCP listener and the QUIC listener paired with it, which the controller removes one after
+    the other; HttpServer removes each of them twice (when the listener stops and once it has stopped), so the
+    listeners are counted by their hash.
+*/
 class RemovalSignal inherits LoggerAppenderWithLayout {
     public {
-        Counter removed(1);
+        Counter removed;
     }
 
-    constructor() : LoggerAppenderWithLayout("removal-signal", new LoggerLayoutPattern("%m")) {
+    private {
+        hash<string, bool> seen;
+        Mutex lck();
+    }
+
+    constructor(int listeners) : LoggerAppenderWithLayout("removal-signal", new LoggerLayoutPattern("%m")) {
+        removed = new Counter(listeners);
         open();
     }
 
     processEventImpl(int type, auto params) {
-        if (type == EVENT_LOG && params =~ /Removed listener/ && removed.getCount()) {
+        if (type != EVENT_LOG) {
+            return;
+        }
+        *string lhash = (params =~ x/Removed listener "([0-9a-f]+)"/)[0];
+        if (!lhash) {
+            return;
+        }
+        AutoLock al(lck);
+        if (!seen{lhash} && removed.getCount()) {
+            seen{lhash} = True;
             removed.dec();
         }
     }
@@ -179,19 +203,39 @@ class RaceServer inherits HttpServer {
 
 class HttpListenerRemovalRaceTest inherits QUnit::Test {
     constructor() : QUnit::Test("HttpListenerRemovalRace", "1.0") {
-        addTestCase("an SSE stream set up by a request that returns after the removal ends", \sseTest());
+        foreach string proto in ("h1", "h2", "h3") {
+            addTestCase(sprintf("%s: an SSE stream set up by a request that returns after the removal ends", proto),
+                \sseTest(), proto);
+        }
         addTestCase("a keep-alive connection whose request returns after the removal is closed", \keepAliveTest());
         set_return_value(main());
     }
 
     #! Starts a server whose listener is removed while a request on \a path is held
-    private hash<auto> startServer(string path, AbstractHttpRequestHandler handler) {
-        RemovalSignal signal();
+    /** An HTTP/2 or HTTP/3 listener uses TLS; HTTP/3 adds a QUIC listener paired with the TCP listener.
+    */
+    private hash<auto> startServer(string path, AbstractHttpRequestHandler handler, string proto = "h1") {
+        RemovalSignal signal(proto == "h3" ? 2 : 1);
         Logger logger("listener-removal-race", LoggerLevel::getLevelInfo());
         logger.addAppender(signal);
         RaceServer srv(<HttpServerOptionInfo>{"logger": logger});
         srv.setHandler("race", path, NOTHING, handler);
-        hash<auto> li = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        hash<HttpListenerOptionInfo> lopts = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
+        if (proto != "h1") {
+            lopts += <HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                "http_version": "auto",
+                "enable_h3": proto == "h3",
+            };
+        }
+        hash<auto> li;
+        try {
+            li = srv.addListener(lopts);
+        } catch (hash<ExceptionInfo> ex) {
+            delete srv;
+            testSkip(sprintf("no %s listener: %s: %s", proto, ex.err, ex.desc));
+        }
         srv.race.signal = signal;
         srv.race.path = path;
         srv.race.lid = li.id;
@@ -206,19 +250,26 @@ class HttpListenerRemovalRaceTest inherits QUnit::Test {
         assertEq(0, srv.getListeners().size(), "the listener is gone");
     }
 
-    sseTest() {
+    sseTest(string proto) {
         RaceSseHandler h();
-        hash<auto> s = startServer("/sse", h);
+        hash<auto> s = startServer("/sse", h, proto);
         RaceServer srv = s.srv;
         on_exit delete srv;
 
-        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
-            "request_timeout": 20s,
-            "connect_timeout": 5s,
-        });
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> copts =
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "accept_all_certs": True,
+                "request_timeout": 20s,
+                "connect_timeout": 5s,
+            };
+        if (proto != "h1") {
+            copts.protocol = proto;
+        }
+        HttpClientIo::HttpClientConnectionManager mgr(copts);
         on_exit delete mgr;
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
-            sprintf("http://localhost:%d", s.port), "GET", "/sse", {"Accept": "text/event-stream"});
+            sprintf("%s://localhost:%d", proto == "h1" ? "http" : "https", s.port), "GET", "/sse",
+            {"Accept": "text/event-stream"});
         on_exit stream.cancel();
 
         assertEq(0, h.registered.waitForZero(HangTimeout), "the stream was registered with the handler");
