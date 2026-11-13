@@ -2914,7 +2914,7 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
             return dump_skip_string_ref(reader, p, end)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
-        case AOTExprKind::DOT_EVAL_EXPR:
+        case AOTExprKind::AST_EXPR:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::CLOSURE_CREATE: {

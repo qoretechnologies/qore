@@ -5514,7 +5514,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
-            case AOTExprKind::DOT_EVAL_EXPR: {
+            case AOTExprKind::AST_EXPR: {
                 std::string dot_err;
                 QoreValue dot_expr = readOneExpr(reader, ptr, end, dot_err, pgm,
                     ctx->locals, num_locals, ctx->globals, num_globals, local_owner_pgm);

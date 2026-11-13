@@ -441,8 +441,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 102: SQUARE_BRACKET_RANGE
     {"SQUARE_BRACKET_RANGE", 102, true, write_slot_SQUARE_BRACKET_RANGE, "Range subscript operator"},
 
-    // 103: DOT_EVAL_EXPR
-    {"DOT_EVAL_EXPR", 103, true, write_slot_DOT_EVAL_EXPR, "Full dot-eval expression slot payload"},
+    // 103: AST_EXPR
+    {"AST_EXPR", 103, true, write_slot_AST_EXPR, "Full inline expression evaluated as an AST"},
     // 104: UNARY_MINUS
     {"UNARY_MINUS", 104, true, write_slot_UNARY_MINUS, "Unary minus operator"},
     // 105: LOG_AEQ
