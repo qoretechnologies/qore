@@ -923,6 +923,17 @@ static bool qore_aot_is_debug_instruction(const QoreIRInstruction& inst) {
     return inst.opcode == QoreIROpcode::DebugStatement || inst.opcode == QoreIROpcode::DebugBlock;
 }
 
+//! Returns true if a summary of a function body skips an instruction: a debugger instruction, and the check of the
+//! object of a call through self (CheckCallTarget with no operand, issue #5823)
+/** A summary takes the place of the call of the function it describes, which is made through self by a caller that
+    checks its object first: a call through self in the summarized body has the same object, which nothing in a body
+    that has a summary can delete.
+*/
+static bool qore_aot_is_summary_skipped_instruction(const QoreIRInstruction& inst) {
+    return qore_aot_is_debug_instruction(inst)
+        || (inst.opcode == QoreIROpcode::CheckCallTarget && inst.operands.empty());
+}
+
 //! Returns true if a block has more than the given number of instructions that are not the instructions of a debugger
 /** The debugger instructions of a statement precede its code, so the scan ends after a small multiple of the limit
 */
@@ -2776,6 +2787,10 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context, constant_reverse_map);
+    // the object of the calls through self (issue #5823)
+    if (sig) {
+        lowering.setSelfLocal(sig->selfid);
+    }
     if (!lowering.lowerStatementBlock(statements, error)) {
         if (q_env_is_set("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: lowering failed for '%s': %s\n", name, error.c_str());
@@ -6780,7 +6795,7 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
     const QoreIRInstruction* operation = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -7348,7 +7363,7 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
         return index;
     };
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -7690,7 +7705,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
     const QoreIRInstruction* operation = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -8076,7 +8091,7 @@ static bool qore_aot_get_conditional_aggregate_shape(
                 return false;
             }
             const auto& inst_ptr = block->instructions[offset];
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || terminated) {
@@ -8554,7 +8569,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                     "AOT aggregate-return instruction analysis")) {
             return false;
         }
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -9121,7 +9136,7 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                 cancelled = true;
                 return fail();
             }
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -9598,7 +9613,7 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
     int8_t returned_param = -1;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -9680,7 +9695,7 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
     int8_t returned_param = -1;
     bool returned = false;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || returned) {
@@ -9926,7 +9941,7 @@ static int8_t qore_aot_get_composed_boxed_return_param(
         for (const auto& block : func.blocks) {
             for (const auto& inst_ptr : block->instructions) {
                 const QoreIRInstruction* inst = inst_ptr.get();
-                if (inst && qore_aot_is_debug_instruction(*inst)) {
+                if (inst && qore_aot_is_summary_skipped_instruction(*inst)) {
                     continue;
                 }
                 if (!inst || inst->exception_target) {
@@ -10246,7 +10261,7 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
     AOTComposedIntSourceKind source_kind = AOTComposedIntSourceKind::None;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -10417,7 +10432,7 @@ static bool qore_aot_get_context_int(const QoreIRFunction& func,
     std::unordered_map<uint32_t, AffineValue> values;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -10555,7 +10570,7 @@ static bool qore_aot_get_global_int(const QoreIRFunction& func,
     std::unordered_map<uint32_t, AffineValue> values;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -11617,7 +11632,7 @@ static bool qore_aot_collect_int_expression_summaries(
         if (func->blocks.size() >= 3) {
             const QoreIRBranchIfInstruction* branch = nullptr;
             for (const auto& inst_ptr : func->blocks.front()->instructions) {
-                if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                     continue;
                 }
                 if (!inst_ptr || inst_ptr->exception_target || branch) {
@@ -11679,7 +11694,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<const LocalVar*, int> nested_locals = local_values;
                 const QoreIRBranchIfInstruction* nested_branch = nullptr;
                 for (const auto& inst_ptr : nested_block->instructions) {
-                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                         continue;
                     }
                     if (!inst_ptr || inst_ptr->exception_target || nested_branch) {
@@ -11732,7 +11747,7 @@ static bool qore_aot_collect_int_expression_summaries(
                     std::unordered_map<const LocalVar*, int> block_locals = initial_locals;
                     const QoreIRReturnInstruction* ret = nullptr;
                     for (const auto& inst_ptr : block->instructions) {
-                        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                             continue;
                         }
                         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -11794,7 +11809,7 @@ static bool qore_aot_collect_int_expression_summaries(
                     block_values = values;
                     block_locals = local_values;
                     for (const auto& inst_ptr : block->instructions) {
-                        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                             continue;
                         }
                         if (!inst_ptr || inst_ptr->exception_target || target) {
@@ -11872,7 +11887,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<uint32_t, int> merge_values = values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : true_merge->instructions) {
-                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                         continue;
                     }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -11938,7 +11953,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<const LocalVar*, int> block_locals = local_values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : block->instructions) {
-                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                         continue;
                     }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -11977,7 +11992,7 @@ static bool qore_aot_collect_int_expression_summaries(
 
         const QoreIRReturnInstruction* ret = nullptr;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -12481,7 +12496,7 @@ static bool qore_aot_collect_float_expression_summaries(
                     return -1;
                 }
                 const QoreIRInstruction* inst = inst_ptr.get();
-                if (is_ignored(inst->opcode)) {
+                if (is_ignored(inst->opcode) || qore_aot_is_summary_skipped_instruction(*inst)) {
                     continue;
                 }
                 if (inst->opcode == QoreIROpcode::Return) {
@@ -13626,7 +13641,7 @@ bool qore_ir_resolve_batch_function_summaries(
         const QoreIRInstruction* comparison = nullptr;
         const QoreIRBranchIfInstruction* branch = nullptr;
         for (const auto& inst_ptr : entry->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || branch) {
@@ -13683,7 +13698,7 @@ bool qore_ir_resolve_batch_function_summaries(
             std::unordered_map<uint32_t, ScalarIntOperand> values = entry_values;
             const QoreIRReturnInstruction* ret = nullptr;
             for (const auto& inst_ptr : block->instructions) {
-                if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                     continue;
                 }
                 if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -13755,7 +13770,7 @@ bool qore_ir_resolve_batch_function_summaries(
                 }
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : block->instructions) {
-                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                         continue;
                     }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -13859,7 +13874,7 @@ bool qore_ir_resolve_batch_function_summaries(
         const QoreIRSelfMemberInstruction* load = nullptr;
         const QoreIRReturnInstruction* ret = nullptr;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -13921,7 +13936,7 @@ bool qore_ir_resolve_batch_function_summaries(
         std::vector<std::pair<std::string, int8_t>> assignments;
         bool returned = false;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || returned) {
@@ -14055,7 +14070,7 @@ bool qore_ir_resolve_batch_function_summaries(
         bool assigned = false;
         bool returned = false;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || returned) {

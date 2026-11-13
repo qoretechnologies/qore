@@ -280,6 +280,13 @@ struct QoreAOTStaticMethodRef {
     QoreAOTStaticMethodRef(const char* encoded);
 };
 
+//! Returns the variant of @a method (or of the method of the same name of the variant's class, which @a method is then
+//! set to) given by @a variant_ref ("<variant class>\n<signature text>"), or nullptr if it is not found
+/** The variant of the method call of an EN_DOT_EVAL expression node (issue #5823).
+*/
+const AbstractQoreFunctionVariant* qore_aot_find_method_variant(QoreProgram* pgm, const QoreMethod*& method,
+        const char* method_name, const char* variant_ref, bool pseudo);
+
 //! Encodes a static method reference, optionally with an exact variant or deferred argument type signature.
 std::string qore_aot_encode_static_method_ref(const char* method_name,
     const AbstractQoreFunctionVariant* variant = nullptr,

@@ -2591,6 +2591,18 @@ static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
     return variant;
 }
 
+const AbstractQoreFunctionVariant* qore_aot_find_method_variant(QoreProgram* pgm, const QoreMethod*& method,
+        const char* method_name, const char* variant_ref, bool pseudo) {
+    if (!method || !method_name || !variant_ref || !*variant_ref) {
+        return nullptr;
+    }
+    std::string encoded(method_name);
+    encoded += "\n";
+    encoded += variant_ref;
+    AOTEncodedMethodRef method_ref(encoded.c_str());
+    return findAOTMethodVariantByRef(pgm, method, method_ref, pseudo);
+}
+
 static const QoreMethod* findAOTStaticCallMethodByName(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
@@ -8869,6 +8881,11 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
+    // the object of the calls through self, as tryLowerFunction() lowers them, so that the expression slots are
+    // walked in the same order (issue #5823)
+    if (const UserSignature* self_sig = uvb->getUserSignature()) {
+        lowering.setSelfLocal(self_sig->selfid);
+    }
     std::string lower_error;
     if (!lowering.lowerStatementBlock(statements, lower_error)) {
         printd(1, "AOT: buildContextForVariant '%s': IR lowering failed: %s\n", name, lower_error.c_str());

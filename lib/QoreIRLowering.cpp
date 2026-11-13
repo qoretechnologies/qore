@@ -4688,6 +4688,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         handler_lowering.bg_helper_count = bg_helper_count;
         // the body of the handler is the root block of its IR function, which has the handler's block event (#5870)
         handler_lowering.handler_body = true;
+        // the handler runs in the frame of the function: its calls through self are made on the same object
+        // (issue #5823)
+        handler_lowering.self_local = self_local;
 
         // Lower the handler body into the handler IR function.  Any failure
         // here is an outer-function lowering failure — we no longer keep an
@@ -4822,6 +4825,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         handler_lowering.bg_helper_count = bg_helper_count;
         // the body of the handler is the root block of its IR function, which has the handler's block event (#5870)
         handler_lowering.handler_body = true;
+        // the handler runs in the frame of the function: its calls through self are made on the same object
+        // (issue #5823)
+        handler_lowering.self_local = self_local;
 
         // Lower the handler body into the handler IR function.  Any failure
         // is now reported as an outer-function lowering failure — the
@@ -12747,6 +12753,9 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     QoreIRLowering helper_lowering(helper_builder, parse_context, constant_reverse_map);
     helper_lowering.bg_helper_count = bg_helper_count;
     helper_lowering.bg_helper_index = helper_index;
+    // the new thread runs the expression with the object of the function (see uses_self): its calls through self are
+    // made on that object (issue #5823)
+    helper_lowering.self_local = self_local;
     BackgroundHelperLowering state;
     helper_lowering.bg_helper = &state;
 
@@ -13283,13 +13292,19 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     const QoreValue& base_expr = op->getExpression();
     LocalVar* base_local = getLocalVarFromValue(base_expr);
     bool self_base = base_local && !strcmp(base_local->getName(), "self");
-    if (m && m->getName() && self_base) {
+    // in a background expression, self is a value given to the new thread, which has no current object for it
+    // (unlike an unqualified call, see lowerSelfCall()): the call is made on the value, as any method call is, which
+    // checks it as the AST interpreter does (issue #5823)
+    if (m && m->getName() && self_base && !bg_helper) {
         const QoreMethod* method = m->getMethod();
         const QoreClass* qc = m->getClass();
         const AbstractQoreFunctionVariant* variant = m->getVariant();
         if (method && qc && qore_ir_method_target_is_final(qc, variant)
                 && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
                     variant, m->getParseArgs(), m->getArgs())) {
+            // the direct call does not check the object: it is checked before the arguments, as the AST interpreter
+            // checks it (issue #5823)
+            emitSelfCallTargetCheck(expr, op->loc);
             std::vector<QoreIRValue> lowered_args;
             if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {
                 if (!exception_stack.empty()) {
@@ -15629,6 +15644,16 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
 // QoreIRInlineStateClaim in QoreIR.h), so a value written at lowering time would never be
 // read; the interpreter resolves the same values from the variant on first execution.
 
+void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc) {
+    if (!self_local) {
+        // code without a self local (top-level code, a function) has no object to check
+        return;
+    }
+    // the check takes the current object itself: a load of self would make a method ineligible for the fast entries
+    // that have no self (isAOTImplicitSelfFastEntryEligible())
+    builder.createCheckCallTarget(call, QoreIRValue(), getCurrentExceptionTarget(), loc);
+}
+
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* call = dynamic_cast<const SelfFunctionCallNode*>(node);
@@ -15646,6 +15671,21 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     // a background expression calling a method of the object runs with the object in the new thread
     if (bg_helper && (!call->getMethod() || !call->getMethod()->isStatic())) {
         bg_helper->uses_self = true;
+    }
+    // the object is checked before the arguments, as the AST interpreter checks it (issue #5823): always for a direct
+    // call (see below), which does not check it, and for a call dispatched at run time when the arguments can show the
+    // order; a static method has no object, and copy() is not a method call
+    {
+        const QoreMethod* method = call->getMethod();
+        const QoreClass* qc = call->getClass();
+        bool direct = !call->hasExplicitTypeArgs() && method && qc
+            && qore_ir_method_target_is_final(qc, call->getVariant())
+            && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
+                call->getVariant(), call->getParseArgs(), call->getArgs());
+        if ((!method || !method->isStatic()) && !call->isCopyCall()
+                && (direct || callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs()))) {
+            emitSelfCallTargetCheck(expr, call->loc);
+        }
     }
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {

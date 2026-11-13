@@ -1223,7 +1223,10 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
 QoreIRExprInstruction* QoreIRBuilder::createCheckCallTarget(const QoreValue& call, QoreIRValue target,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRExprInstruction>(QoreIROpcode::CheckCallTarget, call);
-    inst->operands.push_back(target);
+    // no target: the call is made through self, on the current object (issue #5823)
+    if (target.isValid()) {
+        inst->operands.push_back(target);
+    }
     inst->exception_target = exception_target;
     inst->loc = loc;
     return inst;

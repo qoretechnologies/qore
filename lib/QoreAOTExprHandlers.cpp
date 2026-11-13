@@ -3422,11 +3422,22 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     const char* method_name = method_name_ref;
     // the explicit type arguments of the call, if any (qore#5865)
     const char* type_args = qore_aot_find_call_type_args(method_name_ref);
+    // the variant resolved at parse time ("<variant class>\n<signature>"), if any (issue #5823)
+    const char* variant_ref = nullptr;
+    // the variant comes before the type arguments, whose marker starts with a newline: a call without a variant has
+    // the marker right after the method name
+    std::string variant_ref_storage;
     if (method_name_ref) {
         const char* sig_sep = strchr(method_name_ref, '\n');
         if (sig_sep) {
             method_name_storage.assign(method_name_ref, sig_sep - method_name_ref);
             method_name = method_name_storage.c_str();
+            if (!type_args) {
+                variant_ref = sig_sep + 1;
+            } else if (sig_sep < type_args) {
+                variant_ref_storage.assign(sig_sep + 1, type_args - sig_sep - 1);
+                variant_ref = variant_ref_storage.c_str();
+            }
         }
     }
     uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -3499,6 +3510,10 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
         mc->parseSetClassAndMethod(resolved_qc, resolved_m);
         if (is_pseudo) {
             mc->setPseudo(resolved_qc->getTypeInfo());
+        }
+        if (const AbstractQoreFunctionVariant* variant = qore_aot_find_method_variant(ctx.pgm, resolved_m,
+                method_name, variant_ref, is_pseudo != 0)) {
+            mc->setVariant(variant);
         }
     }
     if (type_args) {

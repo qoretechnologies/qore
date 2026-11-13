@@ -8581,6 +8581,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // can_debug: invariant within this function — tlpd, statements, pgm won't change.
     // Only runtimeCheck() can change (debugger attaches mid-execution).
     bool can_debug = tlpd && statements && pgm;
+    // the current object of the frame, read by the first check of a call through self (issue #5823)
+    QoreObject* frame_self = nullptr;
+    bool frame_self_known = false;
     debug_active = can_debug && tlpd->runtimeCheck();
     // the state of the debugger's events of the frame (see QoreIRDebugFrameState)
     QoreIRDebugFrameState dbg_state;
@@ -15094,7 +15097,24 @@ load_local_done:
                 const QoreIRExprInstruction* ei = static_cast<const QoreIRExprInstruction*>(inst);
                 // qore_check_call_target() decides the common case (a method call on an object that has not been
                 // deleted) first; testing it inline here measured the same
-                if (qore_check_call_target(ei->expr, getIRValue(values, inst->operands.front()), xsink)) {
+                QoreValue target;
+                if (inst->operands.empty()) {
+                    // no operand: the call is made through self, on the current object (issue #5823), which does
+                    // not change while the frame runs: it is read once
+                    if (!frame_self_known) {
+                        frame_self = runtime_get_stack_object();
+                        frame_self_known = true;
+                    }
+                    // a method call on an object that has not been deleted needs no other check
+                    if (frame_self && qore_object_private::isValidInline(frame_self)) {
+                        ++ip;
+                        break;
+                    }
+                    target = frame_self ? QoreValue(static_cast<AbstractQoreNode*>(frame_self)) : QoreValue();
+                } else {
+                    target = getIRValue(values, inst->operands.front());
+                }
+                if (qore_check_call_target(ei->expr, target, xsink)) {
                     if (inst->exception_target) {
                         // the handler is in this frame: only the raising statement's temps are dead there
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);

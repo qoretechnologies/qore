@@ -16102,6 +16102,9 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 case QoreIROpcode::LoadLocal:
                 case QoreIROpcode::ConstInt:
                 case QoreIROpcode::ConstString:
+                // the check of the target of a call before its arguments (issue #5823): it changes nothing, stays
+                // where it is, and nothing in the interval can delete the object that it checks
+                case QoreIROpcode::CheckCallTarget:
                     break;
                 default:
                     return false;

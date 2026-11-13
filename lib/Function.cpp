@@ -6798,6 +6798,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
+    // the object of the calls through self (issue #5823)
+    lowering.setSelfLocal(signature.selfid);
     std::string error;
     if (!lowering.lowerStatementBlock(statements, error)) {
         if (mark_failure) {

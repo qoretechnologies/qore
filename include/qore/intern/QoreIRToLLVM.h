@@ -228,6 +228,9 @@ private:
     bool aot_mode = false;
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
+    //! the current object (NaN-boxed), read at the start of the function by the first check of a call through self
+    //! (QoreIROpcode::CheckCallTarget with no operand, issue #5823); null until then
+    llvm::Value* current_self_bits = nullptr;
     bool aot_direct_closure_fast_entry = true;
 
     // Deferred exception checking for code proven not to observe exceptions before
