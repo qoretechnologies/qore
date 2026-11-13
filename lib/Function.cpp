@@ -1026,16 +1026,25 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
 }
 
 CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
-        const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args,
-        QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* n_explicit_type_param_instantiation,
-        bool n_defer_domain_po, const name_vec_t& n_arg_names)
-    : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(nullptr),
+        const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
+        const qore_class_private* n_qc, const qore_class_private* cctx, QoreProgram* pgm_ctx,
+        const QoreTypeInfo* n_explicit_receiver_type_info,
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po,
+        const name_vec_t& n_arg_names)
+    : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()), arg_names(&n_arg_names),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        explicit_receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     // Qore code must never be started on an async I/O thread answering a fast route
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
     assert(!variant);
+    if (self && !self->isValid()) {
+        assert(n_qc);
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
+            "deleted", qc->name.c_str(), func->getName());
+        return;
+    }
     setCallName(func);
     tmp.assignEval(args);
     if (*xsink) {
@@ -1043,18 +1052,27 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     defer_domain_po = n_defer_domain_po;
-    init<true>(func, variant, false, nullptr, nullptr, pgm_ctx);
+    init<true>(func, variant, false, cctx, self, pgm_ctx);
 }
 
 CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
-        const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
-        QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* n_explicit_type_param_instantiation,
-        bool n_defer_domain_po, const name_vec_t& n_arg_names)
-    : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(nullptr),
+        const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
+        const qore_class_private* n_qc, const qore_class_private* cctx, QoreProgram* pgm_ctx,
+        const QoreTypeInfo* n_explicit_receiver_type_info,
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po,
+        const name_vec_t& n_arg_names)
+    : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()), arg_names(&n_arg_names),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        explicit_receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     assert(!variant);
+    if (self && !self->isValid()) {
+        assert(n_qc);
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
+            "deleted", qc->name.c_str(), func->getName());
+        return;
+    }
     setCallName(func);
     tmp.assignEval(args);
     if (*xsink) {
@@ -1062,7 +1080,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     }
 
     defer_domain_po = n_defer_domain_po;
-    init<true>(func, variant, false, nullptr, nullptr, pgm_ctx);
+    init<true>(func, variant, false, cctx, self, pgm_ctx);
 }
 
 #ifdef DEBUG
@@ -5857,8 +5875,8 @@ QoreValue QoreFunction::evalFunctionIntern(const AbstractQoreFunctionVariant* va
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     if constexpr (NAMED) {
-        CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, call_pgm_entry.getArgs(args), exec_pgm,
-            explicit_type_param_instantiation, defer_domain_po, *arg_names);
+        CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, call_pgm_entry.getArgs(args), nullptr, nullptr,
+            nullptr, exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po, *arg_names);
         if (*xsink) {
             return QoreValue();
         }
@@ -5912,8 +5930,8 @@ QoreValue QoreFunction::evalFunctionTmpArgsIntern(const AbstractQoreFunctionVari
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     if constexpr (NAMED) {
-        CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, exec_pgm, explicit_type_param_instantiation,
-            defer_domain_po, *arg_names);
+        CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, nullptr, exec_pgm, nullptr,
+            explicit_type_param_instantiation, defer_domain_po, *arg_names);
         if (*xsink) {
             return QoreValue();
         }

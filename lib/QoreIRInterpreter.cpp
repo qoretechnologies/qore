@@ -6170,6 +6170,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         SelfFunctionCallNode clone(*call, arg_list);
                         res = evalAndRef(&clone, xsink);
                         used_operands = true;
+                    } else if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                            inv->expr.getInternalNode()); dot && dot->getMethodCall()
+                            && dot->getMethodCall()->getRuntimeArgNames()) {
+                        // a named call of a method of an object resolved at run time by parameter name: the
+                        // receiver is the first operand
+                        res = dot->evalRuntimeNamedWithArgs(arg_list, xsink);
+                        used_operands = true;
                     }
                 } else if (op == QoreIROpcode::CallStatic || op == QoreIROpcode::CallStaticDirect) {
                     if (auto* call = dynamic_cast<const StaticMethodCallNode*>(
@@ -16778,6 +16785,13 @@ load_local_done:
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             SelfFunctionCallNode clone(*call, arg_list);
                             res = evalAndRef(&clone, xsink);
+                            used_operands = true;
+                        } else if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                                call_expr.getInternalNode()); dot && dot->getMethodCall()
+                                && dot->getMethodCall()->getRuntimeArgNames()) {
+                            // a named call of a method of an object resolved at run time by parameter name: the
+                            // receiver is the first operand
+                            res = dot->evalRuntimeNamedWithArgs(arg_list, xsink);
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallStatic) {

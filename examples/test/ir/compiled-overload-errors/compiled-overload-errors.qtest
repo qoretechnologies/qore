@@ -28,6 +28,8 @@
     - a variant resolved again at run time and found to be another one (a base class's, another overload) is called
       with the arguments as the caller gave them; the AST interpreter called it without arguments, and with the
       arguments converted for the variant that did not match
+    - M4: a named call whose variant is resolved at run time binds its arguments by name to each candidate variant
+      (functions; methods of objects, self calls and static methods: named-runtime-methods)
 
     The scripts next to the test run in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
     their output must be that of the AST interpreter, which the test runs first.  The output of the AST interpreter
@@ -37,7 +39,7 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
     public {
         #! the scripts
         const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins",
-            "assigned", "named", "named-runtime", "access-control", "or-nothing-casts");
+            "assigned", "named", "named-runtime", "named-runtime-methods", "access-control", "or-nothing-casts");
     }
 
     private {
@@ -55,11 +57,15 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
         dir = get_script_dir();
         foreach string script in (Scripts) {
-            addTestCase(script + ": execution modes", sub () { modesTest(script); });
-            addTestCase(script + ": AOT executable -O0", sub () { aotTest(script, "-O0"); });
-            addTestCase(script + ": AOT executable -O3", sub () { aotTest(script, "-O3"); });
+            # a local of the loop's block is a new variable in each iteration; the loop variable itself is one
+            # variable, which all closures would see with its last value
+            string name = script;
+            addTestCase(name + ": execution modes", sub () { modesTest(name); });
+            addTestCase(name + ": AOT executable -O0", sub () { aotTest(name, "-O0"); });
+            addTestCase(name + ": AOT executable -O3", sub () { aotTest(name, "-O3"); });
         }
         addTestCase("named call binding conflict", \namedBindingConflictTest());
+        addTestCase("named method call binding", \namedMethodBindingTest());
         set_return_value(main());
     }
 
@@ -121,6 +127,50 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
             p.parse(decl + "string sub t() { return nf5(a: 1, b: \"s\"); }\n", "named-literal");
             assertEq("nf5(int a, string b)", p.callFunction("t"));
+        }
+    }
+
+    #! named calls of methods and static methods whose variant is resolved at run time by parameter name (M4 phase 2)
+    namedMethodBindingTest() {
+        string decl = "class C {\n"
+            "    string m(int count, string label) { return \"m1\"; }\n"
+            "    string m(string label, float count) { return \"m2\"; }\n"
+            "    static string s(int count, string label) { return \"s1\"; }\n"
+            "    static string s(string label, float count) { return \"s2\"; }\n"
+            "    string pv(int a) { return \"pv1\"; }\n"
+            "    private string pv(string b) { return \"pv2\"; }\n"
+            "    string tie(int a, string b) { return \"t1\"; }\n"
+            "    string tie(string b, int a) { return \"t2\"; }\n"
+            "}\n";
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t(auto c, auto l) { C o(); return o.m(label: l, count: c) + "
+                "C::s(label: l, count: c); }\n", "named-method-runtime");
+            assertEq("m1s1", p.callFunction("t", 1, "x"));
+            assertEq("m2s2", p.callFunction("t", 1.5, "x"));
+            # no variant takes a string for "count"
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "count: string", \p.callFunction(), ("t", "y", "x"));
+        }
+        {
+            # a private variant is not a candidate outside the class
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-ARG-UNKNOWN", "'b'", \p.parse(), (decl + "string sub t(auto v) { C o(); "
+                "return o.pv(b: v); }\n", "named-method-private"));
+        }
+        {
+            # arguments with values of known types that two variants match equally well are ambiguous
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous", \p.parse(), (decl + "string sub t() { C o(); "
+                "return o.tie(a: 1, b: \"s\"); }\n", "named-method-tie"));
+        }
+        {
+            # the variants that the names can be bound to give the return type of a call resolved at run time
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-TYPE-ERROR", "string", \p.parse(), (decl + "int sub t(auto c, auto l) { C o(); "
+                "int i = o.m(label: l, count: c); return i; }\n", "named-method-return-type"));
+            Program p2(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-TYPE-ERROR", "string", \p2.parse(), (decl + "int sub t(auto c, auto l) { "
+                "int i = C::s(label: l, count: c); return i; }\n", "named-static-return-type"));
         }
     }
 

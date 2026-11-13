@@ -98,7 +98,31 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
         return m->execPseudo(base, xsink);
     }
 
+    // a named call of a method of an object resolved at run time by parameter name whose receiver is not an object
+    if (m->getRuntimeArgNames()) {
+        return m->execPseudoNamed(base, xsink);
+    }
+
     return pseudo_classes_eval(base, m->getName(), m->getArgs(), xsink);
+}
+
+QoreValue QoreDotEvalOperatorNode::evalRuntimeNamedWithArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    assert(m->getRuntimeArgNames());
+    ReferenceHolder<QoreListNode> args_holder(args, xsink);
+    ValueHolder base(args ? args->shift() : QoreValue(), xsink);
+    // a copy of the call with the arguments, which keeps the names of the arguments
+    ReferenceHolder<MethodCallNode> call(new MethodCallNode(*m, args_holder.release()), xsink);
+    switch (base->getType()) {
+        case NT_WEAKREF:
+            return call->exec(base->get<WeakReferenceNode>()->get(), xsink);
+
+        case NT_OBJECT:
+            return call->exec(const_cast<QoreObject*>(base->get<const QoreObject>()), xsink);
+
+        default:
+            break;
+    }
+    return call->execPseudoNamed(*base, xsink);
 }
 
 int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -141,6 +165,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             if (meth && strcmp(mname, "copy")) {
                 parse_context.typeInfo = nullptr;
                 QoreFunction* func = qore_method_private::get(*meth)->getFunction();
+                // the arguments are bound by name at run time when the variants that could be selected name their
+                // parameters differently (see AbstractMethodCallNode::execNamed())
+                m->setAllowRuntimeArgNames();
                 if (m->parseArgs(parse_context, func, nullptr) && !err) {
                     err = -1;
                 }
@@ -318,6 +345,11 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
     // check parameters, if any
     QoreFunction* func = qore_method_private::get(*meth)->getFunction();
+    // the arguments of a call of a method of the object are bound by name at run time when the variants that could be
+    // selected name their parameters differently (see AbstractMethodCallNode::execNamed())
+    if (!m->isPseudo()) {
+        m->setAllowRuntimeArgNames();
+    }
     if (m->parseArgs(parse_context, func, nullptr) && !err) {
         err = -1;
     }

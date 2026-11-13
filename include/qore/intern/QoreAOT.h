@@ -252,13 +252,20 @@ struct QoreAOTNamedCallArgs {
     bool has_names = false;
 };
 
-class FunctionCallNode;
+class FunctionCallBase;
 
-//! returns the serialized binding of the arguments of a named function call ("" for any other call)
+//! returns the serialized binding of the arguments of a named call ("" for any other call)
 /** @param with_map true to include the parameter positions of a call bound at parse time (an expression tree, whose
     arguments are written in source order); the arguments of a compiled call are passed at their positions
 */
-DLLLOCAL std::string qore_aot_named_call_arg_suffix(const FunctionCallNode* call, bool with_map = true);
+DLLLOCAL std::string qore_aot_named_call_arg_suffix(const FunctionCallBase* call, bool with_map = true);
+
+//! sets the binding of the arguments of a named call read with qore_aot_parse_named_call_arg_suffix() on the call
+/** a function call resolved at run time by parameter name is replaced with a RuntimeNamedFunctionCallNode
+
+    @return -1 if the value is not a call or the binding does not match its arguments, with the reason in \a error
+*/
+DLLLOCAL int qore_aot_apply_named_call_args(QoreValue& call, QoreAOTNamedCallArgs& named, std::string& error);
 
 //! removes the serialized binding of the arguments of a named function call from the reference; returns -1 if invalid
 DLLLOCAL int qore_aot_parse_named_call_arg_suffix(std::string& ref, QoreAOTNamedCallArgs& named);

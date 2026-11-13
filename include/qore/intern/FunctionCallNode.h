@@ -118,6 +118,11 @@ public:
     //! the names of the arguments in source order of a named call resolved at run time by parameter name, if any
     DLLLOCAL const name_vec_t* getRuntimeArgNames() const { return runtime_arg_names; }
 
+    //! allows the call to bind named arguments at run time; set before parseArgsVariant()
+    DLLLOCAL void setAllowRuntimeArgNames() {
+        allow_runtime_arg_names = true;
+    }
+
     //! sets the names of the arguments in source order of a named call resolved at run time (AOT deserialization)
     DLLLOCAL void setRuntimeArgNames(name_vec_t&& names) {
         runtime_arg_names = qore_intern_call_arg_names(std::move(names));
@@ -584,6 +589,15 @@ public:
     DLLLOCAL QoreValue exec(QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
             const;
 
+    //! evaluates a named call of a method of an object resolved at run time by parameter name
+    /** @param o the object
+        @param m the method, or nullptr to look it up by name in the class of the object
+        @param cstr the name of the method
+        @param ctx the class context of the call
+    */
+    DLLLOCAL QoreValue execNamed(QoreObject* o, const QoreMethod* m, const char* cstr, const qore_class_private* ctx,
+            RuntimeConfig& rc, ExceptionSink* xsink) const;
+
     DLLLOCAL const QoreClass* getClass() const {
         return qc;
     }
@@ -621,6 +635,11 @@ public:
     DLLLOCAL QoreValue exec(QoreObject* o, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue execPseudo(const QoreValue n, ExceptionSink* xsink) const;
+
+    //! evaluates a named call resolved at run time by parameter name on a value that is not an object: the call of
+    //! a method of an object whose receiver has no value or another value at run time (see
+    //! QoreDotEvalOperatorNode::evalWithBase())
+    DLLLOCAL QoreValue execPseudoNamed(const QoreValue n, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual const char* getName() const {
         return c_str ? c_str : "copy";
@@ -829,6 +848,9 @@ protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const;
+
+    //! evaluates a named call resolved at run time by parameter name
+    DLLLOCAL QoreValue evalNamed(RuntimeConfig& rc, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, NamedScope* n_scope, QoreParseListNode* args)

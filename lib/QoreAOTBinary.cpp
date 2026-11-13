@@ -12290,6 +12290,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
             variant ? nullptr : &call->getParsedArgTypeInfo());
+        // the arguments are written in source order (the order of their evaluation): a named call keeps the
+        // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
+        // name) after the method reference (read by read_expr_self_method_call())
+        method_ref += qore_aot_named_call_arg_suffix(call);
         writer.writeStringRef(method_ref.c_str());
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -12324,6 +12328,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
             variant ? nullptr : &call->getParsedArgTypeInfo());
+        // the arguments are written in source order (the order of their evaluation): a named call keeps the
+        // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
+        // name) after the method reference (read by read_expr_static_method_call())
+        method_ref += qore_aot_named_call_arg_suffix(call);
         writer.writeStringRef(method_ref.c_str());
         if ((writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
             writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
@@ -13546,7 +13554,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 class_path = qore_aot_encode_class_ref(qc, mc->isPseudo());
             }
             writer.writeStringRef(class_path.c_str());
-            writer.writeStringRef(mc->getName() ? mc->getName() : "");
+            // the arguments are written in source order (the order of their evaluation): a named call keeps the
+            // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
+            // name) after the name of the method (read by read_expr_dot_eval_target())
+            std::string method_ref = mc->getName() ? mc->getName() : "";
+            method_ref += qore_aot_named_call_arg_suffix(mc);
+            writer.writeStringRef(method_ref.c_str());
             writer.writeU8(mc->isPseudo() ? 1 : 0);
             // Target expression (left-hand side of the dot)
             if (!classifyAndWriteExpr(writer, de->getExpression(),

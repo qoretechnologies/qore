@@ -10911,6 +10911,12 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
             result = result.refSelf();
         }
         used_operands = true;
+    } else if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+            dot && dot->getMethodCall() && dot->getMethodCall()->getRuntimeArgNames()) {
+        // a named call of a method of an object resolved at run time by parameter name: the receiver is the first
+        // argument
+        result = dot->evalRuntimeNamedWithArgs(arg_list.release(), xsink);
+        used_operands = true;
     }
 
     if (!used_operands) {

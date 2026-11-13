@@ -138,7 +138,7 @@ static void makeExprDeserializedClosureIRNameUnique(QoreIRFunction& ir, const Us
         + "_" + std::to_string(closure_ir_counter.fetch_add(1));
 }
 
-std::string qore_aot_named_call_arg_suffix(const FunctionCallNode* call, bool with_map) {
+std::string qore_aot_named_call_arg_suffix(const FunctionCallBase* call, bool with_map) {
     std::string rv;
     if (const name_vec_t* arg_names = call->getRuntimeArgNames()) {
         rv = "\nargnames:";
@@ -483,6 +483,9 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
             variant ? nullptr : &call->getParsedArgTypeInfo());
+        // the binding of the arguments of a named call follows the method reference (see
+        // read_expr_self_method_call())
+        method_ref += qore_aot_named_call_arg_suffix(call);
         ctx.writer.writeStringRef(method_ref.c_str());
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -503,9 +506,38 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
     return false;
 }
 
+static QoreValue read_expr_self_method_call_intern(AOTExprReadCtx& ctx, const char* class_path,
+        const char* method_ref_str);
+
+int qore_aot_apply_named_call_args(QoreValue& call, QoreAOTNamedCallArgs& named, std::string& error);
+
 static QoreValue read_expr_self_method_call(AOTExprReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_ref_str = ctx.reader.readStringRef(ctx.ptr);
+    // the arguments are written in source order: a named call keeps the positions of their parameters (bound at parse
+    // time) or their names (resolved at run time by parameter name) after the method reference
+    std::string method_ref_text = method_ref_str ? method_ref_str : "";
+    QoreAOTNamedCallArgs named;
+    if (qore_aot_parse_named_call_arg_suffix(method_ref_text, named)) {
+        ctx.error = "invalid named call arguments in inline SELF_METHOD_CALL expression";
+        return QoreValue();
+    }
+    QoreValue rv = read_expr_self_method_call_intern(ctx, class_path,
+        method_ref_str ? method_ref_text.c_str() : nullptr);
+    if (!ctx.error.empty() || rv.isNothing()) {
+        return rv;
+    }
+    std::string error;
+    if (qore_aot_apply_named_call_args(rv, named, error)) {
+        rv.discard(nullptr);
+        ctx.error = error + " in inline SELF_METHOD_CALL expression";
+        return QoreValue();
+    }
+    return rv;
+}
+
+static QoreValue read_expr_self_method_call_intern(AOTExprReadCtx& ctx, const char* class_path,
+        const char* method_ref_str) {
     QoreAOTStaticMethodRef method_ref(method_ref_str);
     QoreParseListNode* pln = nullptr;
     if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_SELF_CALL_ARGS) != 0) {
@@ -744,6 +776,9 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
             variant ? nullptr : &call->getParsedArgTypeInfo());
+        // the binding of the arguments of a named call follows the method reference (see
+        // read_expr_static_method_call())
+        method_ref += qore_aot_named_call_arg_suffix(call);
         ctx.writer.writeStringRef(method_ref.c_str());
         if ((ctx.writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
             ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
@@ -772,9 +807,69 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
     return false;
 }
 
+static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx, const char* class_path,
+        const char* method_ref_str);
+
+int qore_aot_apply_named_call_args(QoreValue& call, QoreAOTNamedCallArgs& named, std::string& error) {
+    if (!named.has_names && !named.has_map) {
+        return 0;
+    }
+    AbstractQoreNode* node = call.getInternalNode();
+    // the call of a method of an object is the method call of the dot operator
+    QoreDotEvalOperatorNode* dot = node ? dynamic_cast<QoreDotEvalOperatorNode*>(node) : nullptr;
+    FunctionCallBase* fcb = dot ? static_cast<FunctionCallBase*>(dot->getMethodCall())
+        : (node ? dynamic_cast<FunctionCallBase*>(node) : nullptr);
+    if (!fcb) {
+        error = "the named call is not a call that can bind its arguments";
+        return -1;
+    }
+    // the binding has one entry for each argument
+    size_t nargs = fcb->getArgs() ? fcb->getArgs()->size() : 0;
+    if ((named.has_names && named.names.size() != nargs)
+            || (named.has_map && named.source_to_param.size() != nargs)) {
+        error = "the binding of the named call does not match the number of its arguments";
+        return -1;
+    }
+    if (named.has_map) {
+        fcb->setCallArgEvalMap(std::move(named.source_to_param), named.result_size);
+        return 0;
+    }
+    fcb->setRuntimeArgNames(std::move(named.names));
+    // a function call resolved at run time by parameter name is of a class of its own
+    if (FunctionCallNode* fcn = dot ? nullptr : dynamic_cast<FunctionCallNode*>(node)) {
+        call = FunctionCallNode::makeRuntimeNamed(fcn);
+    }
+    return 0;
+}
+
 static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
-    QoreAOTStaticMethodRef method_ref(ctx.reader.readStringRef(ctx.ptr));
+    const char* method_ref_str = ctx.reader.readStringRef(ctx.ptr);
+    // the arguments are written in source order: a named call keeps the positions of their parameters (bound at parse
+    // time) or their names (resolved at run time by parameter name) after the method reference
+    std::string method_ref_text = method_ref_str ? method_ref_str : "";
+    QoreAOTNamedCallArgs named;
+    if (qore_aot_parse_named_call_arg_suffix(method_ref_text, named)) {
+        ctx.error = "invalid named call arguments in inline STATIC_METHOD_CALL expression";
+        return QoreValue();
+    }
+    QoreValue rv = read_expr_static_method_call_intern(ctx, class_path,
+        method_ref_str ? method_ref_text.c_str() : nullptr);
+    if (!ctx.error.empty() || rv.isNothing()) {
+        return rv;
+    }
+    std::string error;
+    if (qore_aot_apply_named_call_args(rv, named, error)) {
+        rv.discard(nullptr);
+        ctx.error = error + " in inline STATIC_METHOD_CALL expression";
+        return QoreValue();
+    }
+    return rv;
+}
+
+static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx, const char* class_path,
+        const char* method_ref_str) {
+    QoreAOTStaticMethodRef method_ref(method_ref_str);
     const char* receiver_type_path = nullptr;
     if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
         receiver_type_path = ctx.reader.readStringRef(ctx.ptr);
@@ -3358,15 +3453,18 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     // classifyAndWriteExpr in QoreAOTBinary.cpp.
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_name_ref = ctx.reader.readStringRef(ctx.ptr);
-    std::string method_name_storage;
-    const char* method_name = method_name_ref;
-    if (method_name_ref) {
-        const char* sig_sep = strchr(method_name_ref, '\n');
-        if (sig_sep) {
-            method_name_storage.assign(method_name_ref, sig_sep - method_name_ref);
-            method_name = method_name_storage.c_str();
-        }
+    // the binding of the arguments of a named call follows the name of the method
+    std::string method_name_storage = method_name_ref ? method_name_ref : "";
+    QoreAOTNamedCallArgs named;
+    if (qore_aot_parse_named_call_arg_suffix(method_name_storage, named)) {
+        ctx.error = "invalid named call arguments in inline DOT_EVAL_TARGET expression";
+        return QoreValue();
     }
+    size_t sig_sep = method_name_storage.find('\n');
+    if (sig_sep != std::string::npos) {
+        method_name_storage.erase(sig_sep);
+    }
+    const char* method_name = method_name_ref ? method_name_storage.c_str() : nullptr;
     uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ctx.ptr);
 
     // Target expression
@@ -3440,6 +3538,21 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
         }
     }
     mc->resolveParseArgs();
+    // the binding has one entry for each argument
+    size_t nargs = mc->getArgs() ? mc->getArgs()->size() : 0;
+    if ((named.has_names && named.names.size() != nargs)
+            || (named.has_map && named.source_to_param.size() != nargs)) {
+        mc->deref(nullptr);
+        target.discard(nullptr);
+        ctx.error = "named call arguments that do not match the number of arguments in inline DOT_EVAL_TARGET "
+            "expression";
+        return QoreValue();
+    }
+    if (named.has_names) {
+        mc->setRuntimeArgNames(std::move(named.names));
+    } else if (named.has_map) {
+        mc->setCallArgEvalMap(std::move(named.source_to_param), named.result_size);
+    }
 
     return QoreValue(new QoreDotEvalOperatorNode(&loc_builtin, target, mc));
 }

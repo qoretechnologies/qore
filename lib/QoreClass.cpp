@@ -7445,6 +7445,101 @@ QoreValue StaticMethodFunction::evalMethodTmpArgs(ExceptionSink* xsink, RuntimeC
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 
+// a named call of a normal method resolved at run time by parameter name; "args" are evaluated by the call (const)
+// or temporary values that the caller keeps; see NormalMethodFunction::evalMethod()
+template <typename ArgList>
+static QoreValue eval_normal_method_named(const NormalMethodFunction& f, ExceptionSink* xsink, RuntimeConfig& rc,
+        QoreObject* self, ArgList args, const qore_class_private* cctx, QoreProgram* pgm_ctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names) {
+    const QoreClass* qc = f.getClass();
+    const char* mname = f.getName();
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, &f, variant, mname, args, self, qore_class_private::get(*qc), cctx,
+        qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), nullptr, explicit_type_param_instantiation, false,
+        arg_names);
+    if (*xsink) {
+        return QoreValue();
+    }
+    const MethodVariant* mv = METHV_const(variant);
+    if (mv->isAbstract()) {
+        xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly",
+            f.getClassName(), mname, mv->getSignature()->getSignatureText());
+        return QoreValue();
+    }
+    return mv->evalMethod(self, ceh, xsink);
+}
+
+QoreValue NormalMethodFunction::evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
+        const QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names) const {
+    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, nullptr, explicit_type_param_instantiation,
+        arg_names);
+}
+
+QoreValue NormalMethodFunction::evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
+        QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names) const {
+    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, nullptr, explicit_type_param_instantiation,
+        arg_names);
+}
+
+// see NormalMethodFunction::evalPseudoMethodNamed()
+template <typename ArgList>
+static QoreValue eval_pseudo_method_named(const NormalMethodFunction& f, ExceptionSink* xsink, RuntimeConfig& rc,
+        const QoreValue n, ArgList args, const qore_class_private* cctx, const name_vec_t& arg_names) {
+    const QoreClass* qc = f.getClass();
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, &f, variant, f.getName(), args, nullptr,
+        qc ? qore_class_private::get(*qc) : nullptr, cctx, qc ? qore_get_method_pgm_context(*qc, spgm_holder) : nullptr,
+        nullptr, nullptr, false, arg_names);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return METHV_const(variant)->evalPseudoMethod(n, ceh, xsink);
+}
+
+QoreValue NormalMethodFunction::evalPseudoMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreValue n,
+        const QoreListNode* args, bool tmp_args, const qore_class_private* cctx, const name_vec_t& arg_names) const {
+    return tmp_args
+        ? eval_pseudo_method_named(*this, xsink, rc, n, const_cast<QoreListNode*>(args), cctx, arg_names)
+        : eval_pseudo_method_named(*this, xsink, rc, n, args, cctx, arg_names);
+}
+
+// a named call of a static method resolved at run time by parameter name; see eval_normal_method_named()
+template <typename ArgList>
+static QoreValue eval_static_method_named(const StaticMethodFunction& f, ExceptionSink* xsink, RuntimeConfig& rc,
+        ArgList args, const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names) {
+    const QoreClass* qc = f.getClass();
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, &f, variant, f.getName(), args, nullptr, qore_class_private::get(*qc), cctx,
+        qore_get_method_pgm_context(*qc, spgm_holder), receiver_type_info, explicit_type_param_instantiation, false,
+        arg_names);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // issue #4964: set class ctx
+    ObjectSubstitutionHelper osh(nullptr, cctx);
+    return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
+}
+
+QoreValue StaticMethodFunction::evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreListNode* args,
+        const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names) const {
+    return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
+        explicit_type_param_instantiation, arg_names);
+}
+
+QoreValue StaticMethodFunction::evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreListNode* args,
+        const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names) const {
+    return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
+        explicit_type_param_instantiation, arg_names);
+}
+
 const qore_class_private* MethodVariantBase::getClassPriv() const {
     return qore_class_private::get(*(qmethod->getClass()));
 }

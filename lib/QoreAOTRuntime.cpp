@@ -1343,8 +1343,48 @@ static std::string describeAOTStaticCallTarget(const char* class_path, const cha
     return desc;
 }
 
+static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const char* ref2,
+        QoreProgram* pgm, const UserSignature* containing_signature);
+
+//! resolves an expression slot; the names of the arguments of a named call of a method or a static method resolved
+//! at run time by parameter name are written after its reference (see qore_aot_named_call_arg_suffix()) and set on
+//! the call node, which binds the arguments by name (see qore_rt_call_with_args_impl())
 static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* ref2,
         QoreProgram* pgm, const UserSignature* containing_signature = nullptr) {
+    if ((kind != AOTExprKind::STATIC_METHOD_CALL && kind != AOTExprKind::SELF_METHOD_CALL) || !ref2) {
+        return resolveExprSlotIntern(kind, ref1, ref2, pgm, containing_signature);
+    }
+    std::string encoded_ref = ref2;
+    QoreAOTNamedCallArgs named;
+    // the compiled arguments of a call bound at parse time are passed at the positions of their parameters, so
+    // only the names of a call resolved at run time are written
+    if (qore_aot_parse_named_call_arg_suffix(encoded_ref, named) || named.has_map) {
+        return 0;
+    }
+    uint64_t bits = resolveExprSlotIntern(kind, ref1, encoded_ref.c_str(), pgm, containing_signature);
+    if (!bits || !named.has_names) {
+        return bits;
+    }
+    QoreValue val;
+    std::memcpy(&val, &bits, sizeof(val));
+    AbstractQoreNode* node = val.getInternalNode();
+    // a static method call can be resolved to a function call (see qore_aot_resolve_function_entry_for_static_call_
+    // fallback()), which is of a class of its own when resolved at run time by parameter name
+    if (FunctionCallNode* fcn = dynamic_cast<FunctionCallNode*>(node)) {
+        fcn->setRuntimeArgNames(std::move(named.names));
+        return toBitsNB(QoreValue(FunctionCallNode::makeRuntimeNamed(fcn)));
+    }
+    if (FunctionCallBase* call = node ? dynamic_cast<FunctionCallBase*>(node) : nullptr) {
+        call->setRuntimeArgNames(std::move(named.names));
+        return bits;
+    }
+    printd(0, "AOT v2: the named call '%s' of an expression slot is not a call\n", ref2);
+    val.discard(nullptr);
+    return 0;
+}
+
+static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const char* ref2,
+        QoreProgram* pgm, const UserSignature* containing_signature) {
     if (!pgm) {
         return 0;
     }
@@ -4652,6 +4692,16 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
                     ref3 = reader.readStringRef(ptr);
                 }
+                // a named call resolved at run time by parameter name: the names of its arguments follow the
+                // reference (see resolveExprSlot()); a call bound at parse time has its arguments at the positions of
+                // their parameters
+                std::string static_ref2 = ref2 ? ref2 : "";
+                QoreAOTNamedCallArgs static_named;
+                bool static_named_invalid = qore_aot_parse_named_call_arg_suffix(static_ref2, static_named)
+                    || static_named.has_map;
+                if (ref2) {
+                    ref2 = static_ref2.c_str();
+                }
                 QoreAOTStaticMethodRef method_ref(ref2);
                 const char* method_name = method_ref.method_name;
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
@@ -4675,6 +4725,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                             call_args->push(arg, nullptr);
                         }
                     }
+                }
+                if (!has_unsupported && static_named_invalid) {
+                    setAOTExprSlotResolveError(i, expr_kind_name, "invalid named call arguments of the call to '"
+                        + describeAOTStaticCallTarget(ref1, method_name) + "'");
+                    has_unsupported = true;
                 }
                 if (has_unsupported) {
                     if (call_args) {
@@ -4800,6 +4855,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                             if (pln) {
                                 call_node->resolveParseArgs();
                             }
+                            if (static_named.has_names) {
+                                call_node->setRuntimeArgNames(std::move(static_named.names));
+                            }
                             ctx->exprs[i] = toBitsNB(QoreValue(call_node));
                             continue;
                         }
@@ -4832,6 +4890,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                     if (pln) {
                         fcn->resolveParseArgs();
+                    }
+                    if (static_named.has_names) {
+                        fcn->setRuntimeArgNames(std::move(static_named.names));
+                        ctx->exprs[i] = toBitsNB(QoreValue(FunctionCallNode::makeRuntimeNamed(fcn)));
+                        continue;
                     }
                     ctx->exprs[i] = toBitsNB(QoreValue(fcn));
                     continue;
@@ -6279,14 +6342,19 @@ static QoreAOTContext* buildContextFromSlotMap(
             continue;
         }
         const AbstractQoreNode* node = expr_val.getInternalNode();
+        // a named call resolved at run time by parameter name (of a function, a method of an object, a self call
+        // or a static method) is evaluated through its node, which binds its arguments by name (see
+        // qore_rt_call_with_args_impl())
+        {
+            const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node);
+            const FunctionCallBase* call = dot ? dot->getMethodCall() : dynamic_cast<const FunctionCallBase*>(node);
+            if (call && call->getRuntimeArgNames()) {
+                ctx->call_targets[i].runtime_arg_names = true;
+                continue;
+            }
+        }
         // Function call
         const auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
-        // a named call resolved at run time by parameter name is evaluated through its node, which binds its
-        // arguments by name (FunctionCallNode::evalImpl())
-        if (fcn && fcn->getRuntimeArgNames()) {
-            ctx->call_targets[i].runtime_arg_names = true;
-            continue;
-        }
         if (fcn && fcn->getFunction()) {
             ctx->call_targets[i].func = fcn->getFunction();
             ctx->call_targets[i].pgm = fcn->getProgram();

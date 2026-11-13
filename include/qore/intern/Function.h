@@ -703,19 +703,27 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             bool n_defer_domain_po = false);
 
-    //! Creates the object for evaluating a named function call whose variant is resolved at run time by parameter
-    //! name; the arguments are in source order with the names in "n_arg_names" (see
-    //! QoreFunction::runtimeFindVariant())
+    //! Creates the object for evaluating a named call whose variant is resolved at run time by parameter name; the
+    //! arguments are in source order with the names in "n_arg_names" (see QoreFunction::runtimeFindVariant())
+    /** @param self the object of a call of a normal method, otherwise nullptr
+        @param n_qc the class of the method of a method call, otherwise nullptr
+        @param cctx the class context of the variant resolved for a method call, if any
+        @param explicit_receiver_type_info the receiver of a call of a static method, if any
+    */
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args,
-            QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
-            bool n_defer_domain_po, const name_vec_t& n_arg_names);
+            QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
+            QoreProgram* pgm_ctx, const QoreTypeInfo* explicit_receiver_type_info,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool n_defer_domain_po,
+            const name_vec_t& n_arg_names);
 
-    //! Creates the object for evaluating a named function call with temporary arguments (see above)
+    //! Creates the object for evaluating a named call with temporary arguments (see above)
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
-            QoreProgram* pgm_ctx, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
-            bool n_defer_domain_po, const name_vec_t& n_arg_names);
+            QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
+            QoreProgram* pgm_ctx, const QoreTypeInfo* explicit_receiver_type_info,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool n_defer_domain_po,
+            const name_vec_t& n_arg_names);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**

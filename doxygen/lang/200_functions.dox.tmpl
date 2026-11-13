@@ -277,10 +277,31 @@ auto l = "items";
 string str = show(label: l, count: n);
     @endcode
 
-    For a method or static method call whose variant is resolved at runtime, the variants that the runtime resolution
-    can select must have the same parameter names at the positions of the arguments; if another such variant has
-    other parameter names at those positions, the call is rejected with \c NAMED-CALL-NOT-SUPPORTED; use positional
-    arguments or give the argument an explicit type that has a value.
+    Calls of methods are resolved at runtime by parameter name in the same way: a call of a method of an object
+    binds the arguments to the variants of the method in the class of the object at runtime (so a variant that a
+    child class adds is a candidate, as for a call with positional arguments), a call of a method in the
+    class (with or without an explicit class name) to the variants of that method, and a static method call to the
+    variants of the static method; a variant that is not accessible where the call is made is not a candidate.  A
+    receiver declared with an or-nothing class type that has no value at runtime raises the error of the same call
+    with positional arguments.  For a call of a pseudo-method whose variant is resolved at runtime, the variants that
+    the runtime resolution can select must have the same parameter names at the positions of the arguments; if
+    another such variant has other parameter names at those positions, the call is rejected with
+    \c NAMED-CALL-NOT-SUPPORTED; use positional arguments or give the argument an explicit type that has a value.
+    @code{.py}
+class Label {
+    string show(int count, string label) { return sprintf("%s: %d", label, count); }
+    string show(string label, float count) { return sprintf("%g x %s", count, label); }
+    static string format(int count, string label) { return sprintf("%s: %d", label, count); }
+    static string format(string label, float count) { return sprintf("%g x %s", count, label); }
+}
+auto n = 2.5;
+auto l = "items";
+Label lbl();
+# resolved at runtime: show(string label, float count) matches the float value of n best
+string str = lbl.show(label: l, count: n);
+# the same for a static method
+str = Label::format(label: l, count: n);
+    @endcode
 
     @note Parameter names are part of the public calling interface for named callers. Renaming a public parameter can
     break callers that use named arguments even when positional callers are unaffected.
