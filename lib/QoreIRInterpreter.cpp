@@ -7691,6 +7691,39 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_dismissed_exit(QoreIRDebugFrameStat
     return true;
 }
 
+struct IRCatchEntry {
+    QoreException* caught;  // the caught exception
+    QoreException* saved;   // the previous td->catchException value
+    //! the number of scopes open when the catch block was entered (those that enclose the try statement): the
+    //! catch block is in every scope below that depth, and is left when one of them is (#5969)
+    size_t scope_depth;
+};
+
+//! Restores enclosing caught exceptions on the exceptional exit from a scope (#5969).
+static QORE_INTERN_NOINLINE void qore_ir_close_catch_scopes_pending(std::vector<IRCatchEntry>& stack,
+        size_t scope_count, ExceptionSink* xsink) {
+    while (!stack.empty() && stack.back().scope_depth >= scope_count) {
+        IRCatchEntry entry = stack.back();
+        stack.pop_back();
+        if (entry.caught) {
+            catch_swap_exception(entry.saved);
+            entry.caught->del(xsink);
+        }
+    }
+}
+
+//! Keeps the empty-stack/depth checks inline, with no persistent closure object in each interpreter frame.
+/** Only a pending exception or thread_exit closes these catch scopes here. Normal break/continue/return exits
+    close them with CatchCleanup. The uncommon unwind loop lives outside the per-invocation execute() frame.
+*/
+static QORE_INTERN_ALWAYS_INLINE void qore_ir_close_catch_scopes(std::vector<IRCatchEntry>& stack,
+        size_t scope_count, ExceptionSink* xsink) {
+    if (stack.empty() || stack.back().scope_depth < scope_count || !xsink || !*xsink) {
+        return;
+    }
+    qore_ir_close_catch_scopes_pending(stack, scope_count, xsink);
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -8096,17 +8129,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     };
     auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
-    struct CatchEntry {
-        QoreException* caught;  // the caught exception
-        QoreException* saved;   // the previous td->catchException value
-        //! the number of scopes open when the catch block was entered (those that enclose the try statement): the
-        //! catch block is in every scope below that depth, and is left when one of them is (#5969)
-        size_t scope_depth;
-    };
-    std::vector<CatchEntry> catch_exception_stack;
+    std::vector<IRCatchEntry> catch_exception_stack;
     // RAII cleanup for catch_exception_stack — ensures proper cleanup on all exit paths
     struct CatchStackCleanup {
-        std::vector<CatchEntry>& stack;
+        std::vector<IRCatchEntry>& stack;
         ExceptionSink* xsink;
         ~CatchStackCleanup() {
             while (!stack.empty()) {
@@ -8121,31 +8147,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     } catch_stack_cleanup{catch_exception_stack, xsink};
     // Scope stack: one entry for each ScopeEnter; see IRScopeEntry
     std::vector<IRScopeEntry> scope_stack;
-    // closes the catch blocks of the frame opened in a scope that the code leaves, before the handlers of the scope
-    // run: an exception that a call in a catch block raises (or a thread_exit) leaves the catch block, and the AST
-    // interpreter restores the exception that it caught before (td->catchException) as it leaves it, so that the
-    // handlers of the enclosing blocks and the code after the try statement that catches the exception see that one
-    // (#5969); a throw or rethrow closes the catch blocks it leaves itself (see catchScopesLeftByThrow()).  Only with
-    // an exception or a thread_exit pending: a break, continue or return out of a catch block leaves the scopes before
-    // the CatchCleanup instructions that close its catch blocks
-    // closes the catch blocks entered in the innermost scope, before the scope is left (scope_count: the number of open
-    // scopes, that one included); the depth is compared first, so that a scope that entered no catch block, the case
-    // of every normal exit, makes no call to check the sink (ExceptionSink::operator bool() is not inline), and a scope
-    // records nothing when it is entered
-    auto closeCatchScopes = [&](size_t scope_count) QORE_IR_LAMBDA_INLINE {
-        if (catch_exception_stack.empty() || catch_exception_stack.back().scope_depth < scope_count || !xsink
-                || !*xsink) {
-            return;
-        }
-        while (!catch_exception_stack.empty() && catch_exception_stack.back().scope_depth >= scope_count) {
-            CatchEntry entry = catch_exception_stack.back();
-            catch_exception_stack.pop_back();
-            if (entry.caught) {
-                catch_swap_exception(entry.saved);
-                entry.caught->del(xsink);
-            }
-        }
-    };
     auto preserveParentSlotForWriteback = [&](size_t slot_id) {
         // Dirty inherited parent slots must survive cache invalidation until
         // ParentSlotWriteback publishes them to the enclosing frame.
@@ -8172,7 +8173,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto fireScopeExits = [&](size_t target_depth = 0) {
         while (scope_stack.size() > target_depth) {
             size_t scope_start = scope_stack.back().handler_start;
-            closeCatchScopes(scope_stack.size());
+            qore_ir_close_catch_scopes(catch_exception_stack, scope_stack.size(), xsink);
             scope_stack.pop_back();
             if (on_block_exit_handlers.size() > scope_start) {
                 // a scope left without an exception, such as by a thread_exit, runs its on_success handlers, as
@@ -10682,7 +10683,7 @@ next_instruction:
                     // exception released its own temporaries when it branched here
                     releaseScopeTemps(scope_stack.back());
                     size_t scope_start = scope_stack.back().handler_start;
-                    closeCatchScopes(scope_stack.size());
+                    qore_ir_close_catch_scopes(catch_exception_stack, scope_stack.size(), xsink);
                     scope_stack.pop_back();
                     // Execute on_error/on_exit/on_success handlers in reverse order (LIFO); a block left by a
                     // thread_exit, which is not an exception, runs its on_success handlers, as in the AST
@@ -15456,7 +15457,7 @@ load_local_done:
                         // closes none: a break, continue or return out of a catch block closes it with CatchCleanup,
                         // and a scope without handlers leaves them to the scopes, landing pads and frame exit after it
                         // (#5969)
-                        closeCatchScopes(scope_stack.size() + 1);
+                        qore_ir_close_catch_scopes(catch_exception_stack, scope_stack.size() + 1, xsink);
                         ExceptionSink obe_xsink;
                         bool error = scope_inst->is_error || (xsink && xsink->isException());
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
