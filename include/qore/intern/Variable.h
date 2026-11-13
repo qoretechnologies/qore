@@ -664,7 +664,8 @@ private:
     DLLLOCAL void releaseIntern(ExceptionSink* xsink);
 };
 
-class LValueHelper {
+class LValueHelper final {
+    friend struct qore_type_safe_ref_helper_priv_t;
     friend class LValueRemoveHelper;
     friend class LValueLockHandoffHelper;
 
@@ -1007,6 +1008,14 @@ public:
 
     DLLLOCAL LValueHelper(ExceptionSink* xsink, bool for_assignment = false);
 
+    //! Finishes the parent lvalue before a callback that can replace or remove it
+    /** The caller must first retain the target object. Completes counts, locks, reference Program entries,
+        writebacks, scans and deferred releases, then leaves an empty helper. Pending member notifications stay
+        with this helper until its original scope ends. The caller must not read the old lvalue afterwards.
+        Object mutation does not write its reference back to an external parent member.
+    */
+    DLLLOCAL void finishForCallback();
+
     //! Returns how the helper resolves the lvalue (see ReadAccess)
     DLLLOCAL read_access_e getReadAccess() const {
         return read_access;
@@ -1044,6 +1053,9 @@ public:
 
     // to scan objects after initialization
     DLLLOCAL LValueHelper(QoreObject& obj, ExceptionSink* xsink);
+    //! Scan an already pinned object after unlocked native callbacks, without reading its member counts
+    struct ObjectScan {};
+    DLLLOCAL LValueHelper(QoreObject& self, ExceptionSink* xsink, ObjectScan);
 
     DLLLOCAL ~LValueHelper();
 

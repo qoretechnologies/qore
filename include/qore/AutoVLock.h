@@ -78,6 +78,8 @@ private:
 /** This object is used for lock handover management and automatically releasing the last lock.
  */
 class AutoVLock {
+    // Internal lvalue handoff preserves pending notifications until the operation has finished.
+    friend class LValueLockHandoffHelper;
 private:
     // pointer to lock currently held
     QLckPtr lock;

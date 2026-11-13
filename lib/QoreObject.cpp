@@ -1031,11 +1031,15 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
 }
 
 QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key, bool check_access,
-        bool for_delete) {
+        bool for_delete, bool* exists) {
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
-        return cls->evalMemberWriteGate(obj, key, QoreValue(),
+        QoreValue value = cls->evalMemberWriteGate(obj, key, QoreValue(),
             for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, xsink);
+        if (exists) {
+            *exists = !value.isNothing();
+        }
+        return value;
     }
     const QoreTypeInfo* mti = nullptr;
 
@@ -1050,8 +1054,12 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     // a declared member held in external storage is read and cleared with its accessors, without the object lock
     if (cls->findAccessorMember(key)) {
-        return cls->evalExternalMemberWrite(obj, key, QoreValue(),
+        QoreValue value = cls->evalExternalMemberWrite(obj, key, QoreValue(),
             for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, xsink);
+        if (exists) {
+            *exists = !*xsink;
+        }
+        return value;
     }
 
     QoreAutoVarRWWriteLocker al(rml);
@@ -1063,7 +1071,8 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv = odata->priv->swapKeyValue(key, QoreValue(), this);
+    QoreValue rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
+        : odata->priv->swapKeyValue(key, QoreValue(), this);
     if (needs_scan(rv)) {
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();
@@ -1076,7 +1085,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
-        lvh.vl.del();
+        lvh.finishForCallback();
+        if (*lvh.vl.xsink) {
+            return QoreValue();
+        }
         QoreValue value = cls->evalMemberWriteGate(obj, key, QoreValue(),
             for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, lvh.vl.xsink);
         if (exists) {
@@ -1100,7 +1112,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     // the lvalue's locks are released first
     if (cls->findAccessorMember(key)) {
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
-        lvh.vl.del();
+        lvh.finishForCallback();
+        if (*lvh.vl.xsink) {
+            return QoreValue();
+        }
         QoreValue value = cls->evalExternalMemberWrite(obj, key, QoreValue(),
             for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, lvh.vl.xsink);
         if (exists) {
@@ -1135,38 +1150,52 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     return rv;
 }
 
+void qore_object_private::takeExternalMembers(QoreLValueGeneric& rv, LValueHelper& lvh,
+        const QoreListNode* l, bool for_delete) {
+    ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
+    lvh.finishForCallback();
+    if (*lvh.vl.xsink) {
+        return;
+    }
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), lvh.vl.xsink);
+    // Mixed slices can remove ordinary members too. Scan the pinned target, never the former parent path.
+    LValueHelper object_scan(*obj, lvh.vl.xsink, LValueHelper::ObjectScan{});
+    ConstListIterator li(l);
+    size_t count = 0;
+    while (li.next()) {
+        if (++count % 10 == 0 && qore_check_cancel(lvh.vl.xsink, "external member removal")) {
+            return;
+        }
+        QoreHashKeyHelper key(li.getValue(), lvh.vl.xsink);
+        if (*lvh.vl.xsink) {
+            return;
+        }
+        bool exists = false;
+        ValueHolder value(takeMember(lvh.vl.xsink, key.c_str(), true, for_delete, &exists), lvh.vl.xsink);
+        object_scan.objectRemoved(*this, needs_scan(*value));
+        // Keep even overwritten duplicate-key results until the target scan has finished.
+        object_scan.saveTemp(value->refSelf());
+        if (*lvh.vl.xsink) {
+            return;
+        }
+        if (!exists) {
+            continue;
+        }
+        result->setKeyValue(key.c_str(), value.release(), lvh.vl.xsink);
+        if (*lvh.vl.xsink) {
+            return;
+        }
+    }
+    rv.assignInitial(result.release());
+    return;
+}
+
 void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l,
         bool for_delete) {
     lvh.disableMemberWriteBack();
     // members held in external storage are taken one at a time, as their accessors and gates run without locks
     if (theclass->hasMemberWriteGate() || qore_class_private::get(*theclass)->has_member_accessors) {
-        ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
-        lvh.vl.del();
-        ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), lvh.vl.xsink);
-        ConstListIterator li(l);
-        size_t count = 0;
-        while (li.next()) {
-            if (++count % 10 == 0 && qore_check_cancel(lvh.vl.xsink, "external member removal")) {
-                return;
-            }
-            QoreHashKeyHelper key(li.getValue(), lvh.vl.xsink);
-            if (*lvh.vl.xsink) {
-                return;
-            }
-            bool exists = false;
-            ValueHolder value(takeMember(lvh, key.c_str(), for_delete, &exists), lvh.vl.xsink);
-            if (*lvh.vl.xsink) {
-                return;
-            }
-            if (!exists) {
-                continue;
-            }
-            result->setKeyValue(key.c_str(), value.release(), lvh.vl.xsink);
-            if (*lvh.vl.xsink) {
-                return;
-            }
-        }
-        rv.assignInitial(result.release());
+        takeExternalMembers(rv, lvh, l, for_delete);
         return;
     }
     // get the current class context for possible internal data
