@@ -1369,7 +1369,11 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
             if (sfcn) {
                 val = sfcn;
                 deref();
-                return sfcn->parseInitCall(val, parse_context);
+                // parse-initialized here, not through ParseNode::parseInit(), so its analysis is recorded here
+                // (qore#5977)
+                int rc = sfcn->parseInitCall(val, parse_context);
+                sfcn->setParseAnalysis(parse_context.analysis);
+                return rc;
             }
         }
     } else {
@@ -1476,7 +1480,7 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
         free(c_str);
         c_str = nullptr;
         deref();
-        return dynamic_call->parseInitFinalizedCall(val, parse_context);
+        return dynamic_call->parseInitReplacementCall(val, parse_context);
     }
 
     if (!fe && !defer_source_function) {
@@ -1959,7 +1963,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     fcn->moveExplicitTypeArgsFrom(*this);
                     val = fcn;
                     deref();
-                    return fcn->parseInitFinalizedCall(val, parse_context);
+                    return fcn->parseInitReplacementCall(val, parse_context);
                 }
             }
 
@@ -2029,7 +2033,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     delete scope;
                     scope = nullptr;
                     deref();
-                    return dynamic_call->parseInitFinalizedCall(val, parse_context);
+                    return dynamic_call->parseInitReplacementCall(val, parse_context);
                 }
 
                 {

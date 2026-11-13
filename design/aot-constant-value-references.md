@@ -361,6 +361,18 @@ exception target (a typed container whose entries must be checked), as its excep
 edge is part of the CFG.  `QORE_DISABLE_IR_CONSTANT_CONTAINER_LOAD` turns the
 replacement off, and `QORE_IR_OPT_STATS` reports it as `constant-loads`.
 
+The other half of the #5977 cost was the call's value, not the call: `HttpServer` calls
+`http_get_charset_label()` of `HttpServerUtil` namespace-qualified, which parses as a
+static method call that replaces itself with a function call and parse-initializes it
+itself.  `ParseNode::parseInit()` records the analysis only on the node it was called
+on, so the replacement kept none, and code generation saw no type for the returned
+string: a pseudo-method call on it was compiled to the dynamic dispatch.  Such a
+replacement is initialized with `FunctionCallNode::parseInitReplacementCall()`, which
+records it, and so is a call of a method of the class without a receiver, which a
+`FunctionCallNode` replaces with a `SelfFunctionCallNode`
+(`examples/test/ir/AOTCrossModuleCallReturnType.qtest`).  The cost of the
+cross-module call itself is [#6035](https://github.com/qoretechnologies/qore/issues/6035).
+
 ## The load-side guard
 
 `ConstantEntry::getReferencedValue()` records the entry it is materializing in a
