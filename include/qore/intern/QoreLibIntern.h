@@ -436,6 +436,11 @@ constexpr unsigned QORE_EVAL_STACK_CHECK_INTERVAL = 16;
 DLLLOCAL QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name,
         const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink);
 
+DLLLOCAL QoreValue q_call_static_method_args(LexicalSemanticPolicy policy, QoreProgram* pgm,
+    const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink);
+DLLLOCAL q_func_t qore_get_lexical_object_builtin(q_func_t func);
+DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
+
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
@@ -1782,9 +1787,17 @@ public:
         already hold an unrelated exception when a caller reuses a long-lived sink
     */
     DLLLOCAL int assign(QoreValue v, ExceptionSink* xsink);
+    DLLLOCAL int assignNative(QoreValue v, ExceptionSink* xsink);
+    template <bool Native>
+    DLLLOCAL int assignNativeImpl(QoreValue v, ExceptionSink* xsink);
 
     //! assigns the value to the key; returns 0 for OK, -1 if THIS assignment failed (see the overload above)
     DLLLOCAL int assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink);
+
+    DLLLOCAL int assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL int assignImpl(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink, LexicalSemanticPolicy policy);
 
     DLLLOCAL QoreValue swap(QoreValue v) {
         return swapImpl(v);

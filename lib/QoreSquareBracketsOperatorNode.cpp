@@ -58,7 +58,7 @@ bool QoreSquareBracketsOperatorNode::normalizeIndex(int64& offset, int64 size, b
 }
 
 static bool qore_get_effective_selector_range(const QoreValue& seq, const QoreValue& range_value,
-        bool negative_offsets, int64& start, int64& stop, bool& empty, ExceptionSink* xsink) {
+        bool negative_offsets, bool broken_list_range, int64& start, int64& stop, bool& empty, ExceptionSink* xsink) {
     empty = false;
 
     if (!negative_offsets || range_value.getType() != NT_LIST) {
@@ -80,7 +80,7 @@ static bool qore_get_effective_selector_range(const QoreValue& seq, const QoreVa
 
     int64 seq_size;
     empty = !QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, start, stop, seq_size, start_index,
-        stop_index, static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
+        stop_index, broken_list_range, negative_offsets, xsink);
     return true;
 }
 
@@ -389,7 +389,7 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     // do not evalute RHS if it's a list with ranges
     if (rhs_list_range)
         return doSquareBracketsListRange(*lh, right.get<const QoreParseListNode>(), string_index_char,
-            negative_offsets, xsink);
+            negative_offsets, semantic_policy.brokenListRange(), xsink);
 
     // the index is a temporary of the statement, which lives until the statement ends (qore#5712)
     QoreOperandEvalHolder rh(right, xsink);
@@ -409,7 +409,7 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
 }
 
 QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,
-        bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
+        bool string_index_char, bool negative_offsets, bool broken_list_range, ExceptionSink* xsink) {
     switch (l.getType()) {
         case NT_LIST: {
             // calculate the runtime element type if possible
@@ -429,7 +429,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                 int64 start;
                 int64 stop;
                 bool empty;
-                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, start, stop, empty,
+                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, broken_list_range, start, stop, empty,
                         xsink)) {
                     if (*xsink) {
                         return QoreValue();
@@ -516,7 +516,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                 int64 start;
                 int64 stop;
                 bool empty;
-                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, start, stop, empty,
+                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, broken_list_range, start, stop, empty,
                         xsink)) {
                     if (*xsink) {
                         return QoreValue();
@@ -558,7 +558,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                 int64 start;
                 int64 stop;
                 bool empty;
-                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, start, stop, empty,
+                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, broken_list_range, start, stop, empty,
                         xsink)) {
                     if (*xsink) {
                         return QoreValue();
@@ -756,7 +756,7 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
         if (lhs->getType() == NT_LIST) {
             value_type = list;
             return new QoreFunctionalSquareBracketsComplexOperator(lhs, right.get<const QoreParseListNode>(),
-                string_index_char, negative_offsets, xsink);
+                string_index_char, negative_offsets, semantic_policy.brokenListRange(), xsink);
         }
     } else {
         if (rhs.eval(right))
@@ -765,7 +765,7 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
     }
 
     ValueHolder res(doSquareBracketsListRange(*lhs, right.get<const QoreParseListNode>(), string_index_char,
-        negative_offsets, xsink), xsink);
+        negative_offsets, semantic_policy.brokenListRange(), xsink), xsink);
     if (*xsink)
         return nullptr;
     return getResultIterator(res, value_type, xsink);
@@ -853,7 +853,7 @@ int QoreFunctionalSquareBracketsComplexOperator::startRange(const QoreRangeOpera
         int64 seq_size;
         bool has_range = QoreSquareBracketsRangeOperatorNode::getEffectiveRange(*leftValue, effective_start,
             effective_stop, seq_size, QoreValue(start), QoreValue(stop),
-            static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
+            broken_list_range, negative_offsets, xsink);
         if (*xsink) {
             return -1;
         }

@@ -195,6 +195,7 @@ QoreBreakpointList_t::~QoreBreakpointList_t() {
 
 AbstractStatement::AbstractStatement(qore_program_private_base* p) : loc(p->getLocation(-1, -1)) {
     pwo = p->pwo;
+    semantic_policy_bound = LexicalParsePolicyHelper::capture(semantic_policy);
 }
 
 AbstractStatement::AbstractStatement(int sline, int eline)
@@ -202,12 +203,14 @@ AbstractStatement::AbstractStatement(int sline, int eline)
     QoreProgram* pgm = getProgram();
     assert(pgm);
     pwo = qore_program_private::getParseWarnOptions(pgm);
+    semantic_policy_bound = LexicalParsePolicyHelper::capture(semantic_policy);
 }
 
 AbstractStatement::AbstractStatement(const QoreProgramLocation* loc) : loc(loc) {
     QoreProgram* pgm = getProgram();
     assert(pgm);
     pwo = qore_program_private::getParseWarnOptions(pgm);
+    semantic_policy_bound = LexicalParsePolicyHelper::capture(semantic_policy);
 }
 
 AbstractStatement::~AbstractStatement() {
@@ -270,6 +273,11 @@ int AbstractStatement::parseInit(QoreParseContext& parse_context) {
 
     // set parse options and warning mask for this statement
     ParseWarnHelper pwh(pwo);
+    if (!semantic_policy_bound) {
+        semantic_policy = LexicalSemanticPolicy(pwo.parse_options);
+        semantic_policy_bound = true;
+    }
+    LexicalParsePolicyHelper semantic_scope(semantic_policy);
 
     in_try = (parse_context.pflag & PF_IN_TRY) != 0;
 

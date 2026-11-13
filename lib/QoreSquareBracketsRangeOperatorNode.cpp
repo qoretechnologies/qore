@@ -189,7 +189,7 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
     holdBorrowedSequence(seq);
 
     QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
-    bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
+    bool broken_list_range = semantic_policy.brokenListRange();
     bool negative_offsets = static_cast<bool>(po & PO_NEGATIVE_OFFSETS);
 
     ValueEvalRefHolder start_index(rc, e[1], xsink);
@@ -238,12 +238,12 @@ QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value,
             if (!empty || broken_list_range) {
                 if (start < stop) {
                     for (int64 i = start; i <= stop; ++i) {
-                        rv->push(l->getReferencedEntry(i), xsink);
+                        qore_list_private::pushCanonical(**rv, l->getReferencedEntry(i), xsink);
                         assert(!*xsink);
                     }
                 } else {
                     for (int64 i = start; i >= stop; --i) {
-                        rv->push(l->getReferencedEntry(i), xsink);
+                        qore_list_private::pushCanonical(**rv, l->getReferencedEntry(i), xsink);
                         assert(!*xsink);
                     }
                 }
@@ -320,28 +320,28 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getFunctionalI
     if (*xsink)
         return nullptr;
     QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
-    return getSliceIterator(seq, *start_index, *stop_index, po, value_type, xsink);
+    return getSliceIterator(seq, *start_index, *stop_index, po, value_type, xsink, semantic_policy);
 }
 
 FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getSliceIterator(ValueEvalRefHolder& seq,
         const QoreValue start_index, const QoreValue stop_index, QoreParseOptions po, FunctionalValueType& value_type,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, LexicalSemanticPolicy semantic_policy) {
     value_type = list;
 
     if (seq->getType() == NT_LIST || seq->getType() == NT_BUFFER) {
-        bool broken_list_range = static_cast<bool>(po & PO_BROKEN_LIST_RANGE);
+        bool broken_list_range = semantic_policy.brokenListRange();
         bool negative_offsets = static_cast<bool>(po & PO_NEGATIVE_OFFSETS);
         int64 start, stop, seq_size;
         if (getEffectiveRange(*seq, start, stop, seq_size, start_index, stop_index, broken_list_range,
                 negative_offsets, xsink)) {
-            if (!(po & PO_BROKEN_RANGE)) {
+            if (!semantic_policy.brokenRange()) {
                 if (start <= stop) {
                     ++stop;
                 } else {
                     --stop;
                 }
             }
-            return new QoreFunctionalSquareBracketsRangeOperator(seq, start, stop, xsink);
+            return new QoreFunctionalSquareBracketsRangeOperator(seq, start, stop, semantic_policy.brokenRange(), xsink);
         }
         if (*xsink) {
             return nullptr;
@@ -361,7 +361,7 @@ FunctionalOperatorInterface* QoreSquareBracketsRangeOperatorNode::getSliceIterat
     }
 
     // any other sequence: its value is made from the sequence and the indices
-    ValueHolder res(slice(*seq, start_index, stop_index, static_cast<bool>(po & PO_BROKEN_LIST_RANGE),
+    ValueHolder res(slice(*seq, start_index, stop_index, semantic_policy.brokenListRange(),
         static_cast<bool>(po & PO_NEGATIVE_OFFSETS), xsink), xsink);
 
     if (*xsink) {

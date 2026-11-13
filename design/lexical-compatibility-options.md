@@ -1,6 +1,6 @@
 # Lexical compatibility options (#5831)
 
-Status: revised design for approval; no implementation in this branch. Inventory baseline: `c160ce9369`.
+Status: approved design; implementation and validation in progress. Inventory baseline: `c160ce9369`.
 Scope decision: legacy code remains AST-only; the `PO_MODERN` native eligibility contract is unchanged.
 Implementation precondition: [#5853](https://github.com/qoretechnologies/qore/issues/5853) must enforce that
 contract for mixed-directive bodies before #5831 implementation.
@@ -135,7 +135,7 @@ redaction. Program/ProgramControl/get_parse_options introspection is not itself 
 proposal does not silently redefine those APIs. Plugin floating-point reassociation acceptance is a separate
 compiler policy, not a deprecated compatibility option.
 
-## Binding rules proposed for approval
+## Approved binding rules
 
 1. An expression, builtin invocation, lookup, conversion or control-flow operation uses its own lexical
    snapshot. This includes a builtin reached through a call reference or dynamic lookup: its invocation site
@@ -153,7 +153,7 @@ compiler policy, not a deprecated compatibility option.
    is explicit; zero must never mean "read the current Program". No new AOT presence contract is required,
    because the native gate excludes legacy policy from compiled artifacts.
 
-These rules need approval, particularly builtin references versus user references and declaration-time
+These rules are approved, particularly builtin references versus user references and declaration-time
 parameter/return conversion. Tests must state those decisions directly rather than infer them from current
 mutable-Program behavior.
 
@@ -163,11 +163,20 @@ Define one internal `LexicalSemanticPolicy` projection of the relevant low and h
 fields/queries and a canonical default. Retain the original 128-bit snapshot for diagnostics and code metadata;
 project it once at parse/bind time. The compatibility projection excludes all authority bits.
 
-Capture operation policy in `parseInit` while `ParseWarnHelper` has restored the statement's snapshot. Standalone
-expressions, defaults, member/global initializers, closure bodies and deferred handlers need explicit owners
-and capture points too. Store immutable policy with the executable operation or a code-owned descriptor whose
-lifetime follows that code, including code whose defining Program has been released. Never key it solely by a
-raw Program address or mutable Program option word.
+Capture source policy from scanner token provenance when grammar reductions construct code. A statement is
+constructed after its body, and default expressions can be parse-initialized after later pending sources; the
+options then current, including a statement's old `pwo`, cannot identify the original lexical context. Empty
+grammar rules contribute no source policy. Infix and postfix operations bind the operator token rather than
+the earlier left operand. Conditions bind their expression's context, including a trailing
+`do/while` condition and a `for` condition after its initializer. During parse initialization, replacements inherit
+the original node's captured policy through a parse-only scoped context; execution does not use that context.
+AOT reconstruction explicitly starts with canonical policy. `ParseWarnHelper` and the original option snapshots
+continue to serve their existing authority and diagnostic purposes.
+
+Standalone expressions, defaults, member/global initializers, closure bodies and deferred handlers need explicit
+owners and capture points too. Store immutable policy with the executable operation or a code-owned descriptor
+whose lifetime follows that code, including code whose defining Program has been released. Never key it solely
+by a raw Program address or mutable Program option word.
 
 Use separate default and compatibility execution entries, selected during AST parsing or cold call binding:
 
@@ -296,7 +305,45 @@ regression. Compare 1,000/10,000 or similarly scaled runs to remove startup cost
 call-path delta and recover it; a small aggregate percentage is not sufficient. Report compatibility-path cost
 separately. Verify both IR and native/AOT generated code rather than relying on a source-level claim.
 
-Approval requested for the revised AST binding rules; explicit policy plus separate legacy execution/filter
-entries and the scoped native RuntimeConfig bridge; and the mixed modern/legacy boundary tests. Negative
-offsets and adjacent strictness changes are excluded. The native eligibility contract remains unchanged; its existing mixed-body defect is fixed separately by
-#5853. Implementation remains blocked on approval of this revised design and completion of that precondition.
+The revised AST binding rules, separate legacy execution/filter entries, scoped native RuntimeConfig bridge,
+and mixed modern/legacy boundary tests are approved. The #5853 native eligibility precondition is merged into
+develop. Negative offsets and adjacent strictness changes remain excluded.
+
+## Native forwarding and public value APIs
+
+Reflection invokes code with the caller's semantic policy, just as a direct call does. A handle carries neither
+the policy of its creation site nor additional authority. Registration selects an alternate lexical entry for
+the reflection invocation methods; the ordinary method body stays the canonical entry. The registration scope
+is thread-local, and each variant retains an immutable function pointer before publication. Invocations do not
+search a registry. The entries cover Class construction, ConstructorMethod and ConstructorMethodVariant,
+normal/static/pseudo method and variant calls, and function and variant calls. Existing namespace, export,
+class-access and sandbox checks remain in the shared invocation bodies.
+
+The same selection applies to named/reference function forwarding, object/static/pseudo method forwarding,
+dynamic construction and Program call methods. Source-bound forwarding passes the policy explicitly to the
+target's matching, filtering and invocation entry. A user target still uses its own declaration filters and
+body policy. Native-originated `invoke()` calls without a Qore source operation retain canonical reset behavior;
+a source-bound native call reference follows its explicit invocation policy.
+
+Copy initialization runs the existing flattened superclass copy chain once. When a user copy method starts
+that chain, its declaration supplies the native base-copy policy. A class without its own copy method starts
+the chain under the source copy invocation's policy. Each inherited user copy body still uses its own
+declaration policy; it does not start a second base-copy chain. Tests distinguish all three cases with
+opposing caller/declaration policies and cover native copy failure before private-data initialization.
+
+Public native value APIs use the active native invocation policy when they perform compatibility-sensitive
+conversions. These include boolean/soft equality conversion, typed list and hash mutations, hashdecl members,
+object members and typed-reference assignments. Internal AST default filters and compiled helpers select
+canonical entries explicitly, including iterator materialization before a modern callback starts its body.
+Untyped result builders do not read the conversion policy.
+
+The appended ResolvedCallReferenceNode entries require module API 2.3 (provisional until batch assembly); API 2.2 modules are refused. Existing
+native subclasses continue to override execValue() without source changes. The external subclass inventory
+contains jni's QoreJniFunctionalInterface, python's PythonCallableCallReferenceNode and the JavaScript/V8
+module's QoreV8CallReference; full module builds against the new headers are part of validation. Internal Qore
+references and closures use their existing body directly through the new dispatch slot. External callbacks
+may add one virtual dispatch and the native policy save/set/restore, measured separately against a real
+Python callback; ordinary internal calls, call references, closures and map retain the zero-work requirement.
+
+No AOT format, opcode or feature bit is added. The runtime identity changes because the shared helper and
+invocation implementations change.

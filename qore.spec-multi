@@ -14,7 +14,7 @@
 %global upstream_version 3.0.0
 # QORE_MODULE_API_MAJOR.QORE_MODULE_API_MINOR of include/qore/ModuleManager.h
 # (checked by examples/test/cmake/test_module_api_version.py)
-%global module_api 2.1
+%global module_api 2.3
 %global soname 20
 %global module_dir %{_libdir}/qore-modules
 %global _vpath_builddir build

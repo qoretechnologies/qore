@@ -2709,6 +2709,8 @@ QoreValue readOneExpr(
         LocalVar** locals, int num_locals,
         Var** globals, int num_globals,
         QoreProgram* local_owner_pgm) {
+    // Deferred defaults can be reconstructed after the main load phases, even during a legacy source parse.
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     uint8_t ekind = QoreAOTBinaryReader::readU8(p);
     AOTExprKind ek = static_cast<AOTExprKind>(ekind);
 
@@ -2721,7 +2723,9 @@ QoreValue readOneExpr(
     AOTExprReadCtx rctx{
         rdr, p, e, pgm, err, locals, num_locals, globals, num_globals, local_owner_pgm
     };
-    return kinfo->read_fn(rctx);
+    QoreValue value = kinfo->read_fn(rctx);
+    ParseNode::bindSemanticPolicy(value, LexicalSemanticPolicy());
+    return value;
 }
 
 QoreValue readOneTopLevelIRExpr(
@@ -2870,11 +2874,13 @@ public:
 
     //! Deserialize an expression tree from the blob and return NaN-boxed bits
     uint64_t deserialize() {
+        LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
         QoreValue v = deserializeValue();
         if (failed) {
             v.discard(nullptr);
             return 0;
         }
+        ParseNode::bindSemanticPolicy(v, LexicalSemanticPolicy());
         return toBitsNB(v);
     }
 
@@ -3279,6 +3285,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         QoreProgram* local_owner_pgm = nullptr) {
     // the closures read in the context name the type parameters of the function (qore#5733)
     QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
+    // The slot-map roots are reconstructed here, outside the scopes used to read their nested expressions.
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     const uint8_t* entry_payload_start = ptr;
     auto setBuildError = [name, build_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
@@ -3878,10 +3886,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             printd(0, "AOT v2: error reading complex hash arg %d for '%s': %s\n",
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(*call_args, QoreValue(), nullptr);
                             has_unsupported = true;
                         } else {
-                            call_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(*call_args, arg, nullptr);
                         }
                     }
                 }
@@ -4035,10 +4043,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             printd(0, "AOT v2: error reading hashdecl arg %d for '%s': %s\n",
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(*call_args, QoreValue(), nullptr);
                             has_unsupported = true;
                         } else {
-                            call_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(*call_args, arg, nullptr);
                         }
                     }
                 }
@@ -4342,10 +4350,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             local_owner_pgm);
                         if (!arg_err.empty()) {
                             arg.discard(nullptr);
-                            self_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(**self_args, QoreValue(), nullptr);
                             self_args_ok = false;
                         } else {
-                            self_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(**self_args, arg, nullptr);
                         }
                     }
                     // Build the base (method/class/variant-resolved) self-call node, then wrap it
@@ -4400,10 +4408,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 "cannot read argument " + std::to_string(j) + " of the call to '"
                                     + describeAOTStaticCallTarget(ref1, method_name) + "': " + arg_err);
                             arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(*call_args, QoreValue(), nullptr);
                             has_unsupported = true;
                         } else {
-                            call_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(*call_args, arg, nullptr);
                         }
                     }
                 }
@@ -8726,6 +8734,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
 */
 static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* name,
         QoreProgram* pgm, const QoreAOTFunc& aot_func) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         printd(1, "AOT: buildContextForVariant '%s': no statement block\n", name);

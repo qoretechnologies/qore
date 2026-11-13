@@ -114,6 +114,8 @@ private:
 
 class QoreFunction;
 
+class LexicalSemanticPolicy;
+
 //! base class for resolved call references
 class ResolvedCallReferenceNode : public AbstractCallReferenceNode {
 public:
@@ -148,6 +150,10 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT QoreValue invoke(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    //! Internal invocation by a parsed operation with an immutable compatibility policy.
+    DLLLOCAL QoreValue invokeLexical(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
 
     //! returns a pointer to the QoreProgram object associated with this reference (can be nullptr)
     /** this function is not exported in the library's public interface
@@ -205,6 +211,28 @@ protected:
         @return always returns false
     */
     DLLEXPORT virtual bool derefImpl(ExceptionSink* xsink);
+
+    //! Invocation entry used by invoke(); native subclasses continue to implement execValue().
+    /** The default entry scopes canonical compatibility semantics around the native callback and restores the
+        caller's native invocation after success or failure. Internal Qore references override this entry with
+        their existing declaration-bound execution path, so ordinary Qore calls retain one virtual dispatch.
+        Modules must rebuild for the current QORE_MODULE_API_MINOR because these entry slots extend the vtable.
+
+        @param args arguments passed by invoke()
+        @param xsink receives an exception from the callback
+        @return the callback result, owned by the caller
+    */
+    DLLEXPORT virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    //! Internal counterpart for a source-bound call; native subclasses need not override this entry.
+    /** @param args arguments passed by the parsed invocation
+        @param xsink receives an exception from the callback
+        @param policy immutable policy of the invocation operation; user code retains its declaration policy
+        @return the callback result, owned by the caller
+    */
+    DLLEXPORT virtual QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
+
 };
 
 class OptionalCallReferenceAccessHelper {

@@ -36,6 +36,8 @@
 #include "qore/intern/qore_string_private.h"
 class QoreLogicalEqualsOperatorNode : public QoreBinaryOperatorNode<> {
 public:
+    DLLLOCAL static QoreLogicalEqualsOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+            QoreValue left, QoreValue right);
     DLLLOCAL QoreLogicalEqualsOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)
             : QoreBinaryOperatorNode<QoreOperatorNode>(loc, left, right), pfunc(nullptr) {
     }
@@ -64,12 +66,25 @@ public:
     }
 
     DLLLOCAL static bool softEqual(const QoreValue& l, const QoreValue& r, ExceptionSink *xsink);
+    DLLLOCAL static bool softEqualLexical(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    //! Native value API: obtain invocation policy only if comparison reaches boolean coercion.
+    DLLLOCAL static bool softEqualNative(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
+
+    template <bool Lexical, bool Native = false>
+    DLLLOCAL static bool softEqualImpl(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
 
     DLLLOCAL virtual const QoreTypeInfo *getTypeInfo() const {
         return typeInfo;
     }
 
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+
     // type of pointer to optimized versions depending on arguments found at parse-time
     typedef bool(QoreLogicalEqualsOperatorNode::*eval_t)(ExceptionSink *xsink) const;
     // pointer to optimized versions depending on arguments found at parse-time

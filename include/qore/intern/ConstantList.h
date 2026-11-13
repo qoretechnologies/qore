@@ -153,6 +153,7 @@ class ConstantEntry : public QoreReferenceCounter {
 public:
     const QoreProgramLocation* loc;
     ParseWarnOptions pwo;
+    LexicalSemanticPolicy semantic_policy;
     std::string name;
     const QoreTypeInfo* typeInfo;
     // unresolved declared type for an explicitly-typed constant; resolution is deferred to parseInit() so that

@@ -4293,7 +4293,9 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     return priv->sb.exec(xsink);
 }
 
-QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+template <bool LexicalInvocation>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_program_private::callFunctionImpl(const char* name,
+        const QoreListNode* args, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
     SimpleRefHolder<FunctionCallNode> fc;
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
@@ -4302,10 +4304,10 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 
     // need to grab parse lock for safe access to the user function map and imported function map
     {
-        ProgramRuntimeParseAccessHelper pah(xsink, this);
+        ProgramRuntimeParseAccessHelper pah(xsink, pgm);
         if (*xsink)
             return QoreValue();
-        fe = qore_root_ns_private::runtimeFindFunctionEntry(*priv->RootNS, name);
+        fe = qore_root_ns_private::runtimeFindFunctionEntry(*RootNS, name, policy);
     }
 
     if (!fe) {
@@ -4319,13 +4321,28 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
     // like load_module() operating on the target, and privileged builtins like set_save_object_callback()
     // invoked by a trusted caller on a sandboxed target).  Hand-rolling the parse-option handling here
     // gets one of those cases wrong; the shared path handles all of them.
-    fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), this);
+    if constexpr (LexicalInvocation) {
+        fc = qore_make_function_call<FunctionCallNode>(policy, get_runtime_location(), fe,
+            const_cast<QoreListNode*>(args), pgm);
+        ParseNode::bindSemanticPolicy(*fc, policy);
+    } else {
+        fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), pgm);
+    }
     QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
 
     // let caller delete function arguments if necessary
     fc->takeArgs();
 
     return rv;
+}
+
+QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+    return priv->callFunctionImpl<false>(name, args, xsink, {});
+}
+
+QoreValue qore_program_private::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    return callFunctionImpl<true>(name, args, xsink, policy);
 }
 
 void QoreProgram::parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {

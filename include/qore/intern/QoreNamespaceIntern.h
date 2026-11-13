@@ -725,7 +725,7 @@ public:
 
         //printd(5, "qore_ns_private::addBuiltinVariant('%s', %p, flags=%lld, domain=%lld, ret=%s, num_params=%d, "
         //    "...)\n", name, f, flags, functional_domain, QoreTypeInfo::getName(returnTypeInfo), num_params);
-        addBuiltinVariant(name, new B(f, flags, functional_domain, returnTypeInfo, typeList, defaultArgList,
+        addBuiltinVariant(name, B::create(f, flags, functional_domain, returnTypeInfo, typeList, defaultArgList,
             nameList));
     }
 
@@ -1784,8 +1784,12 @@ protected:
     }
 
     DLLLOCAL const FunctionEntry* runtimeFindFunctionEntryIntern(const char* name) {
+        return runtimeFindFunctionEntryIntern(name, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const FunctionEntry* runtimeFindFunctionEntryIntern(const char* name, LexicalSemanticPolicy policy) {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const FunctionEntry* fe = runtimeFindQoreFunctionEntryIntern(name)) {
                 return fe;
             }
@@ -2925,6 +2929,15 @@ public:
         return rns.rpriv->runtimeFindFunctionEntryIntern(name);
     }
 
+    DLLLOCAL static const FunctionEntry* runtimeFindFunctionEntry(RootQoreNamespace& rns, const char* name,
+            LexicalSemanticPolicy policy) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->runtimeFindFunctionEntryIntern(nscope);
+        }
+        return rns.rpriv->runtimeFindFunctionEntryIntern(name, policy);
+    }
+
     DLLLOCAL static bool runtimeExistsFunction(RootQoreNamespace& rns, const char* name) {
         return rns.rpriv->runtimeExistsFunctionIntern(name);
     }
@@ -3218,7 +3231,7 @@ private:
     }
 
     DLLLOCAL bool useBrokenNamespaceResolutionRuntime() const {
-        return static_cast<bool>(getProgram()->getParseOptions() & PO_BROKEN_NAMESPACE_RESOLUTION);
+        return qore_get_native_semantic_policy().brokenNamespace();
     }
 
     DLLLOCAL bool isUnderQoreNamespace(const qore_ns_private* ns, const qore_ns_private* qore_ns) const {
@@ -3439,7 +3452,9 @@ private:
         while (nsi.next()) {
             const QoreNamespace* ns = nsi.get();
             const qore_ns_private* ns_priv = qore_ns_private::get(*ns);
-            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+            // Skip empty function tables before entering the hash lookup. Keeping this guard at the scan
+            // avoids hashing the same name for every empty namespace when findNode() is inlined.
+            if (!isUnderQoreNamespace(ns_priv, qore_ns) || ns_priv->func_list.empty()) {
                 continue;
             }
             const FunctionEntry* fe = ns_priv->func_list.findNode(name);

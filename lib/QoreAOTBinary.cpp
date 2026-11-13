@@ -4742,6 +4742,7 @@ static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,
 
 QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end,
         std::string& error) const {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     const uint8_t* start = ptr;
     QoreValue rv = readValueIntern(ptr, end, error);
     if (error.empty()) {
@@ -15837,6 +15838,8 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
 }
 
 bool QoreAOTBinaryDeserializer::deserializeShellsFromOpenReader(std::string& error) {
+    // Native images have canonical semantics, including AST metadata reconstructed during a legacy parse.
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     if (!checkAOTFeatureCompatibility(reader, error)) {
         return false;
     }
@@ -16158,6 +16161,7 @@ const QoreProgramLocation* QoreAOTBinaryDeserializer::getBlobLocation(int32_t st
 }
 
 bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Install pending-static-method-default context for the function/method
     // deserialization phase. Param defaults like
     // `string b = MultiPartMessage::getBoundary()` inside MultiPartMessage's
@@ -16283,6 +16287,7 @@ bool QoreAOTBinaryDeserializer::commitClasses(std::string& error) {
 // embedded source metadata, rebuilds root-namespace indexes, and
 // resolves the BCA (base-class constructor argument) expression blobs.
 bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     {
         for (const auto& pd : pending_smd) {
             const QoreClass* qc = !pd.class_path.empty()
@@ -16323,6 +16328,7 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::finalizePostIndex(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Resolve deferred BCA (base class constructor argument) blobs.
     // Must run after commitDeserializedClasses + rebuildAllIndexes so all
     // methods and classes are findable by the native/legacy expression handlers.
@@ -17117,6 +17123,7 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Second pass: create instance members now that types are resolved
     // NOTE: hashdecls and enums must be deserialized before calling this method
     // so that type references to them can be resolved
@@ -17327,6 +17334,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Second pass: create static members now that types are resolved
     // NOTE: hashdecls and enums must be deserialized before calling this method
     // so that type references to them can be resolved
@@ -17819,6 +17827,7 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Preserve constant references as lazy expressions while their values are
     // still pending. All constant names now exist, including sibling fragments.
     struct RcrWrapGuard {

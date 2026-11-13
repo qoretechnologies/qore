@@ -28,9 +28,109 @@
     information.
 */
 
+#include <qore/intern/LexicalReflection.h>
 #include <qore_reflection.h>
 #include "QC_NormalMethod.h"
 #include "QC_Class.h"
+
+// Both entries share the reflection authority checks; only the final invocation differs.
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue NormalMethod_call_VoVV_impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, QoreObject* obj) {
+    // the privileges of the calling code, captured before switching to the method's Program
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
+        return QoreValue();
+    }
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
+    // a confusing exception
+    if (check_call(obj, *m->m, xsink)) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> call_args(xsink);
+
+    // if there are arguments to pass
+    if (num_args(args) > 1) {
+        // create argument list by copying current list
+        call_args = args->copyListFrom(1);
+    }
+
+    // the method's class and the variant selected for the arguments must be allowed by the caller and the
+    // method's Program
+    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
+        return QoreValue();
+    }
+    // the access of the method's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
+    // the method ptr must be valid
+    if constexpr (Lexical) return qore_lexical_reflection_method(policy, obj, *m->m, m->m->getClass(), nullptr, *call_args, xsink);
+    else return obj->evalMethod(*m->m, m->m->getClass(), *call_args, xsink);
+}
+
+static QoreValue NormalMethod_call_VoVV_lexical(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    QoreObject* obj = HARD_QORE_VALUE_OBJECT(args, 0);
+    return NormalMethod_call_VoVV_impl<true>(qore_get_native_semantic_policy(), self, m, args, runtime_cfg, xsink, obj);
+}
+
+static QoreValue NormalMethod_call_VoVV(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue NormalMethod_callArgs_VoC15_softlist_auto__impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, QoreObject* obj, const QoreListNode* argv) {
+    // the privileges of the calling code, captured before switching to the method's Program
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
+        return QoreValue();
+    }
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
+    // a confusing exception
+    if (check_call(obj, *m->m, xsink)) {
+        return QoreValue();
+    }
+
+    // the method's class and the variant selected for the arguments must be allowed by the caller and the
+    // method's Program
+    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
+        return QoreValue();
+    }
+    // the access of the method's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
+    // the method ptr must be valid
+    if constexpr (Lexical) return qore_lexical_reflection_method(policy, obj, *m->m, m->m->getClass(), nullptr, argv, xsink);
+    else return obj->evalMethod(*m->m, m->m->getClass(), argv, xsink);
+}
+
+static QoreValue NormalMethod_callArgs_VoC15_softlist_auto__lexical(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    QoreObject* obj = HARD_QORE_VALUE_OBJECT(args, 0);
+    const QoreListNode* argv = get_param_value(args, 1).get<const QoreListNode>();
+    return NormalMethod_callArgs_VoC15_softlist_auto__impl<true>(qore_get_native_semantic_policy(), self, m, args, runtime_cfg, xsink, obj, argv);
+}
+
+static QoreValue NormalMethod_callArgs_VoC15_softlist_auto_(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+static const QoreLexicalMethodRegistrationHelper::Entry lexical_entries_NormalMethod[] = {
+    {reinterpret_cast<q_method_t>(NormalMethod_call_VoVV), reinterpret_cast<q_method_t>(NormalMethod_call_VoVV_lexical)},
+    {reinterpret_cast<q_method_t>(NormalMethod_callArgs_VoC15_softlist_auto_), reinterpret_cast<q_method_t>(NormalMethod_callArgs_VoC15_softlist_auto__lexical)},
+};
+
+
 
 //! This class provides information about %Qore normal (non-static, non-special) class methods
 /**
@@ -143,43 +243,7 @@ auto v = m.call(obj, arg1, arg2);
     @see callArgs()
 */
 auto NormalMethod::call(object obj, ...) {
-    // the privileges of the calling code, captured before switching to the method's Program
-    QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
-        return QoreValue();
-    }
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, m->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
-    // a confusing exception
-    if (check_call(obj, *m->m, xsink)) {
-        return QoreValue();
-    }
-
-    ReferenceHolder<QoreListNode> call_args(xsink);
-
-    // if there are arguments to pass
-    if (num_args(args) > 1) {
-        // create argument list by copying current list
-        call_args = args->copyListFrom(1);
-    }
-
-    // the method's class and the variant selected for the arguments must be allowed by the caller and the
-    // method's Program
-    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
-        return QoreValue();
-    }
-    // the access of the method's variants, for code that a sandbox governs or that is restricted
-    if (reflection_check_method_access(caller, m->m, xsink)) {
-        return QoreValue();
-    }
-    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
-    // the method ptr must be valid
-    return obj->evalMethod(*m->m, m->m->getClass(), *call_args, xsink);
+    return NormalMethod_call_VoVV_impl<false>({}, self, m, args, runtime_cfg, xsink, obj);
 }
 
 //! calls the given method with the given object; the object must be a member of a compatible class
@@ -201,33 +265,8 @@ auto v = m.callArgs(obj, (arg1, arg2));
     @see call()
 */
 auto NormalMethod::callArgs(object obj, *softlist<auto> argv) {
-    // the privileges of the calling code, captured before switching to the method's Program
-    QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
-        return QoreValue();
-    }
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, m->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
-    // a confusing exception
-    if (check_call(obj, *m->m, xsink)) {
-        return QoreValue();
-    }
-
-    // the method's class and the variant selected for the arguments must be allowed by the caller and the
-    // method's Program
-    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
-        return QoreValue();
-    }
-    // the access of the method's variants, for code that a sandbox governs or that is restricted
-    if (reflection_check_method_access(caller, m->m, xsink)) {
-        return QoreValue();
-    }
-    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
-    // the method ptr must be valid
-    return obj->evalMethod(*m->m, m->m->getClass(), argv, xsink);
+    return NormalMethod_callArgs_VoC15_softlist_auto__impl<false>({}, self, m, args, runtime_cfg, xsink, obj, argv);
 }
+
+
+//! @qppinit: QoreLexicalMethodRegistrationHelper lexical_registration(lexical_entries_NormalMethod);

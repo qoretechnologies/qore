@@ -233,6 +233,13 @@ private:
 /**
  * @brief RAII helper to manage RuntimeConfig and sync on destruction.
  */
+//! Raw internal flags access used by call entry and context copies, without public QCF masking.
+class QoreRuntimeFlags {
+public:
+    DLLLOCAL static q_rt_flags_t get(const RuntimeConfig& rc);
+    DLLLOCAL static void set(RuntimeConfig& rc, q_rt_flags_t flags);
+};
+
 class RuntimeConfigHelper {
 public:
     DLLLOCAL RuntimeConfigHelper();

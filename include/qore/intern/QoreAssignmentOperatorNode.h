@@ -51,10 +51,17 @@ protected:
 
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode);
 
+    DLLLOCAL int parseInitMode(QoreValue& val, QoreParseContext& parse_context, AssignmentMode mode);
+
+    DLLLOCAL QoreValue evalLexical(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalInternImpl(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
     DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, AssignmentMode::Normal);
+        return parseInitMode(val, parse_context, AssignmentMode::Normal);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -87,7 +94,7 @@ public:
 
 protected:
     DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, AssignmentMode::Weak);
+        return parseInitMode(val, parse_context, AssignmentMode::Weak);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -114,11 +121,32 @@ public:
 
 protected:
     DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, AssignmentMode::Opaque);
+        return parseInitMode(val, parse_context, AssignmentMode::Opaque);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         return evalIntern(xsink, needs_deref, AssignmentMode::Opaque);
+    }
+};
+
+//! Selected during parse initialization; canonical assignment nodes keep their original execution entry.
+template <typename Base, AssignmentMode Mode>
+class LexicalAssignmentOperatorNode : public Base {
+public:
+    using Base::Base;
+
+    DLLLOCAL QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = this->template copyBackgroundExplicit<LexicalAssignmentOperatorNode>(xsink);
+        if (copy) {
+            copy->broken_int = this->broken_int;
+            copy->ident = this->ident;
+        }
+        return copy;
+    }
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return this->evalLexical(xsink, needs_deref, Mode);
     }
 };
 

@@ -204,6 +204,10 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
     if (pgm)
         pwo = qore_program_private::getParseWarnOptions(pgm);
 
+    if (!builtin) {
+        LexicalParsePolicyHelper::capture(semantic_policy);
+    }
+
     const char* mod_name = get_module_context_name();
     if (mod_name) {
         from_module = mod_name;
@@ -214,7 +218,7 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
 }
 
 ConstantEntry::ConstantEntry(const ConstantEntry& old)
-        : loc(old.loc), pwo(old.pwo), name(old.name),
+        : loc(old.loc), pwo(old.pwo), semantic_policy(old.semantic_policy), name(old.name),
         typeInfo(old.typeInfo),
         in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
         explicit_type(old.explicit_type),
@@ -588,9 +592,9 @@ int ConstantEntry::parseInit(ClassNs ptr) {
             // running acceptAssignment() here would report a second, redundant RUNTIME-TYPE-ERROR for the
             // same mismatch
             ExceptionSink type_xsink;
-            QoreTypeInfo::retypeValue(val, typeInfo, &type_xsink);
+            QoreTypeInfo::retypeValue(val, typeInfo, &type_xsink, semantic_policy);
             if (!type_xsink) {
-                QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", val, &type_xsink);
+                QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", val, &type_xsink, semantic_policy);
             }
             if (type_xsink) {
                 qore_program_private::addParseException(getProgram(), type_xsink, loc);
@@ -655,9 +659,9 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
                 saved_val = nv;
                 saved_val_set = true;
                 if (explicit_type) {
-                    QoreTypeInfo::retypeValue(saved_val, typeInfo, &xsink);
+                    QoreTypeInfo::retypeValue(saved_val, typeInfo, &xsink, semantic_policy);
                     if (!xsink) {
-                        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", saved_val, &xsink);
+                        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", saved_val, &xsink, semantic_policy);
                     }
                 } else {
                     // a date has the type of its subtype, as a date literal does (issue #5722)

@@ -2429,7 +2429,10 @@ public:
         yy_scan_string(code, lexer);
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
-        yyparse(lexer);
+        {
+            LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+            yyparse(lexer);
+        }
         // the parser returns before the end of the input if its stack is exhausted
         qore_scanner_end_input(lexer);
 
@@ -2706,7 +2709,10 @@ public:
             yylex_init_extra(&state, &lexer);
             yyset_in(fp, lexer);
             // yyparse() will call endParsing() and restore old pgm position
-            yyparse(lexer);
+            {
+                LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+                yyparse(lexer);
+            }
             // the parser returns before the end of the input if its stack is exhausted
             qore_scanner_end_input(lexer);
 
@@ -4243,6 +4249,14 @@ public:
 
     DLLLOCAL static bool runWithRegisteredPrograms(
             const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f);
+
+    //! Explicit invocation policy for source-bound dynamic forwarding; the public C++ entry is canonical.
+    DLLLOCAL QoreValue callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool LexicalInvocation>
+    DLLLOCAL QoreValue callFunctionImpl(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;

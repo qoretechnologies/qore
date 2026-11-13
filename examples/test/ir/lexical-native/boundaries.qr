@@ -1,0 +1,189 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%requires compatprobe
+
+# These callbacks are part of the enclosing executable when qcc compiles this fixture.
+bool sub compiled_native_body(auto value) { return CompatProbe::value_bool(value); }
+bool sub compiled_native_filter(softbool value) { return value; }
+auto sub compiled_iterator_value() { return new ListIterator(("text", "1")); }
+list<bool> sub compiled_native_iterator(auto ignored, list<softbool> value = compiled_iterator_value()) { return value; }
+bool sub compiled_native_throw(auto value) { throw "COMPILED-CALLBACK-ERROR"; }
+auto sub compiled_replacements(auto ignored) {
+    list<softbool> values = (False, False);
+    splice values, 0, 1, "text";
+    extract values, 1, 1, "text";
+    return values;
+}
+bool sub compiled_copy(auto ignored) {
+    CompatProbe::NativeProbe value("text", False);
+    return value.copy().observed()[0];
+}
+
+Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+p.parsePending("%requires compatprobe\n"
+    "string sub text() { return \"text\"; }\n"
+    "auto sub opaque(auto value) { return value; }\n"
+    "auto sub modern_identity(auto value) { return value; }\n"
+    "auto sub modern_native_reference(code cb) { return cb(); }\n"
+    "auto sub modern_config() { return CompatProbe::config_state(text()); }\n"
+    "auto sub modern_comparison() { return CompatProbe::compare_values(((1, 2),), (True,)); }\n"
+    "auto sub modern_rendezvous() { return CompatProbe::rendezvous_bool(text()); }\n"
+    "auto sub modern_argument() { return legacy_identity(!!text()); }\n"
+    "bool sub modern_throw(softbool value) { throw \"CALLBACK-ERROR\"; }\n"
+    "bool sub modern_bool(softbool value) { return value; }\n"
+    "auto sub modern_iterator_value() { return new ListIterator((\"text\", \"1\")); }\n"
+    "list<bool> sub modern_iterator(auto ignored, list<softbool> value = modern_iterator_value()) { return value; }\n"
+    "int sub modern_soft(softint value) { return value; }\n"
+    "auto sub modern_to_legacy() { return legacy_bool(\"text\"); }\n"
+    "auto sub modern_body(auto value) { return CompatProbe::value_bool(value); }\n",
+    "modern-boundary");
+p.disableParseOptions(PO_MODERN);
+p.setParseOptions(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+p.setParseOptions(new ParseOptions("broken-soft-types"));
+p.parsePending("bool sub legacy_bool(softbool value) { return value; }\n"
+    "auto sub legacy_native_reference(code cb) { return cb(); }\n"
+    "auto sub foreign_result(code cb) { return CompatProbe::callback(cb, text()); }\n"
+    "auto sub foreign_iterator(code cb) { return CompatProbe::callback(cb, new ListIterator((\"text\", \"1\"))); }\n"
+    "auto sub iterator_callback() { return foreign_iterator(\\modern_iterator()); }\n"
+    "auto sub foreign_state(code cb) { return CompatProbe::callback_state(cb, text()); }\n"
+    "auto sub legacy_config() { return CompatProbe::config_state(text()); }\n"
+    "auto sub legacy_comparison() { return CompatProbe::compare_values(((1, 2),), (True,)); }\n"
+    "auto sub native_reset() { return CompatProbe::callback(CompatProbe::native_callback(False, False), text()); }\n"
+    "auto sub native_restore() { return CompatProbe::callback_state(CompatProbe::native_callback(False, False), text()); }\n"
+    "auto sub native_exception() { return CompatProbe::callback_state(CompatProbe::native_callback(False, True), text()); }\n"
+    "auto sub legacy_nested(softbool value) { auto result = CompatProbe::callback_state(\\modern_body(), text()); "
+    "if (result !== (False, False, False)) throw \"NESTED-CALLBACK-POLICY\", result; return result; }\n"
+    "auto sub nested_restore() { return CompatProbe::callback_state(\\legacy_nested(), text()); }\n"
+    "auto sub legacy_identity(auto value) { return value; }\n"
+    "auto sub legacy_rendezvous() { return CompatProbe::rendezvous_bool(text()); }\n"
+    "auto sub native_bool_filter() { return CompatProbe::soft_bool(text()); }\n"
+    "auto sub native_null_filter() { return CompatProbe::soft_int(opaque(NULL)); }\n"
+    "auto sub caller_expression() { return modern_identity(!!text()); }\n"
+    "auto sub restore_success() { return CompatProbe::callback_state(\\modern_bool(), text()); }\n"
+    "auto sub restore_exception() { return CompatProbe::callback_state(\\modern_throw(), text()); }\n"
+    "softbool sub return_filter() { return text(); }\n"
+    "softint sub null_return_filter() { return opaque(NULL); }\n"
+    "auto sub native_value() { return CompatProbe::value_bool(\"text\"); }\n"
+    "auto sub invoke_native_callback() { return CompatProbe::callback(\\modern_bool(), \"text\"); }\n"
+    "auto sub native_body_callback() { return CompatProbe::callback(\\modern_body(), \"text\"); }\n"
+    "auto sub native_rejected_callback() { return CompatProbe::callback(\\modern_soft(), NULL); }\n"
+    "auto sub legacy_to_modern() { return modern_bool(\"text\"); }\n",
+    "legacy-boundary");
+p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+p.disableParseOptions(new ParseOptions("broken-soft-types"));
+p.setParseOptions(PO_MODERN);
+p.parseCommit();
+int sub show(Program p, string state) {
+    hash<auto> expected = {
+        "modern_to_legacy": False,
+        "iterator_callback": (True, True),
+        "modern_config": (True, True, True, True, True, True),
+        "modern_comparison": (True, True, True, True),
+        "legacy_comparison": (False, False, False, False),
+        "legacy_config": (False, False, True, True, True, True),
+        "native_reset": True,
+        "native_restore": (False, False, False),
+        "native_exception": (False, False, True),
+        "nested_restore": (False, False, False),
+        "native_value": False,
+        "invoke_native_callback": True,
+        "native_body_callback": True,
+        "native_rejected_callback": "RUNTIME-OVERLOAD-ERROR",
+        "legacy_to_modern": True,
+        "native_bool_filter": False,
+        "native_null_filter": 0,
+        "caller_expression": False,
+        "return_filter": False,
+        "null_return_filter": 0,
+        "modern_argument": True,
+        "restore_success": (False, False, False),
+        "restore_exception": (False, False, True),
+    };
+    int failures = 0;
+    foreach string fn in (("modern_to_legacy", "native_value", "invoke_native_callback", "native_body_callback",
+            "native_rejected_callback", "legacy_to_modern", "native_bool_filter", "native_null_filter",
+            "caller_expression", "return_filter", "null_return_filter", "modern_argument", "restore_success",
+            "restore_exception", "modern_config", "legacy_config", "native_reset", "native_restore", "native_exception", "nested_restore", "modern_comparison", "legacy_comparison", "iterator_callback")) {
+        auto actual;
+        try {
+            actual = p.callFunction(fn);
+        } catch (hash<ExceptionInfo> ex) {
+            actual = ex.err;
+        }
+        bool passed = actual === expected{fn};
+        printf("%s %s: %s expected=%y actual=%y\n", state, fn, passed ? "PASS" : "FAIL", expected{fn}, actual);
+        if (!passed) ++failures;
+    }
+    foreach code compiled_cb in (\compiled_native_body(), \compiled_native_filter()) {
+        if (p.callFunction("foreign_result", compiled_cb) !== True) ++failures;
+        if (p.callFunction("foreign_state", compiled_cb) !== (False, False, False)) ++failures;
+    }
+    if (p.callFunction("foreign_state", \compiled_native_throw()) !== (False, False, True)) ++failures;
+    auto iterator_result = p.callFunction("foreign_iterator", \compiled_native_iterator());
+    printf("%s compiled iterator: %s expected=(True, True) actual=%y\n", state,
+        iterator_result === (True, True) ? "PASS" : "FAIL", iterator_result);
+    if (iterator_result !== (True, True)) ++failures;
+    auto replacements = p.callFunction("foreign_result", \compiled_replacements());
+    printf("%s compiled replacements: %s expected=(True, True) actual=%y\n", state,
+        replacements === (True, True) ? "PASS" : "FAIL", replacements);
+    if (replacements !== (True, True)) ++failures;
+    if (p.callFunction("foreign_result", \compiled_copy()) !== True) ++failures;
+    auto cb = CompatProbe::native_callback(False, False);
+    foreach string fn in ("modern_native_reference", "legacy_native_reference") {
+        auto actual = p.callFunction(fn, cb);
+        bool expected = fn == "modern_native_reference";
+        if (actual !== expected) ++failures;
+        printf("%s %s expected=%y actual=%y\n", state, fn, expected, actual);
+    }
+    return failures;
+}
+int sub concurrent(Program p, string state) {
+    Queue results();
+    Counter done(2);
+    Counter ready(2);
+    background sub (Program target, Queue results, Counter done, Counter ready) {
+        on_exit done.dec();
+        ready.dec();
+        ready.waitForZero();
+        int failures = 0;
+        try {
+            for (int i = 0; i < 100; ++i) {
+                if (target.callFunction("native_value") !== False) ++failures;
+            }
+            if (target.callFunction("legacy_rendezvous") !== False) ++failures;
+        } catch (hash<ExceptionInfo> ex) {
+            ++failures;
+        }
+        results.push(failures);
+    }(p, results, done, ready);
+    background sub (Program target, Queue results, Counter done, Counter ready) {
+        on_exit done.dec();
+        ready.dec();
+        ready.waitForZero();
+        int failures = 0;
+        try {
+            for (int i = 0; i < 100; ++i) {
+                if (target.callFunction("native_body_callback") !== True) ++failures;
+            }
+            if (target.callFunction("modern_rendezvous") !== True) ++failures;
+        } catch (hash<ExceptionInfo> ex) {
+            ++failures;
+        }
+        results.push(failures);
+    }(p, results, done, ready);
+    done.waitForZero();
+    int failures = results.get() + results.get();
+    printf("%s concurrent policy checks: %d failures\n", state, failures);
+    return failures;
+}
+int failures = show(p, "modern Program");
+failures += concurrent(p, "modern Program");
+p.disableParseOptions(PO_MODERN);
+p.setParseOptions(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRICT_BOOLEAN_EVAL);
+p.setParseOptions(new ParseOptions("broken-soft-types"));
+failures += show(p, "legacy Program");
+failures += concurrent(p, "legacy Program");
+if (failures) throw "COMPAT-BINDING-ERROR", sprintf("%d boundary/isolation checks failed", failures);
+printf("PASS\n");

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 
 #ifdef _Q_WINDOWS
 #include <malloc.h>
@@ -2256,7 +2257,7 @@ int QoreBufferNode::setValue(size_t index, QoreValue value, ExceptionSink* xsink
 }
 
 bool QoreBufferNode::getAsBoolImpl() const {
-    if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
+    if (qore_get_native_semantic_policy().strictBoolean()) {
         return false;
     }
     return !empty();
