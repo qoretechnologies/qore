@@ -719,7 +719,10 @@ bool QoreValue::derefCanThrowException() const {
         return false;
     }
     qore_type_t t = n->getType();
-    return t == NT_OBJECT || t == NT_HASH || t == NT_LIST || t == NT_CLOSURE || t == NT_RUNTIME_CLOSURE;
+    // References can own a closure variable, and call-reference wrappers can own a closure. Releasing their last
+    // reference can therefore run an object's destructor just as releasing a container can.
+    return t == NT_OBJECT || t == NT_HASH || t == NT_LIST || t == NT_CLOSURE || t == NT_RUNTIME_CLOSURE
+        || t == NT_REFERENCE || t == NT_FUNCREF;
 }
 
 // ============================================================================

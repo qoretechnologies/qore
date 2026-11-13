@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT/AOT compilation and linking of captured-reference cleanup
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class ReferenceDestructorExceptionTest
+
+#! A variable reference forwards cleanup exceptions to the code releasing its last reference (qore#6013).
+/** Plain assignment releases a reference whose captured local owns a throwing object. The caller must catch the
+    exception in AST, IR, JIT, both tiered paths and a compiled executable.
+*/
+class ReferenceDestructorExceptionTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC_BIN ?? ENV.QORE_QCC_EXECUTABLE ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/reference-destructor-exception-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("ReferenceDestructorException", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("captured destructor exceptions propagate in every execution mode", \checkModes());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    checkModes() {
+        string ast = ExecModeHarness::run(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=ast " + quote(worker));
+        assertEq("PASS captured reference exception\n", ast, "the caller caught the destructor exception");
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(ast, ExecModeHarness::run(prefix + quote(qore_bin)
+                + " -b --enable-debug --exec-mode=" + mode + " " + quote(worker)), mode);
+        }
+        assertEq(ast, ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + quote(worker)), "tiered-ir");
+        TmpDir tmp("qore-reference-exception-");
+        string exe = tmp.path + DirSep + "cleanup";
+        ExecModeHarness::run_any(prefix + quote(qcc_bin) + " -O2 -o " + quote(exe) + " " + quote(worker));
+        assertTrue(is_file(exe), "qcc produced the executable");
+        assertEq(ast, ExecModeHarness::run_any(prefix + quote(exe) + " -b --enable-debug"), "AOT");
+    }
+}
