@@ -418,6 +418,76 @@ sub map_fold_raises_no_handler() {
     out("map fold no handler", log);
 }
 
+# code delegated to the AST interpreter raises in a map in a function with no handler: the exit releases the element and
+# the list before the value that the statement holds from the previous element (qore#5884)
+auto sub map_no_handler(Log log) {
+    return map (exists (fail_on($1, "h2") ?? NOTHING)), holders(log, 3);
+}
+
+sub map_raises_no_handler() {
+    Log log();
+    try {
+        map_no_handler(log);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    log.add("after");
+    out("map no handler", log);
+}
+
+# a fold over objects raises in a map in a function with no handler: the exit releases the fold's iterator, which holds
+# its list, before the map's element and list (qore#5884)
+auto sub map_object_fold_no_handler(Log log) {
+    return map ((foldl (exists (fail_on($2, "h2") ?? NOTHING)) ? $1 : $2, holders(log, 3)).n + ($1.n ?? "")),
+        holders(log, 2, "m");
+}
+
+sub map_object_fold_raises_no_handler() {
+    Log log();
+    try {
+        map_object_fold_no_handler(log);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    log.add("after");
+    out("map object fold no handler", log);
+}
+
+# a map raises in a fold in a function with no handler: the map's list, the fold's iterator and list, and then the
+# value that the statement holds from the map's previous element (qore#5884)
+auto sub fold_map_no_handler(Log log) {
+    return foldl ((map (exists (fail_on($1, "h2") ?? NOTHING)), holders(log, 3)).size() + ($2.n ?? "")),
+        holders(log, 3, "m");
+}
+
+sub fold_map_raises_no_handler() {
+    Log log();
+    try {
+        fold_map_no_handler(log);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    log.add("after");
+    out("fold map no handler", log);
+}
+
+# a map raises in a fold in a map in a function with no handler (qore#5884)
+auto sub map_fold_map_no_handler(Log log) {
+    return map (foldl $1 + $2, (map (exists (fail_on($1, "h2") ?? NOTHING)), holders(log, 3))),
+        holders(log, 2, "m");
+}
+
+sub map_fold_map_raises_no_handler() {
+    Log log();
+    try {
+        map_fold_map_no_handler(log);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    log.add("after");
+    out("map fold map no handler", log);
+}
+
 sub main() {
     map_list();
     select_list();
@@ -438,6 +508,10 @@ sub main() {
     foldl_nested_raises();
     foldl_next_raises();
     map_fold_raises_no_handler();
+    map_raises_no_handler();
+    map_object_fold_raises_no_handler();
+    fold_map_raises_no_handler();
+    map_fold_map_raises_no_handler();
 }
 
 main();

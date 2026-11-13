@@ -45,12 +45,24 @@ static LocalVar* qore_closure_vlist_self(const LVarSet* vlist) {
     return nullptr;
 }
 
+//! Returns the class of a closure function's class type, or nullptr
+static const qore_class_private* qore_closure_method_class(const UserClosureFunction* uf) {
+    const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(uf->getClassType());
+    return qc ? qore_class_private::get(*qc) : nullptr;
+}
+
 static QoreClosureBase* qore_closure_try_object_context(const QoreClosureParseNode* closure, LocalVar* self_lv,
         cvv_vec_t* cvec) {
     QoreObject* o = nullptr;
     const qore_class_private* c_ctx = nullptr;
     runtime_get_object_and_class(o, c_ctx);
     if (o) {
+        // a closure of a method runs in the class context of the method, as the method's code does, also when it is
+        // created outside of it: the default value of the method's parameter is evaluated with the method's object
+        // before the call enters the method's class, in the caller's class context (issue #5898)
+        if (const qore_class_private* method_class = closure->getMethodClass()) {
+            c_ctx = method_class;
+        }
         return new QoreObjectClosureNode(o, c_ctx, closure, cvec);
     }
 
@@ -94,6 +106,14 @@ static QoreClosureBase* qore_closure_try_object_context(const QoreClosureParseNo
 QoreClosureParseNode::QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf, bool n_lambda)
         : ParseNode(loc, NT_CLOSURE), uf(n_uf), lambda(n_lambda), in_method(false) {
     set_effect_as_root(false);
+}
+
+QoreClosureParseNode::QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf, bool n_lambda,
+        bool n_in_method) : ParseNode(loc, NT_CLOSURE), uf(n_uf), lambda(n_lambda), in_method(n_in_method) {
+    set_effect_as_root(false);
+    if (in_method) {
+        method_class = qore_closure_method_class(uf);
+    }
 }
 
 QoreClosureParseNode::~QoreClosureParseNode() {
@@ -153,6 +173,7 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     if (parse_context.oflag) {
         in_method = true;
         uf->setClassType(parse_context.oflag->getTypeInfo());
+        method_class = qore_closure_method_class(uf);
     }
     if (parse_context.pflag & PF_CONST_METHOD) {
         uf->setConstMethodContext();

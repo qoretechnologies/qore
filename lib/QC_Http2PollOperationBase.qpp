@@ -156,6 +156,22 @@ void Http2PollOperationPriv::abort(ExceptionSink* xsink) {
     }
 }
 
+int Http2PollOperationPriv::sendShutdownGoaway(ExceptionSink* xsink) {
+    QoreSocketObject* s;
+    {
+        AutoLocker al(op_lock);
+        if (!sock || h2_state == H2ServerState::CLOSED) {
+            return 0;
+        }
+        s = sock;
+        s->ref();
+    }
+    // the write waits for the socket's I/O thread, whose continuePoll() takes op_lock, so it is made without the lock
+    int rv = s->sendHttp2ShutdownGoaway(xsink);
+    s->deref(xsink);
+    return rv;
+}
+
 QoreValue Http2PollOperationPriv::getOutput() const {
     AutoLocker al(op_lock);
     // Clear the pending flag — getOutput() is the dispatch callback's
@@ -569,7 +585,7 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendHttp2StreamDataForAsyncPoll(stream_id, *holder, false, &cxsink);
+            int rv = sock_ptr->sendHttp2StreamControlFrameForAsyncPoll(stream_id, *holder, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path.
                 cxsink.clear();
@@ -1209,6 +1225,27 @@ bool Http2PollOperationBase::isClosed() [flags=RET_VALUE_ONLY] {
 */
 bool Http2PollOperationBase::isStreamPeerClosed(int stream_id) [flags=RET_VALUE_ONLY] {
     return priv->isStreamPeerClosed((int32_t)stream_id);
+}
+
+//! Sends a GOAWAY frame with error code \c NO_ERROR to tell the client that the server is closing the connection
+/** Used when the server stops: the frame gives the client the ID of the last stream that the server processed, so
+    that the client knows which of its requests it can retry on another connection, and tells it to send no more
+    requests on this one (RFC 9113 section 6.8).
+
+    Does nothing if the connection is closed, if the server has not sent its connection preface yet, or if a
+    \c GOAWAY frame was sent already.  The frame is written on the I/O thread of the socket without blocking; if the
+    socket cannot take it, or if the peer has closed the connection, it is not sent and no error is raised.  Called
+    on an async I/O thread or in a \c continuePoll worker, the frame is only queued and the call does not wait for
+    it to be written.
+
+    @throw HTTP2-ERROR the frame could not be submitted
+    @throw SOCKET-CLOSED the socket was closed before the frame could be handed to its I/O thread
+    @throw ASYNC-IO-ERROR the async I/O controller could not run the operation
+
+    @since %Qore 3.0
+*/
+nothing Http2PollOperationBase::sendShutdownGoaway() {
+    priv->sendShutdownGoaway(xsink);
 }
 
 //! Registers the watch of the response on a stream so that the result of its transmission is reported
