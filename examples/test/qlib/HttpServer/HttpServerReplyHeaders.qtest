@@ -1,0 +1,1031 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The response headers of HttpServer, exactly: their names with their case, their values (the Content-Type with its
+# charset) and their order, as sent on the wire by synchronous and asynchronous HTTP/1.1 listeners and over HTTP/2.
+# The cases cover a response whose Content-Type the server sets, handler headers with canonical and other-case names
+# (which replace the server's configured headers and the managed fields), the server's configured headers, the
+# response to a HEAD request, error responses returned by a handler, the error response to an invalid handler response,
+# the response of the server when no handler matches, and responses that close the connection; also configured
+# headers that a subclass changes after the server's constructor (with canonical names and with names of managed
+# fields in another case), configured headers changed while the server serves requests, and configured headers whose
+# values all have one type.  The order of the header fields is that of the hash the server builds, and the tests pin it
+# so that it does not change (#5759): the expected values were taken from the server before #5759.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerReplyHeadersTest
+
+class ReplyHeadersHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        switch ((hdr.path =~ x/^h\/(.*)$/)[0]) {
+            # no headers: the server sets the Content-Type
+            case "default":
+                return makeResponse(200, "<p>ok</p>");
+            # binary data: application/octet-stream without a charset
+            case "binary":
+                return makeResponse(200, <00e4>);
+            # canonical names, a Content-Type without a charset, and a configured header replaced
+            case "typed":
+                return makeResponse(200, "ok", {"Content-Type": MimeTypeText, "X-Handler": "h", "X-Instance": "h"});
+            # managed fields and a configured header with names in another case
+            case "lower":
+                return makeResponse(200, "ok", {
+                    "content-type": MimeTypeText + ";charset=utf-8",
+                    "x-handler": "h",
+                    "server": "custom-server",
+                    "x-powered-by": "handler",
+                    "x-instance": "h",
+                });
+            # a handler that closes the connection
+            case "close":
+                hash<HttpResponseInfo> rv = makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+                rv.close = True;
+                return rv;
+            # a handler that sends its own Connection header
+            case "connection":
+                return makeResponse(200, "ok", {"Content-Type": MimeTypeText, "Connection": "close"});
+            # an empty body: 204 without a Content-Type
+            case "empty":
+                return makeResponse(200, "", {"X-Handler": "h"});
+            # error responses
+            case "error":
+                return makeResponse(404, "missing", {"X-Handler": "h"});
+            case "error-typed":
+                return makeResponse(409, "conflict", {"content-type": MimeTypeText, "X-Handler": "h"});
+            case "error-default":
+                return <HttpResponseInfo>{"code": 400};
+            case "redirect":
+                return makeResponse(302, "", {"Location": "/default"});
+            # an invalid response: 500
+            case "invalid":
+                return <HttpResponseInfo>{"code": 999, "body": "x"};
+        }
+        return makeResponse(404, "not found");
+    }
+}
+
+#! a server whose subclass changes the configured headers after the server's constructor, with canonical names
+class CanonicalSubclassServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+        hdr += {"Server": "sub-server", "X-Frame-Options": "SAMEORIGIN"};
+        remove hdr."X-Powered-By";
+    }
+}
+
+#! a server whose subclass changes the configured headers after the server's constructor, with names of fields
+#! managed by the server in another case
+class LowerCaseSubclassServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+        hdr += {"server": "sub-server", "x-frame-options": "SAMEORIGIN"};
+    }
+}
+
+#! a server whose configured headers are changed while it serves requests
+class ChangingSubclassServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    setConfiguredHeader(string name, string value) {
+        hdr{name} = value;
+    }
+}
+
+class HttpServerReplyHeadersTest inherits QUnit::Test {
+    private {
+        const CertPem = TestCertificates::CertPem;
+        const KeyPem = TestCertificates::KeyPem;
+
+        # the Date header has the current time
+        const DateRegex = "^[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT$";
+
+        # request (method path) -> the header lines of the HTTP/1.1 response in the order sent; "<date>" stands for
+        # the Date value and "<version>" for the Qore version
+        const ExpectedH1 = {
+            "GET /h/default": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: 9",
+            ),
+            "GET /h/binary": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: application/octet-stream",
+                "Content-Length: 2",
+            ),
+            "GET /h/typed": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "Content-Type: text/plain;charset=utf-8",
+                "X-Handler: h",
+                "X-Instance: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 2",
+            ),
+            "GET /h/lower": (
+                "HTTP/1.1 200 OK",
+                "Content-Type: text/plain;charset=utf-8",
+                "x-handler: h",
+                "Server: custom-server",
+                "x-powered-by: handler",
+                "x-instance: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Content-Length: 2",
+            ),
+            "GET /h/close": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Content-Type: text/plain;charset=utf-8",
+                "Date: <date>",
+                "Connection: close",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 2",
+            ),
+            "GET /h/connection": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Content-Type: text/plain;charset=utf-8",
+                "Connection: close",
+                "Date: <date>",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 2",
+            ),
+            "GET /h/empty": (
+                "HTTP/1.1 204 No Content",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "X-Handler: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 0",
+            ),
+            "GET /h/error": (
+                "HTTP/1.1 404 Not Found",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "X-Handler: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: 7",
+            ),
+            "GET /h/error-typed": (
+                "HTTP/1.1 409 Conflict",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Content-Type: text/plain;charset=utf-8",
+                "X-Handler: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 8",
+            ),
+            "GET /h/error-default": (
+                "HTTP/1.1 400 Bad Request",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: <n>",
+            ),
+            "GET /h/redirect": (
+                "HTTP/1.1 302 Found",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Location: /default",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 0",
+            ),
+            "GET /h/invalid": (
+                "HTTP/1.1 500 Internal Server Error",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Content-Type: text/html;charset=utf-8",
+                "Date: <date>",
+                "Connection: close",
+                "Content-Length: <n>",
+            ),
+            "GET /none": (
+                "HTTP/1.1 501 Not Implemented",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: <n>",
+            ),
+            "HEAD /h/default": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: 9",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+            ),
+            "HEAD /h/typed": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "Content-Type: text/plain;charset=utf-8",
+                "X-Handler: h",
+                "X-Instance: h",
+                "Content-Length: 2",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+            ),
+        };
+
+        # request (method path) -> the header lines of the HTTP/1.1 response of the TLS listener, which has an Alt-Svc
+        # header; "<port>" stands for the UDP port of its HTTP/3 listener
+        const ExpectedH1Tls = {
+            "GET /h/default": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: 9",
+            ),
+            "GET /h/binary": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: application/octet-stream",
+                "Content-Length: 2",
+            ),
+            "GET /h/typed": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Content-Type: text/plain;charset=utf-8",
+                "X-Handler: h",
+                "X-Instance: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 2",
+            ),
+            "GET /h/lower": (
+                "HTTP/1.1 200 OK",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Content-Type: text/plain;charset=utf-8",
+                "x-handler: h",
+                "Server: custom-server",
+                "x-powered-by: handler",
+                "x-instance: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Content-Length: 2",
+            ),
+            "GET /h/close": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Content-Type: text/plain;charset=utf-8",
+                "Date: <date>",
+                "Connection: close",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 2",
+            ),
+            "GET /h/connection": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Content-Type: text/plain;charset=utf-8",
+                "Connection: close",
+                "Date: <date>",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 2",
+            ),
+            "GET /h/empty": (
+                "HTTP/1.1 204 No Content",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "X-Handler: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 0",
+            ),
+            "GET /h/error": (
+                "HTTP/1.1 404 Not Found",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "X-Handler: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: 7",
+            ),
+            "GET /h/error-typed": (
+                "HTTP/1.1 409 Conflict",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Content-Type: text/plain;charset=utf-8",
+                "X-Handler: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 8",
+            ),
+            "GET /h/error-default": (
+                "HTTP/1.1 400 Bad Request",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: <n>",
+            ),
+            "GET /h/redirect": (
+                "HTTP/1.1 302 Found",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Location: /default",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 0",
+            ),
+            "GET /h/invalid": (
+                "HTTP/1.1 500 Internal Server Error",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Content-Type: text/html;charset=utf-8",
+                "Date: <date>",
+                "Connection: close",
+                "Content-Length: <n>",
+            ),
+            "GET /none": (
+                "HTTP/1.1 501 Not Implemented",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: <n>",
+            ),
+            "HEAD /h/default": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "X-Instance: srv",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: 9",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+            ),
+            "HEAD /h/typed": (
+                "HTTP/1.1 200 OK",
+                "X-Powered-By: Qore/<version>",
+                "Alt-Svc: h3=\":<port>\"; ma=3600",
+                "Content-Type: text/plain;charset=utf-8",
+                "X-Handler: h",
+                "X-Instance: h",
+                "Content-Length: 2",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+            ),
+        };
+
+        # request (method path) -> the header fields of the HTTP/2 response as the client returns them (sorted by
+        # name, so the order is not compared); "<date>" stands for the Date value, "<version>" for the Qore version and
+        # "<port>" for the UDP port of the HTTP/3 listener in the Alt-Svc header
+        const ExpectedH2 = {
+            "GET /h/default": (
+                "alt-svc: h3=\":<port>\"; ma=3600",
+                "content-length: 9",
+                "content-type: text/html;charset=utf-8",
+                "date: <date>",
+                "server: Qore-HTTP-Server/<server-version>",
+                "x-instance: srv",
+                "x-powered-by: Qore/<version>",
+            ),
+            "GET /h/typed": (
+                "alt-svc: h3=\":<port>\"; ma=3600",
+                "content-length: 2",
+                "content-type: text/plain;charset=utf-8",
+                "date: <date>",
+                "server: Qore-HTTP-Server/<server-version>",
+                "x-handler: h",
+                "x-instance: h",
+                "x-powered-by: Qore/<version>",
+            ),
+            "GET /h/lower": (
+                "alt-svc: h3=\":<port>\"; ma=3600",
+                "content-length: 2",
+                "content-type: text/plain;charset=utf-8",
+                "date: <date>",
+                "server: custom-server",
+                "x-handler: h",
+                "x-instance: h",
+                "x-powered-by: handler",
+            ),
+            "GET /h/connection": (
+                "alt-svc: h3=\":<port>\"; ma=3600",
+                "content-length: 2",
+                "content-type: text/plain;charset=utf-8",
+                "date: <date>",
+                "server: Qore-HTTP-Server/<server-version>",
+                "x-instance: srv",
+                "x-powered-by: Qore/<version>",
+            ),
+            "GET /h/error": (
+                "alt-svc: h3=\":<port>\"; ma=3600",
+                "content-length: 7",
+                "content-type: text/html;charset=utf-8",
+                "date: <date>",
+                "server: Qore-HTTP-Server/<server-version>",
+                "x-handler: h",
+                "x-instance: srv",
+                "x-powered-by: Qore/<version>",
+            ),
+            "GET /h/error-typed": (
+                "alt-svc: h3=\":<port>\"; ma=3600",
+                "content-length: 8",
+                "content-type: text/plain;charset=utf-8",
+                "date: <date>",
+                "server: Qore-HTTP-Server/<server-version>",
+                "x-handler: h",
+                "x-instance: srv",
+                "x-powered-by: Qore/<version>",
+            ),
+            "GET /h/invalid": (
+                "alt-svc: h3=\":<port>\"; ma=3600",
+                "content-length: <n>",
+                "content-type: text/html;charset=utf-8",
+                "date: <date>",
+                "x-instance: srv",
+                "x-powered-by: Qore/<version>",
+            ),
+            "GET /none": (
+                "alt-svc: h3=\":<port>\"; ma=3600",
+                "content-length: <n>",
+                "content-type: text/html;charset=utf-8",
+                "date: <date>",
+                "server: Qore-HTTP-Server/<server-version>",
+                "x-instance: srv",
+                "x-powered-by: Qore/<version>",
+            ),
+        };
+
+        # the header lines of the responses of the servers of the subclasses
+        const ExpectedSubclass = {
+            "canonical": {
+                "GET /h/default": (
+                    "HTTP/1.1 200 OK",
+                    "Server: sub-server",
+                    "X-Frame-Options: SAMEORIGIN",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 9",
+                ),
+                "GET /h/typed": (
+                    "HTTP/1.1 200 OK",
+                    "Server: sub-server",
+                    "X-Frame-Options: SAMEORIGIN",
+                    "Content-Type: text/plain;charset=utf-8",
+                    "X-Handler: h",
+                    "X-Instance: h",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Length: 2",
+                ),
+                "GET /h/lower": (
+                    "HTTP/1.1 200 OK",
+                    "X-Frame-Options: SAMEORIGIN",
+                    "Content-Type: text/plain;charset=utf-8",
+                    "x-handler: h",
+                    "Server: custom-server",
+                    "x-powered-by: handler",
+                    "x-instance: h",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Length: 2",
+                ),
+                "GET /h/error": (
+                    "HTTP/1.1 404 Not Found",
+                    "Server: sub-server",
+                    "X-Frame-Options: SAMEORIGIN",
+                    "X-Handler: h",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 7",
+                ),
+                "GET /none": (
+                    "HTTP/1.1 501 Not Implemented",
+                    "Server: sub-server",
+                    "X-Frame-Options: SAMEORIGIN",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: <n>",
+                ),
+                "HEAD /h/default": (
+                    "HTTP/1.1 200 OK",
+                    "Server: sub-server",
+                    "X-Frame-Options: SAMEORIGIN",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 9",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                ),
+            },
+            "lower-case": {
+                "GET /h/default": (
+                    "HTTP/1.1 200 OK",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: sub-server",
+                    "x-frame-options: SAMEORIGIN",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 9",
+                ),
+                "GET /h/typed": (
+                    "HTTP/1.1 200 OK",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: sub-server",
+                    "x-frame-options: SAMEORIGIN",
+                    "Content-Type: text/plain;charset=utf-8",
+                    "X-Handler: h",
+                    "X-Instance: h",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Length: 2",
+                ),
+                "GET /h/lower": (
+                    "HTTP/1.1 200 OK",
+                    "x-frame-options: SAMEORIGIN",
+                    "Content-Type: text/plain;charset=utf-8",
+                    "x-handler: h",
+                    "Server: custom-server",
+                    "x-powered-by: handler",
+                    "x-instance: h",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Length: 2",
+                ),
+                "GET /h/error": (
+                    "HTTP/1.1 404 Not Found",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: sub-server",
+                    "x-frame-options: SAMEORIGIN",
+                    "X-Handler: h",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 7",
+                ),
+                "GET /none": (
+                    "HTTP/1.1 501 Not Implemented",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: sub-server",
+                    "x-frame-options: SAMEORIGIN",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: <n>",
+                ),
+                "HEAD /h/default": (
+                    "HTTP/1.1 200 OK",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: sub-server",
+                    "x-frame-options: SAMEORIGIN",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 9",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                ),
+            },
+        };
+        # the header lines of the responses before and after the configured headers are changed
+        const ExpectedChanged = {
+            "before": {
+                "GET /h/default": (
+                    "HTTP/1.1 200 OK",
+                    "X-Powered-By: Qore/<version>",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Server: Qore-HTTP-Server/<server-version>",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 9",
+                ),
+            },
+            "after": {
+                "GET /h/default": (
+                    "HTTP/1.1 200 OK",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: late-server",
+                    "X-Late: 1",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 9",
+                ),
+                "GET /h/typed": (
+                    "HTTP/1.1 200 OK",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: late-server",
+                    "X-Late: 1",
+                    "Content-Type: text/plain;charset=utf-8",
+                    "X-Handler: h",
+                    "X-Instance: h",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Length: 2",
+                ),
+                "GET /h/lower": (
+                    "HTTP/1.1 200 OK",
+                    "X-Late: 1",
+                    "Content-Type: text/plain;charset=utf-8",
+                    "x-handler: h",
+                    "Server: custom-server",
+                    "x-powered-by: handler",
+                    "x-instance: h",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Length: 2",
+                ),
+                "GET /h/error": (
+                    "HTTP/1.1 404 Not Found",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: late-server",
+                    "X-Late: 1",
+                    "X-Handler: h",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 7",
+                ),
+                "GET /none": (
+                    "HTTP/1.1 501 Not Implemented",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: late-server",
+                    "X-Late: 1",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: <n>",
+                ),
+                "HEAD /h/default": (
+                    "HTTP/1.1 200 OK",
+                    "X-Powered-By: Qore/<version>",
+                    "Server: late-server",
+                    "X-Late: 1",
+                    "Content-Type: text/html;charset=utf-8",
+                    "Content-Length: 9",
+                    "Date: <date>",
+                    "Connection: Keep-Alive",
+                ),
+            },
+        };
+        # the header lines of the responses of a server whose configured headers are a hash<string, int>
+        const ExpectedNarrowed = {
+            "GET /h/default": (
+                "HTTP/1.1 200 OK",
+                "X-Instance: 1",
+                "X-Count: 2",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: 9",
+            ),
+            "GET /h/typed": (
+                "HTTP/1.1 200 OK",
+                "X-Count: 2",
+                "Content-Type: text/plain;charset=utf-8",
+                "X-Handler: h",
+                "X-Instance: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Length: 2",
+            ),
+            "GET /h/lower": (
+                "HTTP/1.1 200 OK",
+                "X-Count: 2",
+                "Content-Type: text/plain;charset=utf-8",
+                "x-handler: h",
+                "Server: custom-server",
+                "x-powered-by: handler",
+                "x-instance: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Content-Length: 2",
+            ),
+            "GET /h/error": (
+                "HTTP/1.1 404 Not Found",
+                "X-Instance: 1",
+                "X-Count: 2",
+                "X-Handler: h",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: 7",
+            ),
+            "GET /none": (
+                "HTTP/1.1 501 Not Implemented",
+                "X-Instance: 1",
+                "X-Count: 2",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: <n>",
+            ),
+            "HEAD /h/default": (
+                "HTTP/1.1 200 OK",
+                "X-Instance: 1",
+                "X-Count: 2",
+                "Content-Type: text/html;charset=utf-8",
+                "Content-Length: 9",
+                "Date: <date>",
+                "Connection: Keep-Alive",
+                "Server: Qore-HTTP-Server/<server-version>",
+            ),
+        };
+
+        HttpServer server;
+        int sync_port;
+        int async_port;
+        int h2_port;
+    }
+
+    constructor() : Test("HttpServerReplyHeadersTest", "1.0") {
+        addTestCase("HTTP/1.1 async listener", \asyncH1Test());
+        addTestCase("HTTP/1.1 sync listener", \syncH1Test());
+        addTestCase("HTTP/1.1 TLS listener", \tlsH1Test());
+        addTestCase("HTTP/1.1 keep-alive", \keepAliveTest());
+        addTestCase("HTTP/2", \h2Test());
+        addTestCase("configured headers of a subclass", \subclassTest());
+        addTestCase("configured headers changed while serving", \changedHeadersTest());
+        addTestCase("configured headers with values of one type", \narrowedHeadersTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # the configured headers have a canonical name and a name of a field that is not configured otherwise
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+            "hdr": {"X-Powered-By": "Qore/" + Qore::VersionString, "X-Instance": "srv"},
+        });
+        ReplyHeadersHandler handler();
+        server.setHandler("h", "^h/", NOTHING, handler);
+        sync_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0, "sync": True}).port;
+        async_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        h2_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    asyncH1Test() {
+        checkH1(async_port, "async");
+    }
+
+    syncH1Test() {
+        checkH1(sync_port, "sync");
+    }
+
+    # the TLS listener has the Alt-Svc header of its HTTP/3 listener
+    tlsH1Test() {
+        checkH1(h2_port, "tls", True);
+    }
+
+    # several requests on one connection have the same headers as the first one
+    keepAliveTest() {
+        foreach int port in (async_port, sync_port) {
+            Socket s();
+            s.connect(sprintf("127.0.0.1:%d", port), 30s);
+            on_exit s.close();
+            for (int i = 0; i < 3; ++i) {
+                foreach string req in ("GET /h/default", "GET /h/typed", "GET /h/lower", "GET /h/error") {
+                    string label = sprintf("%d %s #%d", port, req, i);
+                    list<string> l = getHeaderLines(s, req, label);
+                    assertEq(ExpectedH1{req}, l, label);
+                }
+            }
+        }
+    }
+
+    h2Test() {
+        HTTPClient hc({
+            "url": sprintf("https://127.0.0.1:%d", h2_port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "timeout": 30s,
+            "error_passthru": True,
+        });
+        hc.setHttp3Mode("disabled");
+        for (int i = 0; i < 2; ++i) {
+            foreach hash<auto> e in (ExpectedH2.pairIterator()) {
+                (string method, string path) = e.key.split(" ");
+                string label = sprintf("h2 %s #%d", e.key, i);
+                hash<auto> info;
+                hc.send(NOTHING, method, path, NOTHING, False, \info);
+                list<string> lines = map sprintf("%s: %s", $1.key, $1.value), info."response-headers".pairIterator(),
+                    $1.key !~ /^:/ && !inlist($1.key, ("status_code", "status_message", "http_version", "body"));
+                assertEq(e.value, normalize(lines, label, path), label);
+            }
+        }
+        assertTrue(hc.isHttp2Active());
+    }
+
+    # the requests checked with the servers of the subclasses
+    const SubclassRequests = ("GET /h/default", "GET /h/typed", "GET /h/lower", "GET /h/error", "GET /none",
+        "HEAD /h/default");
+
+    # serves the requests with the given server and returns the header lines of the responses
+    private hash<string, list<string>> serve(HttpServer srv, string label, list<string> reqs = SubclassRequests) {
+        srv.setHandler("h", "^h/", NOTHING, new ReplyHeadersHandler());
+        int port = srv.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        srv.waitForAsyncIo();
+        hash<string, list<string>> rv = {};
+        foreach string req in (reqs) {
+            Socket s();
+            s.connect(sprintf("127.0.0.1:%d", port), 30s);
+            on_exit s.close();
+            rv{req} = getHeaderLines(s, req, label + " " + req);
+        }
+        return rv;
+    }
+
+    private checkServed(hash<auto> expected, hash<string, list<string>> actual, string label) {
+        foreach hash<auto> e in (expected.pairIterator()) {
+            assertEq(e.value, actual{e.key}, label + " " + e.key);
+        }
+        assertEq(keys expected, keys actual, label);
+    }
+
+    subclassTest() {
+        foreach string label in ("canonical", "lower-case") {
+            HttpServer srv = label == "canonical"
+                ? new CanonicalSubclassServer(<HttpServerOptionInfo>{
+                    "logger": new Logger("server", LoggerLevel::getLevelError()),
+                })
+                : new LowerCaseSubclassServer(<HttpServerOptionInfo>{
+                    "logger": new Logger("server", LoggerLevel::getLevelError()),
+                });
+            on_exit delete srv;
+            checkServed(ExpectedSubclass{label}, serve(srv, label), label);
+        }
+    }
+
+    changedHeadersTest() {
+        ChangingSubclassServer srv(<HttpServerOptionInfo>{"logger": new Logger("server", LoggerLevel::getLevelError())});
+        on_exit delete srv;
+        checkServed(ExpectedChanged.before, serve(srv, "before", ("GET /h/default",)), "before");
+        # requests after the change have the changed headers: a field managed by the server in another case, and
+        # another one
+        srv.setConfiguredHeader("server", "late-server");
+        srv.setConfiguredHeader("X-Late", "1");
+        hash<string, list<string>> actual;
+        int port = srv.getListeners().firstValue().port;
+        foreach string req in (SubclassRequests) {
+            Socket s();
+            s.connect(sprintf("127.0.0.1:%d", port), 30s);
+            on_exit s.close();
+            actual{req} = getHeaderLines(s, req, "after " + req);
+        }
+        checkServed(ExpectedChanged.after, actual, "after");
+    }
+
+    narrowedHeadersTest() {
+        # the configured headers are a hash<string, int>
+        HttpServer srv(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+            "hdr": {"X-Instance": 1, "X-Count": 2},
+        });
+        on_exit delete srv;
+        checkServed(ExpectedNarrowed, serve(srv, "narrowed"), "narrowed");
+    }
+
+    private checkH1(int port, string label_prefix, bool tls = False) {
+        foreach hash<auto> e in (ExpectedH1.pairIterator()) {
+            string label = sprintf("%s %s", label_prefix, e.key);
+            Socket s();
+            s.connect(sprintf("127.0.0.1:%d", port), 30s);
+            on_exit s.close();
+            if (tls) {
+                s.upgradeClientToSSL(30s);
+            }
+            list<string> l = getHeaderLines(s, e.key, label);
+            assertEq(tls ? ExpectedH1Tls{e.key} : e.value, l, label);
+        }
+    }
+
+    # sends the request and returns the header lines of the response, normalized; the message body is read
+    private list<string> getHeaderLines(Socket s, string req, string label) {
+        (string method, string path) = req.split(" ");
+        s.send(sprintf("%s %s HTTP/1.1\r\nHost: localhost\r\n\r\n", method, path));
+        string data = "";
+        int end;
+        while ((end = data.find("\r\n\r\n")) < 0) {
+            data += s.recv(0, 30s);
+        }
+        list<string> lines = data.substr(0, end).split("\r\n");
+        string rest = data.substr(end + 4);
+        # read the message body, so that the next response on the connection starts with its status line
+        *string cl;
+        foreach string line in (lines) {
+            if (*list<*string> m = (line =~ x/^Content-Length: ([0-9]+)$/i)) {
+                cl = m[0];
+            }
+        }
+        if (method != "HEAD" && cl) {
+            int len = cl.toInt();
+            while (rest.size() < len) {
+                rest += s.recv(0, 30s);
+            }
+        }
+        return normalize(lines, label, path);
+    }
+
+    # the length of a message that the server generates (an error message with the response of a handler, or an
+    # HTML page) is not compared, as it changes with the text
+    const GeneratedMessagePaths = {"/h/invalid": True, "/none": True, "/h/error-default": True};
+
+    private list<string> normalize(list<string> lines, string label, string path) {
+        string server_version = HttpServer::HttpServerString;
+        lines = map normalizeLine($1, server_version, label), lines;
+        if (GeneratedMessagePaths{path}) {
+            lines = map regex_subst($1, "^(content-length): [0-9]+$", "$1: <n>", RE_Caseless), lines;
+        }
+        return lines;
+    }
+
+    private string normalizeLine(string line, string server_string, string label) {
+        if (*list<*string> m = (line =~ x/^(date): (.*)$/i)) {
+            assertRegex(DateRegex, m[1], label);
+            return m[0] + ": <date>";
+        }
+        line = regex_subst(line, "^(alt-svc: h3=\":)[0-9]+", "$1<port>", RE_Caseless);
+        line = replace(line, server_string, "Qore-HTTP-Server/<server-version>");
+        return replace(line, "Qore/" + Qore::VersionString, "Qore/<version>");
+    }
+}
