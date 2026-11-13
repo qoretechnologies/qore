@@ -73,7 +73,7 @@ QoreParseHashNode* QoreParseHashNode::bindSource(QoreParseHashNode* node, Lexica
 }
 
 QoreParseHashNode* QoreParseHashNode::copyBackground(const QoreParseHashNode& old, ExceptionSink* xsink) {
-    auto* node = old.getSemanticPolicy().needsFilter()
+    auto* node = old.generic ? old.copyGenericBackground(xsink) : old.getSemanticPolicy().needsFilter()
         ? static_cast<QoreParseHashNode*>(new LexicalParseHashNode(old, xsink)) : new QoreParseHashNode(old, xsink);
     node->copySemanticPolicy(old);
     return node;
@@ -314,6 +314,18 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         return err;
     }
 
+    if (qore_type_contains_type_parameter(vtype)) {
+        // the hash that a literal in a generic callable creates has the type argument of the call in place of the
+        // type parameter, so it cannot be created here; other literals keep their code path (issue #5872)
+        ReferenceHolder<> holder(this, nullptr);
+        QoreParseHashNode* generic_hash = getSemanticPolicy().needsFilter()
+            ? static_cast<QoreParseHashNode*>(new QoreGenericParseHashNode<true>(*this))
+            : new QoreGenericParseHashNode<false>(*this);
+        generic_hash->setParseAnalysis(parse_context.analysis);
+        val = generic_hash;
+        return 0;
+    }
+
     if (needs_eval) {
         return 0;
     }
@@ -348,9 +360,16 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
     return evalCommon<false>(needs_deref, xsink);
 }
 
-template <bool Lexical>
+template <bool Lexical, bool Generic>
 QoreValue QoreParseHashNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     assert(keys.size() == values.size());
+
+    // the value type in a generic callable has the type argument of the call in place of the type parameter
+    // (issue #5872); the code of the other literals uses the node's value type as before
+    const QoreTypeInfo* generic_vtype = nullptr;
+    if (Generic) {
+        generic_vtype = qore_substitute_type_params_if_needed(this->vtype);
+    }
 
     // Use the parse-time narrowed value type when available so
     // setKeyValue triggers per-value softening (softint, softstring,
@@ -363,12 +382,14 @@ QoreValue QoreParseHashNode::evalCommon(bool& needs_deref, ExceptionSink* xsink)
     // autoTypeInfo when the parser left vtype as auto/null/any, and
     // the tail block below derives complexTypeInfo from runtime-
     // inferred values as before (issue #2106).
-    const bool parse_time_narrowed = (this->vtype
-        && this->vtype != autoTypeInfo
-        && this->vtype != anyTypeInfo);
+    const bool parse_time_narrowed = Generic
+        ? (generic_vtype && generic_vtype != autoTypeInfo && generic_vtype != anyTypeInfo)
+        : (this->vtype
+            && this->vtype != autoTypeInfo
+            && this->vtype != anyTypeInfo);
 
     ReferenceHolder<QoreHashNode> h(
-        new QoreHashNode(parse_time_narrowed ? this->vtype : autoTypeInfo),
+        new QoreHashNode(parse_time_narrowed ? (Generic ? generic_vtype : this->vtype) : autoTypeInfo),
         xsink);
 
     // issue #2106 we must calculate the runtime type again because lvalues can return NOTHING despite their declared
@@ -411,7 +432,9 @@ QoreValue QoreParseHashNode::evalCommon(bool& needs_deref, ExceptionSink* xsink)
         //printd(5, "QoreParseHashNode::evalImpl() '%s' this->vtype: '%s' (c: %d) vt: '%s' (c: %d)\n",
         //  key.c_str(), QoreTypeInfo::getName(this->vtype), QoreTypeInfo::hasComplexType(this->vtype),
         //  QoreTypeInfo::getName(vt), QoreTypeInfo::hasComplexType(vt));
-        if (this->vtype && this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype)
+        // a literal in a generic callable stores its values as they are, as the IR interpreter does: this keeps the
+        // type folding call out of its code
+        if (!Generic && this->vtype && this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype)
                 && QoreTypeInfo::hasComplexType(vt)) {
             // this can never throw an exception; it's only used for type folding/stripping
             QoreTypeInfo::acceptInputKey(this->vtype, key.c_str(), val, xsink);
@@ -446,3 +469,7 @@ QoreValue QoreParseHashNode::evalCommon(bool& needs_deref, ExceptionSink* xsink)
 
     return rv.release();
 }
+
+// the evaluation of the literals whose value type has a type parameter (QoreGenericParseHashNode, issue #5872)
+template QoreValue QoreParseHashNode::evalCommon<false, true>(bool& needs_deref, ExceptionSink* xsink) const;
+template QoreValue QoreParseHashNode::evalCommon<true, true>(bool& needs_deref, ExceptionSink* xsink) const;
