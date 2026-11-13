@@ -35279,6 +35279,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::FUNC_CALL;
         if (const char* deferred_source_function = call->getAOTDeferredSourceFunction()) {
             id.ref1 = deferred_source_function;
+            id.ref2 = QORE_AOT_DEFERRED_SOURCE_CALL_SLOT;
             return id;
         }
         // Namespace-qualified identity so slot resolution at runtime

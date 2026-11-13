@@ -511,6 +511,11 @@ constexpr uint8_t QORE_AOT_COMPRESSION_SECTIONED_ZSTD = 3;
 //! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
 constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
 
+//! FUNC_CALL variant reference (expression slot ref2, inline call signature) of a call that the compiler left to
+//! another source object (FunctionCallNode::getAOTDeferredSourceFunction()): its function is resolved with
+//! qore_aot_resolve_deferred_source_function_entry(), every other with qore_aot_resolve_function_entry_for_slot()
+constexpr const char* QORE_AOT_DEFERRED_SOURCE_CALL_SLOT = "deferred-source-call";
+
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
 

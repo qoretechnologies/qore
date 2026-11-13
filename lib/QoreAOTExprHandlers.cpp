@@ -172,7 +172,7 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
         if (!deferred_source_function) {
             ctx.writer.writeStringRef(qore_aot_get_function_call_signature_ref(call).c_str());
         } else {
-            ctx.writer.writeStringRef("");
+            ctx.writer.writeStringRef(QORE_AOT_DEFERRED_SOURCE_CALL_SLOT);
         }
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -260,7 +260,9 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
         ctx.error = "empty function name in inline FUNC_CALL expression";
         return QoreValue();
     }
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
+    const FunctionEntry* fe = sig_ref && !strcmp(sig_ref, QORE_AOT_DEFERRED_SOURCE_CALL_SLOT)
+        ? qore_aot_resolve_deferred_source_function_entry(ctx.pgm, func_name)
+        : qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
     if (!fe) {
         QoreValue fallback = qore_aot_make_deferred_function_call(ctx.pgm, func_name, pln);
         pln = nullptr;
