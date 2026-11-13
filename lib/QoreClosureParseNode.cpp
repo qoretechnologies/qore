@@ -275,6 +275,19 @@ QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QorePr
     return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink);
 }
 
+QoreValue QoreClosureParseNode::execNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, const name_vec_t& arg_names, QoreObject* self, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    // a deferred closure is initialized as for a call with positional arguments (see exec())
+    if (is_deferred && const_cast<QoreClosureParseNode*>(this)->parseInitDeferred()) {
+        xsink->raiseException("CLOSURE-INITIALIZATION-ERROR", "the closure used in this constant expression could "
+            "not be initialized");
+        return QoreValue();
+    }
+    assert(uf);
+    return uf->evalClosureNamed(closure_base, pgm, args, arg_names, self, class_ctx, xsink);
+}
+
 QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) const {
     // Capture only the variables the closure uses, as evalClosure() does.  The closure holds a reference to each
     // ClosureVarValue, which is shared with the frame that started the thread, so both see each other's changes.

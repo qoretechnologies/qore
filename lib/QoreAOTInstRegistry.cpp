@@ -1582,15 +1582,18 @@ static bool instRegistryWriteCheckCallTargetExpr(AOTInstWriteCtx& ctx, const Qor
             return true;
         }
     }
-    if (dynamic_cast<const CallReferenceCallNode*>(node)) {
+    if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
         // a call through a call reference (AOTExprKind::CALLREF_CALL): no callable (it is the operand) and no
-        // arguments
-        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CALLREF_CALL));
+        // arguments; a named call has the names of its arguments (AOTExprKind::CALLREF_CALL_NAMED), which are bound
+        // when the call is made (CallReferenceCallNode::evalRuntimeNamedWithArgs())
+        const name_vec_t* arg_names = crc->getRuntimeArgNames();
+        ctx.writer.writeU8(static_cast<uint8_t>(arg_names ? AOTExprKind::CALLREF_CALL_NAMED
+            : AOTExprKind::CALLREF_CALL));
         if (!ctx.writeExpr(ctx.writer, QoreValue())) {
             return false;
         }
         ctx.writer.writeU8(0);
-        return true;
+        return !arg_names || qore_aot_write_callref_arg_names(ctx.writer, *arg_names);
     }
     return instRegistryWriteCallTargetExpr(ctx, expr);
 }

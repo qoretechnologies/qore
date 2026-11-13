@@ -193,6 +193,14 @@ QoreValue QoreClosureNode::dispatchValue(const QoreListNode* args, ExceptionSink
     return closure->exec(*this, pgm, args, 0, class_ctx, xsink);
 }
 
+QoreValue QoreClosureNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    // see dispatchValue()
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->execNamed(*this, pgm, args, arg_names, 0, class_ctx, xsink);
+}
+
 bool QoreClosureNode::getAsBoolImpl() const {
     // check if we should do perl-style boolean evaluation
     if (qore_get_native_semantic_policy().strictBoolean())
@@ -218,6 +226,16 @@ QoreValue QoreObjectClosureNode::dispatchValue(const QoreListNode* args, Excepti
     QoreProgram* pgm = obj->getProgram();
     ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
     return closure->exec(*this, pgm, args, obj, class_ctx, xsink);
+}
+
+QoreValue QoreObjectClosureNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    // see dispatchValue()
+    QoreClosureSelfContextHelper csch(obj);
+    QoreProgram* pgm = obj->getProgram();
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->execNamed(*this, pgm, args, arg_names, obj, class_ctx, xsink);
 }
 
 QoreObject* QoreObjectClosureNode::refSelfForBackground(ExceptionSink* xsink) const {

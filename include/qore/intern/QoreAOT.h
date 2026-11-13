@@ -284,6 +284,17 @@ struct QoreAOTNamedCallArgs {
 };
 
 class FunctionCallBase;
+class QoreAOTBinaryWriter;
+class QoreAOTBinaryReader;
+
+//! writes the names of the arguments of a named call reference call (AOTExprKind::CALLREF_CALL_NAMED): u8 count, then
+//! a string ref per name; returns false if there are more than 255
+DLLLOCAL bool qore_aot_write_callref_arg_names(QoreAOTBinaryWriter& writer, const name_vec_t& names);
+
+//! reads the names written by qore_aot_write_callref_arg_names(); returns the interned names, or nullptr with \a error
+//! set if the data is truncated
+DLLLOCAL const name_vec_t* qore_aot_read_callref_arg_names(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, std::string& error);
 
 //! returns the serialized binding of the arguments of a named call ("" for any other call)
 /** @param with_map true to include the parameter positions of a call bound at parse time (an expression tree, whose

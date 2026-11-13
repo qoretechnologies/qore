@@ -2199,9 +2199,17 @@ public class NamedArgumentsTest inherits QUnit::Test {
             p.parse("sub f(int a, int b) {} f(1, a: 2);", "overwrite-positional");
         });
 
-        assertThrows("NAMED-CALL-NOT-SUPPORTED", "call-reference or closure calls without a parse-time-resolved signature", sub() {
+        # a named call through a call reference binds its arguments by name when it is made (M4 phase 3)
+        {
             Program p(PO_NEW_STYLE);
-            p.parse("sub f(int a) {} code c = \\f(); c(a: 1);", "call-reference");
+            p.parse("int sub f(int a, int b = 2) { return a * 10 + b; } int sub t() { code c = \\f(); return c(b: 5, a: 1); }",
+                "call-reference");
+            assertEq(15, p.callFunction("t"));
+        }
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "closure>\\(z: integer\\)", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub t() { code c = sub (int a) {}; c(z: 1); }", "call-reference-unknown");
+            p.callFunction("t");
         });
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {

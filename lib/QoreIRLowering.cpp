@@ -15797,6 +15797,26 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     if (!callee.isValid()) {
         return QoreIRValue();
     }
+    // a named call binds its arguments by parameter name to the code that the expression gives when the call is made
+    // (M4 phase 3): the callable and the arguments in source order are passed to the call node
+    // (CallReferenceCallNode::evalRuntimeNamedWithArgs()); no direct closure call applies
+    if (call->getRuntimeArgNames()) {
+        if (!dynamic_cast<const QoreClosureParseNode*>(call->getExp().getInternalNode())
+                && callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs())) {
+            builder.createCheckCallTarget(expr, callee, getCurrentExceptionTarget(), call->loc);
+        }
+        std::vector<QoreIRValue> operands;
+        operands.push_back(callee);
+        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
+            return QoreIRValue();
+        }
+        QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
+        if (result.isValid()
+                && !markReferenceArgumentAssignmentsUnknown(call->getParseArgs(), call->getArgs(), error)) {
+            return QoreIRValue();
+        }
+        return result;
+    }
     // the callable is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
     // (issue #5784); a closure created by the call's own expression is always callable and has no object, so it is
     // not checked (and stays an immediate closure whose only use is the call)
