@@ -41,6 +41,17 @@ class AI inherits A {
     string am(string l, float n) { return sprintf("AI::am(string l, float n) l=%y n=%y", l, n); }
 }
 
+# a name that only one variant has selects that variant also for an argument that another variant matches better by
+# position (an int for an int parameter rather than a float parameter): its override is called (as in C#)
+class P {
+    string m(float x) { return "P::m(float x)"; }
+    string m(int n) { return "P::m(int n)"; }
+}
+class Q inherits P {
+    string m(float x) { return "Q::m(float x)"; }
+    string m(int n) { return "Q::m(int n)"; }
+}
+
 auto i = 1;
 auto s = "x";
 
@@ -91,6 +102,19 @@ for (int k = 0; k < 3; ++k) {
     l += a.am(label: "a" + k, count: k);
 }
 printf("loop: %y\n", l);
+
+# the variant that the names select
+P pq = new Q();
+P pp = new P();
+Q qq = new Q();
+printf("names select literal: %s\n", pq.m(x: 1));
+printf("names select runtime: %s\n", pq.m(x: i));
+printf("names select base literal: %s\n", pp.m(x: 1));
+printf("names select base runtime: %s\n", pp.m(x: i));
+printf("names select child literal: %s\n", qq.m(x: 1));
+printf("names select child runtime: %s\n", qq.m(x: i));
+printf("names select other: %s\n", pq.m(n: i));
+printf("positional: %s\n", pq.m(i));
 
 # a call made in a background thread
 Queue q();

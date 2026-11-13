@@ -19,4 +19,12 @@ abstract runtime float: AI::am(string l, float n) l="x" n=1.5
 abstract self: AI::am(int n, string l) n=1 l="x"
 implementation names: AI::am(int n, string l) n=1 l="x"
 loop: ["C::sw(int n, string l) n=0 l=\"l0\"", "AI::am(int n, string l) n=0 l=\"a0\"", "C::sw(int n, string l) n=1 l=\"l1\"", "AI::am(int n, string l) n=1 l=\"a1\"", "C::sw(int n, string l) n=2 l=\"l2\"", "AI::am(int n, string l) n=2 l=\"a2\""]
+names select literal: Q::m(float x)
+names select runtime: Q::m(float x)
+names select base literal: P::m(float x)
+names select base runtime: P::m(float x)
+names select child literal: Q::m(float x)
+names select child runtime: Q::m(float x)
+names select other: Q::m(int n)
+positional: Q::m(int n)
 background: C::sw(int n, string l) n=1 l="x"

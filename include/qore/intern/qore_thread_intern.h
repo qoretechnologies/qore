@@ -539,6 +539,9 @@ DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options();
 //! as runtime_take_call_caller_parse_options(), and returns the Program of the code making the call in \a code_pgm
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm);
+//! as runtime_take_call_caller_parse_options(), without taking the options of a call made on behalf of a Program
+//! (which the call that follows takes)
+DLLLOCAL QoreParseOptions runtime_peek_call_caller_parse_options(const QoreProgram*& code_pgm);
 
 //! returns the parse options of \a pgm with the active runtime parse options override applied
 /** for a call that has already switched to the Program it runs in; \a pgm is the calling Program

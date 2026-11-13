@@ -6091,6 +6091,16 @@ QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code
     return runtime_get_effective_parse_options_for(td, td->current_pgm);
 }
 
+QoreParseOptions runtime_peek_call_caller_parse_options(const QoreProgram*& code_pgm) {
+    ThreadData* td = thread_data.get();
+    if (td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm) {
+        code_pgm = td->callback_caller_pgm;
+        return td->callback_caller_pgm->getParseOptions();
+    }
+    code_pgm = td->current_pgm;
+    return runtime_get_effective_parse_options_for(td, td->current_pgm);
+}
+
 QoreCallReferenceCallHelper::QoreCallReferenceCallHelper(RuntimeConfig& n_rc, const QoreListNode* args,
         const QoreParseOptions* creator_po) {
     if (!creator_po) {

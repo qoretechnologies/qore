@@ -224,6 +224,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 // the arguments are bound by name at run time when the variants that could be selected name their
                 // parameters differently (see AbstractMethodCallNode::execNamed())
                 m->setAllowRuntimeArgNames();
+                if (!meth->isStatic()) {
+                    m->setVirtualNamedDispatch();
+                }
                 if (m->parseArgs(parse_context, func, nullptr) && !err) {
                     err = -1;
                 }
@@ -411,6 +414,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     // selected name their parameters differently (see AbstractMethodCallNode::execNamed())
     if (!m->isPseudo()) {
         m->setAllowRuntimeArgNames();
+        if (!meth->isStatic()) {
+            m->setVirtualNamedDispatch();
+        }
     }
     if (m->parseArgs(parse_context, func, nullptr) && !err) {
         err = -1;

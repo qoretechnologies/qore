@@ -2479,6 +2479,20 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
     return desc;
 }
 
+//! returns true if a variant with signature \a a overrides one with signature \a b: the same parameter types (as
+//! the variant of a class with the parameter types of a variant of a parent class is called instead of it)
+static bool qore_signature_overrides(const AbstractFunctionSignature& a, const AbstractFunctionSignature& b) {
+    if (a.numParams() != b.numParams() || a.hasVarargs() != b.hasVarargs()) {
+        return false;
+    }
+    for (unsigned i = 0, e = a.numParams(); i < e; ++i) {
+        if (!QoreTypeInfo::equal(a.getParamTypeInfo(i), b.getParamTypeInfo(i))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 //! the variants that a class overrides, for binding the arguments of a named call (qore#5990)
 /** the names of a named call are bound to the parameters of the variants of the receiver's static type: a variant of
     a parent class that a class before it in the inheritance list overrides (a variant with the same parameter types)
@@ -2506,7 +2520,7 @@ public:
             return false;
         }
         for (const AbstractFunctionSignature* s : sigs) {
-            if (s->compare(*sig, true)) {
+            if (qore_signature_overrides(*s, *sig)) {
                 return true;
             }
         }
@@ -3687,6 +3701,53 @@ static void raise_invalid_function_access(ExceptionSink* xsink, const QoreFuncti
         "functional domain: %s", variant->isUser() ? "" : "builtin ", !class_path.empty() ? "method" : "function",
         !class_path.empty() ? class_path.c_str() : "", !class_path.empty() ? "::" : "", func->getName(),
         variant->getSignature()->getSignatureText(), qore_describe_source_domains(denied).c_str());
+}
+
+const AbstractQoreFunctionVariant* QoreFunction::runtimeFindOverride(const AbstractQoreFunctionVariant* v,
+        const qore_class_private* class_ctx) const {
+    const AbstractFunctionSignature* vsig = v->getSignature();
+    assert(vsig);
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop;
+        const QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            if (*i == v) {
+                return static_cast<const MethodVariantBase*>(v)->isAbstract() ? nullptr : v;
+            }
+            if (last_class && (skip_method_variant(*i, class_ctx, internal_access)
+                    || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
+                continue;
+            }
+            const AbstractFunctionSignature* sig = (*i)->getSignature();
+            if (sig && qore_signature_overrides(*sig, *vsig)) {
+                return *i;
+            }
+        }
+        if (stop) {
+            break;
+        }
+    }
+    return nullptr;
+}
+
+int QoreFunction::runtimeCheckVariantDomains(const AbstractQoreFunctionVariant* v, ExceptionSink* xsink) const {
+    // pgm could be zero if called from a foreign thread with no current Program (see runtimeFindVariant())
+    if (!getProgram()) {
+        return 0;
+    }
+    QoreParseOptions ppo = runtime_get_parse_options();
+    const QoreProgram* code_pgm = nullptr;
+    QoreParseOptions caller_po = runtime_peek_call_caller_parse_options(code_pgm);
+    if (int64 denied = qore_get_variant_denied_domains(v, ppo, &caller_po, code_pgm)) {
+        raise_invalid_function_access(xsink, this, v, denied);
+        return -1;
+    }
+    return 0;
 }
 
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,

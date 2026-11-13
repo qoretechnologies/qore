@@ -209,8 +209,9 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
             assertEq("B2", p.callFunction("t", 1, "x"));
             # with only the overridden variant, the names are unknown
             Program p1(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-            assertThrows("NAMED-ARG-UNKNOWN", "one\\(count: auto, label: auto\\)", \p1.parse(), ("class B1 { string one(int count, "
-                "string label) { return \"B\"; } } class C1 inherits B1 { string one(int n, string l) { "
+            assertThrows("NAMED-ARG-UNKNOWN", "one\\(count: auto, label: auto\\)", \p1.parse(),
+                ("class B1 { string one(int count, string label) { return \"B\"; } } class C1 inherits B1 { "
+                "string one(int n, string l) { "
                 "return \"C\"; } } string sub t(auto i, auto s) { C1 c(); return c.one(count: i, label: s); }",
                 "named-virtual-overridden-only"));
             Program p2(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);

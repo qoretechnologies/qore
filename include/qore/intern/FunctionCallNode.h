@@ -64,6 +64,10 @@ protected:
     bool has_explicit_type_args = false;
     //! true if the call can bind named arguments at run time (set by the call node before parseArgsVariant())
     bool allow_runtime_arg_names = false;
+    //! true for a call of a method dispatched on the class of the object (a call through an object or an
+    //! unqualified call in the class), whose named arguments are bound with the variants of the receiver's static
+    //! type and passed to the override of the variant that they select (qore#5990)
+    bool virtual_named_dispatch = false;
 
 public:
     DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args),
@@ -128,6 +132,11 @@ public:
     //! allows the call to bind named arguments at run time; set before parseArgsVariant()
     DLLLOCAL void setAllowRuntimeArgNames() {
         allow_runtime_arg_names = true;
+    }
+
+    //! marks a call of a method dispatched on the class of the object; set before parseArgsVariant()
+    DLLLOCAL void setVirtualNamedDispatch() {
+        virtual_named_dispatch = true;
     }
 
     //! sets the names of the arguments in source order of a named call resolved at run time (AOT deserialization)

@@ -2659,6 +2659,20 @@ public:
             const QoreParseOptions* user_dom_po, const QoreProgram* user_dom_code_pgm,
             const name_vec_t* arg_names, QoreListNode** named_bound_args, bool bind_abstract = false) const;
 
+    //! returns the variant of this function or of a function that it inherits that overrides \a v (the most derived
+    //! accessible variant with the parameter types of \a v, which can be \a v itself), or nullptr if there is none
+    /** for a named call, which binds its names to the variant \a v of the receiver's static type and calls its override
+        in the class of the object (qore#5990)
+    */
+    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindOverride(const AbstractQoreFunctionVariant* v,
+            const qore_class_private* class_ctx) const;
+
+    //! checks the functional domains of a variant that a call selected at run time without runtimeFindVariant(),
+    //! against the options of the code making the call, as runtimeFindVariant() checks the variant that it selects
+    /** @return -1 if the exception was raised
+    */
+    DLLLOCAL int runtimeCheckVariantDomains(const AbstractQoreFunctionVariant* v, ExceptionSink* xsink) const;
+
     // finds the best match with the given arg types; \a variant_filter: see QRFV_ONLY_USER and QRFV_EXPORTED_ONLY
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
             const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
