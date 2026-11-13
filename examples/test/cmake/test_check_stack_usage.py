@@ -68,7 +68,7 @@ CLANG_SU = "/src/lib/Function.cpp:10:10:UserVariantBase::eval\t512\tstatic\n"
 @contextlib.contextmanager
 def build_dir(su_text, compiler="GNU", build_type="Release", write_config=True, target="x86_64-linux-gnu",
         version="15.2.0", build_type_flags="-O3 -DNDEBUG", cxx_flags="-fno-strict-aliasing -std=c++20",
-        hardening="_FORTIFY_SOURCE=3 __CET__=3 __SSP_STRONG__=3", ipo="0"):
+        hardening="_FORTIFY_SOURCE=3 __CET__=3 __SSP_STRONG__=3", ipo="0", single_unit=None):
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         if write_config:
@@ -76,6 +76,9 @@ def build_dir(su_text, compiler="GNU", build_type="Release", write_config=True, 
                 "# test\ncompiler=%s\ncompiler-version=%s\nbuild-type=%s\nbuild-type-flags=%s\ncxx-flags=%s\n"
                 "hardening=%s\nipo=%s\ntarget=%s\n"
                 % (compiler, version, build_type, build_type_flags, cxx_flags, hardening, ipo, target))
+            if single_unit is not None:
+                with (tmp / "stack-usage-config.txt").open("a") as f:
+                    f.write("single-compilation-unit=%s\n" % single_unit)
         if su_text is not None:
             obj = tmp / "CMakeFiles" / "libqore.dir" / "lib"
             obj.mkdir(parents=True)
@@ -396,6 +399,24 @@ class CheckTest(unittest.TestCase):
                 self.assertEqual(0, rc, out)
                 self.assertIn("SKIPPED", out)
                 self.assertIn(text, out)
+
+    def test_chunked_or_separate_units_build_skipped(self):
+        # the budgets are for a single compilation unit: a chunked (SINGLE_COMPILATION_UNIT_CHUNKS > 1) or
+        # separate-units build is reported as not calibrated, unless --force; a configuration without the entry
+        # and an explicit single unit are checked
+        for single_unit, checked in (("0", False), ("1", True), (None, True)):
+            with build_dir(GCC_SU, single_unit=single_unit) as d:
+                b = write_budgets(d, "1 UserVariantBase::eval\n")
+                rc, out, _ = run(["--budgets", b, str(d)])
+                if checked:
+                    self.assertEqual(1, rc, out)
+                    self.assertNotIn("SKIPPED", out)
+                else:
+                    self.assertEqual(0, rc, out)
+                    self.assertIn("SKIPPED: the budgets are not calibrated for this build: libqore is not built as a "
+                        "single compilation unit", out)
+                    rc, out, _ = run(["--budgets", b, "--force", str(d)])
+                    self.assertEqual(1, rc, out)
 
     def test_input_errors(self):
         with build_dir(GCC_SU, write_config=False) as d:
