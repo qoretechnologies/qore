@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_list_private.h"
 
 namespace {
 class LexicalSpliceOperatorNode : public QoreSpliceOperatorNode {

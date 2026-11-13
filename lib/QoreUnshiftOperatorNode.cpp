@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_list_private.h"
 
 QoreString QoreUnshiftOperatorNode::unshift_str("unshift operator expression");
 
