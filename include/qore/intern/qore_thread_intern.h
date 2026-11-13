@@ -1300,6 +1300,17 @@ private:
 */
 DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
 
+//! The number of sandbox managers whose interrupt is requested (QoreSandboxManager::requestInterrupt())
+/** A cancellation point resolves the sandbox manager that governs the thread only while it is not 0, so that a check
+    with no request pending costs no lookup (see qore_check_cancel() and "Cost of a check" in
+    design/cooperative-cancellation.md).  Changed only when a manager's QSB_INTR_REQUESTED bit changes, in the same
+    seq_cst order as the bit, and before requestInterrupt() wakes the waiting threads: a waiter that registers its wait
+    and then reads 0 is woken by the wakeup that follows.  It can be negative for a moment, while a clear that
+    follows a request decrements it before the request increments it; a value other than 0 only makes the check look
+    up the manager.
+*/
+DLLLOCAL extern std::atomic<int> qore_sandbox_interrupt_count;
+
 //! Gives the Program of a module (a registered user module, or an AOT module) module lifetime
 /** The Program stays allocated (with a dependency reference) until qore_release_module_program_pins(), which
     qore_cleanup() calls once no other thread can run Qore code, so code that calls into the module from another
