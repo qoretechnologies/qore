@@ -5736,6 +5736,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                 for (uint16_t c = 0; c < num_captured; ++c) {
                     const char* cname = reader.readStringRef(ptr);
                     captured_names[c] = cname ? cname : "";
+                    // a top-level local that a default argument's closure captures is written as "top:<index>:<name>"
+                    // (qore#5998; see read_expr_closure_create()): here the variable is found by its name, as before
+                    if (cname && !strncmp(cname, "top:", 4)) {
+                        const char* colon = strchr(cname + 4, ':');
+                        if (colon && colon[1]) {
+                            captured_names[c] = colon + 1;
+                        }
+                    }
                     captured_parent_slots[c] = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
                 }
 

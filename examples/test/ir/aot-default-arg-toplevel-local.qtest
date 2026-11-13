@@ -39,6 +39,7 @@ class AotDefaultArgTopLevelLocalTest inherits QUnit::Test {
         addTestCase("the AST interpreter prints the expected output", \testAst());
         addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("a module's function with a closure as the default argument", \testModuleDefaultClosure());
         set_return_value(main());
     }
 
@@ -64,6 +65,51 @@ class AotDefaultArgTopLevelLocalTest inherits QUnit::Test {
             foreach string mode in (Modes) {
                 assertEq(expected(name), run(name, mode), name + " " + mode);
             }
+        }
+    }
+
+    #! a module has no top-level locals: a closure default of its function binds as before, and the module loads
+    testModuleDefaultClosure() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        foreach string opt in (("0", "3")) {
+            TmpDir tmp("qore-aot-default-closure-module-");
+            string src = tmp.path + "/AotDefClosure.qm";
+            {
+                File f();
+                f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+                f.write("%modern
+module AotDefClosure {
+    version = \"1.0\";
+    desc = \"closure default probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+public namespace AotDefClosure {
+public const Base = 40;
+public auto sub run(code c = auto sub () { return Base + 2; }) {
+    return c();
+}
+}
+");
+            }
+            mkdir(tmp.path + "/mods");
+            string qmod = tmp.path + "/mods/AotDefClosure.qmod";
+            int rc;
+            string out = backquote(sprintf("%s -O%s --module --output %s %s 2>&1", qcc_bin, opt, qmod, src), \rc);
+            assertEq(0, rc, "module compiled with -O" + opt + ": " + out);
+            string prog = tmp.path + "/probe.qr";
+            {
+                File f();
+                f.open2(prog, O_CREAT | O_WRONLY | O_TRUNC);
+                f.write(sprintf("%%modern\n%%append-module-path %s/mods\n%%requires AotDefClosure\n", tmp.path)
+                    + "printf(\"%y %y\\n\", AotDefClosure::run(), AotDefClosure::run(auto sub () { return 1; }));\n");
+            }
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b %s", qore_bin, prog));
+            assertEq(0, r.rc, "module probe exit status with -O" + opt + ": " + r.out);
+            assertEq("42 1\n", r.stdout, "the module's closure default with -O" + opt);
         }
     }
 
