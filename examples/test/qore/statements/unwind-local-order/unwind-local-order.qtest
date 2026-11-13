@@ -14,12 +14,14 @@
 
 %exec-class UnwindLocalOrderTest
 
-#! The locals of a frame that an exception leaves are released last declared first (#5920)
+#! The locals of a frame that an exception leaves are released last declared first (#5920, #5941)
 /** After the handlers of a block that an exception left, the IR interpreter released the cache of every local slot of
     the frame, which is the value of an IR-only local, so that a local of an enclosing scope was released before the
     locals of the block; and the value of a return that the exception interrupted was released before the locals of
-    the function, while the AST interpreter keeps it until the function ends.  UnwindLocalOrder.q gives the output of
-    the AST interpreter in every execution mode and compiled with qcc.
+    the function, while the AST interpreter keeps it until the function ends; the native code of qcc released it
+    before the locals as well, and after the catch block of a try statement of the function that caught the exception,
+    which releases it before (#5941).  UnwindLocalOrder.q gives the output of the AST interpreter in every execution
+    mode and compiled with qcc.
 */
 class UnwindLocalOrderTest inherits QUnit::Test {
     public {
@@ -36,15 +38,15 @@ r4: [\"x\", \"~r4-z\", \"~r4-t\", \"caught:RUNTIME-TYPE-ERROR\"]
 r5: [\"x\", \"~r5-z\", \"~r5-t\", \"caught:RUNTIME-TYPE-ERROR\"]
 r6: [\"x\", \"~r6-z\", \"~r6-t\", \"caught:PSEUDO-METHOD-DOES-NOT-EXIST\"]
 f1: [\"~f1-l2\", \"~f1-l1\", \"~f1-z\", \"caught:THR\"]
+u1: [\"x\", \"~u1\", \"c\", \"~u1-other\"]
+u2: [\"x\", \"~u2\", \"c\", \"~u2-other\"]
+u3: [\"x\", \"~u3-a\", \"~u3-b\", \"c\", \"~u3-z\", \"~u3-other\"]
+u4: [\"x\", \"~u4\", \"c\", \"~u4-other\"]
+u5: [\"x\", \"~u5\", \"c\", \"~u5-other\"]
+u6: [\"x\", \"~u6\", \"c\", \"~u6-other\"]
+u7: [\"x\", \"~u7-q\", \"~u7\", \"c\", \"~u7-other\"]
 t2: [\"x0\", \"~t2-0\", \"x1\", \"~t2-1\", \"~t2-z\"]
 t1: [\"x\", \"~t1-z\", \"~t1-t\"]
-";
-        #! the output of the native code of qcc, without the case of an interrupted return
-        const ExpectedNative = "a: [\"x\", \"~a-inner\", \"~a-outer\", \"caught:A\"]
-b: [\"x\", \"~b3\", \"e\", \"~b2\", \"~b1\", \"caught:B\"]
-c: [\"x0\", \"~c0\", \"x1\", \"~c1\", \"~c-outer\", \"caught:C\"]
-d: [\"x\", \"~d-inner\", \"d-end\", \"~d-outer\"]
-t2: [\"x0\", \"~t2-0\", \"x1\", \"~t2-1\", \"~t2-z\"]
 ";
 
         #! the optimization levels of the AOT compiles
@@ -84,8 +86,8 @@ t2: [\"x0\", \"~t2-0\", \"x1\", \"~t2-1\", \"~t2-z\"]
         string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
             script));
         assertTrue(is_file(exe), "compiled the executable: " + out);
-        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s native",
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
             libqore_dir, libqore_dir, exe));
-        assertEq(ExpectedNative, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
     }
 }

@@ -1440,6 +1440,11 @@ constexpr uint8_t QORE_IR_DEBUG_NEST_IN_CATCH = 0x04;
 //! the frame is in the statement that contains it, which an exception raised after it, as in the condition of a loop,
 //! is reported for; it makes no event
 constexpr uint8_t QORE_IR_DEBUG_NEST_END = 0x08;
+//! QoreIRDebugStatementInstruction::nest_flags: the instruction starts the exception path of a block with an exception
+//! path of its own, before its handlers run and its locals are released: it makes the exception events of the
+//! statements of the block that the exception leaves (those at its depth and deeper), as the AST interpreter makes
+//! them before the block releases its locals (#5954); it makes no event of its own
+constexpr uint8_t QORE_IR_DEBUG_NEST_UNWIND = 0x10;
 
 //! The locals of a block, for the debugger's release of the locals of a block that an exception leaves (#5921)
 struct QoreIRDebugBlockLocals {
@@ -4415,6 +4420,12 @@ public:
         IRCleanupSlots in QoreIRInterpreter.cpp). */
     mutable std::vector<uint8_t> interpreter_slot_owned_values;
     mutable std::vector<uint32_t> interpreter_return_value_slot_ids;
+    //! the values of the Return instructions in the try block of each try statement, by its CatchException
+    /** Set by the lowering and read by the LLVM lowering, which releases them when the try statement catches the
+        exception that interrupted such a return, as the AST interpreter does (TryStatement::execImpl()); not
+        serialized: IR read back keeps them until the end of the try statement (qore#5941)
+    */
+    std::unordered_map<const QoreIRInstruction*, std::vector<uint32_t>> catch_interrupted_returns;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
     mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;
     mutable bool interpreter_needs_slot_cache_tls = false;

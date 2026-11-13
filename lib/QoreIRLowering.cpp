@@ -1630,6 +1630,16 @@ static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth) {
 }
 
 // documented in QoreIRLowering.h
+bool QoreIRLowering::returnRunsHandlers() const {
+    for (const InlineHandler& handler : block_handlers) {
+        if (handler.type != OBE_Error) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// documented in QoreIRLowering.h
 bool QoreIRLowering::returnCleanupObservesError(const LocalVar* returned_local) const {
     if (getCurrentExceptionTarget() || catch_cleanup_depth > 0) {
         return true;
@@ -1723,9 +1733,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // A variable that can hold a weak reference - the variable of a foreach loop, or one assigned with := or @= -
         // is read with a strong reference of its own, which is a temporary of the statement as well: it is released
         // with the others, before the variable is destroyed when the statement leaves its block.
+        // A value read from a variable or a member is a temporary too, whose release a handler that runs before the
+        // Return observes when it changes what the value was read from: the temporary would keep the value that
+        // the handler replaces until the Return (qore#6003).
         bool ret_temp_scope = builder.getExceptionTempScopeId()
-            && (expressionMayCreateIntermediateCallTemp(expr) || expressionReadsWeakCapableLocal(expr))
-            && returnCleanupObservesError(qore_ir_get_returned_local(expr));
+            && ((((expressionMayCreateIntermediateCallTemp(expr) || expressionReadsWeakCapableLocal(expr))
+                    && returnCleanupObservesError(qore_ir_get_returned_local(expr)))
+                || (expressionMayCreateIntermediateContainerTemp(expr) && returnRunsHandlers())));
         if (ret_temp_scope) {
             builder.createPushTempMark(nullptr);
         }
@@ -1785,6 +1799,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createCatchCleanup(stmt->loc);
         }
         QoreIRReturnInstruction* ret = builder.createReturn(lowered);
+        // every try statement that the return leaves can catch an exception that interrupts it (qore#5941)
+        for (std::vector<uint32_t>& try_returns : try_return_value_stack) {
+            try_returns.push_back(lowered.id);
+        }
         // record the parse-time type of the returned expression: the declared type of a member or otherwise the
         // type recorded for the expression; ParseNode::getTypeInfo() is not used generally, since some nodes (such as
         // method calls) resolve their types with parse-time APIs that are not available when lowering
@@ -3767,6 +3785,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         size_t try_scope_depth = scope_stack.size();
         exception_scope_depth_stack.push_back(try_scope_depth);
         try_catch_cleanup_depth_stack.push_back(catch_cleanup_depth);
+        try_return_value_stack.emplace_back();
 
         // Allocate a try-level scope ID and emit ScopeEnter to save the OBE count
         // at try entry. This is used by the LandingPad to execute on_error/on_exit
@@ -3820,6 +3839,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // execute on_error/on_exit handlers for scopes entered within the try body
         builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
         QoreIRInstruction* catch_inst = builder.createCatchException(stmt->loc);
+        // the returns of the try block, whose value the try statement releases when it catches an exception that
+        // interrupted one of them (qore#5941); those of the catch block are those of the enclosing try statement
+        if (!try_return_value_stack.empty()) {
+            if (!try_return_value_stack.back().empty()) {
+                builder.getFunction()->catch_interrupted_returns[catch_inst] = std::move(try_return_value_stack.back());
+            }
+            try_return_value_stack.pop_back();
+        }
         // A thread_exit unwinds through the try block like an exception, but the catch block is not
         // entered (TryStatement::execImpl() catches only an exception, and does not run the catch block
         // while the thread is exiting).  CatchException branches to its exception target when the sink
@@ -4377,6 +4404,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         QoreIRBasicBlock* after_block = builder.getBlock();
         builder.getFunction()->moveBlockToEnd(lvar_exception_cleanup_block);
         builder.setBlock(lvar_exception_cleanup_block);
+        // the exception events of the statements of the block that the exception leaves come before its handlers and
+        // the release of its locals, as with the AST interpreter (#5954)
+        if (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements) {
+            builder.createDebugBlockUnwind(debug_nest_depth, block->loc);
+        }
         if (has_on_block_exit) {
             // Exception unwinds through this synthetic block instead of the
             // try LandingPad, so fire this lexical scope's on_exit/on_error

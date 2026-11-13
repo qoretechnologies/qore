@@ -14,11 +14,12 @@
 
 %exec-class DebuggerBlockLocalsUnwindTest
 
-#! The locals of a block that an exception leaves with a debugger attached (#5867, #5921)
+#! The locals of a block that an exception leaves with a debugger attached (#5867, #5921, #5954)
 /** The debug IR of AOT code released the locals of a block that has no exception path of its own when the frame
     ended, after the debugger's exception events of the statements that contain the block, whether or not the block
     has handlers; the AST interpreter releases them when the exception leaves the block (after its handlers), before
-    those events.  The children run with DBG=1,
+    those events.  A block with an exception path of its own (in a try block or in a block with handlers) released them
+    before the events of the statements in it that the exception leaves (#5954).  The children run with DBG=1,
     which attaches the debugger of DebuggerBlockLocalsUnwind.q, whose output is that of the AST interpreter in every
     execution mode and compiled with qcc; the interpreter modes run on the AST tier while the debugger is attached,
     so that they check the agreement with it, while the qcc cases check the debug IR.
@@ -26,30 +27,38 @@
 class DebuggerBlockLocalsUnwindTest inherits QUnit::Test {
     public {
         #! the output of DebuggerBlockLocalsUnwind.q with the AST interpreter
-        const Expected = "a: [\"A@39\", \"x\", \"~a\", \"A@36\", \"caught:A\"]
-b: [\"B@49\", \"x\", \"~b\", \"B@44\", \"caught:B\"]
-c: [\"x0\", \"~c0\", \"C@57\", \"C@56\", \"x1\", \"~c1\", \"C@53\", \"caught:C\"]
-d: [\"D@68\", \"x\", \"~d2\", \"D@65\", \"e\", \"~d1\", \"D@62\", \"caught:D\"]
-e: [\"E@77\", \"x\", \"~e\", \"E@73\", \"caught:E\"]
-f: [\"x\", \"F@84\", \"F@83\", \"~f\", \"caught:F\"]
-g: [\"G@94\", \"G@93\", \"x\", \"G@91\", \"caught:G\"]
-h: [\"y\", \"H@105\", \"H@104\", \"x\", \"H@101\", \"~h\", \"caught:H\"]
-i: [\"x\", \"I@113\", \"~iu\", \"I@112\", \"~i\", \"caught:I\"]
-n2: [\"x\", \"N2@123\", \"N2@122\", \"~n2\", \"caught:N2\"]
-n3: [\"x\", \"N3@131\", \"N3@130\", \"~n3\", \"caught:N3\"]
-n4: [\"x\", \"N4@139\", \"N4@138\", \"~n4\", \"caught:N4\"]
-n5: [\"x\", \"N5@146\", \"N5@145\", \"~n5\", \"caught:N5\"]
-n6: [\"x\", \"N6@153\", \"N6@152\", \"~n6\", \"caught:N6\"]
-k1: [\"K1@167\", \"x\", \"~k1b\", \"K1@164\", \"~k1a\", \"K1@162\", \"~k1o\", \"caught:K1\"]
-k2: [\"K2@180\", \"x\", \"K2@178\", \"~k2b\", \"K2@176\", \"~k2a\", \"K2@174\", \"~k2o\", \"caught:K2\"]
-k3: [\"K3@190\", \"~k3a\", \"K3@188\", \"c\", \"~k3z\"]
-k4: [\"K4A@204\", \"x\", \"K4A@202\", \"c\", \"K4B@210\", \"~k4b\", \"~k4a\", \"K4B@199\", \"caught:K4B\"]
-k5: [\"~k5a1\", \"K5@220\", \"x\", \"K5@218\", \"K5@217\", \"~k5a2\", \"K5@215\", \"caught:K5\"]
-m1: [\"x\", \"M1@232\", \"M1@231\", \"~m1u\", \"M1@228\", \"~m1\", \"caught:M1\"]
-m2: [\"x\", \"M2@242\", \"M2@241\", \"M2@238\", \"~m2\", \"caught:M2\"]
-m3: [\"x\", \"M3@251\", \"M3@250\", \"M3@248\", \"~m3\", \"caught:M3\"]
-m4: [\"x\", \"M4@261\", \"M4@260\", \"M4@257\", \"~m4\", \"caught:M4\"]
-m5: [\"x\", \"M5@273\", \"M5@272\", \"~m5u\", \"M5@270\", \"M5@268\", \"~m5\", \"caught:M5\"]
+        const Expected = "a: [\"A@41\", \"x\", \"~a\", \"A@38\", \"caught:A\"]
+b: [\"B@51\", \"x\", \"~b\", \"B@46\", \"caught:B\"]
+c: [\"x0\", \"~c0\", \"C@59\", \"C@58\", \"x1\", \"~c1\", \"C@55\", \"caught:C\"]
+d: [\"D@70\", \"x\", \"~d2\", \"D@67\", \"e\", \"~d1\", \"D@64\", \"caught:D\"]
+e: [\"E@79\", \"x\", \"~e\", \"E@75\", \"caught:E\"]
+f: [\"x\", \"F@86\", \"F@85\", \"~f\", \"caught:F\"]
+g: [\"G@96\", \"G@95\", \"x\", \"G@93\", \"caught:G\"]
+h: [\"y\", \"H@107\", \"H@106\", \"x\", \"H@103\", \"~h\", \"caught:H\"]
+i: [\"x\", \"I@115\", \"~iu\", \"I@114\", \"~i\", \"caught:I\"]
+n2: [\"x\", \"N2@125\", \"N2@124\", \"~n2\", \"caught:N2\"]
+n3: [\"x\", \"N3@133\", \"N3@132\", \"~n3\", \"caught:N3\"]
+n4: [\"x\", \"N4@141\", \"N4@140\", \"~n4\", \"caught:N4\"]
+n5: [\"x\", \"N5@148\", \"N5@147\", \"~n5\", \"caught:N5\"]
+n6: [\"x\", \"N6@155\", \"N6@154\", \"~n6\", \"caught:N6\"]
+k1: [\"K1@169\", \"x\", \"~k1b\", \"K1@166\", \"~k1a\", \"K1@164\", \"~k1o\", \"caught:K1\"]
+k2: [\"K2@182\", \"x\", \"K2@180\", \"~k2b\", \"K2@178\", \"~k2a\", \"K2@176\", \"~k2o\", \"caught:K2\"]
+k3: [\"K3@192\", \"~k3a\", \"K3@190\", \"c\", \"~k3z\"]
+k4: [\"K4A@206\", \"x\", \"K4A@204\", \"c\", \"K4B@212\", \"~k4b\", \"~k4a\", \"K4B@201\", \"caught:K4B\"]
+k5: [\"~k5a1\", \"K5@222\", \"x\", \"K5@220\", \"K5@219\", \"~k5a2\", \"K5@217\", \"caught:K5\"]
+m1: [\"x\", \"M1@234\", \"M1@233\", \"~m1u\", \"M1@230\", \"~m1\", \"caught:M1\"]
+m2: [\"x\", \"M2@244\", \"M2@243\", \"M2@240\", \"~m2\", \"caught:M2\"]
+m3: [\"x\", \"M3@253\", \"M3@252\", \"M3@250\", \"~m3\", \"caught:M3\"]
+m4: [\"x\", \"M4@263\", \"M4@262\", \"M4@259\", \"~m4\", \"caught:M4\"]
+m5: [\"x\", \"M5@275\", \"M5@274\", \"~m5u\", \"M5@272\", \"M5@270\", \"~m5\", \"caught:M5\"]
+v1: [\"V1@288\", \"V1@287\", \"~v1\", \"V1@285\", \"c\"]
+v2: [\"V2@303\", \"V2@302\", \"~v2b\", \"V2@300\", \"x\", \"V2@298\", \"~v2a\", \"V2@296\", \"caught:V2\"]
+v3: [\"V3@315\", \"V3@314\", \"~v3\", \"V3@312\", \"oe\", \"V3@310\", \"caught:V3\"]
+v4: [\"V4A@326\", \"~v4b\", \"V4A@324\", \"~v4a\", \"V4@330\", \"V4@329\", \"V4@322\", \"~v4o\", \"caught:V4\"]
+v5: [\"~v5_1\", \"V5@339\", \"V5@338\", \"~v5_2\", \"c\", \"V5@343\", \"V5@336\", \"V5@335\", \"caught:V5\"]
+w1: [\"~w1x\", \"DX@356\", \"~w1b\", \"DX@354\", \"~w1\", \"DX@352\", \"c\"]
+w2: [\"x\", \"~w2x\", \"DX@369\", \"~w2\", \"DX@367\", \"c\"]
+w3: [\"~w3t\", \"DX@382\", \"~w3\", \"DX@380\", \"c\"]
 closure: [5]
 ";
 
@@ -72,6 +81,10 @@ closure: [5]
         foreach string mode in (ExecModeHarness::ExecModes) {
             addTestCase(mode + ": the locals of a block that an exception leaves", \modeTest(), (mode,));
         }
+        foreach string mode in (("jit", "tiered")) {
+            addTestCase(mode + ": a try statement of native code catches after a debugger attaches", \nativeAttachTest(),
+                (mode,));
+        }
         foreach int opt in (OptLevels) {
             addTestCase(sprintf("qcc -O%d: the locals of a block that an exception leaves", opt), \aotTest(), (opt,));
         }
@@ -82,6 +95,15 @@ closure: [5]
         string output = ExecModeHarness::run(sprintf("DBG=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
             libqore_dir, libqore_dir, qore_bin, mode, script));
         assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    #! the frame of f() in NativeAttachTry.q runs as native code when the debugger attaches: its exception is caught by
+    #! its try statement (the start of a block's exception path is no debugger step in native code, #5954)
+    nativeAttachTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s", libqore_dir, libqore_dir, qore_bin, mode,
+            get_script_dir() + "/NativeAttachTry.q"));
+        assertEq("[\"x\", \"~f\", \"c\", \"after\"]\n", output, mode + ": the try statement catches the exception");
     }
 
     aotTest(int opt) {

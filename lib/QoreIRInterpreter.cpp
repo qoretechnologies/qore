@@ -7621,7 +7621,7 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_start_chain_innermost(QoreIRDebugFr
 /** @return true if events were made; a dismissal ends the function, which returns no value (see exitAfterUnwind())
 */
 static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameState& st,
-        ThreadLocalProgramData* tlpd, ExceptionSink* xsink, size_t scope_size) {
+        ThreadLocalProgramData* tlpd, ExceptionSink* xsink, size_t scope_size, int min_depth = 0) {
     if (!st.nest_used) {
         return false;
     }
@@ -7634,7 +7634,8 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_report_enclosing(QoreIRDebugFrameSt
         n.chain = static_cast<int>(n.entries.size()) - 2;
     }
     bool rc = false;
-    while (n.chain >= 0) {
+    // the statements below min_depth are left for later (see QORE_IR_DEBUG_NEST_UNWIND); an entry's index is its depth
+    while (n.chain >= 0 && n.chain >= min_depth) {
         const QoreIRDebugNestEntry& e = n.entries[n.chain];
         // a try statement whose try block has the statement catches the exception
         if ((e.flags & QORE_IR_DEBUG_NEST_TRY) && !(n.entries[n.chain + 1].flags & QORE_IR_DEBUG_NEST_IN_CATCH)) {
@@ -14990,6 +14991,27 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::DebugStatement: {
+                // the start of the exception path of a block: the exception events of the statements of the block
+                // that the exception leaves, before its handlers and the release of its locals (#5954)
+                if (static_cast<QoreIRDebugStatementInstruction*>(inst)->nest_flags & QORE_IR_DEBUG_NEST_UNWIND) {
+                    if (debug_active && xsink && xsink->isException()) [[unlikely]] {
+                        // the event of the statement that raised the exception, if it has none yet, as for an
+                        // exception that a destructor raised at the end of a statement or of a block
+                        dbgReportException();
+                        if (qore_ir_dbg_report_enclosing(dbg_state, tlpd, xsink, scope_stack.size(),
+                                static_cast<QoreIRDebugStatementInstruction*>(inst)->nest_depth)) {
+                            invalidateExternalCaches();
+                        }
+                        // a dismissal ends the function, which returns no value (#5825)
+                        if (dbg_state.exit_dismissed) {
+                            unwindForException();
+                            cleanupLocalCaches();
+                            return exitAfterUnwind();
+                        }
+                    }
+                    ++ip;
+                    break;
+                }
                 // The step event of the statement that follows, where the AST interpreter calls dbgStep() for it
                 // (StatementBlock::execImpl()).
                 if (debug_active && !(xsink && *xsink)) {

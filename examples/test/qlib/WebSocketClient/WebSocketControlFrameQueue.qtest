@@ -108,7 +108,7 @@ class ErrorCloseLogAppender inherits LoggerAppenderWithLayout {
     public {
         #! the client's messages about its close that the tests wait for
         const MessageRe = "closing the connection for an error|sent the close frame|the connection is closed|"
-            "discarding a close frame";
+            "discarding a close frame|waiting for the queued data";
     }
 
     public {
@@ -140,6 +140,10 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
             \testErrorAfterClose());
         addTestCase("HTTP/2 client: an error while the client's own close frame waits to be sent keeps the frame",
             \testErrorAfterHeldClose());
+        addTestCase("HTTP/2 client: the server's close while the client's own close frame waits to be sent keeps the "
+            "frame", \testSimultaneousHeldClose());
+        addTestCase("HTTP/2 client: a close whose frame cannot be sent ends at the close timeout",
+            \testHeldCloseTimesOut());
         addTestCase("HTTP/2 client: the cause of the client's close is reported when the server ends the stream",
             \testCloseCauseAtStreamEnd());
         addTestCase("HTTP/2 client: a close frame that arrives after the connection was closed is discarded",
@@ -223,6 +227,14 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
     }
 
     testErrorAfterHeldClose() {
+        testSkip("the process module is not available");
+    }
+
+    testSimultaneousHeldClose() {
+        testSkip("the process module is not available");
+    }
+
+    testHeldCloseTimesOut() {
         testSkip("the process module is not available");
     }
 
@@ -409,6 +421,88 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
         assertEq(sprintf("CLOSE %d", WSCC_GoingAway), readLine(\node), "the client's close frame arrives");
         # the server answered the close frame and ended the stream; the client ends the connection
         assertEq("END", readLine(\node), "the client ends the stream");
+    }
+
+    #! The server's close frame arrives while the client's own close frame waits to be sent (a simultaneous close)
+    /** The connection is closed when the server's close frame arrives; the teardown that took the connection waits
+        for the stream to send its queued data (the rest of a message and the client's close frame), which it dropped
+        (issue #6001)
+    */
+    testSimultaneousHeldClose() {
+        hash<auto> node = startNode();
+        on_exit stopNode(node.process);
+        ErrorCloseLogAppender capture();
+        Logger logger("ws", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://127.0.0.1:%d/ws", node.port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+            "logger": logger,
+        });
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        # a message larger than the stream's flow-control window: the server grants no more credit until the release
+        wsc.send(binary(strmul("a", HeldSize)));
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }();
+        on_exit done.waitForZero(HangGuard);
+        assertRegex("sent the close frame: close code 1001", capture.lines.get(HangGuard),
+            "the client queued its close frame");
+        # disconnect() takes the connection with the lock held (see testErrorAfterHeldClose())
+        assertFalse(wsc.isOpen(), "disconnect() took the connection");
+        # the server's close frame arrives while the client's waits
+        node.process.write("close 1000\n");
+        assertEq("SENT CLOSE 1000", readLine(\node), "the server sent its close frame");
+        assertRegex("the connection is closed: close code 1000", capture.lines.get(HangGuard),
+            "the client closes the connection");
+        assertRegex("waiting for the queued data", capture.lines.get(HangGuard),
+            "the teardown waits for the stream to send its queued data");
+        node.process.write("release\n");
+        assertEq(sprintf("MSG %d 97 97", HeldSize), readLine(\node), "the message arrives");
+        assertEq(sprintf("CLOSE %d", WSCC_GoingAway), readLine(\node), "the client's close frame arrives");
+    }
+
+    #! The server neither answers the client's close frame nor grants credit for it: the close ends at the close timeout
+    /** The teardown then closes the connection at once (RFC 6455 section 7.1.7); it does not wait for the data queued
+        on the stream for another close timeout (issue #6001)
+    */
+    testHeldCloseTimesOut() {
+        hash<auto> node = startNode();
+        on_exit stopNode(node.process);
+        ErrorCloseLogAppender capture();
+        Logger logger("ws", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://127.0.0.1:%d/ws", node.port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            # the close timeout
+            "timeout": 2s,
+            "logger": logger,
+        });
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        # the client's close frame waits behind a message that the server grants no credit for
+        wsc.send(binary(strmul("a", HeldSize)));
+        wsc.disconnect();
+        list<string> lines = ();
+        while (capture.lines.size()) {
+            push lines, capture.lines.get();
+        }
+        assertEq(1, (select lines, $1 =~ /sent the close frame: close code 1001/).size(), "the client queued its close "
+            "frame: " + lines.join("; "));
+        assertEq(1, (select lines, $1 =~ /the connection is closed: close code 1006/).size(), "the close timed out: "
+            + lines.join("; "));
+        assertEq(0, (select lines, $1 =~ /waiting for the queued data/).size(), "the teardown did not wait for the "
+            "queued data: " + lines.join("; "));
     }
 
     #! The client closes the connection for an idle timeout; the server ends the stream instead of answering the close

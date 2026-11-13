@@ -1,0 +1,954 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket and SSE connections over HTTP/1.1, HTTP/2 and HTTP/3, their ends and the handler pool
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HttpAsyncTarget::onPersistentRequestEnd() (qorus#869): a request whose onHttpRequest() returned while its
+    WebSocket connection or SSE stream stays open is reported to the async target once, when that connection or
+    stream ends, for any reason, over HTTP/1.1, HTTP/2 and HTTP/3, and never before the request has returned.  Since
+    qore#5752 and qore#5758 a WebSocket or SSE request returns once its connection is set up, so a target that keeps
+    state for the request for the life of the connection (Qorus keeps a group's dispatch registered, so that a drain
+    of the group can close the connection) needs this notification.
+
+    The server's async target is wrapped as Qorus wraps it, and the wrapper records the requests that returned and
+    the notifications; the HttpPersistentRequestEnd class is also tested on its own.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires AsyncSocketIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpPersistentRequestEndTest
+
+#! Upper bound for any wait that a regression turns into a hang
+const HangTimeout = 30s;
+
+#! A notification recorded by the tracking target
+hashdecl EndRecord {
+    #! the key of the request
+    string key;
+    #! @ref True if the request's onHttpRequest() had returned when the notification was made
+    bool after_return;
+    #! @ref True if the notification's info has the socket and stream of the request
+    bool same_request;
+    #! @ref True if the notification ran on a thread of the handler pool (between the dispatch context hooks)
+    bool in_dispatch;
+}
+
+#! Wraps the server's async target, as Qorus does, and records the requests and the notifications
+class TrackingTarget inherits HttpAsyncTarget {
+    public {
+        #! the notifications made, in order
+        Queue ends();
+        #! the keys of the requests whose connection stays open, pushed when the request has returned
+        Queue persistent_returned();
+    }
+
+    private {
+        HttpAsyncTarget delegate;
+        Mutex m();
+        #! request key -> the request's identification, for requests whose connection stays open
+        hash<string, hash<auto>> persistent = {};
+        #! request key -> True once the request's onHttpRequest() has returned
+        hash<string, bool> returned = {};
+        #! request key -> the number of notifications
+        hash<string, int> end_count = {};
+        #! when set, a request whose connection stays open does not return until it is zero
+        *Counter return_gate;
+        #! counted down when a request whose connection stays open has reached the return gate
+        *Counter at_gate;
+        #! the thread IDs in a dispatch context (see saveDispatchContext())
+        hash<string, bool> dispatch_tids = {};
+    }
+
+    public {
+        #! when set, onHttpRequest() raises an exception for a request whose connection stays open
+        bool raise_persistent;
+    }
+
+    constructor(HttpAsyncTarget delegate) {
+        self.delegate = delegate;
+    }
+
+    #! Makes the next request whose connection stays open wait before it returns, until releaseReturn() is called
+    holdReturn() {
+        AutoLock al(m);
+        return_gate = new Counter(1);
+        at_gate = new Counter(1);
+    }
+
+    #! Waits until a held request has reached the gate
+    waitAtGate() {
+        Counter c;
+        {
+            AutoLock al(m);
+            c = at_gate;
+        }
+        if (c.waitForZero(HangTimeout)) {
+            throw "TEST-ERROR", "no request reached the return gate";
+        }
+    }
+
+    #! Releases a request held by holdReturn()
+    releaseReturn() {
+        AutoLock al(m);
+        if (return_gate) {
+            return_gate.dec();
+            remove return_gate;
+        }
+    }
+
+    #! Returns the number of requests whose connection stayed open
+    int getPersistentCount() {
+        AutoLock al(m);
+        return persistent.size();
+    }
+
+    #! Returns the number of notifications per request
+    hash<string, int> getEndCounts() {
+        AutoLock al(m);
+        return end_count;
+    }
+
+    static string getKey(hash<HttpConnectionInfo> info) {
+        if (info.header_info.http3) {
+            return sprintf("h3:%s:%d:%d", info.sock.uniqueHash(), info.header_info.session_id,
+                info.header_info.stream_id);
+        }
+        if (info.header_info.http2) {
+            return sprintf("h2:%s:%d", info.sock.uniqueHash(), info.header_info.stream_id);
+        }
+        return "h1:" + info.sock.uniqueHash();
+    }
+
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        string key = getKey(info);
+        hash<HttpRequestResultInfo> rv = delegate.onHttpRequest(info);
+        if (rv.persistent_request_end && raise_persistent) {
+            throw "TEST-RAISE", "onHttpRequest() raises for a request whose connection stays open";
+        }
+        if (rv.persistent_request_end) {
+            *Counter gate;
+            {
+                AutoLock al(m);
+                persistent{key} = {
+                    "sock": info.sock.uniqueHash(),
+                    "http2": info.header_info.http2 ?? False,
+                    "http3": info.header_info.http3 ?? False,
+                    "session_id": info.header_info.session_id,
+                    "stream_id": info.header_info.stream_id,
+                };
+                gate = return_gate;
+                # at_gate stays set, so that waitAtGate() finds it after the request has reached the gate
+                if (gate && at_gate.getCount()) {
+                    at_gate.dec();
+                }
+            }
+            if (gate) {
+                gate.waitForZero(HangTimeout);
+            }
+        }
+        {
+            AutoLock al(m);
+            returned{key} = True;
+        }
+        if (rv.persistent_request_end) {
+            persistent_returned.push(key);
+        }
+        return rv;
+    }
+
+    onPersistentRequestEnd(hash<HttpConnectionInfo> info) {
+        string key = getKey(info);
+        hash<EndRecord> rec;
+        {
+            AutoLock al(m);
+            *hash<auto> req = persistent{key};
+            rec = <EndRecord>{
+                "key": key,
+                "after_return": returned{key} ?? False,
+                "same_request": req
+                    && req.sock == info.sock.uniqueHash()
+                    && req.http2 == (info.header_info.http2 ?? False)
+                    && req.http3 == (info.header_info.http3 ?? False)
+                    && req.session_id == info.header_info.session_id
+                    && req.stream_id == info.header_info.stream_id,
+                "in_dispatch": dispatch_tids{gettid()} ?? False,
+            };
+            ++end_count{key};
+        }
+        ends.push(rec);
+    }
+
+    auto saveDispatchContext() {
+        {
+            AutoLock al(m);
+            dispatch_tids{gettid()} = True;
+        }
+        return delegate.saveDispatchContext();
+    }
+
+    restoreDispatchContext(auto save_data) {
+        {
+            AutoLock al(m);
+            remove dispatch_tids{gettid()};
+        }
+        delegate.restoreDispatchContext(save_data);
+    }
+
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        delegate.onIdleTimeout(sock, listener, cx);
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
+        delegate.onError(sock, ex, listener, cx);
+    }
+
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        delegate.onSseDisconnect(sock, listener, cx);
+    }
+
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+        delegate.onWebSocketFrame(sock, frame, listener, cx);
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+        delegate.onWebSocketClose(sock, code, reason, listener, cx);
+    }
+
+    *hash<HttpRequestResultInfo> tryInlineRequest(hash<HttpConnectionInfo> info) {
+        return delegate.tryInlineRequest(info);
+    }
+
+    *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
+        return delegate.prepareHttpRequest(info);
+    }
+
+    cancelPreparedHttpRequest(hash<HttpConnectionInfo> info) {
+        delegate.cancelPreparedHttpRequest(info);
+    }
+}
+
+#! A server whose async target is wrapped by a TrackingTarget
+class TrackingServer inherits HttpServer {
+    public {
+        TrackingTarget target;
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+        # replaced before any listener is added, as the HttpServer documentation requires
+        target = new TrackingTarget(asyncTarget);
+        asyncTarget = target;
+    }
+}
+
+#! Decremented once per WebSocket connection whose cleanup in the handler is complete
+our *Counter ws_ended;
+
+#! Echoes each message; "close" makes the server close the connection
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        if (msg == "close") {
+            stop();
+            return;
+        }
+        send(msg);
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid, *hash<auto> conn) {
+        return new EchoConnection(self);
+    }
+
+    private finishConnection(WebSocketConnection wsc, *HttpWebSocketPollOperationBase ws_poll_op, string cid) {
+        on_exit if (ws_ended) {
+            ws_ended.dec();
+        }
+        WebSocketHandler::finishConnection(wsc, ws_poll_op, cid);
+    }
+}
+
+#! Records the SSE connections, so that the test can close them from the server
+class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        #! counted down when a connection registers
+        Counter registered(1);
+        #! the most recently registered connection
+        *ServerSentEventHandler::ServerSentEventConnection last_conn;
+    }
+
+    private {
+        #! when set, the setup of the next connection waits at its registration until it is zero
+        *Counter setup_gate;
+        Mutex gate_lock();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none"}) {
+    }
+
+    reset() {
+        registered = new Counter(1);
+        last_conn = NOTHING;
+    }
+
+    armSetupGate() {
+        AutoLock al(gate_lock);
+        setup_gate = new Counter(1);
+    }
+
+    releaseSetupGate() {
+        AutoLock al(gate_lock);
+        if (setup_gate && setup_gate.getCount() > 0) {
+            setup_gate.dec();
+        }
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        last_conn = conn;
+        registered.dec();
+        *Counter gate;
+        {
+            AutoLock al(gate_lock);
+            gate = setup_gate;
+        }
+        if (gate) {
+            gate.waitForZero(HangTimeout);
+        }
+    }
+}
+
+#! An event source that keeps its stream open until it is closed by the client or by close()
+class HoldSource inherits AbstractSseEventSource {
+    public {
+        #! counted down when the source has started
+        Counter started(1);
+    }
+
+    private {
+        *AbstractSseConnection conn;
+        Mutex m();
+        bool stopped = False;
+    }
+
+    start(AbstractSseConnection conn) {
+        {
+            AutoLock al(m);
+            self.conn = conn;
+        }
+        conn.queueRawString("event: hello\ndata: 1\n\n");
+        started.dec();
+    }
+
+    stop() {
+        AutoLock al(m);
+        remove conn;
+        stopped = True;
+    }
+
+    #! @ref True once the server has stopped the source (its stream has ended)
+    bool isStopped() {
+        AutoLock al(m);
+        return stopped;
+    }
+
+    #! Closes the stream from the server
+    close() {
+        *AbstractSseConnection c;
+        {
+            AutoLock al(m);
+            c = conn;
+        }
+        if (c) {
+            c.close();
+        }
+    }
+}
+
+#! Returns responses whose events an event source pushes (a handler that is not a socket handler)
+class SourceHandler inherits AbstractHttpRequestHandler {
+    public {
+        *HoldSource last;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        last = new HoldSource();
+        return {"code": 200, "hdr": {"Content-Type": MimeTypeSse}, "sse_source": last};
+    }
+}
+
+#! Answers ordinary requests
+class ProbeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": "ok",
+        };
+    }
+}
+
+#! A target for the unit tests of HttpPersistentRequestEnd
+class CountingTarget inherits HttpAsyncTarget {
+    public {
+        list<hash<HttpConnectionInfo>> calls = ();
+        bool raise;
+        #! a value is pushed for each call
+        Queue called();
+    }
+
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        return <HttpRequestResultInfo>{};
+    }
+
+    onPersistentRequestEnd(hash<HttpConnectionInfo> info) {
+        calls += info;
+        called.push(True);
+        if (raise) {
+            throw "TEST-RAISE", "the target raises";
+        }
+    }
+
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
+    }
+
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+    }
+
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+    }
+}
+
+#! A test server
+class ServerCtx {
+    public {
+        *TrackingServer server;
+        TrackingTarget target;
+        EchoHandler ws_handler;
+        RecordingSseHandler sse_handler;
+        SourceHandler source_handler;
+        int probe_port;
+        int port;
+        int lid;
+    }
+}
+
+class HttpPersistentRequestEndTest inherits QUnit::Test {
+    private {
+        Logger mLogger;
+
+        #! The protocols of the connections
+        const Protocols = ("h1", "h2", "h3");
+    }
+
+    constructor() : Test("HttpPersistentRequestEndTest", "1.0") {
+        addTestCase("the end before the return is reported when the request returns", \unitEndFirstTest());
+        addTestCase("the end after the return is reported when the connection ends", \unitReturnFirstTest());
+        addTestCase("the end is reported once", \unitOnceTest());
+        addTestCase("an exception raised by the target is ignored", \unitRaiseTest());
+        addTestCase("a request that does not return is not reported", \unitNoReturnTest());
+        addTestCase("a notification that runs after its notifier was released is made", \unitDeferredTest());
+        addTestCase("a notification whose runner fails is made on a thread of its own", \unitRunnerFailsTest());
+        foreach string proto in (Protocols) {
+            # a WebSocket connection, an SSE stream of an SSE handler, and an SSE stream of an event source
+            foreach string kind in (("ws", "sse", "source")) {
+                addTestCase(sprintf("%s %s: a close by the client is reported once after the request returned",
+                    proto, kind), \clientCloseTest(), (proto, kind));
+                addTestCase(sprintf("%s %s: a close by the server is reported once after the request returned",
+                    proto, kind), \serverCloseTest(), (proto, kind));
+                addTestCase(sprintf("%s %s: a stop of the listener is reported once", proto, kind),
+                    \listenerStopTest(), (proto, kind));
+                addTestCase(sprintf("%s %s: a stop of the server is reported once", proto, kind),
+                    \serverStopTest(), (proto, kind));
+            }
+            addTestCase(sprintf("%s ws: a connection that ends before the request returns is reported after it "
+                "returns", proto), \wsEndBeforeReturnTest(), proto);
+        }
+        foreach string proto in (("h2", "h3")) {
+            addTestCase(sprintf("%s sse: a stream reset before the request returns is reported after it returns",
+                proto), \sseEndBeforeReturnTest(), proto);
+        }
+        addTestCase("ordinary requests are not reported", \ordinaryRequestTest());
+        addTestCase("a request whose onHttpRequest() raises is not reported", \raiseTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("persistent-request-end-test", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelWarn());
+        mLogger.addAppender(new StdoutAppender());
+    }
+
+    #! Returns a connection info hash for the unit tests
+    private static hash<HttpConnectionInfo> unitInfo() {
+        return <HttpConnectionInfo>{
+            "sock": new Socket(),
+            "hdr": {},
+            "header_info": {"http2": True, "stream_id": 5},
+            "cx": {},
+            "keep_alive": True,
+            "ssl": False,
+        };
+    }
+
+    #! A runner that runs the code at once and counts its calls
+    private static code<nothing(code<nothing()>)> unitRunner(reference<int> runs) {
+        return sub (code<nothing()> c) {
+            ++runs;
+            c();
+        };
+    }
+
+    unitEndFirstTest() {
+        HttpPersistentRequestEnd pend();
+        CountingTarget t();
+        int runs = 0;
+        pend.setEnded();
+        assertEq(0, t.calls.size(), "nothing is reported before the request returns");
+        assertFalse(pend.isNotified(), "not notified before the request returns");
+        hash<HttpConnectionInfo> info = unitInfo();
+        pend.requestReturned(t, info, unitRunner(\runs));
+        assertEq(1, runs, "the notification runs once the request has returned");
+        assertEq(1, t.calls.size(), "the target is notified once");
+        assertEq(5, t.calls[0].header_info.stream_id, "the target gets the request's info");
+        assertTrue(t.calls[0].sock == info.sock, "the target gets the request's socket");
+        assertTrue(pend.isNotified(), "notified");
+    }
+
+    unitReturnFirstTest() {
+        HttpPersistentRequestEnd pend();
+        CountingTarget t();
+        int runs = 0;
+        pend.requestReturned(t, unitInfo(), unitRunner(\runs));
+        assertEq(0, runs, "nothing is reported while the connection is open");
+        assertEq(0, t.calls.size(), "the target is not notified while the connection is open");
+        pend.setEnded();
+        assertEq(1, runs, "the notification runs when the connection ends");
+        assertEq(1, t.calls.size(), "the target is notified once");
+    }
+
+    unitOnceTest() {
+        HttpPersistentRequestEnd pend();
+        CountingTarget t();
+        int runs = 0;
+        pend.setEnded();
+        pend.setEnded();
+        pend.requestReturned(t, unitInfo(), unitRunner(\runs));
+        pend.requestReturned(t, unitInfo(), unitRunner(\runs));
+        pend.setEnded();
+        assertEq(1, runs, "the notification runs once");
+        assertEq(1, t.calls.size(), "the target is notified once");
+    }
+
+    unitRaiseTest() {
+        HttpPersistentRequestEnd pend();
+        CountingTarget t();
+        t.raise = True;
+        int runs = 0;
+        pend.requestReturned(t, unitInfo(), unitRunner(\runs));
+        # the exception of the target does not reach the code that reports the end
+        pend.setEnded();
+        assertEq(1, t.calls.size(), "the target is notified once");
+    }
+
+    unitDeferredTest() {
+        CountingTarget t();
+        Queue q();
+        {
+            HttpPersistentRequestEnd pend();
+            pend.requestReturned(t, unitInfo(), sub (code<nothing()> c) {
+                q.push(c);
+            });
+            pend.setEnded();
+        }
+        # the notifier has been released; the notification runs later, on another thread, as on the handler pool
+        code<nothing()> c = q.get(HangTimeout);
+        background c();
+        t.called.get(HangTimeout);
+        assertEq(1, t.calls.size(), "the target is notified once");
+    }
+
+    unitRunnerFailsTest() {
+        CountingTarget t();
+        HttpPersistentRequestEnd pend();
+        pend.requestReturned(t, unitInfo(), sub (code<nothing()> c) {
+            throw "TEST-RAISE", "the runner fails, as when the controller has been deleted";
+        });
+        # setEnded() does not raise the runner's exception, and the notification is still made
+        pend.setEnded();
+        t.called.get(HangTimeout);
+        assertEq(1, t.calls.size(), "the target is notified once");
+    }
+
+    unitNoReturnTest() {
+        HttpPersistentRequestEnd pend();
+        pend.setEnded();
+        assertFalse(pend.isNotified(), "a request that has not returned is not reported");
+    }
+
+    #! Starts a server with a WebSocket and an SSE handler and a listener for the protocol
+    /** The case is skipped if no TLS listener can be created
+    */
+    private ServerCtx startServer(string proto) {
+        ServerCtx ctx();
+        ctx.server = new TrackingServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        ctx.target = ctx.server.target;
+        ctx.ws_handler = new EchoHandler({"logger": mLogger});
+        ctx.sse_handler = new RecordingSseHandler();
+        ctx.server.setHandler("ws-handler", "/ws", NOTHING, ctx.ws_handler);
+        ctx.server.setHandler("sse-handler", "/sse", NOTHING, ctx.sse_handler);
+        ctx.server.setHandler("probe", "/probe", NOTHING, new ProbeHandler());
+        ctx.source_handler = new SourceHandler();
+        ctx.server.setHandler("source", "/source", NOTHING, ctx.source_handler);
+        ctx.probe_port = ctx.server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+        }).port;
+        hash<auto> info;
+        if (proto == "h1") {
+            info = ctx.server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+            });
+        } else {
+            try {
+                info = ctx.server.addListener(<HttpListenerOptionInfo>{
+                    "node": "localhost",
+                    "service": 0,
+                    "cert": new SSLCertificate(TestCertificates::CertPem),
+                    "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                    "http_version": "auto",
+                    "enable_h3": proto == "h3",
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                delete ctx.server;
+                testSkip(sprintf("no %s listener: %s: %s", proto, ex.err, ex.desc));
+            }
+        }
+        ctx.port = info.port;
+        ctx.lid = info.id;
+        ctx.server.waitForAsyncIo();
+        return ctx;
+    }
+
+    #! An open connection of the test: a WebSocket client or an SSE stream
+    private hash<auto> open(ServerCtx ctx, string proto, string kind) {
+        if (kind == "ws") {
+            ws_ended = new Counter(1);
+            Queue received();
+            WebSocketClient wsc(sub (*data msg) {
+                received.push(msg);
+            }, {
+                "url": sprintf("%s://localhost:%d/ws", proto == "h1" ? "ws" : "wss", ctx.port),
+                "logger": mLogger,
+                "http_version": proto == "h1" ? "1.1" : (proto == "h2" ? "2.0" : "3.0"),
+                "ssl_verify_cert": False,
+                "timeout": 30000,
+            });
+            wsc.connect();
+            if ((proto == "h2" && !wsc.isHttp2()) || (proto == "h3" && !wsc.isHttp3())) {
+                wsc.disconnect();
+                testSkip(sprintf("%s was not negotiated", proto));
+            }
+            # the connection is set up on the server once it echoes a message
+            wsc.send("hello");
+            assertEq("hello", received.get(HangTimeout), "the WebSocket connection echoes");
+            return {"wsc": wsc};
+        }
+        if (kind == "source") {
+            # a stream whose events an event source pushes
+            HttpClientIo::HttpClientConnectionManager mgr = makeManager(proto);
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+                sprintf("%s://localhost:%d", proto == "h1" ? "http" : "https", ctx.port), "GET", "/source",
+                {"Accept": "text/event-stream"});
+            ctx.target.persistent_returned.get(HangTimeout);
+            assertEq(0, ctx.source_handler.last.started.waitForZero(HangTimeout), "the event source has started");
+            HttpClientStreamingIo::SseStreamReader reader(stream);
+            *hash<SseMessageInfo> evt = reader.readEvent(HangTimeout);
+            assertEq("hello", evt.event, "the event source's stream delivers an event");
+            return {"mgr": mgr, "stream": stream};
+        }
+        ctx.sse_handler.reset();
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager(proto);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            sprintf("%s://localhost:%d", proto == "h1" ? "http" : "https", ctx.port), "GET", "/sse",
+            {"Accept": "text/event-stream"});
+        assertEq(0, ctx.sse_handler.registered.waitForZero(HangTimeout), "the SSE stream is registered");
+        # the request of the stream has returned
+        ctx.target.persistent_returned.get(HangTimeout);
+        # the stream is set up in the async I/O controller once an event reaches the client
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+        ctx.sse_handler.last_conn.send(<SseMessageInfo>{"event": "hello", "data": "1"});
+        *hash<SseMessageInfo> evt = reader.readEvent(HangTimeout);
+        assertEq("hello", evt.event, "the SSE stream delivers an event");
+        return {"mgr": mgr, "stream": stream};
+    }
+
+    private HttpClientIo::HttpClientConnectionManager makeManager(string proto) {
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> opts =
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "accept_all_certs": True,
+                "request_timeout": 20s,
+                "connect_timeout": 5s,
+            };
+        if (proto != "h1") {
+            opts.protocol = proto;
+        }
+        return new HttpClientIo::HttpClientConnectionManager(opts);
+    }
+
+    #! Closes the client side of a connection of open()
+    private static closeClient(hash<auto> conn) {
+        if (conn.wsc) {
+            conn.wsc.disconnect();
+        } else {
+            conn.stream.cancel();
+            delete conn.mgr;
+        }
+    }
+
+    #! Checks that the one connection's end was reported once, after its request returned, on the handler pool
+    /** @param on_pool @ref True if the end must be reported on the handler pool (not when the server stops)
+    */
+    private checkReported(ServerCtx ctx, string msg, bool on_pool = True) {
+        hash<EndRecord> rec;
+        try {
+            rec = ctx.target.ends.get(HangTimeout);
+        } catch (hash<ExceptionInfo> ex) {
+            # shows whether the connection ended on the server
+            fail(sprintf("%s: the end of the connection was not reported: %s: %s (requests left open: %d, "
+                "WebSocket connections: %y, SSE connections: %y, event source stopped: %y)", msg, ex.err, ex.desc,
+                ctx.target.getPersistentCount(), ctx.ws_handler.getConnectionIds(),
+                ctx.sse_handler.getConnectionIds(), ctx.source_handler.last ? ctx.source_handler.last.isStopped()
+                    : NOTHING));
+        }
+        assertTrue(rec.after_return, msg + ": reported after the request returned");
+        assertTrue(rec.same_request, msg + ": reported with the request's socket and stream");
+        if (on_pool) {
+            assertTrue(rec.in_dispatch, msg + ": reported on the handler pool with the target's dispatch context");
+        }
+        assertEq(1, ctx.target.getPersistentCount(), msg + ": one request left its connection open");
+        assertEq({rec.key: 1}, ctx.target.getEndCounts(), msg + ": reported once");
+    }
+
+    #! Deletes the server, after which its handler pool has run every task, and checks that nothing more was reported
+    private checkNothingMore(ServerCtx ctx, string msg) {
+        delete ctx.server;
+        assertEq(0, ctx.target.ends.size(), msg + ": nothing more is reported");
+        assertEq(1, ctx.target.getEndCounts().size(), msg + ": one request is reported");
+        assertEq((1,), ctx.target.getEndCounts().values(), msg + ": reported once");
+    }
+
+    clientCloseTest(string proto, string kind) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        hash<auto> conn = open(ctx, proto, kind);
+        assertEq(0, ctx.target.ends.size(), "not reported while the connection is open");
+        closeClient(conn);
+        checkReported(ctx, "after the client closed");
+        checkNothingMore(ctx, "after the client closed");
+    }
+
+    serverCloseTest(string proto, string kind) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        hash<auto> conn = open(ctx, proto, kind);
+        on_exit closeClient(conn);
+        switch (kind) {
+            case "ws":
+                conn.wsc.send("close");
+                break;
+            case "sse":
+                # the handler's connection aborts its stream
+                ctx.sse_handler.last_conn.stop();
+                break;
+            case "source":
+                # the event source closes its stream
+                ctx.source_handler.last.close();
+                break;
+        }
+        checkReported(ctx, "after the server closed");
+        checkNothingMore(ctx, "after the server closed");
+    }
+
+    listenerStopTest(string proto, string kind) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        hash<auto> conn = open(ctx, proto, kind);
+        on_exit closeClient(conn);
+        # in a thread of its own, so that a stop that does not finish fails the assertion below
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            ctx.server.stopListenerID(ctx.lid);
+        }();
+        assertEq(0, stopped.waitForZero(HangTimeout), "the stop of the listener finished");
+        checkReported(ctx, "after the stop of the listener");
+        checkNothingMore(ctx, "after the stop of the listener");
+    }
+
+    serverStopTest(string proto, string kind) {
+        ServerCtx ctx = startServer(proto);
+        hash<auto> conn = open(ctx, proto, kind);
+        on_exit closeClient(conn);
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            delete ctx.server;
+        }();
+        assertEq(0, stopped.waitForZero(HangTimeout), "the stop of the server finished");
+        # the handler pool can be stopping: the end is then reported on a thread of its own
+        checkReported(ctx, "after the stop of the server", False);
+        checkNothingMore(ctx, "after the stop of the server");
+    }
+
+    wsEndBeforeReturnTest(string proto) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        # the request of the next connection that stays open does not return until it is released
+        ctx.target.holdReturn();
+        on_exit ctx.target.releaseReturn();
+        ws_ended = new Counter(1);
+        Queue received();
+        WebSocketClient wsc(sub (*data msg) {
+            received.push(msg);
+        }, {
+            "url": sprintf("%s://localhost:%d/ws", proto == "h1" ? "ws" : "wss", ctx.port),
+            "logger": mLogger,
+            "http_version": proto == "h1" ? "1.1" : (proto == "h2" ? "2.0" : "3.0"),
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+        });
+        wsc.connect();
+        if ((proto == "h2" && !wsc.isHttp2()) || (proto == "h3" && !wsc.isHttp3())) {
+            wsc.disconnect();
+            testSkip(sprintf("%s was not negotiated", proto));
+        }
+        ctx.target.waitAtGate();
+        # the connection ends while its request has not returned
+        wsc.disconnect();
+        assertEq(0, ws_ended.waitForZero(HangTimeout), "the connection's cleanup in the handler is complete");
+        assertEq(0, ctx.target.ends.size(), "not reported before the request returns");
+        ctx.target.releaseReturn();
+        checkReported(ctx, "a connection that ended before its request returned");
+    }
+
+    sseEndBeforeReturnTest(string proto) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        ctx.sse_handler.reset();
+        # the setup of the stream waits at its registration, before the server reports the end of the stream
+        ctx.sse_handler.armSetupGate();
+        on_exit ctx.sse_handler.releaseSetupGate();
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager(proto);
+        on_exit delete mgr;
+        string url = sprintf("https://localhost:%d", ctx.port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, "GET", "/sse",
+            {"Accept": "text/event-stream"});
+        assertEq(0, ctx.sse_handler.registered.waitForZero(HangTimeout), "the SSE stream is registered");
+        # the stream is reset while its request is being handled; the reply to a request on the same connection
+        # shows that the server has received the reset
+        stream.cancel();
+        hash<auto> resp = mgr.request(url, "GET", "/probe");
+        assertEq(200, resp.status_code, "the connection serves another request");
+        ctx.sse_handler.releaseSetupGate();
+        checkReported(ctx, "a stream reset before its request returned");
+    }
+
+    ordinaryRequestTest() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        HTTPClient hc({
+            "url": sprintf("http://localhost:%d", ctx.port),
+            "timeout": HangTimeout,
+            "connect_timeout": HangTimeout,
+        });
+        for (int i = 0; i < 3; ++i) {
+            assertEq("ok", hc.send(NOTHING, "GET", "/probe").body, "an ordinary request is served");
+        }
+        # a WebSocket connection afterwards is the only one reported: the ordinary requests before it were not
+        hash<auto> conn = open(ctx, "h1", "ws");
+        closeClient(conn);
+        checkReported(ctx, "the WebSocket connection after the ordinary requests");
+        checkNothingMore(ctx, "after the ordinary requests and the WebSocket connection");
+    }
+
+    raiseTest() {
+        ServerCtx ctx = startServer("h1");
+        on_exit delete ctx.server;
+        ctx.target.raise_persistent = True;
+        ws_ended = new Counter(1);
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("ws://localhost:%d/ws", ctx.port),
+            "logger": mLogger,
+            "http_version": "1.1",
+            "timeout": 30000,
+        });
+        on_exit wsc.disconnect();
+        try {
+            wsc.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            # the server closes the connection of the request that raised
+        }
+        # the connection ends: the controller closes the connection of a request that raised
+        assertEq(0, ws_ended.waitForZero(HangTimeout), "the connection's cleanup in the handler is complete");
+        # once the server is deleted, its handler pool has run every task
+        delete ctx.server;
+        assertEq(0, ctx.target.ends.size(), "a request that raised is not reported");
+        assertEq({}, ctx.target.getEndCounts(), "no request is reported");
+    }
+}

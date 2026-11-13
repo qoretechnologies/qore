@@ -24,9 +24,11 @@ class D inherits DebugProgram {
     onExit(ProgramControl pgm, int s, reference result, reference rs, reference rts) {}
 }
 const FirstLine = 35;
-const LastLine = 278;
+const LastLine = 388;
 our list<string> log = ();
 class T { private { string n; } constructor(string n) { self.n = n; } destructor() { log += "~" + n; } }
+# a destructor that raises an exception
+class TX { private { string n; } constructor(string n) { self.n = n; } destructor() { log += "~" + n; throw "DX"; } }
 our *D R;
 # the debugger is attached before the top-level code runs; without DBG in the environment, the program runs without it
 bool sub attach() { if (ENV.DBG) { R = new D(); R.addProgram(ProgramControl::getProgram()); } return True; }
@@ -276,9 +278,117 @@ T sub m5() {
         }
     }
 }
+# a block with an exception path of its own (in a try block, or in a block with handlers) releases its locals after
+# the exception events of the statements in it that the exception leaves (#5954)
+sub v1() {
+    try {
+        if (True) {
+            T a("v1");
+            if (True) {
+                throw "V1";
+            }
+        }
+    } catch () {
+        log += "c";
+    }
+}
+sub v2() {
+    if (True) {
+        T a("v2a");
+        if (True) {
+            on_exit log += "x";
+            if (True) {
+                T b("v2b");
+                if (True) {
+                    throw "V2";
+                }
+            }
+        }
+    }
+}
+sub v3() {
+    if (True) {
+        on_error log += "oe";
+        if (True) {
+            T a("v3");
+            if (True) {
+                throw "V3";
+            }
+        }
+    }
+}
+sub v4() {
+    T o("v4o");
+    try {
+        T a("v4a");
+        if (True) {
+            T b("v4b");
+            throw "V4A";
+        }
+    } catch () {
+        if (True) {
+            throw "V4";
+        }
+    }
+}
+sub v5() {
+    foreach int i in (1, 2) {
+        try {
+            T a("v5_" + i);
+            if (i == 2) {
+                throw "V5";
+            }
+        } catch () {
+            log += "c";
+            rethrow;
+        }
+    }
+}
+
+# an exception that a destructor raises at the end of a block or of a statement, in a block with an exception path of
+# its own (#5954)
+sub w1() {
+    try {
+        if (True) {
+            T a("w1");
+            if (True) {
+                T b("w1b");
+                if (True) {
+                    TX x("w1x");
+                }
+            }
+        }
+    } catch () {
+        log += "c";
+    }
+}
+sub w2() {
+    try {
+        if (True) {
+            T a("w2");
+            if (True) {
+                on_exit log += "x";
+                TX x("w2x");
+            }
+        }
+    } catch () {
+        log += "c";
+    }
+}
+sub w3() {
+    try {
+        if (True) {
+            T a("w3");
+            new TX("w3t");
+            log += "n";
+        }
+    } catch () {
+        log += "c";
+    }
+}
+
 foreach string fn in (("a", "b", "c", "d", "e", "f", "g", "h", "i", "n2", "n3", "n4", "n5", "n6", "k1", "k2", "k3",
-        "k4", "k5", "m1", "m2", "m3",
-        "m4", "m5")) {
+        "k4", "k5", "m1", "m2", "m3", "m4", "m5", "v1", "v2", "v3", "v4", "v5", "w1", "w2", "w3")) {
     log = ();
     try { call_function(fn); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
     printf("%s: %y\n", fn, log);
