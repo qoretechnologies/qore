@@ -165,6 +165,9 @@ class ExecModeMarkerTest(unittest.TestCase):
         # the tests that run their checks in default-mode child processes without the harness:
         # - AOTConstantImportStale (#5798) and AOTDumpInfoPendingConstants (#5799): their checks run qcc and the
         #   programs and modules it compiles in child processes
+        # - AOTModuleDelClosure (#6015): its checks compile modules and scripts with qcc and run the interpreter and the
+        #   compiled programs in child processes
+        # - AOTNestedFind (#5974): its checks run the interpreter, qcc and the compiled programs in child processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
         # - JitTeardownAtExit: JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
         # - qlib-module-domains: each module is loaded first by a restricted Program in a child process, as a loaded
@@ -179,6 +182,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
+                                 "examples/test/ir/AOTModuleDelClosure.qtest",
+                                 "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest",
                                  "examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest",
