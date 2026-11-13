@@ -4390,6 +4390,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         QoreIRBasicBlock* after_block = builder.getBlock();
         builder.getFunction()->moveBlockToEnd(lvar_exception_cleanup_block);
         builder.setBlock(lvar_exception_cleanup_block);
+        // the exception events of the statements of the block that the exception leaves come before its handlers and
+        // the release of its locals, as with the AST interpreter (#5954)
+        if (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements) {
+            builder.createDebugBlockUnwind(debug_nest_depth, block->loc);
+        }
         if (has_on_block_exit) {
             // Exception unwinds through this synthetic block instead of the
             // try LandingPad, so fire this lexical scope's on_exit/on_error

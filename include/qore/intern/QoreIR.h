@@ -1440,6 +1440,11 @@ constexpr uint8_t QORE_IR_DEBUG_NEST_IN_CATCH = 0x04;
 //! the frame is in the statement that contains it, which an exception raised after it, as in the condition of a loop,
 //! is reported for; it makes no event
 constexpr uint8_t QORE_IR_DEBUG_NEST_END = 0x08;
+//! QoreIRDebugStatementInstruction::nest_flags: the instruction starts the exception path of a block with an exception
+//! path of its own, before its handlers run and its locals are released: it makes the exception events of the
+//! statements of the block that the exception leaves (those at its depth and deeper), as the AST interpreter makes
+//! them before the block releases its locals (#5954); it makes no event of its own
+constexpr uint8_t QORE_IR_DEBUG_NEST_UNWIND = 0x10;
 
 //! The locals of a block, for the debugger's release of the locals of a block that an exception leaves (#5921)
 struct QoreIRDebugBlockLocals {
