@@ -1,36 +1,50 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# test-exec-mode: children - the modules are loaded and compared in child processes that run in the default mode
-
-%modern
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires json
-%requires Util
-%requires FsUtil
-%requires QUnit
-
-%exec-class RestSchemaModuleLazyTypesTest
-
-#! Verifies that every provider module building REST-schema actions builds its output types on first use, and that
-#! they are the types built at load
-/** Each module is loaded twice, in separate processes: once with
+#! The cases of the RestSchemaModuleLazyTypes-<n>.qtest tests: each runs one part of them, so that each takes a short
+#! time, and together they run every case (see addPartCase())
+/** Verifies that every provider module building REST-schema actions builds its output types on first use, and that
+    they are the types built at load.  Each module is loaded twice, in separate processes: once with
     @ref RestSchemaActions::RestSchemaActionSet::setEagerResponseTypes() "RestSchemaActionSet::setEagerResponseTypes()"
     forcing every output type to be built at construction, and once as shipped.  Every action's output type,
     options and other metadata must be identical.
+
+    Part n compares the modules whose index in the sorted list of modules is n - 1 modulo Parts; part 1 also checks
+    that every module opts in.
 */
-class RestSchemaModuleLazyTypesTest inherits QUnit::Test {
+class RestSchemaModuleLazyTypesBase inherits QUnit::Test {
+    public {
+        #! The number of parts that the modules are compared in
+        const Parts = 8;
+    }
+
     private {
         #! The module sources
         string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
     }
 
-    constructor() : Test("REST-schema modules build output types on first use", "1.0") {
-        addTestCase("every REST-schema module opts in, and its lazy types equal its eager ones", \modulesTest());
+    constructor(string name, int part) : Test(name, "1.0") {
+        self.part = part;
+        addPartCase(1, "every REST-schema module opts in", \optInTest());
+        addPartCase(1, "lazy types equal eager ones, part 1", \modulesTest(), 1);
+        addPartCase(2, "lazy types equal eager ones, part 2", \modulesTest(), 2);
+        addPartCase(3, "lazy types equal eager ones, part 3", \modulesTest(), 3);
+        addPartCase(4, "lazy types equal eager ones, part 4", \modulesTest(), 4);
+        addPartCase(5, "lazy types equal eager ones, part 5", \modulesTest(), 5);
+        addPartCase(6, "lazy types equal eager ones, part 6", \modulesTest(), 6);
+        addPartCase(7, "lazy types equal eager ones, part 7", \modulesTest(), 7);
+        addPartCase(8, "lazy types equal eager ones, part 8", \modulesTest(), 8);
         set_return_value(main());
+    }
+
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     #! Returns the modules in the source tree that build REST-schema action sets or register their actions
@@ -52,7 +66,7 @@ class RestSchemaModuleLazyTypesTest inherits QUnit::Test {
             bool lazy;
             foreach string file in (dir.listFiles("\\.q[cm]$")) {
                 string src = ReadOnlyFile::readTextFile(path + DirSep + file);
-                builds = builds || RestSchemaModuleLazyTypesTest::constructsSet(src);
+                builds = builds || RestSchemaModuleLazyTypesBase::constructsSet(src);
                 # a module registering the actions of a set another module builds
                 registers = registers || src.find(".getActionInfoList(") >= 0;
                 lazy = lazy || src.find("LazyResponseTypes") >= 0 || src.find("lazy_response_types") >= 0;
@@ -94,17 +108,24 @@ class RestSchemaModuleLazyTypesTest inherits QUnit::Test {
         return parse_json(ReadOnlyFile::readTextFile(output));
     }
 
-    modulesTest() {
+    #! Checks that the REST-schema modules are found and that every one building an action set opts in
+    optInTest() {
         hash<string, bool> modules = getModules();
         assertGt(20, modules.size(), "the REST-schema modules are found");
         assertEq((), (map $1.key, modules.pairIterator(), $1.value) ?? (),
             "every module building a REST-schema action set opts in to lazy response types");
+    }
 
-        list<string> names = sort(keys modules);
+    #! Compares the lazy and eager types of the modules of the given part
+    modulesTest(int n) {
+        list<string> all = sort(keys getModules());
+        list<string> names = map all[$1], xrange(n - 1, all.size(), Parts);
+        assertGt(0, names.size(), sprintf("part %d has modules", n));
         hash<auto> eager = dump("eager", names);
         hash<auto> lazy = dump("lazy", names);
 
         assertEq(keys eager.apps, keys lazy.apps, "the same applications are registered");
+        assertGt(0, eager.apps.size(), sprintf("part %d registers applications", n));
         hash<string, int> lazy_actions = {};
         # every difference, so that a failure names all of them: app -> action -> part
         hash<string, hash<string, list<string>>> differences = {};

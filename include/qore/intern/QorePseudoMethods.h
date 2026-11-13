@@ -38,6 +38,12 @@ DLLLOCAL void pseudo_classes_del();
 DLLLOCAL QoreValue pseudo_classes_eval(const QoreValue n, const char* name, const QoreListNode* args, ExceptionSink* xsink);
 DLLLOCAL QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreValue n, const char* name,
     const QoreListNode* args, ExceptionSink* xsink);
+
+//! Raises the exception that pseudo_classes_eval() raises for a method that does not exist before it evaluates the
+//! arguments (issue #5784)
+/** @return -1 if the exception was raised, 0 if not
+*/
+DLLLOCAL int pseudo_classes_check_method(const QoreValue n, const char* name, ExceptionSink* xsink);
 DLLLOCAL const QoreMethod* pseudo_classes_find_method(qore_type_t t, const char* mname, QoreClass*& qc);
 DLLLOCAL const QoreMethod* pseudo_classes_find_method(const QoreTypeInfo* typeInfo, const char* mname, QoreClass*& qc, bool& possible_match);
 DLLLOCAL void qore_pseudo_check_return_type_info(const QoreFunction* func, const QoreTypeInfo* pseudoTypeInfo, const QoreTypeInfo*& returnTypeInfo);

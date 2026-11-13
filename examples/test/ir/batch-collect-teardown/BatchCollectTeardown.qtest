@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT batch compiles and the teardown of a Program, in threads
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class BatchCollectTeardownTest
+
+#! issue #5874: a batch JIT compile or effect analysis that reads the code of another Program holds that Program
+/** A batch JIT compile of a function of Program B collects the code of the functions of Program A that it calls, and
+    the IR interpreter's effect analysis walks the same code; A frees that code with its namespaces when it is deleted.
+    Both hold A while they read it, and A's teardown waits for the hold, which is not visible to A's code.  The script
+    deletes A in another thread while the collection or analysis is held after it has held A (a test hook), and checks
+    that the teardown waited for it; before, the teardown freed A's code while it was read.  It then checks that a hold
+    of a Program that its teardown has marked is refused, and that the call still returns its result.
+
+    The code is read by the batch collection with JIT and tiered execution and by the effect analysis with IR and
+    tiered execution; with the AST interpreter, which reads neither, the script only checks the results of the calls.
+    The script needs library debugging (dbg_hold_batch_collection()).
+*/
+class BatchCollectTeardownTest inherits QUnit::Test {
+    public {
+        #! the output when the code of g is read (by a batch collection or the effect analysis)
+        const ExpectedCompiled = "collection held: True\n"
+            "teardown waited for the collection: True\n"
+            "collection continued: True\n"
+            "result: 1\n"
+            "teardown marked the Program: True\n"
+            "holds refused after the teardown marked the Program: True\n"
+            "result after the teardown marked the Program: 1\n";
+
+        #! the output of the AST interpreter, which reads neither
+        const ExpectedInterpreted = "collection held: n/a\n"
+            "teardown waited for the collection: n/a\n"
+            "collection continued: n/a\n"
+            "result: 1\n"
+            "teardown marked the Program: True\n"
+            "holds refused after the teardown marked the Program: n/a\n"
+            "result after the teardown marked the Program: 1\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("batch collection and teardown", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/BatchCollectTeardown.qr";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("background compiles", \backgroundTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! skips the test case without library debugging, which the script needs
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_batch_collection() requires library debugging");
+        }
+    }
+
+    #! runs the script in every execution mode, with synchronous compiles
+    private modesTest() {
+        checkDebugging();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string exp = mode == "ast" ? ExpectedInterpreted : ExpectedCompiled;
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+    }
+
+    #! runs the script with background compiles
+    private backgroundTest() {
+        checkDebugging();
+        foreach string mode in (("jit", "tiered")) {
+            string cmd = sprintf("env -u QORE_JIT_SYNC_COMPILE %s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s "
+                "--exec-mode=%s %s 2>&1", env, qore_bin, mode, script);
+            assertEq(ExpectedCompiled, backquote(cmd), mode + " with background compiles");
+        }
+    }
+
+    #! compiles the script with qcc: the executable's Programs are parsed at run time (tiered execution, the default)
+    private aotTest(string opt) {
+        checkDebugging();
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("batch-collect-teardown-aot-");
+        string exe = dir.path + "/batch-collect-teardown";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(ExpectedCompiled, ExecModeHarness::run_any(sprintf("%s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s",
+            env, exe)), "AOT " + opt);
+    }
+}

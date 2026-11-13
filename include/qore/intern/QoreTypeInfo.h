@@ -986,6 +986,17 @@ public:
         return false;
     }
 
+    //! Returns true if each type that \a second returns is a type that \a first returns, with no conversion
+    /** A missing type returns any value: \a first without a type accepts any output, and \a second without one is
+        accepted only by \a first without a type
+    */
+    DLLLOCAL static bool outputAccepts(const QoreTypeInfo* first, const QoreTypeInfo* second) {
+        if (!hasType(first) || first == second) {
+            return true;
+        }
+        return hasType(second) ? first->outputAccepts(second) : false;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static bool canConvertToScalar(const QoreTypeInfo* ti) {
         return ti ? ti->canConvertToScalarImpl() : true;
@@ -1238,6 +1249,13 @@ protected:
 
     // returns true if "this"'s output is a superset of the argument's output with a strict interpretation that the order of return declarations must also be the same
     DLLLOCAL bool outputSuperSetOf(const QoreTypeInfo* t) const;
+
+    //! Returns true if each type that \a t returns is a type that this type returns, with no conversion
+    /** Unlike outputSuperSetOf(), the order of the return types is not significant, and a match that may need a
+        conversion (filter) is refused: a soft type is compared by the types it returns (\c softlist<string> returns
+        \c list<string>), not by the types it accepts.
+    */
+    DLLLOCAL bool outputAccepts(const QoreTypeInfo* t) const;
 
     DLLLOCAL qore_type_t getSingleType() const {
         if (accept_vec.size() == 1 && return_vec.size() == 1) {

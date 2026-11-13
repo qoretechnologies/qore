@@ -1,9 +1,9 @@
 qore (3.0.0-1) unstable; urgency=medium
 
-  * Binary Module API 2.3: modules use QoreModuleInfo-based registration; modules built
+  * Binary Module API 2.2: modules use QoreModuleInfo-based registration; modules built
     for older module APIs are refused
   * Added required build dependencies: nghttp2, brotli, zstd, lz4
-  * Updated module ABI to 2.3
+  * Updated module ABI to 2.2
   * Use quilt source format and declare complete, versioned build dependencies.
   * Require offline builds with packaged dependencies; retain upstream CMake
     FetchContent behavior for ordinary developer builds.

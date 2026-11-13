@@ -40,6 +40,8 @@
 
 
 module XeroDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "user module providing a data provider API for Xero";
     author = "Qore Technologies <info@qoretechnologies.com>";

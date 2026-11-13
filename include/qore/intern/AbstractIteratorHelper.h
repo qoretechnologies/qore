@@ -139,7 +139,7 @@ public:
         const qore_class_private* class_ctx = runtime_get_class();
         const MethodVariantBase* variant = reinterpret_cast<const MethodVariantBase*>(
             qore_method_private::get(*m)->getFunction()->runtimeFindVariant(xsink, (QoreListNode*)nullptr, false,
-                class_ctx)
+                class_ctx, nullptr, nullptr, nullptr, nullptr, nullptr, ::getProgram())
         );
         // this could throw an exception if the variant is builtin and has functional flags not allowed in the current
         // pgm, for example

@@ -120,7 +120,7 @@ private:
         Native subclasses inherit the default; they do not need to implement this entry.
 
         @return the borrowed wrapped callback, or nullptr for a call reference that is not sandbox-bound
-        @note This entry is part of the module API 2.3 vtable change; modules must rebuild for that API.
+        @note This entry is part of the module API 2.2 vtable change; modules must rebuild for that API.
     */
     DLLEXPORT virtual const ResolvedCallReferenceNode* getSandboxBoundCallback() const;
 };

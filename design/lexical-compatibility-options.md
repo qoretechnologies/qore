@@ -337,13 +337,19 @@ object members and typed-reference assignments. Internal AST default filters and
 canonical entries explicitly, including iterator materialization before a modern callback starts its body.
 Untyped result builders do not read the conversion policy.
 
-The appended ResolvedCallReferenceNode entries require module API 2.3 (provisional until batch assembly); API 2.2 modules are refused. Existing
+The appended ResolvedCallReferenceNode entries require module API 2.2; API 2.1 modules are refused. Existing
 native subclasses continue to override execValue() without source changes. The external subclass inventory
 contains jni's QoreJniFunctionalInterface, python's PythonCallableCallReferenceNode and the JavaScript/V8
 module's QoreV8CallReference; full module builds against the new headers are part of validation. Internal Qore
 references and closures use their existing body directly through the new dispatch slot. External callbacks
 may add one virtual dispatch and the native policy save/set/restore, measured separately against a real
 Python callback; ordinary internal calls, call references, closures and map retain the zero-work requirement.
+
+The lexical call-reference entries keep the creator-permission protocol of #5803: they mark the call with
+`QoreCallReferenceCallHelper`, and both lexical `CodeEvaluationHelper` constructors take that marker before
+argument evaluation. Overload resolution receives the same creator/caller domain options as the canonical
+entry, independently of the compatibility policy. A lexical policy never grants a domain; a denied call
+restores the previous marker and policy, including nested calls and calls with evaluated arguments.
 
 No AOT format, opcode or feature bit is added. The runtime identity changes because the shared helper and
 invocation implementations change.

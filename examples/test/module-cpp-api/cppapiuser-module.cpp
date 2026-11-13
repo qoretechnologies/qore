@@ -34,13 +34,19 @@
 */
 
 #include "cppapiuser-module.h"
+#include <qore/QoreSandboxManager.h>
 
 #include <cassert>
 #include <cstring>
+#include <mutex>
+#include <new>
+#include <string>
+#include <vector>
 
 static void cppapiuser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void cppapiuser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void cppapiuser_module_delete();
+static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink);
 
 extern "C" DLLEXPORT void cppapiuser_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "cppapiuser";
@@ -53,6 +59,7 @@ extern "C" DLLEXPORT void cppapiuser_qore_module_desc(QoreModuleInfo& mod_info) 
     mod_info.init = cppapiuser_module_init;
     mod_info.ns_init = cppapiuser_module_ns_init;
     mod_info.del = cppapiuser_module_delete;
+    mod_info.parse_cmd = cppapiuser_parse_cmd;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }
@@ -156,4 +163,43 @@ static void cppapiuser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Ex
 }
 
 static void cppapiuser_module_delete() {
+}
+
+// the module commands received (%module-cmd(cppapiuser) and Program::issueModuleCmd()), for the tests of how they
+// reach the module (issue #5905)
+static std::mutex module_cmd_lock;
+static std::vector<std::string> module_cmds;
+
+// records the command, with " [sandboxed]" appended when the Program that the command runs in has a sandbox manager
+// (the sandbox that a module such as python gives what the command creates, see QoreSandboxManagerHelper(pgm)); the
+// command "fail" raises an exception instead
+static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
+    assert(xsink);
+    if (cmd == "fail") {
+        xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", "the command \"fail\" was issued");
+        return;
+    }
+    // no C++ exception may leave the module's C callback
+    try {
+        std::string rec(cmd.c_str());
+        {
+            QoreSandboxManagerHelper sm(getProgram());
+            if (sm) {
+                rec += " [sandboxed]";
+            }
+        }
+        std::lock_guard<std::mutex> guard(module_cmd_lock);
+        module_cmds.push_back(std::move(rec));
+    } catch (const std::bad_alloc&) {
+        xsink->outOfMemory();
+    }
+}
+
+QoreListNode* cppapiuser_get_module_cmds() {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), nullptr);
+    std::lock_guard<std::mutex> guard(module_cmd_lock);
+    for (const std::string& cmd : module_cmds) {
+        rv->push(new QoreStringNode(cmd), nullptr);
+    }
+    return rv.release();
 }

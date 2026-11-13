@@ -3494,6 +3494,14 @@ hash\<{WORD}\>\{                        {
                                            return yytext[0];
                                         }
 {WSNL}+                                 /* ignore whitespace */
+\[/{WSNL}*dom{WSNL}*=[^=~]              {
+                                           // the start of a function or method attribute list: '[' followed by
+                                           // a known key and '=' (not '==' or '=~'); a distinct token so that
+                                           // the list does not conflict with an index expression after a call
+                                           // (ex: Cls::m(x)[i])
+                                           streaming_any_expression_context = false;
+                                           return TOK_ATTR_OPEN;
+                                        }
 .                                       { return scanner_return_char_token(yytext[0]); }
 %%
 

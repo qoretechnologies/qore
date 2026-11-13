@@ -1332,7 +1332,7 @@ ModuleName/
 
     Binary modules are written in C++ and delivered in binary form. They must conform to the %Qore Module API and have the file extension \c "*.qmod". Binary modules normally depend on other shared libraries and therefore can only be loaded if the libraries they require are present on the system and can be found in the library path.
 
-    Binary modules are merged into @ref Qore::Program "Program" objects in the same way as the static system namespace objects are imported.  It is possible to import a binary module and be able to use only part of its functionality, for example, if the importing @ref Qore::Program "Program" cannot access the filesystem, and the module has functions that access the filesystem, only the functions that access the filesystem will not be available.  In user modules, the functional domain is set on the module level and not on the individual function or method level as with builtin objects, so user modules are either completely imported or not at all.
+    Binary modules are merged into @ref Qore::Program "Program" objects in the same way as the static system namespace objects are imported.  It is possible to import a binary module and be able to use only part of its functionality, for example, if the importing @ref Qore::Program "Program" cannot access the filesystem, and the module has functions that access the filesystem, only the functions that access the filesystem will not be available.  User modules are either completely imported or not at all; their functions and methods can declare @ref function_domains "functional domains" as builtin functions and methods do, which a %Program that may not use them cannot reference.
 
     Please note that as of version 0.7.0 onwards, the source code for binary modules has been split from the main %Qore library source code into separate projects; see <a href="http://www.qore.org">%Qore's home page</a> for more information.
 
@@ -1573,7 +1573,7 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt><b>desc</b> = &quot;</tt><i>description string</i><tt>&quot;;</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt><b>author</b> = &quot;</tt><i>author string</i><tt>&quot;;</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>url</b> = &quot;</tt><i>URL string</i><tt>&quot;;]</tt>\n
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>license</b> = &quot;</tt><i>license string</i><tt>&quot;;]</tt>\n
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>license</b> = &quot;</tt><i>license string</i><tt>&quot;;]</tt>\n    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>domains</b> = &quot;</tt><i>functional domains</i><tt>&quot;;]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>init</b> = </tt><i>@ref closure "initialization closure"</i><tt>;]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>del</b> = </tt><i>@ref closure "deletion closure"</i><tt>;]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>}</tt>
@@ -1584,6 +1584,33 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     - \c author: (required) must be assigned to a string giving the module's author's name
     - \c url: (optional) if present, must be a string giving the URL of the module
     - \c license: (optional) if present, must be a string giving the license of the module
+    - \c domains: (optional) if present, must be a string giving the @ref function_domains "functional domains" that
+      the module's own code uses, separated by commas and without the \c QDOM_ prefix, as in the attribute list of a
+      function (ex: <tt>domains = "PROCESS_CONTROL,THREAD_CONTROL";</tt>); only domains that a parse option restricts
+      can be given (not \c INJECTION, \c DEBUGGER nor \c IN_MODULE).  The module's @ref Qore::Program "Program" does
+      not have the restrictions of these domains, which it would otherwise inherit from the %Program that loads the
+      module, so a %Program restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" can load a module
+      that registers process-wide functionality when it is loaded.  The declaration applies only to a module found in a
+      directory of the process-wide module path (\c QORE_MODULE_DIR (see @ref environment_variables) and the built-in module
+      directories, not a directory that a %Program adds with @ref append-module-path "%append-module-path" or
+      @ref prepend-module-path "%prepend-module-path", nor a module loaded by its path): a module from anywhere else
+      has the restrictions of the %Program that loads it.  The code after the module declaration, including
+      @ref conditional_parsing "%ifdef" directives for the restricting parse options, sees the options without these
+      restrictions, as do the \c init and \c del closures.  The code that calls the module is still checked against
+      its own restrictions.  Each module declares the domains that its own code uses; the modules that it requires do
+      not get them.  A declaration must not make the module's public API a way around the caller's restrictions: the
+      module's public functions and methods whose effect is the restricted capability itself (changing process-wide
+      state such as environment variables, registrations, caches or settings, exiting the process, signal handlers,
+      loading modules) declare the domain too, so that a restricted caller cannot call them, and module code that would
+      use the capability for its caller checks the caller first
+      (@ref Qore::Program::getCallerCapabilityMask() "Program::getCallerCapabilityMask()"); what the module does for its
+      own work (its threads, waits and thread data) needs no such declaration.  The module's own code may use the
+      functionality of the declared domains also when a call is resolved at run time
+      (@ref Qore::call_function() "call_function()", a method call on an untyped value, a call reference that the
+      module's code creates), for a sandboxed caller too; the same calls that the caller's code makes are checked
+      against the caller's restrictions.  A module that gives its callers a generic way to call its code (a call
+      reference to @ref Qore::call_function() "call_function()" that it creates, for example) lets them reach its
+      declared code through it.  Since %Qore 3.0
     - \c init: (optional) if present, must be a closure that will be executed when the module is loaded; this can be
       used to initialize the module, for example
     - \c del: (optional) if present, must be a closure that will be executed when the module is unloaded; this can be
@@ -1594,7 +1621,11 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     - Unhandled exceptions in the \c init and \c del closures are displayed on @ref Qore::stdout "stdout"
     - \c init and \c del closures are parsed with restricted capabilities; they are parsed with
       @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN" permissions except that
-      @ref Qore::PO_NO_REFLECTION "PO_NO_REFLECTION" is not set
+      @ref Qore::PO_NO_REFLECTION "PO_NO_REFLECTION" is not set, and that the domains given with \c domains are not
+      restricted (unless the module inherits their restrictions from the %Program that loads it); calls of functions
+      and methods that declare @ref function_domains "functional domains" in %Qore source (such as the registration
+      APIs of the @ref dataproviderintro "DataProvider" module) are not restricted by these permissions either, only
+      by the restrictions that the module inherits from the %Program that loads it
 
     @anchor user_module_exit_hooks
     A module's \c del closure runs after the library has waited for every background thread of the process to end, so a
@@ -1674,7 +1705,10 @@ public namespace MyNamespace {
     contrast with @ref binary_modules "binary modules", which can be imported even if they expose functionality not
     allowed in the importing @ref Qore::Program "Program", however that functionality will not be available in that
     case).  User module @ref Qore::Program "Program" objects have a functional domain attribute set on the
-    @ref Qore::Program "Program" level, so either a user module is imported in its entirety or not at all.
+    @ref Qore::Program "Program" level, so either a user module is imported in its entirety or not at all.  The
+    functions and methods of a user module can declare @ref function_domains "functional domains": an importing
+    %Program that may not use a domain can import the module, and is refused only the code that declares the domain;
+    a module whose own code uses a domain declares it with the \c domains key of its module declaration (see above).
 
     @subsection user_module_runtime_context Module Code at Run Time
 

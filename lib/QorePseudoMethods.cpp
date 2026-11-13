@@ -170,31 +170,29 @@ const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
     return QC_PSEUDOVALUE;
 }
 
-template <bool Lexical>
-static QoreValue pseudo_classes_eval_impl(LexicalSemanticPolicy policy, const QoreValue n, const char* name,
-        const QoreListNode* args, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
+//! Gives a value to @a f with the pseudo-class that its pseudo-methods are called in, as pseudo_classes_eval() does
+/** The evaluation of a pseudo-method and the check of its existence (issue #5784) use the same dispatch.
+*/
+template <typename F>
+static QoreValue pseudo_classes_dispatch(const QoreValue n, ExceptionSink* xsink, F&& f) {
     switch (n.getType()) {
         case NT_STRING:
             if (n.isShortString()) {
                 char buf[7];
                 n.getShortString(buf);
                 ValueHolder str(new QoreStringNode(buf, n.shortStringLen(), QCS_UTF8), xsink);
-                return qore_class_private::get(*po_list[NT_STRING])->evalPseudoMethodWithPolicy<Lexical>(policy, *str, name, args, rc, xsink);
+                return f(po_list[NT_STRING], *str);
             }
             break;
 
         case NT_WEAKREF:
-            return qore_class_private::get(*po_list[NT_OBJECT])->evalPseudoMethodWithPolicy<Lexical>(policy,
-                QoreValue(n.get<WeakReferenceNode>()->get()), name, args, rc, xsink);
+            return f(po_list[NT_OBJECT], QoreValue(n.get<WeakReferenceNode>()->get()));
 
         case NT_WEAKREF_HASH:
-            return qore_class_private::get(*po_list[NT_HASH])->evalPseudoMethodWithPolicy<Lexical>(policy,
-                QoreValue(n.get<WeakHashReferenceNode>()->get()), name, args, rc, xsink);
+            return f(po_list[NT_HASH], QoreValue(n.get<WeakHashReferenceNode>()->get()));
 
         case NT_WEAKREF_LIST:
-            return qore_class_private::get(*po_list[NT_LIST])->evalPseudoMethodWithPolicy<Lexical>(policy,
-                QoreValue(n.get<WeakListReferenceNode>()->get()), name, args, rc, xsink);
+            return f(po_list[NT_LIST], QoreValue(n.get<WeakListReferenceNode>()->get()));
 
         case NT_REFERENCE: {
             const ReferenceNode* r = n.get<const ReferenceNode>();
@@ -204,23 +202,38 @@ static QoreValue pseudo_classes_eval_impl(LexicalSemanticPolicy policy, const Qo
                 return QoreValue();
             }
 
-            return pseudo_classes_eval_impl<Lexical>(policy, ref.getValue(), name, args, xsink);
+            return pseudo_classes_dispatch(ref.getValue(), xsink, f);
         }
 
         default:
             break;
     }
 
-    return qore_class_private::get(*pseudo_get_class(n.getType()))->evalPseudoMethodWithPolicy<Lexical>(policy, n, name, args, rc, xsink);
+    return f(pseudo_get_class(n.getType()), n);
 }
-QoreValue pseudo_classes_eval(const QoreValue n, const char* name, const QoreListNode* args,
-        ExceptionSink* xsink) {
-    return pseudo_classes_eval_impl<false>({}, n, name, args, xsink);
+
+QoreValue pseudo_classes_eval(const QoreValue n, const char *name, const QoreListNode *args, ExceptionSink *xsink) {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return pseudo_classes_dispatch(n, xsink, [&] (const QoreClass* qc, const QoreValue v) {
+        return qore_class_private::evalPseudoMethod(qc, v, name, args, rc, xsink);
+    });
 }
 
 QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreValue n, const char* name,
         const QoreListNode* args, ExceptionSink* xsink) {
-    return pseudo_classes_eval_impl<true>(policy, n, name, args, xsink);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return pseudo_classes_dispatch(n, xsink, [&] (const QoreClass* qc, const QoreValue v) {
+        return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<true>(policy, v, name, args, rc, xsink);
+    });
+}
+
+int pseudo_classes_check_method(const QoreValue n, const char* name, ExceptionSink* xsink) {
+    bool found = false;
+    pseudo_classes_dispatch(n, xsink, [&] (const QoreClass* qc, const QoreValue v) {
+        found = qore_class_private::get(*qc)->runtimeFindPseudoMethod(v, name, xsink) != nullptr;
+        return QoreValue();
+    });
+    return found ? 0 : -1;
 }
 
 const QoreMethod* pseudo_classes_find_method(qore_type_t t, const char *mname, QoreClass* &qc) {

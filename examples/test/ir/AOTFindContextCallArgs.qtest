@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+#
+# A call or cast at the root of an expression that find or context evaluates per row (the result and where
+# expressions of find, the where and sort expressions of context) or of their source gets its operands, including a
+# local variable of a method, in every execution mode, on the IR tier and in qcc executables, modules and linked
+# objects at -O0 and -O3, as with the AST interpreter (qore#5939: AOT code called the function without its arguments
+# and cast nothing)
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTFindContextCallArgsTest
+
+class AOTFindContextCallArgsTest inherits QUnit::Test {
+    public {
+        const Expected = "find builtin:5 user:5 static:8 new:4 callref:2 where:4 where-root:4 source:5 first:7 cast:4 "
+            "method-local:11\n"
+            "context where:[4] sort:[4, 5, 6] source:[5, 4]\n";
+
+        const Module = "%modern
+module AOTFindCallArgsMod {
+    version = \"1.0\";
+    desc = \"find and context call arguments in a compiled module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace AOTFindCallArgsMod {
+    int sub plus1(int x) {
+        return x + 1;
+    }
+
+    public string sub run() {
+        hash<auto> q = {\"a\": (1, 2), \"b\": (3, 4)};
+        list<auto> l = ();
+        context (q) where (boolean(plus1(%a) - 2)) sortBy (abs(-%b)) {
+            l += %b;
+        }
+        return sprintf(\"%y %y %y\", find abs(-5) in q where (%a == 1), find plus1(%b) in q where (plus1(%a) == 3),
+            l);
+    }
+}
+";
+
+        const ModuleExpected = "5 5 [4]\n";
+
+        const Driver = "printf(\"%s\\n\", AOTFindCallArgsMod::run());\n";
+
+        #! a class compiled to a standalone object
+        const ObjectClass = "%new-style
+public class AOTFindCallArgsObject {
+    public static string run() {
+        hash<auto> q = {\"a\": (1, 2), \"b\": (3, 4)};
+        list<auto> l = ();
+        context (q) where (boolean(AOTFindCallArgsObject::plus1(%a) - 2)) sortBy (abs(-%b)) {
+            l += %b;
+        }
+        return sprintf(\"%y %y %y\", find abs(-5) in q where (%a == 1),
+            find AOTFindCallArgsObject::plus1(%b) in q where (AOTFindCallArgsObject::plus1(%a) == 3), l);
+    }
+
+    private static int plus1(int x) {
+        return x + 1;
+    }
+}
+";
+
+        #! the entry point linked with the object
+        const ObjectMain = "%new-style
+int sub main() {
+    printf(\"%s\\n\", AOTFindCallArgsObject::run());
+    return 0;
+}
+
+main();
+";
+    }
+
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/AOTFindContextCallArgs.qr";
+    }
+
+    constructor() : Test("find and context call arguments", "1.0", \ARGV) {
+        addTestCase("execution modes", \executionModes());
+        addTestCase("AOT executables", \aotExecutables());
+        addTestCase("AOT modules", \aotModules());
+        addTestCase("AOT objects", \aotObjects());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string env() {
+        return "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR="
+            + quote(libdir) + " ";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + env() + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private static write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    executionModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the JIT compiles synchronously, so the native code runs
+            assertEq(Expected, run((qore, "--exec-mode=" + mode, source), "QORE_JIT_SYNC_COMPILE=1 "), mode);
+        }
+        # tiered execution kept on the IR tier: nothing is compiled to native code, nothing runs on the AST
+        assertEq(Expected, ExecModeHarness::run_ir_tier(env() + quote(qore) + " --exec-mode=tiered "
+            + quote(source)), "IR tier");
+    }
+
+    aotExecutables() {
+        TmpDir dir("qore-aot-find-call-args-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            run((qcc, level, "-o", executable, source));
+            assertEq(Expected, run((executable,)), level);
+            unlink(executable);
+        }
+    }
+
+    aotModules() {
+        TmpDir dir("qore-aot-find-call-args-mod-");
+        write(dir.path + "/AOTFindCallArgsMod.qm", Module);
+        write(dir.path + "/run-source.qr", "%requires ./AOTFindCallArgsMod.qm\n" + Driver);
+        write(dir.path + "/run-qmod.qr", "%requires ./AOTFindCallArgsMod.qmod\n" + Driver);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(ModuleExpected, run((qore, "--exec-mode=" + mode, dir.path + "/run-source.qr"),
+                "QORE_JIT_SYNC_COMPILE=1 "), "source module " + mode);
+        }
+        foreach string level in (("-O0", "-O3")) {
+            string qmod = dir.path + "/AOTFindCallArgsMod.qmod";
+            run((qcc, level, "-m", dir.path + "/AOTFindCallArgsMod.qm", "-o", qmod));
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                assertEq(ModuleExpected, run((qore, "--exec-mode=" + mode, dir.path + "/run-qmod.qr"),
+                    "QORE_JIT_SYNC_COMPILE=1 "), "compiled module " + level + " " + mode);
+            }
+            unlink(qmod);
+        }
+    }
+
+    aotObjects() {
+        TmpDir dir("qore-aot-find-call-args-qo-");
+        string lib = dir.path + "/lib";
+        mkdir(lib);
+        write(dir.path + "/object.qc", ObjectClass);
+        write(dir.path + "/main.qr", ObjectMain);
+        foreach string level in (("-O0", "-O3")) {
+            run((qcc, level, "-c", "-L", lib, "--parse-option=PO_MODERN", "-o", lib + "/object.qo",
+                dir.path + "/object.qc"));
+            run((qcc, level, "-c", "-L", lib, "--parse-option=PO_MODERN", "-o", lib + "/main.qo",
+                dir.path + "/main.qr"));
+            string executable = dir.path + "/app";
+            run((qcc, "-o", executable, lib + "/object.qo", lib + "/main.qo"));
+            assertEq(ModuleExpected, run((executable,)), "linked objects " + level);
+            unlink(executable);
+            unlink(lib + "/object.qo");
+            unlink(lib + "/main.qo");
+        }
+    }
+}

@@ -168,6 +168,18 @@ int64_t qore_rt_is_null_or_nothing(uint64_t val);
 
 // --- Refcount helpers ---
 
+//! Returns the value of a local with IR storage as a unique container (qore#5847)
+/** A hash or list that is shared is copied: the copy is returned, the value passed is not released.  The value
+    itself is returned in every other case.
+*/
+uint64_t qore_rt_unique_container(uint64_t val);
+
+//! Makes the hash or list that an AOT body local holds unique (qore#5847)
+/** The unique step of a weak assignment from an AOT body local, which the program publishes to the runtime stack: a
+    shared container is replaced by a copy in the variable of the slot; a value of another type is left as it is
+*/
+void qore_rt_unique_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
 //! Increment reference count if value is a pointer type
 void qore_rt_incref(uint64_t val);
 
@@ -318,6 +330,73 @@ void qore_rt_raise_return_statement_nothing(const QoreTypeInfo* ti, ExceptionSin
 void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx, const char* type_path,
         ExceptionSink* xsink);
 
+//! Raises the exception that the call @a call raises for its target @a target before it evaluates its arguments, if
+//! any (QoreIROpcode::CheckCallTarget; issue #5784)
+/** @return -1 if an exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
+
+//! Returns true if the call @a call needs no check of its target @a target: a method call (not a call through a
+//! call reference) on an object that has not been deleted, the common case (QoreIROpcode::CheckCallTarget)
+/** With the inline accessors of the values only; qore_check_call_target() makes the check otherwise.
+*/
+static inline bool qore_call_target_needs_no_check(const QoreValue& call, const QoreValue& target) {
+    if (!target.isPointer() || !call.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* target_node = target.getPtr();
+    const AbstractQoreNode* call_node = call.getPtr();
+    return target_node && call_node && target_node->getType() == NT_OBJECT && call_node->getType() != NT_FUNCREFCALL
+        && static_cast<const QoreObject*>(target_node)->isValid();
+}
+
+//! The JIT fast test of QoreIROpcode::CheckCallTarget for a call that is not a call through a call reference (known
+//! when the call is compiled): true if the target is an object that has not been deleted
+bool qore_rt_call_target_is_valid_object(uint64_t target_bits);
+
+//! The layout of the fields that JIT-generated code reads to test that a value is an object that has not been deleted
+/** Taken from the running libqore: JIT code is generated and run in the same process.  AOT code never uses it (the AOT
+    runtime identity does not cover the layout of these classes), and calls qore_rt_call_target_is_valid_object()
+    instead (issue #5784).
+*/
+struct QoreJITObjectLayout {
+    //! the byte offset of a 32-bit little-endian word of an AbstractQoreNode holding its 11-bit type
+    uint32_t type_byte_offset;
+    //! the position of the type in that word
+    uint32_t type_shift;
+    //! the byte offset of the QoreObject's private data pointer
+    uint32_t priv_offset;
+    //! the byte offset of the status (a 32-bit atomic int) in the private data
+    uint32_t status_offset;
+    //! the status of a deleted object
+    int32_t deleted_status;
+};
+
+//! Returns the layout of the fields that JIT code reads to test for a valid object, or nullptr if it is not known
+/** The type is a bitfield: its position is found by reading nodes of several known types, and the layout is given only
+    if exactly one position gives the type of each, so a change of the layout makes the JIT call the helper instead of
+    reading the wrong bits.
+*/
+const QoreJITObjectLayout* qore_jit_object_layout();
+
+//! The JIT fast test of QoreIROpcode::CheckCallTarget: qore_call_target_needs_no_check() with NaN-boxed values
+bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits);
+
+//! The AOT counterpart of qore_rt_call_target_needs_no_check(), with the call identified by its expression slot
+bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits);
+
+//! The JIT helper of QoreIROpcode::CheckCallTarget: qore_check_call_target() with the NaN-boxed call and target
+void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink);
+
+//! The AOT counterpart of qore_rt_check_call_target(), with the call identified by its expression slot
+void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits, ExceptionSink* xsink);
+
+//! Returns the current object, as a call through self takes it (QoreIROpcode::CheckCallTarget with no operand)
+QoreValue qore_rt_current_self_value();
+
+//! Returns the current object as a NaN-boxed value (no reference), which native code reads once per function
+uint64_t qore_rt_current_self_bits();
+
 //! Checks the value of a return statement against the declared return type as the AST interpreter checks it in the
 //! return statement, without changing the value (QoreIROpcode::CheckReturnValue)
 void qore_rt_check_return_value(const QoreTypeInfo* ti, uint64_t value, ExceptionSink* xsink);
@@ -403,6 +482,7 @@ uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 
 //! Run all cleanup actions from an array of pointers to NaN-boxed cleanup slots.
 void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink);
+void qore_rt_cleanup_release_slots(uint64_t** slots, const uint32_t* order, int32_t count, ExceptionSink* xsink);
 
 //! Release every active iterator recorded in an array of cleanup slots.
 void qore_rt_iterator_cleanup_allocas(void*** slots, int32_t count);

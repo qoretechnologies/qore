@@ -57,8 +57,8 @@
     for lexical semantics in ResolvedCallReferenceNode; only the current API is accepted, so older modules
     must be rebuilt
 */
-// Provisional branch value for lexical callback entry slots; final value is assigned at batch assembly.
-#define QORE_MODULE_API_MINOR 3
+// Module API 2.2 includes the lexical callback entry slots.
+#define QORE_MODULE_API_MINOR 2
 
 #define QORE_MODULE_COMPAT_API_MAJOR QORE_MODULE_API_MAJOR  //!< the major number of the earliest recommended Qore module API
 #define QORE_MODULE_COMPAT_API_MINOR QORE_MODULE_API_MINOR  //!< the minor number of the earliest recommended Qore module API

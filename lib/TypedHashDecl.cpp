@@ -261,6 +261,10 @@ int typed_hash_decl_private::parseInit() {
 
     {
         HashDeclTypeParamContextHelper hashdecl_type_param_context(this);
+        // the members are parsed in the namespace of the hashdecl and in no class context, as the members of a
+        // namespace are, also when the hashdecl is first used in a class's code (a closure in a member initializer
+        // keeps the class that it is parsed in; issue #5961)
+        QoreParseClassHelper qpch(nullptr, ns ? ns : qore_ns_private::get(*getRootNS()));
 
         // Initialize own members
         for (auto& i : members.member_list) {

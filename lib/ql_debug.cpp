@@ -38,6 +38,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreIRAnalysis.h"
@@ -15683,6 +15684,43 @@ static QoreValue f_dbg_async_io_release_held_timer_callbacks(const QoreListNode*
     return static_cast<int64>(AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(xsink));
 }
 
+//! Debug-only: sets the number of responses that an HTTP/2 or HTTP/3 client dispatches in one read pass; 0: the default
+static QoreValue f_dbg_http_client_drain_limit(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t limit = get_param_value(params, 0).getAsBigInt();
+    if (limit < 0 || limit > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_drain_limit(): invalid limit %lld",
+            (long long)limit);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().drain_limit.store(static_cast<int>(limit), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: holds the completed responses of HTTP/2 and HTTP/3 clients from now on (True), or not (False)
+/** While held, the responses accumulate; the read pass after the hold dispatches them all
+*/
+static QoreValue f_dbg_http_client_hold_outputs(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHttpClientDrainDebug::get().setHold(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until a read pass of a client found at least the given number of responses held
+/** @return False if the wait timed out
+*/
+static QoreValue f_dbg_http_client_wait_held_outputs(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t count = get_param_value(params, 0).getAsBigInt();
+    return QoreHttpClientDrainDebug::get().waitHeld(count < 0 ? 0 : static_cast<size_t>(count),
+        get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: the number of HTTP/2 and HTTP/3 client read passes that left responses without an immediate re-poll
+static QoreValue f_dbg_http_client_stranded_passes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(QoreHttpClientDrainDebug::get().stranded_passes.load(std::memory_order_relaxed));
+}
+
 //! Debug-only: the number of system events that matched no event loop registration in the process
 /** See QoreEventLoop::dbgUnmatchedKernelEvents(): a registration left in the kqueue or the epoll set wakes every poll
     at once
@@ -15715,6 +15753,45 @@ static QoreValue f_dbg_socket_wait_controller_op(const QoreListNode* params, Run
     }
     return my_socket_priv::getPriv(**s)->dbgWaitForControllerOp(
         static_cast<int>(get_param_value(params, 1).getAsBigInt()));
+}
+
+//! Debug-only: returns the number of onComplete() calls that the global async I/O controller has dispatched
+/** A test sees with it whether the completion of an operation has been dispatched at a given point, such as while
+    the operation's abort() runs, which no Qore code can see otherwise
+*/
+static QoreValue f_dbg_async_io_on_complete_dispatched(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgOnCompleteDispatched();
+}
+
+//! Debug-only: sets or clears the shutdown mark of an owner in the global async I/O controller's dispatcher
+/** As flushCallbacksByOwner() does around its wait; a test holds the mark with it to check what happens to the work
+    of an owner that is shutting down
+*/
+static QoreValue f_dbg_async_io_mark_owner_shutting_down(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* owner = get_param_value(params, 0).get<const QoreStringNode>();
+    bool mark = HARD_QORE_VALUE_BOOL(params, 1);
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ctrl->dbgSetOwnerShuttingDown(owner->c_str(), mark);
+    return QoreValue();
 }
 
 //! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
@@ -17576,6 +17653,202 @@ static QoreValue f_dbg_run_poll_state_tests(const QoreListNode* params, RuntimeC
     return make_unit_test_result(c, xsink);
 }
 
+//! issues #5917, #5933: self calls without a method, as the AOT runtime makes for calls that it dispatches by name
+/** The background operator holds the object of the starting code for a call of a normal method, which a call without
+    a method is unless its name resolves only to a static method (SelfFunctionCallNode::backgroundCallIsStatic()).
+    BGThreadParams asserted that only a copy() call has no method.  A qualified call without a method asserted that
+    it had one (SelfFunctionCallNode::evalImpl()); it now calls the method of the class that it names, which the class
+    of the object must be or inherit.
+*/
+static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* pgm = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    ON_BLOCK_EXIT([pgm] () {
+        ExceptionSink xs;
+        // waits for the threads that the test starts
+        pgm->waitForTerminationAndDeref(&xs);
+        xs.clear();
+    });
+    // the code is parsed as at the top level, with no return type of running code: StatementBlock::parseCheckReturn()
+    // reads the return type of the running code (getReturnTypeInfo()), here hash for run_debug_unit_tests(), and not
+    // the one of the code being parsed (parse_get_return_type_info()), so the blocks of the methods were refused
+    // (issue #5940)
+    const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
+    pgm->parse("%modern\n"
+        "class UtBgBase {\n"
+        "    public { static Queue q(); }\n"
+        "    m() { UtBgBase::q.push(\"UtBgBase::m\"); }\n"
+        "    static sm() { UtBgBase::q.push(\"UtBgBase::sm\"); }\n"
+        "}\n"
+        "class UtBgChild inherits UtBgBase {\n"
+        "    m() { UtBgBase::q.push(\"UtBgChild::m\"); }\n"
+        "}\n"
+        "class UtBgOther {\n"
+        "    m() {}\n"
+        "}\n"
+        "UtBgChild sub ut_make() { return new UtBgChild(); }\n"
+        "string sub ut_take() { return UtBgBase::q.get(10s); }\n",
+        "ut-self-call-without-method", &xsink, nullptr, 0);
+    saveReturnTypeInfo(old_return_type);
+    UT_ASSERT(c, !xsink, "the self call test program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        return;
+    }
+    const QoreClass* base = pgm->findClass("UtBgBase", &xsink);
+    const QoreClass* child = pgm->findClass("UtBgChild", &xsink);
+    const QoreClass* other = pgm->findClass("UtBgOther", &xsink);
+    UT_ASSERT(c, base && child && other && !xsink, "the classes of the self call test program are found");
+    if (!base || !child || !other || xsink) {
+        xsink.clear();
+        return;
+    }
+    ValueHolder obj_holder(pgm->callFunction("ut_make", nullptr, &xsink), &xsink);
+    UT_ASSERT(c, !xsink && obj_holder->getType() == NT_OBJECT, "the object of the self call test is made");
+    if (xsink || obj_holder->getType() != NT_OBJECT) {
+        xsink.clear();
+        return;
+    }
+    QoreObject* obj = obj_holder->get<QoreObject>();
+
+    // makes a self call without a method; a qualified name is resolved on the class of the call
+    auto make_call = [&xsink] (const char* name, const QoreClass* qc, bool is_copy = false) {
+        return ReferenceHolder<SelfFunctionCallNode>(new SelfFunctionCallNode(&loc_builtin, strdup(name), nullptr,
+            qc, qore_class_private::get(*qc), is_copy), &xsink);
+    };
+    // takes the record of the next call made by the test program
+    auto take = [&] () -> std::string {
+        ValueHolder v(pgm->callFunction("ut_take", nullptr, &xsink), &xsink);
+        if (xsink || v->getType() != NT_STRING) {
+            xsink.clear();
+            return std::string();
+        }
+        return v->get<const QoreStringNode>()->c_str();
+    };
+
+    // the calls that hold the object in a background thread
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("m", base);
+        UT_ASSERT(c, !n->backgroundCallIsStatic(obj), "a call of a normal method by name is not static");
+        UT_ASSERT(c, !n->backgroundCallIsStatic(nullptr),
+            "a call of a normal method by name is not static without an object");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("sm", base);
+        UT_ASSERT(c, n->backgroundCallIsStatic(obj), "a call of a static method by name is static");
+        UT_ASSERT(c, n->backgroundCallIsStatic(nullptr), "a call of a static method by name is static without an "
+            "object");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgBase::sm", base);
+        UT_ASSERT(c, n->backgroundCallIsStatic(obj), "a qualified call of a static method by name is static");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("no_such_method", base);
+        UT_ASSERT(c, !n->backgroundCallIsStatic(obj), "a call of an unknown method by name is not static");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("copy", base, true);
+        UT_ASSERT(c, !n->backgroundCallIsStatic(obj), "a copy() call is not static");
+        UT_ASSERT(c, !n->backgroundCallIsStatic(nullptr), "a copy() call is not static without an object");
+    }
+
+    {
+        ProgramThreadCountContextHelper tch(&xsink, pgm, true);
+        UT_ASSERT(c, !xsink, "the self call test program is entered");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        ObjectSubstitutionHelper osh(obj, qore_class_private::get(*child));
+
+        // background calls without a method: virtual by name, qualified (not virtual), and static by name
+        struct {
+            const char* name;
+            const QoreClass* qc;
+            const char* expected;
+        } bg_calls[] = {
+            {"m", child, "UtBgChild::m"},
+            {"UtBgBase::m", base, "UtBgBase::m"},
+            {"sm", base, "UtBgBase::sm"},
+        };
+        for (auto& bc : bg_calls) {
+            ReferenceHolder<SelfFunctionCallNode> n = make_call(bc.name, bc.qc);
+            ValueHolder tid(do_op_background(QoreValue(*n), &xsink), &xsink);
+            std::string desc = std::string("a background call of ") + bc.name + "() without a method";
+            UT_ASSERT(c, !xsink && tid->getType() == NT_INT, (desc + " starts a thread").c_str());
+            xsink.clear();
+            UT_ASSERT(c, take() == bc.expected, (desc + " calls " + bc.expected + "()").c_str());
+        }
+
+        // a qualified call without a method evaluated in the starting thread calls the method of the class that it
+        // names
+        {
+            ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgBase::m", base);
+            ValueHolder rv(n->eval(&xsink), &xsink);
+            UT_ASSERT(c, !xsink, "a qualified call without a method is evaluated");
+            xsink.clear();
+            UT_ASSERT(c, take() == "UtBgBase::m", "a qualified call without a method is not virtual");
+        }
+        // which the class of the object must be or inherit
+        {
+            ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgOther::m", other);
+            ValueHolder rv(n->eval(&xsink), &xsink);
+            QoreValue err = xsink.isException() ? xsink.getExceptionErr() : QoreValue();
+            UT_ASSERT(c, err.getType() == NT_STRING
+                && !strcmp(err.get<const QoreStringNode>()->c_str(), "METHOD-DOES-NOT-EXIST"),
+                "a qualified call of a class that the object does not inherit raises METHOD-DOES-NOT-EXIST");
+            xsink.clear();
+        }
+    }
+}
+
+// the helpers of AOT code compiled before issue #5933 (JITRuntime.cpp), with the arguments that such code passes
+extern "C" uint64_t qore_rt_background_self_call_aot(const char* method_name, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+extern "C" uint64_t qore_rt_background_self_call_aot_throwing(const char* method_name, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+
+//! issue #5933: the background self-call helper of code compiled by an older qcc raises an exception
+/** The helper became qore_rt_background_self_call_aot_v2(), which takes a class reference before the name of the
+    method; a standalone executable compiled by an older qcc and linked to libqore dynamically (which no runtime
+    identity check refuses) calls the old symbol with the old arguments, which must not be taken as the new ones
+*/
+static void ut_old_background_self_call_helper(UnitTestCounters& c) {
+    auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
+        if (!xsink.isException()) {
+            return false;
+        }
+        QoreValue err = xsink.getExceptionErr();
+        QoreValue desc = xsink.getExceptionDesc();
+        return err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "AOT-RUNTIME-ERROR")
+            && desc.getType() == NT_STRING && strstr(desc.get<const QoreStringNode>()->c_str(), "'m'")
+            && strstr(desc.get<const QoreStringNode>()->c_str(), "recompile the program");
+    };
+    {
+        ExceptionSink xsink;
+        uint64_t args[1] = {0};
+        qore_rt_background_self_call_aot("m", args, 1, &xsink);
+        UT_ASSERT(c, is_rebuild_error(xsink), "the old background self-call helper raises AOT-RUNTIME-ERROR");
+        xsink.clear();
+    }
+    {
+        ExceptionSink xsink;
+        bool thrown = false;
+        try {
+            qore_rt_background_self_call_aot_throwing("m", nullptr, 0, &xsink);
+        } catch (...) {
+            thrown = true;
+        }
+        UT_ASSERT(c, thrown && is_rebuild_error(xsink),
+            "the old throwing background self-call helper raises AOT-RUNTIME-ERROR and unwinds");
+        xsink.clear();
+    }
+}
+
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
@@ -17591,6 +17864,8 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_callback_caller_parse_options(c, rc.getProgram());
+    ut_self_call_without_method(c, rc.getProgram());
+    ut_old_background_self_call_helper(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
 #endif
@@ -18134,12 +18409,17 @@ struct ProgramTeardownHold {
     std::condition_variable cond;
     //! the Program to hold the teardown of; null if not armed; only compared, never dereferenced
     QoreProgram* pgm = nullptr;
-    //! the thread is waiting in the hook
+    //! the thread has reached the hook (it stays set when the thread continues)
     bool held = false;
     //! the thread may continue
     bool released = false;
     //! the thread has marked the Program and waits for the threads in it to leave
     bool final_wait = false;
+    //! a thread waits in the hook and has not woken yet; a new hold is not armed then, as arming it resets "released"
+    bool waiting = false;
+    //! the thread was released without being woken (a negative timeout of dbg_continue_program_teardown()); it
+    //! continues at the next call of that function, not at a spurious wakeup
+    bool no_wake = false;
 };
 
 ProgramTeardownHold& program_teardown_hold() {
@@ -18159,8 +18439,10 @@ void dbg_hold_program_teardown(QoreProgram* pgm, qore_program_private::DbgTeardo
             return;
         }
         h.held = true;
+        h.waiting = true;
         h.cond.notify_all();
-        h.cond.wait(l, [&h]() { return h.released; });
+        h.cond.wait(l, [&h]() { return h.released && !h.no_wake; });
+        h.waiting = false;
         return;
     }
     // the Program's lock is held: this point only reports that it was reached
@@ -18172,7 +18454,7 @@ void dbg_hold_program_teardown(QoreProgram* pgm, qore_program_private::DbgTeardo
 }
 
 //! arms a hold of the thread that tears down the given Program; see ProgramTeardownHold
-/** @throw DBG-ARGUMENT-ERROR a hold is already armed
+/** @throw DBG-ARGUMENT-ERROR a hold is already armed, or the thread of the previous hold has not woken yet
 */
 static QoreValue f_dbg_hold_program_teardown(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -18187,10 +18469,17 @@ static QoreValue f_dbg_hold_program_teardown(const QoreListNode* params, Runtime
         xsink->raiseException("DBG-ARGUMENT-ERROR", "a Program teardown hold is already armed");
         return QoreValue();
     }
+    // the thread of a hold whose dbg_continue_program_teardown() timed out before the thread woke still waits for
+    // "released", which a new hold would reset
+    if (h.waiting) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the teardown of the previous hold has not continued yet");
+        return QoreValue();
+    }
     h.pgm = *pgm;
     h.held = false;
     h.released = false;
     h.final_wait = false;
+    h.no_wake = false;
     qore_program_private::dbg_teardown_hook.store(dbg_hold_program_teardown);
     return QoreValue();
 }
@@ -18207,9 +18496,13 @@ static QoreValue f_dbg_wait_program_teardown_held(const QoreListNode* params, Ru
 //! lets the held teardown continue and waits until it waits for the threads in the Program to leave it
 /** The hold is disarmed in any case.
 
-    @return False if the teardown did not reach the wait within the timeout
+    A negative timeout lets the teardown continue without waking its thread and returns at once: the thread wakes at
+    the next notification (another call of this function); a test uses it for a thread that has not woken yet, which
+    a timeout can leave as well.
 
-    @throw DBG-ARGUMENT-ERROR no teardown is held
+    @return False if the teardown did not reach the wait within the timeout; True with a negative timeout
+
+    @throw DBG-ARGUMENT-ERROR no teardown is held (a thread that waits in the hold is woken all the same)
 */
 static QoreValue f_dbg_continue_program_teardown(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -18217,10 +18510,24 @@ static QoreValue f_dbg_continue_program_teardown(const QoreListNode* params, Run
     ProgramTeardownHold& h = program_teardown_hold();
     std::unique_lock<std::mutex> l(h.m);
     if (!h.pgm || !h.held) {
+        // an armed hold that no teardown has reached is disarmed, so that a teardown that reaches it later continues
+        if (h.pgm) {
+            h.pgm = nullptr;
+            h.released = true;
+        }
+        // and a thread of an earlier hold that was not woken (see above) is woken
+        h.no_wake = false;
+        h.cond.notify_all();
         xsink->raiseException("DBG-ARGUMENT-ERROR", "no Program teardown is held");
         return QoreValue();
     }
     h.released = true;
+    if (timeout_ms < 0) {
+        h.no_wake = true;
+        h.pgm = nullptr;
+        return true;
+    }
+    h.no_wake = false;
     h.cond.notify_all();
     bool rv = h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return h.final_wait; });
     // "released" stays set, so that a held thread that has not woken yet continues
@@ -18612,6 +18919,30 @@ static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig
     return QoreValue();
 }
 
+//! lets a held background compile that the end of the process abandons end before the process does (qore#5842)
+/** Without this, a compile held at the end of the process stays held, and the process ends with \c _exit().  With
+    \c "shutdown", the compile is let go when it is abandoned, and QoreJIT::shutdown() waits for it, so that it
+    releases the JIT; with \c "exit", it is let go at the end of the process, which waits for it and releases the JIT
+    then (QoreJIT::exitQuickly()).
+
+    @throw DBG-ARGUMENT-ERROR the point is neither \c "shutdown" nor \c "exit"
+*/
+static QoreValue f_dbg_finish_abandoned_bg_compile(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* where = get_param_value(params, 0).get<const QoreStringNode>();
+    QoreJIT::DbgFinishAbandoned w;
+    if (where && *where == "shutdown") {
+        w = QoreJIT::DbgFinishAbandoned::Shutdown;
+    } else if (where && *where == "exit") {
+        w = QoreJIT::DbgFinishAbandoned::Exit;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the point must be \"shutdown\" or \"exit\"");
+        return QoreValue();
+    }
+    QoreJIT::instance().dbgFinishAbandonedCompile(w);
+    return QoreValue();
+}
+
 //! waits until the background JIT compiler is stopped at the given point; returns False on timeout
 static QoreValue f_dbg_wait_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::BgCompileHoldPoint point;
@@ -18806,6 +19137,45 @@ static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, Runti
 //! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
+}
+
+//! holds the next batch JIT collection of the named root function after it has held a Program (qore#5874)
+static QoreValue f_dbg_hold_batch_collection(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    qore_dbg_hold_batch_collection(func ? func->c_str() : "");
+    return QoreValue();
+}
+
+//! waits until the armed batch collection is held; returns False on timeout
+static QoreValue f_dbg_wait_batch_collection_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_wait_batch_collection_held(get_param_value(params, 0).getAsBigInt());
+}
+
+//! waits until a Program's teardown waits for a batch collection's hold; returns False on timeout
+static QoreValue f_dbg_wait_teardown_compile_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_wait_teardown_compile_hold(get_param_value(params, 0).getAsBigInt());
+}
+
+//! counts the holds refused to the batch collections and effect analyses of the named root function (qore#5874)
+static QoreValue f_dbg_count_batch_collection_refusals(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    qore_dbg_count_batch_collection_refusals(func ? func->c_str() : "");
+    return QoreValue();
+}
+
+//! returns the number of holds refused since dbg_count_batch_collection_refusals()
+static QoreValue f_dbg_get_batch_collection_refusals(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_get_batch_collection_refusals();
+}
+
+//! lets the held batch collection continue; returns False if it did not continue before the timeout
+static QoreValue f_dbg_continue_batch_collection(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_continue_batch_collection(get_param_value(params, 0).getAsBigInt());
 }
 
 //! returns the number of hashes and lists copied in the current thread
@@ -19071,6 +19441,85 @@ static QoreValue f_dbg_register_user_module_from_source(const QoreListNode* para
     QoreStringNodeValueHelper src(get_param_value(params, 1));
     MM.registerUserModuleFromSource(name->c_str(), src->c_str(), getProgram(), xsink);
     return QoreValue();
+}
+
+//! returns a hash of module name -> sorted list of names for a dependency record map
+static QoreHashNode* dbg_dependency_record_hash(const md_map_t& m) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    for (const auto& i : m) {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), nullptr);
+        for (const std::string& n : i.second) {
+            l->push(new QoreStringNode(n), nullptr);
+        }
+        rv->setKeyValue(i.first.c_str(), l.release(), nullptr);
+    }
+    return rv.release();
+}
+
+//! Debug-only: returns the module manager's dependency records (#5953)
+/** @return a hash with the keys \c requires (user module -> the user modules it requires), \c dependents (user module
+    -> the user modules that require it) and \c binary_users (binary module -> the user modules that require it)
+*/
+static QoreValue f_dbg_get_module_dependency_records(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    md_map_t reqs, dependents, binary_users;
+    QMM.getDependencyRecords(reqs, dependents, binary_users);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("requires", dbg_dependency_record_hash(reqs), xsink);
+    rv->setKeyValue("dependents", dbg_dependency_record_hash(dependents), xsink);
+    rv->setKeyValue("binary_users", dbg_dependency_record_hash(binary_users), xsink);
+    return rv.release();
+}
+
+//! Debug-only: compiles a user module in this process as qcc does, to check the module manager's records after it
+/** @param mode \c "single" (a single-file module: compileModule()), \c "separated" (a directory module:
+    compileSeparatedModule()), \c "file" (one file of a directory module: compileSeparatedModuleFile()), \c "objects"
+    (a directory module from per-file objects: compileModuleFromObjects()) or \c "archive" (archiveModuleFromObjects())
+    @param path the module file or directory
+    @param output the output file
+    @param target the file compiled in \c "file" mode, the object files in \c "objects" and \c "archive" modes
+
+    @return the error, or NOTHING if the module was compiled
+*/
+static QoreValue f_dbg_aot_compile_module(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper mode(get_param_value(params, 0));
+    QoreStringNodeValueHelper path(get_param_value(params, 1));
+    QoreStringNodeValueHelper output(get_param_value(params, 2));
+    std::vector<std::string> targets;
+    if (const QoreListNode* l = get_param_value(params, 3).get<const QoreListNode>()) {
+        ConstListIterator li(l);
+        while (li.next()) {
+            QoreStringValueHelper str(li.getValue());
+            targets.emplace_back(str->c_str());
+        }
+    }
+    std::string error;
+    bool ok;
+    if (!strcmp(mode->c_str(), "single")) {
+        std::string src = QoreDir::get_file_content(path->c_str());
+        ok = QoreAOT::compileModule(src.c_str(), static_cast<int>(src.size()), path->c_str(), output->c_str(),
+            PO_DEFAULT, error);
+    } else if (!strcmp(mode->c_str(), "separated")) {
+        ok = QoreAOT::compileSeparatedModule(path->c_str(), output->c_str(), PO_DEFAULT, error);
+    } else if (!strcmp(mode->c_str(), "file")) {
+        if (targets.size() != 1) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_aot_compile_module(): \"file\" mode requires one target");
+            return QoreValue();
+        }
+        ok = QoreAOT::compileSeparatedModuleFile(path->c_str(), targets[0].c_str(), output->c_str(), PO_DEFAULT,
+            error);
+    } else if (!strcmp(mode->c_str(), "objects")) {
+        ok = QoreAOT::compileModuleFromObjects(path->c_str(), targets, output->c_str(), PO_DEFAULT, error);
+    } else if (!strcmp(mode->c_str(), "archive")) {
+        ok = QoreAOT::archiveModuleFromObjects(path->c_str(), targets, output->c_str(), PO_DEFAULT, error);
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_aot_compile_module(): unknown mode '%s'", mode->c_str());
+        return QoreValue();
+    }
+    if (ok) {
+        return QoreValue();
+    }
+    return new QoreStringNode(error);
 }
 
 //! returns the private data of a Counter argument, or raises an exception
@@ -20475,6 +20924,31 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
 }
 
 QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+std::atomic<int64_t> qore_dbg_h2_connection_window_updates[2] = {{0}, {0}};
+std::atomic<bool> qore_dbg_h2_default_connection_window{false};
+
+//! keeps (or no longer keeps) the RFC 9113 default connection window (65535) in the HTTP/2 sessions created from now on
+/** For tests that detect lost connection credit by watching the window shrink, which the larger window would hide
+
+    @param on True to keep the default window
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_http2_default_connection_window(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_h2_default_connection_window.exchange(HARD_QORE_VALUE_BOOL(params, 0));
+}
+
+//! returns the WINDOW_UPDATE frames for the connection (stream 0) that HTTP/2 sessions sent
+/** @return a hash with keys \c client and \c server: the frames sent by client and by server sessions
+*/
+static QoreValue f_dbg_http2_connection_window_updates(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("client", qore_dbg_h2_connection_window_updates[0].load(), xsink);
+    h->setKeyValue("server", qore_dbg_h2_connection_window_updates[1].load(), xsink);
+    return h.release();
+}
 
 std::atomic<int64_t> qore_dbg_quic_connect_buffered{0};
 
@@ -20568,10 +21042,15 @@ static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, Runtime
 }
 
 //! stops holding the staged response data of the stream held with dbg_quic_hold_stream_data()
+/** The held streams are resumed; their data is written with the session's next write, for example when a packet of
+    the peer is processed.
+*/
 static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     dbg_quic_hold_session.store(0, std::memory_order_release);
     dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    // a held stream is deferred until it is resumed: without this, its data stayed held after the release
+    QuicSession::dbgResumeHeldStreams();
     return QoreValue();
 }
 
@@ -21690,6 +22169,18 @@ void init_debug_functions(QoreNamespace& qns) {
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_release_held_timer_callbacks", f_dbg_async_io_release_held_timer_callbacks,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_http_client_drain_limit", f_dbg_http_client_drain_limit,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "limit");
+    qns.addBuiltinVariant("dbg_http_client_hold_outputs", f_dbg_http_client_hold_outputs,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_http_client_wait_held_outputs", f_dbg_http_client_wait_held_outputs,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_http_client_stranded_passes", f_dbg_http_client_stranded_passes,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_event_loop_unmatched_kernel_events", f_dbg_event_loop_unmatched_kernel_events,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_sync_release_counts", f_dbg_async_io_sync_release_counts,
@@ -21698,6 +22189,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolTypeInfo, 2,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_on_complete_dispatched", f_dbg_async_io_on_complete_dispatched,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_mark_owner_shutting_down", f_dbg_async_io_mark_owner_shutting_down,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "mark");
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
@@ -21817,6 +22313,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_finish_abandoned_bg_compile", f_dbg_finish_abandoned_bg_compile, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "where");
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "func");
@@ -21869,6 +22367,18 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_live_bigfloat_count", f_dbg_get_live_bigfloat_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
+    qns.addBuiltinVariant("dbg_wait_batch_collection_held", f_dbg_wait_batch_collection_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_teardown_compile_hold", f_dbg_wait_teardown_compile_hold, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_continue_batch_collection", f_dbg_continue_batch_collection, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_count_batch_collection_refusals", f_dbg_count_batch_collection_refusals,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
+    qns.addBuiltinVariant("dbg_get_batch_collection_refusals", f_dbg_get_batch_collection_refusals, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
@@ -21977,6 +22487,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_default_connection_window", f_dbg_http2_default_connection_window, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
+    qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
         "stream_id");
@@ -22030,6 +22544,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");
+    qns.addBuiltinVariant("dbg_get_module_dependency_records", f_dbg_get_module_dependency_records, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_compile_module", f_dbg_aot_compile_module, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK | QDOM_FILESYSTEM, stringOrNothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "mode",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo, QORE_PARAM_NO_ARG, "output", listOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "targets");
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");
     qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

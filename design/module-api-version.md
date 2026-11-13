@@ -49,7 +49,7 @@ Adding new exported functions, or new types that old modules do not use, needs n
   - `QoreModuleInfo::ns`, through which a module registers the namespace that module teardown purges, with
     `QoreNamespace::purge()` (module namespace teardown, merged with this bump).
 
-- 2.3 (Qore 3.0, #5831; provisional until batch assembly): appends native callback dispatch entries to `ResolvedCallReferenceNode`; modules built
+- 2.2 (Qore 3.0, #5831): appends native callback dispatch entries to `ResolvedCallReferenceNode`; modules built
   for the previous API are refused. See the lexical callback entries below.
 
 ## Guard
@@ -108,11 +108,11 @@ explicit source-bound invocation uses the appended `dispatchLexicalValue()` slot
 not need to change. Internal Qore references and closures place their existing execution bodies in the new
 ordinary slot, preserving one virtual dispatch and using their declaration-bound argument filters.
 
-The public vtable changes, so `QORE_MODULE_API_MINOR` is incremented in the same change. The provisional assigned version is 2.3. `qore_mod_api_list` continues to contain only the current API, and older
+The public vtable changes, so `QORE_MODULE_API_MINOR` is incremented in the same change. The assigned version is 2.2. `qore_mod_api_list` continues to contain only the current API, and older
 modules are refused by the existing API-mismatch path. Rebuild every external module against the new headers.
 No AOT serialization layout, opcode, or feature bit is added; the runtime identity changes.
 
-The same unpublished API 2.3 change adds an internal `AbstractCallReferenceNode::getSandboxBoundCallback()`
+The same unpublished API 2.2 change adds an internal `AbstractCallReferenceNode::getSandboxBoundCallback()`
 slot. Its default returns no edge; the runtime sandbox wrapper exposes its borrowed, immutable callback through
 an override. Cycle scanning therefore identifies wrappers without RTTI name comparisons on ordinary callbacks.
 Existing native subclasses inherit the default unchanged. This slot also applies safely to unresolved call

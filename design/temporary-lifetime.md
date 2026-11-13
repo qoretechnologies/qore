@@ -231,12 +231,20 @@ after the read, which destroys the value in the AST interpreter (qore#5712):
   `o.n + (o = NOTHING) + mark()` destroy the object before `mark()` runs.  A slice is not such a use: as the source of
   a functional operator, the AST interpreter iterates the sequence itself (`map $1, l[0..(l = ()).size()]`).
 
-A list or hash literal, the result of `AddAny` and the value that `remove`, `shift` or `pop` takes, passed to a call
-as its argument, are released when the call returns, as every argument is, when that release can be observed: when
+A list or hash literal, the result of `AddAny`, of `SubAny` (`hash - key`) and of a list or hash cast (`CastList`,
+`CastHash`), and the value that `remove`, `shift` or `pop` takes, passed to a call as its argument, are released when
+the call returns, as every argument is, when that release can be observed: when
 they hold a value that nothing else holds, such as an object that the expression created or the value of a local that
 the statement writes later (`qore_ir_find_observable_temp_call_args()`, used by the IR interpreter and by
 `QoreIRToLLVM::releaseConsumedCallArgs()`).  A literal of scalars, constants and reads of locals that keep their values
 is released at the end of the statement, which costs the call nothing.
+
+A plain read of a local whose only use takes values from it - `SubAny`, `CastList` and `CastHash` as well as the uses
+above - is released after that use as well (qore#5801), so `f(cast<list<T>>(l)) + (l = NOTHING)` and
+`f(h - "k") + (h = NOTHING)` destroy the objects before the rest of the statement, as the AST interpreter does.  The
+IR interpreter counts a pure check of a call argument before the call in its block (a `GuardNotNothing` or a
+`GuardType` with no result, as a cast's result has) as no use of its own, so the call can still take the argument's
+slot over or release it when it returns (`buildValueUseCounts()`).
 
 A method call reference to a temporary (`\make().getName()`) is created from the receiver that the lowering
 evaluated (`qore_rt_create_object_method_ref()`, `ParseObjectMethodReferenceNode::makeReference()`); the interpreter
@@ -332,6 +340,33 @@ operation through a runtime helper (an untyped division, modulo, addition, subtr
 division, a string concatenation) on the path where the helper returns NOTHING, which it returns when it raises: left
 pending, the exception let the code after it run, and the operator's `next()` then took it for its own.
 
+The value of map, select and foldl given to a call is released when the call returns (qore#5801), as the AST
+interpreter releases it:
+
+- the operator's source read from a local is released after the operator, as a temporary source is
+  (`FunctionalSourceRelease`): a plain read (`qore_ir_is_plain_local_read()`) holds a reference of the frame, while
+  the AST interpreter's operator borrows the variable's value; a read through a reference, one of a closure-bound or a
+  top-level local, and one of a local whose type admits a reference (an untyped local, which a caller's or the
+  function's reference can be stored in: `qore_ir_local_may_hold_reference()`) still live until the statement ends, so
+  the value of an operator over an untyped local is still released at the end of the statement in the compiled modes
+  (the lowering does not know yet whether the function creates a reference; this and the other remaining differences
+  are qore#5959); a local whose type holds no object (a scalar, or a list or hash of scalars) is not released early
+  either, as its release cannot be observed and would only cost instructions; a source of a list type, or of a list or
+  NOTHING, gives a new container or NOTHING, never the source's value; any other source, and every fold, gives the
+  operator's value a reference of its own (`RefSelf`) before the source is released, and the value's own slot then
+  gives its reference up, so that the new value is its only owner;
+- the iterator of map, select and foldl over an iterator is released at the operator's normal end
+  (`IteratorRelease`), as a fused pipeline's is, when the source is released after the operator
+  (`QoreIRLowering::functionalSourceReleased()`): it held the source; a source read through a reference keeps its
+  value, and the iterator, to the end of the statement (`ReferenceReadLifetime.qtest`);
+- the Phi of the operator's final block takes its accumulator over (the IR interpreter's
+  `interpreter_phi_takes_incoming`, native code's `consumable_phis`) when the Phi's block cannot reach any other use
+  of the accumulator without the accumulator being defined again: the loop's appends, and the exception cleanup's
+  release, which only an exception before the Phi runs; the IR interpreter also lets the accumulator Phi of a fold
+  take the result of an untyped addition or subtraction over, so that the previous accumulator is released for each
+  element, as the AST interpreter's fold releases it.  The reachability is computed without check points, as the
+  IR interpreter caches the result for every thread that runs the function.
+
 A hash map and a hash map-select over an iterator have the same exception cleanup as map, with the hash built so far
 as the partial result and the key and the value as the values the expressions gave; they had none, and an exception
 released their iterator after the handler (qore#5830).
@@ -357,8 +392,35 @@ iterator's `next()` raises releases the iterator and the source first and then t
 interpreter's functional iterator ends before the fold releases its value (`routeNext()`).  The accumulator's Phi of a
 fold over an iterator takes the first element over from the slot of its `IteratorNext` (the IR interpreter's
 `phi_takes_incoming`, native code's Phi fixup), so the first element is released when the accumulator is replaced, as
-in the AST interpreter, and not when the frame ends; a fold at the root of a fused pipeline keeps the first element
-in the slot of a `RefSelf` until the statement ends.  The releases of a functional operator's exception cleanup
+in the AST interpreter, and not when the frame ends.  A fold at the root of a fused pipeline gives its accumulator's
+Phi the first element (the value of the last stage) as it gives it the value of its expression: a `RefSelf` gave the
+first element a slot of its own, which kept it until the statement ended (qore#5883).  The IR interpreter's Phi takes
+the element over from its slot or takes a reference of its own to it.  In native code, the Phi that gives the
+accumulator its value (the first element or the value of the expression) has a slot of its own when the accumulator's
+Phi has one (`QoreIRToLLVM::owning_phis`): it takes the value of the expression over and takes a reference of its own
+to the first element, which the accumulator's Phi takes over in turn, so a fold costs no reference per element.  The
+accumulator's Phi of a pipeline with a select stage has itself as an incoming value, on the path of an element that
+the stage skips: in native code, the Phi's own value is not a use of it, and a Phi among its own incoming values has
+a slot of its own unless all its values are constants (any other value can be released in the loop: an iterator's
+element, the value of a call or of an operator, which the next execution of the instruction replaces in its slot, or a
+value read from a variable, which code in the loop can assign), which keeps its value on that edge, and no call
+consumes it; it had none, and borrowed the element that the next `IteratorNext` released, or the value that the next
+element's operator replaced.  A loop header's Phi that can hold such a value owns it the same way when it is not a Phi
+of temporaries.  The Phi that gives the accumulator its value releases nothing when it gets its next one, as the
+accumulator's Phi took its slot over (`QoreIRToLLVM::emptied_phi_slots`), and a Phi that takes a reference of its own
+to a value gives the value with the reference as its own, so that the code generator keeps one value in the loop.
+Since the accumulator's Phi owns its value, the `IteratorNext` of a fold releases the values of its map stages before
+a stage that can skip an element or stop the pipeline as it does for the other roots (`stage_values`): a value that a
+select stage skipped is released before the next element, as the AST interpreter releases it, and not when the
+statement ends.  A value read from a local of the function (not a top-level one) that no code in the loop assigns is
+not released: the local holds it, so its release cannot be observed, and the IR interpreter's read, which takes a
+reference of its own, keeps it when the next element's read gives the same value, where a release per element cost a
+reference and a release (a write through a reference or by a closure is not an assignment there: the AST interpreter
+keeps the value read until the next element).  The values of the map stages after the last stage that can skip an
+element or stop the pipeline, which the fold gets, are released when the pipeline ends (`fold_last_values`, flagged as
+`exception_cleanup_release`, so that the releases are not uses that keep the accumulator's Phi or a call from taking
+them over); they were released when the statement ended, after the code that used the fold's value (qore#5883).
+The releases of a functional operator's exception cleanup
 (`QoreIRInstruction::exception_cleanup_release`, set by `FunctionalLoopExceptionCleanup`) are not uses that keep a
 value from being taken over by a Phi or moved into a container (`qore_ir_is_exception_only_release()`, in the IR
 interpreter's use counts and native code's Phis of temporaries): counted, they cost a fold a reference and a release
@@ -422,5 +484,6 @@ released with the statement's temporaries, before the variable.
 worker in each execution mode, as an AOT program and from a compiled module, and compares the traces with the AST
 interpreter's (`temporary-lifetime-results.qi`).  `examples/test/ir/ReferenceReadLifetime.qtest` runs the reads of
 [Values read from variables](#values-read-from-variables) in every execution mode, on the IR tier and as a qcc
-executable. `examples/test/ir/temp-release-points/` runs the release points of reads of locals that the statement writes later
-and of the temporary arguments above (qore#5712).
+executable. `examples/test/ir/temp-release-points/` runs the release points of reads of locals that the statement
+writes later and of the temporary arguments above (qore#5712), and of the values of casts, hash - key, map, select and
+foldl given to a call (qore#5801).

@@ -468,6 +468,11 @@ public:
         return has_init_expr;
     }
 
+    //! Returns true if this constant has an explicit declared type
+    DLLLOCAL bool hasExplicitType() const {
+        return explicit_type;
+    }
+
     //! Returns true for qcc --stub constants that are declarations only.
     DLLLOCAL bool isExternalStub() const {
         return external_stub;

@@ -1678,6 +1678,7 @@ public:
         Reset,
         WatchResponseSend,
         Goaway,
+        Drain,
     };
 
     DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, Action action,
@@ -1765,7 +1766,8 @@ public:
 
         Http2SessionPtr h2 = qore_socket_object_get_h2_session(sock);
         if (!h2) {
-            if (action == Action::Cleanup || action == Action::Reset || action == Action::Goaway) {
+            if (action == Action::Cleanup || action == Action::Reset || action == Action::Goaway
+                    || action == Action::Drain) {
                 output = 0;
                 done = true;
                 return nullptr;
@@ -1866,6 +1868,11 @@ public:
             case Action::Cleanup:
                 h2->cleanupStream(stream_id);
                 output = 0;
+                // the end of the last stream of a draining connection: the connection's poll operation must run to
+                // close it (qore#5899)
+                if (h2->isDraining() && h2->isDrainComplete()) {
+                    wake_controller = true;
+                }
                 break;
 
             case Action::WatchResponseSend:
@@ -1875,6 +1882,12 @@ public:
 
             case Action::Goaway:
                 output = h2->isServer() ? h2->sendShutdownGoaway(xsink) : 0;
+                break;
+
+            case Action::Drain:
+                // the GOAWAY is written by the wake that follows: the connection's poll operation flushes the session
+                // and then sees whether the drain is complete
+                output = h2->isServer() ? h2->startDrain(xsink) : 0;
                 break;
 
             case Action::Reset:
@@ -2266,8 +2279,10 @@ private:
             case Action::Trailers:
                 return output == 0;
             case Action::Cleanup:
-                // a STOP_SENDING queued by the cleanup is only written when the I/O thread handles the session
-                return cleanup_queued_frame;
+                // a STOP_SENDING queued by the cleanup is only written when the I/O thread handles the session; while
+                // the server drains, the end of a stream can end the drain of its session, which the I/O thread
+                // closes when it handles it (qore#5899)
+                return cleanup_queued_frame || sock->isHttpDraining();
             case Action::WatchResponseSend:
             case Action::RegisterConnectQueue:
             case Action::DeregisterConnectQueue:
@@ -6000,7 +6015,8 @@ int QoreSocketObject::watchHttp2ResponseSend(int32_t stream_id, ExceptionSink* x
         "watchHttp2ResponseSend", xsink));
 }
 
-int QoreSocketObject::sendHttp2ShutdownGoaway(ExceptionSink* xsink) {
+// sends the GOAWAY of a stopping server (drain false) or starts a drain (drain true) on the I/O thread of the socket
+static int qore_socket_object_http2_shutdown(QoreSocketObject* s, bool drain, ExceptionSink* xsink) {
     // only the socket's I/O thread writes server session data (design/async-socket-io.md), so a caller on another
     // thread has the frame written there and waits for it
     bool on_io_thread = qore_on_async_io_thread();
@@ -6008,25 +6024,43 @@ int QoreSocketObject::sendHttp2ShutdownGoaway(ExceptionSink* xsink) {
         // the controller facade cannot be used here (it would deadlock or nest a poll wait), and this thread may not
         // own the socket: the frame is only submitted, and the connection's poll operation writes it, as it flushes
         // the session's pending data at the top of every cycle
-        Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+        Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
         if (!h2 || !h2->isServer()) {
             return 0;
         }
-        if (h2->submitShutdownGoaway(xsink)) {
+        if (drain ? h2->startDrain(xsink) : h2->submitShutdownGoaway(xsink)) {
             return -1;
         }
         if (!on_io_thread) {
-            qore_socket_object_wake_async_controller(this, xsink);
+            qore_socket_object_wake_async_controller(s, xsink);
             if (*xsink) {
                 return -1;
             }
         }
         return 0;
     }
-    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
-        new QoreSocketObjectHttp2EnqueuePollOperation(this,
-            QoreSocketObjectHttp2EnqueuePollOperation::Action::Goaway, 0),
-        "sendHttp2ShutdownGoaway", xsink));
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(s,
+        new QoreSocketObjectHttp2EnqueuePollOperation(s, drain
+            ? QoreSocketObjectHttp2EnqueuePollOperation::Action::Drain
+            : QoreSocketObjectHttp2EnqueuePollOperation::Action::Goaway, 0),
+        drain ? "startHttp2Drain" : "sendHttp2ShutdownGoaway", xsink));
+}
+
+int QoreSocketObject::sendHttp2ShutdownGoaway(ExceptionSink* xsink) {
+    return qore_socket_object_http2_shutdown(this, false, xsink);
+}
+
+int QoreSocketObject::startHttp2Drain(ExceptionSink* xsink) {
+    return qore_socket_object_http2_shutdown(this, true, xsink);
+}
+
+bool QoreSocketObject::isHttpDraining() const {
+    return priv->http_draining.load(std::memory_order_acquire);
+}
+
+bool QoreSocketObject::isHttp2DrainComplete() const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return h2 && h2->isDrainComplete();
 }
 
 std::vector<std::pair<int32_t, bool>> QoreSocketObject::takeHttp2ResponseSendResultsForAsyncPoll() {
@@ -6044,6 +6078,13 @@ void QoreSocketObject::cleanupHttp2StreamAsync(int32_t stream_id) {
         Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
         if (h2) {
             h2->cleanupStream(stream_id);
+            // the end of the last stream of a draining connection: its poll operation must run to close it; on the
+            // I/O thread, the cycle that runs this sees it (qore#5899)
+            if (h2->isDraining() && !qore_on_async_io_thread() && h2->isDrainComplete()) {
+                ExceptionSink wake_xsink;
+                qore_socket_object_wake_async_controller(this, &wake_xsink);
+                wake_xsink.clear();
+            }
         }
         return;
     }

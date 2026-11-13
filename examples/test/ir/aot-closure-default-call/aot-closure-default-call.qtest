@@ -21,8 +21,8 @@
     crashed at load.  AOTClosureDefaultCall.q has closures with such defaults in functions, nested closures, methods,
     member, static member, hashdecl member, constant and global variable initializers, a default argument and top-level
     code, calling functions, static methods and namespace functions declared before and after them and using constants,
-    a class and a hashdecl of the Program; it gives the output of the AST interpreter in every execution mode and
-    compiled with qcc.
+    a class and a hashdecl of the Program, and defaults that are constants of a typed list and of a hashdecl (#5918);
+    it gives the output of the AST interpreter in every execution mode and compiled with qcc.
 */
 class AOTClosureDefaultCallTest inherits QUnit::Test {
     public {
@@ -40,6 +40,8 @@ sc z=202
 m z=1011
 hd z=302
 const z=402
+list<int> [1, 2] hash<HD> {a: 7} 40
+f6 list<int> [1, 2] hash<HD> {a: 7}
 ";
 
         #! the optimization levels of the AOT compiles

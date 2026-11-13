@@ -45,6 +45,18 @@ static inline const AbstractQoreNode* check_call_ref(const AbstractQoreNode* op,
     return (ref.getType() == NT_FUNCREF || ref.getType() == NT_RUNTIME_CLOSURE) ? ref.getInternalNode() : nullptr;
 }
 
+//! Raises the exception that a method call raises for its receiver @a base before it evaluates its arguments, if any
+/** As QoreDotEvalOperatorNode::evalWithBase() dispatches the call: an object that has been deleted (also through a
+    weak reference), or a value whose pseudo-class has no method @a name; nothing for a hash whose member @a name is a
+    call reference.  The call is given by its method name and by what parse initialization resolved (@a qc,
+    @a method, @a variant, @a pseudo), so that the AOT runtime can make the check from the call's target as well
+    (issue #5784).
+
+    @return -1 if an exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_method_call_receiver(QoreValue base, const char* name, const QoreClass* qc,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool pseudo, ExceptionSink* xsink);
+
 class QoreDotEvalOperatorNode : public QoreOperatorNode {
 protected:
     static QoreString name;
@@ -142,6 +154,15 @@ public:
         The caller is responsible for managing the lifetime of @a base.
     */
     DLLLOCAL QoreValue evalWithBase(QoreValue base, ExceptionSink* xsink) const;
+
+    //! Raises the exception that evalWithBase() raises for @a base before it evaluates the arguments, if any
+    /** The compiled execution modes evaluate the arguments of a call before they dispatch it; they check the
+        receiver first when the arguments can have side effects, so that a call on an object that has been deleted
+        or on a value without the method evaluates no argument, as in the AST interpreter (issue #5784).
+
+        @return -1 if an exception was raised, 0 if not
+    */
+    DLLLOCAL int checkReceiver(QoreValue base, ExceptionSink* xsink) const;
 };
 
 //! Parse-time choice of invocation entry; ordinary dot calls keep their existing virtual dispatch.
