@@ -79,6 +79,18 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_
 typedef void (*qore_dbg_deref_marked_hook_t)(const char* class_name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook;
 
+//! called by qore_object_private::customDeref() when the dereference that marked the object as being destroyed has
+//! completed (RObject::derefDone()), before the deletion starts; called with no lock held; set by
+//! dbg_hold_deref_delete()
+typedef void (*qore_dbg_deref_delete_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_hook;
+
+//! called by qore_object_private::customDeref() when a dereference has released the last reference to the object
+//! and has no collection to decide, before it takes the object's lock to delete it or hand its deletion off; called
+//! with no lock held; set by dbg_hold_deref_last()
+typedef void (*qore_dbg_deref_last_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_deref_last_hook_t> qore_dbg_deref_last_hook;
+
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
 typedef void (*qore_dbg_deref_collect_hook_t)(const char* class_name);
@@ -117,6 +129,40 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure
 //! set by dbg_count_closure_var_collections()
 typedef void (*qore_dbg_closure_var_collect_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook;
+
+//! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
+//! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
+DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
+//! the accounting of the stream credit that the HTTP/2 and HTTP/3 clients defer until the application consumes the
+//! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited +
+//! settled (a byte is credited when it is consumed, or settled with its stream when the stream or its session ends
+//! before it is consumed); excess and orphaned count reports that credit nothing
+struct QoreDbgStreamCreditStats {
+    //! bytes whose stream credit was deferred when they were received
+    std::atomic<int64_t> deferred{0};
+    //! bytes whose deferred stream credit was granted when they were consumed
+    std::atomic<int64_t> credited{0};
+    //! bytes whose deferred stream credit was settled when their stream or session ended before they were consumed
+    std::atomic<int64_t> settled{0};
+    //! bytes reported as consumed beyond the stream's deferred credit (credited when received, or reported twice)
+    std::atomic<int64_t> excess{0};
+    //! bytes reported as consumed after their session was gone
+    std::atomic<int64_t> orphaned{0};
+};
+DLLLOCAL extern QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+//! the bytes held by the extended-CONNECT stream buffers of all QUIC sessions (QuicSession::connect_stream_data_),
+//! for dbg_quic_connect_buffered_bytes() (issue #5821)
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_connect_buffered;
+
+//! the WINDOW_UPDATE frames for the connection (stream 0) that HTTP/2 sessions sent: [0] client sessions, [1] server
+//! sessions; see dbg_http2_connection_window_updates()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_h2_connection_window_updates[2];
+//! true to keep the RFC 9113 default connection window (65535) in new HTTP/2 sessions, for tests that detect lost
+//! connection credit by watching the window shrink; see dbg_http2_default_connection_window()
+DLLLOCAL extern std::atomic<bool> qore_dbg_h2_default_connection_window;
+
+//! adds received bytes whose stream credit was deferred, and wakes dbg_http_stream_credit_wait_deferred()
+DLLLOCAL void qore_dbg_stream_credit_deferred(int64_t bytes);
 
 class AbstractHttpPollConnectionPriv;
 //! called by the HTTP/1 client poll operation when it is about to mark its connection closed (holding a reference
@@ -191,6 +237,28 @@ DLLLOCAL void qore_dbg_http_note_closed();
 //! called by HTTPClient::startPollSendRecv() right before it submits its request on a ready connection: waits until
 //! the Counter armed by dbg_http_submit_after_close() reaches zero (a connection was marked closed), then disarms it
 DLLLOCAL void qore_dbg_http_wait_submit_after_close();
+
+//! the points at which an HTTP client can be held by dbg_http_hold_at()
+enum class QoreDbgHttpHoldPoint : unsigned char {
+    //! HTTPClient::startPollSendRecv() has checked out its connection and is about to submit the request
+    Submit,
+    //! an HTTP/1 or HTTP/2 client connection's closeConnection() has invalidated it and is about to close it
+    CloseAfterInvalidate,
+};
+
+//! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
+DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point);
+
+//! records that an HTTP client connection's closeConnection() runs, for dbg_http_concurrent_closes(); destroying it
+//! records the end of the close
+class QoreDbgHttpCloseScope {
+public:
+    DLLLOCAL QoreDbgHttpCloseScope(const void* conn);
+    DLLLOCAL ~QoreDbgHttpCloseScope();
+
+private:
+    const void* conn;
+};
 
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, holding a reference to
 //! it and no lock: once after the connection has been marked closed and its waiters woken, before the close hook

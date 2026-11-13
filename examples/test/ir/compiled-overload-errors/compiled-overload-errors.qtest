@@ -30,6 +30,8 @@
       arguments converted for the variant that did not match
     - M4: a named call whose variant is resolved at run time binds its arguments by name to each candidate variant
       (functions; methods of objects, self calls and static methods: named-runtime-methods)
+    - #5838: a call typed against a parent class trusts its return type, so a child class variant that it can select
+      must return a compatible type, which the parser enforces: the output is the same in every mode
 
     The scripts next to the test run in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
     their output must be that of the AST interpreter, which the test runs first.  The output of the AST interpreter
@@ -39,7 +41,8 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
     public {
         #! the scripts
         const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins",
-            "assigned", "named", "named-runtime", "named-runtime-methods", "access-control", "or-nothing-casts");
+            "assigned", "named", "named-runtime", "named-runtime-methods", "access-control", "or-nothing-casts",
+            "override-returns");
     }
 
     private {

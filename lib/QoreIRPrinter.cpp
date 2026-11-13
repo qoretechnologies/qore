@@ -81,6 +81,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::CheckRangeBound: return "check.range.bound";
         case QoreIROpcode::ListSelectorStep: return "list.selector.step";
         case QoreIROpcode::IteratorCreateSelectors: return "iterator.create.selectors";
+        case QoreIROpcode::IteratorCreateSource: return "iterator.create.source";
         case QoreIROpcode::SelectorIteratorPending: return "selector.iterator.pending";
         case QoreIROpcode::SelectorIteratorFeed: return "selector.iterator.feed";
         case QoreIROpcode::ExceptionSuspend: return "exception.suspend";
@@ -433,6 +434,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::DiscardTempsKeep: return "discard.temps.keep";
         case QoreIROpcode::UnwindTemps: return "unwind.temps";
         case QoreIROpcode::CheckReturnValue: return "check.return";
+        case QoreIROpcode::CheckCallTarget: return "check.call.target";
         case QoreIROpcode::IteratorRelease: return "iterator.release";
         case QoreIROpcode::ReleaseOwnedTemp: return "release.owned.temp";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
@@ -845,7 +847,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorCreate
                     || inst->opcode == QoreIROpcode::IteratorCreateIterate
-                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
+                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors
+                    || inst->opcode == QoreIROpcode::IteratorCreateSource) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterable.id;
@@ -871,6 +874,12 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                     if (iter->done_target) {
                         out << " done " << iter->done_target->name;
+                    }
+                    if (!iter->release_values.empty()) {
+                        out << " release";
+                        for (const QoreIRValue& rv : iter->release_values) {
+                            out << " %" << rv.id;
+                        }
                     }
                 }
             } else if (inst->opcode == QoreIROpcode::RefForeachInit) {

@@ -401,9 +401,7 @@ typedef vector_map_t<std::string, QoreValue> dmap_t;
 //typedef std::map<std::string, QoreValue> dmap_t;
 
 // map for pushed parse options
-//! the parse options saved by %push-parse-options: the options in effect and the suspended ones (see
-//! qore_program_private_base::suspended_options)
-typedef vector_map_t<const char*, std::pair<QoreParseOptions, QoreParseOptions>> ppo_t;
+typedef vector_map_t<const char*, QoreParseOptions> ppo_t;
 //typedef std::map<const char*, QoreParseOptions, ltstr> ppo_t;
 
 class AbstractQoreZoneInfo;
@@ -433,6 +431,26 @@ struct pgmloc_vec_t : public std::vector<QoreProgramLocation*> {
 };
 
 class qore_program_private;
+
+#ifdef DEBUG
+//! test hook: called with the Program's lock held when its teardown waits for a batch JIT compile's hold (qore#5874)
+DLLLOCAL void qore_program_dbg_teardown_waits_for_compile_hold();
+//! test hook: holds the next batch collection or effect analysis of the named root function after it has held a
+//! Program other than the root function's (qore#5874); "collection" below means either
+DLLLOCAL void qore_dbg_hold_batch_collection(const char* func);
+//! test hook: waits until the armed batch collection is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_batch_collection_held(int64 timeout_ms);
+//! test hook: waits until a Program's teardown waits for a batch collection's hold; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_teardown_compile_hold(int64 timeout_ms);
+//! test hook: lets the held batch collection continue; returns false if it did not continue before the timeout
+DLLLOCAL bool qore_dbg_continue_batch_collection(int64 timeout_ms);
+//! test hook: counts the holds refused to the collections of the named root function until the count is read
+DLLLOCAL void qore_dbg_count_batch_collection_refusals(const char* func);
+//! test hook: returns the number of holds refused since qore_dbg_count_batch_collection_refusals() and disarms it
+DLLLOCAL int64 qore_dbg_get_batch_collection_refusals();
+//! test hook: records a hold refused to the collection of \a root (a function name with its unique suffix)
+DLLLOCAL void qore_dbg_batch_collection_refused(const std::string& root);
+#endif
 
 class qore_program_private_base {
     friend class QoreProgramAccessHelper;
@@ -505,6 +523,8 @@ public:
     */
     ptid_map_t deferred_derefs;
     unsigned thread_waiting = 0; // number of threads waiting on all threads to terminate or parsing to complete
+    //! batch JIT compiles that read the Program's code (see tryHoldForCompile()); protected by plock
+    unsigned compile_holds = 0;
     unsigned parse_count = 0;    // recursive parse count
     // thread with the parse lock; atomic because parsingLocked() reads it without plock,
     // while lockParsing()/unlockParsing() write it under plock
@@ -595,6 +615,16 @@ public:
 
     // weak reference dependency counter, when this hits zero, the object is deleted
     QoreReferenceCounter dc;
+    //! protects the list of the user variants of the Program's code (user_variants), which the Program marks when its
+    //! deletion starts (see markUserVariantsDeleted())
+    std::mutex user_variant_lock;
+    //! the first registered variant, linked through UserVariantBase::uv_next; protected by user_variant_lock
+    /** An intrusive list, so that registering and unregistering a variant allocate nothing and cannot fail
+    */
+    const UserVariantBase* user_variants = nullptr;
+    //! true once the deletion of the Program has started (markUserVariantsDeleted()); a variant registered later is
+    //! marked when it registers; protected by user_variant_lock
+    bool user_variants_deleted = false;
     ExceptionSink* parseSink = nullptr,
         * warnSink = nullptr,
         * pendingParseSink = nullptr;
@@ -609,6 +639,16 @@ public:
 
     // top level statements
     TopLevelStatementBlock sb;
+    //! AOT checks every source body and initializer, including code that fragment emission does not lower.
+    QoreNativeParseInfo native_parse_info;
+    QoreNativeParseInfo committed_native_parse_info;
+
+    DLLLOCAL void recordNativeParseInfo(const QoreNativeParseInfo& info) {
+        // Debugger expressions have their own block; declaration-only stubs generate no executable code.
+        if (!expression_mode && !parsing_stub_declarations) {
+            native_parse_info.merge(info);
+        }
+    }
 
     // bit field flags
     // written only by the thread that holds the parse lock, or before the Program can be reached by other threads;
@@ -914,6 +954,17 @@ public:
         the functionality the module's code uses, as parsing the module's source does (see qore_aot_module_init_v3())
     */
     QoreParseOptions aot_used_dom;
+    //! the functional domains that a user module declares in its module header (\c domains), which its Program does
+    //! not inherit from the Program loading it when the module is library code (see setModuleOwnDomains())
+    int64 module_own_dom = QDOM_DEFAULT;
+    //! the domains of \c module_own_dom that apply, as the module is library code (see setModuleOwnDomains()): the
+    //! module's own code may use the functionality of these domains for any caller, also when a call is resolved at
+    //! run time (see qore_relieve_module_declared_domains())
+    int64 module_trusted_dom = QDOM_DEFAULT;
+    //! the restrictions that a user module header adds to the module's Program while its header is parsed
+    //! (MOD_HEADER_PO), which do not apply to the functional domains declared on user code (see
+    //! qore_program_private::parseDeniedDomains())
+    int64 mod_header_dom = QDOM_DEFAULT;
 
     //! the restrictions that an AOT module Program inherited from the Program that loaded it
     /** source modules are parsed with these restrictions; AOT module code runs with them (see
@@ -1029,6 +1080,21 @@ public:
 
     std::vector<source_parse_type_import_t> source_parse_type_imports;
 
+    //! a constant of another source file whose value the parse of this source folded (qore#5798)
+    /** the value and declaration hashes are computed when the symbol index is written, from the entry, which the
+        Program owns: they are then exactly the hashes that the provider publishes for the constant
+    */
+    struct source_parse_constant_import_t {
+        std::string source_file;
+        std::string qore_path;
+        const ConstantEntry* entry = nullptr;
+        bool class_constant = false;
+    };
+
+    std::vector<source_parse_constant_import_t> source_parse_constant_imports;
+    //! the (entry, consuming source file) pairs already recorded
+    std::set<std::pair<const ConstantEntry*, std::string>> source_parse_constant_import_keys;
+
     enum class source_parse_call_import_kind_t {
         Function,
         Method,
@@ -1045,11 +1111,6 @@ public:
 
     // pushed parse option map
     ppo_t ppo;
-    //! compatibility options that were set but are suspended while %modern is in effect (issue #5682)
-    /** They take effect again when %modern is turned off (ex: %old-style); see applyParseOptionImplications().  The
-        state of the Program, not of a statement: it is saved and restored with the options by %push-parse-options
-    */
-    QoreParseOptions suspended_options;
 
     // thread initialization user code
     ResolvedCallReferenceNode* thr_init = nullptr;
@@ -1172,7 +1233,7 @@ public:
     }
 
     //! The compatibility options that change the meaning of code; they cannot be set while %modern is in effect
-    /** %modern suspends them when it takes effect (applyParseOptionImplications()); see issue #5682
+    /** and %modern cannot be set while one of them is in effect (getModernConflict()); see issue #5682
     */
     DLLLOCAL static QoreParseOptions modernIncompatibleOptions() {
         return QoreParseOptions(PO_BROKEN_NARROWED_TYPES | PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_PARSING
@@ -1186,17 +1247,29 @@ public:
     //! Appends the parse directives of the given options to the string, separated by ", "
     DLLLOCAL static void describeParseOptions(const QoreParseOptions& po, QoreString& str);
 
+    //! Appends the description of setting the options \a po in a Program with the options \a current that %modern
+    //! does not allow (\a conflict, from getModernConflict()) with the verb ("set" or "used") (issue #5682)
+    DLLLOCAL static void describeModernSetConflict(const QoreParseOptions& current, const QoreParseOptions& po,
+            const QoreParseOptions& conflict, const char* verb, QoreString& desc);
+
+    //! Appends the description of a source file that is parsed in %modern mode by its extension while options that
+    //! %modern does not allow (\a conflict) are in effect (issue #5682)
+    DLLLOCAL static void describeModernSourceDefaultConflict(const char* filename, const QoreParseOptions& conflict,
+            QoreString& desc);
+
     //! Returns the options of the change that %modern does not allow with the given parse options, if any
     /** While %modern is in effect, a compatibility option that changes the meaning of code cannot be set
-        (\a set true), and an option that %modern implies cannot be disabled (\a set false) while %modern stays in
-        effect; disabling one of %modern's own options (%old-style, %loose-args, ...) turns %modern off, which is
-        allowed (issue #5682)
+        (\a set true), nor can %modern be set while such an option is in effect (the option is returned), and an
+        option that %modern implies cannot be disabled (\a set false) while %modern stays in effect; disabling one of
+        %modern's own options (%old-style, %loose-args, ...) turns %modern off, which is allowed (issue #5682)
     */
     DLLLOCAL static QoreParseOptions getModernConflict(const QoreParseOptions& current, const QoreParseOptions& po,
             bool set) {
         if (set) {
-            // also when the options set make up %modern themselves (ex: PO_MODERN | PO_BROKEN_RANGE)
-            return isModern(current | po) ? po & modernIncompatibleOptions() : QoreParseOptions();
+            // also when the options set make up %modern themselves (ex: PO_MODERN | PO_BROKEN_RANGE), and when they
+            // set %modern while such an option is in effect: %modern cannot be set after them (issue #5682)
+            QoreParseOptions all = current | po;
+            return isModern(all) ? all & modernIncompatibleOptions() : QoreParseOptions();
         }
         if (!isModern(current)) {
             return QoreParseOptions();
@@ -1222,24 +1295,17 @@ public:
         @return -1 if the options are not allowed, with the exception raised, 0 if they are
     */
     DLLLOCAL static int checkNewProgramModernOptions(const QoreProgram* parent, const QoreParseOptions& po,
-            ExceptionSink* xsink);
+            ExceptionSink* xsink, const char* what = "Program::constructor()");
 
     // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
-    /** %modern implies further options and suspends the compatibility options that change the meaning of code
-        (issue #5682): when a Program takes %modern on (a %modern directive, a file parsed in %modern mode by its
-        extension, -M, PO_MODERN given by the API or inherited by a child Program), they are kept aside
-        (suspended_options) and take effect again when %modern is turned off (ex: %old-style), so an
-        option given for legacy code (ex: on the command line) is not lost when the code opts out of %modern; setting
-        them while %modern is in effect is refused (getModernConflict())
+    /** %modern implies further options; the compatibility options that change the meaning of code cannot be in
+        effect with it: every path that sets %modern or such an option refuses the combination (getModernConflict(),
+        applyModernSourceDefault()); see issue #5682
     */
     DLLLOCAL void applyParseOptionImplications() {
         if (isModern(pwo.parse_options)) {
+            assert(!(pwo.parse_options & modernIncompatibleOptions()));
             pwo.parse_options |= modernImpliedOptions();
-            suspended_options |= pwo.parse_options & modernIncompatibleOptions();
-            pwo.parse_options &= ~modernIncompatibleOptions();
-        } else if (suspended_options) {
-            pwo.parse_options |= suspended_options;
-            suspended_options = QoreParseOptions();
         }
     }
 
@@ -1346,7 +1412,6 @@ public:
 
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options = po;
-        suspended_options = QoreParseOptions();
         applyParseOptionImplications();
         syncExecModeWithParseOptions();
     }
@@ -1470,6 +1535,9 @@ protected:
     DLLLOCAL void newProgram();
 
     DLLLOCAL void setDefines();
+
+    //! see setModuleOwnDomains()
+    DLLLOCAL int64 setModuleOwnDomainsIntern(int64 dom, bool apply);
 };
 
 class PreParseHelper {
@@ -1599,6 +1667,14 @@ public:
     */
     bool library_module = false;
 
+    //! Returns the block of an AOT closure at the given location, which the debugger's events of the debug IR of the
+    //! closure are given with, as the entry block of an AOT function (#5795)
+    /** Made and registered once per location, and owned by the Program, as the closure functions of AOT code are made
+        again when their IR is read again; locks plock.  The closures of AOT code have no location (their signature
+        has the Program's location with no line), so that they share one block, and one statement ID
+    */
+    DLLLOCAL StatementBlock* getAOTClosureDebugBlock(const QoreProgramLocation* loc);
+
     //! Returns true if a debugger is currently attached to this program
     DLLLOCAL bool hasDebuggerAttached() const {
         return dpgm.load(std::memory_order_relaxed) != nullptr;
@@ -1639,6 +1715,24 @@ public:
     DLLLOCAL ~qore_program_private();
 
     DLLLOCAL void registerProgram();
+
+    //! Registers a user variant of the Program's code; see UserVariantBase::setProgram()
+    DLLLOCAL void registerUserVariant(const UserVariantBase* v);
+
+    //! Unregisters a user variant of the Program's code when it is destroyed or moved to another Program
+    DLLLOCAL void unregisterUserVariant(const UserVariantBase* v);
+
+#ifdef DEBUG
+    //! For tests: the number of Program objects that exist (created and not yet destroyed)
+    DLLLOCAL static size_t dbgGetLiveProgramCount();
+#endif
+
+    //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::pgm_deleted)
+    /** A variant can outlive its Program (a closure or a call reference stored in another Program, for example); the
+        fast paths that evaluate its code without entering the Program (the native leaf of a closure) check the mark,
+        so that the call path refuses the call with PROGRAM-ERROR, as for the AST interpreter (qore#5822)
+    */
+    DLLLOCAL void markUserVariantsDeleted();
 
     DLLLOCAL void depRef() {
         printd(QPP_DBG_LVL, "qore_program_private::depRef() this: %p pgm: %p %d->%d\n", this, pgm,
@@ -2240,10 +2334,48 @@ public:
         ptid_map_t::iterator i = tidmap.find(tid);
         unsigned adj = (i != tidmap.end() ? i->second : 0);
 
-        while ((thread_count - adj) || parse_count) {
+        // a batch JIT compile that reads the Program's code holds it as well (see tryHoldForCompile())
+        while ((thread_count - adj) || parse_count || compile_holds) {
             ++thread_waiting;
+#ifdef DEBUG
+            if (compile_holds) {
+                qore_program_dbg_teardown_waits_for_compile_hold();
+            }
+#endif
             pcond.wait(plock);
             --thread_waiting;
+        }
+    }
+
+    //! Keeps the Program's teardown from freeing its code while a batch JIT compile or effect analysis reads it
+    /** A batch compile of a function collects the code of the functions that it calls (collectBatchCallees()), and
+        the IR interpreter's effect analysis walks the same code (refineInterpreterEffectSummary()), without running it
+        (qore#5874); see QoreProgramCodeHolds.  The hold makes the teardown wait (waitForAllThreadsToTerminateIntern())
+        until the batch is queued or the analysis is done; the teardown then drains or detaches a queued batch
+        (QoreJIT::waitForBgCompileQueue()).
+        Unlike entering the Program, the hold is not visible to its code: it is not a thread of the Program (no thread
+        map entry, thread count or activity event), so neither the Program's threads nor its debugger see it.  A thread
+        must therefore never start the teardown of a Program that it holds: unlike its own thread count, its hold is not
+        discounted, and the teardown would wait for itself (a holder runs no Qore code while it holds).
+
+        @return true if the hold was taken, false if its teardown has marked the Program (ptid): its code is not read
+        then; until then, the teardown waits for a hold taken (its first wait and the cleanup callback come before)
+    */
+    DLLLOCAL bool tryHoldForCompile() {
+        AutoLocker al(plock);
+        if (ptid) {
+            return false;
+        }
+        ++compile_holds;
+        return true;
+    }
+
+    //! Releases a hold taken with tryHoldForCompile()
+    DLLLOCAL void releaseCompileHold() {
+        AutoLocker al(plock);
+        assert(compile_holds);
+        if (!--compile_holds && thread_waiting) {
+            pcond.broadcast();
         }
     }
 
@@ -2876,14 +3008,29 @@ public:
 
     //! Auto-enables %modern for a source file unless its extension is exactly '.q' (legacy by design) or the
     //! QORE_OLD_STYLE_DEFAULT environment variable disables the default globally; see should_auto_enable_modern()
-    DLLLOCAL void applyModernSourceDefault(const char* filename) {
-        if (should_auto_enable_modern(filename)) {
-            pwo.parse_options |= PO_MODERN;
-            applyParseOptionImplications();
-            syncExecModeWithParseOptions();
-            pgm->setWarningMask(QP_WARN_ALL);
+    /** @return -1 if %modern cannot be set because a compatibility option that it does not allow is in effect, with a
+        \c PARSE-OPTION-ERROR exception raised (issue #5682), 0 if not
+    */
+    DLLLOCAL int applyModernSourceDefault(const char* filename, ExceptionSink* xsink) {
+        if (!should_auto_enable_modern(filename)) {
+            return 0;
         }
+        if (checkModernSourceDefault(pwo.parse_options, filename, xsink)) {
+            return -1;
+        }
+        pwo.parse_options |= PO_MODERN;
+        applyParseOptionImplications();
+        syncExecModeWithParseOptions();
+        pgm->setWarningMask(QP_WARN_ALL);
+        return 0;
     }
+
+    //! Raises a \c PARSE-OPTION-ERROR exception if a source file that is parsed in %modern mode by its extension has
+    //! a compatibility option that %modern does not allow in effect (issue #5682)
+    /** @return -1 if the exception was raised, 0 if not
+    */
+    DLLLOCAL static int checkModernSourceDefault(const QoreParseOptions& current, const char* filename,
+            ExceptionSink* xsink);
 
     DLLLOCAL void parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
             bool first_except_only = false) {
@@ -2913,7 +3060,9 @@ public:
 
         // the Program's parse state is changed with the parse lock held, which pch holds
         only_first_except = first_except_only;
-        applyModernSourceDefault(filename);
+        if (applyModernSourceDefault(filename, xsink)) {
+            return;
+        }
         setScriptPath(filename);
 
         parse(fp, filename, xsink, wS, wm);
@@ -3190,8 +3339,6 @@ public:
 
     DLLLOCAL void disableParseOptionsIntern(const QoreParseOptions& po) {
         pwo.parse_options &= ~po;
-        // a suspended option that is disabled does not take effect again
-        suspended_options &= ~po;
         applyParseOptionImplications();
         syncExecModeWithParseOptions();
     }
@@ -3250,7 +3397,7 @@ public:
         }
 
         // the options given must be consistent: %modern with no compatibility option that changes the meaning of code
-        if (checkModernConflict(po, po, true, "Program::replaceParseOptions()", xsink)) {
+        if (checkModernConflict(QoreParseOptions(), po, true, "Program::replaceParseOptions()", xsink)) {
             return -1;
         }
         //printd(5, "qore_program_private::replaceParseOptions() this: %p pgm: %p replacing po: %lld with po: %lld\n", this, pgm, pwo.parse_options, po);
@@ -3433,6 +3580,26 @@ public:
         return source_parse_type_imports;
     }
 
+    DLLLOCAL void recordSourceParseConstantImport(const QoreProgramLocation* loc, const char* qore_path,
+            const ConstantEntry* entry, bool class_constant) {
+        if (!loc || !qore_path || !*qore_path || !entry) {
+            return;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return;
+        }
+        // one record per constant and consuming source file
+        if (!source_parse_constant_import_keys.insert({entry, file}).second) {
+            return;
+        }
+        source_parse_constant_imports.push_back({file, qore_path, entry, class_constant});
+    }
+
+    DLLLOCAL const std::vector<source_parse_constant_import_t>& getSourceParseConstantImportRecords() const {
+        return source_parse_constant_imports;
+    }
+
     DLLLOCAL bool buildSourceParseFunctionImportRecord(const QoreProgramLocation* loc, const char* qore_path,
             source_parse_call_import_kind_t kind, const char* provider_source_file,
             source_parse_function_import_t& rec) {
@@ -3591,7 +3758,7 @@ public:
         ppo_t::iterator i = ppo.lower_bound(pf);
         if (i != ppo.end() && !strcmp(pf, i->first))
             return;
-        ppo.insert(i, ppo_t::value_type(pf, std::make_pair(pwo.parse_options, suspended_options)));
+        ppo.insert(i, ppo_t::value_type(pf, pwo.parse_options));
         //printd(5, "qore_program_private::pushParseOptions() this: %p %p '%s' saving %lld\n", this, pf, pf, pwo.parse_options);
     }
 
@@ -3599,8 +3766,7 @@ public:
         ppo_t::iterator i = ppo.find(pf);
         if (i != ppo.end()) {
             //printd(5, "qore_program_private::restoreParseOptions() this: %p %p '%s' restoring %lld\n", this, pf, pf, pwo.parse_options);
-            pwo.parse_options = i->second.first;
-            suspended_options = i->second.second;
+            pwo.parse_options = i->second;
             ppo.erase(i);
             // the options restored may not support an inherited execution mode that the ones of the file did
             syncExecModeWithParseOptions();
@@ -3731,7 +3897,7 @@ public:
         i->second->clearTZ();
     }
 
-    DLLLOCAL void addStatement(AbstractStatement* s);
+    DLLLOCAL void addStatement(AbstractStatement* s, const QoreNativeParseInfo& info = {});
 
     DLLLOCAL q_exp_t createExpression(const QoreStringNode& source, const QoreStringNode& label,
             ExceptionSink* xsink) {
@@ -4182,8 +4348,9 @@ public:
         return pgm.priv->constructed;
     }
 
-    DLLLOCAL static void addStatement(QoreProgram& pgm, AbstractStatement* s) {
-        pgm.priv->addStatement(s);
+    DLLLOCAL static void addStatement(QoreProgram& pgm, AbstractStatement* s,
+            const QoreNativeParseInfo& native_parse_info = {}) {
+        pgm.priv->addStatement(s, native_parse_info);
     }
 
     DLLLOCAL static const AbstractQoreZoneInfo* currentTZIntern(QoreProgram& pgm) {
@@ -4376,6 +4543,16 @@ public:
         return pgm->priv->getSourceParseTypeImportRecords();
     }
 
+    DLLLOCAL static void recordSourceParseConstantImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path, const ConstantEntry* entry, bool class_constant) {
+        pgm->priv->recordSourceParseConstantImport(loc, qore_path, entry, class_constant);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_constant_import_t>& getSourceParseConstantImportRecords(
+            QoreProgram* pgm) {
+        return pgm->priv->getSourceParseConstantImportRecords();
+    }
+
     DLLLOCAL static void recordSourceParseFunctionImport(QoreProgram* pgm, const QoreProgramLocation* loc,
             const char* qore_path, const char* provider_source_file = nullptr) {
         pgm->priv->recordSourceParseFunctionImport(loc, qore_path, provider_source_file);
@@ -4528,6 +4705,47 @@ public:
         pgm.priv->aot_inherited_po = po;
     }
 
+    //! Records the functional domains that a user module declares in its module header (\c domains)
+    /** If \a apply is true (the module is library code: see QoreModuleManager::isTrustedModulePath()), the Program no
+        longer has the restrictions of these domains, which it inherited from the Program loading it, nor their parse
+        defines, so the module's own code may use them; the code calling the module is still checked against its own
+        restrictions.
+
+        @return the restrictions that were removed
+    */
+    DLLLOCAL static int64 setModuleOwnDomains(QoreProgram& pgm, int64 dom, bool apply) {
+        return pgm.priv->setModuleOwnDomainsIntern(dom, apply);
+    }
+
+    //! Returns the functional domain bits of \a dom that the parse options of \a pgm do not allow, and records them
+    /** as parseAddDomain(); the restrictions that a module header adds for its own code do not apply to the domains
+        declared on user code (\a user_declared): the header's \c init and \c del closures may call user code that
+        declares a domain, which the code loading the module is checked for when it calls the module
+    */
+    DLLLOCAL static QoreParseOptions parseDeniedDomains(QoreProgram* pgm, int64 dom, int64 user_declared) {
+        QoreParseOptions denied = parseAddDomain(pgm, dom);
+        if (denied && user_declared && pgm->priv->mod_header_dom) {
+            denied &= ~QoreParseOptions(user_declared & pgm->priv->mod_header_dom & ~(dom & ~user_declared));
+        }
+        return denied;
+    }
+
+    //! Sets the restrictions that a user module header adds to the module's Program while its header is parsed
+    DLLLOCAL static void setModuleHeaderDomains(QoreProgram& pgm, int64 dom) {
+        pgm.priv->mod_header_dom = dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header (\c domains)
+    DLLLOCAL static int64 getModuleOwnDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_own_dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header and that apply to it, as it is
+    //! library code
+    DLLLOCAL static int64 getModuleTrustedDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_trusted_dom;
+    }
+
     DLLLOCAL static QoreParseOptions getDomain(const QoreProgram& pgm) {
         return pgm.priv->dom;
     }
@@ -4539,8 +4757,6 @@ public:
     DLLLOCAL static QoreParseOptions forceReplaceParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         QoreParseOptions rv = pgm.priv->pwo.parse_options;
         pgm.priv->pwo.parse_options = po;
-        // the options given replace all others, as with replaceParseOptionsIntern()
-        pgm.priv->suspended_options = QoreParseOptions();
         pgm.priv->applyParseOptionImplications();
         pgm.priv->syncExecModeWithParseOptions();
         return rv;
@@ -5171,6 +5387,10 @@ private:
     // statementId to AbstractStatement resolving
     typedef std::vector<AbstractStatement*> StatementVector_t;
     StatementVector_t statementIds;
+    //! the blocks of AOT closures, by location, which the debugger's events of their debug IR are given with; owned
+    /** see getAOTClosureDebugBlock(); protected by plock
+    */
+    std::map<const QoreProgramLocation*, StatementBlock*> aot_closure_debug_blocks;
     //! the blocks found by getBlockFromIndex(), by file and line; cleared when a statement is registered
     std::map<std::tuple<std::string, int, int>, const StatementBlock*> blockIndexCache;
 

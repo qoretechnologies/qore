@@ -69,7 +69,22 @@ QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* clas
         return QoreValue();
     }
 
-    return QoreObject::evalStaticMethod(*m, m->getClass(), args, xsink);
+    // the method is called in the caller's class context, as a static method call in the caller's code would be: a
+    // private method (or variant) is accessible only to a caller with private access to the class (issue #5767); in
+    // a builtin function or method, the caller's class context is the caller class, not the current one (none in a
+    // function, the builtin class in a method such as Program::callStaticMethod())
+    const qore_class_private* class_ctx = runtime_get_caller_class();
+    if (class_ctx && !qore_class_private::get(*cls)->runtimeCheckPrivateClassAccess(class_ctx)) {
+        class_ctx = nullptr;
+    }
+    if (!class_ctx && m->isPrivate()) {
+        xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s() is private and cannot be accessed externally",
+            cls_path->c_str(), method_name->c_str());
+        return QoreValue();
+    }
+    ObjectSubstitutionHelper osh(nullptr, class_ctx);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::eval(*m, xsink, rc, nullptr, args);
 }
 
 static QoreValue call_static_method_args_intern(QoreProgram* pgm, const QoreStringNode* class_name,
@@ -335,6 +350,10 @@ auto result = call_static_method("Namespace::Class", "method", arg1, arg2);
     - call_object_method_args()
     - @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
     - @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()"
+    @note a private static method is called only for a caller with private access to the class (the class
+    itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
+    from anywhere); a call made through call_function() or through a call reference to this function has the
+    class context of that call, so it cannot call a private method
 */
 auto call_static_method(string class_name, string method, ...) {
     ReferenceHolder<QoreListNode> call_args(xsink);
@@ -374,6 +393,10 @@ auto result = call_static_method_args("Namespace::Class", "method", (arg1, arg2)
     - call_object_method_args()
     - @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
     - @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()"
+    @note a private static method is called only for a caller with private access to the class (the class
+    itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
+    from anywhere); a call made through call_function() or through a call reference to this function has the
+    class context of that call, so it cannot call a private method
 */
 auto call_static_method_args(string class_name, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     return call_static_method_args_intern(q_get_runtime_call_program(runtime_cfg), class_name, method, arguments,

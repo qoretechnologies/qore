@@ -21,7 +21,8 @@
 
     A module is a capability: once loaded, any caller can use it, and its code runs with its own options.  Only a
     sandboxed caller's restrictions apply to module code (they are part of its sandbox); a caller restricted only by
-    its parse options restricts its own code.  Each probe runs as a module function and as a static method, from a
+    its parse options restricts its own code, which includes a call reference that it makes to a builtin method of an
+    object that module code created (it runs as the direct call would).  Each probe runs as a module function and as a static method, from a
     Program without restrictions, from one restricted by parse options only, from a sandboxed one with the same
     restrictions, and from the main Program, with the source module and with the module AOT-compiled with
     <tt>--compile-module</tt>, in every execution mode and as an AOT-compiled script, against the expected output of
@@ -92,8 +93,8 @@ restricted by parse options: function async caller code: \"scheduled\"
 restricted by parse options: method async caller code: \"scheduled\"
 restricted by parse options: function callback: \"INVALID-FUNCTION-ACCESS\"
 restricted by parse options: method callback: \"INVALID-FUNCTION-ACCESS\"
-restricted by parse options: function object call reference: \"readers: 0\"
-restricted by parse options: method object call reference: \"readers: 0\"
+restricted by parse options: function object call reference: \"INVALID-FUNCTION-ACCESS\"
+restricted by parse options: method object call reference: \"INVALID-FUNCTION-ACCESS\"
 restricted by parse options: function call reference: \"module\"
 restricted by parse options: function call_function: \"module\"
 restricted by parse options: function caller-only name: \"NO-FUNCTION\"

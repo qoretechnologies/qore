@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - IR specialization, JIT and AOT code of background threads started by generic code
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class GenericBackgroundSpecializationTest
+
+#! Generic code with background expressions runs in every mode (qore#5815)
+/** The specialization of the IR of generic code for its type arguments marked the helpers of its background
+    expressions as code of the specialization by reading every instruction of the background opcode as one evaluated
+    by a helper; a background call of a function, of a closure or of a self or static method is an instruction of
+    another class, so it read and wrote memory at a wrong offset, and the IR interpreter, the JIT and
+    tiered execution crashed with SIGSEGV.  The probes (generic-background-specialization/probes.q: generic functions,
+    static methods and methods of a generic class, each with background expressions of every form and two type
+    arguments) run at the top level and in a child Program, in each execution mode in a child process, at the IR tier
+    and promoted to native code with tiered execution, and as qcc-compiled executables (-O0, -O3).
+*/
+class GenericBackgroundSpecializationTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Line = "[\"1\", 1, 1, 1]; [\"\\\"s\\\"\", \"s\", \"s\", \"s\"]; [2, 2, 2]; [\"t\", \"t\", \"t\"]; "
+            "[3, 3, 3]; [\"u\", \"u\", \"u\"]";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probes;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("GenericBackgroundSpecialization", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        probes = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "generic-background-specialization" + DirSep
+            + "probes.q");
+        for (int i = 0; i < 4; ++i) {
+            expected += sprintf("%d: %s\n", i, Line);
+        }
+
+        addTestCase("generic code with background expressions runs in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-generic-background-specialization-");
+        # the probes at the top level, and in a child Program whose source is the same file
+        string top = tmp.path + DirSep + "top.q";
+        writeFile(top, probes + "\nprint(probes());\n");
+        string probes_file = tmp.path + DirSep + "probes.q";
+        writeFile(probes_file, probes);
+        string child = tmp.path + DirSep + "child.q";
+        writeFile(child, sprintf("%%modern\nProgram p(PO_NEW_STYLE);\np.parse(ReadOnlyFile::readTextFile(%y), "
+            "\"probes\");\nprint(p.callFunction(\"probes\"));\n", probes_file));
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string file in (top, child) {
+            string label = basename(file);
+            foreach string mode in (ExecModes) {
+                assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)),
+                    sprintf("%s: %s", label, mode));
+            }
+            # tiered execution kept at the IR tier, and promoted to native code
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), label + ": tiered, IR tier");
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1 %s 2>&1", env, qore_bin, file)), label + ": tiered, promoted");
+
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = file + opt;
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                    file));
+                assertTrue(is_file(exe), sprintf("%s: qcc %s compiled the executable: %s", label, opt, out));
+                assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                    libqore_dir, exe)), sprintf("%s: qcc %s", label, opt));
+            }
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}

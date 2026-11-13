@@ -219,6 +219,8 @@ on_error table1.rollback();
 
 
     @section tablemapperv1_3_1 TableMapper v1.3.1
+    - @ref TableMapper::SqlStatementMapperIterator::mapBulk() "SqlStatementMapperIterator::mapBulk()" is declared to
+      return \c list<hash<auto>>, as the method that it overrides (see @ref override_return_types)
     - fixed @ref TableMapper::InboundTableMapper "InboundTableMapper" inserts of rows after the first with a
       sequence column on Oracle, whose sequence is part of the SQL, and with a sequence column that is not the first
       column: the arguments of the insert are the ones that the table binds
@@ -1743,7 +1745,7 @@ InboundTableMapperIterator i(input, mapper);
 
             @return a list of mapped hashes with a maximum number of rows corresponding to the \a size argument; in case there is less input data than requested, the list returned could have fewer rows than requested; in case there is no more data, the return value is an empty list
          */
-        list<auto> mapBulk(int size) {
+        list<hash<auto>> mapBulk(int size) {
             AbstractSQLStatement stmt = cast<AbstractSQLStatement>(i);
             *hash h = stmt.fetchColumns(size);
             return !h ? () : m_mapper.mapAll(h);

@@ -64,6 +64,23 @@ public:
     DLLLOCAL ResolvedCallReferenceNodeIntern(const QoreProgramLocation* loc, bool n_needs_eval = false) :
         ResolvedCallReferenceNode(n_needs_eval), CallReferenceNodeLocation(loc) {
     }
+
+    //! returns the effective parse options of the context that created the reference value, or nullptr for a
+    //! reference that its own code calls in place (a reference in the parse tree)
+    /** a call through the reference runs with the permissions of the context that created it: the functional domains
+        declared on a user function or method in Qore source are checked against these options
+    */
+    DLLLOCAL const QoreParseOptions* getCreatorParseOptions() const {
+        return has_creator_po ? &creator_po : nullptr;
+    }
+
+protected:
+    //! records the effective parse options of the context creating the reference value
+    DLLLOCAL void captureCreatorParseOptions();
+
+private:
+    QoreParseOptions creator_po;
+    bool has_creator_po = false;
 };
 
 class AbstractUnresolvedCallReferenceNode : public AbstractCallReferenceNodeIntern {
@@ -293,14 +310,18 @@ public:
     //! sets the explicit type arguments of the reference (\f<T>()), which instantiate the function when it is called
     DLLLOCAL void setExplicitTypeArgs(std::vector<const QoreTypeInfo*>&& type_args);
 
+    //! binds a type parameter of the code that creates the reference, in the explicit type arguments, to the instantiation that is running
+    DLLLOCAL void bindExplicitTypeArgs();
+
     //! returns the explicit type-parameter instantiation of the reference, or nullptr
     DLLLOCAL const QoreTypeParamInstantiation* getExplicitTypeParamInstantiation() const {
         return explicit_inst.get();
     }
 
     //! sets the function entry that the parser resolved the reference to
-    /** The entry says which namespace the function is in, which the function does not (an AOT image names a function
-        of the root namespace so that it is not taken for the builtin of the same name)
+    /** The entry says which namespace the function is in, which the function does not: an AOT image names the
+        function by the path of its namespace, so that a function of the root namespace is not taken for the builtin
+        of the same name, nor a function of another namespace for the function of the same name in the root namespace
     */
     DLLLOCAL void setFunctionEntry(const FunctionEntry* n_fe) {
         fe = n_fe;
@@ -336,6 +357,7 @@ public:
             QoreProgram* n_pgm) : LocalFunctionCallReferenceNode(loc, n_uf, false), pgm(n_pgm) {
         assert(pgm);
         assert(uf);
+        captureCreatorParseOptions();
         const_cast<QoreFunction*>(uf)->ref();
         // make a weak reference to the Program - a strong reference (QoreProgram::ref()) could cause a recursive
         // reference
@@ -381,6 +403,12 @@ class ImportedFunctionEntry;
 //! a run-time call reference to a method of a particular object
 class RunTimeObjectMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
+    //! Raises the exception that execValue() raises for an object that has been deleted before it evaluates the
+    //! arguments (issue #5784)
+    /** @return -1 if the exception was raised, 0 if not
+    */
+    DLLLOCAL int checkObject(ExceptionSink* xsink) const;
+
     DLLLOCAL RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
             const char* n_method);
 
@@ -406,6 +434,16 @@ private:
     QoreObject* obj;
     std::string method;
     const qore_class_private* qc;
+    //! the Program of the code that created the reference, or nullptr if there was none, with PGM_WEAK_REF set if
+    //! the reference holds a weak reference to it
+    /** A call runs the method as a direct call in this Program would: called from another Program, the method runs
+        in this one with its parse options; see execValue().  Held with a weak reference unless it is the object's
+        Program, which the object holds while the reference holds the object.  The flag is in the pointer, so that
+        the destructor tests one value that it loads anyway
+    */
+    uintptr_t pgm_ref;
+    //! set in \c pgm_ref if the reference holds a weak reference to the Program
+    static constexpr uintptr_t PGM_WEAK_REF = 1;
 
     DLLLOCAL virtual ~RunTimeObjectMethodReferenceNode();
 };
@@ -414,8 +452,18 @@ private:
 // is known when the method reference node object is created
 class RunTimeResolvedMethodReferenceNode : public ResolvedCallReferenceNodeIntern {
 public:
+    //! Raises the exception that execValue() raises for an object that has been deleted before it evaluates the
+    //! arguments (issue #5784)
+    /** @return -1 if the exception was raised, 0 if not
+    */
+    DLLLOCAL int checkObject(ExceptionSink* xsink) const;
+
+    //! creates the reference with the class context of the creating code
     DLLLOCAL RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
-            const QoreMethod* n_method, const qore_class_private* ctx = runtime_get_class());
+            const QoreMethod* n_method);
+
+    DLLLOCAL RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
+            const QoreMethod* n_method, const qore_class_private* ctx);
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
@@ -443,7 +491,26 @@ private:
     QoreObject* obj;
     const QoreMethod* method;
     const qore_class_private* qc;
-    QoreProgram* pgm = getProgram();
+    //! the Program of the reference, with PGM_CREATOR set if it is the Program of the code that created it
+    /** Without PGM_CREATOR (a user method, or a builtin method of an object of the Program that creates the
+        reference): the Program of the object when the reference was created, or nullptr; the method runs in the
+        Program that defines its class, and this one is used only when that Program has released the class.  Also
+        nullptr for a builtin method of a reference created with no Program, which runs with none.
+
+        With PGM_CREATOR (a builtin method of an object of another Program): the Program of the code that created the
+        reference, held with a weak reference; a call runs the method as a direct call in this Program would, not in
+        the Program of the object, which for a builtin object is the Program it was created for (a reflection handle
+        is created in the Program that it describes).
+
+        See execValue().  One tagged pointer keeps the reference as small as a reference with a single Program, and
+        a call and the destructor test the case in the value that they load anyway
+    */
+    uintptr_t pgm_ref;
+    //! set in \c pgm_ref if it is the Program of the code that created the reference
+    static constexpr uintptr_t PGM_CREATOR = 1;
+
+    //! sets up the Program of the reference; \a creator is the Program of the code that creates it
+    DLLLOCAL void init(QoreProgram* creator);
 
     DLLLOCAL virtual ~RunTimeResolvedMethodReferenceNode();
 };
@@ -455,6 +522,19 @@ private:
     ResolvedCallReferenceNode::getProgram().  Returns nullptr for builtin code, which has no Program.
 */
 DLLLOCAL const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr);
+
+//! Raises the exception for a call of a value that is not a call reference or a closure, as the AST interpreter
+//! raises it (CallReferenceCallNode::evalImpl()); every execution mode uses it (issue #5784)
+/** @param loc the location of the call, if known
+*/
+DLLLOCAL void qore_raise_not_call_reference(ExceptionSink* xsink, const QoreProgramLocation* loc, const QoreValue& v);
+
+//! Raises the exception that a call through @a rcr raises before it evaluates the arguments, if any (issue #5784)
+/** A reference to a method of an object that has been deleted.
+
+    @return -1 if the exception was raised, 0 if not
+*/
+DLLLOCAL int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink);
 
 //! Gets the parse options of the Program whose code a call reference runs (see qore_call_reference_code_program())
 /** The Program of a user function is the Program that defined it, which can have been deleted while a Program that

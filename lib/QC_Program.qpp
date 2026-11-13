@@ -2058,6 +2058,10 @@ auto result = p.callStaticMethod("Namespace::Class::method", arg1, arg2);
     - @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()"
 
     @since %Qore 0.9.5
+    @note a private static method is called only for a caller with private access to the class (the class
+    itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
+    from anywhere); a call made through call_function() or through a call reference to this function has the
+    class context of that call, so it cannot call a private method
 */
 auto Program::callStaticMethod(string class_name, string method, ...) {
     ReferenceHolder<QoreListNode> call_args(xsink);
@@ -2095,6 +2099,10 @@ auto result = p.callStaticMethodArgs("Namespace::Class::method", (arg1, arg2));
     - @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
 
     @since %Qore 0.9.5
+    @note a private static method is called only for a caller with private access to the class (the class
+    itself or a subclass), in the caller's class context (since %Qore 3.0; before, private methods could be called
+    from anywhere); a call made through call_function() or through a call reference to this function has the
+    class context of that call, so it cannot call a private method
 */
 auto Program::callStaticMethodArgs(
         string class_name, string method_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
@@ -3963,20 +3971,25 @@ nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES
 //! resolve the string as a call reference in the given Program
 /** @param identifier the string to resolve; function or static class method, can include namespace path
 
-    @return the call reference to the given function or static method; the string is resolved as follows:
-    - if in a class method, a non-static method lookup is made
-    - if not found, then a static method lookup is made
-    - if not found, then a function lookup is made
-    - if not found, an \c CALL-REFERENCE-ERROR exception is thrown
+    @return the call reference to the given function or static method; the string is resolved in the Program as
+    follows:
+    - a name with a class path (<tt>Class::method</tt>, also with a namespace path) is looked up as a public static
+      method of the class; a non-static method raises \c CALL-REFERENCE-ERROR, as this method runs without an object
+    - otherwise it is resolved as a function of the Program, which can include a namespace path; a method of the
+      @ref Qore::Program "Program" object itself is not found (ex: the Program's function \c run() is referenced by
+      \c "run", not the @ref Qore::Program::run() "Program::run()" method; since %Qore 3.0)
+    - if not found, a \c CALL-REFERENCE-ERROR exception is thrown
 
-    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context, or the identifier contains a NUL character (since %Qore 3.0)
+    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context; a
+    non-static method (which needs an object; use <object>::getCallReference() in the object's code); the identifier
+    contains a NUL character (since %Qore 3.0)
 
     @note
     - use <object>::getCallReference() to get call references to non-public class methods; this builtin function
       will always run without any class context, however pseudo-methods run with the class context of the caller, which
       enables it to access any accessible private method
-    - call references to non-static methods contain a weak reference to the object; the lifetime of the object is not
-      extended by the call reference
+    - a non-static method cannot be referenced with this method, as it has no object (since %Qore 3.0); use
+      <object>::getCallReference()
 
     @see
     - @ref Qore::get_call_reference()
@@ -3986,7 +3999,9 @@ nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES
  */
 code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreProgramContextHelper pch(p);
-    return get_call_reference_intern(runtime_get_stack_object(), identifier, xsink);
+    // the identifier is resolved in the Program, not as a method of the Program object, which is the stack object
+    // of this method (issue #5863)
+    return get_call_reference_intern(nullptr, identifier, xsink);
 }
 
 //! returns an expression object for the given source code

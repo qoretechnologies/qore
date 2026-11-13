@@ -1,0 +1,452 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over TLS on HTTP/1.1, HTTP/2 and HTTP/3 (QUIC), and their close
+
+/*  WebSocketMessageTooBig.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5861: a WebSocket message larger than the maximum message size (16 MiB) closed the connection, but neither
+    the client nor the server's handler could tell why: the close status code 1009 (Message Too Big, RFC 6455
+    section 7.4.1) only reached the logs.  Both sides now report the code and reason of the close
+    (WebSocketClient::getCloseCode() and the close event, WebSocketConnection::getCloseCode() in
+    connectionClosed()), and a fragmented message is checked as its fragments arrive.
+
+    On HTTP/2 and HTTP/3, the server reported the close code 0 instead of 1009 when the connection was busy:
+    - the client tore the connection down as soon as it rejected the message, before its close frame, which the
+      frame state had only queued, was written; the client now waits for the server to end the stream after
+      answering the close frame (RFC 8441 section 5, RFC 9220 section 3), at most the close timeout;
+    - a heartbeat PING that the server's stream refused because its send buffer was full (the client was still
+      reading the large message) closed the connection without a close code; the PING is now skipped, and it counts
+      as sent, so a client that sends nothing is still closed once it has missed the allowed heartbeats;
+    - the server's answer to the client's close frame was dropped when the stream's send buffer was full; it now
+      waits for the buffer to drain.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketMessageTooBigTest
+
+#! larger than the maximum message size (16 MiB)
+const Big = 17 * 1024 * 1024;
+
+#! the size of each fragment of a fragmented message: under the maximum message size, together over it
+const Fragment = 6 * 1024 * 1024;
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! the heartbeat interval of the "/hb" handler, in seconds
+/** A client that sends nothing is closed two intervals after the first PING that it did not answer (the server's
+    detection of a dead peer, MaxMissedHeartbeats): the case that keeps the connection open sends its close frame as
+    soon as the first PING was skipped, which leaves it two intervals
+*/
+const HeartbeatSecs = 5;
+
+#! the size of the message that the "/hb" handler sends: far over the 1 MB HTTP/2 stream backpressure threshold
+const HeartbeatPayload = 4 * 1024 * 1024;
+
+#! Pushes the messages about heartbeats that a handler logs to a Queue, so that a test can wait for a heartbeat
+class HeartbeatLogAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! the messages about heartbeats, in order
+        Queue messages();
+    }
+
+    constructor() : LoggerAppenderWithLayout("heartbeat", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == LoggerAppender::EVENT_LOG && params.toString() =~ /heartbeat/i) {
+            messages.push(params.toString());
+        }
+    }
+}
+
+#! Sends a large message when the client asks for it, and reports the close code of the connection when it ends
+class HeartbeatConnection inherits WebSocketConnection {
+    private {
+        Queue closed;
+    }
+
+    constructor(WebSocketHandler handler, Queue closed) : WebSocketConnection(handler) {
+        self.closed = closed;
+    }
+
+    gotMessage(string msg) {
+        if (msg == "send") {
+            send(binary(strmul("h", HeartbeatPayload)));
+        }
+    }
+
+    connectionClosed() {
+        closed.push(getCloseCode());
+    }
+}
+
+class HeartbeatHandler inherits WebSocketHandler {
+    public {
+        #! the close codes of the connections that ended
+        Queue closed();
+    }
+
+    private {
+        #! True to hold the staged data of an HTTP/3 stream back from the transport (debug builds)
+        bool hold;
+    }
+
+    constructor(hash<auto> opts, bool hold = False) : WebSocketHandler(NOTHING, opts) {
+        self.hold = hold;
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        # on HTTP/3, the stream's staged data is held back, as when the client grants no credit, until the test
+        # releases it
+        if (hold && cx."header-info".session_id) {
+            call_function("dbg_quic_hold_stream_data", cx."header-info".session_id, cx."header-info".stream_id);
+        }
+        return new HeartbeatConnection(self, closed);
+    }
+}
+
+class TestConnection inherits WebSocketConnection {
+    public {
+        #! the events of the connection: received messages and the close
+        Queue events;
+    }
+
+    constructor(WebSocketHandler handler, Queue events) : WebSocketConnection(handler) {
+        self.events = events;
+    }
+
+    gotMessage(binary msg) {
+        events.push({"got": msg.size()});
+        # the client asks for a message that is too big
+        if (msg == binary("big")) {
+            send(binary(strmul("s", Big)));
+        } else if (msg == binary("fragments")) {
+            send(binary(strmul("a", Fragment)), WSOP_Binary, False);
+            send(binary(strmul("b", Fragment)), WSOP_Continuation, False);
+            send(binary(strmul("c", Fragment)), WSOP_Continuation, True);
+        }
+    }
+
+    gotMessage(string msg) {
+        gotMessage(binary(msg));
+    }
+
+    connectionClosed() {
+        events.push({"closed": getCloseCode(), "reason": getCloseReason()});
+    }
+}
+
+class TestHandler inherits WebSocketHandler {
+    public {
+        Queue events();
+    }
+
+    #! the close timeout is a hang guard only: the server waits for the client's close frame, which follows the rest of a
+    #! message that is too big; the default of 5 seconds ran out while a slow client (as under valgrind) still sent it,
+    #! and the server's close of the connection with the client's data unread lost its close frame for the client
+    #! (1006 instead of 1009)
+    constructor() : WebSocketHandler(NOTHING, {"close_timeout": HangGuard}) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TestConnection(self, events);
+    }
+}
+
+class WebSocketMessageTooBigTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        TestHandler handler();
+        int port;
+        #! the heartbeat messages of the "/hb" handler
+        HeartbeatLogAppender heartbeat_log();
+        HeartbeatHandler heartbeat_handler;
+        #! the "/hb3" handler: holds the staged data of its HTTP/3 streams
+        HeartbeatHandler heartbeat_h3_handler;
+    }
+
+    constructor() : QUnit::Test("WebSocketMessageTooBig", "1.0") {
+        foreach string ver in (("1.1", "2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: the client sends a message that is too big", ver), \testTooBig(),
+                (ver, "client"));
+            addTestCase(sprintf("HTTP/%s: the client sends a fragmented message that is too big", ver),
+                \testTooBig(), (ver, "client-fragments"));
+            addTestCase(sprintf("HTTP/%s: the server sends a message that is too big", ver), \testTooBig(),
+                (ver, "big"));
+            addTestCase(sprintf("HTTP/%s: the server sends a fragmented message that is too big", ver),
+                \testTooBig(), (ver, "fragments"));
+        }
+        addTestCase("HTTP/2: a heartbeat while the server's stream send buffer is full does not close the connection",
+            \testHeartbeatBufferFull(), True);
+        addTestCase("HTTP/2: a client that reads nothing and sends nothing is still closed after its missed heartbeats",
+            \testHeartbeatBufferFull(), False);
+        addTestCase("HTTP/3: a heartbeat while the server's staged data is over its limit does not close the "
+            "connection", \testHeartbeatH3());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("ws", handler);
+        # the heartbeat messages are logged at the debug level
+        Logger heartbeat_logger("heartbeat", LoggerLevel::getLevelDebug());
+        heartbeat_logger.addAppender(heartbeat_log);
+        # the close timeout is a hang guard only: the answer to the client's close frame waits for the message before
+        # it to be sent
+        heartbeat_handler = new HeartbeatHandler({"heartbeat": HeartbeatSecs, "logger": heartbeat_logger,
+            "close_timeout": HangGuard});
+        server.setHandler("hb", "/hb", NOTHING, heartbeat_handler, NOTHING, False);
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            heartbeat_h3_handler = new HeartbeatHandler({"heartbeat": HeartbeatSecs, "logger": heartbeat_logger,
+                "close_timeout": HangGuard}, True);
+            server.setHandler("hb3", "/hb3", NOTHING, heartbeat_h3_handler, NOTHING, False);
+        }
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    #! A message that is too big closes the connection with 1009, which both sides report
+    /** @param ver the HTTP version
+        @param what \c "client": the client sends the message; \c "client-fragments": the client sends it in
+        fragments that are each under the limit; \c "big": the server sends it; \c "fragments": the server sends it
+        in fragments
+    */
+    testTooBig(string ver, string what) {
+        # the server's events of an earlier case are not this case's
+        handler.events.clear();
+        Queue client_events();
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (exists msg) {
+                client_events.push({"got": msg.size()});
+            } else {
+                # the close is reported with its status code and reason
+                client_events.push({"closed": wsc.getCloseCode(), "reason": wsc.getCloseReason()});
+            }
+        }, {
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": ver,
+            "ssl_verify_cert": False,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+
+        if (what == "client") {
+            wsc.send(binary(strmul("c", Big)));
+        } else if (what == "client-fragments") {
+            wsc.send(binary(strmul("a", Fragment)), WSOP_Binary, False);
+            wsc.send(binary(strmul("b", Fragment)), WSOP_Continuation, False);
+            wsc.send(binary(strmul("c", Fragment)), WSOP_Continuation, True);
+        } else {
+            wsc.send(binary(what));
+        }
+
+        # the client is told the connection closed, with 1009; it never gets the message that is too big
+        hash<auto> client_close = getClose(client_events, "client");
+        assertEq(WSCC_MessageTooBig, client_close.closed, "the client reports the close code 1009");
+        assertNeq("", client_close.reason, "the client reports the close reason");
+        # so is the server's handler
+        hash<auto> server_close = getClose(handler.events, "server");
+        assertEq(WSCC_MessageTooBig, server_close.closed, "the server reports the close code 1009");
+        assertNeq("", server_close.reason, "the server reports the close reason");
+    }
+
+    #! Returns the close event of a side, after checking that no message that is too big was delivered
+    private hash<auto> getClose(Queue events, string side) {
+        while (True) {
+            hash<auto> e = events.get(HangGuard);
+            if (e.hasKey("closed")) {
+                return e;
+            }
+            assertLt(Fragment, e.got, side + ": no message that is too big is delivered");
+        }
+    }
+
+    #! On HTTP/3, a heartbeat while the server's staged data is held does not close the connection
+    /** The server's staged data for the stream is held back from the transport (a debug hook), so the 4 MiB message
+        stays over the staged data's limit when the heartbeat is due: the PING is skipped, and the connection stays
+        open (bug B); once the data is released, the message arrives and the close reports the client's code
+    */
+    testHeartbeatH3() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        heartbeat_log.messages.clear();
+        heartbeat_h3_handler.closed.clear();
+        on_exit call_function("dbg_quic_release_stream_data");
+        Queue got();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                got.push(msg.size());
+            }
+        }, {
+            "url": sprintf("wss://localhost:%d/hb3", port),
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp3(), "the connection uses HTTP/3");
+        wsc.send("send");
+        string msg;
+        while ((msg = heartbeat_log.messages.get(HangGuard)) !~ /PING not sent/) {
+        }
+        assertRegex("PING not sent", msg, "the heartbeat PING is not sent while the message is held, and the "
+            "connection is not closed for it");
+        call_function("dbg_quic_release_stream_data");
+        # a packet of the client makes the server write the stream's data
+        wsc.send("go");
+        assertEq(HeartbeatPayload, got.get(HangGuard), "the whole message is delivered");
+        wsc.disconnect();
+        assertEq(WSCC_GoingAway, heartbeat_h3_handler.closed.get(HangGuard), "the server reports the client's "
+            "close code");
+    }
+
+    #! A heartbeat that finds the stream's send buffer full does not close the connection
+    /** A raw HTTP/2 WebSocket client asks for a message far over the stream's backpressure threshold and does not read
+        it, so the server's stream send buffer stays full when the heartbeat is due; the connection stays open: the
+        server reads the client's close frame, reports its code and answers it after the message.
+    */
+    testHeartbeatBufferFull(bool answer) {
+        # the messages of an earlier case are not this case's
+        heartbeat_log.messages.clear();
+        heartbeat_handler.closed.clear();
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(sprintf("https://localhost:%d/hb", port));
+        on_exit {
+            try {
+                stream.cancel();
+            } catch () {
+            }
+        }
+        # an extended CONNECT (RFC 8441)
+        stream.startStreaming("CONNECT", "/hb", {
+            ":protocol": "websocket",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        }, True);
+        auto rh = stream.readData(HangGuard);
+        assertEq(200, rh.status_code ?? rh.headers.":status".toInt(), "the server accepts the WebSocket connection");
+        # client frames are masked
+        stream.sendData(ws_encode_message("send", WSOP_Text, True));
+        # the first heartbeat after the request finds the server's stream send buffer full (a heartbeat before the
+        # request may have sent a PING, which is skipped when the frames are read)
+        string msg;
+        while ((msg = heartbeat_log.messages.get(HangGuard)) !~ /PING not sent/) {
+        }
+        assertRegex("PING not sent", msg, "the heartbeat PING is not sent while the message is not read, and the "
+            "connection is not closed for it");
+        if (!answer) {
+            # a client that neither reads nor sends is gone: it is still closed once it has missed the heartbeats
+            while ((msg = heartbeat_log.messages.get(HangGuard)) !~ /did not answer/) {
+            }
+            assertRegex("did not answer", msg, "the server closes a client that does not answer its heartbeats");
+            assertEq(0, heartbeat_handler.closed.get(HangGuard), "the connection ends without a close frame");
+            return;
+        }
+        # the connection is open: the server reads the client's close frame
+        stream.sendData(ws_encode_message(WSCC_NormalClosure.encodeMsb(2), WSOP_Close, True));
+        # the frames that the server sends until it ends the stream
+        list<hash<WsMsgInfo>> frames;
+        binary buf;
+        while (True) {
+            auto data = stream.readData(HangGuard);
+            if (!exists data) {
+                fail("the server sent nothing within the hang guard");
+            }
+            if (data.typeCode() == NT_HASH) {
+                if (data.end_stream || data.error) {
+                    break;
+                }
+                if (!exists data.body) {
+                    continue;
+                }
+                data = data.body;
+            }
+            buf += binary(data);
+            # the frames received whole
+            while (True) {
+                *int size = ws_get_frame_size(buf);
+                if (!size || buf.size() < size) {
+                    break;
+                }
+                hash<WsMsgInfo> f = ws_parse_frame(buf.substr(0, size));
+                buf = buf.substr(size);
+                # a PING of a heartbeat before the request, and its answer, are not part of the exchange checked
+                if (f.op != WSOP_Ping && f.op != WSOP_Pong) {
+                    push frames, f;
+                }
+            }
+        }
+        assertEq(2, frames.size(), "the client receives the message and the server's close frame");
+        assertEq(HeartbeatPayload, frames[0].msg.size(), "the whole message is delivered");
+        assertEq(WSOP_Close, frames[1].op, "the server answers the client's close frame after the message");
+        assertEq(WSCC_NormalClosure, frames[1].close, "with the client's close code");
+        assertEq(WSCC_NormalClosure, heartbeat_handler.closed.get(HangGuard), "the server reports the client's "
+            "close code");
+    }
+}

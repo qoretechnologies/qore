@@ -12976,7 +12976,20 @@ on_exit printf("SQL> %s\n", sql);
         }
     }
 
+    #! Returns an AbstractTable object for a table in the database that the given connection string names
+    /** @param dsstr the datasource connection string
+        @param nname the name of the table
+        @param opts the table options
+
+        @throw PERMISSION-DENIED code that a sandbox governs cannot open a connection from a connection string (since
+        SqlUtil 3.11.0)
+    */
     static AbstractTable getTable(string dsstr, string nname, *hash<auto> opts) {
+        # a connection string opens a connection of its own: sandboxed code may use only the datasources that the host
+        # provides
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot open a database connection from a connection string or configuration; use a datasource that the host provides";
+        }
         Datasource nds(dsstr);
         return AbstractTable::getTable(nds, nname, opts);
     }

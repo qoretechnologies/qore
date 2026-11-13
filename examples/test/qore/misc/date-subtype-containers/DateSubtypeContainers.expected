@@ -1,0 +1,17 @@
+constant hash: RUNTIME-TYPE-ERROR
+constant list: RUNTIME-TYPE-ERROR
+hash variable: RUNTIME-TYPE-ERROR
+list variable: RUNTIME-TYPE-ERROR
+softlist variable: RUNTIME-TYPE-ERROR
+or nothing: RUNTIME-TYPE-ERROR
+nested: RUNTIME-TYPE-ERROR
+hash argument: RUNTIME-TYPE-ERROR
+list argument: RUNTIME-TYPE-ERROR
+hash literal of a variable: RUNTIME-TYPE-ERROR
+valid constant hash: {a: 2026-01-01 00:00:00.000000 +00:00} hash<string, date<absolute>>
+valid hash variable: {a: 2026-01-01 00:00:00.000000 +00:00} hash<string, date<absolute>>
+valid list variable: [<time: 1 second>, <time: 2 seconds>] list<date<relative>>
+valid nested: {a: [2026-01-01 00:00:00.000000 +00:00]} hash<string, list<date<absolute>>>
+take_abs_hash: {a: 2026-01-01 00:00:00.000000 +00:00} hash<string, date<absolute>>
+take_rel_list: [<time: 1 second>, <time: 2 seconds>] list<date<relative>>
+plain date: {a: 2026-01-01 00:00:00.000000 +00:00} hash<string, date>

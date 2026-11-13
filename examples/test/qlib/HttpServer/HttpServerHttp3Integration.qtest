@@ -835,6 +835,9 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "logger": logger,
                 "request_timeout": 10s,
                 "connect_timeout": 5s,
+                # a request is not sent again on a fresh connection, which would reach whatever listens on the port
+                # then (qore#5812)
+                "max_request_retries": 0,
             },
         );
         on_exit mgr.closeAll();
@@ -846,18 +849,31 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Delete the server
         delete server;
 
-        # Second request should fail gracefully (no crash/hang)
-        bool got_error = False;
+        # the server's UDP socket is closed when the server is deleted: its port can be bound at once; the test holds
+        # it, so that nothing else can answer on it (qore#5812)
+        Socket udp();
         try {
-            mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+            udp.bindINET("127.0.0.1", string(port), False, AF_INET, SOCK_DGRAM);
         } catch (hash<ExceptionInfo> ex) {
-            got_error = True;
+            fail(sprintf("the port of the deleted server is still bound (or another process took it): %s: %s",
+                ex.err, ex.desc));
+        }
+        on_exit udp.close();
+
+        # the deleted server closed the client's connection (CONNECTION_CLOSE), and nothing answers on its port, which
+        # the test holds: the request, sent on a new connection, gets no answer and fails
+        *hash<auto> late;
+        *string err;
+        try {
+            late = mgr.request(url, "GET", "/hello", NOTHING, NOTHING, 3s);
+        } catch (hash<ExceptionInfo> ex) {
+            err = sprintf("%s: %s", ex.err, ex.desc);
             if (m_options.verbose > 1) {
-                printf("testServerShutdown: got expected error: %s: %s\n", ex.err, ex.desc);
+                printf("testServerShutdown: got expected error: %s\n", err);
             }
         }
-        # After server deletion, the request should fail with an error
-        assertTrue(got_error, "request after server shutdown should fail gracefully");
+        assertEq(NOTHING, late, "no response after the server was deleted");
+        assertTrue(exists err, "the request after the server was deleted fails");
     }
 
     testGoawayGracefulShutdown() {
@@ -1564,13 +1580,16 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Test: same-origin Alt-Svc to an unreachable H3 port falls back to H2
-    /** Distinct from the cross-origin case: here the alt-authority host
-        matches the origin so the manager DOES cache h3 and drain the H2
-        connection.  The second request attempts H3 to the advertised port
-        (1, with no QUIC listener), which fails fast on UDP loopback (ICMP
-        Port Unreachable).  The catch in createConnection() then builds a
-        fresh H2 connection.  connect_timeout is set low as a backstop in
-        case the platform doesn't surface ICMP errors.
+    /** Distinct from the cross-origin case: here the alt-authority host matches the origin, so the manager records
+        the advertised port (1, with no QUIC listener) for its next happy-eyeballs race.  The server has no QUIC
+        listener: the first request races HTTP/3 to the origin's UDP port against HTTP/2, and HTTP/2 wins.  An
+        advertisement does not establish QUIC reachability, so the negotiated HTTP/2 connection is kept, and the second
+        request uses it.
+
+        The race ends when a candidate connects, without waiting for the outcome of the others, so the HTTP/3 attempt
+        needs no short connect timeout, and the case sets none: the connect timeout also bounds the HTTP/2 connection,
+        which must be made, and its TCP connect, TLS handshake and preface exchange take more than 500 ms on a loaded
+        host.
     */
     testConnMgrAltSvcUnreachableH3FallsBack() {
         HttpServer server(<HttpServerOptionInfo>{
@@ -1589,13 +1608,13 @@ l50Xb2GWQesIt9k5jF5IOw==
         });
         server.waitForAsyncIo();
 
+        # no connect_timeout: the default one bounds the connections (see above)
         HttpClientIo::HttpClientConnectionManager mgr(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "protocol": "auto",
                 "accept_all_certs": True,
                 "logger": mLogger,
                 "request_timeout": 15s,
-                "connect_timeout": 500ms,
             },
         );
         on_exit delete mgr;
@@ -1604,11 +1623,11 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         hash<auto> resp1 = mgr.request(url, "GET", "/test");
         assertEq(200, resp1.status_code, "fallback: first request OK");
+        assertEq("h2", resp1.protocol, "fallback: the first request is made with H2");
 
         hash<auto> resp2 = mgr.request(url, "GET", "/test");
-        assertEq(200, resp2.status_code, "fallback: second request OK after H3 fail");
-        assertNeq("h3", resp2.protocol ?? "h2",
-            "fallback: H3 to unreachable port must fall back to H2");
+        assertEq(200, resp2.status_code, "fallback: second request OK after the Alt-Svc advertisement");
+        assertEq("h2", resp2.protocol, "fallback: the advertisement of an unreachable H3 port keeps H2");
     }
 
     #! Regression: Alt-Svc H3 upgrade via "localhost" must not stall.

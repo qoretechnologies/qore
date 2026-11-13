@@ -80,6 +80,7 @@ std::atomic<bool> qore_initialized = {false};
 
 // shutdown flag
 std::atomic<bool> qore_shutdown = {false};
+std::atomic<bool> qore_types_deleted = {false};
 
 // exiting flag
 std::atomic<bool> qore_exiting = {false};
@@ -385,6 +386,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 #endif
 
     // set initialized flag for external modules
+    qore_types_deleted.store(false, std::memory_order_relaxed);
     qore_initialized.store(true, std::memory_order_relaxed);
 }
 
@@ -418,9 +420,10 @@ void qore_cleanup() {
     // raw pointers to UserVariantBase members.  Keep the LLVM engine alive, however, because user
     // module delete callbacks below can still call functions through published native entry points.
     // A compile still in LLVM is detached rather than awaited, as LLVM can take without bound; its
-    // thread no longer reads those pointers, QoreJIT::shutdown() below leaves the engine to the
-    // operating system then, and qore_fork_child_quick_exit() ends the process with _exit() if the
-    // compile still runs at the end (see QoreJIT::stopBackgroundCompiler() and QoreJIT::exitQuickly()).
+    // thread no longer reads those pointers.  QoreJIT::shutdown() below releases the engine if the
+    // compile has ended by then; otherwise qore_fork_child_quick_exit() releases it if the compile has
+    // ended at the end, or ends the process with _exit() if it still runs (see
+    // QoreJIT::stopBackgroundCompiler() and QoreJIT::exitQuickly(); qore#5842).
     QoreJIT::instance().stopBackgroundCompiler();
 
     // drop any user-module QoreObject references held by the async I/O
@@ -502,8 +505,24 @@ void qore_cleanup() {
     staticSystemNamespace = nullptr;
 #endif
 
+    // Module-owned Qore state has been released when the modules were deleted above (see QoreModuleInfo::ns and
+    // QoreNamespace::purge()); a module namespace with static storage duration that was not registered still holds
+    // its values, which its C++ static destructor releases after the types are freed (or never, if the process ends
+    // with _exit()).  Debug builds count them; QORE_TEARDOWN_REPORT names them on stderr.
+#ifdef DEBUG
+    {
+        bool report = q_env_is_set("QORE_TEARDOWN_REPORT");
+        unsigned late = qore_count_late_module_namespaces(report);
+        if (report) {
+            fprintf(stderr, "[TEARDOWN] module namespaces released after qore_cleanup(): %u\n", late);
+        }
+    }
+#endif
+
     // delete default type values
     delete_qore_types();
+    // Qore values released from here on are released after their types (see qore_ns_private::~qore_ns_private())
+    qore_types_deleted.store(true, std::memory_order_release);
 
     // delete threading infrastructure
     delete_qore_threads();

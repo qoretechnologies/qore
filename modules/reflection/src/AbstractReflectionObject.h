@@ -80,6 +80,33 @@ DLLLOCAL int reflection_check_structural_access(const QoreReflectionCaller& call
 DLLLOCAL int reflection_check_class_call(const QoreReflectionCaller& caller, const QoreClass* cls,
         const QoreProgram* target, bool create, ExceptionSink* xsink);
 
+//! Checks that a class is exported by the user module that declares it, for callers its export boundary applies to
+/** Used for the operations that the language allows only with the class's name: construction, static methods,
+    static members and constants, and member initializers (see QoreReflectionCaller::canSeeClass())
+
+    @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
+*/
+DLLLOCAL int reflection_check_class_export(const QoreReflectionCaller& caller, const QoreClass* cls,
+        const QoreProgram* target, ExceptionSink* xsink);
+
+//! Returns true if the caller could name the typed hash in the language
+/** A system typed hash, or one declared in, imported into or inherited by the caller's Program (a module's exported
+    typed hash is imported into the Programs that load it).
+*/
+DLLLOCAL bool reflection_can_see_typed_hash(const QoreReflectionCaller& caller, const TypedHashDecl* th);
+
+//! Checks that the caller may evaluate the initializers or member defaults of a typed hash through a handle
+/** Allowed if the caller could name the typed hash (reflection_can_see_typed_hash()): the cast is one that it could
+    make itself, and it runs under the caller's sandbox and restrictions.  Otherwise the caller needs access to the
+    Program of the handle (QoreReflectionCaller::checkProgramAccess()), and a caller to which the language's access
+    rules apply is refused: a typed hash that a user module does not export, or a parent's that a child Program does
+    not inherit, also through Type::getType(value).getTypedHash().
+
+    @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
+*/
+DLLLOCAL int reflection_check_typed_hash_init(const QoreReflectionCaller& caller, const QoreProgram* target,
+        const TypedHashDecl* th, ExceptionSink* xsink);
+
 //! Checks the functional domain of a class whose members or constants are read or written through reflection
 /** @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
 */
@@ -115,6 +142,102 @@ DLLLOCAL int reflection_check_variant_call(const QoreReflectionCaller& caller, c
 */
 DLLLOCAL const QoreNamespace* reflection_program_namespace(QoreProgram* pgm, const QoreNamespace* ns,
         ExceptionSink* xsink);
+
+//! The export boundary of a user module for lookups in a namespace of a reflection object's Program
+/** A caller to which the boundary applies (QoreReflectionCaller::appliesModuleExports()) finds in a module's
+    namespaces only what the module exports: other declarations are treated as if they did not exist.  See
+    @ref reflection_caller_privilege.
+*/
+class ReflectionExportFilter {
+public:
+    DLLLOCAL ReflectionExportFilter(const QoreReflectionCaller& caller, const QoreProgram* pgm,
+            const QoreNamespace* ns) : limited(caller.appliesModuleExports(pgm)),
+            ns_visible(!limited || caller.canSeeNamespace(pgm, ns)) {
+    }
+
+    //! Returns true if a declaration in the namespace is visible; \a exported: it is public or builtin
+    DLLLOCAL bool visible(bool exported) const {
+        return !limited || (ns_visible && exported);
+    }
+
+    //! Returns true if a class found in the namespace is visible
+    DLLLOCAL bool visibleClass(const QoreReflectionCaller& caller, const QoreProgram* pgm,
+            const QoreClass* cls) const {
+        return !limited || (ns_visible && caller.canSeeClass(pgm, cls));
+    }
+
+    //! Returns true if a child namespace of the namespace is visible
+    DLLLOCAL bool visibleNamespace(const QoreReflectionCaller& caller, const QoreProgram* pgm,
+            const QoreNamespace* ns) const {
+        return !limited || (ns_visible && caller.canSeeNamespace(pgm, ns));
+    }
+
+private:
+    bool limited;
+    bool ns_visible;
+};
+
+//! The caller of a lookup by path or pattern, for the export boundary of user modules
+/** A lookup in the calling code's own Program, or in a Program that is not a user module, cannot cross the export
+    boundary of a module, so the caller is captured (QoreReflectionCaller) only for a lookup in another user module's
+    Program; lookups made without a Program argument thus stay as cheap as before.
+*/
+class ReflectionLookupCaller {
+public:
+    //! Captures the caller only if a lookup in \a lookup_pgm can cross the export boundary of a user module
+    DLLLOCAL explicit ReflectionLookupCaller(const QoreProgram* lookup_pgm) {
+        if (lookup_pgm && lookup_pgm != getProgram()
+                && lookup_pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+            own.reset(new QoreReflectionCaller);
+            caller = own.get();
+        }
+    }
+
+    //! Uses a caller that the entry point has already captured
+    DLLLOCAL ReflectionLookupCaller(const QoreReflectionCaller& caller) : caller(&caller) {
+    }
+
+    DLLLOCAL bool canSeeNamespace(const QoreProgram* pgm, const QoreNamespace* ns) const {
+        return !caller || caller->canSeeNamespace(pgm, ns);
+    }
+
+    DLLLOCAL bool canSeeDeclaration(const QoreProgram* pgm, const QoreNamespace* ns, bool exported) const {
+        return !caller || caller->canSeeDeclaration(pgm, ns, exported);
+    }
+
+    DLLLOCAL bool canSeeClass(const QoreProgram* pgm, const QoreClass* cls) const {
+        return !caller || caller->canSeeClass(pgm, cls);
+    }
+
+private:
+    std::unique_ptr<QoreReflectionCaller> own;
+    const QoreReflectionCaller* caller = nullptr;
+};
+
+//! Returns true if a function is exported by the module that declares it (public), or builtin
+static inline bool reflection_exported(const QoreExternalFunction* f) {
+    return f->isModulePublic() || f->isBuiltin();
+}
+
+//! Returns true if a constant is exported by the module that declares it (public), or builtin
+static inline bool reflection_exported(const QoreExternalConstant* c) {
+    return c->isModulePublic() || c->isBuiltin();
+}
+
+//! Returns true if a global variable is exported by the module that declares it (public), or builtin
+static inline bool reflection_exported(const QoreExternalGlobalVar* v) {
+    return v->isModulePublic() || v->isBuiltin();
+}
+
+//! Returns true if a typed hash is exported by the module that declares it (public), or builtin
+static inline bool reflection_exported(const TypedHashDecl* th) {
+    return th->isPublic() || th->isSystem();
+}
+
+//! Returns true if an enum is exported by the module that declares it (public), or builtin
+static inline bool reflection_exported(const QoreEnumDecl* ed) {
+    return ed->isPublic() || ed->isSystem();
+}
 
 //! returns the Program used to resolve reflection lookups: the call's RuntimeConfig Program, else the current one
 static inline QoreProgram* get_reflection_lookup_program(RuntimeConfig& runtime_cfg) {

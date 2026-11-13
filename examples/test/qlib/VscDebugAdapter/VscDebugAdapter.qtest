@@ -38,6 +38,7 @@
 
 %exec-class VscDebugAdapterTest
 
+%ifndef NoProcess
 #! A client of the Debug Adapter Protocol for an adapter process
 class DapClient {
     public {
@@ -45,7 +46,10 @@ class DapClient {
         list<string> stray = ();
 
         #! the maximum time to wait for a message before the test fails
-        const MessageTimeout = 30s;
+        /** Long enough for an adapter that is starved under load, short enough that a missing message fails the test
+            case well within the time limit of run_tests.sh
+        */
+        const MessageTimeout = 60s;
     }
 
     private {
@@ -75,16 +79,23 @@ class DapClient {
     }
 
     #! Returns the next message that matches, including messages that were received before
-    hash<auto> waitFor(code<bool(hash<auto>)> pred, string what) {
+    /** @throw DAP-ERROR the adapter did not send the message within \a timeout_ms or ended without it
+    */
+    hash<auto> waitFor(code<bool(hash<auto>)> pred, string what, timeout timeout_ms = MessageTimeout) {
         for (int i = 0; i < backlog.size(); ++i) {
             if (pred(backlog[i])) {
                 return (extract backlog, i, 1)[0];
             }
         }
+        # on the monotonic clock, in microseconds
+        int deadline = clock_getmicros() + timeout_ms * 1000;
         while (True) {
-            *hash<auto> msg = readMessage();
+            *hash<auto> msg = readMessage(deadline);
             if (!msg) {
-                throw "DAP-ERROR", sprintf("no %s from the adapter", what);
+                throw "DAP-ERROR", sprintf("no %s from the adapter %s; the messages received and not taken: %y; "
+                    "stray output: %y; adapter stderr: %y", what,
+                    proc.running() ? sprintf("within %y", milliseconds(timeout_ms)) : "before it ended",
+                    summarizeBacklog(), stray.size() > 20 ? stray[stray.size() - 20..] : stray, readStderr());
             }
             if (pred(msg)) {
                 return msg;
@@ -94,10 +105,10 @@ class DapClient {
     }
 
     #! Returns the next event with the given name
-    hash<auto> waitForEvent(string event) {
+    hash<auto> waitForEvent(string event, timeout timeout_ms = MessageTimeout) {
         return waitFor(bool sub (hash<auto> m) {
             return m.type == "event" && m.event == event;
-        }, event + " event");
+        }, event + " event", timeout_ms);
     }
 
     #! Returns the events with the given name received so far and not yet taken by waitFor()
@@ -110,8 +121,8 @@ class DapClient {
         return map $1.body.output, backlog, $1.event == "output" && $1.body.category == category;
     }
 
-    #! Reads the next message; returns NOTHING if the adapter does not send one in time
-    private *hash<auto> readMessage() {
+    #! Reads the next message; returns NOTHING if the adapter does not send one before the deadline
+    private *hash<auto> readMessage(int deadline) {
         while (True) {
             int end = buf.find(<0d0a0d0a>);
             if (end >= 0) {
@@ -129,7 +140,7 @@ class DapClient {
                     continue;
                 }
                 while (buf.size() < end + 4 + len) {
-                    if (!fill()) {
+                    if (!fill(deadline)) {
                         return NOTHING;
                     }
                 }
@@ -137,32 +148,75 @@ class DapClient {
                 splice buf, 0, end + 4 + len;
                 return msg;
             }
-            if (!fill()) {
+            if (!fill(deadline)) {
                 return NOTHING;
             }
         }
     }
 
-    #! Reads more output of the adapter; returns False only when the adapter's stdout is at end of file
-    /** readStdoutBinary() returns nothing both at end of file and when nothing arrives within the timeout.  The
-        latter is not the end of the stream: under load the adapter can be starved and produce no output for a
-        while, which must not be mistaken for a missing message.  Wait on the real signal - data, or the adapter
-        actually exiting - by reading again while the adapter is still running; give up only once it has exited
-        (then readStdoutBinary() returns nothing at once, so this does not spin).
+    #! Reads more output of the adapter; returns False when the adapter's stdout is at end of file or at the deadline
+    /** readStdoutBinary() returns nothing either when nothing arrives within the timeout, which is the deadline, or
+        at once at the end of the adapter's output; an adapter that keeps running without sending the message fails
+        the test case at the deadline instead of blocking it (qore#5834), and at the end of its output, the adapter is
+        given until the deadline to exit, so that a reader does not spin while it ends
+
+        @param deadline the time on the monotonic clock (clock_getmicros()) at which the wait fails
     */
-    private bool fill() {
-        while (True) {
-            *binary data = proc.readStdoutBinary(65536, MessageTimeout);
-            if (data) {
-                buf += data;
-                return True;
+    private bool fill(int deadline) {
+        int remaining_us = deadline - clock_getmicros();
+        if (remaining_us <= 0) {
+            return False;
+        }
+        # rounded up, so that the wait does not end before the deadline
+        *binary data = proc.readStdoutBinary(65536, (remaining_us + 999) / 1000);
+        if (data) {
+            buf += data;
+            return True;
+        }
+        # the deadline passed, or the output ended: then the adapter ends or has ended
+        remaining_us = deadline - clock_getmicros();
+        if (remaining_us > 0 && proc.running()) {
+            proc.wait((remaining_us + 999) / 1000);
+        }
+        return False;
+    }
+
+    #! Returns the messages received and not taken, for the message of a failure; repeated messages are counted
+    private list<string> summarizeBacklog() {
+        list<string> summary = ();
+        string last;
+        int count = 0;
+        foreach hash<auto> msg in (backlog) {
+            string desc = msg.type == "event"
+                ? sprintf("event %s%s", msg.event, msg.event == "stopped" ? sprintf(" (%y)", msg.body.reason) : "")
+                : sprintf("%s %s", msg.type, msg.command ?? "");
+            if (desc == last) {
+                ++count;
+                continue;
             }
-            if (!proc.running()) {
-                return False;
+            if (count) {
+                push summary, count > 1 ? sprintf("%s x%d", last, count) : last;
             }
+            last = desc;
+            count = 1;
+        }
+        if (count) {
+            push summary, count > 1 ? sprintf("%s x%d", last, count) : last;
+        }
+        return summary;
+    }
+
+    #! Returns what the adapter wrote to stderr so far, for the message of a failure
+    private string readStderr() {
+        try {
+            *string err = proc.readStderr(65536, 0);
+            return err ?? "";
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("(not readable: %s: %s)", ex.err, ex.desc);
         }
     }
 }
+%endif
 
 public class VscDebugAdapterTest inherits QUnit::Test {
     private {
@@ -333,6 +387,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
     }
 
     constructor() : Test("VscDebugAdapter", "1.0", \ARGV) {
+%ifndef NoProcess
         addTestCase("debug session over the Debug Adapter Protocol", \sessionTest());
         addTestCase("stopOnEntry false: the first stop is a breakpoint", \noStopOnEntryTest());
         addTestCase("stopOnEntry false: a breakpoint on the first statement stops", \firstStatementBreakpointTest());
@@ -342,7 +397,11 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("exception breakpoints", \exceptionTest());
         addTestCase("exceptions without an exception breakpoint", \exceptionNoFilterTest());
         addTestCase("uncaught exceptions", \uncaughtExceptionTest());
+        addTestCase("a message that the adapter does not send fails the wait", \missingMessageTest());
+%endif
+        # needs no adapter process
         addTestCase("the exception filters that stop a thread", \exceptionFilterTest());
+%ifndef NoProcess
         addTestCase("threads started by the program", \threadTest());
         addTestCase("pausing a running program", \pauseTest());
         addTestCase("structured variables are shown as trees", \variablesTest());
@@ -361,7 +420,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("the adapter communicates over sockets, as Visual Studio Code starts it", \socketTest());
         addTestCase("the adapter logs to its file and to the debug console", \logTest());
         addTestCase("the end of a program that started a process is reported", \childProcessTest());
+%endif
+        # needs no adapter process
         addTestCase("names of threads", \threadNameTest());
+%ifndef NoProcess
         addTestCase("all threads stop and continue together", \stopAllThreadsTest());
         addTestCase("output written before a stop is sent before it", \outputOrderTest());
         addTestCase("sources are parsed in the mode that the interpreter gives their files", \sourceModeTest());
@@ -374,6 +436,12 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         addTestCase("the restart request launches the program again", \restartTest());
         addTestCase("integers in hexadecimal", \hexFormatTest());
         addTestCase("hints for exceptions that match a common pitfall", \trapHintTest());
+%else
+        # every other case runs the adapter in a process
+        addTestCase("the cases that run the adapter in a process", sub () {
+            testSkip("no process module 2.2 or later");
+        });
+%endif
         set_return_value(main());
     }
 
@@ -395,127 +463,6 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         throw "TEST-SETUP-ERROR", sprintf("cannot locate Qore executable %y", name);
     }
 
-%ifdef NoProcess
-    sessionTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    endOfInputTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    noStopOnEntryTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    defaultStopOnEntryTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    firstStatementBreakpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    functionBreakpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    unverifiedBreakpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    exceptionTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    exceptionNoFilterTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    uncaughtExceptionTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    trapHintTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    threadTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    pauseTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    variablesTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    setVariableTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    evaluateTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    conditionalBreakpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    hitConditionTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    logpointTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    conditionalStepTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    socketTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    logTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    childProcessTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    attachTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    noServerTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    serverClosedTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    stopAllThreadsTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    stopOneThreadTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    outputOrderTest() {
-        testSkip("no process module 2.2 or later");
-    }
-
-    sourceModeTest() {
-        testSkip("no process module 2.2 or later");
-    }
-%endif
 
     # an exception stops the thread if its type is selected, or if it is not caught and uncaught exceptions are
     exceptionFilterTest() {
@@ -906,6 +853,31 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         proc.closeStdin();
         assertTrue(proc.wait(30s), "the adapter ends");
         assertEq(0, proc.exitCode());
+    }
+
+    #! a running adapter that does not send the message fails the wait in time, with what it did send (qore#5834)
+    missingMessageTest() {
+        Process proc = startAdapter();
+        on_exit if (proc.running()) {
+            proc.terminate();
+        }
+        DapClient dap(proc);
+        hash<auto> r = dap.request("initialize", {"adapterID": "qore", "linesStartAt1": True,
+            "columnsStartAt1": True, "pathFormat": "path"});
+        assertTrue(r.success, r.message);
+        # the adapter sends no stopped event before a program is launched
+        date start = now_us();
+        assertThrows("DAP-ERROR", "^no stopped event from the adapter within <time: 2 seconds>; the messages received "
+            "and not taken: .*; stray output: .*; adapter stderr: ", \dap.waitForEvent(), ("stopped", 2s));
+        date elapsed = now_us() - start;
+        assertTrue(elapsed >= 2s, sprintf("%y", elapsed));
+        assertTrue(elapsed < 30s, sprintf("%y", elapsed));
+        # the adapter is still running: the wait ended at the deadline, not at the end of the adapter's output
+        assertTrue(proc.running());
+        r = dap.request("disconnect");
+        assertTrue(r.success, r.message);
+        proc.closeStdin();
+        assertTrue(proc.wait(30s), "the adapter ends");
     }
 
     # with the "uncaught" filter, only an exception that no try statement catches stops the thread
@@ -2165,9 +2137,11 @@ print('exit code: %d' % p.wait(30))
         assertRegex(sprintf("^DEBUG-CONNECT-ERROR: cannot connect to the debug server at ws://localhost:%d: ", port),
             r.message);
         # the error of the connection is given: Linux refuses a connection to a port that is bound but does not
-        # listen, while on macOS the connection times out
-        assertRegex("SOCKET-CONNECT-ERROR: error in connect\\(\\) \\(target: localhost:[0-9]+\\): "
-            + "(Connection refused|Operation timed out)", r.message);
+        # listen, while on macOS the connection times out, or, when many processes connect at the same time, the
+        # connection is accepted by the system and then reset as the adapter writes its request, which is reported as
+        # a broken pipe: in each case the connection fails
+        assertRegex("(SOCKET-CONNECT-ERROR: error in connect\\(\\) \\(target: localhost:[0-9]+\\): "
+            + "(Connection refused|Operation timed out)|Broken pipe)", r.message);
         proc.closeStdin();
         assertTrue(proc.wait(30s), "the adapter ends");
         assertEq(0, proc.exitCode());

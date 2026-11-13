@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT generic calls with or-nothing container return types
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class GenericOrNothingContainersTest
+
+#! An or-nothing container of a type parameter is substituted with the type arguments of the call (qore#5849)
+/** A container type of a type parameter that also accepts NOTHING (*list<T>, *hash<string, T>, *softlist<T>,
+    *reference<T>) was not recognized as containing a type parameter: it was not substituted, so a generic function or
+    method with such a return type could not return a value, and type arguments were not inferred from arguments of
+    such types.  The probes (generic-or-nothing-containers/probes.q) run in each execution
+    mode in a child process, with tiered execution at the IR tier and promoted to native code, and as qcc-compiled
+    executables (-O0, -O3).
+*/
+class GenericOrNothingContainersTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Line = "[\"a\", \"b\"] list<string>; [1, 2] list<int>; null nothing; "
+            "{k: \"x\"} hash<string, string>; [1] list<int>; [1] list<int>; RUNTIME-TYPE-ERROR; "
+            "[3] list<int>; {u: \"y\"} hash<string, string>; [\"c\"] list<string>; [1] list<int>; "
+            "[\"v\"] list<string>; 4 integer; 5 integer; \"list\" string; \"*list\" string; [null]; "
+            "[7] list<int>";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("GenericOrNothingContainers", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        for (int i = 0; i < 8; ++i) {
+            expected += sprintf("%d: %s\n", i, Line);
+        }
+
+        addTestCase("or-nothing containers of type parameters are substituted in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-generic-or-nothing-containers-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "generic-or-nothing-containers" + DirSep
+            + "probes.q") + "\nprint(probes());\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+        }
+    }
+}

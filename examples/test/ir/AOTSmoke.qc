@@ -1,0 +1,12225 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The cases of the AOTSmoke-<n>.qtest tests: each runs one part of them, so that each takes a short time (all of them
+# took 121 s in a debug build, and more than the 300 s limit of run_tests.sh beside other tests), and together they
+# run every case (see addPartCase())
+
+class AOTSmokeBase inherits QUnit::Test {
+    private {
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+
+        string qore_bin;
+        string qcc_bin;
+        string timeout_cmd;
+        string libqore_dir;
+    }
+
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
+
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # Determine the directory containing libqore (for compile/link)
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libqore_dir + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = dirname(qore_bin) + "/qcc";
+        }
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+        if (!timeout_cmd.val()) {
+            timeout_cmd = backquote("command -v perl 2>/dev/null || true");
+            trim timeout_cmd;
+            if (timeout_cmd.val()) {
+                timeout_cmd += " -e 'alarm shift; exec @ARGV'";
+            }
+        }
+        addPartCase(1, "AOT hello world", \testHelloWorld());
+        addPartCase(1, "AOT arithmetic", \testArithmetic());
+        addPartCase(1, "AOT number literal arithmetic", \testNumberLiteralArithmetic());
+        addPartCase(1, "AOT Phase 5.3 fast-path functions", \testPhase53FastPaths());
+        addPartCase(1, "AOT control flow", \testControlFlow());
+        addPartCase(1, "AOT functions", \testFunctions());
+        addPartCase(1, "AOT inline NULL semantics", \testInlineNullSemantics());
+        addPartCase(1, "AOT map lvalue-key short-circuit cleanup",
+            \testMapLValueKeyShortCircuitCleanup());
+        addPartCase(1, "AOT top-level locals visible to functions",
+            \testTopLevelLocalsVisibleToFunctions());
+        addPartCase(1, "AOT top-level local controls function exception",
+            \testTopLevelLocalControlsFunctionException());
+        addPartCase(1, "AOT reference arg local reload", \testReferenceArgLocalReload());
+        addPartCase(1, "AOT parse reference map selector uses inner implicit index",
+            \testParseRefMapSelectorUsesInnerImplicitIndex());
+        addPartCase(1, "AOT foreach implicit index survives callee early return",
+            \testForeachImplicitIndexSurvivesCalleeEarlyReturn());
+        addPartCase(1, "AOT inline closure-call iterable is not discarded",
+            \testInlineClosureCallIterableNotDiscarded());
+        addPartCase(1, "AOT closure-use reference params teardown",
+            \testClosureUseReferenceParamsTeardown());
+        addPartCase(1, "AOT stale closure self member access fails",
+            \testStaleClosureSelfMemberAccessFails());
+        addPartCase(1, "AOT weak local assignment releases RHS",
+            \testWeakLocalAssignmentReleasesRhs());
+        addPartCase(1, "AOT weak hash element assignment releases RHS",
+            \testWeakHashElementAssignmentReleasesRhs());
+        addPartCase(1, "AOT weak diagnostic hash assignment releases object",
+            \testWeakDiagnosticHashAssignmentReleasesObject());
+        addPartCase(1, "AOT weak assignment preserves non-weak node values",
+            \testWeakAssignmentPreservesNonWeakNodeValues());
+        addPartCase(1, "AOT weak call argument releases RHS",
+            \testWeakCallArgumentReleasesRhs());
+        addPartCase(1, "AOT static method remove argument releases RHS",
+            \testStaticMethodRemoveArgumentReleasesRhs());
+        addPartCase(1, "AOT typed local initializer condition keeps RHS",
+            \testTypedLocalInitializerConditionKeepsRhs());
+        addPartCase(1, "AOT weak branch condition releases temp",
+            \testWeakBranchConditionReleasesTemp());
+        addPartCase(1, "AOT weak dot-eval invoke releases base",
+            \testWeakDotEvalInvokeReleasesBase());
+        addPartCase(1, "AOT object member assignment releases values",
+            \testObjectMemberAssignmentReleasesValues());
+        addPartCase(1, "AOT object member assignment with remove argument releases value",
+            \testObjectMemberAssignmentWithRemoveArgumentReleasesValue());
+        addPartCase(1, "AOT self member remove detaches member value",
+            \testSelfMemberRemoveDetachesMemberValue());
+        addPartCase(1, "AOT object remove list-valued dynamic key",
+            \testObjectRemoveListValuedDynamicKey());
+        addPartCase(1, "AOT constructor argument releases temporary value",
+            \testConstructorArgumentReleasesTemporaryValue());
+        addPartCase(1, "AOT inherited object member assignment releases value",
+            \testInheritedObjectMemberAssignmentReleasesValue());
+        addPartCase(1, "AOT object member call argument releases value",
+            \testObjectMemberCallArgumentReleasesValue());
+        addPartCase(1, "AOT base-typed object member optional call argument releases value",
+            \testBaseTypedObjectMemberOptionalCallArgumentReleasesValue());
+        addPartCase(1, "AOT qorus library loader call releases action member argument",
+            \testQorusLibraryLoaderCallReleasesActionMemberArgument());
+        addPartCase(1, "AOT derived base-constructor action argument releases context",
+            \testDerivedBaseConstructorActionArgumentReleasesContext());
+        addPartCase(1, "AOT direct method member argument releases value",
+            \testDirectMethodMemberArgumentReleasesValue());
+        addPartCase(1, "AOT return wrapper releases context object",
+            \testReturnWrapperReleasesContextObject());
+        addPartCase(1, "AOT static return wrapper releases context object",
+            \testStaticReturnWrapperReleasesContextObject());
+        addPartCase(1, "AOT typed REST response wrapper releases context object",
+            \testTypedRestResponseWrapperReleasesContextObject());
+        addPartCase(1, "AOT REST dispatch response subhashes release context object",
+            \testRestDispatchResponseSubhashesReleaseContextObject());
+        addPartCase(1, "AOT Qorus-style REST update releases weak-registered context",
+            \testQorusStyleRestUpdateReleasesWeakRegisteredContext());
+        addPartCase(1, "AOT Qorus RBAC delta releases forwarded optional helper",
+            \testQorusRbacDeltaReleasesForwardedOptionalHelper());
+        addPartCase(1, "AOT return wrapper exception releases context object",
+            \testReturnWrapperExceptionReleasesContextObject());
+        addPartCase(1, "AOT direct method exception releases self and caller locals",
+            \testDirectMethodExceptionReleasesSelfAndCallerLocals());
+        addPartCase(1, "AOT dynamic method call releases callee locals",
+            \testDynamicMethodCallReleasesCalleeLocals());
+        addPartCase(1, "AOT switch case break releases block locals",
+            \testSwitchCaseBreakReleasesBlockLocals());
+        addPartCase(1, "AOT switch case immediate break releases ignored method result",
+            \testSwitchCaseImmediateBreakReleasesIgnoredMethodResult());
+        addPartCase(1, "AOT sibling switch duplicate local names release block locals",
+            \testSiblingSwitchDuplicateLocalNamesReleaseBlockLocals());
+        addPartCase(1, "AOT sibling switch duplicate typed locals release exact active local",
+            \testSiblingSwitchDuplicateTypedLocalsReleaseExactActiveLocal());
+        addPartCase(1, "AOT try switch case break releases block locals",
+            \testTrySwitchCaseBreakReleasesBlockLocals());
+        addPartCase(1, "AOT metadata-style ignored update releases context",
+            \testMetadataStyleIgnoredUpdateReleasesContext());
+        addPartCase(1, "AOT switch context with reporter self releases locals",
+            \testSwitchContextWithReporterSelfReleasesLocals());
+        addPartCase(1, "AOT ignored self-returning method result releases locals",
+            \testIgnoredSelfReturningMethodResultReleasesLocals());
+        addPartCase(1, "AOT background self call releases self",
+            \testBackgroundSelfCallReleasesSelf());
+        addPartCase(1, "AOT background self call dispatches to derived private method",
+            \testBackgroundSelfCallDispatchesDerivedPrivateMethod());
+        addPartCase(1, "AOT background self call releases self argument",
+            \testBackgroundSelfCallReleasesSelfArgument());
+        addPartCase(1, "AOT background argv releases object member argument",
+            \testBackgroundArgvReleasesObjectMemberArgument());
+        addPartCase(1, "AOT background call_function_args releases object member argument",
+            \testBackgroundCallFunctionArgsReleasesObjectMemberArgument());
+        addPartCase(1, "AOT background self argv call_function_args releases self argument",
+            \testBackgroundSelfArgvCallFunctionArgsReleasesSelfArgument());
+        addPartCase(1, "AOT map self argument releases context",
+            \testMapSelfArgumentReleasesContext());
+        addPartCase(1, "AOT map object method self argument releases context",
+            \testMapObjectMethodSelfArgumentReleasesContext());
+        addPartCase(1, "AOT ignored map object method self argument releases context",
+            \testIgnoredMapObjectMethodSelfArgumentReleasesContext());
+        addPartCase(1, "AOT metadata prepare self call releases action context",
+            \testMetadataPrepareSelfCallReleasesActionContext());
+        addPartCase(1, "AOT IR-only local cache releases object on return",
+            \testIrOnlyLocalCacheReleasesObjectOnReturn());
+        addPartCase(1, "AOT dot-eval memberGate base",
+            \testDotEvalMemberGateBase());
+        addPartCase(1, "AOT string operations", \testStringOps());
+        addPartCase(1, "AOT soft string switch case", \testSoftStringSwitchCase());
+        addPartCase(1, "AOT regex switch", \testSwitchRegex());
+        addPartCase(1, "AOT .qo debugger regex extract keeps global flag",
+            \testQoDebuggerRegexExtractGlobal());
+        addPartCase(1, "AOT stripped debugger statement locations",
+            \testStrippedDebuggerStatementLocations());
+        addPartCase(1, "AOT batch --parse-option=PO_ENABLE_DEBUG enables @assert",
+            \testQoBatchParseOptionEnableDebug());
+        addPartCase(1, "AOT exit code", \testExitCode());
+        addPartCase(1, "AOT ARGV passthrough", \testArgvPassthrough());
+        addPartCase(1, "AOT error handling", \testErrorHandling());
+        addPartCase(2, "AOT exception stops method execution", \testExceptionStopsMethodExecution());
+        addPartCase(2, "AOT compile missing file", \testCompileMissingFile());
+        addPartCase(2, "AOT compile default output", \testCompileDefaultOutput());
+        # Phase 7b: pointer indirection tests
+        addPartCase(2, "AOT all functions pre-compiled", \testAllFunctionsPrecompiled());
+        addPartCase(2, "AOT local variable scoping", \testLocalVariableScoping());
+        addPartCase(2, "AOT nested duplicate local names", \testNestedDuplicateLocalNames());
+        addPartCase(2, "AOT lvalue operations", \testLvalueOps());
+        addPartCase(2, "AOT multiple user functions", \testMultipleUserFunctions());
+        addPartCase(2, "AOT method calls", \testMethodCalls());
+        addPartCase(2, "AOT inherited overload dot-eval dispatch",
+            \testInheritedOverloadDotEvalDispatch());
+        addPartCase(2, "AOT inherited method private internal context",
+            \testInheritedMethodPrivateInternalContext());
+        addPartCase(2, "AOT optional val guard overload dispatch",
+            \testOptionalValGuardOverloadDispatch());
+        addPartCase(2, "AOT qmod nullable static overload dispatch",
+            \testQmodNullableStaticOverloadDispatch());
+        addPartCase(2, "AOT implicit self copy method call", \testImplicitSelfCopyMethodCall());
+        addPartCase(2, "AOT abstract sibling private:internal member context",
+            \testAbstractSiblingPrivateInternalMemberContext());
+        addPartCase(2, "AOT abstract sibling inherited overload dispatch",
+            \testAbstractSiblingInheritedOverloadDispatch());
+        addPartCase(2, "AOT object member store private access checks",
+            \testObjectMemberStorePrivateAccessChecks());
+        addPartCase(2, "AOT hash operations", \testHashOps());
+        addPartCase(2, "AOT narrowed container COW store", \testNarrowedContainerCowStore());
+        addPartCase(2, "AOT list operations", \testListOps());
+        addPartCase(2, "AOT nested function calls", \testNestedFunctionCalls());
+        addPartCase(2, "AOT on_exit blocks", \testOnExitBlocks());
+        addPartCase(2, "AOT handler re-inlining cycle guard",
+            \testHandlerRecursionGuard());
+        addPartCase(2, "AOT on_exit return fires once",
+            \testOnExitReturnFiresOnce());
+        addPartCase(2, "AOT cross-module same-name dispatch",
+            \testCrossModuleSameName());
+        addPartCase(2, "AOT qcc stub external constants",
+            \testQccStubExternalConstants());
+        addPartCase(2, "AOT qcc script define excludes inactive branches",
+            \testQccScriptDefineExcludesInactiveBranches());
+        addPartCase(2, "AOT linked .qo replays module commands",
+            \testAOTLinkedQoModuleCommands());
+        addPartCase(2, "AOT qmod dependency honors prepend module path",
+            \testAOTModuleDependencyPrependPath());
+        addPartCase(2, "AOT qmod try-module dependency metadata",
+            \testAOTModuleTryModuleDependencyMetadata());
+        addPartCase(2, "AOT qmod builtin features are not module dependencies",
+            \testAOTModuleBuiltinFeaturesNotDependencies());
+        addPartCase(2, "AOT ref foreach ParseNode pointer",
+            \testRefForeachParseNode());
+        addPartCase(2, "AOT ref foreach narrowed element type",
+            \testRefForeachNarrowedElement());
+        addPartCase(2, "AOT type conversions", \testTypeConversions());
+        # AOT opt-level, cross-compilation, and static linking tests
+        addPartCase(2, "AOT optimization levels", \testAOTOptLevels());
+        addPartCase(2, "AOT target triple", \testAOTTargetTriple());
+        addPartCase(2, "AOT static linking", \testAOTStaticLink());
+        addPartCase(2, "AOT static link not built", \testAOTStaticLinkNotBuilt());
+        # Module compilation tests
+        addPartCase(2, "AOT module compile", \testAOTModuleCompile());
+        addPartCase(2, "AOT module preserves variant parse options",
+            \testAOTModuleVariantParseOptions());
+        addPartCase(2, "AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
+        addPartCase(2, "AOT module no-narrow reference signatures",
+            \testAOTModuleNoNarrowReferenceSignatures());
+        addPartCase(2, "AOT module no-narrow shared param COW store",
+            \testAOTModuleNoNarrowParamCowStore());
+        addPartCase(2, "AOT module SSO values avoid numeric fast paths",
+            \testAOTModuleSsoAvoidsNumericFastPaths());
+        addPartCase(2, "AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
+        addPartCase(2, "AOT module IR-only local owns invoke result",
+            \testAOTModuleIrOnlyLocalOwnsInvokeResult());
+        addPartCase(2, "AOT module weak diagnostic hashes release objects",
+            \testAOTModuleWeakDiagnosticHashesReleaseObjects());
+        addPartCase(2, "AOT module pointer NULL coalescing", \testAOTModulePointerNullCoalescing());
+        addPartCase(2, "AOT module hashdecl member compound lvalue",
+            \testAOTModuleHashdeclMemberCompoundLValue());
+        addPartCase(2, "AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
+        addPartCase(2, "AOT module namespace constant refs",
+            \testAOTModuleNamespaceConstantRefs());
+        addPartCase(2, "AOT module nested class constant refs",
+            \testAOTModuleNestedClassConstantRefs());
+        addPartCase(2, "AOT module BCA hashdecl class constants",
+            \testAOTModuleBcaHashdeclClassConstants());
+        addPartCase(2, "AOT module computed member defaults",
+            \testAOTModuleComputedMemberDefaults());
+        addPartCase(2, "AOT module unary minus hashdecl init",
+            \testAOTModuleUnaryMinusHashdeclInit());
+        addPartCase(2, "AOT module closure-captured loop condition",
+            \testAOTModuleClosureCapturedLoopCondition());
+        addPartCase(2, "AOT module recursive closure local frame isolation",
+            \testAOTModuleRecursiveClosureLocalFrameIsolation());
+        addPartCase(2, "AOT module default object args", \testAOTModuleDefaultObjectArgs());
+        addPartCase(2, "AOT module compile custom output", \testAOTModuleCompileCustomOutput());
+        addPartCase(2, "AOT module compile opt levels", \testAOTModuleCompileOptLevels());
+        addPartCase(2, "AOT module compile error", \testAOTModuleCompileError());
+        addPartCase(2, "AOT module nested namespace paths", \testAOTModuleNestedNamespacePaths());
+        # Split module tests
+        addPartCase(2, "AOT split module basic", \testAOTSplitModuleBasic());
+        addPartCase(2, "AOT split module nested hash constant init",
+            \testAOTSplitModuleNestedHashConstantInit());
+        addPartCase(2, "AOT split module qm only", \testAOTSplitModuleQmOnly());
+        addPartCase(2, "AOT split module missing qm", \testAOTSplitModuleMissingQm());
+        addPartCase(2, "AOT split module auto detect", \testAOTSplitModuleAutoDetect());
+        addPartCase(2, "AOT split module trailing slash", \testAOTSplitModuleTrailingSlash());
+        # Source stripping tests (Phase 8)
+        addPartCase(2, "AOT strip source basic", \testStripSourceBasic());
+        addPartCase(2, "AOT strip source arithmetic", \testStripSourceArithmetic());
+        addPartCase(2, "AOT strip source strings", \testStripSourceStrings());
+        addPartCase(2, "AOT strip source multiple functions", \testStripSourceMultipleFunctions());
+        addPartCase(2, "AOT strip source binary size", \testStripSourceBinarySize());
+        addPartCase(2, "AOT strip source backward compat", \testStripSourceBackwardCompat());
+        addPartCase(2, "AOT strip source compile output", \testStripSourceCompileOutput());
+        addPartCase(2, "AOT strip source no source in binary", \testStripSourceNoSourceInBinary());
+        # Strip source type export tests (Phase 9)
+        addPartCase(2, "AOT strip source hashdecl", \testStripSourceHashDecl());
+        addPartCase(2, "AOT strip source generic hashdecl", \testStripSourceGenericHashDecl());
+        addPartCase(2, "AOT strip source hashdecl inheritance", \testStripSourceHashDeclInheritance());
+        addPartCase(2, "AOT strip source enum", \testStripSourceEnum());
+        addPartCase(2, "AOT enum member returned through a context-independent fast entry",
+            \testEnumMemberFastEntryContext());
+        addPartCase(2, "AOT strip source hashdecl enum member type",
+            \testStripSourceHashdeclEnumMemberType());
+        addPartCase(2, "AOT strip source nested object complex member type",
+            \testStripSourceNestedObjectComplexMemberType());
+        addPartCase(2, "AOT strip source module dependency", \testStripSourceModuleDependency());
+        # Class inheritance and static member tests
+        addPartCase(2, "AOT strip source class inheritance", \testStripSourceClassInheritance());
+        addPartCase(2, "AOT strip source static members", \testStripSourceStaticMembers());
+        addPartCase(2, "AOT strip source member default function call",
+            \testStripSourceMemberDefaultFunctionCall());
+        # Map optimization opcodes
+        addPartCase(2, "AOT map hash key opcodes", \testAOTMapHashKeyOpcodes());
+        addPartCase(2, "AOT direct-index map with heap results", \testAOTDirectIndexMapHeapResults());
+        addPartCase(3, "AOT typed map assigned-state guards", \testAOTTypedMapAssignedState());
+        addPartCase(3, "AOT reference-output assigned-state guards",
+            \testAOTReferenceOutputAssignedState());
+        addPartCase(3, "AOT direct-index map-select implicit arg cleanup",
+            \testAOTDirectIndexMapSelectImplicitArgCleanup());
+        addPartCase(3, "AOT typed scalar select construction",
+            \testAOTTypedScalarSelectConstruction());
+        addPartCase(3, "AOT typed scalar map-select construction",
+            \testAOTTypedScalarMapSelectConstruction());
+        # AOT Binary Format v1 tests
+        addPartCase(3, "AOT v1 version field", \testVersionField());
+        addPartCase(3, "AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
+        addPartCase(3, "AOT binary records no source modification time", \testNoSourceStatFingerprint());
+        addPartCase(3, "AOT module bytes do not depend on the source modification time",
+            \testModuleBytesIndependentOfSourceMtime());
+        addPartCase(3, "AOT v1 feature flags", \testFeatureFlagsNonZero());
+        addPartCase(3, "AOT subscript compound assign", \testSubscriptCompoundAssign());
+        addPartCase(3, "AOT hash compound native", \testHashCompoundNative());
+        addPartCase(3, "AOT thread-local vars", \testThreadLocalVars());
+        # Strip source: global variable initialization
+        addPartCase(3, "AOT strip source global var init", \testStripSourceGlobalVarInit());
+        # Strip source: complex hash/list construction via new
+        addPartCase(3, "AOT strip source complex type new", \testStripSourceComplexTypeNew());
+        addPartCase(3, "AOT strip source typed list preserves hashdecl element type",
+            \testStripSourceTypedListHashdeclElement());
+        # Strip source: runtime constant resolution
+        addPartCase(3, "AOT strip source runtime const ref", \testStripSourceRuntimeConstRef());
+        addPartCase(3, "AOT constant reverse map honors namespace constant order",
+            \testNamespaceConstantReverseMapOrder());
+        addPartCase(3, "AOT qcc one-shot multi-source executable",
+            \testQccOneShotMultiSourceExecutable());
+        addPartCase(3, "AOT standalone top-level static fast entry",
+            \testStandaloneTopLevelStaticFastEntry());
+        addPartCase(3, "AOT batch fragments avoid forward constant refs",
+            \testBatchFragmentConstantReverseMapOrder());
+        addPartCase(3, "AOT batch fragments defer class constant refs",
+            \testBatchFragmentDeferredClassConstantRefs());
+        addPartCase(3, "AOT batch fragments filter statement locations",
+            \testBatchFragmentStatementLocFilter());
+        addPartCase(3, "AOT qcc dump modern slot expressions",
+            \testQccDumpModernSlotExprKinds());
+        addPartCase(3, "AOT qcc dump assignment, absolute comparison and streaming slot expressions",
+            \testQccDumpCompoundSlotExprKinds());
+        addPartCase(3, "AOT qcc dump names every section", \testQccDumpSectionNames());
+        addPartCase(3, "AOT qcc dump class injection metadata",
+            \testQccDumpClassInjectionMetadata());
+        # Strip source: static class variable access (module)
+        addPartCase(3, "AOT strip source static varref module", \testStripSourceStaticVarrefModule());
+        addPartCase(3, "AOT strip source module init function ref",
+            \testStripSourceModuleInitFunctionRef());
+        # Strip source: on_exit/on_success handler IR
+        addPartCase(3, "AOT strip source on_exit handlers", \testStripSourceOnExitHandlers());
+        addPartCase(3, "AOT strip source on_exit builtin class", \testStripSourceOnExitBuiltinClass());
+        addPartCase(3, "AOT strip source constructor args", \testStripSourceConstructorArgs());
+        addPartCase(3, "AOT strip source default args", \testStripSourceDefaultArgs());
+        addPartCase(3, "AOT strip source cast parse hash", \testStripSourceCastParseHash());
+        addPartCase(3, "AOT strip source dynamic hash-key parse reference",
+            \testStripSourceDynamicHashKeyParseReference());
+        addPartCase(3, "AOT strip source reference member parse reference",
+            \testStripSourceReferenceMemberParseReference());
+        addPartCase(3, "AOT strip source cleanup exception catch",
+            \testStripSourceCleanupExceptionCatch());
+        addPartCase(3, "AOT block local exception cleanup before catch",
+            \testBlockLocalExceptionCleanupBeforeCatch());
+        addPartCase(3, "AOT on_exit exception cleanup before catch",
+            \testOnExitExceptionCleanupBeforeCatch());
+        # Closure and regex handler serialization tests
+        addPartCase(3, "AOT closure in function", \testClosureInFunction());
+        addPartCase(3, "AOT closure lambda", \testClosureLambda());
+        addPartCase(3, "AOT closure typed params defaults", \testClosureTypedParamsDefaults());
+        addPartCase(3, "AOT closure multi capture", \testClosureMultiCapture());
+        addPartCase(3, "AOT closure strip source", \testClosureStripSource());
+        addPartCase(3, "AOT closure strip source ListIndexStore COW",
+            \testClosureStripSourceListIndexStoreCow());
+        addPartCase(3, "AOT closure strip source captured local return",
+            \testClosureStripSourceCapturedLocalReturn());
+        addPartCase(3, "AOT closure strip source regex substitution",
+            \testClosureStripSourceRegexSubst());
+        addPartCase(3, "AOT closure strip source date literal",
+            \testClosureStripSourceDateLiteral());
+        addPartCase(3, "AOT UTC date literal zone", \testUTCDateLiteralZone());
+        addPartCase(3, "AOT fixed-offset date literal zone", \testFixedOffsetDateLiteralZone());
+        addPartCase(3, "AOT strip source class cast lvalue",
+            \testStripSourceClassCastLValue());
+        addPartCase(3, "AOT closure strip source logical and/or",
+            \testClosureStripSourceLogicalAndOr());
+        addPartCase(3, "AOT closure strip source call reference call",
+            \testClosureStripSourceCallRefCall());
+        addPartCase(3, "AOT method closure param", \testAOTMethodClosureParam());
+        addPartCase(3, "AOT method closure thread init self",
+            \testAOTMethodClosureThreadInitSelf());
+        addPartCase(3, "AOT regex switch in on_exit", \testRegexSwitchInOnExit());
+        addPartCase(3, "AOT nested on_exit", \testNestedOnExit());
+        # Closure default value serialization tests
+        addPartCase(3, "AOT closure default int", \testClosureDefaultInt());
+        addPartCase(3, "AOT closure default bool", \testClosureDefaultBool());
+        addPartCase(3, "AOT closure default float", \testClosureDefaultFloat());
+        addPartCase(3, "AOT closure default multiple", \testClosureDefaultMultiple());
+        addPartCase(3, "AOT closure default strip source", \testClosureDefaultStripSource());
+        # Operator expression coverage tests (select, keys, instanceof, map)
+        addPartCase(3, "AOT operator select standalone", \testOperatorSelectStandalone());
+        addPartCase(3, "AOT operator select as argument", \testOperatorSelectAsArgument());
+        addPartCase(3, "AOT operator keys", \testOperatorKeys());
+        addPartCase(3, "AOT operator instanceof", \testOperatorInstanceof());
+        addPartCase(3, "AOT operator map optimized", \testOperatorMapOptimized());
+        addPartCase(3, "AOT operator map range type info", \testOperatorMapRangeTypeInfo());
+        addPartCase(3, "AOT context row expression", \testContextRowExpression());
+        # Closure exception safety tests
+        addPartCase(3, "AOT closure exception safety", \testClosureExceptionSafety());
+        addPartCase(3, "AOT closure exception outer", \testClosureExceptionOuter());
+        # Regression: corrupt .qmod load must not deadlock inside parse-lock scope
+        addPartCase(3, "AOT corrupt qmod load no deadlock", \testCorruptQmodLoadNoDeadlock());
+        addPartCase(3, "AOT corrupt qmod reported rather than fatal when checking is on",
+            \testCorruptQmodSignatureCheck());
+        addPartCase(3, "AOT overload default-arg specificity",
+            \testAOTOverloadDefaultArgSpecificity());
+        # Regression: exceptions escaping catch blocks must unwind catch scopes
+        # (leaked caught-exception trees + stale td->catchException before the fix)
+        addPartCase(3, "AOT exception escaping catch block", \testExceptionEscapingCatchBlock());
+        set_return_value(main());
+    }
+
+    #! adds the case \a name if it is in the part \a case_part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! Write code to a temp .qr file and return {src_path, out_path}
+    private hash<auto> writeTempScript(string code) {
+        # .qr implies %modern for standalone scripts.
+        string base = sprintf("/tmp/aot_test_%d_%d", getpid(), rand());
+        string src_path = base + ".qr";
+        string out_path = base;
+
+        File f();
+        f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+
+        return {
+            "src": src_path,
+            "out": out_path,
+        };
+    }
+
+    private string prependModulePath(string path) {
+        string cur = ENV.QORE_MODULE_DIR ?? "";
+        return cur == "" ? path : path + ":" + cur;
+    }
+
+    private string dumpQccInfo(string path, bool symbols) {
+        string opts = symbols ? "--dump-info --dump-symbols" : "--dump-info";
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s %s %s 2>&1",
+            libqore_dir, qcc_bin, opts, path));
+    }
+
+    private string dumpQccSections(string path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s --dump-info --dump-sections %s 2>&1",
+            libqore_dir, qcc_bin, path));
+    }
+
+    private int aotMetadataOffset(string path, string dump_out) {
+        *list<string> match = (dump_out =~ x/embedded metadata at file offset ([0-9]+)/);
+        assertTrue(match != NOTHING,
+            "qcc dump-info reports embedded metadata file offset for " + path + ": " + dump_out);
+        return match[0].toInt();
+    }
+
+    #! Compile a script with extra compile flags, run it, and return {compile_out, run_out}
+    private hash<auto> compileWithFlags(string code, list<string> compile_flags, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Build compile command with extra flags (flags must come BEFORE the source file)
+        string flags_str = "";
+        for (int i = 0; i < compile_flags.size(); ++i) {
+            flags_str += " " + compile_flags[i];
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --output %s%s %s 2>&1",
+            libqore_dir, qore_bin, paths.out, flags_str, paths.src);
+        string compile_out = backquote(compile_cmd);
+
+        string run_out;
+        if (is_file(paths.out)) {
+            string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+            if (run_args) {
+                for (int i = 0; i < run_args.size(); ++i) {
+                    run_cmd += " " + run_args[i];
+                }
+            }
+            run_cmd += " 2>&1";
+            run_out = backquote(run_cmd);
+        } else {
+            run_out = "";
+        }
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "compiled": is_file(paths.out),
+        };
+    }
+
+    #! Try to compile with extra flags and return compile output (no run)
+    private string compileOnly(string code, list<string> compile_flags) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+            unlink(paths.out + ".o");
+        }
+
+        # Flags must come BEFORE the source file
+        string flags_str = "";
+        for (int i = 0; i < compile_flags.size(); ++i) {
+            flags_str += " " + compile_flags[i];
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --output %s%s %s 2>&1",
+            libqore_dir, qore_bin, paths.out, flags_str, paths.src);
+        return backquote(compile_cmd);
+    }
+
+    #! Compile a script to a standalone executable, run it, and return stdout
+    private string compileAndRun(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile with --include-source to embed source text (set QORE_LIBDIR so the AOT
+        # linker finds the correct libqore)
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Verify the executable was created
+        if (!is_file(paths.out)) {
+            return "COMPILE_FAILED: " + compile_out;
+        }
+
+        # Run the compiled executable
+        string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+        if (run_args) {
+            for (int i = 0; i < run_args.size(); ++i) {
+                run_cmd += " " + run_args[i];
+            }
+        }
+        run_cmd += " 2>&1";
+        return backquote(run_cmd);
+    }
+
+    private bool compileOutputHasCompleteAot(string compile_out) {
+        *list<string> native_match = (compile_out =~ x/generated native code for (\d+) Qore code variants/);
+        *list<string> metadata_match = (compile_out =~ x/complete compilation metadata generated for (\d+) Qore code variants/);
+        return native_match && metadata_match && native_match[0] == metadata_match[0];
+    }
+
+    private bool compileOutputHasCompleteAotCount(string compile_out, string count) {
+        return compile_out.regex("generated native code for " + count + " Qore code variants")
+            && compile_out.regex("complete compilation metadata generated for " + count + " Qore code variants");
+    }
+
+    #! Compile a script and return {compile_out, run_out, all_precompiled}
+    private hash<auto> compileCheckAndRun(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile with --include-source to embed source text
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --include-source %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Full AOT serialization is mandatory; the output reports native code
+        # generation and complete metadata for the same function count.
+        bool all_precompiled = compileOutputHasCompleteAot(compile_out);
+
+        string run_out;
+        if (is_file(paths.out)) {
+            string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+            if (run_args) {
+                for (int i = 0; i < run_args.size(); ++i) {
+                    run_cmd += " " + run_args[i];
+                }
+            }
+            run_cmd += " 2>&1";
+            run_out = backquote(run_cmd);
+        } else {
+            run_out = "COMPILE_FAILED: " + compile_out;
+        }
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "all_precompiled": all_precompiled,
+        };
+    }
+
+    #! Run a script with the interpreter and return stdout
+    private string runInterpreted(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string cmd = sprintf("%s -b --enable-debug %s", qore_bin, paths.src);
+        if (run_args) {
+            for (int i = 0; i < run_args.size(); ++i) {
+                cmd += " " + run_args[i];
+            }
+        }
+        cmd += " 2>&1";
+        return backquote(cmd);
+    }
+
+    private string runExecMode(string code, string mode) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        return ExecModeHarness::run(sprintf("%s -b --enable-debug --exec-mode=%s %s",
+            qore_bin, mode, paths.src));
+    }
+
+    testHelloWorld() {
+        string code = "%modern\nprintf(\"Hello, World!\\n\");\n";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT hello world output matches interpreter");
+    }
+
+    testArithmetic() {
+        string code = "%modern
+int sum = 0;
+for (int i = 0; i < 10; ++i) {
+    sum += i;
+}
+printf(\"sum: %d\\n\", sum);
+
+int a = 100;
+int b = 37;
+printf(\"add: %d\\n\", a + b);
+printf(\"sub: %d\\n\", a - b);
+printf(\"mul: %d\\n\", a * b);
+printf(\"div: %d\\n\", a / b);
+printf(\"mod: %d\\n\", a % b);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT arithmetic output matches interpreter");
+    }
+
+    testNumberLiteralArithmetic() {
+        string code = "%modern
+number result_add = 3.14159n + 2.71828n;
+number result_sub = 3.14159n - 2.71828n;
+number result_mul = 3.14159n * 2.71828n;
+number result_div = 3.14159n / 2.71828n;
+printf(\"%n\\n\", result_add);
+printf(\"%n\\n\", result_sub);
+printf(\"%n\\n\", result_mul);
+printf(\"%n\\n\", result_div);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT number literal arithmetic output matches interpreter");
+    }
+
+    testPhase53FastPaths() {
+        string code = "%modern
+# Test Phase 5.3 fast-path builtin functions
+# These use optimized fast-call paths when called from JIT/AOT code
+int result1 = length(\"hello world\");
+printf(\"length: %d\\n\", result1);
+
+string upper = toupper(\"hello world\");
+printf(\"upper: %s\\n\", upper);
+
+string lower = tolower(\"HELLO WORLD\");
+printf(\"lower: %s\\n\", lower);
+
+int len = strlen(\"test string\");
+printf(\"strlen: %d\\n\", len);
+
+# Verify pseudo-method size works
+list l = (1, 2, 3, 4, 5);
+printf(\"list size: %d\\n\", l.size());
+
+hash h = (\"a\": 1, \"b\": 2, \"c\": 3);
+printf(\"hash size: %d\\n\", h.size());
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT Phase 5.3 fast-path functions output matches interpreter");
+    }
+
+    testControlFlow() {
+        string code = "%modern
+int x = 42;
+if (x > 40) {
+    printf(\"big\\n\");
+} else {
+    printf(\"small\\n\");
+}
+
+int count = 0;
+while (count < 5) {
+    ++count;
+}
+printf(\"count: %d\\n\", count);
+
+int total = 0;
+int i = 0;
+do {
+    total += i;
+    ++i;
+} while (i < 5);
+printf(\"total: %d\\n\", total);
+
+switch (x) {
+    case 42:
+        printf(\"matched\\n\");
+        break;
+    default:
+        printf(\"no match\\n\");
+        break;
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT control flow output matches interpreter");
+    }
+
+    testFunctions() {
+        string code = "%modern
+int sub factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+int sub fibonacci(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+printf(\"fact(10): %d\\n\", factorial(10));
+printf(\"fib(10): %d\\n\", fibonacci(10));
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT function output matches interpreter");
+    }
+
+    testInlineNullSemantics() {
+        string code = "%modern
+sub check(auto v) {
+    printf(\"arg=%y type=%s eq=%y seq=%y exists=%y int=%d\\n\",
+        v, v.type(), v == NULL, v === NULL, exists v, int(v));
+}
+
+printf(\"const=%y type=%s eq=%y seq=%y\\n\",
+    NULL, NULL.type(), NULL == NULL, NULL === NULL);
+hash<auto> h;
+h.valid = NULL;
+printf(\"hash=%y type=%s eq=%y seq=%y exists=%y\\n\",
+    h.valid, h.valid.type(), h.valid == NULL, h.valid === NULL, exists h.valid);
+check(NULL);
+";
+        string ast_out = runExecMode(code, "ast");
+        assertEq(ast_out, runExecMode(code, "ir"), "IR inline NULL semantics match AST");
+        assertEq(ast_out, runExecMode(code, "jit"), "JIT inline NULL semantics match AST");
+        assertEq(ast_out, compileAndRun(code), "AOT inline NULL semantics match AST");
+    }
+
+    testMapLValueKeyShortCircuitCleanup() {
+        # Regression: a map element body that assigns to a dynamic lvalue key
+        # ($1) while the RHS uses a short-circuit operator (??, ?:, &&, ||)
+        # splits the map body into extra basic blocks.  The body's closing
+        # DiscardTemps then landed in a block laid out *after* the map's
+        # direct-final block, so the LLVM emitter (visiting blocks in layout
+        # order) paired each DiscardTemps with the wrong PushTempMark and
+        # dropped the map source list's reference once per iteration — freeing
+        # the source list mid-loop.  Symptom: INVALID-MEMBER '' or a crash on
+        # the second element under jit/ir-compiled/aot (the AST interpreter was
+        # unaffected).  Verify every mode agrees with the AST reference.
+        list<string> codes = (
+            # object member lvalue key + ?? on a hash member
+            "%modern
+class C { public { auto a; auto b; } }
+C c();
+hash<auto> h = {\"a\": \"X\", \"b\": \"Y\"};
+map c.$1 = h.$1 ?? NOTHING, (\"a\", \"b\");
+printf(\"%y %y\\n\", c.a, c.b);",
+            # hash member lvalue key + ?? with arithmetic over 3 elements
+            "%modern
+hash<auto> d = {};
+hash<auto> h = {\"a\": 1, \"c\": 3};
+map d.$1 = (h.$1 ?? 0) + 10, (\"a\", \"b\", \"c\");
+printf(\"%y\\n\", d);",
+            # ternary RHS
+            "%modern
+hash<auto> d = {};
+hash<auto> h = {\"a\": \"X\", \"b\": \"Y\"};
+map d.$1 = exists h.$1 ? h.$1 : NOTHING, (\"a\", \"b\");
+printf(\"%y\\n\", d);",
+            # logical-and/ternary short circuit
+            "%modern
+hash<auto> d = {};
+map d.$1 = ($1 == \"a\" && True) ? \"Y\" : \"N\", (\"a\", \"b\");
+printf(\"%y\\n\", d);",
+        );
+        foreach string code in (codes) {
+            string ast_out = runExecMode(code, "ast");
+            assertEq(ast_out, runExecMode(code, "ir"), "IR map lvalue-key short-circuit cleanup");
+            assertEq(ast_out, runExecMode(code, "jit"), "JIT map lvalue-key short-circuit cleanup");
+            assertEq(ast_out, compileAndRun(code), "AOT map lvalue-key short-circuit cleanup");
+        }
+    }
+
+    testTopLevelLocalsVisibleToFunctions() {
+        string code = "%modern
+bool flag = False;
+int counter = 0;
+
+sub update() {
+    printf(\"seen=%y counter=%d\\n\", flag, counter);
+    flag = False;
+    counter += 1;
+}
+
+flag = True;
+counter = 41;
+update();
+printf(\"after=%y counter=%d\\n\", flag, counter);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "top-level local sync regression fully precompiled: "
+            + result.compile_out);
+        assertEq("seen=True counter=41\nafter=False counter=42\n", result.run_out,
+            "AOT functions must read and write top-level locals through the shared runtime stack");
+    }
+
+    testTopLevelLocalControlsFunctionException() {
+        string code = "%modern
+bool do_throw = False;
+
+sub maybeThrow() {
+    if (do_throw) {
+        throw \"AOT-TOP-LEVEL-FLAG\", \"top-level flag visible\";
+    }
+    printf(\"not thrown\\n\");
+}
+
+do_throw = True;
+try {
+    maybeThrow();
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught=%s\\n\", ex.err);
+}
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "top-level exception flag regression fully precompiled: "
+            + result.compile_out);
+        assertEq("caught=AOT-TOP-LEVEL-FLAG\n", result.run_out,
+            "AOT functions must observe top-level locals before control-flow decisions");
+    }
+
+    testReferenceArgLocalReload() {
+        string code = "%modern
+class C {
+    public static bump(reference<int> x) {
+        x += 1;
+    }
+
+    public static int test() {
+        int depth = 1;
+        int x = 0;
+        C::bump(\\x);
+        depth += x;
+        return depth;
+    }
+}
+
+printf(\"value=%d\\n\", C::test());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "reference arg regression fully precompiled: " + result.compile_out);
+        assertEq("value=2\n", result.run_out, "AOT reloads locals mutated through reference args");
+    }
+
+    testParseRefMapSelectorUsesInnerImplicitIndex() {
+        string code = "%modern
+sub verify(reference<hash<auto>> h) {
+    if (!exists h.name) {
+        throw \"MISSING-NAME\", sprintf(\"missing name: %y\", h);
+    }
+}
+
+sub convert(hash<auto> new_data) {
+    map verify(\\new_data.errors[$#]), new_data.errors;
+}
+
+int sub callConvert(int i) {
+    hash<auto> one = {
+        \"errors\": ({\"name\": \"x\"},),
+    };
+    convert(one);
+    return i;
+}
+
+map callConvert($#) + (exists {\"a\": 1}.a ? 0 : 0), (0, 1);
+printf(\"ok\\n\");
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "parse-ref selector regression fully precompiled: "
+            + result.compile_out);
+        assertEq("ok\n", result.run_out,
+            "AOT parse references resolve map selector $# from the inner map context");
+    }
+
+    testForeachImplicitIndexSurvivesCalleeEarlyReturn() {
+        # Regression: a value (iterator-based) foreach registered the $# restore
+        # only on its break/continue paths, not on the cleanup stack walked by a
+        # non-local exit.  A `return` from inside the loop body therefore left $#
+        # holding the loop's last index, and that stale value leaked back to the
+        # caller's enclosing foreach.  The interpreter restores $# correctly, so
+        # the compiled output must match it.
+        string code = "%modern
+*string sub pick(list<hash<auto>> al) {
+    foreach hash<auto> info in (al) {
+        if (info.skip) {
+            continue;
+        }
+        return info.address;   # early return from inside foreach -> must restore \$#
+    }
+    return;
+}
+
+int sub nested(list<int> a, list<int> b) {
+    foreach int x in (a) {
+        foreach int y in (b) {
+            if (y == 5) {
+                return x * 100 + y;   # non-local exit through two nested foreaches
+            }
+        }
+    }
+    return -1;
+}
+
+list<hash<auto>> addrs = ();
+for (int i = 0; i < 14; ++i) {
+    addrs += {\"skip\": i < 13, \"address\": sprintf(\"a%d\", i)};
+}
+list<int> nums = ();
+for (int i = 0; i < 14; ++i) {
+    nums += i;
+}
+
+list<hash<auto>> rows = ({\"n\": \"a\"}, {\"n\": \"b\"}, {\"n\": \"c\"}, {\"n\": \"d\"});
+foreach hash<auto> row in (\\rows) {
+    pick(addrs);
+    nested(nums, nums);
+    printf(\"n=%s pos=%d\\n\", row.n, \$#);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out,
+            "AOT foreach preserves \$# across a callee that returns from inside its own foreach");
+        # the implicit index must follow the outer loop, not the callee's last index
+        assertEq("n=a pos=0\nn=b pos=1\nn=c pos=2\nn=d pos=3\n", aot_out,
+            "outer foreach \$# tracks the outer iteration after callee early returns");
+    }
+
+    testInlineClosureCallIterableNotDiscarded() {
+        # Regression: the IR interpreter's operand_use_counts table (used to decide
+        # whether a CallClosureDirect result may be discarded as dead) was built only
+        # from inst->operands and ignored value operands carried in dedicated fields
+        # such as IteratorCreate::iterable.  A closure/call-reference result used
+        # directly as a foreach/map/select/foldl iterable therefore looked unused,
+        # was discarded, and the iterator saw NOTHING -> zero iterations.  Binding the
+        # call result to a local first masked the bug.  All modes must match AST.
+        string code = "%modern
+code cl = list sub () { return (1, 2, 3, 4); };
+
+# foreach over an inline closure call in the scope where it is defined
+int a = 0; foreach auto x in (cl()) { ++a; }
+printf(\"local-foreach=%d\\n\", a);
+
+# the same closure value invoked inline in foreach after arriving via a parameter
+int sub viaParam(code fn) {
+    int n = 0;
+    foreach auto x in (fn()) { ++n; }
+    return n;
+}
+printf(\"param-foreach=%d\\n\", viaParam(cl));
+
+# functional operators over an inline closure call
+int m = 0; map ++m, cl();
+printf(\"map=%d\\n\", m);
+printf(\"select=%d\\n\", (select cl(), \$1 > 2).size());
+printf(\"foldl=%d\\n\", foldl \$1 + \$2, cl());
+
+# call-reference (\\f) form passed via parameter
+list sub gen() { return (9, 8, 7); }
+printf(\"ref-foreach=%d\\n\", viaParam(\\gen()));
+";
+        string ast_out = runExecMode(code, "ast");
+        assertEq("local-foreach=4\nparam-foreach=4\nmap=4\nselect=2\nfoldl=10\nref-foreach=3\n",
+            ast_out, "AST inline closure-call iteration counts");
+        assertEq(ast_out, runExecMode(code, "ir"),
+            "IR inline closure-call iterable matches AST");
+        assertEq(ast_out, runExecMode(code, "jit"),
+            "JIT inline closure-call iterable matches AST");
+        assertEq(ast_out, compileAndRun(code),
+            "AOT inline closure-call iterable matches AST");
+    }
+
+    testClosureUseReferenceParamsTeardown() {
+        string code = "%modern
+class C {
+    public hash<auto> m(string shdr, code<string(hash<auto>)> signer, string method, string path,
+            auto body, *hash<auto> hdr) {
+        hash<auto> prepared = prepare(method, \\path, body, \\hdr);
+        auto sig = signer({\"path\": path, \"body\": prepared.body, \"hdr\": hdr - shdr});
+        hdr{shdr} = sig;
+        return prepared;
+    }
+
+    private hash<auto> prepare(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        if (path.val() && path[0] != \"/\") {
+            path = \"/\" + path;
+        }
+        return {\"body\": body};
+    }
+}
+
+C c();
+hash<auto> h = {};
+hash<auto> r = c.m(\"S\", string sub (hash<auto> hh) { return \"sig\"; }, \"GET\", \"x\", NOTHING, h);
+printf(\"ok\\n\");
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "closure-use param teardown regression fully precompiled: "
+            + result.compile_out);
+        assertEq("ok\n", result.run_out, "AOT does not pop caller-owned closure-use parameters");
+    }
+
+    testStaleClosureSelfMemberAccessFails() {
+        string code = "%modern
+class C {
+    private {
+        string value;
+    }
+
+    constructor(string v) {
+        value = v;
+    }
+
+    code<string()> getReadClosure() {
+        return string sub () {
+            return value;
+        };
+    }
+
+    code<auto()> getRemoveClosure() {
+        return auto sub () {
+            return remove value;
+        };
+    }
+}
+
+code<string()> read_closure;
+{
+    C c(\"read\");
+    read_closure = c.getReadClosure();
+}
+
+try {
+    printf(\"read=%s\\n\", read_closure());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"read=%s\\n\", ex.err);
+}
+
+code<auto()> remove_closure;
+{
+    C c(\"remove\");
+    remove_closure = c.getRemoveClosure();
+}
+
+try {
+    printf(\"remove=%y\\n\", remove_closure());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"remove=%s\\n\", ex.err);
+}
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "stale closure self member regression fully precompiled: "
+            + result.compile_out);
+        assertEq("read=OBJECT-ALREADY-DELETED\nremove=OBJECT-ALREADY-DELETED\n", result.run_out,
+            "AOT closure self member access must match AST stale-self checks");
+    }
+
+    testWeakLocalAssignmentReleasesRhs() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+C strong();
+C weak := remove strong;
+printf(\"destroyed=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak assignment regression fully precompiled: "
+            + result.compile_out);
+        assertEq("destroyed=1\n", result.run_out,
+            "AOT weak assignment must not retain the consumed RHS object");
+    }
+
+    testWeakHashElementAssignmentReleasesRhs() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> weak_map = {};
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub run() {
+    C strong();
+    weak_map{\"x\"} := strong;
+    printf(\"inside=%d alive=%y\\n\", destroyed, boolean(weak_map{\"x\"}));
+}
+
+run();
+printf(\"after=%d alive=%y\\n\", destroyed, boolean(weak_map{\"x\"}));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak hash element assignment regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=0 alive=True\nafter=1 alive=False\n", result.run_out,
+            "AOT weak lvalue assignment to hash elements must not retain the target object");
+    }
+
+    testWeakDiagnosticHashAssignmentReleasesObject() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> live_action_hash = {};
+our hash<auto> live_context_hash = {};
+
+class Registry {
+    public static registerContext(string id, hash<auto> info, auto obj) {
+        info.object := obj;
+        live_context_hash{id} = info;
+    }
+}
+
+class Helper {
+    init() {
+        live_action_hash{self.uniqueHash()} = {\"phase\": \"init\", \"tid\": gettid(), \"stack\": (\"init\")};
+        live_action_hash{self.uniqueHash()}.object := self;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    constructor() {
+        Registry::registerContext(self.uniqueHash(), {\"phase\": \"ctor\", \"tid\": gettid(), \"stack\": (\"ctor\")},
+            self);
+    }
+
+    run() {
+        Helper h();
+        h.init();
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d action=%y context=%y\\n\", destroyed,
+        boolean(live_action_hash.firstValue().object), boolean(live_context_hash.firstValue().object));
+}
+
+launch();
+printf(\"after=%d action=%y context=%y\\n\", destroyed,
+    boolean(live_action_hash.firstValue().object), boolean(live_context_hash.firstValue().object));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "weak diagnostic hash cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=1 action=False context=True\nafter=2 action=False context=False\n", result.run_out,
+            "AOT weak diagnostic hash assignments must not retain helper/context objects");
+    }
+
+    testWeakAssignmentPreservesNonWeakNodeValues() {
+        string code = "%modern
+%allow-weak-references
+
+string strong = \"abc\";
+auto weak := strong;
+printf(\"%y\\n\", weak);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak non-weakable node regression fully precompiled: "
+            + result.compile_out);
+        assertEq("\"abc\"\n", result.run_out,
+            "AOT weak assignment must keep an owned reference for non-weak node values");
+    }
+
+    testWeakCallArgumentReleasesRhs() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub check(C c0) {
+    remove c0;
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+C strong();
+check(remove strong);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak call argument regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT call argument ownership must not retain consumed objects");
+    }
+
+    testStaticMethodRemoveArgumentReleasesRhs() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Holder {
+    static check(C c0) {
+        remove c0;
+        printf(\"inside=%d\\n\", destroyed);
+    }
+}
+
+C strong();
+Holder::check(c0: remove strong);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "static method remove-arg regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT static method call must consume removed argument cleanup before method body");
+    }
+
+    testTypedLocalInitializerConditionKeepsRhs() {
+        string code = "%modern
+
+hashdecl Info {
+    string name;
+}
+
+hash<auto> pending = {\"app\": <Info>{\"name\": \"demo\"}};
+if (*hash<auto> h = remove pending{\"app\"}) {
+    printf(\"name=%s remaining=%d\\n\", h.name, pending.size());
+} else {
+    printf(\"miss\\n\");
+}
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "typed local initializer regression fully precompiled: "
+            + result.compile_out);
+        assertEq("name=demo remaining=0\n", result.run_out,
+            "AOT StoreLocal must keep a reused RHS value alive for the following condition");
+    }
+
+    testWeakBranchConditionReleasesTemp() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+C strong();
+C weak := strong;
+if (weak) {
+    remove strong;
+    printf(\"inside=%d\\n\", destroyed);
+}
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak branch cleanup regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT BrIf must release weak-load temporaries before entering the branch body");
+    }
+
+    testWeakDotEvalInvokeReleasesBase() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+
+class C {
+    ping() {
+    }
+
+    destructor() {
+        destroyed++;
+    }
+}
+
+C strong();
+C weak := strong;
+try {
+    weak.ping();
+    remove strong;
+    printf(\"inside=%d\\n\", destroyed);
+} catch (hash<ExceptionInfo> ex) {
+    rethrow;
+}
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak dot-eval invoke cleanup regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT InvokeDotEvalMethodDirect must release weak-load base before exception branch");
+    }
+
+    testObjectMemberAssignmentReleasesValues() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Tracked {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Holder {
+    private {
+        Tracked tracked;
+    }
+
+    set() {
+        tracked = new Tracked();
+    }
+}
+
+sub run() {
+    Holder h();
+    h.set();
+    h.set();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+run();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object member assignment cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=1\nafter=2\n", result.run_out,
+            "AOT object member assignment must release overwritten values and scope-exit members");
+    }
+
+    testObjectMemberAssignmentWithRemoveArgumentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    private {
+        *hash<string, hash<string, bool>> flags;
+    }
+
+    constructor(*hash<string, hash<string, bool>> flags) {
+        self.flags = flags;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor() {
+        atomic_map{\"svc\"}{15} = True;
+    }
+
+    run() {
+        atomic_action_helper = new AtomicHelper(remove atomic_map);
+        printf(\"inside=%d map=%y\\n\", destroyed, atomic_map);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object member assignment/remove-arg cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 map=null\nafter=1\n", result.run_out,
+            "AOT object member assignment must consume and release constructor results with remove-argument inputs");
+    }
+
+    testSelfMemberRemoveDetachesMemberValue() {
+        string code = "%modern
+%allow-weak-references
+
+our int context_destroyed = 0;
+our int validator_destroyed = 0;
+our int action_destroyed = 0;
+our int helper_destroyed = 0;
+
+class MetadataActionContext {
+    destructor() {
+        ++context_destroyed;
+    }
+}
+
+class MetadataUpdateContext inherits MetadataActionContext {
+}
+
+class InterfaceValidator {
+    public {
+        MetadataActionContext action;
+    }
+
+    constructor(MetadataActionContext action) {
+        self.action = action;
+    }
+
+    validate() {
+    }
+
+    destructor() {
+        ++validator_destroyed;
+    }
+}
+
+class ServiceInterfaceValidator inherits InterfaceValidator {
+    constructor(MetadataActionContext action) : InterfaceValidator(action) {
+    }
+}
+
+class ActionRWLock inherits RWLock {
+    private {
+        list<code> post_actions;
+    }
+
+    writeUnlock() {
+        *list<code> actions = remove self.post_actions;
+        RWLock::writeUnlock();
+        foreach code action in (actions) {
+            action();
+        }
+    }
+
+    addWriteUnlockAction(code action) {
+        @assert(lockOwner(), \"write lock must be held\");
+        post_actions += action;
+    }
+}
+
+class WriteLockHelper {
+    private {
+        RWLock rwl;
+    }
+
+    constructor(RWLock rwl) {
+        if (!rwl.writeLockOwner()) {
+            rwl.writeLock();
+            self.rwl = rwl;
+        }
+    }
+
+    destructor() {
+        ++helper_destroyed;
+        if (rwl) {
+            rwl.writeUnlock();
+        }
+    }
+}
+
+ActionRWLock map_mutex = new ActionRWLock();
+
+sub validateInterfacesLocked(MetadataActionContext action) {
+    WriteLockHelper wlh(map_mutex);
+    list<auto> deferred_validators;
+    {
+        ServiceInterfaceValidator val(action);
+        deferred_validators += val;
+        val.validate();
+    }
+    map_mutex.addWriteUnlockAction(sub () {
+        delete deferred_validators;
+        ++action_destroyed;
+    });
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    validateInterfacesLocked(update);
+}
+
+launch();
+printf(\"context=%d validator=%d action=%d helper=%d\\n\",
+    context_destroyed, validator_destroyed, action_destroyed, helper_destroyed);
+";
+        string expected = "context=1 validator=1 action=1 helper=1\n";
+        assertEq(expected, runExecMode(code, "ast"), "AST self-member remove baseline");
+        assertEq(expected, runExecMode(code, "ir"),
+            "IR self-member remove must detach object member and run deferred actions");
+        assertEq(expected, runExecMode(code, "jit"),
+            "JIT self-member remove must detach object member and run deferred actions");
+
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "self-member remove detach regression fully precompiled: " + result.compile_out);
+        assertEq(expected, result.run_out,
+            "AOT self-member remove must detach object member and run deferred actions");
+    }
+
+    testObjectRemoveListValuedDynamicKey() {
+        string code = "%modern
+class T {
+    public {
+        int a = 1;
+        int b = 2;
+    }
+
+    string clear() {
+        remove self{keys self};
+        return sprintf(\"a=%y b=%y keys=%y\\n\", a, b, keys self);
+    }
+}
+
+T t();
+printf(\"%s\", t.clear());
+";
+        string expected = "a=null b=null keys=[\"a\", \"b\"]\n";
+        assertEq(expected, runExecMode(code, "ast"), "AST object list-valued key remove baseline");
+        assertEq(expected, runExecMode(code, "ir"),
+            "IR object remove must treat list-valued dynamic hash key as a slice");
+        assertEq(expected, runExecMode(code, "jit"),
+            "JIT object remove must treat list-valued dynamic hash key as a slice");
+
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object list-valued key remove regression fully precompiled: " + result.compile_out);
+        assertEq(expected, result.run_out,
+            "AOT object remove must treat list-valued dynamic hash key as a slice");
+    }
+
+    testConstructorArgumentReleasesTemporaryValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Tracked {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Consumer {
+    private {
+        Tracked tracked;
+    }
+
+    constructor(Tracked tracked) {
+        self.tracked = tracked;
+    }
+}
+
+sub run() {
+    {
+        Consumer c(new Tracked());
+    }
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+run();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "constructor argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT constructor calls must consume caller-owned temporary argument cleanups");
+    }
+
+    testInheritedObjectMemberAssignmentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    private {
+        *hash<string, hash<string, bool>> flags;
+    }
+
+    constructor(*hash<string, hash<string, bool>> flags) {
+        self.flags = flags;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class BaseContext {
+    public {
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+    }
+}
+
+class MetadataUpdateContext inherits BaseContext {
+    constructor() {
+        atomic_map{\"svc\"}{15} = True;
+    }
+
+    run() {
+        atomic_action_helper = new AtomicHelper(remove atomic_map);
+        printf(\"inside=%d map=%y helper=%y\\n\", destroyed, atomic_map, boolean(atomic_action_helper));
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext ctx();
+    ctx.run();
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "inherited object member assignment cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 map=null helper=True\nafter=1\n", result.run_out,
+            "AOT inherited object member assignment must consume and release constructor results");
+    }
+
+    testObjectMemberCallArgumentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Helper {
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub use(*Helper h) {
+}
+
+class Context {
+    private {
+        Helper helper;
+    }
+
+    constructor() {
+        helper = new Helper();
+    }
+
+    run() {
+        use(helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object member call argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT call argument ownership must release references loaded from object members");
+    }
+
+    testBaseTypedObjectMemberOptionalCallArgumentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Base {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Derived inherits Base {
+}
+
+sub use(*Base action) {
+}
+
+class Holder {
+    public {
+        Base action;
+    }
+
+    constructor(Base action) {
+        self.action = action;
+    }
+
+    load() {
+        use(action);
+    }
+}
+
+sub launch() {
+    Derived d();
+    Holder h(d);
+    h.load();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "base-typed object member optional argument regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT function calls must release base-typed object-member references passed to optional parameters");
+    }
+
+    testQorusLibraryLoaderCallReleasesActionMemberArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+sub logInfo(string msg) {
+}
+
+class MetadataActionContext {
+    touch() {
+    }
+
+    destructor() {
+        destroyed++;
+    }
+}
+
+class MetadataUpdateContext inherits MetadataActionContext {
+}
+
+class QorusProgram {
+}
+
+sub qorus_load_library(*hash<auto> libh, QorusProgram pgm, *code log,
+        *reference<hash<auto>> mappers, *MetadataActionContext action) {
+    if (log) {
+        log(\"loaded %s\", \"x\");
+    }
+    if (action) {
+        action.touch();
+    }
+}
+
+class InterfaceValidator {
+    public {
+        MetadataActionContext action;
+        hash<auto> info;
+        QorusProgram pgm;
+    }
+
+    constructor(MetadataActionContext action) {
+        self.action = action;
+        info = {\"lib\": {\"functions\": {}}};
+        pgm = new QorusProgram();
+    }
+
+    loadLibrary() {
+        hash<auto> mappers;
+        qorus_load_library(info.lib, pgm, sub (string msg) {
+            logInfo(vsprintf(msg, argv));
+        }, \\mappers, action);
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    InterfaceValidator val(update);
+    val.loadLibrary();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "qorus library loader action argument regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must release optional action member arguments in qorus_load_library-style calls");
+    }
+
+    testDerivedBaseConstructorActionArgumentReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class MetadataActionContext {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class MetadataUpdateContext inherits MetadataActionContext {
+}
+
+class InterfaceValidator {
+    public {
+        MetadataActionContext action;
+    }
+
+    constructor(MetadataActionContext action) {
+        self.action = action;
+    }
+}
+
+class ServiceInterfaceValidator inherits InterfaceValidator {
+    constructor(MetadataActionContext action) : InterfaceValidator(action) {
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    ServiceInterfaceValidator val(update);
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "derived base-constructor action argument regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must release derived-constructor arguments forwarded to base constructors");
+    }
+
+    testDirectMethodMemberArgumentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Helper {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Receiver {
+    rescanDelta(*Helper h) {
+    }
+}
+
+class Context {
+    private {
+        Helper helper;
+        Receiver receiver;
+    }
+
+    constructor() {
+        helper = new Helper();
+        receiver = new Receiver();
+    }
+
+    run() {
+        receiver.rescanDelta(helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "direct method member argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT direct method calls must consume caller-owned object-member argument cleanups");
+    }
+
+    testReturnWrapperReleasesContextObject() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        hash<auto> rv = {\"service\": {\"15\": {\"id\": 15}}};
+        return rv;
+    }
+
+    *hash<auto> updateSingleObject() {
+        string type = \"service\";
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+hash<auto> sub makeResponse(int status, *hash<auto> body) {
+    printf(\"inwrap=%d\\n\", destroyed);
+    return ({\"code\": status, \"body\": body});
+}
+
+hash<auto> sub endpoint() {
+    Context update();
+    return makeResponse(200, update.updateSingleObject());
+}
+
+hash<auto> response = endpoint();
+printf(\"after=%d code=%d id=%d\\n\", destroyed, response.code, response.body.id);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "return wrapper context cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15\n", result.run_out,
+            "AOT return-expression wrappers must release stack context objects before returning to the caller");
+    }
+
+    testStaticReturnWrapperReleasesContextObject() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor(*hash<auto> ah) {
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper();
+        return {\"service\": {\"15\": {\"id\": 15}}};
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+class RestHandler {
+    public static hash<auto> makeResponse(int status, *hash<auto> body) {
+        printf(\"inwrap=%d\\n\", destroyed);
+        return {\"code\": status, \"body\": body};
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<auto> put(*hash<auto> ah) {
+        MetadataUpdateContext update(ah);
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+hash<auto> response = call_object_method_args(handler, \"put\", ({},));
+printf(\"after=%d code=%d id=%d\\n\", destroyed, response.code, response.body.id);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "static return wrapper context cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15\n", result.run_out,
+            "AOT static return-expression wrappers must release stack context objects before returning to the caller");
+    }
+
+    testTypedRestResponseWrapperReleasesContextObject() {
+        string code = "%modern
+
+hashdecl HttpHandlerResponseInfo {
+    int code;
+    auto body;
+    *hash<auto> hdr;
+}
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor(*hash<auto> ah) {
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper();
+        return {\"service\": {\"15\": {\"id\": 15}}};
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+class RestHandler {
+    public static hash<HttpHandlerResponseInfo> makeResponse(int code, auto body, *hash<auto> hdr) {
+        printf(\"inwrap=%d\\n\", destroyed);
+        return <HttpHandlerResponseInfo>{
+            \"code\": code,
+            \"body\": body,
+            \"hdr\": hdr,
+        };
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<HttpHandlerResponseInfo> put(*hash<auto> ah) {
+        MetadataUpdateContext update(ah);
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+hash<HttpHandlerResponseInfo> response = call_object_method_args(handler, \"put\", ({},));
+printf(\"after=%d code=%d id=%d\\n\", destroyed, response.code, response.body.id);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "typed REST response wrapper context cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15\n", result.run_out,
+            "AOT typed REST response wrappers must release stack context objects before returning to the caller");
+    }
+
+    testRestDispatchResponseSubhashesReleaseContextObject() {
+        string code = "%modern
+
+hashdecl HttpHandlerResponseInfo {
+    int code;
+    auto body;
+    *hash<auto> hdr;
+}
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    private {
+        *hash<string, hash<string, bool>> flags;
+    }
+
+    constructor(*hash<string, hash<string, bool>> flags) {
+        self.flags = flags;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        hash<auto> cx;
+        hash<auto> ah;
+        hash<auto> info;
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) {
+        self.cx = cx;
+        self.ah = ah;
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        addUpdateData(type, id);
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    private addUpdateData(string type, int id) {
+        string key = \"0\";
+        info{type}.new_data{key} = {\"enabled\": True};
+        info{type}.ids{key} = id;
+        info{type}.tags{key} = {\"tag\": \"value\"};
+        info{type}.local{key} = {
+            \"info\": {\"id\": id, \"enabled\": True},
+            \"delta\": {\"enabled\": False},
+        };
+        atomic_map{\"svc\"}{id} = True;
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper(remove atomic_map);
+        hash<auto> rv = map {$1: updateFinalizeUnlocked($1)}, keys info;
+        return rv;
+    }
+
+    private *hash<string, hash<auto>> updateFinalizeUnlocked(string type) {
+        *hash<string, hash<auto>> rv;
+        foreach hash<auto> i in (info{type}.new_data.pairIterator()) {
+            int id = info{type}.ids{i.key};
+            hash<auto> local = info{type}.local{i.key};
+            rv{id} = {
+                \"action\": \"updated\",
+                \"delta\": local.delta,
+                \"obj\": local.info,
+                \"id\": id,
+                \"tags\": info{type}.tags{i.key},
+            };
+        }
+        return rv;
+    }
+}
+
+class RestHandler {
+    public static hash<HttpHandlerResponseInfo> makeResponse(int code, auto body, *hash<auto> hdr) {
+        printf(\"inwrap=%d\\n\", destroyed);
+        return <HttpHandlerResponseInfo>{
+            \"code\": code,
+            \"body\": body,
+            \"hdr\": hdr,
+        };
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<HttpHandlerResponseInfo> dispatch(string mn, *hash<auto> ah, hash<auto> cx) {
+        return cast<hash<HttpHandlerResponseInfo>>(call_object_method_args(self, mn, (cx, ah)));
+    }
+
+    hash<HttpHandlerResponseInfo> put(hash<auto> cx, *hash<auto> ah) {
+        MetadataUpdateContext update(cx, ah);
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+hash<auto> cx = {\"user\": \"%SYS%\", \"request\": {\"path\": \"/api/latest/services/fsm-actions\"}};
+hash<HttpHandlerResponseInfo> response = handler.dispatch(\"put\", {\"enabled\": True}, cx);
+printf(\"after=%d code=%d id=%d enabled=%y tag=%s\\n\", destroyed, response.code, response.body.id,
+    response.body.obj.enabled, response.body.tags.tag);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "REST dispatch subhash cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15 enabled=True tag=value\n", result.run_out,
+            "AOT REST dispatch/cast must release context objects while returning subhashes from context members");
+    }
+
+    testQorusStyleRestUpdateReleasesWeakRegisteredContext() {
+        string code = "%modern
+%allow-weak-references
+
+hashdecl HttpHandlerResponseInfo {
+    int code;
+    auto body;
+    *hash<auto> hdr;
+}
+
+our int destroyed = 0;
+our hash<auto> status_hash = {};
+our hash<auto> live_action_hash = {};
+our hash<auto> live_context_hash = {};
+
+bool sub actionAlive() {
+    if (!live_action_hash.size()) {
+        return False;
+    }
+    return boolean(live_action_hash.firstValue().object);
+}
+
+bool sub contextAlive() {
+    if (!live_context_hash.size()) {
+        return False;
+    }
+    return boolean(live_context_hash.firstValue().object);
+}
+
+bool sub statusBlocked() {
+    return boolean(status_hash{\"svc\"}{\"15\"}.block);
+}
+
+class Registry {
+    public static registerContext(string id, hash<auto> info, auto obj) {
+        info.object := obj;
+        live_context_hash{id} = info;
+    }
+}
+
+class AtomicMultiClassActionHelper {
+    constructor(*hash<string, hash<string, bool>> flags) {
+        string id = self.uniqueHash();
+        status_hash{\"svc\"}{\"15\"} = {\"block\": True, \"tid\": gettid(), \"count\": 1, \"owner\": id};
+        live_action_hash{id} = {\"phase\": \"init\", \"tid\": gettid(), \"flags\": flags};
+        live_action_hash{id}.object := self;
+    }
+
+    destructor() {
+        status_hash{\"svc\"}{\"15\"}.block = False;
+        remove live_action_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+
+    addInterfaces(*hash<string, hash<string, bool>> flags) {
+        if (flags) {
+            touch();
+        }
+    }
+
+    private touch() {
+    }
+}
+
+class Rbac {
+    rescanDelta(*list<auto> wfids, *list<auto> svcids, *list<auto> jobids,
+            *AtomicMultiClassActionHelper atomic_action_helper) {
+        if (!wfids && !svcids && !jobids) {
+            return;
+        }
+        enforceGroupChanges(atomic_action_helper);
+    }
+
+    private enforceGroupChanges(*AtomicMultiClassActionHelper atomic_action_helper) {
+        if (!atomic_action_helper) {
+            atomic_action_helper = new AtomicMultiClassActionHelper({\"svc\": {\"15\": True}});
+        } else {
+            atomic_action_helper.addInterfaces({\"svc\": {\"15\": True}});
+        }
+    }
+}
+
+class ServiceMetadata {
+    updatePrepareUnlocked(MetadataUpdateContext action) {
+        foreach hash<auto> i in (action.info{\"service\"}.new_data.pairIterator()) {
+            int id = action.info{\"service\"}.ids{i.key};
+            action.info{\"service\"}.local{i.key} = {
+                \"info\": {\"id\": id, \"enabled\": i.value.enabled},
+                \"delta\": {\"enabled\": False},
+            };
+            action.touch();
+        }
+    }
+
+    updatePrepareLocked(MetadataUpdateContext action) {
+        foreach hash<auto> i in (action.info{\"service\"}.new_data.pairIterator()) {
+            string key = i.key;
+            hash<auto> new_data = i.value;
+            int id = action.info{\"service\"}.ids{key};
+            reference<hash<auto>> local = \\action.info{\"service\"}.local{key};
+            updatePrepareObjectLocked(action, key, new_data, id, \\local);
+        }
+    }
+
+    private updatePrepareObjectLocked(MetadataUpdateContext action, string key, hash<auto> new_data, int id,
+            reference<hash<auto>> local) {
+        local.old_info = {\"id\": id, \"enabled\": False};
+        updatePrepareObjectLockedImpl(action, key, new_data, id, \\local);
+    }
+
+    private updatePrepareObjectLockedImpl(MetadataUpdateContext action, string key, hash<auto> new_data, int id,
+            reference<hash<auto>> local) {
+        processUpdateTags(action, \\local);
+        local.info.enabled = new_data.enabled;
+        local.info.name = key;
+        action.markValidation(\"service\", id);
+    }
+
+    private processUpdateTags(MetadataUpdateContext action, reference<hash<auto>> local) {
+        local.info.tags = {\"tag\": \"value\"};
+        action.touch();
+    }
+
+    createCloneUpdateCompileLocked(MetadataUpdateContext action) {
+        action.touch();
+    }
+
+    updateCommitCacheLocked(MetadataUpdateContext action) {
+        foreach hash<auto> i in (action.info{\"service\"}.new_data.pairIterator()) {
+            int id = action.info{\"service\"}.ids{i.key};
+            reference<hash<auto>> local = \\action.info{\"service\"}.local{i.key};
+            updateCommitCacheObjectLocked(action, i.key, id, \\local);
+        }
+    }
+
+    private updateCommitCacheObjectLocked(MetadataUpdateContext action, string key, int id,
+            reference<hash<auto>> local) {
+        local.info.committed = True;
+        action.touch();
+    }
+
+    *hash<string, hash<auto>> updateFinalizeUnlocked(MetadataUpdateContext action) {
+        return action.finalizeType(\"service\");
+    }
+}
+
+our hash<auto> TypeMap = {\"service\": {\"meta\": new ServiceMetadata()}};
+
+class MetadataUpdateContext {
+    public {
+        hash<auto> info;
+        hash<string, hash<string, bool>> vmap;
+    }
+
+    private {
+        hash<auto> cx;
+        *hash<auto> ah;
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicMultiClassActionHelper atomic_action_helper;
+        Rbac rbac;
+        list<int> pending_rescan_svcids;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) {
+        self.cx = cx;
+        self.ah = ah;
+        rbac = new Rbac();
+        Registry::registerContext(self.uniqueHash(), {\"phase\": \"ctor\", \"tid\": gettid()}, self);
+    }
+
+    touch() {
+    }
+
+    markValidation(string type, int id) {
+        vmap{type}{id} = True;
+    }
+
+    addUpdateData(string type, int id) {
+        string key = string(id);
+        info{type}.new_data{key} = ah;
+        info{type}.ids{key} = id;
+        info{type}.local{key} = {};
+        atomic_map{\"svc\"}{id} = True;
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        addUpdateData(type, id);
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    *hash<string, hash<auto>> finalizeType(string type) {
+        *hash<string, hash<auto>> rv;
+        foreach hash<auto> i in (info{type}.new_data.pairIterator()) {
+            string key = i.key;
+            int id = info{type}.ids{key};
+            hash<auto> local = info{type}.local{key};
+            pending_rescan_svcids += id;
+            rv{id} = {
+                \"action\": \"updated\",
+                \"delta\": local.delta,
+                \"obj\": local.info,
+                \"id\": id,
+                \"path\": cx.request.path,
+            };
+        }
+        return rv;
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        map TypeMap{$1}.meta.updatePrepareUnlocked(self), keys info;
+        map TypeMap{$1}.meta.updatePrepareLocked(self), keys info;
+        atomic_action_helper = new AtomicMultiClassActionHelper(remove atomic_map);
+        map TypeMap{$1}.meta.createCloneUpdateCompileLocked(self), keys info;
+        map TypeMap{$1}.meta.updateCommitCacheLocked(self), keys info;
+        commitDbUnlocked();
+        hash<auto> rv = map {$1: TypeMap{$1}.meta.updateFinalizeUnlocked(self)}, keys info;
+        flushPendingRescans();
+        invalidateCaches();
+        if (vmap) {
+            resetInterfaces(vmap);
+        }
+        return rv;
+    }
+
+    private commitDbUnlocked() {
+    }
+
+    private flushPendingRescans() {
+        rbac.rescanDelta(NOTHING, pending_rescan_svcids, NOTHING, atomic_action_helper);
+        pending_rescan_svcids = ();
+    }
+
+    private invalidateCaches() {
+    }
+
+    private resetInterfaces(hash<string, hash<string, bool>> vmap) {
+    }
+
+    destructor() {
+        remove live_context_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class RestHandler {
+    public static hash<HttpHandlerResponseInfo> makeResponse(int code, auto body, *hash<auto> hdr) {
+        printf(\"inwrap destroyed=%d action=%y context=%y block=%y\\n\", destroyed, actionAlive(),
+            contextAlive(), statusBlocked());
+        return <HttpHandlerResponseInfo>{
+            \"code\": code,
+            \"body\": body,
+            \"hdr\": hdr,
+        };
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<HttpHandlerResponseInfo> dispatch(string mn, *hash<auto> ah, hash<auto> cx) {
+        return cast<hash<HttpHandlerResponseInfo>>(call_object_method_args(self, mn, (cx, ah)));
+    }
+
+    hash<HttpHandlerResponseInfo> put(hash<auto> cx, *hash<auto> ah) {
+        MetadataUpdateContext update(cx, ah);
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+sub launch() {
+    ServiceDefinitionRestClassV8 handler();
+    hash<auto> cx = {\"user\": \"%SYS%\", \"request\": {\"path\": \"/api/latest/services/fsm-actions\"}};
+    hash<HttpHandlerResponseInfo> response;
+    Counter done(1);
+    ThreadPool handler_pool(1, 0, 0);
+    code request_handler = sub () {
+        on_exit done.dec();
+        response = handler.dispatch(\"put\", {\"enabled\": True}, cx);
+    };
+    handler_pool.submit(request_handler);
+    done.waitForZero();
+    handler_pool.stopWait();
+    printf(\"after destroyed=%d action=%y context=%y block=%y code=%d id=%d path=%s\\n\", destroyed,
+        actionAlive(), contextAlive(), statusBlocked(), response.code, response.body.id, response.body.path);
+}
+
+launch();
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "Qorus-style REST update cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap destroyed=0 action=True context=True block=True\n"
+            + "after destroyed=2 action=False context=False block=False code=200 id=15 "
+            + "path=/api/latest/services/fsm-actions\n", result.run_out,
+            "AOT must release Qorus-style weak-registered update contexts and atomic helpers after handler return");
+    }
+
+    testQorusRbacDeltaReleasesForwardedOptionalHelper() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> status_hash = {};
+our hash<auto> live_action_hash = {};
+our hash<auto> live_context_hash = {};
+
+bool sub actionAlive() {
+    return live_action_hash.size() && boolean(live_action_hash.firstValue().object);
+}
+
+bool sub contextAlive() {
+    return live_context_hash.size() && boolean(live_context_hash.firstValue().object);
+}
+
+bool sub statusBlocked() {
+    return boolean(status_hash{\"svc\"}{\"15\"}.block);
+}
+
+class Registry {
+    public static registerContext(string id, hash<auto> info, auto obj) {
+        info.object := obj;
+        live_context_hash{id} = info;
+    }
+}
+
+class AtomicMultiClassActionHelper {
+    constructor(*hash<string, hash<string, bool>> flags) {
+        string id = self.uniqueHash();
+        status_hash{\"svc\"}{\"15\"} = {\"block\": True, \"tid\": gettid(), \"count\": 1, \"owner\": id};
+        live_action_hash{id} = {\"phase\": \"init\", \"tid\": gettid(), \"flags\": flags};
+        live_action_hash{id}.object := self;
+    }
+
+    string getDebugInfo() {
+        return sprintf(\"%y\", status_hash);
+    }
+
+    addInterfaces(hash<string, hash<string, bool>> flags) {
+        if (flags) {
+            touch();
+        }
+    }
+
+    private touch() {
+    }
+
+    destructor() {
+        status_hash{\"svc\"}{\"15\"}.block = False;
+        remove live_action_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class Group {
+    public {
+        int id;
+        bool enabled;
+        string name;
+        hash<auto> omap;
+    }
+
+    constructor(int id, string name, bool enabled, hash<auto> omap) {
+        self.id = id;
+        self.name = name;
+        self.enabled = enabled;
+        self.omap = omap;
+    }
+}
+
+class Rbac {
+    private {
+        hash<string, Group> groups;
+    }
+
+    constructor() {
+        groups{\"synthetic\"} = new Group(-1, \"synthetic\", True, {
+            \"services\": {\"15\": True},
+            \"jobs\": {},
+            \"workflows\": {},
+        });
+    }
+
+    rescanDelta(*list<auto> wfids, *list<auto> svcids, *list<auto> jobids,
+            *AtomicMultiClassActionHelper atomic_action_helper) {
+        bool wf = wfids.val();
+        bool svc = svcids.val();
+        bool job = jobids.val();
+        if (!wf && !svc && !job) {
+            return;
+        }
+
+        *hash<string, Group> og = groups;
+        foreach Group g in (groups.iterator()) {
+            if (g.id >= 0) {
+                continue;
+            }
+            if (svc && g.omap.services{svcids}) {
+                remove groups{g.name};
+            }
+        }
+
+        createDedicatedGroupsIntern(wf, svc, job);
+        enforceGroupChanges(og, wf, svc, job, atomic_action_helper);
+    }
+
+    private createDedicatedGroupsIntern(bool wf, bool svc, bool job) {
+    }
+
+    private enforceGroupChanges(*hash<string, Group> og, bool wf, bool svc, bool job,
+            *AtomicMultiClassActionHelper atomic_action_helper) {
+        hash<string, hash<string, bool>> ah;
+        hash<string, bool> group_status_hash;
+        hash<string, Group> dis_svc;
+
+        foreach Group g in (og.iterator()) {
+            if (svc) {
+                map ah{\"svc\"}{$1} = True, keys g.omap.services;
+            }
+            group_status_hash.(g.name) = g.enabled;
+            if (g.enabled) {
+                continue;
+            }
+            if (svc) {
+                map dis_svc{$1} = g, keys g.omap.services, !dis_svc{$1};
+            }
+        }
+
+        string dbg = atomic_action_helper ? atomic_action_helper.getDebugInfo() : \"\";
+        if (!dbg.val()) {
+            throw \"TEST-ERROR\", \"missing helper debug info\";
+        }
+
+        if (!atomic_action_helper) {
+            atomic_action_helper = new AtomicMultiClassActionHelper(ah);
+        } else {
+            atomic_action_helper.addInterfaces(ah);
+        }
+
+        foreach string id in (keys dis_svc) {
+            if (id) {
+                atomic_action_helper.addInterfaces({\"svc\": {id: True}});
+            }
+        }
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicMultiClassActionHelper atomic_action_helper;
+        Rbac rbac;
+        list<int> pending_rescan_svcids;
+    }
+
+    constructor() {
+        atomic_map{\"svc\"}{\"15\"} = True;
+        rbac = new Rbac();
+        Registry::registerContext(self.uniqueHash(), {\"phase\": \"ctor\", \"tid\": gettid()}, self);
+    }
+
+    updateObjectsIntern() {
+        atomic_action_helper = new AtomicMultiClassActionHelper(remove atomic_map);
+        pending_rescan_svcids += 15;
+        flushPendingRescans();
+    }
+
+    private flushPendingRescans() {
+        rbac.rescanDelta(NOTHING, pending_rescan_svcids, NOTHING, atomic_action_helper);
+        pending_rescan_svcids = ();
+    }
+
+    destructor() {
+        remove live_context_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    update.updateObjectsIntern();
+    printf(\"inside destroyed=%d action=%y context=%y block=%y\\n\", destroyed, actionAlive(),
+        contextAlive(), statusBlocked());
+}
+
+launch();
+printf(\"after destroyed=%d action=%y context=%y block=%y\\n\", destroyed, actionAlive(), contextAlive(),
+    statusBlocked());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "Qorus RBAC delta optional helper cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside destroyed=0 action=True context=True block=True\n"
+            + "after destroyed=2 action=False context=False block=False\n", result.run_out,
+            "AOT must release optional object arguments forwarded through Qorus-style RBAC delta methods");
+    }
+
+    testReturnWrapperExceptionReleasesContextObject() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        AtomicHelper atomic_action_helper;
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper();
+        throw \"UPDATE-ERROR\", \"forced failure after atomic helper assignment\";
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+class RestHandler {
+    public static hash<auto> makeResponse(int status, *hash<auto> body) {
+        return {\"code\": status, \"body\": body};
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<auto> put() {
+        MetadataUpdateContext update();
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+try {
+    call_object_method_args(handler, \"put\", ());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught=%s destroyed=%d\\n\", ex.err, destroyed);
+}
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "return wrapper exception cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("caught=UPDATE-ERROR destroyed=1\nafter=1\n", result.run_out,
+            "AOT exception in return-expression wrapper must release context locals before propagating");
+    }
+
+    testDirectMethodExceptionReleasesSelfAndCallerLocals() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> weak_context = {};
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Registry {
+    public static registerContext(auto obj) {
+        weak_context.object := obj;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor() {
+        Registry::registerContext(self);
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper();
+        throw \"UPDATE-ERROR\", \"forced failure after atomic helper assignment\";
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<auto> put() {
+        MetadataUpdateContext update();
+        return update.updateSingleObject(\"service\", serviceid);
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+try {
+    handler.put();
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught=%s destroyed=%d alive=%y\\n\", ex.err, destroyed, boolean(weak_context.object));
+}
+printf(\"after=%d alive=%y\\n\", destroyed, boolean(weak_context.object));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "direct-method exception cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("caught=UPDATE-ERROR destroyed=2 alive=False\nafter=2 alive=False\n", result.run_out,
+            "AOT fast method exception cleanup must release self and caller-owned context locals");
+    }
+
+    testDynamicMethodCallReleasesCalleeLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        hash<auto> rv = {\"service\": {\"15\": {\"id\": 15}}};
+        return rv;
+    }
+
+    *hash<auto> updateSingleObject() {
+        string type = \"service\";
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+hash<auto> sub makeResponse(int status, *hash<auto> body) {
+    printf(\"inwrap=%d\\n\", destroyed);
+    return ({\"code\": status, \"body\": body});
+}
+
+class Handler {
+    hash<auto> put() {
+        Context update();
+        return makeResponse(200, update.updateSingleObject());
+    }
+}
+
+Handler handler();
+hash<auto> response = call_object_method_args(handler, \"put\");
+printf(\"after=%d code=%d id=%d\\n\", destroyed, response.code, response.body.id);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "dynamic method call cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15\n", result.run_out,
+            "AOT dynamic method calls must release callee stack locals before returning to the caller");
+    }
+
+    testSwitchCaseBreakReleasesBlockLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    update() {
+    }
+}
+
+sub run(string type) {
+    switch (type) {
+        case \"service\": {
+            Context update();
+            update.update();
+            printf(\"inside=%d\\n\", destroyed);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+run(\"service\");
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "switch case break cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT switch case breaks must run cleanup for locals scoped to the case block");
+    }
+
+    testTrySwitchCaseBreakReleasesBlockLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    hash<auto> updateSingleObject() {
+        return {\"ctx\": self};
+    }
+}
+
+sub run(string type) {
+    try {
+        switch (type) {
+            case \"service\": {
+                Context update();
+                update.updateSingleObject();
+                printf(\"inside=%d\\n\", destroyed);
+                break;
+            }
+            default:
+                break;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+}
+
+run(\"service\");
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "try/switch case break cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT try/switch case breaks must run cleanup for locals scoped to the case block");
+    }
+
+    testSwitchCaseImmediateBreakReleasesIgnoredMethodResult() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    hash<auto> updateSingleObject() {
+        return {\"ctx\": self};
+    }
+}
+
+sub run(string type) {
+    switch (type) {
+        case \"service\": {
+            Context update();
+            update.updateSingleObject();
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+run(\"service\");
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "immediate switch break ignored-result cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("after=1\n", result.run_out,
+            "AOT must discard ignored method-call results before immediate switch break cleanup");
+    }
+
+    testSiblingSwitchDuplicateLocalNamesReleaseBlockLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    hash<auto> updateSingleObject(string type, int id) {
+        return {\"ctx\": self, \"type\": type, \"id\": id};
+    }
+}
+
+class Handler {
+    run(string type) {
+        switch (type) {
+            case \"job\": {
+                hash<auto> ah = {\"replace\": False};
+                Context update();
+                update.updateSingleObject(\"job\", 1);
+                break;
+            }
+            case \"service\": {
+                hash<auto> ah = {\"replace\": False};
+                Context update();
+                update.updateSingleObject(\"service\", 15);
+                break;
+            }
+            case \"sla\": {
+                hash<auto> ah = {\"replace\": False};
+                Context update();
+                update.updateSingleObject(\"sla\", 2);
+                break;
+            }
+            default:
+                break;
+        }
+        printf(\"post=%d\\n\", destroyed);
+    }
+}
+
+Handler h();
+call_object_method_args(h, \"run\", (\"service\",));
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "sibling switch duplicate-local cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("post=1\nafter=1\n", result.run_out,
+            "AOT must release the active duplicate-named switch local at case block exit");
+    }
+
+    testSiblingSwitchDuplicateTypedLocalsReleaseExactActiveLocal() {
+        string code = "%modern
+
+our int destroyed = 0;
+our int live = 0;
+
+class Guard {
+    private {
+        int id;
+    }
+
+    constructor(int id) {
+        self.id = id;
+        ++live;
+    }
+
+    destructor() {
+        --live;
+        ++destroyed;
+    }
+}
+
+class Reporter {
+    private {
+        object owner;
+    }
+
+    constructor(object owner) {
+        self.owner = owner;
+    }
+
+    reportProgress(string fmt, ...) {
+        vsprintf(fmt, argv);
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        Guard guard;
+        Reporter reporter;
+        hash<auto> info;
+    }
+
+    constructor(Reporter reporter, int id) {
+        self.reporter = reporter;
+        guard = new Guard(id);
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        info{type}.ids{\"k\"} = id;
+        reporter.reportProgress(\"update %s %d\", type, id);
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        *hash<auto> rv;
+        foreach string t in (keys info) {
+            int id = info{t}.ids.firstValue();
+            rv{t}{id} = {\"id\": id, \"ctx\": self};
+        }
+        return rv;
+    }
+}
+
+class Handler {
+    run(string type) {
+        Reporter reporter(self);
+        try {
+            switch (type) {
+                case \"job\": {
+                    hash<auto> atomic_map = {\"job\": {\"1\": True}};
+                    MetadataUpdateContext update(reporter, 1);
+                    update.updateSingleObject(\"job\", 1);
+                    break;
+                }
+                case \"queue\": {
+                    hash<auto> atomic_map = {\"queue\": {\"2\": True}};
+                    MetadataUpdateContext update(reporter, 2);
+                    update.updateSingleObject(\"queue\", 2);
+                    break;
+                }
+                case \"service\": {
+                    hash<auto> atomic_map = {\"service\": {\"15\": True}};
+                    MetadataUpdateContext update(reporter, 15);
+                    update.updateSingleObject(\"service\", 15);
+                    printf(\"inside=%d live=%d\\n\", destroyed, live);
+                    break;
+                }
+                case \"workflow\": {
+                    hash<auto> atomic_map = {\"workflow\": {\"4\": True}};
+                    MetadataUpdateContext update(reporter, 4);
+                    update.updateSingleObject(\"workflow\", 4);
+                    break;
+                }
+                default:
+                    break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+        printf(\"post=%d live=%d\\n\", destroyed, live);
+    }
+}
+
+Handler handler();
+call_object_method_args(handler, \"run\", (\"service\",));
+printf(\"after=%d live=%d\\n\", destroyed, live);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "sibling switch duplicate typed-local cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 live=1\npost=1 live=0\nafter=1 live=0\n", result.run_out,
+            "AOT must bind duplicate-named typed locals to the exact active source local for cleanup");
+    }
+
+    testMetadataStyleIgnoredUpdateReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Reporter {
+    private {
+        object ws;
+    }
+
+    constructor(object ws) {
+        self.ws = ws;
+    }
+
+    reportProgressArgs(string fmt, *softlist<auto> args) {
+        vsprintf(fmt, args);
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        hash<auto> info;
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+        list<int> pending_rescan_svcids;
+        Reporter reporter;
+    }
+
+    constructor(Reporter reporter) {
+        self.reporter = reporter;
+    }
+
+    reportProgress(string fmt, ...) {
+        reporter.reportProgressArgs(fmt, argv);
+    }
+
+    addUpdateData(string type, int id) {
+        string key = \"k\";
+        info{type}.new_data{key} = {\"enabled\": True};
+        info{type}.ids{key} = id;
+        info{type}.tags{key} = {\"tag\": \"value\"};
+        info{type}.local{key} = {
+            \"info\": {\"id\": id, \"enabled\": True},
+            \"delta\": {\"enabled\": False},
+            \"config_cache_ops\": False,
+        };
+        atomic_map{\"svc\"}{id} = True;
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        addUpdateData(type, id);
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        reportProgress(\"Update objects: %y\", (map {$1.key: $1.value.new_data.size()}, info.pairIterator()));
+        atomic_action_helper = new AtomicHelper();
+
+        hash<auto> rv = map {$1: updateFinalizeUnlocked($1)}, keys info;
+        flushPendingRescans();
+        return rv;
+    }
+
+    private flushPendingRescans() {
+        pending_rescan_svcids = ();
+    }
+
+    private *hash<string, hash<auto>> updateFinalizeUnlocked(string type) {
+        *hash<string, hash<auto>> rv;
+        foreach hash<auto> i in (info{type}.new_data.pairIterator()) {
+            int id = info{type}.ids{i.key};
+            hash<auto> local = info{type}.local{i.key};
+            rv{id} = updateFinalizeObjectUnlockedImpl(type, i.key, id, local);
+        }
+        return rv;
+    }
+
+    private hash<auto> updateFinalizeObjectUnlockedImpl(string type, string key, int id, hash<auto> local) {
+        pending_rescan_svcids += id;
+        return {
+            \"action\": \"updated\",
+            \"delta\": local.delta,
+            \"obj\": local.info,
+            \"id\": id,
+            \"tags\": info{type}.tags{key},
+        };
+    }
+}
+
+class Handler {
+    run(string type) {
+        Reporter reporter(self);
+        try {
+            switch (type) {
+                case \"service\": {
+                    MetadataUpdateContext update(reporter);
+                    update.updateSingleObject(\"service\", 15);
+                    printf(\"inside=%d\\n\", destroyed);
+                    break;
+                }
+                default:
+                    break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+    }
+}
+
+Handler handler();
+call_object_method_args(handler, \"run\", (\"service\",));
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "metadata-style ignored update cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must release metadata-style ignored update contexts and their helper members");
+    }
+
+    testSwitchContextWithReporterSelfReleasesLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Reporter {
+    private {
+        object ws;
+    }
+
+    constructor(object ws) {
+        self.ws = ws;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+        Reporter reporter;
+    }
+
+    constructor(Reporter reporter) {
+        guard = new Guard();
+        self.reporter = reporter;
+    }
+
+    update() {
+    }
+}
+
+class Handler {
+    run(string type) {
+        Reporter reporter(self);
+        switch (type) {
+            case \"service\": {
+                Context update(reporter);
+                update.update();
+                printf(\"inside=%d\\n\", destroyed);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+Handler handler();
+call_object_method_args(handler, \"run\", (\"service\",));
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "switch reporter/self cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must release context locals that hold another local object referencing implicit self");
+    }
+
+    testIgnoredSelfReturningMethodResultReleasesLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    hash<auto> updateSingleObject() {
+        return {\"ctx\": self};
+    }
+}
+
+sub run(string type) {
+    switch (type) {
+        case \"service\": {
+            Context update();
+            update.updateSingleObject();
+            printf(\"inside=%d\\n\", destroyed);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+run(\"service\");
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "ignored self-returning result cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must discard ignored method-call results before local scope teardown");
+    }
+
+    testBackgroundSelfCallReleasesSelf() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Helper {
+    start(Counter sync) {
+        background worker(sync);
+    }
+
+    private worker(Counter sync) {
+        sync.dec();
+    }
+
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub launch() {
+    Counter sync(1);
+    Helper h();
+    h.start(sync);
+    sync.waitForZero();
+}
+
+launch();
+usleep(100ms);
+printf(\"destroyed=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background self-call cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("destroyed=1\n", result.run_out,
+            "AOT background self calls must release the spawned thread's self reference after thread exit");
+    }
+
+    testBackgroundSelfCallDispatchesDerivedPrivateMethod() {
+        string code = "%modern
+
+class A {
+    private f() {
+        printf(\"A\\n\");
+    }
+
+    public g() {
+        background f();
+    }
+}
+
+class B inherits A {
+    private f() {
+        printf(\"B\\n\");
+    }
+}
+
+B b();
+b.g();
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background private self-call dispatch regression fully precompiled: " + result.compile_out);
+        assertEq("B\n", result.run_out,
+            "AOT background self calls must preserve virtual dispatch to derived private methods");
+    }
+
+    testBackgroundSelfCallReleasesSelfArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Helper {
+    start(Counter sync) {
+        background worker(sync, self);
+    }
+
+    private worker(Counter sync, Helper h) {
+        sync.dec();
+    }
+
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub launch() {
+    Counter sync(1);
+    Helper h();
+    h.start(sync);
+    sync.waitForZero();
+}
+
+launch();
+usleep(100ms);
+printf(\"destroyed=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background self-argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("destroyed=1\n", result.run_out,
+            "AOT background self calls must release self when self is also passed as an argument");
+    }
+
+    testBackgroundArgvReleasesObjectMemberArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Dispatcher {
+    run(...) {
+        Counter sync(1);
+        background worker(sync, argv);
+        sync.waitForZero();
+    }
+
+    private worker(Counter sync, *list<auto> args) {
+        sync.dec();
+    }
+}
+
+class Context {
+    private {
+        Guard helper;
+        Dispatcher dispatcher;
+    }
+
+    constructor() {
+        helper = new Guard();
+        dispatcher = new Dispatcher();
+    }
+
+    run() {
+        dispatcher.run(helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+usleep(100ms);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background argv object-member cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT background argv handoff must release object-member arguments after the background call exits");
+    }
+
+    testBackgroundCallFunctionArgsReleasesObjectMemberArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+sub use(*Guard helper) {
+}
+
+class Dispatcher {
+    run(code call, ...) {
+        Counter sync(1);
+        background worker(sync, call, argv);
+        sync.waitForZero();
+    }
+
+    private worker(Counter sync, code call, *list<auto> args) {
+        on_exit sync.dec();
+        call_function_args(call, args);
+    }
+}
+
+class Context {
+    private {
+        Guard helper;
+        Dispatcher dispatcher;
+    }
+
+    constructor() {
+        helper = new Guard();
+        dispatcher = new Dispatcher();
+    }
+
+    run() {
+        dispatcher.run(\\use(), helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+usleep(100ms);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background call_function_args object-member cleanup regression fully precompiled: "
+                + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT background call_function_args must release object-member arguments after the background call exits");
+    }
+
+    testBackgroundSelfArgvCallFunctionArgsReleasesSelfArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+sub use(Helper helper) {
+}
+
+class Helper {
+    doBackground(code call, ...) {
+        Counter sync(1);
+        background worker(sync, call, argv);
+        sync.waitForZero();
+    }
+
+    private worker(Counter sync, code call, *list<auto> args) {
+        on_exit sync.dec();
+        call_function_args(call, args);
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        Helper helper;
+    }
+
+    constructor() {
+        helper = new Helper();
+    }
+
+    run() {
+        helper.doBackground(\\use(), helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+usleep(100ms);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background self argv call_function_args cleanup regression fully precompiled: "
+                + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT background self calls must release self when the same object is passed through argv "
+            "to call_function_args");
+    }
+
+    testMapSelfArgumentReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    touch(string key) {
+    }
+
+    run() {
+        hash<auto> h = {\"a\": 1, \"b\": 2};
+        map useContext($1, self), keys h;
+        map touch($1), keys h;
+    }
+}
+
+sub useContext(string key, Context ctx) {
+    ctx.touch(key);
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+}
+
+launch();
+printf(\"destroyed=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "map self-argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("destroyed=1\n", result.run_out,
+            "AOT map expressions must not retain self/context references after the map completes");
+    }
+
+    testMapObjectMethodSelfArgumentReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Meta {
+    hash<auto> updateFinalizeUnlocked(MetadataUpdateContext action) {
+        action.touch();
+        return {\"15\": {\"id\": 15}};
+    }
+}
+
+our hash<auto> TypeMap = {\"service\": {\"meta\": new Meta()}};
+
+class MetadataUpdateContext {
+    private {
+        Guard guard;
+        hash<auto> info = {\"service\": True};
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    touch() {
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        hash<auto> rv = map {$1: TypeMap{$1}.meta.updateFinalizeUnlocked(self)}, keys info;
+        return rv;
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    hash<auto> rv = update.updateSingleObject(\"service\", 15);
+    printf(\"id=%d inside=%d\\n\", rv.id, destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "map object-method self-argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("id=15 inside=0\nafter=1\n", result.run_out,
+            "AOT map object-method calls must release explicit self/context arguments after the map completes");
+    }
+
+    testIgnoredMapObjectMethodSelfArgumentReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Meta {
+    updatePrepareUnlocked(MetadataUpdateContext action) {
+        action.touch();
+    }
+}
+
+our hash<auto> TypeMap = {\"service\": {\"meta\": new Meta()}};
+
+class MetadataUpdateContext {
+    private {
+        Guard guard;
+        hash<auto> info = {\"service\": True};
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    touch() {
+    }
+
+    run() {
+        map TypeMap{$1}.meta.updatePrepareUnlocked(self), keys info;
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    update.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "ignored map object-method self-argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT ignored map object-method calls must release explicit self/context arguments after the map completes");
+    }
+
+    testMetadataPrepareSelfCallReleasesActionContext() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> live_action_hash = {};
+our hash<auto> live_context_hash = {};
+
+class Registry {
+    public static registerContext(string id, hash<auto> info, auto obj) {
+        info.object := obj;
+        live_context_hash{id} = info;
+    }
+}
+
+class AtomicHelper {
+    init() {
+        live_action_hash{self.uniqueHash()} = {\"phase\": \"init\", \"tid\": gettid()};
+        live_action_hash{self.uniqueHash()}.object := self;
+    }
+
+    destructor() {
+        remove live_action_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class AbstractMetadata {
+    updatePrepareLocked(MetadataUpdateContext action) {
+        foreach hash<auto> i in (action.info{\"service\"}.new_data.pairIterator()) {
+            string key = i.key;
+            hash<auto> new_data = i.value;
+            int id = action.info{\"service\"}.ids{key};
+            reference<hash<auto>> local = \\action.info{\"service\"}.local{key};
+            updatePrepareObjectLockedImpl(action, key, new_data, id, \\local);
+        }
+    }
+
+    private abstract updatePrepareObjectLockedImpl(MetadataUpdateContext action, string key,
+        hash<auto> new_data, int id, reference<hash<auto>> local);
+}
+
+class ServiceMetadata inherits AbstractMetadata {
+    private updatePrepareObjectLockedImpl(MetadataUpdateContext action, string key,
+        hash<auto> new_data, int id, reference<hash<auto>> local) {
+        local.info = {\"id\": id, \"enabled\": new_data.enabled};
+        action.touch();
+    }
+}
+
+our hash<auto> TypeMap = {\"service\": {\"meta\": new ServiceMetadata()}};
+
+class MetadataUpdateContext {
+    public {
+        hash<auto> info;
+    }
+
+    private {
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor() {
+        Registry::registerContext(self.uniqueHash(), {\"phase\": \"ctor\", \"tid\": gettid()}, self);
+    }
+
+    touch() {
+    }
+
+    addUpdateData(string type, int id, hash<auto> data) {
+        string key = string(id);
+        info{type}.new_data{key} = data;
+        info{type}.ids{key} = id;
+        info{type}.local{key} = {};
+        atomic_map{\"svc\"}{id} = True;
+    }
+
+    updateSingleObject(string type, int id, hash<auto> data) {
+        addUpdateData(type, id, data);
+        updateObjectsIntern();
+    }
+
+    private updateObjectsIntern() {
+        map TypeMap{$1}.meta.updatePrepareLocked(self), keys info;
+        atomic_action_helper = new AtomicHelper();
+        atomic_action_helper.init();
+    }
+
+    destructor() {
+        remove live_context_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class Handler {
+    run() {
+        MetadataUpdateContext update();
+        update.updateSingleObject(\"service\", 15, {\"enabled\": True});
+        printf(\"inside=%d action=%y context=%y\\n\", destroyed,
+            boolean(live_action_hash.firstValue().object),
+            boolean(live_context_hash.firstValue().object));
+    }
+}
+
+Handler h();
+h.run();
+printf(\"after=%d action=%y context=%y\\n\", destroyed,
+    boolean(live_action_hash.firstValue().object), boolean(live_context_hash.firstValue().object));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "metadata prepare self-call cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 action=True context=True\nafter=2 action=False context=False\n", result.run_out,
+            "AOT metadata prepare self calls must release action contexts after the handler returns");
+    }
+
+    testIrOnlyLocalCacheReleasesObjectOnReturn() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> live = {};
+
+class CachedObject {
+    constructor() {
+        live{self.uniqueHash()}.object := self;
+    }
+
+    bool alive() {
+        return boolean(live{self.uniqueHash()}.object);
+    }
+
+    destructor() {
+        remove live{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class Runner {
+    run() {
+        CachedObject obj();
+        printf(\"inside=%d live=%y\\n\", destroyed, obj.alive());
+    }
+}
+
+Runner r();
+r.run();
+printf(\"after=%d live=%y\\n\", destroyed, boolean(live.firstValue().object));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "IR-only local cache return cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 live=True\nafter=1 live=False\n", result.run_out,
+            "AOT pooled interpreter frames must not retain IR-only local cache refs after a function returns");
+    }
+
+    testDotEvalMemberGateBase() {
+        string code = "%modern
+class Inner {
+    string openInputStream() {
+        return \"ok\";
+    }
+}
+
+class Outer {
+    auto memberGate(string key) {
+        if (key == \"file\") {
+            return new Inner();
+        }
+        return NOTHING;
+    }
+}
+
+Outer outer();
+printf(\"%s\\n\", outer.file.openInputStream());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "dot-eval memberGate base regression fully precompiled: "
+            + result.compile_out);
+        assertEq("ok\n", result.run_out,
+            "AOT HashKeyAccess must use normal object lookup for dot-eval bases");
+    }
+
+    testStringOps() {
+        string code = "%modern
+string s = \"Hello\";
+s += \", World!\";
+printf(\"%s\\n\", s);
+printf(\"len: %d\\n\", s.size());
+printf(\"upper: %s\\n\", s.upr());
+printf(\"lower: %s\\n\", s.lwr());
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT string ops output matches interpreter");
+    }
+
+    testSoftStringSwitchCase() {
+        string code = "%modern
+class T {
+    int f(*string c) {
+        int tok_type;
+        switch (c) {
+            case \"+\":
+                tok_type = 1;
+                break;
+            case \"*\":
+                tok_type = 2;
+                break;
+            case \"%\":
+                tok_type = 3;
+                break;
+        }
+        return tok_type;
+    }
+}
+
+T t();
+printf(\"%d\\n\", t.f(chr(ord(\"+\"))));
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT soft string switch matches interpreter");
+    }
+
+    testSwitchRegex() {
+        string code = "%modern
+string s = \"test123\";
+switch (s) {
+    case /^test\\d+$/:
+        printf(\"matched pattern\\n\");
+        break;
+    case /^[a-z]+$/:
+        printf(\"matched letters\\n\");
+        break;
+    default:
+        printf(\"no match\\n\");
+        break;
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT regex switch output matches interpreter");
+    }
+
+    #! Multi-source batch compiles must accept PO_ENABLE_DEBUG and keep @assert live
+    /** @assert and @debug are resolved at parse time, so an AOT build can only enable them at compile
+        time; there is no runtime switch once qcc has compiled them out. Batch mode (two or more sources
+        with --output-dir) resolves --parse-option names through a different table than a single-source
+        compile, so a name the single-source path accepts can still be rejected here — which is exactly
+        how PO_ENABLE_DEBUG was missed. Both the compile and the resulting behavior are asserted, with a
+        no-flag control, so neither "the flag is accepted" nor "the flag does anything" can regress alone.
+    */
+    testQoBatchParseOptionEnableDebug() {
+        string tmp_dir = sprintf("/tmp/aot_enable_debug_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string src_path = tmp_dir + "/EnableDebugMain.qr";
+        string src2_path = tmp_dir + "/EnableDebugOther.qr";
+        {
+            File f();
+            f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+
+sub main() {
+    @assert(False, \"assert is live\");
+    printf(\"NO-FIRE\\n\");
+}
+main();
+");
+            f.close();
+        }
+        # a second source is what puts qcc in batch mode, the mode Qorus builds with
+        {
+            File f();
+            f.open2(src2_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+
+sub enable_debug_other() {
+    printf(\"other\\n\");
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -c --parse-option=PO_ENABLE_DEBUG --output-dir=%s %s %s "
+            "2>&1; echo EXIT=$?", libqore_dir, libqore_dir, qcc_bin, qo_dir, src_path, src2_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc batch accepts --parse-option=PO_ENABLE_DEBUG: " + compile_out);
+        assertFalse(compile_out.regex("unknown --parse-option name"),
+            "PO_ENABLE_DEBUG resolves in batch mode: " + compile_out);
+
+        string app_path = tmp_dir + "/enable-debug";
+        # the batch names each .qo after the full source path, so find it rather than assume the name
+        *list<string> qos = glob(qo_dir + "/*EnableDebugMain*.qo");
+        assertEq(1, qos.size(), "batch emitted the main source's .qo: " + qo_dir);
+        string qo_path = qos[0];
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_path));
+        assertTrue(link_out.regex("EXIT=0"), "qcc links the debug-enabled .qo: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, app_path));
+        assertTrue(run_out.regex("ASSERTION-ERROR"),
+            "PO_ENABLE_DEBUG keeps @assert live in the AOT binary: " + run_out);
+        assertFalse(run_out.regex("NO-FIRE"), "@assert aborted before the following statement: " + run_out);
+
+        # control: without the flag the same source must compile with @assert stripped, so the assertion
+        # above is proving the flag's effect and not merely that @assert exists
+        string plain_app = tmp_dir + "/enable-debug-off";
+        string plain_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, plain_app, src_path));
+        assertTrue(plain_out.regex("EXIT=0"), "qcc compiles the probe without the flag: " + plain_out);
+        string plain_run = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, plain_app));
+        assertTrue(plain_run.regex("NO-FIRE"),
+            "without PO_ENABLE_DEBUG @assert is compiled out: " + plain_run);
+        assertFalse(plain_run.regex("ASSERTION-ERROR"),
+            "without PO_ENABLE_DEBUG @assert does not fire: " + plain_run);
+    }
+
+    testQoDebuggerRegexExtractGlobal() {
+        string tmp_dir = sprintf("/tmp/aot_regex_global_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string src_path = tmp_dir + "/RegexGlobal.qr";
+        string qo_path = qo_dir + "/RegexGlobal.qo";
+        string app_path = tmp_dir + "/regex-global";
+
+        {
+            File f();
+            f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+sub main() {
+    string value = \"$local:a && $local:b\";
+    list<*string> matches = value =~ x/(?:[^\\\\]|^)(\\$[a-z][-a-z]+:(?:{.*}|[a-zA-Z0-9_]+|'.*'|\".*\"))/g;
+    printf(\"%y\\n\", matches);
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 --strip-source -c --parse-option=PO_ALLOW_DEBUGGER --output-dir=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, src_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc compiles debugger-enabled .qo regex global probe: " + compile_out);
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 --strip-source -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_path));
+        assertTrue(link_out.regex("EXIT=0"),
+            "qcc links debugger-enabled .qo regex global probe: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("[\"$local:a\", \"$local:b\"]\nEXIT=0\n", run_out,
+            "source-stripped debugger IR preserves regex extract /g");
+    }
+
+    testStrippedDebuggerStatementLocations() {
+        hash<auto> result = compileWithFlags("%modern
+%allow-debugger
+
+int sub debug_probe() {
+    int value = 41;
+    ++value;
+    return value;
+}
+
+ProgramControl pc = ProgramControl::getProgram();
+int sid = pc.findStatementId(\"\", 6);
+hash<StatementInfo> info = pc.getStatementIdInfo(sid);
+printf(\"%d:%d\\n\", info.start_line, debug_probe());
+", ("--strip-source",), NOTHING);
+
+        assertTrue(result.compiled,
+            "qcc compiles stripped debugger statement-location probe: " + result.compile_out);
+        assertEq("6:42\n", result.run_out,
+            "stripped debugger resolves the exact interior statement line");
+    }
+
+    testExitCode() {
+        # AOT binary should return 0 on success
+        hash<auto> paths = writeTempScript("%modern\nprintf(\"ok\\n\");\n");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        backquote(compile_cmd);
+
+        assertTrue(is_file(paths.out), "AOT executable was created");
+        int rc = system(sprintf("LD_LIBRARY_PATH=%s %s -b > /dev/null 2>&1", libqore_dir, paths.out));
+        assertEq(0, rc, "AOT binary exits with code 0");
+    }
+
+    testArgvPassthrough() {
+        string code = "%modern
+list<auto> args = ARGV;
+for (int i = 0; i < args.size(); ++i) {
+    printf(\"arg%d: %s\\n\", i, args[i]);
+}
+";
+        list<string> args = ("foo", "bar", "baz");
+        string aot_out = compileAndRun(code, args);
+        string interp_out = runInterpreted(code, args);
+        assertEq(interp_out, aot_out, "AOT ARGV passthrough matches interpreter");
+    }
+
+    testErrorHandling() {
+        string code = "%modern
+try {
+    throw \"TEST-ERROR\", \"test message\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught: %s: %s\\n\", ex.err, ex.desc);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT error handling matches interpreter");
+    }
+
+    testExceptionStopsMethodExecution() {
+        string code = "%modern
+class P {
+    getFuture() {
+        printf(\"unexpected future\\n\");
+    }
+}
+
+class C {
+    fail() {
+        throw \"EXPECTED\", \"stop\";
+    }
+
+    run() {
+        fail();
+        P p();
+        p.getFuture();
+    }
+}
+
+C c();
+c.run();
+";
+        string aot_out = compileAndRun(code);
+        assertTrue(aot_out.regex("EXPECTED: stop"), "AOT preserves the original exception: " + aot_out);
+        assertFalse(aot_out.regex("chained exception"), "AOT stops execution after exception: " + aot_out);
+        assertFalse(aot_out.regex("PSEUDO-METHOD-DOES-NOT-EXIST"),
+            "AOT does not run post-exception pseudo-method call: " + aot_out);
+    }
+
+    testCompileMissingFile() {
+        # Compiling a non-existent file should fail
+        string cmd = sprintf("QORE_LIBDIR=%s %s -b --compile /tmp/nonexistent_file_12345.qr --output /tmp/nonexistent_out 2>&1",
+            libqore_dir, qore_bin);
+        string out = backquote(cmd);
+        assertTrue(out.size() > 0, "error message for missing source file");
+    }
+
+    testCompileDefaultOutput() {
+        # Test that --output can be omitted (default output name derived from source)
+        hash<auto> paths = writeTempScript("%modern\nprintf(\"default\\n\");\n");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile without --output
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile %s 2>&1",
+            libqore_dir, qore_bin, paths.src);
+        backquote(compile_cmd);
+
+        assertTrue(is_file(paths.out), "AOT default output file was created");
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out));
+        assertEq("default\n", out, "default output binary runs correctly");
+    }
+
+    # ---- Phase 7b: Pointer Indirection Tests ----
+
+    testAllFunctionsPrecompiled() {
+        # Verify that ALL functions (including _toplevel) are pre-compiled with pointer indirection
+        string code = "%modern
+int sub add(int a, int b) {
+    return a + b;
+}
+
+int sub multiply(int a, int b) {
+    return a * b;
+}
+
+string sub greet(string name) {
+    return \"Hello, \" + name + \"!\";
+}
+
+printf(\"%d\\n\", add(3, 4));
+printf(\"%d\\n\", multiply(5, 6));
+printf(\"%s\\n\", greet(\"World\"));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "all functions pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "multi-function AOT output matches interpreter");
+    }
+
+    testLocalVariableScoping() {
+        # Test local variable assignment, reassignment, and scoping
+        string code = "%modern
+int x = 10;
+printf(\"x=%d\\n\", x);
+x = 20;
+printf(\"x=%d\\n\", x);
+
+{
+    int y = 30;
+    printf(\"y=%d\\n\", y);
+    x = x + y;
+}
+printf(\"x=%d\\n\", x);
+
+# Test multiple locals in a function
+int sub compute(int a, int b, int c) {
+    int temp1 = a + b;
+    int temp2 = temp1 * c;
+    int result = temp2 - a;
+    return result;
+}
+printf(\"result=%d\\n\", compute(3, 4, 5));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "local scoping: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "local variable scoping output matches interpreter");
+    }
+
+    testNestedDuplicateLocalNames() {
+        # Test that nested scopes with duplicate variable names (e.g., 'x' in nested blocks,
+        # 'tmp' in if/else branches) resolve correctly under AOT — previously caused assertion
+        # failures due to name collisions in stmt_local_map overwriting earlier LocalVar* pointers
+        string code = "%modern
+int sub nested_blocks() {
+    int result = 0;
+    {
+        int x = 10;
+        result += x;
+    }
+    {
+        int x = 20;
+        result += x;
+    }
+    {
+        int x = 30;
+        result += x;
+    }
+    return result;
+}
+
+int sub nested_if_scopes(int val) {
+    int r = 0;
+    if (val > 0) {
+        int tmp = val * 2;
+        r += tmp;
+    } else {
+        int tmp = val * 3;
+        r += tmp;
+    }
+    return r;
+}
+
+int sub deeply_nested() {
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        {
+            int v = i * 10;
+            sum += v;
+        }
+        {
+            int v = i * 100;
+            sum += v;
+        }
+    }
+    return sum;
+}
+
+printf(\"%d\\n\", nested_blocks());
+printf(\"%d\\n\", nested_if_scopes(5));
+printf(\"%d\\n\", nested_if_scopes(-3));
+printf(\"%d\\n\", deeply_nested());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "nested dup names: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "nested duplicate local names output matches interpreter");
+    }
+
+    testLvalueOps() {
+        # Test pre-increment/decrement and compound assignment
+        # NOTE: post-increment (a++) on typed int vars uses QoreIntPostIncrementOperatorNode
+        # which is not yet handled by IR lowering; pre-increment (++a) works via
+        # QorePreIncrementOperatorNode
+        string code = "%modern
+int a = 10;
+++a;
+printf(\"++a: %d\\n\", a);
+--a;
+printf(\"--a: %d\\n\", a);
+
+# Compound assignment operators
+int b = 100;
+b += 10;
+printf(\"b+=10: %d\\n\", b);
+b -= 30;
+printf(\"b-=30: %d\\n\", b);
+b *= 2;
+printf(\"b*=2: %d\\n\", b);
+b /= 4;
+printf(\"b/=4: %d\\n\", b);
+b %= 7;
+printf(\"b%%=7: %d\\n\", b);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "lvalue ops: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "lvalue operations output matches interpreter");
+    }
+
+    testMultipleUserFunctions() {
+        # Test multiple user functions calling each other and _toplevel
+        string code = "%modern
+int sub square(int n) {
+    return n * n;
+}
+
+int sub sum_of_squares(int n) {
+    int total = 0;
+    for (int i = 1; i <= n; ++i) {
+        total += square(i);
+    }
+    return total;
+}
+
+string sub format_result(string label, int value) {
+    return sprintf(\"%s: %d\", label, value);
+}
+
+printf(\"%s\\n\", format_result(\"sq(5)\", square(5)));
+printf(\"%s\\n\", format_result(\"sum_sq(5)\", sum_of_squares(5)));
+printf(\"%s\\n\", format_result(\"sq(10)+sq(20)\", square(10) + square(20)));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "multi-func: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "multiple user functions output matches interpreter");
+    }
+
+    testMethodCalls() {
+        # Test various method calls on built-in types (DotEvalInt, DotEvalString, etc.)
+        string code = "%modern
+# String methods
+string s = \"Hello, World!\";
+printf(\"size: %d\\n\", s.size());
+printf(\"upper: %s\\n\", s.upr());
+printf(\"lower: %s\\n\", s.lwr());
+printf(\"substr: %s\\n\", s.substr(0, 5));
+
+# List methods
+list<int> l = (3, 1, 4, 1, 5, 9);
+printf(\"list size: %d\\n\", l.size());
+
+# Number operations
+float f = 3.14159;
+printf(\"float: %g\\n\", f);
+printf(\"int cast: %d\\n\", int(f));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "method calls: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "method calls output matches interpreter");
+    }
+
+    testInheritedOverloadDotEvalDispatch() {
+        # Regression: DOT_EVAL_TARGET slots must not lose the parse-selected
+        # variant for inherited overloads.  Otherwise AOT can bind to the
+        # child class' same-name no-arg overload and pass caller args as argv.
+        string code = "%modern
+class Base2 {
+    int doOther(string str) { return 1; }
+    int doOther() { return 2; }
+    int m2(int i) {
+        delete argv;
+        return i + 1;
+    }
+}
+class Child2 inherits Base2 {
+    int doOther() { return 3; }
+    int m2(int i) { return i; }
+}
+Child2 c2();
+printf(\"%d:%d:%d\\n\", c2.doOther(\"str\"), c2.m2(1), c2.m2(1, 2));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "inherited overload dot-eval: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "inherited overload dot-eval output matches interpreter");
+    }
+
+    testInheritedMethodPrivateInternalContext() {
+        # Qorus-shaped regression: a child class has a same-name overload, and
+        # a base-typed object call selects the inherited base overload.  The
+        # inherited method body must still execute with the base class context,
+        # otherwise private:internal members such as mutex resolve as NOTHING.
+        string code = "%modern
+class AOTCtxBase {
+    private:internal {
+        hash<string, list<string>> url_map();
+        Mutex mutex();
+    }
+
+    setUrls(string id, list<string> urls) {
+        mutex.lock();
+        on_exit mutex.unlock();
+        url_map{id} = urls;
+    }
+
+    list<string> getThreadSafeUrls(string id) {
+        mutex.lock();
+        on_exit mutex.unlock();
+        return url_map{id};
+    }
+}
+
+class AOTCtxClient {
+    constructor(AOTCtxBase process, string id) {
+        list<string> urls = process.getThreadSafeUrls(id);
+        printf(\"%y\\n\", urls);
+    }
+}
+
+class AOTCtxMixinA {
+}
+
+class AOTCtxMixinB {
+}
+
+class AOTCtxDerived inherits AOTCtxBase, AOTCtxMixinA, AOTCtxMixinB {
+    private {
+        AOTCtxClient client;
+    }
+
+    constructor() {
+        setUrls(\"master\", \"tcp://127.0.0.1:1\".split(\",\"));
+        client = new AOTCtxClient(self, \"master\");
+    }
+
+    list<string> getThreadSafeUrls() {
+        return getThreadSafeUrls(\"master\");
+    }
+}
+
+AOTCtxDerived d();
+printf(\"%y\\n\", d.getThreadSafeUrls());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "inherited method private:internal context: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "inherited method private:internal context output matches interpreter");
+    }
+
+    testOptionalValGuardOverloadDispatch() {
+        # Regression: a *T local guarded by .val() must still dispatch to a T
+        # overload when the runtime value is present.  The same inline assignment
+        # shape must coerce NULL to NOTHING before pseudo-method dispatch.
+        string code = "%modern
+public auto sub work(string data) {
+    return \"got string: \" + data;
+}
+
+public nothing sub work(null data) {
+}
+
+auto x = NULL;
+bool b1 = (*string v1 = NULL).val();
+bool b2 = (*string v2 = x).val();
+printf(\"%y:%s:%y:%s\\n\", b1, v1.type(), b2, v2.type());
+
+hash<auto> row = {\"f\": \"payload\"};
+string f = \"f\";
+if ((*string v = row{f}).val()) {
+    printf(\"%y\\n\", work(v));
+}
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "optional val guard overload dispatch all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "optional val guard overload dispatch output matches interpreter");
+    }
+
+    testQmodNullableStaticOverloadDispatch() {
+        # Regression for Swagger.qmod/Qorus service init: AOT qmod expression
+        # slots must not resolve a static overload from a nullable parse-time
+        # argument type such as *hash<auto>.  Runtime dispatch must see the
+        # actual hash value and select the hash overload, not the auto fallback.
+        string tmp_dir = sprintf("/tmp/aot_qmod_nullable_static_overload_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string qm_path = tmp_dir + "/AOTNullableStaticOverload.qm";
+        string qmod_path = tmp_dir + "/AOTNullableStaticOverload.qmod";
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+
+module AOTNullableStaticOverload {
+    version = \"1.0\";
+    desc = \"nullable static overload AOT regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTNullableStaticOverload {
+public class Target {
+    static string f(string name, hash<auto> h) {
+        return \"hash\";
+    }
+
+    static string f(string name, auto v) {
+        return \"auto:\" + v.type();
+    }
+}
+
+bool sub fill(reference<auto> target) {
+    target = {\"x\": 1};
+    return True;
+}
+
+public class Runner {
+    static string run() {
+        *hash<auto> h;
+        if (fill(\\h)) {
+            return Target::f(\"response_200\", h);
+        }
+        return \"not-filled\";
+    }
+}
+}
+");
+        f.close();
+
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "nullable static overload module compiled: " + result.compile_out);
+        unlink(qm_path);
+
+        string script_path = tmp_dir + "/run.qr";
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%requires AOTNullableStaticOverload
+%modern
+printf(\"%s\\n\", AOTNullableStaticOverload::Runner::run());
+");
+        f.close();
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, script_path));
+        assertEq("hash\n", aot_out, "compiled qmod nullable static overload dispatches by runtime value");
+    }
+
+    testImplicitSelfCopyMethodCall() {
+        # Regression for Issue3637: implicit self copy() has no QoreMethod
+        # identity, so AOT must reconstruct it as an implicit copy call and
+        # not as an unresolved normal self method.
+        string code = "%modern
+class Issue3637 {
+    Issue3637 getCopy() {
+        return copy();
+    }
+}
+Issue3637 o();
+printf(\"%d\\n\", o.getCopy() instanceof Issue3637 ? 1 : 0);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "implicit self copy: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "implicit self copy output matches interpreter");
+    }
+
+    testAbstractSiblingPrivateInternalMemberContext() {
+        # Regression for issue2741 under source-stripped AOT: C3 gets a
+        # synthesized t1() while resolving B's abstract method from sibling
+        # parent C1.  The synthesized method executes with C3 as class
+        # context, so AOT must preserve C3 -> C1 storage mapping for C1's
+        # private:internal member.
+        string code = "%modern
+class B {
+    int t(int i) {
+        return t1(i);
+    }
+    abstract int t1(int i);
+}
+class N inherits B {
+}
+class C1 inherits B {
+    private:internal {
+        int cv = 1;
+    }
+    int t1(int i) {
+        return i + cv;
+    }
+}
+class C2 inherits C1 {
+    int ta() {
+        return t1(2);
+    }
+}
+class C3 inherits N, C1, C2 {
+}
+C3 c();
+printf(\"%d:%d:%d\\n\", c.t1(1), c.ta(), c.t(1));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "abstract sibling internal member context: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "abstract sibling internal member context output matches interpreter");
+    }
+
+    testAbstractSiblingInheritedOverloadDispatch() {
+        # Resolving an abstract variant from a sibling parent synthesizes a
+        # local method after AOT class preparation.  That synthesized method
+        # still needs inherited overloads from the concrete sibling parent.
+        string code = "%modern
+class AbstractBase {
+    abstract auto get(string key);
+    abstract hash<auto> get(*list<auto> key_list);
+}
+class ConcreteBase {
+    auto get(string key) {
+        return \"key:\" + key;
+    }
+    hash<auto> get(*list<auto> key_list) {
+        return key_list ? {\"count\": key_list.size()} : {\"all\": True};
+    }
+}
+class Derived inherits AbstractBase, ConcreteBase {
+}
+Derived d();
+printf(\"%y\\n\", d.get(NOTHING));
+printf(\"%y\\n\", d.get((\"a\", \"b\")));
+printf(\"%y\\n\", d.get(\"x\"));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "abstract sibling inherited overload dispatch compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "abstract sibling inherited overload dispatch all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "abstract sibling inherited overload dispatch output matches interpreter");
+    }
+
+    testObjectMemberStorePrivateAccessChecks() {
+        # Regression: the HashKeyStore fast path used QoreObject::setValue()
+        # for object containers, bypassing LValueHelper's private-member
+        # access check.  The store must also keep try/catch routing intact.
+        string code = "%modern
+class Test1 {
+    private {
+        int a;
+    }
+    constructor() {
+        a = 1;
+    }
+}
+class Runner {
+    go() {
+        auto t1 = new Test1();
+        try {
+            t1.a = 3;
+            printf(\"direct no throw\\n\");
+        } catch (hash<ExceptionInfo> e) {
+            printf(\"direct throw %s\\n\", e.err);
+        }
+        code c = sub () {
+            t1.a = 4;
+        };
+        try {
+            c();
+            printf(\"closure no throw\\n\");
+        } catch (hash<ExceptionInfo> e) {
+            printf(\"closure throw %s\\n\", e.err);
+        }
+    }
+}
+Runner r();
+r.go();
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object member store access checks: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "object member store access checks output matches interpreter");
+    }
+
+    testHashOps() {
+        # Test hash construction, access, and method calls
+        string code = "%modern
+hash<auto> h = {
+    \"name\": \"Alice\",
+    \"age\": 30,
+    \"active\": True,
+};
+printf(\"name: %s\\n\", h.name);
+printf(\"age: %d\\n\", h.age);
+printf(\"keys: %d\\n\", h.size());
+
+# Hash modification
+h.email = \"alice@example.com\";
+printf(\"updated keys: %d\\n\", h.size());
+
+# Hash iteration via keys()
+list<string> key_list = keys(h);
+printf(\"first key: %s\\n\", key_list[0]);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "hash ops: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "hash operations output matches interpreter");
+    }
+
+    testNarrowedContainerCowStore() {
+        # Regression test: a COW key/index store into a container whose runtime
+        # value type has narrowed (hash<string, int> / list<int>) but that is
+        # held through an auto! (no-narrow) parameter.  The COW helpers must
+        # transfer the fresh copy's reference into the local-variable
+        # assignment so LValueHelper::assign's auto!-strip retypes the unique
+        # node in place; the previous refSelf-then-assign pattern made the
+        # coercion store a stripped copy while the helper deref'd and then
+        # mutated the original copy (use-after-free SIGSEGV in
+        # QoreHashNode::setKeyValue).
+        string code = "%modern
+class Base {
+    private { hash<auto> m_cfg; }
+    constructor(hash<auto> cfg) { m_cfg = cfg; }
+    hash<auto> getCfg() { return m_cfg; }
+}
+
+class HashDerived inherits Base {
+    constructor(*hash<auto> opts) : Base(HashDerived::resolveOpts(opts)) {
+    }
+
+    static hash<auto> resolveOpts(*hash<auto!> opts) {
+        if (!opts.url) {
+            # COW key store of a string into a hash narrowed to hash<string, int>
+            opts.url = \"http://localhost:8001\";
+        }
+        return opts;
+    }
+}
+
+class ListDerived inherits Base {
+    constructor(*list<auto> vals) : Base(ListDerived::resolveVals(vals)) {
+    }
+
+    private static hash<auto> resolveVals(*list<auto!> vals) {
+        if (vals[0] != \"x\") {
+            # COW index store of a string into a list narrowed to list<int>
+            vals[1] = \"converted\";
+        }
+        return {\"vals\": vals};
+    }
+}
+
+# all-int literals narrow to hash<string, int> / list<int>
+HashDerived hd({\"timeout\": 30000});
+printf(\"hash cfg: %y\\n\", hd.getCfg());
+ListDerived ld((10, 20, 30));
+printf(\"list cfg: %y\\n\", ld.getCfg());
+
+# unique container (rvalue argument): no COW copy is made, so the store
+# exercises the direct setKeyValue path — the parameter-boundary strip
+# must make it succeed identically
+hash<auto> ur = HashDerived::resolveOpts({\"timeout\": 1});
+printf(\"unique cfg: %y (%s)\\n\", ur, ur.fullType());
+printf(\"OK\\n\");
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "narrowed container COW store: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "narrowed container COW store output matches interpreter");
+        assertTrue(result.run_out.regex("OK"),
+            "narrowed container COW store must complete: " + result.run_out);
+    }
+
+    testListOps() {
+        # Test list construction, access, and operations
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+printf(\"size: %d\\n\", nums.size());
+printf(\"first: %d\\n\", nums[0]);
+printf(\"last: %d\\n\", nums[4]);
+
+# Build list with push
+list<string> words = ();
+words += \"hello\";
+words += \"world\";
+printf(\"words: %d\\n\", words.size());
+
+# List in for loop
+int total = 0;
+for (int i = 0; i < nums.size(); ++i) {
+    total += nums[i];
+}
+printf(\"total: %d\\n\", total);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "list ops: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "list operations output matches interpreter");
+    }
+
+    testNestedFunctionCalls() {
+        # Test deeply nested function calls with multiple locals
+        string code = "%modern
+string sub wrap(string s, string prefix, string suffix) {
+    return prefix + s + suffix;
+}
+
+string sub format(int n) {
+    return sprintf(\"%d\", n);
+}
+
+int sub double_val(int n) {
+    return n * 2;
+}
+
+# Nested: wrap(format(double_val(5)), \"[\", \"]\")
+printf(\"%s\\n\", wrap(format(double_val(5)), \"[\", \"]\"));
+printf(\"%s\\n\", wrap(wrap(\"core\", \"<\", \">\"), \"[\", \"]\"));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "nested calls: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "nested function calls output matches interpreter");
+    }
+
+    testOnExitBlocks() {
+        # Test on_exit / on_success blocks with user functions
+        # NOTE: We call functions and store results before passing to printf
+        # to avoid double-evaluation (Call instruction re-evaluates the full
+        # expression from the AST, including sub-expressions as arguments)
+        string code = "%modern
+string sub test_on_exit(string label) {
+    string result = \"\";
+    on_exit {
+        printf(\"exit: %s\\n\", label);
+    }
+    result = \"body: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string sub test_on_success(string label) {
+    string result = \"\";
+    on_success {
+        printf(\"success: %s\\n\", label);
+    }
+    result = \"body2: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string rv1 = test_on_exit(\"A\");
+printf(\"rv: %s\\n\", rv1);
+string rv2 = test_on_success(\"B\");
+printf(\"rv: %s\\n\", rv2);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "on_exit: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "on_exit blocks output matches interpreter");
+    }
+
+    testRefForeachParseNode() {
+        # Regression: AOT-lowered `RefForeachInit` called
+        # `qore_rt_invoke_expr_aot` which EVALUATES the expression
+        # slot — for a `ParseReferenceNode` that means
+        # `evalToRef()` returns a `ReferenceNode*`.  The callee
+        # `qore_rt_ref_foreach_init` then `reinterpret_cast`'d that
+        # as `ParseReferenceNode*` and SIGSEGV'd on the wrong
+        # vtable when dispatching `evalToRef()` a second time.
+        # Fix: pass the raw ParseReferenceNode* bits from the AOT
+        # slot via `qore_rt_get_expr_bits_aot` (no evaluation),
+        # matching the JIT path's embedded-constant semantics.
+        string code = "%modern
+int sub count(*list<auto> rows) {
+    int n = 0;
+    foreach auto row in (\\rows) {
+        ++n;
+    }
+    return n;
+}
+printf(\"%d\\n\", count((\"a\", \"b\", \"c\")));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "ref-foreach: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "ref-foreach AOT output matches interpreter");
+    }
+
+    testRefForeachNarrowedElement() {
+        # Regression: `RefForeachGetEntry` passes a loop-counter PHI
+        # (marked nanboxed_values) as an i64 index to the runtime
+        # helper.  Physical LLVM type is i64 for both nanboxed and
+        # native values, so the previous emit code's type check
+        # passed, but the bits were the NaN-box tag
+        # 0xFFF9000000000000 for integer 0.  `getReferencedEntry`
+        # saw a huge negative index, returned NOTHING, the loop
+        # accumulator filled with NOTHING, and the final write-back
+        # failed the element-type check with
+        # `<lvalue> expects type 'hash<auto>', but got no value`.
+        # Fix: unbox the index via `ensureIntTypeInline` before
+        # passing to `qore_rt_ref_foreach_get_entry`.
+        string code = "%modern
+*list<hash<auto>> sub run() {
+    # heterogeneous values force hash<auto>, not narrowed hash<string>
+    hash<auto> a = {\"domain\": \"a\", \"keyname\": \"x\", \"count\": 1};
+    hash<auto> b = {\"domain\": \"b\", \"keyname\": \"y\", \"count\": 2};
+    *list<hash<auto>> rows = (a, b);
+    foreach hash<auto> row in (\\rows) {
+        # body touches row to exercise the per-iter write-back
+        row.touched = True;
+    }
+    return rows;
+}
+*list<hash<auto>> result = run();
+printf(\"%d\\n\", elements result);
+foreach hash<auto> r in (result) {
+    printf(\"%s=%y\\n\", r.keyname, r.touched);
+}
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "narrowed ref-foreach: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "narrowed ref-foreach AOT output matches interpreter");
+    }
+
+    testHandlerRecursionGuard() {
+        # Regression: a return/break/continue inside an on_exit or
+        # on_success body caused `emitBlockCleanups` to walk back to the
+        # still-live Scope entry owning the firing handler, re-entering
+        # `lowerHandlersAtExit` on the same handler range, infinite-recursing
+        # the lowerer until SIGSEGV (or stack overflow at runtime in the
+        # AOT-compiled body).  Fixed by pushing a HandlerBarrier sentinel on
+        # cleanup_stack around the handler body lowering so nested
+        # emitBlockCleanups invocations clamp target_depth past the firing
+        # Scope entry.  Patterns exercised here replicate what
+        # WorkflowExecutionInstance.qc has and what the qwf batch hit.
+        string code = "%modern
+# nested on_exit/on_success with early return inside on_success body
+hash<auto> sub run_a(*hash eh) {
+    hash<auto> rv = {\"status\": \"init\"};
+    {
+        on_success {
+            hash<auto> rv_s = {};
+            if (eh) {
+                # hash-slice on local var inside handler — the exact shape
+                # that tripped the original lowerParseList SIGSEGV.
+                rv_s.error = eh.(\"error\", \"description\", \"info\");
+            }
+            return rv_s;
+        }
+        on_exit {
+            rv = {\"status\": \"cleaned\"};
+        }
+        on_success
+            ;
+        on_exit {
+            rv = {\"status\": \"cleaned2\"};
+        }
+    }
+    return rv;
+}
+
+# on_exit body that itself contains an early return
+# (Qore's parser rejects break/continue from inside an on_exit targeting an
+# enclosing loop; `return` is the only cross-scope exit that's legal here.)
+int sub run_b(bool fast_exit) {
+    int counter = 0;
+    foreach int i in (xrange(5)) {
+        on_exit {
+            counter++;
+            if (fast_exit && i == 2) {
+                return counter + 100;
+            }
+        }
+    }
+    return counter;
+}
+
+# 3-deep nested on_exit where innermost body returns
+int sub run_c() {
+    int side_effect = 0;
+    {
+        on_exit { side_effect++; }
+        {
+            on_exit { side_effect++; }
+            {
+                on_exit {
+                    if (side_effect == 0) {
+                        return side_effect + 10;
+                    }
+                }
+                side_effect += 1;
+            }
+        }
+    }
+    return side_effect;
+}
+
+# exception thrown inside an on_exit handler — unwind must still work
+int sub run_d() {
+    int x = 0;
+    try {
+        on_exit {
+            x += 1;
+        }
+        throw \"BOOM\", \"oops\";
+    } catch (hash<ExceptionInfo> ex) {
+        x += 10;
+    }
+    return x;
+}
+
+hash<auto> rv_a1 = run_a(NOTHING);
+printf(\"a1: %y\\n\", rv_a1);
+hash<auto> rv_a2 = run_a({\"error\": \"e\", \"description\": \"d\", \"info\": \"i\", \"x\": \"ignored\"});
+printf(\"a2: %y\\n\", rv_a2);
+printf(\"b-nofast: %d\\n\", run_b(False));
+printf(\"b-fast: %d\\n\", run_b(True));
+printf(\"c: %d\\n\", run_c());
+printf(\"d: %d\\n\", run_d());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "handler-recursion: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "handler-recursion AOT output matches interpreter");
+    }
+
+    testOnExitReturnFiresOnce() {
+        # Regression: when an inline-lowered on_exit body returned before the
+        # generated ScopeExit instruction ran, the runtime handler registration
+        # stayed live. Return cleanup then executed the same handler a second
+        # time. The shape mirrors Qorus SegmentManager's typed local from a
+        # hash plus on_exit cleanup after removing the hash entry.
+        string code = "%modern
+
+hash<auto> SWD = {};
+
+class S {
+    bool deref() {
+        printf(\"deref before remove size=%d\\n\", SWD.size());
+        remove SWD{\"wf\"};
+        printf(\"deref after remove size=%d\\n\", SWD.size());
+        return True;
+    }
+
+    bool canDelete() {
+        printf(\"canDelete\\n\");
+        return True;
+    }
+
+    destructor() {
+        printf(\"dtor\\n\");
+    }
+}
+
+*bool sub derefWorkflowIntern(string id) {
+    S swd = cast<S>(SWD{id});
+    on_exit {
+        printf(\"on_exit before canDelete\\n\");
+        if (swd.canDelete()) {
+            printf(\"on_exit after canDelete\\n\");
+            return True;
+        }
+    }
+    if (swd.deref()) {
+        printf(\"after deref\\n\");
+    }
+}
+
+SWD{\"wf\"} = new S();
+derefWorkflowIntern(\"wf\");
+printf(\"done size=%d\\n\", SWD.size());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "on_exit-return-once regression fully precompiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "AOT must not execute return-producing on_exit handlers twice");
+    }
+
+    testTypeConversions() {
+        # Test implicit and explicit type conversions
+        string code = "%modern
+# int to string
+int n = 42;
+string s = sprintf(\"%d\", n);
+printf(\"str: %s\\n\", s);
+
+# string to int
+string num_str = \"123\";
+int parsed = int(num_str);
+printf(\"int: %d\\n\", parsed);
+
+# float to int
+float f = 3.7;
+int truncated = int(f);
+printf(\"trunc: %d\\n\", truncated);
+
+# int to float
+float widened = float(parsed);
+printf(\"float: %.1f\\n\", widened);
+
+# unary minus after scalar float conversion
+printf(\"neg-float: %.1f\\n\", -float(parsed) / 2.0);
+
+# bool
+bool t = True;
+bool f2 = False;
+printf(\"true: %s\\n\", string(t));
+printf(\"false: %s\\n\", string(f2));
+
+# <value>::toBool() pseudo-method lowering
+printf(\"to-bool: %y %y %y\\n\", \"true\".toBool(), \"0\".toBool(), \"\".toBool());
+
+# int arithmetic chain
+int x = int(\"10\") + int(\"20\");
+printf(\"chain: %d\\n\", x);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "type conversions: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "type conversions output matches interpreter");
+    }
+
+    # ---- AOT Optimization Levels and Cross-Compilation Tests ----
+
+    testAOTOptLevels() {
+        # Test that --opt-level=0 through --opt-level=3 all produce correct output
+        string code = "%modern
+int sub factorial(int n) {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+printf(\"fact(10): %d\\n\", factorial(10));
+int sum = 0;
+for (int i = 0; i < 100; ++i) {
+    sum += i;
+}
+printf(\"sum: %d\\n\", sum);
+";
+        string interp_out = runInterpreted(code);
+
+        # Test each optimization level
+        for (int level = 0; level <= 3; ++level) {
+            hash<auto> result = compileWithFlags(code, (sprintf("--opt-level=%d", level),));
+            assertTrue(result.compiled, sprintf("O%d: compilation succeeded", level));
+            # Verify output message includes opt level
+            assertTrue(result.compile_out.regex(sprintf("compiled executable \\(-O%d", level)),
+                sprintf("O%d: output shows opt level", level));
+            assertEq(interp_out, result.run_out,
+                sprintf("O%d: output matches interpreter", level));
+        }
+
+        # Test invalid --opt-level value
+        string err_out = compileOnly(code, ("--opt-level=5",));
+        assertTrue(err_out.regex("invalid --opt-level"),
+            "invalid opt-level produces error");
+
+        # Test non-numeric --opt-level value
+        string err_out2 = compileOnly(code, ("--opt-level=abc",));
+        assertTrue(err_out2.regex("invalid --opt-level"),
+            "non-numeric opt-level produces error");
+    }
+
+    testAOTTargetTriple() {
+        string code = "%modern
+printf(\"hello\\n\");
+";
+        # Compile with --target set to an invalid triple — should produce an error
+        string err_out = compileOnly(code, ("--target=invalid-unknown-triple",));
+        assertTrue(err_out.regex("(failed to look up target|error|No available targets)"),
+            "invalid target triple produces error: " + err_out);
+    }
+
+    testAOTStaticLink() {
+        # Check if static libqore is available
+        string static_lib = libqore_dir + "/libqore_static.a";
+        if (!is_file(static_lib)) {
+            testSkip("static libqore not built (requires -DBUILD_STATIC_LIBQORE=ON)");
+            return;
+        }
+
+        string code = "%modern
+printf(\"static hello\\n\");
+int sum = 0;
+for (int i = 0; i < 10; ++i) {
+    sum += i;
+}
+printf(\"sum: %d\\n\", sum);
+";
+        # Compile with --static
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --output %s --static %s 2>&1",
+            libqore_dir, qore_bin, paths.out, paths.src);
+        string compile_out = backquote(compile_cmd);
+        assertTrue(is_file(paths.out), "static compilation succeeded: " + compile_out);
+
+        # Run the static binary — still needs transitive .so deps (libjsig, etc.)
+        # but does NOT need libqore.so on LD_LIBRARY_PATH.
+        # Detect extra library paths needed for transitive deps (e.g., libjsig from JVM)
+        string extra_ld = "";
+        *string jsig = backquote("find /usr/lib/jvm -name 'libjsig.so' 2>/dev/null | head -1");
+        if (jsig.val()) {
+            # Remove trailing newline
+            jsig =~ s/\n$//;
+            extra_ld = ":" + dirname(jsig);
+        }
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s%s %s -b 2>&1",
+            libqore_dir, extra_ld, paths.out));
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, run_out, "static binary output matches interpreter");
+
+        # Verify the binary does not dynamically link libqore.so
+        string ldd_out = backquote(sprintf("ldd %s 2>&1", paths.out));
+        assertFalse(ldd_out.regex("libqore\\.so"),
+            "static binary does not link libqore.so dynamically");
+    }
+
+    testAOTStaticLinkNotBuilt() {
+        # Test that --static gives a clear error when libqore_static.a is not available
+        string static_lib = libqore_dir + "/libqore_static.a";
+        if (is_file(static_lib)) {
+            testSkip("static libqore is built — cannot test missing-lib error");
+            return;
+        }
+
+        string code = "%modern\nprintf(\"hello\\n\");\n";
+        string err_out = compileOnly(code, ("--static",));
+        assertTrue(err_out.regex("(static libqore not found|BUILD_STATIC_LIBQORE)"),
+            "missing static lib produces helpful error: " + err_out);
+    }
+
+    # ---- Module Compilation Tests ----
+
+    #! Write a .qm module file to temp and return the path
+    private string writeTempModule(string code) {
+        string path = sprintf("/tmp/aot_test_mod_%d_%d.qm", getpid(), rand());
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+        return path;
+    }
+
+    #! Compile a .qm module with --compile-module, return {compile_out, so_path, compiled}
+    private hash<auto> compileModuleFile(string qm_path, *string output_path, *list<string> extra_flags) {
+        string so_path;
+        if (output_path) {
+            so_path = output_path;
+        } else {
+            # Default: strip .qm extension, add .qmod
+            so_path = qm_path;
+            so_path =~ s/\.qm$//;
+            so_path += ".qmod";
+        }
+
+        string flags_str = "";
+        if (extra_flags) {
+            for (int i = 0; i < extra_flags.size(); ++i) {
+                flags_str += " " + extra_flags[i];
+            }
+        }
+
+        string output_flag = "";
+        if (output_path) {
+            output_flag = " --output " + output_path;
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile-module%s%s %s 2>&1",
+            libqore_dir, qore_bin, output_flag, flags_str, qm_path);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "compile_out": compile_out,
+            "so_path": so_path,
+            "compiled": is_file(so_path),
+        };
+    }
+
+    testAOTModuleBuiltinFeaturesNotDependencies() {
+        string tmp_dir = sprintf("/tmp/aot_builtin_feature_deps_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string qm_path = tmp_dir + "/BuiltinFeatureDepTest.qm";
+        string qmod_path = tmp_dir + "/BuiltinFeatureDepTest.qmod";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+
+module BuiltinFeatureDepTest {
+    version = \"1.0\";
+    desc = \"Builtin feature dependency regression test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace BuiltinFeatureDepTest {
+    public int sub value() {
+        return 4817;
+    }
+}
+");
+            f.close();
+        }
+
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "builtin-feature-deps: module compiled: " + result.compile_out);
+
+        string dump_out = dumpQccInfo(qmod_path, False);
+        assertTrue(dump_out.regex("dependencies:\\s+\\(none\\)"),
+            "implicit Qore builtin features are not serialized as module dependencies: " + dump_out);
+        assertTrue(dump_out.regex("imports:\\s+\\(none\\)"),
+            "implicit Qore builtin features are not serialized as module imports: " + dump_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        {
+            File f();
+            f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%requires BuiltinFeatureDepTest
+
+printf(\"%d\\n\", BuiltinFeatureDepTest::value());
+");
+            f.close();
+        }
+        string run_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, script_path));
+        assertEq("4817\n", run_out,
+            "qmod with only implicit builtin features loads without module dependencies");
+
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            string debug_qm_path = tmp_dir + "/ExplicitDebugFeatureDepTest.qm";
+            string debug_qmod_path = tmp_dir + "/ExplicitDebugFeatureDepTest.qmod";
+            {
+                File f();
+                f.open2(debug_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+                f.write("%modern
+%requires debug
+
+module ExplicitDebugFeatureDepTest {
+    version = \"1.0\";
+    desc = \"Explicit debug dependency regression test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace ExplicitDebugFeatureDepTest {
+    public int sub value() {
+        return 4818;
+    }
+}
+");
+                f.close();
+            }
+
+            hash<auto> debug_result = compileModuleFile(debug_qm_path, debug_qmod_path);
+            assertTrue(debug_result.compiled,
+                "explicit-debug-feature-deps: module compiled: " + debug_result.compile_out);
+
+            string debug_dump_out = dumpQccInfo(debug_qmod_path, False);
+            assertTrue(debug_dump_out.regex("dependencies:\\s+debug"),
+                "explicit %requires debug is serialized as a dependency: " + debug_dump_out);
+            assertTrue(debug_dump_out.regex("imports:\\s+debug"),
+                "explicit %requires debug is serialized as a module import: " + debug_dump_out);
+        }
+    }
+
+    testAOTModuleNestedNamespacePaths() {
+        string tmp_dir = sprintf("/tmp/aot_nested_ns_path_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNestedNsPath {
+    version = \"1.0\";
+    desc = \"Nested namespace qmod path regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace Outer {
+public namespace Inner {
+    public class Base {
+    }
+
+    public class Derived inherits Outer::Inner::Base {
+    }
+}
+}
+";
+        string qm_path = tmp_dir + "/AOTNestedNsPath.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNestedNsPath.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled,
+            "nested namespace qmod path regression module compiled: " + result.compile_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        {
+            File f();
+            f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%requires AOTNestedNsPath
+%requires reflection
+
+foreach auto c in (Reflection::Class::forName(\"Outer::Inner::Derived\").getClassHierarchy()) {
+    printf(\"%s|%s\\n\", c.getPathName(), c.getNamespace().getPathName());
+}
+");
+            f.close();
+        }
+
+        string out = ExecModeHarness::run(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s",
+            libqore_dir, prependModulePath(tmp_dir), qore_bin, script_path));
+        assertTrue(out.regex("Outer::Inner::Base\\|Outer::Inner"),
+            "AOT qmod preserves nested base class namespace path: " + out);
+        assertTrue(out.regex("Outer::Inner::Derived\\|Outer::Inner"),
+            "AOT qmod preserves nested derived class namespace path: " + out);
+        assertFalse(out.regex("(^|\\n)Inner::"),
+            "AOT qmod does not expose local-only class paths: " + out);
+        assertFalse(out.regex("\\|Inner($|\\n)"),
+            "AOT qmod does not expose local-only namespace paths: " + out);
+    }
+
+    testAOTModuleSsoAvoidsNumericFastPaths() {
+        string tmp_dir = sprintf("/tmp/aot_sso_fastpath_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+
+module AOTShortStringFastPath {
+    version = \"1.0\";
+    desc = \"SSO numeric fast-path regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTShortStringFastPath {
+    public class Writer {
+        private {
+            string quote = \"\\\"\";
+            string escape = \"\\\\\";
+            string empty = \"\";
+            string type = \"btree\";
+            *string method;
+        }
+
+        string direct() {
+            return escape + quote;
+        }
+
+        list<auto> mapped(list<auto> values) {
+            return map replace(string($1), quote, escape + quote), values;
+        }
+
+        bool emptyTruthy() {
+            return empty ? True : False;
+        }
+
+        bool quoteTruthy() {
+            return quote ? True : False;
+        }
+
+        bool hardEq() {
+            return quote === quote;
+        }
+
+        int findSep() {
+            string s = \"a\\n\\n\";
+            return s.find(\"\\n\\n\");
+        }
+
+        string lower() {
+            string s = \"A\";
+            return s.lwr();
+        }
+
+        bool equalPartial() {
+            string s = \"/x\";
+            return s.equalPartial(\"/\");
+        }
+
+        string optionalMethodFallback() {
+            return method.val() ? method.upr() : type.upr();
+        }
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTShortStringFastPath.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTShortStringFastPath.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled,
+            "SSO numeric fast-path regression module compiled: " + result.compile_out);
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "9"),
+            "SSO numeric fast-path regression module fully precompiled: " + result.compile_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        {
+            File f();
+            f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%requires AOTShortStringFastPath
+
+AOTShortStringFastPath::Writer w();
+printf(\"%y\\n\", (w.direct(), w.mapped((\"a\\\"b\",)), w.emptyTruthy(), w.quoteTruthy(), w.hardEq(),
+    w.findSep(), w.lower(), w.equalPartial(), w.optionalMethodFallback()));
+");
+            f.close();
+        }
+
+        string out = ExecModeHarness::run(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s",
+            libqore_dir, tmp_dir, qore_bin, script_path));
+        assertEq("[\"\\\\\\\"\", [\"a\\\\\\\"b\"], False, True, True, 1, \"a\", True, \"BTREE\"]\n", out,
+            "AOT qmod SSO values stay out of numeric fast paths and legacy pseudo dispatch");
+    }
+
+    testAOTModuleIrOnlyLocalOwnsInvokeResult() {
+        string tmp_dir = sprintf("/tmp/aot_ir_only_local_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTLocalTempCleanup {
+    version = \"1.0\";
+    desc = \"IR-only local ownership regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public class AOTLocalTempCleanup {
+    static string restoreCodeBlocks(string result, list<string> protected_blocks) {
+        for (int i = protected_blocks.size() - 1; i >= 0; --i) {
+            result = regex_subst(result, \"<<PROTECTED_\" + string(i) + \">>\",
+                protected_blocks[i], RE_Global);
+        }
+        return result;
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTLocalTempCleanup.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTLocalTempCleanup.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "IR-only local ownership module compiled: " + result.compile_out);
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "1"),
+            "IR-only local ownership module fully precompiled: " + result.compile_out);
+
+        string out = ExecModeHarness::run(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --modern --exec-mode=ast -l AOTLocalTempCleanup "
+            "-e 'list<string> p = (\"`code`\",); printf(\"%%y\\n\", "
+            "AOTLocalTempCleanup::restoreCodeBlocks(\"before <<PROTECTED_0>> after\", p));'",
+            libqore_dir, tmp_dir, qore_bin));
+        assertEq("\"before `code` after\"\n", out,
+            "AOT qmod StoreLocal must keep IR-only local value alive after DiscardTemps");
+    }
+
+    testAOTModuleWeakDiagnosticHashesReleaseObjects() {
+        string tmp_dir = sprintf("/tmp/aot_weak_diag_mod_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+%allow-weak-references
+
+module AOTWeakDiagnosticLeak {
+    version = \"1.0\";
+    desc = \"weak diagnostic hash cleanup regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTWeakDiagnosticLeak {
+    public class Meta {
+        public updatePrepareUnlocked(auto action) {
+            action.touch();
+        }
+    }
+
+    public class State {
+        public {
+            static int destroyed = 0;
+            static hash<auto> live_action_hash = {};
+            static hash<auto> live_context_hash = {};
+            static hash<auto> type_map = {\"service\": {\"meta\": new Meta()}};
+        }
+    }
+
+    public class Registry {
+        public static registerContext(string id, hash<auto> info, auto obj) {
+            info.object := obj;
+            State::live_context_hash{id} = info;
+        }
+    }
+
+    public class Helper {
+        public init() {
+            State::live_action_hash{self.uniqueHash()} = {
+                \"phase\": \"init\",
+                \"tid\": gettid(),
+                \"stack\": (\"init\"),
+            };
+            State::live_action_hash{self.uniqueHash()}.object := self;
+        }
+
+        destructor() {
+            ++State::destroyed;
+        }
+    }
+
+    public class BaseContext {
+        public {
+            Helper atomic_action_helper;
+        }
+    }
+
+    public class Context inherits BaseContext {
+        private {
+            hash<auto> info = {\"service\": True};
+        }
+
+        constructor() {
+            Registry::registerContext(self.uniqueHash(), {
+                \"phase\": \"ctor\",
+                \"tid\": gettid(),
+                \"stack\": (\"ctor\"),
+            }, self);
+        }
+
+        public touch() {
+        }
+
+        public run() {
+            map State::type_map{$1}.meta.updatePrepareUnlocked(self), keys info;
+            atomic_action_helper = new Helper();
+            atomic_action_helper.init();
+        }
+
+        destructor() {
+            ++State::destroyed;
+        }
+    }
+
+    public sub launch() {
+        Context ctx();
+        ctx.run();
+        printf(\"inside=%d action=%y context=%y\\n\", State::destroyed,
+            boolean(State::live_action_hash.firstValue().object),
+            boolean(State::live_context_hash.firstValue().object));
+    }
+
+    public int sub getDestroyed() {
+        return State::destroyed;
+    }
+
+    public bool sub actionAlive() {
+        return boolean(State::live_action_hash.firstValue().object);
+    }
+
+    public bool sub contextAlive() {
+        return boolean(State::live_context_hash.firstValue().object);
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTWeakDiagnosticLeak.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTWeakDiagnosticLeak.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "weak diagnostic hash module compiled: " + result.compile_out);
+        assertTrue(compileOutputHasCompleteAot(result.compile_out),
+            "weak diagnostic hash module fully precompiled: " + result.compile_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        {
+            File f();
+            f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%requires AOTWeakDiagnosticLeak
+
+AOTWeakDiagnosticLeak::launch();
+printf(\"after=%d action=%y context=%y\\n\", AOTWeakDiagnosticLeak::getDestroyed(),
+    AOTWeakDiagnosticLeak::actionAlive(), AOTWeakDiagnosticLeak::contextAlive());
+");
+            f.close();
+        }
+
+        string out = ExecModeHarness::run(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s",
+            libqore_dir, tmp_dir, qore_bin, script_path));
+        assertEq("inside=0 action=True context=True\nafter=2 action=False context=False\n", out,
+            "AOT qmod weak diagnostic hash assignments must not retain helper/context objects");
+    }
+
+    testCrossModuleSameName() {
+        # Regression: two AOT .qmods that each define a function with the
+        # SAME BASE NAME (and signature) emitted identical bare LLVM
+        # symbols — `dlopen(..., RTLD_GLOBAL)` then interposed one body
+        # onto the other's function-table slot, so a wrapper `OMQ::foo`
+        # that calls `Util::foo` ended up running `OMQ::foo` again,
+        # blowing the C++ stack (pre-HandlerBarrier) or corrupting the
+        # arg flow (post-HandlerBarrier, producing a `<block return>`
+        # type error or a `<nothing>::substr()` pseudo-method failure
+        # as the cross-module body saw NOTHING in its first parameter).
+        # Fixed by prefixing the LLVM symbol with `_qaot_<module>_` so
+        # same-named functions across modules get distinct symbols.
+        # The AOT function-table entry's `name` field stays unqualified
+        # so the runtime register path's variant-key reconstruction
+        # keeps working.
+        string tmp_dir = sprintf("/tmp/aot_xmod_name_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Module A: defines ModA::shared_fn
+        string mod_a = "%modern
+module ModA { version = \"1.0\"; desc = \"A\"; author = \"t\"; license = \"MIT\"; }
+public namespace ModA {
+    public string sub shared_fn(string s) {
+        return \"A:\" + s;
+    }
+}
+";
+        # Module B: `%requires ModA`, defines ModB::shared_fn wrapping A's.
+        # Same base name, same signature — must NOT collide at load time.
+        string mod_b = "%modern
+%requires ModA
+module ModB { version = \"1.0\"; desc = \"B\"; author = \"t\"; license = \"MIT\"; }
+public namespace ModB {
+    public string sub shared_fn(string s) {
+        return ModA::shared_fn(s) + \":B\";
+    }
+}
+";
+        string a_qm = tmp_dir + "/ModA.qm";
+        string b_qm = tmp_dir + "/ModB.qm";
+        {
+            File f();
+            f.open2(a_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_a);
+            f.close();
+        }
+        {
+            File f();
+            f.open2(b_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_b);
+            f.close();
+        }
+
+        hash<auto> ra = compileModuleFile(a_qm, tmp_dir + "/ModA.qmod");
+        assertTrue(ra.compiled, "ModA compiled: " + ra.compile_out);
+        # B requires A — qcc needs QORE_MODULE_DIR=tmp_dir to find
+        # ModA.qmod for the `%requires ModA` directive.  Drive qcc
+        # directly (compileModuleFile doesn't thread env vars through).
+        string compile_b_cmd = sprintf("QORE_LIBDIR=%s QORE_MODULE_DIR=%s "
+            "%s -b --compile-module --output %s/ModB.qmod %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, tmp_dir, b_qm);
+        string b_out = backquote(compile_b_cmd);
+        hash<auto> rb = {
+            "compile_out": b_out,
+            "so_path": tmp_dir + "/ModB.qmod",
+            "compiled": is_file(tmp_dir + "/ModB.qmod"),
+        };
+        assertTrue(rb.compiled, "ModB compiled: " + rb.compile_out);
+
+        # Symbols must be distinct (prefixed and namespace-qualified).
+        string dump_a = dumpQccInfo(tmp_dir + "/ModA.qmod", True);
+        string dump_b = dumpQccInfo(tmp_dir + "/ModB.qmod", True);
+        assertTrue(dump_a.regex("function[[:space:]]+ModA::shared_fn\\(string\\)[^\\n]*"
+                "native=_qaot_ModA_ModA__shared_fn_string__h[0-9a-f]+"),
+            "qcc dump-symbols reports ModA shared_fn Qore symbol with native body: " + dump_a);
+        assertTrue(dump_b.regex("function[[:space:]]+ModB::shared_fn\\(string\\)[^\\n]*"
+                "native=_qaot_ModB_ModB__shared_fn_string__h[0-9a-f]+"),
+            "qcc dump-symbols reports ModB shared_fn Qore symbol with native body: " + dump_b);
+
+        # Run a script that loads both modules and calls each — a correct
+        # dispatch yields ModA direct="A:x" and ModB wrapper="A:y:B".
+        string test_code = "%modern
+%requires ModA
+%requires ModB
+printf(\"%s\\n\", ModA::shared_fn(\"x\"));
+printf(\"%s\\n\", ModB::shared_fn(\"y\"));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s "
+            "%s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        assertEq("A:x\nA:y:B\n", out,
+            "cross-module same-name dispatch produces correct results: " + out);
+    }
+
+    testQccStubExternalConstants() {
+        string tmp_dir = sprintf("/tmp/aot_stub_const_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string stub_path = tmp_dir + "/stub.qc";
+        string provider_path = tmp_dir + "/provider.qr";
+        string main_path = tmp_dir + "/main.qr";
+        string provider_qo = tmp_dir + "/provider.qo";
+        string main_qo = tmp_dir + "/main.qo";
+        string app_path = tmp_dir + "/stub-ok";
+        string missing_app_path = tmp_dir + "/stub-missing";
+
+        {
+            File f();
+            f.open2(stub_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%new-style
+public namespace Host {
+    public const Build = \"\";
+    public const Banner = sprintf(\"build %s\", Build);
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace Host {
+    public const Build = \"real\";
+    public const Banner = sprintf(\"build %s\", Build);
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(main_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+sub main() {
+    string b = Host::Banner;
+    printf(\"%s\\n\", b);
+}
+");
+            f.close();
+        }
+
+        string compile_main = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --stub=%s -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, stub_path, main_qo, main_path));
+        assertTrue(compile_main.regex("EXIT=0"),
+            "qcc compiles main source with declaration-only stub: " + compile_main);
+
+        string compile_provider = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, provider_qo, provider_path));
+        assertTrue(compile_provider.regex("EXIT=0"),
+            "qcc compiles runtime provider source: " + compile_provider);
+
+        string link_ok = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, provider_qo, main_qo));
+        assertTrue(link_ok.regex("EXIT=0"),
+            "qcc links provider before stub-compiled main: " + link_ok);
+
+        string run_ok = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("build real\nEXIT=0\n", run_ok,
+            "stub constants resolve to host-injected runtime constants, not placeholder values");
+
+        string link_missing = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, missing_app_path, main_qo));
+        assertTrue(link_missing.regex("EXIT=0"),
+            "qcc can link a host-missing binary so runtime diagnostics can name the missing constant: "
+            + link_missing);
+
+        string run_missing = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, missing_app_path));
+        assertTrue(run_missing.regex("cannot resolve runtime constant reference 'Host::Banner'"),
+            "missing host constant reports the unresolved stub-derived constant path: " + run_missing);
+        assertTrue(run_missing.regex("runtime host must inject the external constant"),
+            "missing host constant diagnostic explains the qcc --stub contract: " + run_missing);
+        assertTrue(run_missing.regex("EXIT=1"),
+            "missing host constant fails fast instead of using a stub placeholder: " + run_missing);
+    }
+
+    testQccScriptDefineExcludesInactiveBranches() {
+        string tmp_dir = sprintf("/tmp/aot_qcc_define_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string src_path = tmp_dir + "/IfdefBranch.qr";
+        string qo_path = tmp_dir + "/IfdefBranch.qo";
+        {
+            File f();
+            f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+%ifdef QorusServer
+int sub branch() {
+    return 1;
+}
+%else
+int sub branch() {
+    return missing_bareword;
+}
+%endif
+
+sub main() {
+    printf(\"%d\\n\", branch());
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --define=QorusServer -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_path, src_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc single-file script mode applies --define before parsing: "
+            + compile_out);
+    }
+
+    testAOTLinkedQoModuleCommands() {
+        string jni_check = backquote(sprintf("LD_LIBRARY_PATH=%s %s -ljni -nX 1 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin));
+        bool jni_available = jni_check.regex("EXIT=0");
+
+        string tmp_dir = sprintf("/tmp/aot_module_cmd_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string src_path = tmp_dir + "/ModuleCmd.qr";
+        string qo_path = qo_dir + "/ModuleCmd.qo";
+        string app_path = tmp_dir + "/module-cmd";
+
+        {
+            File f();
+            f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%try-module jni
+%define NO_JNI
+%endtry
+
+%ifndef NO_JNI
+%module-cmd(jni) import java.util.ArrayList
+%endif
+
+sub main() {
+%ifdef NO_JNI
+    printf(\"no-jni\\n\");
+%else
+    ArrayList l = new ArrayList();
+    l.add(\"x\");
+    printf(\"ok\\n\");
+%endif
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, src_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc compiles script-context .qo with %module-cmd metadata: " + compile_out);
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_path));
+        assertTrue(link_out.regex("EXIT=0"),
+            "qcc links .qo containing %module-cmd metadata: " + link_out);
+
+        # only the standard output is compared: the JVM writes a banner such as "Picked up JAVA_TOOL_OPTIONS: ..." to the
+        # standard error when JAVA_TOOL_OPTIONS or _JAVA_OPTIONS is set, as the CI images set JAVA_TOOL_OPTIONS
+        string err_path = tmp_dir + "/run.stderr";
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>%s; echo EXIT=$?", libqore_dir, app_path,
+            err_path));
+        assertEq((jni_available ? "ok\n" : "no-jni\n") + "EXIT=0\n", run_out,
+            "linked .qo binary replays %module-cmd before AOT metadata resolution; error output: "
+            + (ReadOnlyFile::readTextFile(err_path) ?? ""));
+    }
+
+    testAOTModuleDependencyPrependPath() {
+        string suffix = sprintf("%d_%d", getpid(), rand());
+        string dep_name = "AOTDepPath" + suffix;
+        string consumer_name = "AOTConsumerPath" + suffix;
+        string tmp_dir = sprintf("/tmp/aot_mod_path_%s", suffix);
+        string preferred_dir = tmp_dir + "/preferred";
+        string fallback_dir = tmp_dir + "/fallback";
+        mkdir(tmp_dir);
+        mkdir(preferred_dir);
+        mkdir(fallback_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string dep_template = "%modern
+module %s { version = \"1.0\"; desc = \"dependency\"; author = \"t\"; license = \"MIT\"; }
+public namespace %s {
+    public string sub value() {
+        return \"%s\";
+    }
+}
+";
+        string preferred_dep_qm = preferred_dir + "/" + dep_name + ".qm";
+        string fallback_dep_qm = fallback_dir + "/" + dep_name + ".qm";
+        {
+            File f();
+            f.open2(preferred_dep_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf(dep_template, dep_name, dep_name, "preferred"));
+            f.close();
+        }
+        {
+            File f();
+            f.open2(fallback_dep_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf(dep_template, dep_name, dep_name, "fallback"));
+            f.close();
+        }
+
+        string preferred_dep_qmod = preferred_dir + "/" + dep_name + ".qmod";
+        string fallback_dep_qmod = fallback_dir + "/" + dep_name + ".qmod";
+        string preferred_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, preferred_dir, qore_bin, preferred_dep_qmod, preferred_dep_qm));
+        string fallback_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, fallback_dir, qore_bin, fallback_dep_qmod, fallback_dep_qm));
+        assertTrue(is_file(preferred_dep_qmod), "preferred dependency compiled: " + preferred_dep_out);
+        assertTrue(is_file(fallback_dep_qmod), "fallback dependency compiled: " + fallback_dep_out);
+
+        string consumer_qm = preferred_dir + "/" + consumer_name + ".qm";
+        string consumer_qmod = preferred_dir + "/" + consumer_name + ".qmod";
+        string consumer_code = sprintf("%modern
+%%requires %s
+module %s { version = \"1.0\"; desc = \"consumer\"; author = \"t\"; license = \"MIT\"; }
+public namespace %s {
+    public string sub value() {
+        return %s::value();
+    }
+}
+", dep_name, consumer_name, consumer_name, dep_name);
+        {
+            File f();
+            f.open2(consumer_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(consumer_code);
+            f.close();
+        }
+
+        string consumer_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, preferred_dir, qore_bin, consumer_qmod, consumer_qm));
+        assertTrue(is_file(consumer_qmod), "consumer module compiled: " + consumer_out);
+
+        string test_code = sprintf("%modern
+%%prepend-module-path \"%s\"
+%%requires %s
+hash<auto> mh = get_module_hash();
+printf(\"value=%%s\\n\", %s::value());
+printf(\"dep=%%s\\n\", mh.%s.filename);
+", preferred_dir, consumer_name, consumer_name, dep_name);
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, fallback_dir, qore_bin, paths.src));
+        assertEq(sprintf("value=preferred\ndep=%s\n", preferred_dep_qmod), out,
+            "AOT qmod dependency resolution honors importing Program prepends: " + out);
+    }
+
+    testAOTModuleTryModuleDependencyMetadata() {
+        string suffix = sprintf("%d_%d", getpid(), rand());
+        string tmp_dir = sprintf("/tmp/aot_try_dep_%s", suffix);
+        string missing_dir = tmp_dir + "/MissingTry" + suffix;
+        string loaded_dir = tmp_dir + "/LoadedTry" + suffix;
+        string qlib_dir = get_script_dir() + "/../../../qlib";
+        mkdir(tmp_dir);
+        mkdir(missing_dir);
+        mkdir(loaded_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string missing_mod = "MissingTry" + suffix;
+        string missing_feature = "definitely_missing_qore_aot_dep_probe_" + suffix;
+        string missing_qm = missing_dir + "/" + missing_mod + ".qm";
+        string missing_qmod = tmp_dir + "/" + missing_mod + ".qmod";
+        {
+            File f();
+            f.open2(missing_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf("%modern
+module %s { version = \"1.0\"; desc = \"missing try probe\"; author = \"t\"; license = \"MIT\"; }
+%%try-module %s
+int sub hidden() {
+    return 1;
+}
+%%endtry
+public int sub ok() {
+    return 7;
+}
+", missing_mod, missing_feature));
+            f.close();
+        }
+
+        string missing_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s -m %s -o %s 2>&1; echo EXIT=$?",
+            libqore_dir, prependModulePath(qlib_dir), libqore_dir, qcc_bin, missing_dir, missing_qmod));
+        assertTrue(missing_out.regex("EXIT=0"), "missing try-module qmod compiled: " + missing_out);
+        string missing_dump = dumpQccInfo(missing_qmod, False);
+        # the failed request is recorded in the module metadata as an unavailable optional module, so that the
+        # loader can tell when the module becomes available, and not as a dependency
+        *list<*string> module_info = regex_extract(missing_dump, "\\n  AOT module metadata: [^\\n]*\\n"
+            "    module: [^\\n]*\\n    dependencies: ([0-9]+)\\n(?:      [^\\n]*\\n)*"
+            "    unavailable optional modules: ([0-9]+)\\n      ([^\\n]*)\\n");
+        assertEq(("0", "1", missing_feature), module_info,
+            "failed %try-module dependency is an unavailable optional module in the module metadata: "
+                + missing_dump);
+        int module_info_offset = missing_dump.find("\n  AOT module metadata:");
+        assertTrue(module_info_offset > 0, "the module metadata follows the AOT metadata: " + missing_dump);
+        assertTrue(!missing_dump.substr(0, module_info_offset).regex(missing_feature),
+            "failed %try-module dependency is not serialized as a hard qmod dependency: " + missing_dump);
+        assertTrue(missing_dump.regex("imports:\\s+\\(none\\)"),
+            "failed %try-module dependency is not serialized as a namespace import: " + missing_dump);
+
+        string loaded_mod = "LoadedTry" + suffix;
+        string loaded_qm = loaded_dir + "/" + loaded_mod + ".qm";
+        string loaded_qmod = tmp_dir + "/" + loaded_mod + ".qmod";
+        {
+            File f();
+            f.open2(loaded_qm, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf("%modern
+module %s { version = \"1.0\"; desc = \"loaded try probe\"; author = \"t\"; license = \"MIT\"; }
+%%try-module FsUtil
+public int sub ok() {
+    return 7;
+}
+%%endtry
+", loaded_mod));
+            f.close();
+        }
+
+        string loaded_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s -m %s -o %s 2>&1; echo EXIT=$?",
+            libqore_dir, prependModulePath(qlib_dir), libqore_dir, qcc_bin, loaded_dir, loaded_qmod));
+        assertTrue(loaded_out.regex("EXIT=0"), "loaded try-module qmod compiled: " + loaded_out);
+        string loaded_dump = dumpQccInfo(loaded_qmod, False);
+        assertTrue(loaded_dump.regex("\\bFsUtil\\b"),
+            "successful %try-module dependency is serialized as a hard qmod dependency: " + loaded_dump);
+        assertTrue(loaded_dump.regex("imports:\\s+FsUtil"),
+            "successful %try-module dependency is serialized as a namespace import: " + loaded_dump);
+    }
+
+    testAOTModuleCompile() {
+        # Use a temp directory so we can control module naming
+        string tmp_dir = sprintf("/tmp/aot_mod_test_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            # Clean up the entire temp directory
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Write a test module with a filename matching the module name
+        string mod_code = "%modern
+%enable-all-warnings
+
+module AOTTestMod {
+    version = \"1.0\";
+    desc = \"AOT test module\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTTestMod {
+    public string sub hello(string name) {
+        return \"Hello, \" + name + \"!\";
+    }
+
+    public int sub add(int a, int b) {
+        return a + b;
+    }
+
+    public int sub factorial(int n) {
+        if (n <= 1) {
+            return 1;
+        }
+        return n * factorial(n - 1);
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTTestMod.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        # Compile the module (produces AOTTestMod.qmod by default)
+        string qmod_path = tmp_dir + "/AOTTestMod.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+
+        assertTrue(result.compiled, "module compilation produced .qmod: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compiled module \\(-O2"),
+            "compile output shows module compilation: " + result.compile_out);
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "3"),
+            "all module functions pre-compiled: " + result.compile_out);
+
+        # Write a test script that loads the compiled module
+        string test_code = "%modern
+%enable-all-warnings
+
+%requires AOTTestMod
+
+printf(\"%s\\n\", AOTTestMod::hello(\"World\"));
+printf(\"%d\\n\", AOTTestMod::add(10, 20));
+printf(\"%d\\n\", AOTTestMod::factorial(10));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled .qmod binary module
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        # Run with the interpreted .qm user module (remove .qmod so loader picks up .qm)
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module output matches interpreted module");
+        assertEq("Hello, World!\n30\n3628800\n", aot_out, "module functions produce correct results");
+    }
+
+    testAOTModuleVariantParseOptions() {
+        string tmp_dir = sprintf("/tmp/aot_variant_po_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string dep_code = "%modern
+module AOTVariantParseOptionsDep {
+    version = \"1.0\";
+    desc = \"dependency loaded through an injected Program\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+public namespace AOTVariantParseOptionsDep {
+    public string sub value() {
+        return \"dep\";
+    }
+}
+";
+        string dep_path = tmp_dir + "/AOTVariantParseOptionsDep.qm";
+        {
+            File f();
+            f.open2(dep_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(dep_code);
+            f.close();
+        }
+
+        string mod_code = "%modern
+module AOTVariantParseOptionsMod {
+    version = \"1.0\";
+    desc = \"variant parse options regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+%allow-injection
+public namespace AOTVariantParseOptionsMod {
+    public class Loader {
+        static string test(string dep_path) {
+            Program p(PO_NO_USER_API | PO_ALLOW_INJECTION | PO_NEW_STYLE);
+            p.loadApplyToUserModule(dep_path, True, WARN_MODULES, True);
+            return \"loaded\";
+        }
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTVariantParseOptionsMod.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTVariantParseOptionsMod.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "variant parse options module compiled: " + result.compile_out);
+
+        string dump_out = dumpQccInfo(qmod_path, False);
+        assertTrue(dump_out.regex("variant-parse-options"),
+            "qcc dump reports variant parse option metadata: " + dump_out);
+
+        string script_code = sprintf("%%modern
+%%requires AOTVariantParseOptionsMod
+printf(\"%%s\\n\", AOTVariantParseOptionsMod::Loader::test(\"%s\"));
+", dep_path);
+        hash<auto> paths = writeTempScript(script_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "source-stripped qmod preserves %allow-injection on method bodies: " + aot_out);
+        assertEq("loaded\n", aot_out, "injection-domain method call succeeds from qmod");
+    }
+
+    testAOTModuleNoNarrowMemberTypes() {
+        string tmp_dir = sprintf("/tmp/aot_no_narrow_member_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNoNarrowMember {
+    version = \"1.0\";
+    desc = \"AOT no-narrow member regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTNoNarrowMember {
+    public class C {
+        private {
+            hash<auto!> h;
+            list<auto!> l;
+        }
+
+        constructor() {
+            int p = 4;
+            h = {\"period\": p};
+            h.alpha = 0.3;
+            l = (p,);
+            l[1] = 0.3;
+        }
+
+        string getResult() {
+            return sprintf(\"%y|%y\\n\", h, l);
+        }
+    }
+
+    public string sub run() {
+        C c();
+        return c.getResult();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTNoNarrowMember.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNoNarrowMember.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "no-narrow member module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTNoNarrowMember
+printf(\"%s\", AOTNoNarrowMember::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module preserves hash<auto!>/list<auto!> member types: " + aot_out);
+        assertTrue(aot_out.regex("alpha"), "hash member accepted mixed value types: " + aot_out);
+        assertTrue(aot_out.regex("0.3"), "list member accepted mixed value types: " + aot_out);
+    }
+
+    testAOTModuleNoNarrowReferenceSignatures() {
+        string tmp_dir = sprintf("/tmp/aot_no_narrow_ref_sig_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNoNarrowRefSig {
+    version = \"1.0\";
+    desc = \"AOT no-narrow reference signature regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTNoNarrowRefSig {
+    public class C {
+        static string put(reference<hash<auto!>> h, string key, auto val) {
+            h.(key) = val;
+            return sprintf(\"%d:%s\", h.n, h.s);
+        }
+
+        static string putBroad(reference<hash<auto>> h) {
+            h.impact_values = ({\"metric_name\": \"exposure\"},);
+            return sprintf(\"%s:%s\", h.fullType(), h.impact_values[0].metric_name);
+        }
+    }
+
+    public string sub run() {
+        hash<auto!> h = {\"n\": 1};
+        hash<auto!> broad = {\"source_event_ids\": (\"event-id\",)};
+        string broad_type = broad.fullType();
+        return C::put(\\h, \"s\", \"x\") + \":\" + h.s + \":\" + broad_type + \":\"
+            + C::putBroad(\\broad) + \"\\n\";
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTNoNarrowRefSig.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNoNarrowRefSig.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "no-narrow reference signature module compiled: " + result.compile_out);
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "3"),
+            "no-narrow reference signature module fully precompiled: " + result.compile_out);
+
+        unlink(qm_path);
+        string out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug --modern "
+            "-l AOTNoNarrowRefSig -e 'printf(\"%%s\", AOTNoNarrowRefSig::run());' 2>&1",
+            libqore_dir, tmp_dir, qore_bin));
+
+        assertEq("1:x:x:hash<auto>:hash<auto>:exposure\n", out,
+            "source-stripped AOT qmod preserves auto! targets through broad reference signatures");
+    }
+
+    # Regression: the JIT/AOT COW store helpers (qore_rt_hash_key_store_cow*(),
+    # qore_rt_list_index_store_cow*()) assumed the local held the freshly-copied
+    # container after the COW assign, but LValueHelper::assign()'s hash<auto!>/
+    # list<auto!> no-narrow strip replaces a shared container with another copy,
+    # freeing the helper's pointer — a use-after-free on the next key/index store.
+    # Triggered by cast<hash<auto!>>(...) temporaries passed to *hash<auto!>
+    # params that are mutated while shared (e.g. constructor-initializer calls
+    # like QorusSystemRestHelperIo::resolveClientOpts()).
+    testAOTModuleNoNarrowParamCowStore() {
+        string tmp_dir = sprintf("/tmp/aot_no_narrow_cow_store_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNoNarrowCowStore {
+    version = \"1.0\";
+    desc = \"AOT no-narrow COW store regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTNoNarrowCowStore {
+    public class Base {
+        private {
+            hash<auto> base_opts;
+        }
+
+        constructor(hash<auto> opts) {
+            base_opts = opts;
+        }
+
+        string getUrl() {
+            return base_opts.url;
+        }
+
+        auto getOpt(string key) {
+            return base_opts{key};
+        }
+    }
+
+    public class Client inherits Base {
+        constructor(*hash<auto> opts) : Base(Client::resolveOpts(opts)) {
+        }
+
+        private static hash<auto> resolveOpts(*hash<auto!> opts) {
+            if (!opts.url) {
+                opts.url = \"http://localhost/\";
+            }
+            return opts;
+        }
+    }
+
+    public string sub construct(int timeout) {
+        Client c(cast<hash<auto!>>({\"timeout\": timeout}));
+        return sprintf(\"%s|%d\", c.getUrl(), c.getOpt(\"timeout\"));
+    }
+
+    public hash<auto> sub putShared(*hash<auto!> opts, auto val) {
+        hash<auto> keep = opts;
+        opts.s = val;
+        return {\"keep\": keep, \"opts\": opts};
+    }
+
+    public hash<auto> sub putSharedDyn(*hash<auto!> opts, string key, auto val) {
+        hash<auto> keep = opts;
+        opts{key} = val;
+        return {\"keep\": keep, \"opts\": opts};
+    }
+
+    public list<auto> sub putSharedList(*list<auto!> l, auto val) {
+        list<auto> keep = l;
+        l[0] = val;
+        return (keep, l);
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTNoNarrowCowStore.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNoNarrowCowStore.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "no-narrow COW store module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTNoNarrowCowStore
+
+for (int i = 0; i < 100; ++i) {
+    AOTNoNarrowCowStore::Client c(cast<hash<auto!>>({\"timeout\": i}));
+    if (i == 7) {
+        printf(\"ctor: %s|%d\\n\", c.getUrl(), c.getOpt(\"timeout\"));
+    }
+}
+printf(\"internal: %s\\n\", AOTNoNarrowCowStore::construct(11));
+printf(\"shared: %y\\n\", AOTNoNarrowCowStore::putShared(cast<hash<auto!>>({\"n\": 1}), \"x\"));
+printf(\"dyn: %y\\n\", AOTNoNarrowCowStore::putSharedDyn(cast<hash<auto!>>({\"n\": 2}), \"d\", \"y\"));
+printf(\"list: %y\\n\", AOTNoNarrowCowStore::putSharedList(cast<list<auto!>>((1, 2)), \"z\"));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "compiled module COW stores on shared no-narrow params match source semantics: " + aot_out);
+        assertEq("ctor: http://localhost/|7\n"
+            "internal: http://localhost/|11\n"
+            "shared: {keep: {n: 1}, opts: {n: 1, s: \"x\"}}\n"
+            "dyn: {keep: {n: 2}, opts: {n: 2, d: \"y\"}}\n"
+            "list: [[1, 2], [\"z\", 2]]\n", aot_out,
+            "COW stores mutate the callee's container without touching shared views: " + aot_out);
+    }
+
+    testAOTModuleScalarLocalCoercion() {
+        string tmp_dir = sprintf("/tmp/aot_scalar_local_coerce_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTScalarLocalCoerce {
+    version = \"1.0\";
+    desc = \"AOT scalar local coercion regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTScalarLocalCoerce {
+    public int sub runCase() {
+        hash<auto> h = {\"content-length\": \"23\"};
+        softint content_length = h.\"content-length\" ?? 0;
+        return get_random_bytes(content_length).size();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTScalarLocalCoerce.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTScalarLocalCoerce.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "scalar local coercion module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("module compilation"),
+            "scalar local coercion module reports compilation summary: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTScalarLocalCoerce
+printf(\"value=%d\\n\", AOTScalarLocalCoerce::runCase());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module scalar local coercion matches source: " + aot_out);
+        assertEq("value=23\n", aot_out, "softint local is coerced before native uses");
+    }
+
+    testAOTModulePointerNullCoalescing() {
+        string tmp_dir = sprintf("/tmp/aot_pointer_null_coalesce_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTPointerNullCoalesce {
+    version = \"1.0\";
+    desc = \"AOT pointer NULL coalescing regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTPointerNullCoalesce {
+    public softint sub runCase(hash<auto> row) {
+        softint size = row.character_maximum_length ?? row.numeric_precision ?? 0;
+        return size;
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTPointerNullCoalesce.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTPointerNullCoalesce.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "pointer NULL coalescing module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("module compilation"),
+            "pointer NULL coalescing module reports compilation summary: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTPointerNullCoalesce
+hash<auto> row = {\"character_maximum_length\": NULL, \"numeric_precision\": NULL};
+printf(\"value=%y\\n\", AOTPointerNullCoalesce::runCase(row));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast "
+            "--enable-debug %s", libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+            "--exec-mode=ast --enable-debug %s", libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module pointer NULL coalescing matches source: " + aot_out);
+        assertEq("value=0\n", aot_out, "pointer-encoded NULL coalesces before softint assignment");
+    }
+
+    testAOTModuleHashdeclMemberCompoundLValue() {
+        string tmp_dir = sprintf("/tmp/aot_hashdecl_member_compound_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTHashdeclMemberCompound {
+    version = \"1.0\";
+    desc = \"AOT hashdecl member compound lvalue regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTHashdeclMemberCompound {
+    public hashdecl QueryInfo {
+        list<auto> args;
+    }
+
+    public class C {
+        private addWhere(reference<hash<QueryInfo>> info, auto v) {
+            info.args += v;
+        }
+
+        public string run() {
+            hash<QueryInfo> qinfo = <QueryInfo>{\"args\": ()};
+            qinfo.args += \"s\";
+            addWhere(\\qinfo, 1);
+            return sprintf(\"%y\\n\", qinfo.args);
+        }
+    }
+
+    public string sub run() {
+        C c();
+        return c.run();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTHashdeclMemberCompound.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTHashdeclMemberCompound.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "hashdecl member compound module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTHashdeclMemberCompound
+printf(\"%s\", AOTHashdeclMemberCompound::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module preserves hashdecl member lvalue += semantics: " + aot_out);
+        assertEq("[\"s\", 1]\n", aot_out, "hashdecl list<auto> member accepts mixed += values");
+    }
+
+    testAOTModuleHashdeclClassConstants() {
+        string tmp_dir = sprintf("/tmp/aot_hashdecl_class_const_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTHashdeclConst {
+    version = \"1.0\";
+    desc = \"AOT hashdecl class constant regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTHashdeclConst {
+    public hashdecl FieldInfo {
+        string name;
+        string type;
+    }
+
+    public hashdecl SchemaInfo {
+        string name;
+        list<hash<FieldInfo>> fields;
+    }
+
+    public class Templates {
+        public const EntitySchema = <SchemaInfo>{
+            \"name\": \"entity\",
+            \"fields\": (
+                <FieldInfo>{\"name\": \"id\", \"type\": \"string\"},
+            ),
+        };
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTHashdeclConst.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTHashdeclConst.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "hashdecl constant module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTHashdeclConst
+
+string sub read_schema() {
+    hash<AOTHashdeclConst::SchemaInfo> schema = AOTHashdeclConst::Templates::EntitySchema;
+    return sprintf(\"%s:%s:%s\\n\", schema.name, schema.fields[0].name, schema.fields[0].type);
+}
+
+printf(\"%s\", read_schema());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module preserves hashdecl class constants: " + aot_out);
+        assertEq("entity:id:string\n", aot_out, "hashdecl class constant keeps declared type");
+    }
+
+    testAOTModuleNestedClassConstantRefs() {
+        string tmp_dir = sprintf("/tmp/aot_nested_class_const_ref_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNestedClassConstRef {
+    version = \"1.0\";
+    desc = \"AOT nested class constant reference regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTNestedClassConstRef {
+    public class C {
+        public {
+            const Headers = {
+                \"Accept\": \"application/json\",
+            };
+            const AuthArgs = {
+                \"prompt\": \"consent\",
+            };
+            const Scopes = (
+                \"read\",
+                \"write\",
+            );
+            const Scheme = {
+                \"headers\": {
+                    \"default_value\": Headers,
+                },
+                \"auth\": {
+                    \"default_value\": AuthArgs,
+                },
+                \"scopes\": {
+                    \"default_value\": Scopes,
+                },
+                \"later_headers\": {
+                    \"default_value\": LaterHeaders,
+                },
+            };
+            const LaterHeaders = {
+                \"X-Later\": \"ok\",
+            };
+        }
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTNestedClassConstRef.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNestedClassConstRef.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "nested class const-ref module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTNestedClassConstRef
+
+hash<auto> h = AOTNestedClassConstRef::C::Scheme.headers.default_value;
+hash<auto> a = AOTNestedClassConstRef::C::Scheme.auth.default_value;
+list<string> s = AOTNestedClassConstRef::C::Scheme.scopes.default_value;
+hash<auto> l = AOTNestedClassConstRef::C::Scheme.later_headers.default_value;
+printf(\"%s:%s:%s:%s:%s\\n\", h.Accept, a.prompt, s[0], s[1], l.\"X-Later\");
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertFalse(out.regex("cannot resolve const_ref"),
+            "nested class const-ref qmod load is quiet: " + out);
+        assertEq("application/json:consent:read:write:ok\n", out,
+            "source-stripped qmod preserves nested sibling class constant refs");
+    }
+
+    testAOTModuleNamespaceConstantRefs() {
+        string tmp_dir = sprintf("/tmp/aot_namespace_const_ref_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNamespaceConstRef {
+    version = \"1.0\";
+    desc = \"AOT namespace constant reference regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTNamespaceConstRef {
+    const Base = {
+        \"alpha\": \"A\",
+    };
+    const Extra = {
+        \"beta\": \"B\",
+    };
+    public const Combined = {
+        \"base\": Base,
+        \"merged\": Base + Extra,
+    };
+}
+";
+        string qm_path = tmp_dir + "/AOTNamespaceConstRef.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNamespaceConstRef.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "namespace const-ref module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTNamespaceConstRef
+
+hash<auto> h = AOTNamespaceConstRef::Combined;
+printf(\"%s:%s:%s\\n\", h.base.alpha, h.merged.alpha, h.merged.beta);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertFalse(out.regex("cannot resolve const_ref"),
+            "namespace const-ref qmod load is quiet: " + out);
+        assertEq("A:A:B\n", out,
+            "source-stripped qmod preserves namespace constant refs");
+    }
+
+    testAOTModuleBcaHashdeclClassConstants() {
+        string tmp_dir = sprintf("/tmp/aot_bca_hashdecl_const_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTBcaHashdeclConst {
+    version = \"1.0\";
+    desc = \"AOT BCA hashdecl class constant regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTBcaHashdeclConst {
+    public hashdecl Config {
+        string name;
+    }
+
+    public class Base {
+        private {
+            hash<Config> config;
+            int id;
+        }
+
+        constructor(int n_id, hash<Config> n_config) {
+            id = n_id;
+            config = n_config;
+        }
+
+        string getResult() {
+            return sprintf(\"%s:%d\\n\", config.name, id);
+        }
+    }
+
+    public class Child inherits Base {
+        public {
+            const DefaultConfig = <Config>{\"name\": \"typed\"};
+        }
+
+        constructor(int id) : Base(id, DefaultConfig) {
+        }
+    }
+
+    public string sub run() {
+        Child c(11);
+        return c.getResult();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTBcaHashdeclConst.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTBcaHashdeclConst.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "BCA hashdecl constant module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTBcaHashdeclConst
+printf(\"%s\", AOTBcaHashdeclConst::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "compiled module preserves BCA hashdecl class constant: " + aot_out);
+        assertEq("typed:11\n", aot_out, "BCA hashdecl class constant is deferred until init");
+    }
+
+    testAOTModuleComputedMemberDefaults() {
+        string tmp_dir = sprintf("/tmp/aot_member_default_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTComputedMemberDefault {
+    version = \"1.0\";
+    desc = \"AOT computed member default regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTComputedMemberDefault {
+    public class Holder {
+        private {
+            string value = replace(sprintf(\"member-%d\", getpid()), \"-\", \"\");
+        }
+
+        string getValue() {
+            return value;
+        }
+    }
+
+    public string sub run() {
+        Holder h();
+        return h.getValue();
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTComputedMemberDefault.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTComputedMemberDefault.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "computed member default module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTComputedMemberDefault
+printf(\"%s\\n\", AOTComputedMemberDefault::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        assertTrue(aot_out.regex("^member[0-9]+\\n$"),
+            "compiled module evaluates computed member default: " + aot_out);
+    }
+
+    testAOTModuleUnaryMinusHashdeclInit() {
+        string tmp_dir = sprintf("/tmp/aot_unary_minus_hashdecl_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTUnaryMinusHashdecl {
+    version = \"1.0\";
+    desc = \"AOT unary minus hashdecl init regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTUnaryMinusHashdecl {
+    public hashdecl Conversion {
+        string from_unit;
+        string to_unit;
+        float factor;
+        float offset;
+    }
+
+    public class Converter {
+        private {
+            hash<string, hash<string, hash<Conversion>>> conversions;
+        }
+
+        constructor() {
+            conversions = {};
+        }
+
+        registerConversion(string from_unit, string to_unit, float factor, float offset) {
+            if (!exists conversions{from_unit}) {
+                conversions{from_unit} = {};
+            }
+            conversions{from_unit}{to_unit} = <Conversion>{
+                \"from_unit\": from_unit,
+                \"to_unit\": to_unit,
+                \"factor\": factor,
+                \"offset\": offset,
+            };
+
+            if (factor != 0.0) {
+                if (!exists conversions{to_unit}) {
+                    conversions{to_unit} = {};
+                }
+                conversions{to_unit}{from_unit} = <Conversion>{
+                    \"from_unit\": to_unit,
+                    \"to_unit\": from_unit,
+                    \"factor\": 1.0 / factor,
+                    \"offset\": -offset / factor,
+                };
+            }
+        }
+
+        float inverseOffset() {
+            registerConversion(\"a\", \"b\", 2.0, 6.0);
+            return conversions{\"b\"}{\"a\"}.offset;
+        }
+    }
+
+    public string sub run() {
+        Converter c();
+        return sprintf(\"%.1f\", c.inverseOffset());
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTUnaryMinusHashdecl.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTUnaryMinusHashdecl.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "unary-minus hashdecl module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTUnaryMinusHashdecl
+printf(\"%s\\n\", AOTUnaryMinusHashdecl::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        assertEq("-3.0\n", aot_out,
+            "compiled module preserves unary minus in hashdecl initializer: " + aot_out);
+    }
+
+    testAOTModuleClosureCapturedLoopCondition() {
+        string tmp_dir = sprintf("/tmp/aot_closure_loop_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTClosureLoop {
+    version = \"1.0\";
+    desc = \"AOT closure loop condition regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTClosureLoop {
+    public class Runner {
+        list<int> capturedLoop(list<int> xs) {
+            list<int> results = ();
+            int total = xs.size();
+            int offset = 0;
+            while (offset < total) {
+                code<nothing()> worker = sub () {
+                    if (total < 0) {
+                        printf(\"unreachable\\n\");
+                    }
+                };
+                push results, offset;
+                offset = total;
+            }
+            return results;
+        }
+    }
+
+    public list<int> sub run() {
+        Runner r();
+        return r.capturedLoop((1, 2, 3));
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTClosureLoop.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTClosureLoop.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "closure loop module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTClosureLoop
+printf(\"%y\\n\", AOTClosureLoop::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "compiled module preserves closure-captured loop condition: " + aot_out);
+        assertEq("[0]\n", aot_out, "closure-captured loop condition executes loop body");
+    }
+
+    testAOTModuleRecursiveClosureLocalFrameIsolation() {
+        string tmp_dir = sprintf("/tmp/aot_recursive_closure_frame_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTRecursiveClosureFrame {
+    version = \"1.0\";
+    desc = \"AOT recursive closure local frame regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTRecursiveClosureFrame {
+    public auto sub parseLike(bool nested = True) {
+        auto v;
+        bool in_hash;
+        list<hash> l = (
+            {\"type\": 1, \"val\": \"a\"},
+            {\"type\": 4},
+            {\"type\": nested ? 3 : 0, \"val\": nested ? \"nested\" : \"1\"},
+            {\"type\": 5},
+            {\"type\": 1, \"val\": \"b\"},
+            {\"type\": 4},
+            {\"type\": 0, \"val\": \"2\"},
+        );
+
+        code do_eq = sub (reference<int> i, string key) {
+            auto val;
+            switch (l[i + 2].type) {
+                case 3: val = parseLike(False); break;
+                case 0: val = int(l[i + 2].val); break;
+            }
+            if (!exists v) {
+                v{key} = val;
+                in_hash = True;
+            } else if (v.typeCode() == NT_HASH) {
+                v{key} = val;
+            }
+            i += 2;
+        };
+
+        for (int i = 0; i < l.size(); ++i) {
+            hash<auto> h = l[i];
+            switch (h.type) {
+                case 1:
+                    if (l[i + 1].type == 4) {
+                        do_eq(\\i, h.val);
+                        continue;
+                    }
+                    break;
+                case 5:
+                    if (v.typeCode() != NT_LIST && !in_hash) {
+                        list<auto> tmp;
+                        tmp += v;
+                        v = tmp;
+                    }
+                    break;
+            }
+        }
+        return v;
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTRecursiveClosureFrame.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTRecursiveClosureFrame.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "recursive closure frame module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTRecursiveClosureFrame
+printf(\"%y\\n\", AOTRecursiveClosureFrame::parseLike());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "recursive AOT closure call must not clobber caller loop locals: " + aot_out);
+        assertEq("{a: {a: 1, b: 2}, b: 2}\n", aot_out,
+            "recursive closure parser retains keys after nested value");
+    }
+
+    testAOTModuleCompileCustomOutput() {
+        string mod_code = "%modern
+
+module AOTTestOut {
+    version = \"1.0\";
+    desc = \"Test custom output\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTTestOut {
+    public int sub square(int n) {
+        return n * n;
+    }
+}
+";
+        string qm_path = writeTempModule(mod_code);
+        string custom_path = sprintf("/tmp/aot_custom_out_%d.qmod", getpid());
+        on_exit {
+            unlink(qm_path);
+            unlink(custom_path);
+        }
+
+        # Compile with custom --output
+        hash<auto> result = compileModuleFile(qm_path, custom_path);
+        assertTrue(result.compiled, "custom output module compiled: " + result.compile_out);
+        assertEq(custom_path, result.so_path, "output path matches custom path");
+    }
+
+    testAOTModuleCompileOptLevels() {
+        string mod_code = "%modern
+
+module AOTOptMod {
+    version = \"1.0\";
+    desc = \"Test opt levels\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTOptMod {
+    public int sub compute(int n) {
+        int result = 0;
+        for (int i = 0; i < n; ++i) {
+            result += i * i;
+        }
+        return result;
+    }
+}
+";
+        string qm_path = writeTempModule(mod_code);
+        on_exit {
+            unlink(qm_path);
+        }
+
+        # Test each optimization level
+        for (int level = 0; level <= 3; ++level) {
+            string qmod_path = sprintf("/tmp/aot_opt%d_%d.qmod", level, getpid());
+            on_exit {
+                unlink(qmod_path);
+            }
+
+            hash<auto> result = compileModuleFile(qm_path, qmod_path,
+                (sprintf("--opt-level=%d", level),));
+            assertTrue(result.compiled, sprintf("module O%d compiled: %s", level, result.compile_out));
+            assertTrue(result.compile_out.regex(sprintf("compiled module \\(-O%d", level)),
+                sprintf("O%d: shows correct opt level: %s", level, result.compile_out));
+        }
+    }
+
+    testAOTModuleCompileError() {
+        # Test compiling a non-module file with --compile-module
+        string bad_code = "%modern
+printf(\"not a module\\n\");
+";
+        string qm_path = writeTempModule(bad_code);
+        on_exit {
+            unlink(qm_path);
+            # Clean up any .qmod that might have been created
+            string qmod_path = qm_path;
+            qmod_path =~ s/\.qm$/.qmod/;
+            unlink(qmod_path);
+        }
+
+        hash<auto> result = compileModuleFile(qm_path);
+        assertTrue(result.compile_out.regex("(failed|error|no module declaration)"),
+            "non-module file produces error: " + result.compile_out);
+    }
+
+    testAOTModuleDefaultObjectArgs() {
+        string tmp_dir = sprintf("/tmp/aot_default_object_arg_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+%enable-all-warnings
+
+module AOTDefaultObjectArg {
+    version = \"1.0\";
+    desc = \"AOT default object arg test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTDefaultObjectArg {
+    public class DefaultThing {
+        private {
+            int value;
+        }
+
+        constructor() {
+            value = 37;
+        }
+
+        int getValue() {
+            return value;
+        }
+    }
+
+    public int sub readValue(DefaultThing thing = new DefaultThing()) {
+        return thing.getValue();
+    }
+
+    public class Holder {
+        private {
+            int value;
+        }
+
+        constructor(DefaultThing thing = new DefaultThing()) {
+            value = thing.getValue() + 5;
+        }
+
+        int getValue() {
+            return value;
+        }
+    }
+}
+";
+
+        string qm_path = tmp_dir + "/AOTDefaultObjectArg.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTDefaultObjectArg.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "default-object module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%enable-all-warnings
+
+%requires AOTDefaultObjectArg
+
+printf(\"%d\\n\", AOTDefaultObjectArg::readValue());
+AOTDefaultObjectArg::Holder h();
+printf(\"%d\\n\", h.getValue());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled module default object args match interpreted module");
+        assertEq("37\n42\n", aot_out, "default object args are evaluated at call time");
+    }
+
+    #! Helper to create a split module directory structure
+    #! The directory name must match the module name for split module compilation
+    private hash<auto> createSplitModuleDir(string mod_name, string qm_code, *hash<string, string> component_files) {
+        # Create a unique parent dir, then create the module dir inside it with the correct name
+        string parent_dir = sprintf("/tmp/aot_split_test_%d_%d", getpid(), rand());
+        mkdir(parent_dir);
+        string mod_dir = parent_dir + "/" + mod_name;
+        mkdir(mod_dir);
+
+        # Create the main .qm file (must match directory name)
+        string qm_path = mod_dir + "/" + mod_name + ".qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(qm_code);
+            f.close();
+        }
+
+        # Create any component files (.qc, .ql)
+        if (component_files) {
+            HashIterator it(component_files);
+            while (it.next()) {
+                string comp_path = mod_dir + "/" + it.getKey();
+                File f();
+                f.open2(comp_path, O_WRONLY | O_CREAT | O_TRUNC);
+                f.write(it.getValue());
+                f.close();
+            }
+        }
+
+        return {
+            "parent_dir": parent_dir,  # For cleanup
+            "dir": mod_dir,            # Module directory
+            "qm_path": qm_path,
+        };
+    }
+
+    #! Compile a split module directory, return {compile_out, so_path, compiled}
+    private hash<auto> compileSplitModule(string dir_path, *string output_path, *list<string> extra_flags) {
+        string mod_name = basename(dir_path);
+        # Handle trailing slash
+        if (mod_name == "") {
+            mod_name = basename(dirname(dir_path));
+        }
+
+        string so_path;
+        if (output_path) {
+            so_path = output_path;
+        } else {
+            # Default: module_name.qmod in the directory
+            so_path = dir_path + "/" + mod_name + ".qmod";
+        }
+
+        string flags_str = "";
+        if (extra_flags) {
+            for (int i = 0; i < extra_flags.size(); ++i) {
+                flags_str += " " + extra_flags[i];
+            }
+        }
+
+        string output_flag = "";
+        if (output_path) {
+            output_flag = " --output " + output_path;
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile-module%s%s %s 2>&1",
+            libqore_dir, qore_bin, output_flag, flags_str, dir_path);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "compile_out": compile_out,
+            "so_path": so_path,
+            "compiled": is_file(so_path),
+        };
+    }
+
+    testAOTSplitModuleBasic() {
+        # Create a split module with .qm + .qc + .ql files
+        string mod_name = "AOTSplitTest";
+        string qm_code = "%modern
+%enable-all-warnings
+
+module AOTSplitTest {
+    version = \"1.0\";
+    desc = \"AOT split module test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitTest {
+    public int sub main_func() {
+        return 42;
+    }
+}
+";
+
+        # Helper class in .qc file
+        string qc_code = "
+public namespace AOTSplitTest {
+    public class Helper {
+        private {
+            int value = 100;
+        }
+
+        int getValue() {
+            return value;
+        }
+
+        int addTo(int n) {
+            return value + n;
+        }
+    }
+}
+";
+
+        # Helper function in .ql file
+        string ql_code = "
+public namespace AOTSplitTest {
+    public int sub add_numbers(int a, int b) {
+        return a + b;
+    }
+
+    public string sub greet(string name) {
+        return \"Hello, \" + name + \"!\";
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code, {
+            "Helper.qc": qc_code,
+            "funcs.ql": ql_code,
+        });
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile the split module
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+
+        assertTrue(result.compiled, "split module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compiled split module \\(-O2"),
+            "compile output shows split module compilation: " + result.compile_out);
+
+        # Test script that uses all parts of the split module
+        string test_code = "%modern
+
+%requires AOTSplitTest
+
+printf(\"%d\\n\", AOTSplitTest::main_func());
+printf(\"%d\\n\", AOTSplitTest::add_numbers(10, 20));
+printf(\"%s\\n\", AOTSplitTest::greet(\"World\"));
+auto h = new AOTSplitTest::Helper();
+printf(\"%d\\n\", h.getValue());
+printf(\"%d\\n\", h.addTo(50));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled .qmod
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        # Run with the interpreted .qm (remove .qmod so loader picks up .qm)
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "compiled split module output matches interpreted");
+        assertEq("42\n30\nHello, World!\n100\n150\n", aot_out, "split module functions produce correct results");
+    }
+
+    testAOTSplitModuleNestedHashConstantInit() {
+        # Regression: when a class constant hash needed an init function, sibling nested
+        # hash literals that were parse-time constants were embedded as unevaluated
+        # expression hashes in the stored AOT constant.
+        string mod_name = "AOTNestedHashConst";
+        string qm_code = "%modern
+%requires reflection
+
+module AOTNestedHashConst {
+    version = \"1.0\";
+    desc = \"AOT nested hash constant init regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+";
+
+        string qc_code = "%modern
+
+public namespace AOTNestedHashConst {
+hashdecl AllowedValue {
+    string value;
+    string display_name;
+}
+
+public class ConstHolder {
+    public {
+        const Fields = {
+            \"id\": {
+                \"type\": StringType,
+                \"display_name\": \"ID\",
+            },
+            \"name\": {
+                \"type\": StringType,
+                \"display_name\": \"Name\",
+            },
+            \"url\": {
+                \"type\": \"string\",
+                \"display_name\": \"URL\",
+            },
+            \"kind\": {
+                \"type\": \"string\",
+                \"display_name\": \"Kind\",
+                \"allowed_values\": (
+                    <AllowedValue>{\"value\": \"a\", \"display_name\": \"A\"},
+                    <AllowedValue>{\"value\": \"b\", \"display_name\": \"B\"},
+                ),
+            },
+            \"op\": {
+                \"display_name\": \"Closure\",
+                \"impl\": auto sub (hash<auto> rec) {
+                    return rec.value;
+                },
+            },
+        };
+    }
+}
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code, {
+            "ConstHolder.qc": qc_code,
+        });
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+        assertTrue(result.compiled, "nested hash const split module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires reflection
+%requires AOTNestedHashConst
+
+hash<auto> fields = AOTNestedHashConst::ConstHolder::Fields;
+printf(\"id=%s/%s\\n\", fields.id.type.getName(), fields.id.display_name);
+printf(\"name=%s/%s\\n\", fields.name.type.getName(), fields.name.display_name);
+printf(\"kind=%s/%s/%s\\n\", fields.kind.type, fields.kind.allowed_values[0].value,
+    fields.kind.allowed_values[1].display_name);
+printf(\"op=%y\\n\", fields.op.impl({\"value\": 17}));
+hash<auto> reflected = Reflection::Class::forName(\"AOTNestedHashConst::ConstHolder\")
+    .getConstant(\"Fields\").getValue();
+hash<auto> reflected_id = reflected.id;
+printf(\"ref-id=%s/%s\\n\", reflected_id.type.getName(), reflected_id.display_name);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string module_path = prependModulePath(mod_info.parent_dir);
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_path, qore_bin, paths.src));
+
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_path, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out, "AOT nested hash constant output matches interpreted module");
+        assertEq("id=string/ID\nname=string/Name\nkind=string/a/B\nop=17\nref-id=string/ID\n", aot_out,
+            "nested hash constant entries are materialized");
+    }
+
+    testAOTSplitModuleQmOnly() {
+        # Test a split module directory that contains only the main .qm file (no .qc/.ql)
+        string mod_name = "AOTSplitQmOnly";
+        string qm_code = "%modern
+
+module AOTSplitQmOnly {
+    version = \"1.0\";
+    desc = \"Split module with only .qm\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitQmOnly {
+    public int sub get_value() {
+        return 99;
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code);
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile the split module (directory with only .qm)
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+
+        assertTrue(result.compiled, "qm-only split module compiled: " + result.compile_out);
+
+        # Test script
+        string test_code = "%modern
+%requires AOTSplitQmOnly
+printf(\"%d\\n\", AOTSplitQmOnly::get_value());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with compiled module
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq("99\n", aot_out, "qm-only split module works correctly");
+    }
+
+    testAOTSplitModuleMissingQm() {
+        # Test error case: directory without matching .qm file
+        string tmp_dir = sprintf("/tmp/aot_split_missing_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Create a .qc file but no .qm file
+        string qc_path = tmp_dir + "/Helper.qc";
+        {
+            File f();
+            f.open2(qc_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("public namespace Test { public int sub foo() { return 1; } }");
+            f.close();
+        }
+
+        # Try to compile - should fail
+        hash<auto> result = compileSplitModule(tmp_dir);
+
+        assertFalse(result.compiled, "missing .qm produces no output");
+        assertTrue(result.compile_out.regex("(not found|does not exist|cannot open|failed)"),
+            "error message for missing .qm: " + result.compile_out);
+    }
+
+    testAOTSplitModuleAutoDetect() {
+        # Test that directory input auto-detects as module mode
+        string mod_name = "AOTSplitAuto";
+        string qm_code = "%modern
+%require-types
+
+module AOTSplitAuto {
+    version = \"1.0\";
+    desc = \"Auto-detect test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitAuto {
+    public int sub auto_val() {
+        return 777;
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code);
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile without -m flag - should auto-detect directory as module
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
+
+        assertTrue(result.compiled, "auto-detected module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compiled split module"),
+            "output shows split module compilation: " + result.compile_out);
+    }
+
+    testAOTSplitModuleTrailingSlash() {
+        # Test that directory path with trailing slash works
+        string mod_name = "AOTSplitSlash";
+        string qm_code = "%modern
+%require-types
+
+module AOTSplitSlash {
+    version = \"1.0\";
+    desc = \"Trailing slash test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTSplitSlash {
+    public int sub slash_val() {
+        return 888;
+    }
+}
+";
+
+        hash<auto> mod_info = createSplitModuleDir(mod_name, qm_code);
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.parent_dir));
+        }
+
+        # Compile with trailing slash
+        string dir_with_slash = mod_info.dir + "/";
+        string qmod_path = mod_info.dir + "/" + mod_name + ".qmod";
+        hash<auto> result = compileSplitModule(dir_with_slash, qmod_path);
+
+        assertTrue(result.compiled, "trailing slash path compiled: " + result.compile_out);
+
+        # Test script
+        string test_code = "%modern
+%requires AOTSplitSlash
+printf(\"%d\\n\", AOTSplitSlash::slash_val());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+
+        assertEq("888\n", aot_out, "trailing slash module works correctly");
+    }
+
+    #! Compile with --strip-source flag and run
+    private hash<auto> compileStripSourceAndRun(string code, *list<string> run_args) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile with --strip-source (LD_LIBRARY_PATH ensures the build libqore is used)
+        string compile_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --strip-source %s --output %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Full AOT serialization is mandatory; the output reports native code
+        # generation and complete metadata for the same function count.
+        bool all_precompiled = compileOutputHasCompleteAot(compile_out);
+
+        string run_out;
+        int binary_size = 0;
+        if (is_file(paths.out)) {
+            binary_size = hstat(paths.out).size;
+            string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, paths.out);
+            if (run_args) {
+                for (int i = 0; i < run_args.size(); ++i) {
+                    run_cmd += " " + run_args[i];
+                }
+            }
+            run_cmd += " 2>&1";
+            run_out = backquote(run_cmd);
+        } else {
+            run_out = "COMPILE_FAILED: " + compile_out;
+        }
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "all_precompiled": all_precompiled,
+            "binary_size": binary_size,
+            "compiled": is_file(paths.out),
+        };
+    }
+
+    #! Compile with --strip-source and return binary path (caller must clean up)
+    private hash<auto> compileStripSourceGetPath(string code) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string compile_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --strip-source %s --output %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "compile_out": compile_out,
+            "out_path": paths.out,
+            "compiled": is_file(paths.out),
+        };
+    }
+
+    # ---- Source stripping tests (Phase 8) ----
+
+    testStripSourceBasic() {
+        string code = "%modern
+printf(\"Hello, World!\\n\");
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source basic compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compilation \\(-O2\\):.*bytes"),
+            "compile output shows default compilation summary: " + result.compile_out);
+        assertEq("Hello, World!\n", result.run_out, "strip-source basic output correct");
+    }
+
+    testStripSourceArithmetic() {
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+int sub multiply(int a, int b) { return a * b; }
+int sub subtract(int a, int b) { return a - b; }
+printf(\"%d %d %d\\n\", add(10, 20), multiply(3, 7), subtract(100, 42));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source arithmetic compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "strip-source arithmetic matches interpreter");
+    }
+
+    testStripSourceStrings() {
+        string code = "%modern
+string sub greet(string name) { return \"Hello, \" + name + \"!\"; }
+string sub concat3(string a, string b, string c) { return a + b + c; }
+printf(\"%s\\n\", greet(\"World\"));
+printf(\"%s\\n\", concat3(\"A\", \"B\", \"C\"));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source strings compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "strip-source strings matches interpreter");
+    }
+
+    testStripSourceMultipleFunctions() {
+        string code = "%modern
+int sub square(int x) { return x * x; }
+int sub cube(int x) { return x * x * x; }
+int sub sum_squares(int a, int b) { return square(a) + square(b); }
+printf(\"square(5)=%d\\n\", square(5));
+printf(\"cube(3)=%d\\n\", cube(3));
+printf(\"sum_squares(3,4)=%d\\n\", sum_squares(3, 4));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source multi-func compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "strip-source all functions pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "strip-source multi-func matches interpreter");
+    }
+
+    testStripSourceBinarySize() {
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add(1, 2));
+exit(0);
+";
+        # Compile with strip-source
+        hash<auto> strip_result = compileStripSourceAndRun(code);
+        assertTrue(strip_result.compiled, "strip-source compiled: " + strip_result.compile_out);
+
+        # Compile without strip-source for comparison
+        hash<auto> normal_result = compileCheckAndRun(code);
+        assertTrue(normal_result.run_out.regex("result: 3"), "normal AOT runs correctly");
+
+        # Both should produce correct output
+        assertEq(strip_result.run_out, normal_result.run_out,
+            "strip-source output matches normal AOT output");
+
+        assertTrue(strip_result.all_precompiled,
+            "strip-source compile output reports complete compilation metadata");
+    }
+
+    testStripSourceBackwardCompat() {
+        # Verify that normal (non-stripped) AOT binaries still work after our changes
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add(1, 2));
+exit(0);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "non-stripped AOT still works correctly");
+    }
+
+    testStripSourceCompileOutput() {
+        string code = "%modern
+int sub add(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add(1, 2));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "strip-source compiled");
+        # Verify compile output shows metadata size
+        assertTrue(result.compile_out.regex("metadata:.*bytes"),
+            "compile output shows metadata size: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compilation \\(-O2\\):.*bytes"),
+            "compile output shows compilation artifact summary: " + result.compile_out);
+        # Verify it reports generated native code and complete compilation metadata
+        assertTrue(compileOutputHasCompleteAot(result.compile_out),
+            "compile output shows complete AOT stats: " + result.compile_out);
+    }
+
+    testStripSourceNoSourceInBinary() {
+        # Verify that the source code string is NOT present in the stripped binary
+        string code = "%modern
+int sub add_unique_marker_12345(int a, int b) { return a + b; }
+printf(\"result: %d\\n\", add_unique_marker_12345(1, 2));
+exit(0);
+";
+        # Compile with strip-source
+        hash<auto> strip_paths = compileStripSourceGetPath(code);
+        on_exit {
+            unlink(strip_paths.out_path);
+        }
+        assertTrue(strip_paths.compiled, "strip-source compiled: " + strip_paths.compile_out);
+
+        # Also compile WITH --include-source for comparison
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        backquote(compile_cmd);
+
+        # Use the `strings` command to extract printable strings from both binaries
+        # The source code "int sub add_unique_marker_12345" should appear in the
+        # non-stripped binary (embedded source) but NOT in the stripped binary
+        string strip_strings = backquote(sprintf("strings %s 2>&1", strip_paths.out_path));
+        string normal_strings = backquote(sprintf("strings %s 2>&1", paths.out));
+
+        # The --include-source binary should contain the source declaration
+        assertTrue(normal_strings.regex("int sub add_unique_marker_12345"),
+            "include-source binary contains source function declaration");
+
+        # The stripped binary should NOT contain the source declaration
+        assertFalse(strip_strings.regex("int sub add_unique_marker_12345"),
+            "strip-source binary does not contain source function declaration");
+    }
+
+    # ---- Strip source type export tests (Phase 9) ----
+
+    #! Compile a module with --strip-source and return info
+    private hash<auto> compileStripSourceModule(string mod_code, string mod_name) {
+        string tmp_dir = sprintf("/tmp/aot_strip_mod_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+
+        string qm_path = tmp_dir + "/" + mod_name + ".qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/" + mod_name + ".qmod";
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path);
+        string compile_out = backquote(compile_cmd);
+
+        return {
+            "tmp_dir": tmp_dir,
+            "qm_path": qm_path,
+            "qmod_path": qmod_path,
+            "compile_out": compile_out,
+            "compiled": is_file(qmod_path),
+        };
+    }
+
+    testStripSourceHashDecl() {
+        # Create a module with a hashdecl
+        string mod_code = "%modern
+
+module StripHashDeclMod {
+    version = \"1.0\";
+    desc = \"Test hashdecl export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripHashDeclMod {
+    public hashdecl TestInfo {
+        string name;
+        int value;
+    }
+
+    public hash<TestInfo> sub getInfo(string name, int value) {
+        return <TestInfo>{\"name\": name, \"value\": value};
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripHashDeclMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with hashdecl compiled: " + mod_info.compile_out);
+        assertTrue(mod_info.compile_out.regex("module compilation \\(-O2\\):.*bytes"),
+            "compile output shows module artifact summary: " + mod_info.compile_out);
+
+        # Create a test script that uses the hashdecl
+        string test_code = "%modern
+
+%requires StripHashDeclMod
+
+hash<StripHashDeclMod::TestInfo> info = StripHashDeclMod::getInfo(\"test\", 42);
+printf(\"name: %s, value: %d\\n\", info.name, info.value);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("name: test, value: 42\n", out, "hashdecl from strip-source module works correctly");
+    }
+
+    testStripSourceGenericHashDecl() {
+        string mod_code = "%modern
+
+module StripGenericHashDeclMod {
+    version = \"1.0\";
+    desc = \"Test generic hashdecl export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripGenericHashDeclMod {
+    public hashdecl Result<T> {
+        string status;
+        T value;
+        list<T> values;
+    }
+
+    public hashdecl Envelope<T> {
+        hash<Result<T>> result;
+    }
+
+    public class Factory<T> {
+        private {
+            T value;
+        }
+
+        constructor(T value) {
+            self.value = value;
+        }
+
+        static Factory<T> make(T value) {
+            return new Factory<T>(value);
+        }
+
+        T get() {
+            return self.value;
+        }
+    }
+
+    public hash<Result<int>> sub getResult(int value) {
+        hash<Result<int>> rv((\"status\": \"ok\", \"value\": value, \"values\": (value + 1,)));
+        return rv;
+    }
+
+    public hash<Envelope<int>> sub getEnvelope(int value) {
+        hash<Envelope<int>> rv((\"result\": getResult(value)));
+        return rv;
+    }
+
+    public int sub getStaticValue(int value) {
+        Factory<int> f = Factory<int>::make(value);
+        return f.get();
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripGenericHashDeclMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled,
+            "strip-source module with generic hashdecl compiled: " + mod_info.compile_out);
+
+        string test_code = "%modern
+
+%requires StripGenericHashDeclMod
+
+hash<StripGenericHashDeclMod::Result<int>> result = StripGenericHashDeclMod::getResult(41);
+hash<StripGenericHashDeclMod::Envelope<int>> envelope = StripGenericHashDeclMod::getEnvelope(42);
+int static_value = StripGenericHashDeclMod::getStaticValue(43);
+printf(\"status: %s, value: %d, next: %d, nested: %d, static: %d\\n\",
+    result.status, result.value, result.values[0], envelope.result.value, static_value);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("status: ok, value: 41, next: 42, nested: 42, static: 43\n", out,
+            "generic hashdecl and static generic method from strip-source module work correctly");
+    }
+
+    testStripSourceHashDeclInheritance() {
+        # Create a module with hashdecl inheritance
+        string mod_code = "%modern
+
+module StripHashDeclInhMod {
+    version = \"1.0\";
+    desc = \"Test hashdecl inheritance export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripHashDeclInhMod {
+    public hashdecl BaseInfo {
+        string id;
+    }
+
+    public hashdecl ExtendedInfo inherits BaseInfo {
+        string name;
+        int value;
+    }
+
+    public hash<ExtendedInfo> sub getExtendedInfo(string id, string name, int value) {
+        return <ExtendedInfo>{\"id\": id, \"name\": name, \"value\": value};
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripHashDeclInhMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with hashdecl inheritance compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses the derived hashdecl
+        string test_code = "%modern
+
+%requires StripHashDeclInhMod
+
+hash<StripHashDeclInhMod::ExtendedInfo> info = StripHashDeclInhMod::getExtendedInfo(\"id123\", \"test\", 99);
+printf(\"id: %s, name: %s, value: %d\\n\", info.id, info.name, info.value);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("id: id123, name: test, value: 99\n", out,
+            "hashdecl inheritance from strip-source module works correctly");
+    }
+
+    # A callee whose body is simple enough is compiled as a CONTEXT-INDEPENDENT fast entry, which its caller runs
+    # on the caller's own AOT context.  An enum member is not an immediate in AOT code: it is resolved by name when
+    # the object is loaded and read from the function's expression-slot table.  Treating it as context-independent
+    # made the callee read whatever the CALLER kept in that slot -- another member (red() returned Green) or an
+    # unrelated expression, failing with "expects type 'enum<Color>', but got type 'static method call'".
+    testEnumMemberFastEntryContext() {
+        string code = "%modern
+namespace EP { enum Color { Red = 1, Green = 2, Blue = 3 } }
+class UseEnum {
+    public { const C = EP::Color::Green; }
+    static EP::Color red() { return EP::Color::Red; }
+    static EP::Color blue() { return EP::Color::Blue; }
+}
+EP::Color sub pick(bool b) { return b ? EP::Color::Red : EP::Color::Blue; }
+printf(\"%y %y %y %y %y\\n\", UseEnum::C, UseEnum::red(), UseEnum::blue(), pick(True), pick(False));
+";
+        string aot_out = compileAndRun(code);
+        assertEq("2 1 3 1 3\n", aot_out, "each callee returns its own enum member");
+        assertEq(runInterpreted(code), aot_out, "AOT enum returns match the interpreter");
+
+        # the caller's first expression slot is the static call itself, which is what the callee used to read
+        code = "%modern
+namespace EP { enum Color { Red = 1, Green = 2 } }
+class UseEnum { static EP::Color red() { return EP::Color::Red; } }
+printf(\"%y\\n\", UseEnum::red());
+";
+        assertEq("1\n", compileAndRun(code), "a lone enum-returning callee does not read its caller's slot");
+    }
+
+    testStripSourceEnum() {
+        # Create a module with an enum
+        string mod_code = "%modern
+
+module StripEnumMod {
+    version = \"1.0\";
+    desc = \"Test enum export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripEnumMod {
+    public enum Status {
+        Pending = 0,
+        Active = 1,
+        Completed = 2,
+    }
+
+    public int sub getStatusValue(Status s) {
+        return int(s);
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripEnumMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with enum compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses the enum
+        string test_code = "%modern
+
+%requires StripEnumMod
+
+printf(\"Pending=%d\\n\", StripEnumMod::Status::Pending);
+printf(\"Active=%d\\n\", StripEnumMod::Status::Active);
+printf(\"Completed=%d\\n\", StripEnumMod::Status::Completed);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("Pending=0\nActive=1\nCompleted=2\n", out, "enum from strip-source module works correctly");
+    }
+
+    testStripSourceModuleDependency() {
+        # Create a base module with types
+        string base_mod_code = "%modern
+
+module StripBaseTypes {
+    version = \"1.0\";
+    desc = \"Base types module\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripBaseTypes {
+    public hashdecl PersonInfo {
+        string name;
+        int age;
+    }
+
+    public enum Gender {
+        Unknown = 0,
+        Male = 1,
+        Female = 2,
+    }
+}
+";
+        hash<auto> base_info = compileStripSourceModule(base_mod_code, "StripBaseTypes");
+        on_exit {
+            backquote(sprintf("rm -rf %s", base_info.tmp_dir));
+        }
+        assertTrue(base_info.compiled, "base types module compiled: " + base_info.compile_out);
+
+        # Create a dependent module that uses the types from base
+        string dep_mod_code = "%modern
+
+%requires StripBaseTypes
+
+module StripDepMod {
+    version = \"1.0\";
+    desc = \"Dependent module\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripDepMod {
+    public hash<StripBaseTypes::PersonInfo> sub createPerson(string name, int age) {
+        return <StripBaseTypes::PersonInfo>{\"name\": name, \"age\": age};
+    }
+
+    public string sub genderName(StripBaseTypes::Gender g) {
+        switch (g) {
+            case StripBaseTypes::Gender::Male: return \"Male\";
+            case StripBaseTypes::Gender::Female: return \"Female\";
+            default: return \"Unknown\";
+        }
+    }
+}
+";
+        # Write dependent module to the same directory
+        string dep_qm_path = base_info.tmp_dir + "/StripDepMod.qm";
+        {
+            File f();
+            f.open2(dep_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(dep_mod_code);
+            f.close();
+        }
+        string dep_qmod_path = base_info.tmp_dir + "/StripDepMod.qmod";
+        string dep_compile_cmd = sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, base_info.tmp_dir, qore_bin, dep_qmod_path, dep_qm_path);
+        string dep_compile_out = backquote(dep_compile_cmd);
+
+        assertTrue(is_file(dep_qmod_path), "dependent module compiled: " + dep_compile_out);
+
+        # Create a test script that uses both modules
+        string test_code = "%modern
+
+%requires StripBaseTypes
+%requires StripDepMod
+
+hash<StripBaseTypes::PersonInfo> p = StripDepMod::createPerson(\"Alice\", 30);
+printf(\"Person: %s, age %d\\n\", p.name, p.age);
+printf(\"Gender: %s\\n\", StripDepMod::genderName(StripBaseTypes::Gender::Female));
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with both compiled strip-source .qmod files
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, base_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("Person: Alice, age 30\nGender: Female\n", out,
+            "strip-source module dependency with types works correctly");
+    }
+
+    testStripSourceClassInheritance() {
+        # Create a module with class inheritance
+        string mod_code = "%modern
+
+module StripClassInhMod {
+    version = \"1.0\";
+    desc = \"Test class inheritance export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripClassInhMod {
+    public class BaseClass {
+        private {
+            int base_value;
+        }
+
+        constructor(int v) {
+            base_value = v;
+        }
+
+        int getBaseValue() {
+            return base_value;
+        }
+    }
+
+    public class DerivedClass inherits BaseClass {
+        private {
+            string name;
+        }
+
+        constructor(string n, int v) : BaseClass(v) {
+            name = n;
+        }
+
+        string getName() {
+            return name;
+        }
+
+        string describe() {
+            return sprintf(\"%s: %d\", name, getBaseValue());
+        }
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripClassInhMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with class inheritance compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses class inheritance
+        string test_code = "%modern
+
+%requires StripClassInhMod
+
+auto d = new StripClassInhMod::DerivedClass(\"Test\", 42);
+printf(\"Name: %s\\n\", d.getName());
+printf(\"Base value: %d\\n\", d.getBaseValue());
+printf(\"Description: %s\\n\", d.describe());
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("Name: Test\nBase value: 42\nDescription: Test: 42\n", out,
+            "class inheritance from strip-source module works correctly");
+    }
+
+    testStripSourceStaticMembers() {
+        # Create a module with static class members and methods
+        string mod_code = "%modern
+
+module StripStaticMod {
+    version = \"1.0\";
+    desc = \"Test static member export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripStaticMod {
+    public class Helper {
+        public {
+            static string prefix = \"[Static]\";
+        }
+
+        static string format(string msg) {
+            return Helper::prefix + \" \" + msg;
+        }
+
+        static int double_val(int n) {
+            return n * 2;
+        }
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripStaticMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled, "strip-source module with static members compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses static methods
+        string test_code = "%modern
+
+%requires StripStaticMod
+
+printf(\"%s\\n\", StripStaticMod::Helper::format(\"Hello\"));
+printf(\"%d\\n\", StripStaticMod::Helper::double_val(21));
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("[Static] Hello\n42\n", out,
+            "static members from strip-source module work correctly");
+    }
+
+    testStripSourceMemberDefaultFunctionCall() {
+        string code = "%modern
+
+string sub make_name(string n) {
+    return \"proc-\" + n;
+}
+
+class C {
+    public {
+        string name = make_name(\"omq\");
+    }
+
+    string getName() {
+        return name;
+    }
+}
+
+C c();
+printf(\"%s\\n\", c.getName());
+";
+        hash<auto> result = compileWithFlags(code, ("--opt-level=3",));
+        assertTrue(result.compiled, "strip-source member-default function-call executable compiled: "
+            + result.compile_out);
+        assertTrue(compileOutputHasCompleteAot(result.compile_out),
+            "strip-source member-default function-call executable has complete compilation metadata: "
+            + result.compile_out);
+        assertEq("proc-omq\n", result.run_out,
+            "strip-source member default resolves same-program function call");
+    }
+
+    testAOTMapHashKeyOpcodes() {
+        # MapHashKeyValue: map $1.key, list<hash<auto>>
+        string code = "%modern
+list<hash<auto>> items = ({\"val\": \"a\"}, {\"val\": \"b\"}, {\"val\": \"c\"});
+list<auto> result = map $1.val, items;
+printf(\"%s:%s:%s\\n\", result[0], result[1], result[2]);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKeyValue matches interpreter");
+
+        # HashMapTwoKeys: map {$1.k1: $1.k2}, list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"name\": \"alice\", \"age\": 30}, {\"name\": \"bob\", \"age\": 25});
+hash<auto> result = map {$1.name: $1.age}, items;
+printf(\"%d:%d\\n\", result.alice, result.bob);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT HashMapTwoKeys matches interpreter");
+
+        # HashMapTwoKeys with duplicate keys
+        code = "%modern
+list<hash<auto>> items = ({\"k\": \"x\", \"v\": 1}, {\"k\": \"x\", \"v\": 2}, {\"k\": \"y\", \"v\": 3});
+hash<auto> result = map {$1.k: $1.v}, items;
+printf(\"%d:%d:%d\\n\", result.size(), result.x, result.y);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT HashMapTwoKeys duplicate keys matches interpreter");
+
+        # MapHashKeyOffsetInt: map ($1.key + N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 10), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKeyOffsetInt matches interpreter");
+
+        # Dynamic hash values need the generic addition semantics, including a
+        # NOTHING value from an unassigned typed-list element.  The reversed
+        # expression is deliberately not fused because dynamic + is ordered.
+        code = "%modern
+list<hash<auto>> mixed = ({\"val\": \"a\"}, {\"val\": 2});
+list<auto> dynamic = map ($1.val + 7), mixed;
+list<hash<auto>> sparse = ();
+sparse[1] = {\"val\": 2};
+list<auto> guarded = map ($1.val + 7), sparse;
+list<auto> reversed = map (7 + $1.val), mixed;
+printf(\"%s:%s:%s:%s:%s:%s\\n\", dynamic[0], dynamic[1],
+    guarded[0].type(), guarded[0], guarded[1], reversed[0]);
+";
+        hash<auto> dynamic_result = compileWithFlags(code, ("--opt-level=3",));
+        interp_out = runInterpreted(code);
+        assertTrue(dynamic_result.compiled,
+            "AOT MapHashKeyOffsetAny executable compiled: " + dynamic_result.compile_out);
+        assertTrue(compileOutputHasCompleteAot(dynamic_result.compile_out),
+            "AOT MapHashKeyOffsetAny has complete native metadata: " + dynamic_result.compile_out);
+        assertEq(interp_out, dynamic_result.run_out,
+            "AOT MapHashKeyOffsetAny semantics match interpreter");
+
+        # MapHashKeyScaleInt: map ($1.key * N), list<hash<auto>>
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 5}, {\"val\": 10}, {\"val\": 15});
+list<auto> result = map ($1.val * 3), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKeyScaleInt matches interpreter");
+
+        # Empty list edge case
+        code = "%modern
+list<hash<auto>> empty = ();
+list<auto> result = map $1.val, empty;
+printf(\"%s %d\\n\", result.type(), result.size());
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT MapHashKey empty list matches interpreter");
+    }
+
+    testAOTDirectIndexMapHeapResults() {
+        # map with method call returning heap-allocated results (tests refSelf fix)
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+list<int> scaled = (map $1 * 2, nums);
+string result = (map $1.toString(), scaled).join(\",\");
+printf(\"%s\\n\", result);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT map toString over direct-index result");
+
+        # map with hash key access + computation
+        code = "%modern
+list<hash<auto>> items = ({\"val\": 1}, {\"val\": 2}, {\"val\": 3});
+list<auto> result = map ($1.val + 1), items;
+printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT map hash key add computation");
+
+        # Exercise both serialized typed-hash access variants: an unassigned or
+        # removed lvalue needs a NOTHING guard; an exact parameter is assigned by binding.
+        code = "%modern
+int sub readValue(hash<auto> arg) {
+    return arg.value;
+}
+auto sub readRemovedValue(hash<auto> arg) {
+    remove arg;
+    return arg.value;
+}
+hash<auto> h;
+auto before = h.value;
+h = {\"value\": 42};
+auto assigned = h.value;
+int parameter = readValue({\"value\": 44});
+auto removed_parameter = readRemovedValue({\"value\": 45});
+remove h;
+auto removed = h.value;
+h = {\"value\": 43};
+delete h;
+auto deleted = h.value;
+printf(\"%s:%d:%d:%s:%s:%s\\n\", exists before ? \"set\" : \"nothing\", assigned, parameter,
+    exists removed_parameter ? \"set\" : \"nothing\",
+    exists removed ? \"set\" : \"nothing\", exists deleted ? \"set\" : \"nothing\");
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT hash key access assigned-state guards");
+
+        # A two-key hash remap callback can use its fixed-body AOT summary. The
+        # source list can still contain an unassigned element, which must take
+        # the ordinary call path and fail parameter binding instead of entering
+        # the specialized hash implementation.
+        code = "%modern
+hash<auto> sub remap(hash<auto> h) {
+    return (\"n\": h.name, \"v\": h.value);
+}
+list<hash<auto>> items = ((\"name\": \"first\", \"value\": 1),
+    (\"name\": \"second\", \"value\": 2));
+list<hash<auto>> result = (map remap($1), items);
+printf(\"%s:%d:%s:%d\\n\", result[0].n, result[0].v,
+    result[1].n, result[1].v);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT fixed hash remap matches interpreter");
+
+        code = "%modern
+hash<auto> sub remap(hash<auto> h) {
+    return (\"n\": h.name, \"v\": h.value);
+}
+list<hash<auto>> items = ();
+items[0] = (\"name\": \"first\", \"value\": 1);
+items[2] = (\"name\": \"third\", \"value\": 3);
+try {
+    list<hash<auto>> result = (map remap($1), items);
+    printf(\"unexpected:%d\\n\", result.size());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        aot_out = compileAndRun(code);
+        assertTrue(aot_out == "RUNTIME-TYPE-ERROR\n"
+                || aot_out == "RUNTIME-OVERLOAD-ERROR\n",
+            "AOT fixed hash remap sends unassigned element through parameter binding: " + aot_out);
+
+        code = "%modern
+list<hash<auto>> items = ();
+items[0] = (\"id\": \"bool\", \"active\": True);
+items[1] = (\"id\": \"false\", \"active\": False);
+items[2] = (\"id\": \"int\", \"active\": 1);
+items[3] = (\"id\": \"zero\", \"active\": 0);
+items[4] = (\"id\": \"string\", \"active\": \"x\");
+items[5] = (\"id\": \"empty\", \"active\": \"\");
+items[6] = (\"id\": \"missing\");
+items[8] = (\"id\": \"last\", \"active\": True);
+list<hash<auto>> result = (select items, $1.active);
+printf(\"%s\\n\", (map $1.id, result).join(\",\"));
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out,
+            "AOT guarded hash-key truth predicate matches interpreter");
+
+        code = "%modern
+bool sub active(hash<auto> h) {
+    return h.active;
+}
+bool sub removed(hash<auto> h) {
+    remove h;
+    return h.active ? True : False;
+}
+printf(\"%s:%s\\n\", active((\"active\": True)), removed((\"active\": True)));
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out,
+            "AOT assigned hash-key truth predicate matches interpreter");
+
+        code = "%modern
+class ImmediateClosureTest {
+    private { int base = 20; }
+    int run(int x) {
+        return (int sub (int y) { return base + y; })(x);
+    }
+}
+int captured = 10;
+int closure_reload = 1;
+sub mutate_closure_reload() {
+    closure_reload = 41;
+}
+int pure = (int sub (int x) { return x + 1; })(4);
+int fallback_reload = (int sub (int x) {
+    mutate_closure_reload();
+    return int(string(x));
+})(5);
+int nonleaf = (int sub (int x) {
+    int total = 0;
+    for (int i = 0; i < x; ++i) total += i;
+    return total;
+})(5);
+string temporary = (string sub (string value) { return value + \"!\"; })(\"a\" + \"b\");
+int captured_result = (int sub (int x) { return captured + x; })(5);
+code<int(int)> stored = int sub (int x) { return x * 2; };
+code<int(int)> guarded_stored = int sub (int x) { return x + 1; };
+nothing sub replace_guarded_stored() {
+    guarded_stored = int sub (int x) { return x + 10; };
+}
+int guarded_initial = guarded_stored(2);
+replace_guarded_stored();
+int guarded_replaced = guarded_stored(2);
+remove guarded_stored;
+int guarded_removed_error = 0;
+try {
+    guarded_stored(2);
+} catch (hash<ExceptionInfo> ex) {
+    guarded_removed_error = 1;
+}
+string sub stored_direct_cases() {
+    code<int(int)> transform = int sub (int x) {
+        int value = x + 1;
+        if (value % 2) {
+            value *= 3;
+        } else {
+            value += 7;
+        }
+        return value * value - x;
+    };
+    int first = transform(8);
+    int second = transform(9);
+
+    code<int(int)> boxed_fallback = int sub (int x) {
+        return int(string(x)) + 1;
+    };
+    int big_fallback = boxed_fallback(1152921504606846976);
+
+    code<int(int)> reassigned = int sub (int x) { return x + 1; };
+    reassigned = int sub (int x) { return x + 2; };
+    code<int(int)> defaulted = int sub (int x = 5) { return x * 2; };
+
+    string thrown;
+    code<int(int)> throwing = int sub (int x) {
+        throw \"STORED-CLOSURE\", string(x);
+    };
+    try {
+        throwing(7);
+    } catch (hash<ExceptionInfo> ex) {
+        thrown = ex.err;
+    }
+
+    int removed = 4;
+    remove removed;
+    removed *= 3;
+    return sprintf(\"%d:%d:%d:%d:%d:%s:%y\", first, second, big_fallback,
+        reassigned(4), defaulted(), thrown, removed);
+}
+string error;
+try {
+    (int sub (int x) { throw \"IMMEDIATE-CLOSURE\", string(x); })(7);
+} catch (hash<ExceptionInfo> ex) {
+    error = ex.err;
+}
+ImmediateClosureTest object();
+printf(\"%d:%d:%s:%d:%d:%d:%s\\n\", pure, nonleaf, temporary,
+    captured_result, stored(6), object.run(2), error);
+printf(\"%d:%d\\n\", fallback_reload, closure_reload);
+printf(\"%s\\n\", stored_direct_cases());
+printf(\"%d:%d:%d\\n\", guarded_initial, guarded_replaced,
+    guarded_removed_error);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out,
+            "AOT immediate noncapturing closure fusion matches interpreter");
+
+        # Direct-index select on typed list
+        code = "%modern
+list<int> nums = (1, -2, 3, -4, 5);
+list<auto> pos = (select nums, $1 > 0);
+printf(\"%d\\n\", pos.size());
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT select on typed int list");
+
+        # Dynamic comparisons used only as predicates can remain native booleans,
+        # including the mixed-type runtime-comparison path.
+        code = "%modern
+list<hash<auto>> items = ({\"val\": \"b\"}, {\"val\": \"a\"}, {\"val\": \"c\"});
+list<auto> selected = (select items, $1.val > \"a\");
+auto lhs = 2;
+auto rhs = 1;
+auto comparison = lhs > rhs;
+bool condition = comparison;
+printf(\"%d:%s:%s:%s\\n\", selected.size(), comparison.type(), comparison, condition);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT native boolean comparison consumers");
+    }
+
+    testAOTTypedMapAssignedState() {
+        string code = "%modern
+list<int> input = (1, 2, 3);
+list<int> empty = ();
+int value;
+printf(\"%y\\n\", (map value, empty));
+try {
+    auto unassigned = (map value, input);
+    printf(\"unexpected: %y\\n\", unassigned);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+value = 4;
+printf(\"%y\\n\", (map value, input));
+remove value;
+try {
+    auto removed = (map value, input);
+    printf(\"unexpected: %y\\n\", removed);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+float float_value;
+try {
+    auto unassigned_float = (map float_value, input);
+    printf(\"unexpected: %y\\n\", unassigned_float);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+float_value = 1.5;
+printf(\"%y\\n\", (map float_value, input));
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT typed map assigned-state guards match interpreter");
+    }
+
+    testAOTReferenceOutputAssignedState() {
+        # Regression: taking a reference to a local (\var) is not an assignment, and a callee can
+        # also write NOTHING back through an untyped reference. Both the parse-time
+        # definite-assignment state and the IR assigned-value proof must therefore keep the runtime
+        # guard on hash accesses that follow a reference-passing call; eliding it made the compiled
+        # hash-key helpers dereference a null hash and terminate with SIGSEGV.
+        string code = "%modern
+bool sub dont_set(reference<hash<auto>> out) {
+    return True;
+}
+bool sub set_true(reference<hash<auto>> out) {
+    out = {\"x\": 1};
+    return True;
+}
+bool sub set_other(reference<hash<auto>> out) {
+    out = {\"y\": 2};
+    return True;
+}
+bool sub dont_set_int(reference<int> out) {
+    return True;
+}
+bool sub clear_it(reference out) {
+    delete out;
+    return True;
+}
+# the callee returns True without ever writing through the reference
+hash<auto> unset_hash;
+printf(\"1:%y:%y\\n\", dont_set(\\unset_hash) && unset_hash.x, exists unset_hash);
+# the callee assigns a hash whose member is true
+hash<auto> set_hash;
+printf(\"2:%y:%y\\n\", set_true(\\set_hash) && set_hash.x, set_hash.x);
+# the callee assigns a hash whose member is missing
+hash<auto> other_hash;
+printf(\"3:%y:%y\\n\", set_other(\\other_hash) && other_hash.x, other_hash.y);
+# non-fused member access after the same reference call
+hash<auto> plain_hash;
+dont_set(\\plain_hash);
+auto member = plain_hash.x;
+printf(\"4:%y:%y\\n\", exists member, exists plain_hash);
+# an already-assigned hash cleared by the callee through an untyped reference
+hash<auto> cleared_hash = {\"a\": 1};
+printf(\"5:%y:%y\\n\", clear_it(\\cleared_hash) && cleared_hash.a, exists cleared_hash);
+# unassigned int output; the local must not be read as a native int
+int unset_int;
+printf(\"6:%y:%y\\n\", dont_set_int(\\unset_int) && unset_int, exists unset_int);
+# loop-carried clear; the member access is parsed before the reference call
+hash<auto> loop_hash = {\"a\": 1};
+int seen = 0;
+for (int i = 0; i < 3; ++i) {
+    if (loop_hash.a) {
+        ++seen;
+    }
+    clear_it(\\loop_hash);
+}
+printf(\"7:%d:%y\\n\", seen, exists loop_hash);
+# an assigned hash keeps the fast path when no reference is taken
+hash<auto> fast_hash = {\"a\": 1};
+int fast = 0;
+for (int i = 0; i < 3; ++i) {
+    if (fast_hash.a) {
+        ++fast;
+    }
+}
+printf(\"8:%d:%y\\n\", fast, fast_hash.a);
+# the same shapes inside a function, where the hash is a plain local
+hash<auto> sub inFunction() {
+    hash<auto> local_unset;
+    hash<auto> local_set;
+    hash<auto> local_cleared = {\"a\": 1};
+    bool unset_true = dont_set(\\local_unset) && local_unset.x;
+    bool set_true_result = set_true(\\local_set) && local_set.x;
+    bool cleared_true = clear_it(\\local_cleared) && local_cleared.a;
+    return {
+        \"unset\": unset_true,
+        \"set\": set_true_result,
+        \"cleared\": cleared_true,
+        \"unset_exists\": exists local_unset,
+        \"cleared_exists\": exists local_cleared,
+    };
+}
+printf(\"9:%y\\n\", inFunction());
+# a closure that clears the captured hash, invoked through a call that takes no reference
+# argument, so no call instruction names the write
+sub call_it(code c) { c(); }
+hash<auto> captured = {\"a\": 1};
+code clearer = sub () { delete captured; };
+call_it(clearer);
+printf(\"10:%y:%y\\n\", captured.a ? True : False, exists captured);
+# a captured hash that is only read stays correct too
+hash<auto> read_only_capture = {\"a\": 2};
+code reader = auto sub () { return read_only_capture.a; };
+printf(\"11:%y:%y\\n\", call_reader(reader), read_only_capture.a);
+auto sub call_reader(code c) { return c(); }
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out,
+            "AOT reference-output assigned-state guards match interpreter");
+        assertFalse(aot_out =~ /COMPILE_FAILED/, "AOT reference-output test compiled");
+    }
+
+    testAOTDirectIndexMapSelectImplicitArgCleanup() {
+        # Regression: the direct-index map-select lowering must pop implicit
+        # argument state on both predicate-true and predicate-false paths.
+        string code = "%modern
+hash<auto> row = (\"a\": 1, \"b\": 2, \"c\": 3);
+hash<auto> cols = (\"a\": True);
+*hash<auto> suh;
+list updc = ();
+map updc += $1, keys row, !cols.hasKey($1) && !suh.$1;
+printf(\"%y\\n\", updc);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT map-select false predicate restores implicit args");
+    }
+
+    testAOTTypedScalarSelectConstruction() {
+        string code = "%modern
+list<int> ints = range(10);
+list<int> partial = (select ints, $1 % 3 == 0);
+list<int> all = (select ints, True);
+list<int> none = (select ints, False);
+list<int> empty_input = ();
+list<int> empty = (select empty_input, True);
+list<float> floats = (1.5, 2.5, 3.5, 0.5);
+list<float> selected_floats = (select floats, $1 >= 2.5);
+list<int> removed = range(1);
+remove removed;
+auto missing = (select removed, True);
+printf(\"%s|%d:%d|%s:%d|%d|%s|%d\\n\", partial.join(\",\"),
+    all.size(), all[-1], none.type(), none.size(), empty.size(),
+    selected_floats.join(\",\"), exists missing);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT typed scalar select matches interpreter");
+    }
+
+    testAOTTypedScalarMapSelectConstruction() {
+        string code = "%modern
+softlist<softint> sub selectBoxed(softlist<softint> input, hash<string, bool> selected) {
+    return (map $1, input, selected{$1});
+}
+
+list<int> input = (1, 2, 3);
+int value;
+list<string> errors;
+try {
+    auto unassigned = (map value, input, True);
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+value = 7;
+list<int> assigned = (map value, input, $1 > 1);
+remove value;
+try {
+    auto removed = (map value, input, True);
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+list<int> mapped_ints = (map $1 * 2, input, $1 != 2);
+list<float> mapped_floats = (map $1 + 0.5, input, $1 >= 2);
+list<int> none = (map $1 * 2, input, False);
+list<int> empty_input = ();
+list<int> empty = (map $1 * 2, empty_input, True);
+softlist<softint> boxed = selectBoxed((1, 2, 3, 4), {\"1\": True, \"3\": True});
+int pipeline_value;
+try {
+    auto pipeline_unassigned = (map pipeline_value, (select input, True));
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+pipeline_value = 9;
+list<int> pipeline_assigned = (map pipeline_value, (select input, $1 > 1));
+remove pipeline_value;
+try {
+    auto pipeline_removed = (map pipeline_value, (select input, True));
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+list<int> pipeline_ints = (map $1 * 3, (select input, $1 != 2));
+list<float> pipeline_floats = (map $1 + 0.25, (select input, $1 >= 2));
+list<int> pipeline_none = (map $1 * 3, (select input, False));
+list<int> pipeline_removed_source = (1,);
+remove pipeline_removed_source;
+auto pipeline_missing = (map $1 * 3, (select pipeline_removed_source, True));
+printf(\"%s|%s|%s|%s|%d:%d|%s|%s|%s|%s|%d|%d\\n\", errors.join(\",\"),
+    assigned.join(\",\"), mapped_ints.join(\",\"), mapped_floats.join(\",\"),
+    none.size(), empty.size(), boxed.join(\",\"), pipeline_assigned.join(\",\"),
+    pipeline_ints.join(\",\"), pipeline_floats.join(\",\"), pipeline_none.size(),
+    exists pipeline_missing);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT typed scalar map-select matches interpreter");
+    }
+
+    testCompileV1Binary() {
+        # Test that we can compile a script successfully with the new v1 binary format
+        string code = "%modern\nprintf(\"hello v1\\n\");";
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile the script to AOT binary
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_out = backquote(compile_cmd);
+
+        # Check that compilation succeeded
+        assertTrue(is_file(paths.out), "AOT binary was created");
+        assertFalse(compile_out =~ /error|Error|failed/i, "Compilation succeeded without errors");
+    }
+
+    testExecuteV1Binary() {
+        # Test that a v1 binary executes correctly
+        string code = "%modern
+int x = 42;
+printf(\"result: %d\\n\", x);
+";
+        string aot_out = compileAndRun(code);
+        assertFalse(aot_out =~ /error|COMPILE_FAILED/i, "v1 binary executes without error");
+        assertTrue(aot_out =~ /result: 42/, "v1 binary produces correct output");
+    }
+
+    testV1HeaderWithMethodCalls() {
+        # Test v1 binary with method calls (tests feature flag discovery)
+        string code = "%modern
+list<string> items = (\"hello\", \"world\");
+foreach string item in (items) {
+    printf(\"%s\\n\", item);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT v1 binary with method calls matches interpreter");
+    }
+
+    testV1HeaderArithmetic() {
+        # Test v1 binary with arithmetic operations (comprehensive functionality test)
+        string code = "%modern
+int a = 10;
+int b = 20;
+int c = a + b;
+int d = c * 2;
+float e = d / 3.0;
+printf(\"%d %d %d %.2f\\n\", a, b, c, e);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT v1 binary arithmetic matches interpreter");
+    }
+
+    testV1BinaryRegressionPrevious() {
+        # Test that v1 format doesn't break previously working scripts
+        string code = "%modern
+hash<auto> h = {\"x\": 1, \"y\": 2};
+printf(\"%d %d\\n\", h.x, h.y);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT v1 hash operations match interpreter");
+    }
+
+    testVersionField() {
+        # Test that binary version field is correctly set to v1 (0x0001 in LE bytes 4-5)
+        # This verifies the binary format v1 header is correctly written
+        string code = "%modern\nprintf(\"test v1\\n\");\n";
+        string aot_out = compileAndRun(code);
+
+        # Verify compilation and execution succeeded
+        assertFalse(aot_out =~ /error|Error|COMPILE_FAILED/i, "v1 binary compilation succeeds");
+        assertTrue(aot_out =~ /test v1/, "v1 binary executes and produces correct output");
+    }
+
+    testPOHighBitsRoundTrip() {
+        # Test that parse options high bits are correctly preserved through compilation
+        string code = "%modern\nprintf(\"options test\\n\");\n";
+
+        # Compile with parse options that include high bits
+        string aot_out = compileAndRun(code);
+
+        # If compilation and execution succeed, high bits were preserved
+        assertFalse(aot_out =~ /PARSE|error|ERROR/i, "Parse options high bits preserved");
+        assertTrue(aot_out =~ /options test/, "Program executes with parse options");
+    }
+
+    testNoSourceStatFingerprint() {
+        # A binary records nothing about its source file's state on disk, so that compiling the same source content
+        # again produces the same binary; a compiled program runs without reading its source, which can change or
+        # be gone.
+        string code = "%modern\nprintf(\"hello\\n\");\n";
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        # Compile the script
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s --compile %s --output %s 2>&1",
+            libqore_dir, qore_bin, paths.src, paths.out);
+        backquote(compile_cmd);
+
+        string info = dumpQccInfo(paths.out, False);
+        assertTrue(info =~ /build info:/, "the binary has build info: " + info);
+        assertFalse(info =~ /source-size:/, "AOT build info records no source size: " + info);
+        assertFalse(info =~ /source-mtime-ns:/, "AOT build info records no source mtime: " + info);
+
+        string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out);
+        assertEq("hello\n", backquote(run_cmd), "The binary runs");
+
+        # Changing or removing the source does not change what the binary runs
+        {
+            File f();
+            f.open(paths.src, O_WRONLY | O_TRUNC);
+            f.write("printf(\"modified\\n\");\n");
+        }
+        assertEq("hello\n", backquote(run_cmd), "The binary runs after its source changed");
+        unlink(paths.src);
+        assertEq("hello\n", backquote(run_cmd), "The binary runs without its source");
+    }
+
+    testModuleBytesIndependentOfSourceMtime() {
+        # A checkout or a rebase rewrites a source file with unchanged content and a new modification time, and a
+        # build compiles it again; the module it produces must be byte for byte the one it replaces, so that
+        # anything that identifies a module by its content (an installer, a cache, a provider index) sees no change.
+        string tmp_dir = sprintf("/tmp/aot_mtime_test_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            system(sprintf("rm -rf %s", tmp_dir));
+        }
+        string suffix = sprintf("%d", getpid());
+
+        # a single-file module and a split module (a directory with its .qm and a .qc)
+        string single_mod = "MtimeProbe" + suffix;
+        string single_src = tmp_dir + "/" + single_mod + ".qm";
+        writeFile(single_src, sprintf("%%modern
+module %s { version = \"1.0\"; desc = \"mtime probe\"; author = \"t\"; license = \"MIT\"; }
+public namespace %s {
+public int sub value() {
+    return 7;
+}
+}
+", single_mod, single_mod));
+        string split_mod = "MtimeSplitProbe" + suffix;
+        string split_dir = tmp_dir + "/" + split_mod;
+        mkdir(split_dir);
+        writeFile(split_dir + "/" + split_mod + ".qm", sprintf("%%modern
+module %s { version = \"1.0\"; desc = \"split mtime probe\"; author = \"t\"; license = \"MIT\"; }
+", split_mod));
+        writeFile(split_dir + "/Values.qc", sprintf("public namespace %s {
+public int sub value() {
+    return 8;
+}
+}
+", split_mod));
+
+        foreach hash<auto> mod in ((
+                {"name": single_mod, "src": single_src, "touch": (single_src,)},
+                {"name": split_mod, "src": split_dir,
+                    "touch": (split_dir + "/" + split_mod + ".qm", split_dir + "/Values.qc")},
+            )) {
+            list<string> digests = ();
+            # two builds of the same content: the sources dated 2000-01-01 and then 2001-01-01, each written to
+            # a module file of the same name, since a module records its file name
+            foreach string stamp in (("200001010000", "200101010000")) {
+                foreach string path in (mod.touch) {
+                    assertEq(0, system(sprintf("touch -t %s %s", stamp, path)), "set the time of " + path);
+                }
+                string out_dir = tmp_dir + "/out-" + stamp;
+                mkdir(out_dir);
+                string qmod = out_dir + "/" + mod.name + ".qmod";
+                string out = backquote(sprintf(
+                    "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -m %s -o %s 2>&1; echo EXIT=$?",
+                    libqore_dir, libqore_dir, qcc_bin, mod.src, qmod));
+                assertTrue(out.regex("EXIT=0"), mod.name + " compiled: " + out);
+                digests += ReadOnlyFile::readBinaryFile(qmod).toSHA256();
+            }
+            assertEq(digests[0], digests[1], mod.name + ": the same source content gives the same module");
+        }
+    }
+
+    private static writeFile(string path, string content) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(content);
+        f.close();
+    }
+
+    testFeatureFlagsNonZero() {
+        # Test that feature flags are set when binary uses features like method calls
+        # This tests the v1 binary format correctly captures feature flags
+        string code = "%modern\nstring s = \"hello\";\nint len = s.length();\nprintf(\"len: %d\\n\", len);\n";
+        string aot_out = compileAndRun(code);
+
+        # Verify the binary with method calls compiles and executes correctly
+        assertFalse(aot_out =~ /error|Error|COMPILE_FAILED/i, "v1 binary with method calls compiles");
+        assertTrue(aot_out =~ /len: 5/, "v1 binary with method calls executes correctly");
+    }
+
+    testSubscriptCompoundAssign() {
+        string code = "%modern
+hash<auto> h = {\"a\": 0, \"b\": 100};
+for (int i = 0; i < 10; ++i) {
+    h{\"a\"} += 5;
+    h{\"b\"} -= 3;
+}
+printf(\"%d %d\\n\", h{\"a\"}, h{\"b\"});
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "subscript compound: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "subscript compound output matches interpreter");
+        assertEq(result.run_out, "50 70\n");
+    }
+
+    testHashCompoundNative() {
+        string code = "%modern
+hash<auto> h = {\"i\": 0, \"f\": 1.0};
+h{\"i\"} += 10;
+h{\"i\"} -= 3;
+h{\"i\"} *= 4;
+h{\"f\"} += 2.5;
+h{\"f\"} *= 3.0;
+printf(\"%d %.1f\\n\", h{\"i\"}, h{\"f\"});
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "hash compound native: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "hash compound native output matches interpreter");
+        assertEq(result.run_out, "28 10.5\n");
+    }
+
+    testThreadLocalVars() {
+        # Thread-local variables should be fully pre-compiled in AOT mode
+        string code = "%modern
+thread_local int tl_counter = 0;
+thread_local string tl_label = \"start\";
+
+tl_counter = 10;
+tl_label = \"main\";
+tl_counter += 5;
+int r1 = tl_counter;
+tl_counter += 3;
+int r2 = tl_counter;
+printf(\"%d %d %s\\n\", r1, r2, tl_label);
+
+# Test thread-local in closure expression
+code get_counter = int sub() { return tl_counter; };
+printf(\"%d\\n\", get_counter());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "thread-local AOT: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "thread-local AOT output matches interpreter");
+        assertEq(result.run_out, "15 18 main\n18\n");
+    }
+
+    testStripSourceGlobalVarInit() {
+        # Global and thread-local variable initialization in strip-source mode
+        string code = "%modern
+our int x = 42;
+our string msg = \"hello world\";
+our float pi = 3.14159;
+our bool flag = True;
+our hash<auto> h = {\"key\": \"value\", \"num\": 123};
+our list<auto> l = (1, 2, 3);
+thread_local int counter = 100;
+thread_local string tl_msg = \"thread-local\";
+
+printf(\"x=%d msg=%s pi=%.5f flag=%s\\n\", x, msg, pi, flag ? \"T\" : \"F\");
+printf(\"h=%y\\n\", h);
+printf(\"l=%y\\n\", l);
+printf(\"counter=%d tl_msg=%s\\n\", counter, tl_msg);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "global var init: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "global var init: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "global var init: strip-source matches interpreter");
+    }
+
+    testStripSourceComplexTypeNew() {
+        # Complex hash/list construction via new keyword in strip-source mode
+        string code = "%modern
+hash<string, int> sub make_hash() {
+    auto h = new hash<string, int>();
+    h{\"a\"} = 1;
+    h{\"b\"} = 2;
+    return h;
+}
+
+list<string> sub make_list() {
+    auto l = new list<string>();
+    l += \"hello\";
+    l += \"world\";
+    return l;
+}
+
+printf(\"hash=%y\\n\", make_hash());
+printf(\"list=%y\\n\", make_list());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "complex type new: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "complex type new: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "complex type new: strip-source matches interpreter");
+    }
+
+    testStripSourceTypedListHashdeclElement() {
+        string code = "%modern
+hashdecl TH {
+    int events;
+}
+
+list<hash<TH>> nl(new hash<TH>({
+    \"events\": 1,
+}));
+printf(\"%s %y %d\\n\", nl.fullType(), nl[0].fullType(), nl[0].events);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "typed list hashdecl element: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "typed list hashdecl element: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "typed list hashdecl element: strip-source matches interpreter");
+        assertEq("list<hash<TH>> \"hash<TH>\" 1\n", result.run_out,
+            "typed list hashdecl element preserves declared element type");
+    }
+
+    testStripSourceHashdeclEnumMemberType() {
+        string code = "%modern
+public enum StepKind : string {
+    Input = \"input\",
+    Action = \"action\",
+}
+
+hashdecl Step {
+    enum<StepKind> kind;
+}
+
+hash<Step> s = <Step>{\"kind\": StepKind::Action};
+printf(\"%s %y\\n\", s.fullType(), s.kind);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "hashdecl enum member type: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "hashdecl enum member type: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "hashdecl enum member type: strip-source matches interpreter");
+        assertEq("hash<Step> \"action\"\n", result.run_out,
+            "hashdecl enum member type resolves anchored enum type path");
+    }
+
+    testStripSourceNestedObjectComplexMemberType() {
+        string code = "%modern
+namespace OMQ {
+class SegmentEventQueue {
+    string getName() {
+        return \"queue\";
+    }
+}
+
+class WorkflowQueueBase {
+    private {
+        hash<string, object<SegmentEventQueue>> SQ;
+    }
+
+    constructor() {
+        SQ{\"0\"} = new SegmentEventQueue();
+    }
+
+    string getQueueType() {
+        return SQ.fullType();
+    }
+
+    string getQueueName() {
+        return SQ{\"0\"}.getName();
+    }
+}
+}
+
+OMQ::WorkflowQueueBase w();
+printf(\"%s %s\\n\", w.getQueueType(), w.getQueueName());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "nested object complex member type: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "nested object complex member type: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "nested object complex member type: strip-source matches interpreter");
+        assertTrue(result.run_out =~ /^hash<string, object<.*SegmentEventQueue>> queue\n$/,
+            "nested object complex member type resolves anchored object type path: " + result.run_out);
+    }
+
+    testStripSourceRuntimeConstRef() {
+        # Runtime constant references in strip-source mode
+        string code = "%modern
+namespace TestConsts {
+    const PI = 3.14159;
+    const GREETING = \"Hello\";
+    const MAX_VAL = 100;
+}
+
+string sub format_msg() {
+    return sprintf(\"%s PI=%.5f MAX=%d\", TestConsts::GREETING, TestConsts::PI, TestConsts::MAX_VAL);
+}
+
+printf(\"%s\\n\", format_msg());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "runtime const ref: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "runtime const ref: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "runtime const ref: strip-source matches interpreter");
+    }
+
+    testNamespaceConstantReverseMapOrder() {
+        # Regression: folded containers can share node pointers across
+        # constants. The reverse map must not encode an earlier constant's
+        # value through a later same-blob constant, because namespace constants
+        # are deserialized in section order.
+        string code = "%modern
+%require-types
+
+public namespace OMQ {
+    public const CommonAPI = (
+        (\"name\": \"common\", \"returns\": \"hash\"),
+    );
+    public const JobAPI = CommonAPI + (
+        (\"name\": \"job\", \"returns\": \"nothing\"),
+    );
+}
+
+printf(\"%s\\n\", OMQ::CommonAPI[0].name);
+printf(\"%s\\n\", OMQ::JobAPI[0].name);
+printf(\"%s\\n\", OMQ::JobAPI[1].name);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "namespace constant reverse map order: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "namespace constant reverse map order: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "namespace constant reverse map order: strip-source matches interpreter");
+    }
+
+    testQccOneShotMultiSourceExecutable() {
+        string tmp_dir = sprintf("/tmp/aot_qcc_one_shot_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string lib_path = tmp_dir + "/lib.qr";
+        string main_path = tmp_dir + "/main.qr";
+        string app_path = tmp_dir + "/app";
+
+        {
+            File f();
+            f.open2(lib_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("string sub oneShotMessage() {
+    return \"one-shot-qcc-ok\";
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(main_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("int sub main() {
+    printf(\"%s\\n\", oneShotMessage());
+    return 0;
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, lib_path, main_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc one-shot compiles and links multiple .qr sources: " + compile_out);
+        assertTrue(is_file(app_path), "qcc one-shot created executable");
+
+        *list<string> temp_match = (compile_out =~ x/(\/tmp\/qcc-aot-[A-Za-z0-9]+)/);
+        if (temp_match) {
+            assertFalse(is_dir(temp_match[0]),
+                "qcc one-shot cleans temporary directory by default: " + temp_match[0]);
+        }
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("one-shot-qcc-ok\nEXIT=0\n", run_out,
+            "qcc one-shot executable runs cross-file call: " + run_out);
+
+        string missing_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, lib_path, main_path));
+        assertTrue(missing_out.regex("multi-source executable mode requires -o/--output")
+                && missing_out.regex("EXIT=1"),
+            "qcc one-shot without -o has actionable error: " + missing_out);
+
+        string qo_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, lib_path, main_path));
+        assertTrue(qo_out.regex("EXIT=0"),
+            "qcc batch compiles objects for mixed-input negative test: " + qo_out);
+
+        string mixed_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s/bad %s %s/*.qo 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, tmp_dir, lib_path, qo_dir));
+        assertTrue(mixed_out.regex("mixed source and \\.qo inputs")
+                && mixed_out.regex("EXIT=1"),
+            "qcc one-shot rejects mixed source and .qo inputs: " + mixed_out);
+    }
+
+    testStandaloneTopLevelStaticFastEntry() {
+        hash<auto> tmp = writeTempScript("%modern
+class FastEntryProbe {
+    static int add(int a, int b) {
+        return a + b;
+    }
+}
+printf(\"%d\\n\", FastEntryProbe::add(20, 22));
+");
+        on_exit {
+            backquote(sprintf("rm -f %s %s", tmp.src, tmp.out));
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE=1 QORE_DUMP_LLVM_IR=1 "
+                + "%s -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qcc_bin, tmp.out, tmp.src));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "standalone fast-entry probe compiles: " + compile_out);
+        assertTrue(compile_out.regex(
+                "call i64 @FastEntryProbe___static_add[^\\n]*_fast_h[0-9a-f]{16}\\("),
+            "top-level static call uses the native fast entry: " + compile_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, tmp.out));
+        assertEq("42\nEXIT=0\n", run_out,
+            "standalone static fast-entry executable result");
+    }
+
+    testBatchFragmentConstantReverseMapOrder() {
+        # qcc batch mode parses all sources in one program, but emits one `.qo`
+        # per source. A fragment must not serialize an earlier constant's value
+        # through a later sibling fragment's constant path.
+        string tmp_dir = sprintf("/tmp/aot_batch_const_order_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string common_path = tmp_dir + "/a_common.qr";
+        string job_path = tmp_dir + "/b_job.qr";
+        string main_path = tmp_dir + "/c_main.qr";
+        string app_path = tmp_dir + "/app";
+
+        {
+            File f();
+            f.open2(common_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public const CommonAPI = (
+        (\"name\": \"common\", \"returns\": \"hash\"),
+    );
+}
+");
+            f.close();
+        }
+        {
+            string job_items;
+            for (int i = 0; i < 28; ++i) {
+                job_items += sprintf("        \"job_%d\",\n", i);
+            }
+
+            File f();
+            f.open2(job_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public const JobFunctionApi = (
+" + job_items + "    );
+
+    public const JobAPI = JobFunctionApi + CommonAPI + (
+        (\"name\": \"job\", \"returns\": \"nothing\"),
+    );
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(main_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+sub main() {
+    printf(\"%s\\n\", OMQ::CommonAPI[0].name);
+    printf(\"%s\\n\", OMQ::JobAPI[28].name);
+    printf(\"%s\\n\", OMQ::JobAPI[29].name);
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, common_path, job_path, main_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc batch compiles sibling fragments: " + compile_out);
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s/*.qo 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_dir));
+        assertTrue(link_out.regex("EXIT=0"),
+            "qcc links sibling fragments: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("common\ncommon\njob\nEXIT=0\n", run_out,
+            "batch fragment constants do not depend on later sibling const refs: " + run_out);
+    }
+
+    testBatchFragmentDeferredClassConstantRefs() {
+        # Batch-linked fragments are registered in object/link order, not
+        # necessarily source parse order.  Member defaults and class constants
+        # must therefore defer nested const-ref materialization until all
+        # sibling-fragment constant shells are registered.
+        string tmp_dir = sprintf("/tmp/aot_batch_deferred_consts_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string common_path = tmp_dir + "/z_common.qr";
+        string user_path = tmp_dir + "/a_user.qr";
+        string helper_path = tmp_dir + "/b_helper.qr";
+        string main_path = tmp_dir + "/c_main.qr";
+        string app_path = tmp_dir + "/app";
+
+        {
+            File f();
+            f.open2(common_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public const QorusServerDefines = (\"QorusServer\", \"QorusHasAlerts\");
+
+    public class ProgramLike {
+        private {
+            list<string> defs;
+        }
+
+        constructor(list<string> defs) {
+            self.defs = defs;
+        }
+
+        public string firstDefine() {
+            return defs[0];
+        }
+    }
+
+    public class MapperProgram {
+        public {
+            const PythonTypeMap = {
+                \"int\": \"int\",
+                \"string\": \"Any\",
+            };
+        }
+    }
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(user_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public class UserApi {
+        public {
+            static ProgramLike DynamicLogic(QorusServerDefines);
+        }
+
+        public static string firstDefine() {
+            return DynamicLogic.firstDefine();
+        }
+    }
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(helper_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public class MapperFieldCodeTypeHelper {
+        public {
+            const PythonTypeMap = OMQ::MapperProgram::PythonTypeMap;
+        }
+    }
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(main_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+sub main() {
+    printf(\"%s\\n\", OMQ::UserApi::firstDefine());
+    printf(\"%s\\n\", OMQ::MapperFieldCodeTypeHelper::PythonTypeMap{\"int\"});
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, common_path, user_path,
+            helper_path, main_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc batch compiles deferred const-ref fragments: " + compile_out);
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s/*.qo 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_dir));
+        assertTrue(link_out.regex("EXIT=0"),
+            "qcc links deferred const-ref fragments: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("QorusServer\nint\nEXIT=0\n", run_out,
+            "batch fragment member/class const refs resolve after shell phase: " + run_out);
+    }
+
+    testBatchFragmentStatementLocFilter() {
+        # Batch mode parses all source files in one QoreProgram and emits one
+        # `.qo` per source.  Each fragment must serialize only its own
+        # statement-location metadata; otherwise small fragments grow with the
+        # whole context and spend seconds registering irrelevant slot maps.
+        string tmp_dir = sprintf("/tmp/aot_batch_stmt_locs_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string small_path = tmp_dir + "/small.qr";
+        string large_path = tmp_dir + "/large.qr";
+        {
+            File f();
+            f.open2(small_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+int sub small() {
+    return 1;
+}
+");
+            f.close();
+        }
+        {
+            string large_body;
+            for (int i = 0; i < 500; ++i) {
+                large_body += sprintf("    i += %d;\n", i);
+            }
+
+            File f();
+            f.open2(large_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+int sub large() {
+    int i = 0;
+" + large_body + "    return i;
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, small_path, large_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc batch compiles statement-location filter fragments: " + compile_out);
+
+        *list<string> small_match = (compile_out =~ x/script-context \.qo[^\n]+: ([^\n]+small_qr\.qo)/);
+        assertTrue(small_match != NOTHING,
+            "qcc output reports small fragment path: " + compile_out);
+
+        string dump_out = dumpQccSections(small_match[0]);
+        *list<string> slot_match = (dump_out =~ x/SLOT_MAPS\s+type=11 offset=[0-9]+ size=([0-9]+)/);
+        assertTrue(slot_match != NOTHING,
+            "qcc dump reports SLOT_MAPS section for small fragment: " + dump_out);
+
+        int slot_size = slot_match[0].toInt();
+        assertTrue(slot_size < 8192,
+            sprintf("small fragment SLOT_MAPS section is context-local (%d bytes): %s",
+                slot_size, dump_out));
+    }
+
+    testQccDumpModernSlotExprKinds() {
+        # qcc --dump-info has its own lightweight SLOT_MAPS parser. Keep it
+        # synchronized with the writer/runtime registries so diagnostics do not
+        # report valid AOT binaries as malformed when newer slot expression
+        # kinds appear in dynamic lvalue paths.
+        hash<auto> paths = writeTempScript("%modern
+%require-types
+
+int sub refprobe(int i) {
+    hash<auto> h = {};
+    reference<auto> r = \\h.(cast<string>(-i));
+    r = i;
+    return h.(cast<string>(-i));
+}
+
+printf(\"%d\\n\", refprobe(3));
+");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -b --compile --output %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin, paths.out, paths.src));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "modern slot expression probe compiles: " + compile_out);
+
+        string dump_out = dumpQccSections(paths.out);
+        assertTrue(dump_out.regex("expr-slots=[1-9]"),
+            "probe generated slot expressions: " + dump_out);
+        assertTrue(dump_out.regex("malformed=0"),
+            "qcc dump parses modern slot expression payloads: " + dump_out);
+        assertTrue(!dump_out.regex("malformed=[1-9]"),
+            "qcc dump reports no malformed slot expression payloads: " + dump_out);
+        assertTrue(dump_out.regex("UNARY_MINUS\\s+\\(104\\)"),
+            "qcc dump reports unary-minus expression kind from the slot registry: " + dump_out);
+    }
+
+    testQccDumpCompoundSlotExprKinds() {
+        # the expression of each key below is a slot expression; qcc --dump-info must skip the payloads of the
+        # compound assignment, absolute comparison, iterate and streaming expressions, or it reports the slot map of
+        # the function as malformed and stops reading it at the first one
+        hash<auto> paths = writeTempScript("%modern
+%require-types
+
+int sub probe(int i) {
+    hash<auto> h = {};
+    int x = i;
+    reference<auto> r1 = \\h.(cast<string>(x += i));
+    r1 = 1;
+    reference<auto> r2 = \\h.(cast<string>(x -= 1));
+    r2 = 2;
+    reference<auto> r3 = \\h.(cast<string>(x *= 3));
+    r3 = 3;
+    reference<auto> r4 = \\h.(cast<string>(x /= 3));
+    r4 = 4;
+    reference<auto> r5 = \\h.(cast<string>(x %= 100));
+    r5 = 5;
+    reference<auto> r6 = \\h.(cast<string>(x &= 255));
+    r6 = 6;
+    reference<auto> r7 = \\h.(cast<string>(x |= 256));
+    r7 = 7;
+    reference<auto> r8 = \\h.(cast<string>(x ^= 1));
+    r8 = 8;
+    reference<auto> r9 = \\h.(cast<string>(x <<= 1));
+    r9 = 9;
+    reference<auto> r10 = \\h.(cast<string>(x >>= 1));
+    r10 = 10;
+    reference<auto> r11 = \\h.((x === i) ? \"aeq\" : \"naeq\");
+    r11 = 11;
+    reference<auto> r12 = \\h.((x !== i) ? \"ane\" : \"nane\");
+    r12 = 12;
+    reference<auto> r13 = \\h.(cast<string>(first iterate (i, x)));
+    r13 = 13;
+    return h.size();
+}
+
+printf(\"%d\\n\", probe(3));
+");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -b --compile --output %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin, paths.out, paths.src));
+        assertTrue(compile_out.regex("EXIT=0"), "slot expression probe compiles: " + compile_out);
+
+        string dump_out = dumpQccSections(paths.out);
+        assertTrue(dump_out.regex("expr-slots=[1-9]"), "probe generated slot expressions: " + dump_out);
+        assertTrue(dump_out.regex("malformed=0"),
+            "qcc dump parses the slot expression payloads: " + dump_out);
+        foreach string kind in ("PLUS_EQ", "MINUS_EQ", "MULTIPLY_EQ", "DIVIDE_EQ", "MODULO_EQ", "AND_EQ", "OR_EQ",
+                "XOR_EQ", "SHL_EQ", "SHR_EQ", "LOG_AEQ", "LOG_ANE", "STREAMING", "ITERATE") {
+            assertTrue(dump_out.regex("\\b" + kind + "\\s+\\([0-9]+\\): [1-9]"),
+                "qcc dump reports the " + kind + " expression kind: " + dump_out);
+        }
+
+        # the compiled program gives the result of the interpreted one
+        string expected = backquote(sprintf("%s %s 2>&1", qore_bin, paths.src));
+        string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, paths.out));
+        assertEq(expected, actual);
+        assertEq("9\n", actual);
+    }
+
+    testQccDumpSectionNames() {
+        # every section that the writer writes has a name in the qcc --dump-sections table, among them the
+        # IMPORT_DEPENDENCIES section of a relocatable object
+        hash<auto> paths = writeTempScript("%modern
+printf(\"ok\\n\");
+");
+        string obj = paths.out + ".qo";
+        on_exit {
+            unlink(paths.src);
+            unlink(obj);
+        }
+
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -c -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qcc_bin, obj, paths.src));
+        assertTrue(compile_out.regex("EXIT=0"), "section probe compiles: " + compile_out);
+
+        string dump_out = dumpQccSections(obj);
+        assertTrue(dump_out.regex("IMPORT_DEPENDENCIES\\s+type=29 "),
+            "qcc dump names the IMPORT_DEPENDENCIES section: " + dump_out);
+        assertFalse(dump_out.regex("UNKNOWN\\s+type="), "qcc dump names every section: " + dump_out);
+    }
+
+    testQccDumpClassInjectionMetadata() {
+        # qcc --dump-info has its own lightweight CLASSES parser. It must stay
+        # byte-for-byte aligned with the writer/runtime class record layout.
+        hash<auto> paths = writeTempScript("%modern
+%require-types
+
+class DumpInfoInjectedLayout {
+    public {
+        string marker = \"marker\";
+    }
+}
+
+printf(\"ok\\n\");
+");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -b --compile --output %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin, paths.out, paths.src));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "class injection metadata probe compiles: " + compile_out);
+
+        string dump_out = dumpQccSections(paths.out);
+        assertTrue(dump_out.regex("class-injection"),
+            "qcc dump reports class-injection from the feature registry: " + dump_out);
+        assertTrue(dump_out.regex("serialized defaults: total=[1-9]"),
+            "qcc dump scans class member defaults after class injection metadata: " + dump_out);
+        assertTrue(!dump_out.regex("serialized defaults: error"),
+            "qcc dump reports no serialized-default scanner error: " + dump_out);
+    }
+
+    testStripSourceStaticVarrefModule() {
+        # Static class variable access in a strip-source compiled module
+        string mod_code = "%modern
+
+module StripStaticVarMod {
+    version = \"1.0\";
+    desc = \"Test static var access\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripStaticVarMod {
+    public class Accumulator {
+        public {
+            static int total = 0;
+        }
+
+        static add(int n) {
+            Accumulator::total += n;
+        }
+
+        static int getTotal() {
+            return Accumulator::total;
+        }
+
+        static reset() {
+            Accumulator::total = 0;
+        }
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripStaticVarMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled,
+            "static varref module compiled: " + mod_info.compile_out);
+
+        # Create a test script that uses static methods
+        string test_code = "%modern
+
+%requires StripStaticVarMod
+
+StripStaticVarMod::Accumulator::add(10);
+StripStaticVarMod::Accumulator::add(20);
+StripStaticVarMod::Accumulator::add(12);
+printf(\"%d\\n\", StripStaticVarMod::Accumulator::getTotal());
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        # Run with the compiled strip-source .qmod
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("42\n", out,
+            "static varref from strip-source module works correctly");
+    }
+
+    testStripSourceModuleInitFunctionRef() {
+        string mod_code = "%modern
+
+module StripInitCallRefMod {
+    version = \"1.0\";
+    desc = \"Test module init call reference\";
+    author = \"Test\";
+    license = \"MIT\";
+    init = \\Priv::priv_init();
+}
+
+public namespace StripInitCallRefMod {
+    public class State {
+        public {
+            static int value = 0;
+        }
+
+        static int getValue() {
+            return State::value;
+        }
+    }
+}
+
+namespace Priv {
+    sub priv_init() {
+        StripInitCallRefMod::State::value = 42;
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripInitCallRefMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled,
+            "module init function ref compiled: " + mod_info.compile_out);
+
+        string test_code = "%modern
+
+%requires StripInitCallRefMod
+
+printf(\"%d\\n\", StripInitCallRefMod::State::getValue());
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("42\n", out,
+            "function-reference module init from strip-source module runs correctly");
+    }
+
+    testStripSourceOnExitHandlers() {
+        string code = "%modern
+string sub test_on_exit(string label) {
+    string result = \"\";
+    on_exit {
+        printf(\"exit: %s\\n\", label);
+    }
+    result = \"body: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string sub test_on_success(string label) {
+    string result = \"\";
+    on_success {
+        printf(\"success: %s\\n\", label);
+    }
+    result = \"body2: \" + label;
+    printf(\"%s\\n\", result);
+    return result;
+}
+
+string rv1 = test_on_exit(\"A\");
+printf(\"rv: %s\\n\", rv1);
+string rv2 = test_on_success(\"B\");
+printf(\"rv: %s\\n\", rv2);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "on_exit strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "on_exit strip-source output matches interpreter");
+    }
+
+    testStripSourceOnExitBuiltinClass() {
+        # Regression: writeNewObject() in lib/QoreAOTInstRegistry.cpp held
+        # ni->qc->getNamespacePath().c_str() in a const char* across the
+        # writeStringRef() call.  getNamespacePath() returns std::string
+        # by value, so the temporary destroyed at end-of-statement and
+        # the pointer dangled.  Subsequent writeStringRef interned
+        # whatever bytes happened to be in the freed memory, the reader
+        # got garbage, runtimeFindClass() returned nullptr, and the
+        # NewObject opcode in the OBE handler IR raised AOT-ERROR which
+        # the on_block_exit dispatcher swallowed silently — leaving the
+        # rest of the on_exit body unexecuted.  Symptom: on_exit handlers
+        # that constructed AutoLock / Mutex / Counter / etc. silently
+        # aborted, breaking serialized lock release in
+        # HttpClientConnectionManager (30s SSL-refused regression in
+        # HttpServer.qtest:asyncModeConnectionRefusedTest).
+        # Body NewObjects went through the LLVM-lowered slot table path
+        # (qore_rt_new_object_nb_aot) which is unaffected; only
+        # interpreter-driven handler IRs hit readNewObject.
+        string code = "%modern
+sub run() {
+    Mutex m();
+    on_exit {
+        printf(\"before\\n\");
+        AutoLock al(m);
+        printf(\"after\\n\");
+    }
+    throw \"X\", \"x\";
+}
+try { run(); } catch (hash<ExceptionInfo> ex) { printf(\"caught: %s\\n\", ex.err); }
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "on_exit-builtin-class strip-source: all pre-compiled: " + result.compile_out);
+        # The body must run to completion: both 'before' and 'after' must print
+        assertEq("before\nafter\ncaught: X\n", result.run_out,
+            "on_exit body completes after constructing built-in class");
+    }
+
+    testStripSourceConstructorArgs() {
+        string code = "%modern
+class Greeter {
+    public {
+        string greeting;
+    }
+    constructor(string msg) {
+        greeting = msg;
+    }
+    string greet(string name) {
+        return greeting + \", \" + name + \"!\";
+    }
+}
+
+# Test VarRefNewObjectNode syntax (ClassName var(args))
+Greeter g(\"Hello\");
+printf(\"%s\\n\", g.greet(\"World\"));
+printf(\"%s\\n\", g.greeting);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "constructor-args strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "constructor-args strip-source output matches interpreter");
+    }
+
+    testStripSourceDefaultArgs() {
+        string code = "%modern
+string sub make_greeting(string name, string prefix = getcwd()) {
+    return prefix + \": \" + name;
+}
+
+# Call with default arg (should use getcwd())
+string result1 = make_greeting(\"test\");
+# Verify it contains the current working directory
+printf(\"%s\\n\", result1.regex(\"^/\") ? \"PASS\" : \"FAIL\");
+
+# Call with explicit arg (should use the explicit value)
+string result2 = make_greeting(\"test\", \"hello\");
+printf(\"%s\\n\", result2);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "default-args strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "default-args strip-source output matches interpreter");
+    }
+
+    testStripSourceCastParseHash() {
+        string code = "%modern
+hashdecl MyInfo {
+    string name;
+    int age;
+}
+
+hash<MyInfo> sub make_info(string name, int age) {
+    return cast<hash<MyInfo>>({\"name\": name, \"age\": age});
+}
+
+hash<MyInfo> info = make_info(\"Alice\", 30);
+printf(\"%s %d\\n\", info.name, info.age);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "cast-parse-hash strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "cast-parse-hash strip-source output matches interpreter");
+    }
+
+    testStripSourceDynamicHashKeyParseReference() {
+        string code = "%modern
+public list<auto> sub remove_value(reference list, auto val) {
+    return list = (select list, $1 != val);
+}
+
+hash<auto> h = {\"a\": (), \"b\": (2,), \"c\": (1, 2, 3)};
+map remove_value(\\h{$1}, 2), h.keyIterator();
+printf(\"%d:%d:%d:%d\\n\", h.a.size(), h.b.size(), h.c.size(), h.c[1]);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "dynamic hash-key parse-ref strip-source compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "dynamic hash-key parse-ref strip-source all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "dynamic hash-key parse-ref strip-source output matches interpreter");
+    }
+
+    testStripSourceReferenceMemberParseReference() {
+        string code = "%modern
+class Holder {
+    public {
+        static hash<auto> h();
+        reference<hash<auto>> r;
+    }
+
+    constructor() {
+        r = \\h;
+    }
+
+    *hash<auto> getHashViaMemberReference() {
+        reference<auto> rr = \\self.r;
+        return rr;
+    }
+}
+
+Holder holder();
+printf(\"%y\\n\", holder.getHashViaMemberReference());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "reference member parse-ref strip-source compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "reference member parse-ref strip-source all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "reference member parse-ref strip-source output matches interpreter");
+        assertEq("{}\n", result.run_out,
+            "reference member parse-ref strip-source dereferences reference-typed member");
+    }
+
+    testStripSourceCleanupExceptionCatch() {
+        # A cleanup exception from a local destructor must complete the whole
+        # block cleanup sequence before being routed to the active catch block.
+        string code = "%modern
+our list<string> events = ();
+
+class Boom {
+    private {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+    }
+
+    destructor() {
+        events += n;
+        if (n == \"b\") {
+            throw \"BOOM\", \"boom\";
+        }
+    }
+}
+
+sub f() {
+    try {
+        Boom a(\"a\");
+        Boom b(\"b\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"caught %s events=%s\\n\", ex.err, events.join(\",\"));
+    }
+    printf(\"after=%s\\n\", events.join(\",\"));
+}
+
+f();
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "cleanup exception catch strip-source compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "cleanup exception catch strip-source all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "cleanup exception catch strip-source output matches interpreter");
+    }
+
+    testBlockLocalExceptionCleanupBeforeCatch() {
+        string code = "%modern
+class LockCleanup {
+    private {
+        static Mutex m();
+    }
+
+    private fail() {
+        throw \"ORIGINAL\", \"original\";
+    }
+
+    private release() {
+        AutoLock l(m);
+        printf(\"release-ok\\n\");
+    }
+
+    run() {
+        try {
+            {
+                AutoLock l(m);
+                fail();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            release();
+            printf(\"caught %s\\n\", ex.err);
+        }
+    }
+}
+
+LockCleanup t();
+t.run();
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "block local exception cleanup all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "block local exception cleanup output matches interpreter");
+        assertEq("release-ok\ncaught ORIGINAL\n", result.run_out,
+            "block local exception cleanup releases lock before catch");
+    }
+
+    testOnExitExceptionCleanupBeforeCatch() {
+        string code = "%modern
+our int active = 0;
+
+sub f() {
+    try {
+        int local = 1;
+        ++active;
+        on_exit {
+            active -= local;
+        }
+        throw \"ORIGINAL\", \"original\";
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"catch active=%d err=%s\\n\", active, ex.err);
+    }
+    printf(\"after active=%d\\n\", active);
+}
+
+f();
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "on_exit exception cleanup all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "on_exit exception cleanup output matches interpreter");
+        assertEq("catch active=0 err=ORIGINAL\nafter active=0\n", result.run_out,
+            "on_exit exception cleanup fires before catch");
+    }
+
+    testClosureInFunction() {
+        # Test that functions with closures are pre-compiled and work correctly
+        string code = "%modern
+string sub make_adder_label(int base) {
+    code adder = int sub(int x) { return base + x; };
+    return sprintf(\"base=%d result=%d\", base, adder(7));
+}
+
+printf(\"%s\\n\", make_adder_label(10));
+printf(\"%s\\n\", make_adder_label(20));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-in-func: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-in-func output matches interpreter");
+    }
+
+    testClosureLambda() {
+        # Test lambda expression in AOT
+        string code = "%modern
+string sub apply_and_format(code func, int val) {
+    return sprintf(\"result=%d\", func(val));
+}
+
+code doubler = int sub(int x) { return x * 2; };
+printf(\"%s\\n\", apply_and_format(doubler, 5));
+printf(\"%s\\n\", apply_and_format(doubler, 15));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-lambda: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-lambda output matches interpreter");
+    }
+
+    testClosureTypedParamsDefaults() {
+        # Test closure with typed parameters and default values
+        string code = "%modern
+string sub make_formatter(string prefix) {
+    code fmt = string sub(int val, string suffix = \"!\") {
+        return prefix + string(val) + suffix;
+    };
+    return fmt(42) + \" \" + fmt(7, \"?\");
+}
+
+printf(\"%s\\n\", make_formatter(\"num=\"));
+printf(\"%s\\n\", make_formatter(\"x=\"));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-typed-defaults: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-typed-defaults output matches interpreter");
+    }
+
+    testClosureMultiCapture() {
+        # Test closure capturing multiple variables
+        string code = "%modern
+string sub compute(int a, int b, string op) {
+    code calc = int sub() {
+        switch (op) {
+            case \"+\": return a + b;
+            case \"*\": return a * b;
+            default: return a - b;
+        }
+    };
+    return sprintf(\"%s(%d,%d)=%d\", op, a, b, calc());
+}
+
+printf(\"%s\\n\", compute(10, 3, \"+\"));
+printf(\"%s\\n\", compute(10, 3, \"*\"));
+printf(\"%s\\n\", compute(10, 3, \"-\"));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-multi-capture: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-multi-capture output matches interpreter");
+    }
+
+    testClosureStripSource() {
+        # Test closure works in strip-source mode (no AST fallback)
+        string code = "%modern
+string sub make_adder_label(int base) {
+    code adder = int sub(int x) { return base + x; };
+    return sprintf(\"base=%d result=%d\", base, adder(7));
+}
+
+printf(\"%s\\n\", make_adder_label(10));
+printf(\"%s\\n\", make_adder_label(20));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-strip-source output matches interpreter");
+    }
+
+    testClosureStripSourceListIndexStoreCow() {
+        string code = "%modern
+hash<auto> sub mutate_captured_list() {
+    list<int> values = (1, 2, 3);
+    list<int> alias = values;
+    code update = sub () {
+        values[1] = 99;
+    };
+    update();
+    return {\"values\": values, \"alias\": alias};
+}
+
+hash<auto> out = mutate_captured_list();
+printf(\"values=%y alias=%y\\n\", out.values, out.alias);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure ListIndexStore COW strip-source: all pre-compiled: " + result.compile_out);
+        assertEq("values=[1, 99, 3] alias=[1, 2, 3]\n", result.run_out,
+            "AOT-deserialized closure ListIndexStore COW uses resolved container local");
+    }
+
+    testClosureStripSourceCapturedLocalReturn() {
+        string code = "%modern
+list<auto> sub captured() {
+    list<auto> ce = ();
+    code c = sub () {
+        ce += \"x\";
+    };
+    return ce;
+}
+
+printf(\"%y\\n\", captured());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure captured-local strip-source: all pre-compiled: " + result.compile_out);
+        assertEq("[]\n", result.run_out,
+            "closure captured-local strip-source returns the captured list");
+    }
+
+    testClosureStripSourceRegexSubst() {
+        string code = "%modern
+list<auto> sub subst_capture() {
+    list<auto> ce = ();
+    code c = sub (string v) {
+        string s = v;
+        s =~ s/([a-z]+)_f/$1/;
+        ce += s;
+    };
+    c(\"char_f\");
+    return ce;
+}
+
+printf(\"%y\\n\", subst_capture());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure regex-subst strip-source: all pre-compiled: " + result.compile_out);
+        assertEq("[\"char\"]\n", result.run_out,
+            "closure regex-subst strip-source preserves regex metadata");
+    }
+
+    testClosureStripSourceDateLiteral() {
+        string code = "%modern
+list<auto> sub date_capture() {
+    list<auto> out = ();
+    code c = sub () {
+        hash<auto> info = {\"to\": 5s};
+        out += info;
+    };
+    c();
+    return out;
+}
+
+printf(\"%y\\n\", date_capture());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure date literal strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure date literal strip-source output matches interpreter");
+    }
+
+    testUTCDateLiteralZone() {
+        string code = "%modern
+date d = 2015-08-30T12:36:00Z;
+printf(\"%s\\n\", d.format(\"YYYYMMDDTHHmmSS\") + \"Z\");
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "UTC date literal strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "UTC date literal strip-source output matches interpreter");
+        assertEq("20150830T123600Z\n", result.run_out,
+            "UTC date literal preserves the explicit UTC zone");
+    }
+
+    testFixedOffsetDateLiteralZone() {
+        string code = "%modern
+string sub fixed_offset_date() {
+    date d = 2025-05-21T09:48:57+02:00;
+    return d.format(\"IF\");
+}
+
+printf(\"%s\\n\", fixed_offset_date());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "fixed-offset date literal strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "fixed-offset date literal strip-source output matches interpreter");
+        assertEq("2025-05-21T09:48:57+02:00\n", result.run_out,
+            "fixed-offset date literal preserves the explicit offset zone");
+    }
+
+    testStripSourceClassCastLValue() {
+        string code = "%modern
+
+class R {
+    public {
+        bool flag = False;
+    }
+}
+
+sub setflag(object r) {
+    cast<R>(r).flag = True;
+}
+
+R r();
+setflag(r);
+printf(\"%y\\n\", r.flag);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "class cast lvalue strip-source: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "class cast lvalue strip-source: all pre-compiled: " + result.compile_out);
+        assertEq("True\n", result.run_out,
+            "class cast lvalue strip-source assignment works");
+    }
+
+    testClosureStripSourceLogicalAndOr() {
+        string code = "%modern
+list<string> sub logical_capture(int v) {
+    list<string> out = ();
+    code c = sub () {
+        if ((v > 1 && v < 5) || v == 9) {
+            out += \"hit\";
+        } else {
+            out += \"miss\";
+        }
+    };
+    c();
+    return out;
+}
+
+printf(\"%y\\n\", logical_capture(3));
+printf(\"%y\\n\", logical_capture(9));
+printf(\"%y\\n\", logical_capture(7));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure logical and/or strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure logical and/or strip-source output matches interpreter");
+    }
+
+    testClosureStripSourceCallRefCall() {
+        string code = "%modern
+list<int> sub callref_capture() {
+    list<int> out = ();
+    code c = sub () {
+        code<int(int)> f = int sub (int v) { return v + 1; };
+        out += f(40);
+    };
+    c();
+    return out;
+}
+
+printf(\"%y\\n\", callref_capture());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure callref call strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure callref call strip-source output matches interpreter");
+    }
+
+    testAOTMethodClosureParam() {
+        # Test that method closures capture parameters correctly in AOT
+        string code = "%modern
+class Foo {
+    foo(int index) {
+        code c = sub() {
+            printf(\"%y\\n\", index);
+        };
+        c();
+    }
+}
+
+Foo f();
+f.foo(42);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "method-closure-param: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "method-closure-param output matches interpreter");
+    }
+
+    #! Regression: AOT overload resolution must respect type specificity over arg-count.
+    /** When a call's variant is deferred to runtime (an `auto` overload is present),
+        qcc serializes only the argument types.  At load time the AOT runtime resolves
+        the variant from those types: for an overloaded method where the more-specific
+        variant (string, hash<auto>, S, *bool) matches only via a defaulted trailing
+        parameter while a less-specific (string, auto, S) variant matches the arg count
+        exactly, runtime type-vector matching used to pick the less-specific `auto`
+        variant — disagreeing with the interpreter, which picks hash<auto>.  The fix
+        cross-checks the parse-equivalent resolution and, on disagreement, defers to
+        value-based runtime dispatch (matching the interpreter). */
+    testAOTOverloadDefaultArgSpecificity() {
+        string code = "%modern
+class S {}
+class C {
+    static string f(string n, hash<auto> h, S s, *bool opt) {
+        return \"HASH-overload\";
+    }
+    static string f(string n, auto x, S s) {
+        return \"AUTO-overload\";
+    }
+}
+S s();
+printf(\"%s\\n\", C::f(\"k\", {\"a\": 1}, s));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "overload-default-arg: all pre-compiled: " + result.compile_out);
+        # The interpreter is the ground truth: it selects the more-specific
+        # hash<auto> overload.  The AOT binary must agree.
+        string interp_out = runInterpreted(code);
+        assertEq("HASH-overload\n", interp_out, "interpreter selects the hash<auto> overload");
+        assertEq(interp_out, result.run_out,
+            "overload-default-arg output matches interpreter (no auto-overload misdispatch)");
+    }
+
+    testAOTMethodClosureThreadInitSelf() {
+        string code = "%modern
+
+class Target {
+    static check(auto t) {
+        if (!t) {
+            throw \"SELF-ERROR\", \"self was not captured\";
+        }
+        printf(\"captured=%s\\n\", t.className());
+    }
+}
+
+class Holder {
+    run() {
+        Program p = new Program(PO_NEW_STYLE);
+        p.setThreadInit(sub () {Target::check(self);});
+        p.parse(\"%modern
+background sub () {
+}();
+sleep(100ms);
+\", \"child\");
+        p.run();
+    }
+}
+
+Holder h();
+h.run();
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "method-closure-thread-init-self: all pre-compiled: " + result.compile_out);
+        assertEq("captured=Holder\n", result.run_out,
+            "method closure thread init captures lexical self");
+    }
+
+    testRegexSwitchInOnExit() {
+        # Test regex switch cases in on_exit handler body
+        string code = "%modern
+string sub classify(string val) {
+    string result;
+    on_exit {
+        switch (val) {
+            case /^[0-9]+$/:
+                result += \" (numeric)\";
+                break;
+            case /^[a-z]+$/i:
+                result += \" (alpha)\";
+                break;
+            default:
+                result += \" (other)\";
+                break;
+        }
+    }
+    result = val;
+    return result;
+}
+
+printf(\"%s\\n\", classify(\"123\"));
+printf(\"%s\\n\", classify(\"abc\"));
+printf(\"%s\\n\", classify(\"a1b2\"));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "regex-switch-on-exit strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "regex-switch-on-exit strip-source output matches interpreter");
+    }
+
+    testNestedOnExit() {
+        # Test nested on_exit inside an on_exit handler
+        string code = "%modern
+list<string> sub test_nested() {
+    list<string> log = ();
+    on_exit {
+        log += \"outer-exit\";
+        on_exit {
+            log += \"inner-exit\";
+        }
+        log += \"outer-body\";
+    }
+    log += \"main\";
+    return log;
+}
+
+list<string> result = test_nested();
+for (int i = 0; i < result.size(); ++i) {
+    printf(\"%s\\n\", result[i]);
+}
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "nested-on-exit strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "nested-on-exit strip-source output matches interpreter");
+    }
+
+    testClosureDefaultInt() {
+        # Test closure with int default value survives AOT serialization
+        string code = "%modern
+string sub test_default_int() {
+    code fn = string sub(int x = 42) {
+        return sprintf(\"x=%d\", x);
+    };
+    return fn() + \" \" + fn(7);
+}
+
+printf(\"%s\\n\", test_default_int());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-int: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-default-int output matches interpreter");
+    }
+
+    testClosureDefaultBool() {
+        # Test closure with bool default value survives AOT serialization
+        string code = "%modern
+string sub test_default_bool() {
+    code fn = string sub(bool flag = True) {
+        return flag ? \"yes\" : \"no\";
+    };
+    return fn() + \" \" + fn(False);
+}
+
+printf(\"%s\\n\", test_default_bool());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-bool: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-default-bool output matches interpreter");
+    }
+
+    testClosureDefaultFloat() {
+        # Test closure with float default value survives AOT serialization
+        string code = "%modern
+string sub test_default_float() {
+    code fn = string sub(float f = 3.14) {
+        return sprintf(\"f=%.2f\", f);
+    };
+    return fn() + \" \" + fn(2.72);
+}
+
+printf(\"%s\\n\", test_default_float());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-float: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-default-float output matches interpreter");
+    }
+
+    testClosureDefaultMultiple() {
+        # Test closure with multiple params, some with defaults, some without
+        string code = "%modern
+string sub test_multi_defaults() {
+    code fn = string sub(int a, int b = 10, string s = \"hi\", bool flag = True) {
+        string result = sprintf(\"%d+%d=%d %s\", a, b, a + b, s);
+        if (flag) {
+            result += \"!\";
+        }
+        return result;
+    };
+    # Call with just required arg
+    string r1 = fn(5);
+    # Call with all args
+    string r2 = fn(1, 2, \"bye\", False);
+    # Call with partial args
+    string r3 = fn(3, 7);
+    return r1 + \"|\" + r2 + \"|\" + r3;
+}
+
+printf(\"%s\\n\", test_multi_defaults());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-multiple: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-default-multiple output matches interpreter");
+    }
+
+    testClosureDefaultStripSource() {
+        # Test closure with defaults works in strip-source mode (no AST fallback)
+        string code = "%modern
+string sub test_strip_defaults() {
+    code fn = string sub(int x = 42, string s = \"default\") {
+        return sprintf(\"%d:%s\", x, s);
+    };
+    return fn() + \" \" + fn(7, \"custom\");
+}
+
+printf(\"%s\\n\", test_strip_defaults());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-default-strip: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-default-strip output matches interpreter");
+    }
+
+    testOperatorSelectStandalone() {
+        # Test select operator as standalone expression
+        string code = "%modern
+list<int> nums = (1, -2, 3, -4, 5);
+printf(\"%d\\n\", (select nums, \$1 > 0).size());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "select operator standalone output matches interpreter");
+    }
+
+    testOperatorSelectAsArgument() {
+        # Test select operator passed to function
+        string code = "%modern
+printf(\"%d\\n\", (select (1, -2, 3, -4, 5), \$1 > 0).size());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "select operator as argument output matches interpreter");
+    }
+
+    testOperatorKeys() {
+        # Test keys operator on hash expressions
+        string code = "%modern
+hash<auto> h = {\"a\": 1, \"b\": 2, \"c\": 3};
+printf(\"%d\\n\", (keys h).size());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "keys operator output matches interpreter");
+    }
+
+    testOperatorInstanceof() {
+        # Test instanceof operator with class instances
+        string code = "%modern
+class TestClass {
+    public {
+        int x = 42;
+    }
+}
+TestClass obj();
+printf(\"%d\\n\", obj instanceof TestClass ? 1 : 0);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "instanceof operator output matches interpreter");
+    }
+
+    testOperatorMapOptimized() {
+        # Test map operator on numeric expressions
+        string code = "%modern
+list<int> nums = (1, 2, 3, 4, 5);
+printf(\"%d\\n\", (map \$1 * 2, nums).size());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "map operator output matches interpreter");
+    }
+
+    testOperatorMapRangeTypeInfo() {
+        # Regression: QoreRangeOperatorNode cached an uninitialized result
+        # type; tiered IR lowering of map over a range could then crash while
+        # querying 0..N's type.
+        string code = "%modern
+list<int> nums = map \$1 + 10, 0..2;
+printf(\"%d:%d:%d\\n\", nums[0], nums[1], nums[2]);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "map over range output matches interpreter");
+    }
+
+    testContextRowExpression() {
+        string code = "%modern
+hash q = (\"name\": (\"david\"), \"age\": (37));
+hash t = (\"name\": (\"david\"), \"label\": (\"D\"));
+hash<auto> row;
+string label;
+context q (q) {
+    context t (t) where (%q:name == %name) {
+        row = %%;
+        label = %q:name + \":\" + %t:label;
+    }
+}
+printf(\"%s|%s|%s\\n\", row.name, row.label, label);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "context row/reference expressions fully precompiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "context row/reference output matches interpreter");
+    }
+
+    testClosureExceptionSafety() {
+        # Test that closure-captured locals are properly cleaned up
+        # when an exception is thrown inside a closure in AOT mode
+        string code = "%modern
+string sub test_closure_throw() {
+    string result = \"initial\";
+    code c = sub() {
+        result = \"in-exception\";
+        throw \"TEST-EX\", \"test\";
+    };
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s:%s\", result, ex.err);
+    }
+    return \"FAIL\";
+}
+
+printf(\"%s\\n\", test_closure_throw());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-exception: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "closure-exception output matches interpreter");
+    }
+
+    testClosureExceptionOuter() {
+        # Test that closure-captured locals survive exceptions thrown
+        # in the outer function and the closure still reads the correct value
+        string code = "%modern
+string sub test_outer_throw() {
+    string val = \"initial\";
+    code reader = string sub() { return val; };
+    try {
+        val = \"updated\";
+        throw \"OUTER-EX\", \"outer\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s:%s:%s\", ex.err, val, reader());
+    }
+    return \"FAIL\";
+}
+
+printf(\"%s\\n\", test_outer_throw());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure-exception-outer: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure-exception-outer output matches interpreter");
+    }
+
+    private int hexToInt(string s) {
+        int v = 0;
+        for (int i = 0; i < s.size(); ++i) {
+            int c = ord(s.substr(i, 1));
+            int d;
+            if (c >= 0x30 && c <= 0x39) d = c - 0x30;
+            else if (c >= 0x41 && c <= 0x46) d = 10 + c - 0x41;
+            else if (c >= 0x61 && c <= 0x66) d = 10 + c - 0x61;
+            else return v;
+            v = v * 16 + d;
+        }
+        return v;
+    }
+
+    #! Regression: AOT .qmod load used to deadlock forever when the embedded
+    #! metadata could not be deserialized.  Two waitForTerminationAndDeref()
+    #! calls in qore_aot_module_init_v2/v3 sat INSIDE the scope of a
+    #! ProgramRuntimeParseContextHelper, so parse_count was still 1 when wait
+    #! ran — and wait waits for parse_count==0.  A malformed .qmod (truncated
+    #! AOT metadata) exercises the failure path deterministically; the test
+    #! passes when -l exits promptly with a MODULE-LOAD-ERROR instead of hanging.
+    #! An opt-in check turns a fatal corrupt-module load into a reported one.
+    /** macOS kills a process that maps a page whose code signature no longer validates,
+        so a `.qmod` damaged on disk takes the loading process down inside dlopen() with
+        no diagnostic at all -- signal 9, no output, nothing naming the file.
+        QORE_VERIFY_MODULE_SIGNATURES=1 makes the loader verify the file first and raise
+        an ordinary LOAD-MODULE-ERROR instead.
+
+        The damage here is deliberately in the __TEXT segment rather than in the AOT
+        metadata: metadata damage is also caught by the metadata reader once the file can
+        be mapped at all, so it would not show that the signature check is doing anything.
+        Text damage has no other detector.
+
+        Off this platform the check is a no-op and the corrupt module simply fails to load
+        the ordinary way, which is the same assertion.
+    */
+    testCorruptQmodSignatureCheck() {
+        string tmp_dir = sprintf("/tmp/aot_sigcheck_qmod_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+
+module SigCheckQmodTest {
+    version = \"1.0\";
+    desc = \"Signature check test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace SigCheckQmodTest {
+    public int sub one() { return 1; }
+}
+";
+        string qm_path = tmp_dir + "/SigCheckQmodTest.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+        string qmod_path = tmp_dir + "/SigCheckQmodTest.qmod";
+        hash<auto> compile_res = compileModuleFile(qm_path, qmod_path);
+        assertTrue(compile_res.compiled,
+            "sigcheck-qmod: baseline compile succeeded: " + compile_res.compile_out);
+        # no co-located source, or the loader falls back to compiling it
+        unlink(qm_path);
+
+        # Damage a byte well before the AOT metadata, i.e. inside the mapped code.
+        int md_off = aotMetadataOffset(qmod_path, dumpQccInfo(qmod_path, False));
+        assertGt(1024, md_off, "sigcheck-qmod: metadata sits past the byte to damage");
+        {
+            File f();
+            f.open2(qmod_path, O_RDWR);
+            f.setPos(1024);
+            f.write(<FF>);
+            f.close();
+        }
+
+        string script = tmp_dir + "/noop.qr";
+        {
+            File f();
+            f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\nprintf(\"ok\\n\");\n");
+            f.close();
+        }
+        if (!timeout_cmd.val()) {
+            testSkip("cannot run the corrupt .qmod signature-check regression without "
+                "timeout, gtimeout, or perl");
+        }
+
+        # the load of the damaged module may crash where nothing checks the module's signature (the damaged byte can be
+        # executed): the child and the timeout command, which ends with the child's signal, dump no core (a core is kept
+        # with the CI job's artifacts as a crash)
+        string cmd = sprintf("ulimit -c 0; LD_LIBRARY_PATH=%s QORE_VERIFY_MODULE_SIGNATURES=1 %s 15 %s "
+            "--exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, timeout_cmd, qore_bin, qmod_path, script);
+        string out = backquote(cmd);
+
+        assertFalse(out.regex("EXIT=124"),
+            "sigcheck-qmod: the load did not hang: " + out);
+        assertFalse(out.regex("EXIT=137"),
+            "sigcheck-qmod: the loader reported the damaged module instead of being "
+                "killed mapping it: " + out);
+        # The pre-dlopen check is implemented only where the kernel kills the process for mapping a page
+        # that fails signature validation, which is the failure it exists to turn into a diagnostic; see
+        # qore_check_module_file_integrity().  Elsewhere the byte damaged here is an ordinary byte in the
+        # mapped code, the loader is not killed, and there is no signature to disagree with it -- which the
+        # two assertions above are what establishes.
+        if (PlatformOS == "Darwin") {
+            assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
+                "sigcheck-qmod: a module load error names the failure: " + out);
+            assertTrue(out.find("SigCheckQmodTest.qmod") != -1,
+                "sigcheck-qmod: and names the file at fault: " + out);
+        }
+    }
+
+    testCorruptQmodLoadNoDeadlock() {
+        string tmp_dir = sprintf("/tmp/aot_corrupt_qmod_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        # Build a valid .qmod first, then damage its AOT section so
+        # deserializeIntoProgram() fails during parse-context scope.
+        string mod_code = "%modern
+
+module CorruptQmodTest {
+    version = \"1.0\";
+    desc = \"Corrupt qmod load test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace CorruptQmodTest {
+    public int sub one() { return 1; }
+}
+";
+        string qm_path = tmp_dir + "/CorruptQmodTest.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+        string qmod_path = tmp_dir + "/CorruptQmodTest.qmod";
+        hash<auto> compile_res = compileModuleFile(qm_path, qmod_path);
+        assertTrue(compile_res.compiled,
+            "corrupt-qmod-regression: baseline compile succeeded: " + compile_res.compile_out);
+
+        # Remove the .qm source that sits next to the compiled .qmod.  When AOT
+        # metadata fails to deserialize, the module loader gracefully falls back
+        # to compiling co-located source, which would mask the corruption and
+        # let the load succeed.  This test specifically exercises the corrupt
+        # *binary* path (no-deadlock + surfaced error), so the source must not
+        # be available as a fallback.
+        unlink(qm_path);
+
+        # Corrupt the embedded AOT metadata without depending on ELF section
+        # names.  qcc's dump-info uses LLVM object handling plus metadata
+        # scanning, so it is portable across ELF and Mach-O.
+        string dump_out = dumpQccInfo(qmod_path, False);
+        int qord_off = aotMetadataOffset(qmod_path, dump_out);
+        int md_off = qord_off + 4;
+        int md_len = 4;
+        {
+            File f();
+            f.open2(qmod_path, O_RDWR);
+            f.setPos(md_off);
+            binary zeroes = binary();
+            for (int i = 0; i < md_len; ++i) zeroes += <00>;
+            f.write(zeroes);
+            f.close();
+        }
+
+        # macOS signs every dylib -- the linker attaches an ad-hoc signature --
+        # and on Apple Silicon the kernel SIGKILLs a process that maps a page
+        # whose signature no longer validates.  A byte-edited .qmod therefore
+        # kills the loader before Qore reads a single byte of its metadata: the
+        # run dies with signal 9 and no diagnostic at all, which is the OS
+        # enforcing its own rule rather than anything this case is about (see
+        # testCorruptQmodSignatureCheck() for the loader's opt-in check).
+        # Re-signing restores a loadable file with the corruption intact, so
+        # what fails is the AOT metadata -- the path under test.  The module's
+        # own metadata section is part of the image, so the signature covers it
+        # and the module can be signed again in place.
+        if (PlatformOS == "Darwin") {
+            int sign_rc;
+            string sign_out = backquote(sprintf("codesign -f -s - %s 2>&1", qmod_path), \sign_rc);
+            assertEq(0, sign_rc, "corrupt-qmod-regression: re-signed the corrupted module: " + sign_out);
+        }
+
+        # Load the corrupt .qmod with -l. Before the fix this process
+        # hung forever; now it exits quickly with a MODULE-LOAD-ERROR.
+        string script = tmp_dir + "/noop.qr";
+        {
+            File f();
+            f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\nprintf(\"ok\\n\");\n");
+            f.close();
+        }
+
+        # Use timeout so a regression deadlock produces a detectable
+        # non-zero exit and the test suite doesn't stall indefinitely.
+        if (!timeout_cmd.val()) {
+            testSkip("cannot run corrupt .qmod deadlock regression without timeout, gtimeout, or perl");
+        }
+        string cmd = sprintf("LD_LIBRARY_PATH=%s %s 15 %s --exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, timeout_cmd, qore_bin, qmod_path, script);
+        string out = backquote(cmd);
+
+        # Deadlock would make timeout kill the process, producing
+        # EXIT=124.  With the fix, qore exits by itself with a non-zero exit
+        # (the module load fails) but NOT 124.  Any of the AOT init error
+        # tags ("LOAD-MODULE-ERROR", "MODULE-LOAD-ERROR") is acceptable —
+        # the regression is the HANG, not which specific error surfaces.
+        assertFalse(out.regex("EXIT=124"),
+            "corrupt-qmod-regression: process not killed by timeout: " + out);
+        assertFalse(out.regex("EXIT=137"),
+            "corrupt-qmod-regression: the loader read the module instead of being killed mapping it: " + out);
+        assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
+            "corrupt-qmod-regression: saw module load error: " + out);
+
+        # The hang was the failed load leaving the module loader unusable.  So a program that is refused the
+        # corrupt module goes on: it is refused it again, then loads a sound module and calls it, and only then
+        # ends by itself.  Each step prints a line, so the order of the lines shows that each load returned before
+        # the next began; the timeout above stays only as the bound of a regression.
+        string sound_path = tmp_dir + "/SoundModuleAfterCorrupt.qm";
+        {
+            File f();
+            f.open2(sound_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\nmodule SoundModuleAfterCorrupt {\n    version = \"1.0\";\n    desc = \"test\";\n"
+                "    author = \"Test\";\n    license = \"MIT\";\n}\n"
+                "public namespace SoundModuleAfterCorrupt {\n    public int sub two() { return 2; }\n}\n");
+            f.close();
+        }
+        string loader = tmp_dir + "/load-after-corrupt.q";
+        {
+            File f();
+            f.open2(loader, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\n"
+                "for (int i = 1; i <= 2; ++i) {\n"
+                "    try {\n"
+                "        load_module(ARGV[0]);\n"
+                "        printf(\"attempt %d: loaded\\n\", i);\n"
+                "    } catch (hash<ExceptionInfo> ex) {\n"
+                "        printf(\"attempt %d: %s\\n\", i, ex.err);\n"
+                "    }\n"
+                "}\n"
+                "load_module(ARGV[1]);\n"
+                "printf(\"sound module: %d\\n\", call_function(\"SoundModuleAfterCorrupt::two\"));\n");
+            f.close();
+        }
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 15 %s --exec-mode=ast %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, timeout_cmd, qore_bin, loader, qmod_path, sound_path));
+        list<string> lines = map $1, out.split("\n"), $1 =~ /^(attempt [0-9]|sound module|EXIT=)/;
+        assertEq(4, lines.size(), "corrupt-qmod-regression: the program reports each step: " + out);
+        assertRegex("^attempt 1: (MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)$", lines[0],
+            "corrupt-qmod-regression: the first load is refused: " + out);
+        assertRegex("^attempt 2: (MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)$", lines[1],
+            "corrupt-qmod-regression: the second load is refused too, after the first returned: " + out);
+        assertEq("sound module: 2", lines[2],
+            "corrupt-qmod-regression: a sound module loads after the refused loads: " + out);
+        assertEq("EXIT=0", lines[3], "corrupt-qmod-regression: the program ends by itself: " + out);
+    }
+
+    #! Exceptions escaping catch blocks must unwind catch scopes correctly
+    /** Covers the AOT codegen paths where an exception raised by a call inside
+        a catch block leaves the function (or lands in an outer catch of the
+        same function) without executing the catch block's CatchCleanup: the
+        shared exception-exit paths must pop the runtime catch stack back to
+        the entry watermark.  Before the fix, each escaped catch scope leaked
+        the caught exception's entire tree and left td->catchException stale,
+        so a subsequent rethrow could reference the wrong exception.
+    */
+    testExceptionEscapingCatchBlock() {
+        string code = "%modern
+sub thrower() {
+    throw \"NEW-ERROR\", \"from inside catch\";
+}
+
+sub f() {
+    try {
+        throw \"FIRST-ERROR\", \"first\", {\"a\": 1, \"b\": \"payload\"};
+    } catch (hash<ExceptionInfo> ex) {
+        # call raises; exception escapes f() with the catch scope active
+        thrower();
+    }
+}
+
+sub nested() {
+    try {
+        try {
+            throw \"INNER\", \"inner\";
+        } catch (hash<ExceptionInfo> ex1) {
+            # exception lands in the outer catch of the same function,
+            # stranding the inner catch scope
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex2) {
+        printf(\"outer caught: %s\\n\", ex2.err);
+        # rethrow must reference ex2, not a stale stranded inner exception
+        try {
+            rethrow;
+        } catch (hash<ExceptionInfo> ex3) {
+            printf(\"rethrown: %s: %s\\n\", ex3.err, ex3.desc);
+        }
+    }
+}
+
+for (int i = 0; i < 100; ++i) {
+    try {
+        f();
+    } catch (hash<ExceptionInfo> ex) {
+        if (!i) {
+            printf(\"caught: %s: %s\\n\", ex.err, ex.desc);
+        }
+    }
+}
+nested();
+# a subsequent normal try/catch still behaves after the unwinds above
+try {
+    throw \"LAST\", \"done\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"final: %s\\n\", ex.err);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT exception-escaping-catch output matches interpreter");
+    }
+}

@@ -245,12 +245,12 @@ public class DbDataProviderBase inherits AbstractDataProvider {
     }
 
     #! Sets the datasource lookup
-    static setDatasourceLookup(code datasource_lookup) {
+    static setDatasourceLookup(code datasource_lookup) [dom=PROCESS_CONTROL] {
         DbDataProvider::datasource_lookup = datasource_lookup;
     }
 
     #! Sets the table lookup
-    static setTableLookup(code table_lookup) {
+    static setTableLookup(code table_lookup) [dom=PROCESS_CONTROL] {
         DbDataProvider::table_lookup = table_lookup;
     }
 
@@ -260,10 +260,20 @@ public class DbDataProviderBase inherits AbstractDataProvider {
     }
 
     #! Returns an AbstractDatasource object from the given string
+    /** @param ds_string the name of a datasource that the datasource lookup gives, or a connection string
+
+        @throw PERMISSION-DENIED code that a sandbox governs gives a connection string (since DbDataProvider 2.5)
+    */
     static AbstractDatasource getDatasource(string ds_string) {
-        return datasource_lookup && (ds_string !~ /:/)
-            ? DbDataProvider::datasource_lookup(ds_string)
-            : new Datasource(ds_string);
+        if (datasource_lookup && (ds_string !~ /:/)) {
+            return DbDataProvider::datasource_lookup(ds_string);
+        }
+        # a connection string opens a connection of its own: sandboxed code may use only the datasources that the host
+        # provides (qorus#856)
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot open a database connection from a connection string or configuration; use a datasource that the host provides";
+        }
+        return new Datasource(ds_string);
     }
 
     #! Returns an AbstractTable object from the given datasource and table strings

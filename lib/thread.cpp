@@ -782,8 +782,14 @@ public:
     // parse-time block return type
     const QoreTypeInfo* parse_return_type_info = nullptr;
 
-    // parse-time implicit argument type
+    // parse-time implicit argument type ($1)
     const QoreTypeInfo* implicit_arg_type_info = nullptr;
+    // parse-time type of the second implicit argument ($2): only foldl and foldr give their code a second element
+    const QoreTypeInfo* implicit_arg2_type_info = nullptr;
+    //! the number of operators that set the implicit arguments (map, select, foldl, ...) around the code that is parsed
+    unsigned implicit_arg_ctx_depth = 0;
+    //! set when the function or closure body that is parsed reads the implicit arguments of its own call (qore#5805)
+    bool* fn_reads_implicit_args = nullptr;
 
     // current implicit element offset
     int element = 0;
@@ -1982,6 +1988,39 @@ public:
     }
 };
 
+//! makes the type arguments of the generic code that started a background thread current in the thread (qore#5732)
+/** The type arguments of the starting code's call (its own type parameters) and its receiver type (the type
+    parameters of its class)
+*/
+class BGTypeParamInstantiationHelper {
+public:
+    DLLLOCAL BGTypeParamInstantiationHelper(const QoreTypeParamInstantiation& inst,
+            const QoreTypeInfo* receiver_type_info) : inst_set(!inst.empty()),
+            receiver_set(receiver_type_info != nullptr) {
+        if (inst_set) {
+            old_inst = runtime_set_type_param_instantiation(&inst);
+        }
+        if (receiver_set) {
+            old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
+        }
+    }
+
+    DLLLOCAL ~BGTypeParamInstantiationHelper() {
+        if (inst_set) {
+            runtime_set_type_param_instantiation(old_inst);
+        }
+        if (receiver_set) {
+            runtime_set_receiver_type_info(old_receiver_type_info);
+        }
+    }
+
+private:
+    const QoreTypeParamInstantiation* old_inst = nullptr;
+    const QoreTypeInfo* old_receiver_type_info = nullptr;
+    bool inst_set;
+    bool receiver_set;
+};
+
 class BGThreadParams {
 private:
     // call_obj: get and reference the current stack object, if any, for the new call stack
@@ -2008,6 +2047,12 @@ public:
     const QoreProgramLocation* loc;
     //! the identity of the thread for its Program's lifecycle events
     ProgramThreadIdentity identity;
+    //! the type arguments of the generic code that starts the thread, which its expression runs with (qore#5732)
+    /** A copy: the instantiation of the starting code's call ends with that call, which the thread can outlive
+    */
+    QoreTypeParamInstantiation type_param_inst;
+    //! the receiver type of the code that starts the thread, which binds the type parameters of its class (qore#5732)
+    const QoreTypeInfo* receiver_type_info = nullptr;
     bool registered = false,
         started = false;
 
@@ -2023,6 +2068,7 @@ public:
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
             setIdentity(*td);
         }
+        setTypeParamInstantiation();
 
         //printd(5, "BGThreadParams::BGThreadParams(f: %p (%s %d), t: %d) this: %p call_obj: %p '%s' cc: %p '%s' "
         //    "fct: %d\n", f, f->getTypeName(), f->getType(), t, this, call_obj,
@@ -2049,15 +2095,21 @@ public:
 
             // issue #2653: calling a static method from inside a non-static method in the background operator
             // incorrectly extends the lifetime of the object
-            if (!sfcn->getMethod()->isStatic()) {
+            // issue #5917: a self call can have no method: an implicit copy() call, and a call that the AOT runtime
+            // dispatches by name (see SelfFunctionCallNode::backgroundCallIsStatic())
+            if (!sfcn->backgroundCallIsStatic(call_obj)) {
                 //printd(5, "BGThreadParams::BGThreadParams() real object method call: %p\n", call_obj);
                 // must have a current object if an in-object method call is being executed
                 // (i.e. $.method())
                 // we reference the object so it won't go out of scope while the thread is running
                 obj = call_obj;
-                assert(obj);
-                obj->realRef();
-                call_obj = nullptr;
+                // the background copy of a self call (SetSelfFunctionCallNode) holds the object of the starting code,
+                // so there is one here; a call dispatched by name is not assumed to have one, however
+                assert(obj || (!sfcn->getMethod() && !sfcn->isCopyCall()));
+                if (obj) {
+                    obj->realRef();
+                    call_obj = nullptr;
+                }
             }
         }
 
@@ -2084,6 +2136,7 @@ public:
             loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
             setIdentity(*td);
         }
+        setTypeParamInstantiation();
 
         if (preregister(xsink)) {
             return;
@@ -2100,6 +2153,15 @@ public:
         if (call_obj) {
             call_obj->tRef();
         }
+    }
+
+    //! copies the type arguments and the receiver type of the generic code that starts the thread, if any
+    DLLLOCAL void setTypeParamInstantiation() {
+        const QoreTypeParamInstantiation* inst = runtime_get_type_param_instantiation();
+        if (inst && !inst->empty()) {
+            type_param_inst = *inst;
+        }
+        receiver_type_info = runtime_get_receiver_type_info();
     }
 
     //! records the identity of the new thread and of the starting thread
@@ -2775,6 +2837,38 @@ const QoreTypeInfo* parse_get_implicit_arg_type_info() {
     return thread_data.get()->implicit_arg_type_info;
 }
 
+const QoreTypeInfo* parse_set_implicit_arg2_type_info(const QoreTypeInfo* ti) {
+    ThreadData* td = thread_data.get();
+    const QoreTypeInfo* rv = td->implicit_arg2_type_info;
+    td->implicit_arg2_type_info = ti;
+    return rv;
+}
+
+const QoreTypeInfo* parse_get_implicit_arg2_type_info() {
+    return thread_data.get()->implicit_arg2_type_info;
+}
+
+unsigned parse_set_implicit_arg_ctx_depth(unsigned depth) {
+    ThreadData* td = thread_data.get();
+    unsigned rv = td->implicit_arg_ctx_depth;
+    td->implicit_arg_ctx_depth = depth;
+    return rv;
+}
+
+bool* parse_set_function_reads_implicit_args(bool* reads) {
+    ThreadData* td = thread_data.get();
+    bool* rv = td->fn_reads_implicit_args;
+    td->fn_reads_implicit_args = reads;
+    return rv;
+}
+
+void parse_note_implicit_arg_use() {
+    ThreadData* td = thread_data.get();
+    if (!td->implicit_arg_ctx_depth && td->fn_reads_implicit_args) {
+        *td->fn_reads_implicit_args = true;
+    }
+}
+
 void parse_set_try_reexport(bool tr) {
     thread_data.get()->try_reexport = tr;
 }
@@ -2848,15 +2942,17 @@ void qore_set_local_var_debug_type(QoreHashNode& v, const QoreTypeInfo* typeInfo
 
 QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-    ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink);
+    bool aot_code;
+    ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink, &aot_code);
     if (tlpd) {
-        tlpd->lvstack.getLocalVars(**rv, frame, xsink);
+        tlpd->lvstack.getLocalVars(**rv, frame, xsink, aot_code);
         if (*xsink)
             return nullptr;
         tlpd->cvstack.getLocalVars(**rv, frame, xsink);
         if (*xsink)
             return nullptr;
-    } else {
+    } else if (*xsink) {
+        return nullptr;
     }
     return rv.release();
 }
@@ -2869,14 +2965,16 @@ int64 thread_get_local_var_count(ExceptionSink* xsink) {
 
 // returns 0 = OK, 1 = no such variable or inaccessible frame, -1 exception setting variable
 int thread_set_local_var_value(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink) {
-    ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink);
-    return tlpd ? tlpd->lvstack.setVarValue(frame, name, val, xsink) : 1;
+    bool aot_code;
+    ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink, &aot_code);
+    // a frame that cannot be accessed because of an exception is not looked up again for a closure-bound variable
+    return tlpd ? tlpd->lvstack.setVarValue(frame, name, val, xsink, aot_code) : (*xsink ? -1 : 1);
 }
 
 // returns 0 = OK, 1 = no such variable or inaccessible frame, -1 exception setting variable
 int thread_set_closure_var_value(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink) {
     ThreadLocalProgramData* tlpd = ProgramThreadCountContextHelper::getContextFrame(frame, xsink);
-    return tlpd ? tlpd->cvstack.setVarValue(frame, name, val, xsink) : 1;
+    return tlpd ? tlpd->cvstack.setVarValue(frame, name, val, xsink) : (*xsink ? -1 : 1);
 }
 
 void parse_push_ns_name(const char* name) {
@@ -3669,13 +3767,27 @@ QoreModuleDefContext* set_module_def_context(QoreModuleDefContext* qmd) {
     return rv;
 }
 
+//! the module definition context of the thread, if it defines the module of the Program being parsed
+static QoreModuleDefContext* get_module_def_context(ThreadData* td) {
+    QoreModuleDefContext* qmd = td->qmd;
+    // another Program parsed while a module is loaded (ex: by its init closure) is not the module's: its module
+    // declarations are not the module's
+    if (qmd) {
+        const QoreProgram* def_pgm = qmd->getDefinitionProgram();
+        if (def_pgm && def_pgm != td->current_pgm) {
+            return nullptr;
+        }
+    }
+    return qmd;
+}
+
 QoreModuleDefContext* get_module_def_context() {
-    return thread_data.get()->qmd;
+    return get_module_def_context(thread_data.get());
 }
 
 void parse_set_module_def_context_name(const char* name) {
     ThreadData* td = thread_data.get();
-    if (td->qmd) {
+    if (get_module_def_context(td)) {
         QoreUserModuleDefContextHelper* uqmd = static_cast<QoreUserModuleDefContextHelper*>(td->qmd);
         // set name and setup for parsing any header closures / call references
         uqmd->setNameInit(name);
@@ -4141,6 +4253,13 @@ const qore_class_private* runtime_get_caller_class() {
 void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& qc) {
     ThreadData* td = thread_data.get();
     obj = td->current_obj;
+    qc = td->current_class;
+}
+
+void runtime_get_program_and_class(QoreProgram*& pgm, const qore_class_private*& qc) {
+    ThreadData* td = thread_data.get();
+    assert(td);
+    pgm = td->current_pgm;
     qc = td->current_class;
 }
 
@@ -4656,6 +4775,15 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     }
 }
 
+void ProgramThreadCountContextHelper::setTopLevel() {
+    // only a context that switched to the Program is on the thread's chain of contexts; init_tlpd is used by set()
+    // (which ran already) and then only to count the context's bottom frame (getContextFrame()), so it marks the
+    // top-level code's frame too, with no field of its own that every context would initialize
+    if (restore && isFirstThreadLocalProgramData(ctx_td->tlpd)) {
+        init_tlpd = true;
+    }
+}
+
 bool ProgramThreadCountContextHelper::isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const{
     /* find if tlpd is in lower context, i.e. the first usage of particular tlpd
         Not sure if may be substituted with init_tlpd when calling dbgXX event.
@@ -4671,15 +4799,91 @@ bool ProgramThreadCountContextHelper::isFirstThreadLocalProgramData(const Thread
     } while (ch);
     return !ch;
 }
+
+//! Raises AOT-FRAME-ERROR if a frame from the current one to the given one is a call of AOT-compiled code without one
+/** A call that AOT-compiled code makes directly to native code of user code pushes no frame on the stack of local
+    variables, as the callee keeps its local variables in native code (issue #5890); counted on that stack, the frame
+    would be another call's.  Each call of user code has an entry on the thread's call stack, and that of such a call
+    has a type of its own (qore_is_aot_native_call_frame()), so the frames are matched with the entries, the newest
+    first, from that of the caller of get_local_vars() or set_local_var_value() (below the entry of the builtin
+    function itself, if it has one).
+
+    The match ends where a frame can have no entry of its own, so that no frame is matched with the entry of another:
+    - at the first entry that is not one of a call of user code: the frame of top-level code (of a Program run with
+      Program::run() as well) and of an expression evaluated with Program::evalExpression() has none
+    - after the entry of a call made from another Program, which getContextFrame() can count with a frame of the
+      called Program that has no entry, that of the context that entered the Program on the thread first (init_tlpd);
+      the entry gives the Program of the caller (getProgram()), and a direct call of AOT-compiled code is made in its
+      own Program
+
+    The frames from there on are not checked.  The check is made here only, so that calls cost nothing for it.
+
+    The match also gives the location where the requested frame runs (\a frame_loc): that of the entry of the call
+    that the frame makes, or, for frame 0, that of the entry of the builtin function, or the runtime location if it
+    has none; it is not known (nullptr) for a frame past the end of the match.
+
+    @param pgm the Program of the code that calls the builtin function
+    @param frame_loc set to the location where the frame runs, or nullptr if it is not known
+
+    @return 0 if OK, -1 if an exception was raised
+*/
+static int check_aot_native_frames(ThreadData* td, QoreProgram* pgm, int frame, ExceptionSink* xsink,
+        const QoreProgramLocation*& frame_loc) {
+    frame_loc = nullptr;
+    const QoreStackLocation* loc = td->current_stack_location.load(std::memory_order_relaxed);
+    // the location where frame 0 runs: that of the call of the builtin function
+    const QoreProgramLocation* run_loc = td->runtime_loc;
+    // the entry of the builtin function that looks up the frame
+    if (loc && loc->getCallType() == CT_BUILTIN) {
+        const std::string& name = loc->getCallName();
+        if (name == "get_local_vars" || name == "set_local_var_value") {
+            run_loc = &loc->getLocation();
+            loc = loc->getNext();
+        }
+    }
+    for (int i = 0; i <= frame; ++i, loc = loc->getNext()) {
+        if (i == frame) {
+            frame_loc = run_loc;
+        }
+        if (!loc || loc->getCallType() != CT_USER) {
+            break;
+        }
+        // the location where the caller (frame i + 1) runs
+        run_loc = &loc->getLocation();
+        if (qore_is_aot_native_call_frame(loc)) {
+            if (i == frame) {
+                xsink->raiseException("AOT-FRAME-ERROR", "frame %d is a call of '%s' that AOT-compiled code made "
+                    "directly to native code, which has no frame of its own: its local variables cannot be accessed",
+                    i, loc->getCallName().c_str());
+            } else {
+                xsink->raiseException("AOT-FRAME-ERROR", "frame %d is a call of '%s' that AOT-compiled code made "
+                    "directly to native code, which has no frame of its own: frame %d cannot be found", i,
+                    loc->getCallName().c_str(), frame);
+            }
+            return -1;
+        }
+        // a call made from another Program
+        if (loc->getProgram() != pgm) {
+            break;
+        }
+    }
+    return 0;
+}
+
 /*
    there is context stack where pgm/tlpd might repeat, in this case we need consider frame value when context
    started
 */
-ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& frame, ExceptionSink* xsink) {
+ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& frame, ExceptionSink* xsink,
+        bool* aot_code) {
     if (frame < 0)
         return nullptr;
 
     ThreadData* td = thread_data.get();
+    // the frames of calls that AOT-compiled code makes directly are checked once the frame was found or found missing
+    // without an exception, so that a frame in or past a Program that does not allow debugging raises DEBUGGING
+    const int requested_frame = frame;
+    QoreProgram* const current_pgm = td->current_pgm;
     ThreadLocalProgramData* tlpd = td->tlpd;
     int frameCount = tlpd->lvstack.getFrameCount();
     const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx;
@@ -4694,7 +4898,11 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     */
     while (ch && frame >= frameCount - ch->save_frameCount + (ch->init_tlpd ? 1 : 0) ) {
         frame -= frameCount - ch->save_frameCount;
-        // the initial instance has one "frame" beyond frame count (i.e. frame_count is -1)
+        // the initial instance has one "frame" beyond frame count (i.e. frame_count is -1), as has the context of the
+        // top-level code in the thread's first entry into the Program, whose frame has no frame boundary; the
+        // thread's data in the Program is normally created before the top-level code runs (when the Program is
+        // parsed, for example), so the context of the top-level code is not always the initial instance; setTopLevel()
+        // sets init_tlpd for it
         if (ch->init_tlpd) {
             frame--;
         }
@@ -4717,14 +4925,21 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
         if (!tlpd || !pgm) {
             printd(5, "ProgramThreadCountContextHelper::getContextFrame(): frame:%d ch:%p tlpd:%p\n",
                 frame, ch, tlpd);
+            const QoreProgramLocation* frame_loc;
+            check_aot_native_frames(td, current_pgm, requested_frame, xsink, frame_loc);
             return nullptr;
         }
         printd(5, "ProgramThreadCountContextHelper::getContextFrame() L: frame:%d ch:%p tlpd:%p (%d/%d) pgm:%p " \
             "pgmid:" QLLD ", inst:%d init_tlpd:%d\n", frame, ch, tlpd, ch ? ch->save_frameCount : -1, frameCount, pgm,
             (int64)pgm->getProgramId(), tlpd->inst, ch ? ch->init_tlpd: -1);
     }
-    if (!pgm->checkAllowDebugging(xsink)) {
+    const QoreProgramLocation* frame_loc;
+    if (!pgm->checkAllowDebugging(xsink)
+            || check_aot_native_frames(td, current_pgm, requested_frame, xsink, frame_loc)) {
         return nullptr;
+    }
+    if (aot_code) {
+        *aot_code = qore_is_aot_code_location(frame_loc);
     }
     /* now we know that desired frame should be in tlpd and we must add frame index to consider frames above */
     frame += tlpd->lvstack.getFrameCount() - frameCount;
@@ -5858,15 +6073,65 @@ QoreParseOptions runtime_get_effective_program_parse_options() {
 }
 
 QoreParseOptions runtime_take_call_caller_parse_options() {
+    const QoreProgram* code_pgm;
+    return runtime_take_call_caller_parse_options(code_pgm);
+}
+
+QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm) {
     ThreadData* td = thread_data.get();
     if (td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm) {
         const QoreProgram* caller = td->callback_caller_pgm;
         // the call made on behalf of the Program is the first call only; the code it calls, and any code of the
         // Program running on the thread that it calls back, have the effective options of their own callers
         td->callback_caller_pgm = nullptr;
+        code_pgm = caller;
         return caller->getParseOptions();
     }
-    return runtime_get_effective_program_parse_options();
+    code_pgm = td->current_pgm;
+    return runtime_get_effective_parse_options_for(td, td->current_pgm);
+}
+
+QoreCallReferenceCallHelper::QoreCallReferenceCallHelper(RuntimeConfig& n_rc, const QoreListNode* args,
+        const QoreParseOptions* creator_po) {
+    if (!creator_po) {
+        return;
+    }
+    rc = &n_rc;
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(n_rc);
+    old_po = i.call_ref_po;
+    old_args = i.call_ref_args;
+    i.call_ref_po = creator_po;
+    i.call_ref_args = args;
+}
+
+QoreCallReferenceCallHelper::~QoreCallReferenceCallHelper() {
+    if (rc) {
+        RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(*rc);
+        i.call_ref_po = old_po;
+        i.call_ref_args = old_args;
+    }
+}
+
+QoreCallReferenceArgEvalHelper::QoreCallReferenceArgEvalHelper(RuntimeConfig& rc, const QoreListNode* args)
+        : rc(rc), args(args) {
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(rc);
+    saved_po = i.call_ref_po;
+    saved_args = i.call_ref_args;
+    i.call_ref_po = nullptr;
+    i.call_ref_args = nullptr;
+}
+
+QoreCallReferenceArgEvalHelper::~QoreCallReferenceArgEvalHelper() {
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(rc);
+    i.call_ref_po = saved_po;
+    i.call_ref_args = saved_args;
+}
+
+void QoreCallReferenceArgEvalHelper::evaluated(const QoreListNode* evaluated_args) {
+    // the call is made with the evaluated arguments
+    if (saved_po && saved_args == args) {
+        saved_args = evaluated_args;
+    }
 }
 
 QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller) : po(caller->getParseOptions()) {
@@ -5897,6 +6162,10 @@ QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOpti
         return po;
     }
     return po & ~td->runtime_po_caller_restrictions;
+}
+
+const QoreProgram* runtime_get_module_call_program() {
+    return thread_data.get()->runtime_po_module_pgm;
 }
 
 ThreadData* qore_get_thread_data() {
@@ -6946,6 +7215,10 @@ namespace {
                     // run thread expression; it is the statement of the thread, so its temporaries live until it
                     // returns
                     if (entered) {
+                        // the expression runs with the type arguments of the generic code that started the thread,
+                        // as it would have in that code (qore#5732); the thread has none of its own
+                        BGTypeParamInstantiationHelper type_param_helper(btp->type_param_inst,
+                            btp->receiver_type_info);
                         QoreStatementTempScope temps(&xsink);
                         rv = btp->exec(&xsink);
                     } else {

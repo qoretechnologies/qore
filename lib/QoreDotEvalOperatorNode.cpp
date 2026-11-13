@@ -106,6 +106,62 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
     return pseudo_classes_eval(base, m->getName(), m->getArgs(), xsink);
 }
 
+int qore_check_method_call_receiver(QoreValue base, const char* name, const QoreClass* qc,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool pseudo, ExceptionSink* xsink) {
+    // the dispatch of QoreDotEvalOperatorNode::evalWithBase(), up to the evaluation of the arguments
+    QoreObject* obj = nullptr;
+    switch (base.getType()) {
+        case NT_WEAKREF:
+            obj = base.get<WeakReferenceNode>()->get();
+            break;
+
+        case NT_WEAKREF_HASH:
+            if (check_call_ref(base.get<WeakHashReferenceNode>()->get(), name)) {
+                return 0;
+            }
+            break;
+
+        case NT_OBJECT:
+            obj = const_cast<QoreObject*>(base.get<const QoreObject>());
+            break;
+
+        case NT_HASH:
+            if (check_call_ref(base.getInternalNode(), name)) {
+                return 0;
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    if (obj) {
+        // as AbstractMethodCallNode::exec()
+        if (obj->isValid()) {
+            return 0;
+        }
+        qore_raise_deleted_method_call(xsink, obj, name, qc, method, variant);
+        return -1;
+    }
+
+    if (pseudo) {
+        // as MethodCallNode::execPseudo(): no value is dispatched to the methods of the "<nothing>" class by name; the
+        // method resolved at parse time is called otherwise
+        if (base.isNothing() && qc != QC_PSEUDONOTHING) {
+            return qore_class_private::get(*QC_PSEUDONOTHING)->runtimeFindPseudoMethod(base,
+                method ? method->getName() : name, xsink) ? 0 : -1;
+        }
+        return 0;
+    }
+
+    return pseudo_classes_check_method(base, name, xsink);
+}
+
+int QoreDotEvalOperatorNode::checkReceiver(QoreValue base, ExceptionSink* xsink) const {
+    return qore_check_method_call_receiver(base, m->getName(), m->getClass(), m->getMethod(), m->getVariant(),
+        m->isPseudo(), xsink);
+}
+
 QoreValue QoreDotEvalOperatorNode::evalRuntimeNamedWithArgs(QoreListNode* args, ExceptionSink* xsink) const {
     assert(m->getRuntimeArgNames());
     ReferenceHolder<QoreListNode> args_holder(args, xsink);

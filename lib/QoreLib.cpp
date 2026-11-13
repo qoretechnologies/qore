@@ -1501,12 +1501,16 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
         if (!self->getClass()->getClass(*meth->getClass(), priv)) {
             xsink->raiseException("CALL-REFERENCE-ERROR", "\"%s\" is not accessible from an object of " \
                 "class '%s' as the classes are not in the same hierarchy", name, self->getClassName());
+            // no call reference with the error (issue #5866)
+            return QoreValue();
         }
     }
     if (self) {
         return QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, self, meth, qore_class_private::get(*meth->getClass())));
     }
-    return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, meth));
+    // a value created at run time: it records the permissions of the code creating it, which a call through it runs
+    // with (see ResolvedCallReferenceNodeIntern::getCreatorParseOptions())
+    return QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, meth, ::getProgram(), runtime_get_class()));
 }
 
 QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink) {

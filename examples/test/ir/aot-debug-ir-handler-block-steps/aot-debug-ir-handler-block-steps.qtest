@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - debugger attach, and AOT code generation and linking of debug IR of block handlers
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AotDebugIrHandlerBlockStepsTest
+
+#! The block step events of handler bodies with a debugger attached (#5870)
+/** The debug IR of AOT code, which the IR interpreter runs while a debugger is attached, made no block step event for
+    the body of an on_exit, on_error or on_success handler that is compiled to an IR function of its own, which the AST
+    interpreter makes for the block of each handler that it runs.  AotDebugIrHandlerBlockSteps.q gives the output of
+    the AST interpreter in every execution mode and compiled with qcc.
+*/
+class AotDebugIrHandlerBlockStepsTest inherits QUnit::Test {
+    public {
+        #! the output of AotDebugIrHandlerBlockSteps.q with the AST interpreter
+        const Expected = "normal: 1012
+error: enxci
+nested: 01c2
+nestedc: E1X2E2c
+clos: cbcx
+top
+top on_success
+top on_exit
+157 b 78 80 b 80 81 82 83 b 75 b 82 b 80 85 158 b 90 91 b 92 93 99 ERR@99 b 94 95 b 96 b 92 b 101 102 b 103 106 159 b 111 113 b 113 122 b 114 115 116 b 117 IN@117 b 119 b 114 124 160 b 129 130 b 131 137 N1@137 b 132 133 134 135 N2@135 b 133 b 132 b 139 141 161 b 146 147 152 b 148 149 150 b 148 153 163 b 164 165 166 167 b 165 b 164
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AotDebugIrHandlerBlockStepsTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/AotDebugIrHandlerBlockSteps.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": block steps of handler bodies", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: block steps of handler bodies", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-aot-debug-ir-handler-block-steps-");
+        string exe = tmp.path + DirSep + "aot-debug-ir-handler-block-steps";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

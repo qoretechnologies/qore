@@ -624,7 +624,10 @@ class WatchdogReadTest(unittest.TestCase):
         self.assertIn("the test exceeded its 30s limit", result.output)
         self.assertIn("WATCHDOG ERROR: the watchdog's read of its event FIFO ended without an event", result.output)
         self.assertNotIn("test ran to its end", result.output)
-        self.assertRegex(result.output, r"run_with_watchdog: 124 WATCHDOG_TEST_EXIT=134 WATCHDOG_TIMED_OUT=1 "
+        # the failed read makes the watchdog send SIGKILL right after the timeout signal, so the test ends with
+        # whichever arrives first: SIGABRT (134) or, when its core dump has not finished, SIGKILL (137); either way it
+        # does not run to its end
+        self.assertRegex(result.output, r"run_with_watchdog: 124 WATCHDOG_TEST_EXIT=13[47] WATCHDOG_TIMED_OUT=1 "
                                         r"WATCHDOG_ERROR=1")
 
 

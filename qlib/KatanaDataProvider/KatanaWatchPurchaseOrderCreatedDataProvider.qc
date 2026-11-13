@@ -26,7 +26,7 @@ public class KatanaWatchPurchaseOrderCreatedDataProvider inherits KatanaWebhookE
     string getEndpoint() { return "purchase_orders"; }
     string getEventName() { return EVENT_PO_CREATED; }
     *string getTargetStatus() { return NOTHING; }
-    *string getTimestampField() { return "created_at"; }
+    string getTimestampField() { return "created_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaPurchaseOrderDataType();

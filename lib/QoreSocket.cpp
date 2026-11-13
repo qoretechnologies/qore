@@ -680,6 +680,19 @@ static int qore_socket_close_from_controller(QoreSocket* s) {
     return qore_socket_close_private_from_controller(qore_socket_private::get(*s));
 }
 
+//! Returns the key that the operations of the socket are registered under with the async I/O controller
+/** The operations of a socket wrapped by a Socket object are registered under the Socket object's identity (which is
+    its route key; see qore_socket_private::async_io_route_key), those of any other socket under its pointer hash.
+*/
+std::string qore_socket_async_io_route_key(const qore_socket_private* priv) {
+    if (!priv->async_io_route_key.empty()) {
+        return priv->async_io_route_key;
+    }
+    QoreString tmp;
+    qore_get_ptr_hash(tmp, priv);
+    return tmp.c_str();
+}
+
 static void qore_socket_wake_async_controller(qore_socket_private* priv) {
     if (qore_on_async_io_thread()) {
         return;
@@ -694,15 +707,7 @@ static void qore_socket_wake_async_controller(qore_socket_private* priv) {
             : nullptr,
         &xsink);
     if (!xsink && ctrl) {
-        // the operations of a socket wrapped by a Socket object are registered under the Socket object's identity
-        // (which is its route key); see qore_socket_private::async_io_route_key
-        if (!priv->async_io_route_key.empty()) {
-            ctrl->wakeSocket(priv->async_io_route_key);
-        } else {
-            QoreString tmp;
-            qore_get_ptr_hash(tmp, priv);
-            ctrl->wakeSocket(tmp.c_str());
-        }
+        ctrl->wakeSocket(qore_socket_async_io_route_key(priv));
     }
     xsink.clear();
 }
@@ -3362,7 +3367,13 @@ public:
             return nullptr;
         }
 
-        data = h2->takeStreamData(stream_id, max_bytes, xsink);
+        bool credit_due;
+        data = h2->takeStreamData(stream_id, max_bytes, xsink, true, &credit_due);
+        // the stream credit granted for the data taken (issue #5820) is sent by the session's poll operation, which
+        // the wake-up runs again
+        if (credit_due) {
+            h2->sendStreamCredit(qore_socket_async_io_route_key(priv));
+        }
         done = true;
         return nullptr;
     }
@@ -11487,8 +11498,9 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
 void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> lg(mtx);
 
-    // the stream is discarded after an event exceeded the maximum size
+    // the stream is discarded after an event exceeded the maximum size; its data counts as consumed
     if (too_large) {
+        creditNow(qore_http_stream_value_body_size(output));
         output.discard(xsink);
         return;
     }
@@ -11536,25 +11548,45 @@ bool SseAction::addData(const char* data, size_t len, ExceptionSink* xsink) {
     // the stream is split into events byte by byte, so that a blank line ends an event whatever the line endings
     // are, as the event stream format requires (for example a line that ends with LF, then a line that ends with
     // CRLF), and a leading byte order mark of the stream is dropped
+    // the data that each event is made from is reported to the item hook, if any, with the event (issue #5820): the
+    // stream's credit is granted as the application takes the event; data that makes no event is reported at once
+    size_t block_start = 0;
     for (size_t i = 0; i < len; ++i) {
         if (framer.add(data[i])) {
+            size_t block_bytes = pending_bytes + (i + 1 - block_start);
+            pending_bytes = 0;
+            // the event is complete: its data is reported with it, or at once
+            closeItemLocked();
+            block_start = i + 1;
             std::string event = framer.take();
             // parseSseEvent() parses the lines of the event, which end with LF
             QoreString event_text(event.c_str(), event.size(), QCS_UTF8);
             ReferenceHolder<QoreHashNode> evt(parseSseEvent(xsink, event_text), xsink);
             // a block without a field is not an event, as no field of it was kept
             if (evt && !evt->empty() && queue) {
+                if (item_hook) {
+                    item_hook->record(*evt, stream_hook, block_bytes);
+                }
                 queue->pushAndTakeRef(evt.release());
                 pushed = true;
+            } else {
+                creditNow(block_bytes);
             }
             continue;
         }
         if (static_cast<int64>(framer.size()) > MaxEventSize) {
             too_large = true;
             framer.reset();
-            break;
+            // the event read so far and the rest of the data are discarded
+            closeItemLocked();
+            creditNow(pending_bytes + (len - block_start));
+            pending_bytes = 0;
+            return pushed;
         }
     }
+    pending_bytes += len - block_start;
+    // the event in progress can be larger than the stream's window (issue #5820)
+    reportProgressLocked();
     return pushed;
 }
 
@@ -18390,6 +18422,28 @@ int SocketReadHttpHeaderPollOperation::initPollState(ExceptionSink* xsink) {
 
 QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
     QoreHashNode* rv = SocketRecvPollOperationBase::continuePoll(xsink);
+    // a draining server closes a connection that has not sent a byte of a request (one that waited for its request
+    // when the drain started): the operation ends without a header, as when the peer closes it; a request that has
+    // started to arrive is read and answered (qore#5899).  The state is read and released under the socket's lock,
+    // as an abort can reset it from another thread
+    if (rv && sock->priv->http_draining.load(std::memory_order_acquire) > 1) {
+        bool ended = false;
+        {
+            AutoLocker al(sock->priv->m);
+            if (poll_state
+                    && !static_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived()) {
+                poll_state.reset();
+                sock->priv->clearNonBlock(NB_RECV);
+                set_non_block = false;
+                ended = true;
+            }
+        }
+        if (ended) {
+            // released outside the lock: the hash refers to the socket
+            rv->deref(xsink);
+            return nullptr;
+        }
+    }
     if (rv || !data) {
         return rv;
     }
@@ -19446,9 +19500,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 set_non_block = false;
                 return nullptr;
             }
-            phase = Phase::Idle;
-            // Return POLLIN to wait for incoming data
-            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+            return enterIdle(xsink);
         }
 
         case Phase::Idle: {
@@ -19471,6 +19523,16 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 return nullptr;
             }
             if (!idle_rc) {
+                // a draining server closes a connection that has no request: one that has had a response, or any
+                // that waited for a request when the drain started (level 2); the first request of a new connection
+                // is served; a request that arrived is read and answered with Connection: close (qore#5899)
+                int draining = sock->priv->http_draining.load(std::memory_order_acquire);
+                if (draining > 1 || (draining && responded)) {
+                    phase = Phase::Closed;
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
                 return getSocketPollInfoHash(xsink, SOCK_POLLIN);
             }
             // Data is available — transition to header reading
@@ -19585,6 +19647,11 @@ static bool fast_route_header(const QoreHashNode* hdr, const char* name, std::st
 
 int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr, QoreHashNode*& info,
         ExceptionSink* xsink) {
+    // a draining server answers the request on the ordinary path, which closes the connection after the response
+    // (qore#5899)
+    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+        return 0;
+    }
     qore_socket_private* sp = sock->priv->socket->priv;
     std::shared_ptr<HttpFastContext> fast_ctx = sp->getFastContext();
     if (!fast_ctx) {
@@ -19636,6 +19703,11 @@ int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr
 
 int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t size, QoreHashNode*& info,
         ExceptionSink* xsink) {
+    // a draining server answers the request on the ordinary path, which closes the connection after the response
+    // (qore#5899)
+    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+        return 0;
+    }
     qore_socket_private* sp = sock->priv->socket->priv;
     std::shared_ptr<HttpFastContext> fast_ctx = sp->getFastContext();
     if (!fast_ctx) {
@@ -19720,9 +19792,29 @@ int SocketSendAndReadHeaderPollOperation::startFastSend(std::shared_ptr<const st
         info = nullptr;
         return 1;
     }
-    phase = Phase::Idle;
-    info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    info = enterIdle(xsink);
     return 1;
+}
+
+QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
+    responded = true;
+    phase = Phase::Idle;
+    // the response was sent: a draining server closes the connection unless a request has arrived already, which is
+    // then read and answered with Connection: close; the controller closes the connection when the operation
+    // completes in the closed phase (qore#5899)
+    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+        int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
+        if (*xsink || idle_rc <= 0) {
+            phase = Phase::Closed;
+            if (idle_rc < 0) {
+                qore_socket_close_from_controller(sock->priv->socket);
+            }
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+            return nullptr;
+        }
+    }
+    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
 }
 
 QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
@@ -19783,6 +19875,26 @@ const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
         case Phase::Error: return "error";
         default: return "unknown";
     }
+}
+
+QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsink) {
+    phase = Phase::Idle;
+    // the response was sent: a draining server closes the connection unless a request has arrived already, which is
+    // then read and answered with Connection: close; the controller closes the connection when the operation
+    // completes in the closed phase (qore#5899)
+    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+        int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
+        if (*xsink || idle_rc <= 0) {
+            phase = Phase::Closed;
+            if (idle_rc < 0) {
+                qore_socket_close_from_controller(sock->priv->socket);
+            }
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+            return nullptr;
+        }
+    }
+    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
 }
 
 QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
@@ -19877,8 +19989,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                         input_stream = nullptr;
                     }
                     if (fused) {
-                        phase = Phase::Idle;
-                        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        return enterIdle(xsink);
                     }
                     // Non-fused: complete
                     sock->priv->clearNonBlock();
@@ -19946,8 +20057,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                             }
                             // bytes_sent == content_length: normal completion
                             if (fused) {
-                                phase = Phase::Idle;
-                                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                                return enterIdle(xsink);
                             }
                             sock->priv->clearNonBlock();
                             set_non_block = false;
@@ -20000,8 +20110,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                             }
                             // bytes_sent == content_length: normal completion
                             if (fused) {
-                                phase = Phase::Idle;
-                                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                                return enterIdle(xsink);
                             }
                             sock->priv->clearNonBlock();
                             set_non_block = false;
@@ -20053,6 +20162,14 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                     return nullptr;
                 }
                 if (!idle_rc) {
+                    // a draining server closes a connection that has no request; a request that arrived is read and
+                    // answered with Connection: close (qore#5899)
+                    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+                        phase = Phase::Closed;
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        return nullptr;
+                    }
                     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
                 }
                 // Data is available — transition to header reading
@@ -21411,12 +21528,19 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
     // Build response hash from stream info
     ReferenceHolder<QoreHashNode> response(new QoreHashNode(autoTypeInfo), xsink);
 
-    // If the stream was reset by the peer (RST_STREAM with non-zero error
-    // code), surface it as an err/desc pair so the conn_mgr response path
-    // (send_internal_conn_mgr) raises a proper exception instead of letting
-    // the partial body bubble up as a successful short response (observed as
-    // FUTURE-TIMEOUT with a Content-Length mismatch, because the H1 body
-    // reader would otherwise spin waiting for the declared byte count).
+    // the stream was failed by its consumer (issue #5859): its response is that error
+    if (!stream->fail_err.empty()) {
+        response->setKeyValue("err", new QoreStringNode(stream->fail_err), xsink);
+        response->setKeyValue("desc", new QoreStringNode(stream->fail_desc), xsink);
+        response->setKeyValue("stream_id", stream_id, xsink);
+        response->setKeyValue("end_stream", true, xsink);
+        {
+            AutoLocker al(response_lock);
+            completed_responses.push_back(response.release());
+        }
+        return;
+    }
+
     // the stream was canceled because its response body exceeded the maximum response body size
     if (stream->body_too_large) {
         QoreStringNode* desc = new QoreStringNode;
@@ -21433,6 +21557,12 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
         return;
     }
 
+    // If the stream was reset by the peer (RST_STREAM with non-zero error
+    // code), surface it as an err/desc pair so the conn_mgr response path
+    // (send_internal_conn_mgr) raises a proper exception instead of letting
+    // the partial body bubble up as a successful short response (observed as
+    // FUTURE-TIMEOUT with a Content-Length mismatch, because the H1 body
+    // reader would otherwise spin waiting for the declared byte count).
     if (stream->reset && stream->error_code != 0) {
         // REFUSED_STREAM: the peer did not process the request, which can be sent again on another connection; see
         // Http2Session::raiseStreamReset()
@@ -21716,7 +21846,8 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     while (batch < MAX_STREAMING_BATCH
                             && h2_session->hasStreamingData(streaming_id)) {
                         // Take body data from the streaming stream
-                        BinaryNode* body = h2_session->takeStreamData(streaming_id, 0, xsink);
+                        // delivered through the stream's action, whose Channel or Queue reports the consumption (issue #5820)
+                        BinaryNode* body = h2_session->takeStreamData(streaming_id, 0, xsink, false);
                         if (*xsink) {
                             return nullptr;
                         }

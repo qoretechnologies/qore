@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%include ArithParseResultTypes.qc
+
+%exec-class ArithParseResultTypesPart1
+
+#! runs part 1 of 5 of the cases of ArithParseResultTypesBase: the matrix cases in the IR and JIT modes
+class ArithParseResultTypesPart1 inherits ArithParseResultTypesBase {
+    constructor() : ArithParseResultTypesBase("ArithParseResultTypesPart1", 1) {
+    }
+}

@@ -438,14 +438,15 @@ if (push) {
 
     #! Registers a Queue for delivering data to a CONNECT stream handler
     /** Called by the I/O controller when dispatching an extended CONNECT handler.
-        The Queue must be unlimited (created with no max size) to ensure non-blocking pushes.
+        A Queue with a maximum size is supported: the I/O thread never waits for room in it, and the stream's data
+        that it has no room for stays in the stream (see Http2PollOperationBase::registerStreamQueue()).
 
         The optional EventNotifier is signaled on the I/O thread (pure C++) after data
         is pushed to the Queue, enabling efficient cross-thread wake-up without Qore
         interpreter calls.
 
         @param stream_id the HTTP/2 stream ID
-        @param queue the unlimited Queue for data delivery
+        @param queue the Queue for data delivery
         @param notify optional callback for cross-thread wake-up after data is
         drained to the Queue
 

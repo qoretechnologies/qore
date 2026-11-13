@@ -154,6 +154,10 @@ auto StaticMethod::call(...) {
     if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
         return QoreValue();
     }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, m->m->getClass(), m->pgm, xsink)) {
+        return QoreValue();
+    }
     // the access of the method's variants, for code that a sandbox governs or that is restricted
     if (reflection_check_method_access(caller, m->m, xsink)) {
         return QoreValue();
@@ -191,6 +195,10 @@ auto StaticMethod::callArgs(*softlist<auto> argv) {
     // the method's class and the variant selected for the arguments must be allowed by the caller and the
     // method's Program
     if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, m->m->getClass(), m->pgm, xsink)) {
         return QoreValue();
     }
     // the access of the method's variants, for code that a sandbox governs or that is restricted
