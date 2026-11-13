@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks the type of an enum member returned or passed as int; run by enum-int-conversion.qtest
+
+/** An enum member that is returned from code declared to return int, or passed to an int parameter, takes the
+    declared type, as in the AST interpreter: it is an int, not an enum value (qore#6042).  A return or parameter type
+    that accepts the enum keeps it.  Each check prints "name=type".
+*/
+
+enum Shape {
+    RowRecords = 1,
+    Columns = 2,
+}
+
+enum Status : string {
+    Ok = "ok",
+}
+
+enum Mult : float {
+    Half = 0.5,
+}
+
+#! the callees of ident_calls() only return their parameter, so it is not used by other code than the IR
+auto sub ident_int(int x) {
+    return x;
+}
+
+auto sub ident_float(float x) {
+    return x;
+}
+
+auto sub ident_auto(auto x) {
+    return x;
+}
+
+auto sub ident_enum(Shape x) {
+    return x;
+}
+
+auto sub ident_or_nothing_enum(*Shape x) {
+    return x;
+}
+
+#! hot calls of callees that return their parameter as it is: an int or float parameter is the base value, an auto,
+#! Shape or *Shape parameter keeps the enum member
+hash<string, int> sub ident_calls(auto shape, auto mult) {
+    hash<string, int> rv;
+    for (int i = 0; i < 2000; ++i) {
+        ++rv{"int:" + ident_int(shape).fullType()};
+        ++rv{"float:" + ident_float(mult).fullType()};
+        ++rv{"auto:" + ident_auto(shape).fullType()};
+        ++rv{"enum:" + ident_enum(shape).fullType()};
+        ++rv{"or-nothing-enum:" + ident_or_nothing_enum(shape).fullType()};
+    }
+    return rv;
+}
+
+string sub ret_string() {
+    return Status::Ok;
+}
+
+string sub string_param_type(string s) {
+    return s.fullType();
+}
+
+#! calls with enum members in auto values many times, as compiled code calls hot code
+hash<string, int> sub hot_calls(auto shape, auto status) {
+    hash<string, int> rv;
+    for (int i = 0; i < 2000; ++i) {
+        ++rv{param_type(shape)};
+        ++rv{string_param_type(status)};
+        ++rv{ret_int_from_param(shape).fullType()};
+    }
+    return rv;
+}
+
+int sub ret_int() {
+    return Shape::RowRecords;
+}
+
+int sub ret_int_from_param(Shape s) {
+    return s;
+}
+
+*int sub ret_or_nothing_int() {
+    return Shape::Columns;
+}
+
+softint sub ret_softint() {
+    return Shape::Columns;
+}
+
+auto sub ret_auto() {
+    return Shape::RowRecords;
+}
+
+Shape sub ret_enum() {
+    return Shape::Columns;
+}
+
+*Shape sub ret_or_nothing_enum() {
+    return Shape::Columns;
+}
+
+string sub param_type(int x) {
+    return x.fullType();
+}
+
+class C {
+    int m() {
+        return Shape::RowRecords;
+    }
+
+    static int s() {
+        return Shape::Columns;
+    }
+}
+
+hash<string, string> sub checks() {
+    C c();
+    code closure = int sub () {
+        return Shape::RowRecords;
+    };
+    return {
+        "function": ret_int().fullType(),
+        "function-from-param": ret_int_from_param(Shape::Columns).fullType(),
+        "or-nothing-int": ret_or_nothing_int().fullType(),
+        "softint": ret_softint().fullType(),
+        "method": c.m().fullType(),
+        "static-method": C::s().fullType(),
+        "closure": closure().fullType(),
+        "call-reference": (\ret_int())().fullType(),
+        "dynamic-call": call_function("ret_int").fullType(),
+        "list-element": (ret_int(), "x")[0].fullType(),
+        "hash-value": {"a": ret_int()}.a.fullType(),
+        "parameter": param_type(Shape::Columns),
+        "string-function": ret_string().fullType(),
+        "string-parameter": string_param_type(Status::Ok),
+        "hot-calls": sprintf("%y", hot_calls(Shape::Columns, Status::Ok)),
+        "ident-calls": sprintf("%y", ident_calls(Shape::Columns, Mult::Half)),
+        "auto-keeps-enum": ret_auto().fullType(),
+        "enum-keeps-enum": ret_enum().fullType(),
+        "or-nothing-enum-keeps-enum": ret_or_nothing_enum().fullType(),
+    };
+}
+
+# called three times, so that the checks run again after their first call, also on the IR tier with tiered execution
+hash<string, string> first = checks();
+bool stable = True;
+for (int i = 0; i < 2; ++i) {
+    if (checks() != first) {
+        stable = False;
+    }
+}
+map printf("%s=%s\n", $1.key, $1.value), first.pairIterator();
+printf("stable=%y\n", stable);
