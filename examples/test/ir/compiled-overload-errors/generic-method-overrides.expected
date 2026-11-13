@@ -2,6 +2,7 @@ override: GMC::id GMC::id GM::id(string, int)
 or nothing: GMC::opt GMC::opt
 list: GMC::lst
 two type parameters: GMC::two
-abstract: "a" 2 GAI::gl 3
+abstract: "a" 2 GAI::gl 3 3
 not overrides: GB::b GBC::b GBC::c GBC::g
+wider return: ABSTRACT-CLASS-ERROR
 other count: ABSTRACT-CLASS-ERROR

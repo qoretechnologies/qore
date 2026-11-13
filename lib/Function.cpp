@@ -1015,9 +1015,12 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
     const QoreTypeInfo* sig_return_type = sig_type(sig.returnTypeInfo);
 
     // return types for abstract methods must be compatible if present
-    bool same_return_param = false;
-    if (same_method_type_param(returnTypeInfo, sig.returnTypeInfo, same_return_param)) {
-        if (!same_return_param) {
+    // a type parameter of each method at the same position: this signature may return it without "*" for "*" (a
+    // narrower type), as for any other return type
+    const QoreTypeParameterTypeInfo* rtp_this = ua ? qore_get_type_parameter_type_info(returnTypeInfo) : nullptr;
+    const QoreTypeParameterTypeInfo* rtp_sig = ua ? qore_get_type_parameter_type_info(sig.returnTypeInfo) : nullptr;
+    if (rtp_this && rtp_sig && rtp_this->getOwnerSignature() == ua && rtp_sig->getOwnerSignature() == ub) {
+        if (rtp_this->getIndex() != rtp_sig->getIndex() || (rtp_this->isOrNothing() && !rtp_sig->isOrNothing())) {
             return false;
         }
     } else if (sig_return_type != nothingTypeInfo) {

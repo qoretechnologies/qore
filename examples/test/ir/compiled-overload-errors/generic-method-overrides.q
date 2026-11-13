@@ -23,10 +23,13 @@ class GMC inherits GM {
 class GA {
     abstract U ga<U>(U x);
     abstract string gl<U>(list<U> l);
+    abstract *U gn<U>(U x);
 }
 class GAI inherits GA {
     V ga<V>(V x) { return x; }
     string gl<U>(list<U> l) { return sprintf("GAI::gl %d", l.size()); }
+    # a narrower return type: U for *U
+    U gn<U>(U x) { return x; }
 }
 
 # not overrides: other bounds, another number of type parameters, and a non-generic method
@@ -49,10 +52,20 @@ printf("list: %s\n", gm.lst((1, 2)));
 printf("two type parameters: %s\n", gm.two(1, "s"));
 
 GA ga = new GAI();
-printf("abstract: %y %y %s\n", ga.ga("a"), ga.ga(i), ga.gl((1, 2, 3)));
+printf("abstract: %y %y %s %y\n", ga.ga("a"), ga.ga(i), ga.gl((1, 2, 3)), ga.gn(3));
 
 GBC gbc();
 printf("not overrides: %s %s %s %s\n", gbc.b(1), gbc.b("s"), gbc.c(1), gbc.g(1));
+
+# an implementation returning *U for U (a wider type) does not implement the abstract method
+Program pw(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+try {
+    pw.parse("class A { abstract U a<U>(U x); } class AI inherits A { *U a<U>(U x) { return x; } } "
+        "A x = new AI();", "wider");
+    printf("wider return: parsed\n");
+} catch (hash<ExceptionInfo> ex) {
+    printf("wider return: %s\n", ex.err);
+}
 
 # an implementation with another number of type parameters does not implement the abstract method
 Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
