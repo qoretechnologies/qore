@@ -915,6 +915,14 @@ std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo) {
     return rv;
 }
 
+const char* qore_aot_find_class_ref_end(const char* ref) {
+    const char* nl = strchr(ref, '\n');
+    if (nl && !strncmp(ref, AOT_CLASS_REF_MODULE_PREFIX, strlen(AOT_CLASS_REF_MODULE_PREFIX))) {
+        nl = strchr(nl + 1, '\n');
+    }
+    return nl;
+}
+
 //! Returns true for an instruction of the step events of a debugger, which native AOT code ignores
 /** The IR of a Program that can be debugged has them (QoreIRFunction::emit_debug_statements), as it is also
     serialized as the debug IR of the function; the analyses of the native code skip them (#5558)

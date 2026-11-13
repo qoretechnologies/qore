@@ -732,7 +732,10 @@ struct InstRegistryMethodRef {
         method_name = method_name_storage.c_str();
 
         const char* payload = first_sep + 1;
-        const char* second_sep = strrchr(payload, '\n');
+        // the variant's class reference ends the payload's first line, or its second one for a class of a module;
+        // the signature text that follows has the default values of the parameters, whose strings can have newlines
+        // (qore#6026)
+        const char* second_sep = qore_aot_find_class_ref_end(payload);
         if (!second_sep) {
             // Backward-compatible form: method_name + "\n" + signature.
             sig_text = payload;

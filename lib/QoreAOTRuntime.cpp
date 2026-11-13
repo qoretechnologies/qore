@@ -2308,6 +2308,10 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
             req_path += 2;
         }
         if (*req_path) {
+            // the parse lookup reads the parse options of the current Program, which is not set on a thread that
+            // loads a compiled program, and can be another Program; the options of the target Program apply
+            // (qore#6026)
+            QoreProgramContextHelper pch(pgm);
             qc = qore_root_ns_private::parseFindClass(*pp->RootNS, &loc_builtin, req_path);
         }
     }
@@ -2550,7 +2554,10 @@ struct AOTEncodedMethodRef {
         method_name = method_name_storage.c_str();
 
         const char* payload = first_sep + 1;
-        const char* second_sep = strrchr(payload, '\n');
+        // the variant's class reference ends the payload's first line, or its second one for a class of a module;
+        // the signature text that follows has the default values of the parameters, whose strings can have newlines
+        // (qore#6026)
+        const char* second_sep = qore_aot_find_class_ref_end(payload);
         if (!second_sep) {
             // Backward-compatible form: method_name + "\n" + signature.
             sig_text = payload;
