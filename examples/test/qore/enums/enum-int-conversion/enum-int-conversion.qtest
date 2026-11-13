@@ -17,7 +17,8 @@
 /** The value takes the declared type, as in the AST interpreter: an enum member returned from an int function, or
     passed to an int parameter, is an int.  The IR interpreter kept the enum type, as its check of a return or
     parameter value took an enum member for a plain int.  The checks are in enum-int-conversion-worker.qr, which is
-    run in each execution mode and as a program compiled with qcc; every run must give the results below.
+    run in each execution mode, on the IR tier and as a program compiled with qcc; every run must give the results
+    below.
 */
 class EnumIntConversionTest inherits QUnit::Test {
     public {
@@ -46,8 +47,6 @@ class EnumIntConversionTest inherits QUnit::Test {
             "stable": "True",
         };
 
-        #! the execution modes that the worker is run in
-        const ExecModes = ("ast", "ir", "jit", "tiered");
     }
 
     private {
@@ -67,17 +66,24 @@ class EnumIntConversionTest inherits QUnit::Test {
         }
 
         addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
         addTestCase("compiled program", \testCompiledProgram());
 
         set_return_value(main());
     }
 
     testExecModes() {
-        foreach string mode in (ExecModes) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
             string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
                 libqore_dir, qore_bin, mode, getWorker()));
             checkWorkerOutput(mode, out);
         }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
     }
 
     testCompiledProgram() {
