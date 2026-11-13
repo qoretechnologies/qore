@@ -332,9 +332,17 @@ void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx
 
 //! Raises the exception that the call @a call raises for its target @a target before it evaluates its arguments, if
 //! any (QoreIROpcode::CheckCallTarget; issue #5784)
-/** @return -1 if an exception was raised, 0 if not
+/** @param call the call
+    @param target the value that the call is made on or with
+    @param xsink for the exception
+    @param runtime_location true if the call has no source location (a node that the AOT loader rebuilds has
+    \c loc_builtin): an exception is raised with the thread's runtime location, which compiled code sets to the
+    location of the call before the check (issue #5835)
+
+    @return -1 if an exception was raised, 0 if not
 */
-DLLLOCAL int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
+DLLLOCAL int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink,
+        bool runtime_location = false);
 
 //! Returns true if the call @a call needs no check of its target @a target: a method call (not a call through a
 //! call reference) on an object that has not been deleted, the common case (QoreIROpcode::CheckCallTarget)
