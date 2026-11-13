@@ -172,7 +172,7 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
         if (!deferred_source_function) {
             ctx.writer.writeStringRef(qore_aot_get_function_call_signature_ref(call).c_str());
         } else {
-            ctx.writer.writeStringRef("");
+            ctx.writer.writeStringRef(QORE_AOT_DEFERRED_SOURCE_CALL_SLOT);
         }
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -260,7 +260,9 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
         ctx.error = "empty function name in inline FUNC_CALL expression";
         return QoreValue();
     }
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
+    const FunctionEntry* fe = sig_ref && !strcmp(sig_ref, QORE_AOT_DEFERRED_SOURCE_CALL_SLOT)
+        ? qore_aot_resolve_deferred_source_function_entry(ctx.pgm, func_name)
+        : qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
     if (!fe) {
         QoreValue fallback = qore_aot_make_deferred_function_call(ctx.pgm, func_name, pln);
         pln = nullptr;
@@ -1262,7 +1264,7 @@ static Var* resolve_global_varref_payload(const char* ref, QoreProgram* pgm,
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* vns = nullptr;
-    return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns);
+    return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns, LexicalSemanticPolicy{});
 }
 
 static bool write_expr_global_varref(AOTExprWriteCtx& ctx) {
@@ -1479,11 +1481,13 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         closure_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
     }
 
-    bool is_lambda = false, is_in_method = false, needs_type_context = false;
+    bool is_lambda = false, is_in_method = false, needs_type_context = false, defaults_need_object = false;
     if (flags_str) {
         is_lambda = (flags_str[0] == '1');
         is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
         needs_type_context = (strlen(flags_str) >= 5 && flags_str[4] == '1');
+        // the fourth flag: the default values use the closure's object (issue #5931)
+        defaults_need_object = (strlen(flags_str) >= 7 && flags_str[6] == '1');
     }
 
     // Read return type
@@ -1514,6 +1518,10 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             ? type_resolver.resolveForSignature(ptype, type_error, closure_type_param_owner) : nullptr;
         uint8_t has_default = QoreAOTBinaryReader::readU8(ctx.ptr);
         if (has_default) {
+            // a closure in the default value binds to the variables of this context, as the closure's own captures
+            // do (issue #5903)
+            QoreAOTValueLocalsHelper value_locals(ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals,
+                ctx.local_owner_pgm);
             std::string val_error;
             defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
             if (!val_error.empty() && default_error.empty()) {
@@ -1593,6 +1601,12 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     const QoreClass* closure_class = nullptr;
     if (class_type_path && *class_type_path) {
         closure_class = qore_aot_resolve_class_ref(ctx.pgm, class_type_path, false);
+    }
+    // the class of a closure that is not in a method is the class it runs in, not a class type with self (#5907)
+    const QoreClass* static_class = nullptr;
+    if (flags_str && !is_in_method && class_type_path && *class_type_path) {
+        static_class = QoreTypeInfo::getUniqueReturnClass(type_resolver.resolve(class_type_path, type_error));
+        closure_class = nullptr;
     }
 
     // Construct UserClosureFunction + UserClosureVariant
@@ -1715,6 +1729,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             if (!lv->closureUse()) {
                 lv->setClosureUse();
             }
+        } else if (lv) {
+            // a closure that uses the self of the method that it is in takes the object when it is created, as a
+            // closure of the method does (issue #5931): a closure in a default value of a method's closure, for one
+            is_in_method = true;
+            defaults_need_object = true;
         }
     }
 
@@ -1774,13 +1793,19 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_variant->setProgram(ctx.pgm);
 
     // Set class type if in a method context
-    if (class_type_path && *class_type_path) {
+    if (!static_class && class_type_path && *class_type_path) {
         ucf->setClassType(type_resolver.resolve(class_type_path, type_error));
     }
 
     // Create QoreClosureParseNode
     auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
     closure_node->setNeedsTypeContext(needs_type_context);
+    if (defaults_need_object) {
+        closure_node->setDefaultsNeedObject();
+    }
+    if (static_class) {
+        closure_node->setStaticClass(qore_class_private::get(*static_class));
+    }
     return QoreValue(closure_node);
 }
 
@@ -2498,6 +2523,10 @@ static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
         if (call_args) {
             call_args->deref(nullptr);
         }
+        ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex hash constructor";
+        if (!type_error.empty()) {
+            ctx.error += ": " + type_error;
+        }
         return QoreValue();
     }
     // Convert call_args to QoreParseListNode for NewComplexHashNode
@@ -2563,6 +2592,10 @@ static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
     const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
     if (!ti) {
         arg_val.discard(nullptr);
+        ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex list constructor";
+        if (!type_error.empty()) {
+            ctx.error += ": " + type_error;
+        }
         return QoreValue();
     }
     NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, arg_val);
@@ -2644,7 +2677,7 @@ static QoreValue read_expr_const_enum(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     const QoreNamespace* pns = nullptr;
-    const QoreEnumDecl* ed = ctx.pgm->findEnum(enum_path, pns);
+    const QoreEnumDecl* ed = qore_program_private::get(*ctx.pgm)->findEnumCanonical(enum_path, pns);
     if (!ed) {
         return QoreValue();
     }
@@ -3391,11 +3424,22 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     const char* method_name = method_name_ref;
     // the explicit type arguments of the call, if any (qore#5865)
     const char* type_args = qore_aot_find_call_type_args(method_name_ref);
+    // the variant resolved at parse time ("<variant class>\n<signature>"), if any (issue #5823)
+    const char* variant_ref = nullptr;
+    // the variant comes before the type arguments, whose marker starts with a newline: a call without a variant has
+    // the marker right after the method name
+    std::string variant_ref_storage;
     if (method_name_ref) {
         const char* sig_sep = strchr(method_name_ref, '\n');
         if (sig_sep) {
             method_name_storage.assign(method_name_ref, sig_sep - method_name_ref);
             method_name = method_name_storage.c_str();
+            if (!type_args) {
+                variant_ref = sig_sep + 1;
+            } else if (sig_sep < type_args) {
+                variant_ref_storage.assign(sig_sep + 1, type_args - sig_sep - 1);
+                variant_ref = variant_ref_storage.c_str();
+            }
         }
     }
     uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -3469,6 +3513,10 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
         if (is_pseudo) {
             mc->setPseudo(resolved_qc->getTypeInfo());
         }
+        if (const AbstractQoreFunctionVariant* variant = qore_aot_find_method_variant(ctx.pgm, resolved_m,
+                method_name, variant_ref, is_pseudo != 0)) {
+            mc->setVariant(variant);
+        }
     }
     if (type_args) {
         // the variant is chosen when the call is made: the type arguments have no owner, as for a parsed call whose
@@ -3492,16 +3540,16 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
 }
 
 // ============================================================================
-// DOT_EVAL_EXPR (103)
+// AST_EXPR (103)
 // ============================================================================
 
-static bool write_expr_dot_eval_expr(AOTExprWriteCtx& ctx) {
-    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_EXPR));
+static bool write_expr_ast_expr(AOTExprWriteCtx& ctx) {
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::AST_EXPR));
     return classifyAndWriteExpr(ctx.writer, ctx.expr, ctx.parent_locals,
         ctx.parent_globals, ctx.const_reverse_map);
 }
 
-static QoreValue read_expr_dot_eval_expr(AOTExprReadCtx& ctx) {
+static QoreValue read_expr_ast_expr(AOTExprReadCtx& ctx) {
     return readOneExpr(ctx.reader, ctx.ptr, ctx.end, ctx.error, ctx.pgm,
         ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
 }
@@ -4242,6 +4290,170 @@ static bool write_expr_shr_eq(AOTExprWriteCtx& ctx) {
 }
 static QoreValue read_expr_shr_eq(AOTExprReadCtx& ctx) {
     return read_binary_expr<QoreShiftRightEqualsOperatorNode>(ctx);
+}
+
+// ============================================================================
+// SPLICE/EXTRACT (122-123)
+// ============================================================================
+
+//! Writes a splice or extract operator: its lvalue, offset, length and new value expressions (issue #5947)
+/** a length or a new value that the expression does not have is NOTHING, which is written as a constant
+*/
+template <typename NodeT>
+static bool write_splice_extract_expr(AOTExprWriteCtx& ctx, AOTExprKind kind) {
+    auto* op = dynamic_cast<const NodeT*>(ctx.expr.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(kind));
+    for (const QoreValue& v : {op->getLValue(), op->getOffset(), op->getLength(), op->getNewValue()}) {
+        if (!classifyAndWriteExpr(ctx.writer, v, ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+template <typename NodeT>
+static QoreValue read_splice_extract_expr(AOTExprReadCtx& ctx) {
+    QoreValue v[4];
+    for (unsigned i = 0; i < 4; ++i) {
+        std::string err;
+        v[i] = readOneExpr(ctx.reader, ctx.ptr, ctx.end, err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals,
+            ctx.num_globals, ctx.local_owner_pgm);
+        if (!err.empty()) {
+            for (unsigned j = 0; j <= i; ++j) {
+                v[j].discard(nullptr);
+            }
+            ctx.error = err;
+            return QoreValue();
+        }
+    }
+    return QoreValue(new NodeT(&loc_builtin, v[0], v[1], v[2], v[3]));
+}
+
+static bool write_expr_splice(AOTExprWriteCtx& ctx) {
+    return write_splice_extract_expr<QoreSpliceOperatorNode>(ctx, AOTExprKind::SPLICE);
+}
+static QoreValue read_expr_splice(AOTExprReadCtx& ctx) {
+    return read_splice_extract_expr<QoreSpliceOperatorNode>(ctx);
+}
+static bool write_expr_extract(AOTExprWriteCtx& ctx) {
+    return write_splice_extract_expr<QoreExtractOperatorNode>(ctx, AOTExprKind::EXTRACT);
+}
+static QoreValue read_expr_extract(AOTExprReadCtx& ctx) {
+    return read_splice_extract_expr<QoreExtractOperatorNode>(ctx);
+}
+
+// ============================================================================
+// REGEX_SUBST/TRANSLIT (124-125)
+// ============================================================================
+
+QoreValue qore_aot_make_regex_subst(const char* pattern, const char* replacement, int64_t options, bool global,
+        QoreValue operand, std::string& error) {
+    if (!pattern) {
+        operand.discard(nullptr);
+        error = "missing regex substitution pattern";
+        return QoreValue();
+    }
+    QoreRegexSubst* rs = new QoreRegexSubst();
+    // all options of the pattern (i, s, x, m, u, U)
+    rs->addOptions(static_cast<int>(options));
+    ExceptionSink xsink;
+    if (rs->parseRT(pattern, &xsink)) {
+        xsink.clear();
+        delete rs;
+        operand.discard(nullptr);
+        error = "regex substitution compile error for pattern '" + std::string(pattern) + "'";
+        return QoreValue();
+    }
+    if (global) {
+        rs->setGlobal();
+    }
+    for (const char* c = replacement; c && *c; ++c) {
+        rs->concatTarget(*c);
+    }
+    return QoreValue(new QoreRegexSubstOperatorNode(&loc_builtin, operand, rs));
+}
+
+QoreValue qore_aot_make_transliteration(const char* source, const char* target, QoreValue operand) {
+    QoreTransliteration* tr = new QoreTransliteration(&loc_builtin);
+    for (const char* c = source; c && *c; ++c) {
+        tr->concatSource(*c);
+    }
+    tr->finishSource();
+    for (const char* c = target; c && *c; ++c) {
+        tr->concatTarget(*c);
+    }
+    tr->finishTarget();
+    return QoreValue(new QoreTransliterationOperatorNode(&loc_builtin, operand, tr));
+}
+
+//! Writes a regex substitution operator, which modifies its lvalue (issue #5947)
+static bool write_expr_regex_subst(AOTExprWriteCtx& ctx) {
+    auto* op = dynamic_cast<const QoreRegexSubstOperatorNode*>(ctx.expr.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    QoreRegexSubst* rs = op->getRegexSubst();
+    const QoreString* repl = rs ? rs->getNewStr() : nullptr;
+    if (!rs || !rs->getPatternCStr() || !qore_aot_regex_string_ok(repl)) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::REGEX_SUBST));
+    ctx.writer.writeStringRef(rs->getPatternCStr());
+    ctx.writer.writeStringRef(repl ? repl->c_str() : "");
+    ctx.writer.writeI64(rs->getOptions());
+    ctx.writer.writeU8(rs->isGlobal() ? 1 : 0);
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals, ctx.parent_globals,
+        ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_regex_subst(AOTExprReadCtx& ctx) {
+    const char* pattern = ctx.reader.readStringRef(ctx.ptr);
+    const char* replacement = ctx.reader.readStringRef(ctx.ptr);
+    int64_t options = QoreAOTBinaryReader::readI64(ctx.ptr);
+    bool global = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    std::string err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, err, ctx.pgm, ctx.locals, ctx.num_locals,
+        ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = err;
+        return QoreValue();
+    }
+    return qore_aot_make_regex_subst(pattern, replacement, options, global, operand, ctx.error);
+}
+
+//! Writes a transliteration operator, which modifies its lvalue (issue #5947)
+static bool write_expr_translit(AOTExprWriteCtx& ctx) {
+    auto* op = dynamic_cast<const QoreTransliterationOperatorNode*>(ctx.expr.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    QoreTransliteration* tr = op->getTransliteration();
+    if (!tr || !qore_aot_regex_string_ok(&tr->getSource()) || !qore_aot_regex_string_ok(&tr->getTarget())) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::TRANSLIT));
+    ctx.writer.writeStringRef(tr->getSource().c_str());
+    ctx.writer.writeStringRef(tr->getTarget().c_str());
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals, ctx.parent_globals,
+        ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_translit(AOTExprReadCtx& ctx) {
+    const char* source = ctx.reader.readStringRef(ctx.ptr);
+    const char* target = ctx.reader.readStringRef(ctx.ptr);
+    std::string err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, err, ctx.pgm, ctx.locals, ctx.num_locals,
+        ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = err;
+        return QoreValue();
+    }
+    return qore_aot_make_transliteration(source, target, operand);
 }
 
 static bool write_expr_log_eq(AOTExprWriteCtx& ctx) {

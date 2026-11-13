@@ -1,0 +1,239 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class OverrideReturnTypesTest
+
+#! Tests for issue #5838: a child class method that a call typed against a parent class can select must return a
+#! type that the parent class method's return type accepts
+/** The compiled modes (IR, JIT, AOT) trust the declared return type of the variant that a call resolves to at parse
+    time; under virtual dispatch the object's class can provide another variant, so its return type must be
+    compatible: the same type, or a narrower one (covariant return types)
+*/
+class OverrideReturnTypesTest inherits QUnit::Test {
+    public {
+        const Hierarchy = "
+class Item {}
+class SpecialItem inherits Item {}
+class Base {
+    int m(int i) { return i; }
+    *int n() { return 1; }
+    Item item() { return new Item(); }
+    abstract int a();
+    static int s() { return 1; }
+    private:internal int pi() { return 1; }
+    string str(string v) { return v; }
+    nothing w(string v) {}
+    softlist<auto> sl() { return (); }
+    list<string> ls() { return (); }
+    string rcv(string a, string b) { return a + b; }
+}
+";
+    }
+
+    constructor() : QUnit::Test("override return types", "1.0") {
+        addTestCase("an override with an incompatible return type", \testRejectedOverride());
+        addTestCase("an overload that a parent class call can select", \testRejectedOverload());
+        addTestCase("compatible return types", \testAccepted());
+        addTestCase("multiple inheritance", \testMultipleInheritance());
+        addTestCase("builtin parent classes", \testBuiltinParent());
+        addTestCase("the issue's example", \testIssueExample());
+        addTestCase("generic parent classes", \testGeneric());
+        addTestCase("types of the same name", \testSameName());
+        addTestCase("final methods and reference parameters", \testFinalReference());
+        set_return_value(main());
+    }
+
+    private assertRejected(string code, string regex, string label) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        assertThrows("PARSE-TYPE-ERROR", regex, \p.parse(), (Hierarchy + code, label), label);
+    }
+
+    private Program parseAccepted(string code, string label, int po = PO_NEW_STYLE | PO_REQUIRE_TYPES) {
+        Program p(po);
+        p.parse(Hierarchy + code, label);
+        return p;
+    }
+
+    testRejectedOverride() {
+        assertRejected("class C inherits Base { string m(int i) { return \"c\"; } int a() { return 1; } }",
+            "child class method C::m\\(int i\\) returning string cannot override parent class method Base::m\\(int i\\) "
+            "returning int", "a string for an int");
+        assertRejected("class C inherits Base { float m(int i) { return 1.5; } int a() { return 1; } }",
+            "returning float cannot override", "a float for an int: the value would be converted");
+        assertRejected("class C inherits Base { *int m(int i) { return; } int a() { return 1; } }",
+            "returning \\*int cannot override", "an or-nothing type for a plain type");
+        assertRejected("class C inherits Base { nothing m(int i) {} int a() { return 1; } }",
+            "returning nothing cannot override parent class method Base::m\\(int i\\) returning int",
+            "nothing for a plain type");
+        assertRejected("class C inherits Base { softlist ls() { return (); } int a() { return 1; } }",
+            "returning softlist cannot override parent class method Base::ls\\(\\) returning list<string>",
+            "a soft type that returns a wider type");
+        assertRejected("class C inherits Base { Item n() { return new Item(); } int a() { return 1; } }",
+            "returning object<Item> cannot override parent class method Base::n\\(\\) returning \\*int",
+            "another type");
+        assertRejected("class C inherits Base { string a() { return \"x\"; } }",
+            "returning string cannot override parent class method Base::a\\(\\) returning int",
+            "the implementation of an abstract method");
+        assertRejected("class C inherits Base { int a() { return 1; } } class D inherits C { string m(int i) { "
+            "return \"d\"; } }", "D::m\\(int i\\) returning string cannot override parent class method "
+            "Base::m\\(int i\\) returning int", "a grandparent class method");
+    }
+
+    testRejectedOverload() {
+        # the issue's case: a call b.m(1) typed against Base can select the child's variant at run time
+        assertRejected("class C inherits Base { string m(softint i) { return \"c\"; } int a() { return 1; } }",
+            "C::m\\(softint i\\) returning string cannot overload parent class method Base::m\\(int i\\) "
+            "returning int: it accepts arguments that the parent class method accepts", "a broader parameter type");
+        assertRejected("class C inherits Base { string m(auto i) { return \"c\"; } int a() { return 1; } }",
+            "cannot overload parent class method Base::m", "an auto parameter");
+        assertRejected("class C inherits Base { string m(int i, *string x) { return \"c\"; } int a() { return 1; } }",
+            "cannot overload parent class method Base::m", "an optional extra parameter");
+    }
+
+    testAccepted() {
+        Program p = parseAccepted("
+class C inherits Base {
+    # the same type, a narrower one, a subclass (covariant return types)
+    int m(int i) { return i + 1; }
+    int n() { return 2; }
+    SpecialItem item() { return new SpecialItem(); }
+    int a() { return 3; }
+    # an overload that a parent class call cannot select (the parameter types do not intersect)
+    string m(string s) { return s; }
+    # static methods are not dispatched by the object's class
+    static string s() { return \"s\"; }
+    # a private:internal parent class method is not inherited
+    string pi() { return \"pi\"; }
+    # the parent class method's return type accepts it
+    softstring str(string v) { return v; }
+    # a parent class method that returns nothing gives a call typed against it no value to rely on
+    int w(string v) { return v.size(); }
+    # a soft return type is compared by the types it returns: softlist<string> returns list<string>
+    softlist<string> sl() { return \"a\"; }
+    # a reference parameter is bound only to a reference argument, which the parent class method does not accept
+    *string rcv(string a, reference<string> b) { b = a; }
+}
+int sub get_m() { Base b = new C(); return b.m(1); }
+*int sub get_n() { Base b = new C(); return b.n(); }
+string sub get_item() { Base b = new C(); return b.item().className(); }
+int sub get_w() { C c = new C(); return c.w(\"abc\"); }
+list<auto> sub get_sl() { Base b = new C(); return b.sl(); }
+string sub get_rcv() { Base b = new C(); return b.rcv(\"a\", \"b\"); }
+", "compatible");
+        assertEq(2, p.callFunction("get_m"));
+        assertEq(2, p.callFunction("get_n"));
+        assertEq("SpecialItem", p.callFunction("get_item"));
+        assertEq(3, p.callFunction("get_w"));
+        assertEq(("a",), p.callFunction("get_sl"));
+        assertEq("ab", p.callFunction("get_rcv"));
+
+        # code without types: a method without a declared return type is not checked
+        parseAccepted("class Untyped { m() { return 1; } } class UntypedChild inherits Untyped { string m() { "
+            "return \"x\"; } }", "untyped parent class method", PO_NEW_STYLE);
+        parseAccepted("class UntypedChild2 inherits Base { m(int i) { return \"x\"; } int a() { return 1; } }",
+            "untyped child class method", PO_NEW_STYLE);
+    }
+
+    testMultipleInheritance() {
+        assertRejected("class Other { string o() { return \"o\"; } } class C inherits Other, Base { "
+            "string m(int i) { return \"c\"; } int a() { return 1; } }",
+            "C::m\\(int i\\) returning string cannot override parent class method Base::m\\(int i\\) returning int",
+            "a second parent class");
+
+        # a class without a method of the name inherits the first parent class's method, whose variants calls of the
+        # other parent class's method select
+        assertRejected("class A2 { string m(softint i) { return \"a\"; } } class B2 { int m(int i) { return i; } } "
+            "class C2 inherits A2, B2 {}", "class 'C2' cannot inherit method A2::m\\(softint i\\) returning string "
+            "with parent class method B2::m\\(int i\\) returning int", "a sibling parent class's method first");
+        assertRejected("class A2 { string m(softint i) { return \"a\"; } } class B2 { int m(int i) { return i; } } "
+            "class C2 inherits B2, A2 {}", "class 'C2' cannot inherit method B2::m\\(int i\\) returning int with "
+            "parent class method A2::m\\(softint i\\) returning string", "a sibling parent class's method second");
+        # a class that declares the method: the sibling parent class's variants come before the other one's
+        assertRejected("class A2 { string m(softint i) { return \"a\"; } } class B2 { int m(int i) { return i; } } "
+            "class C2 inherits A2, B2 { string m(string s) { return s; } }", "class 'C2' cannot inherit method "
+            "A2::m\\(softint i\\) returning string with parent class method B2::m\\(int i\\) returning int",
+            "a sibling parent class's method before the other one");
+        # an abstract variant of a parent class listed first fixes the return type: a class that inherits an
+        # incompatible implementation with it is refused, as the abstract variant's implementation answers the calls
+        assertRejected("class AJ { abstract *int prog(); } class LJ { int prog() { return 1; } } "
+            "class J inherits AJ, LJ {}", "class 'J' cannot inherit method AJ::prog\\(\\) returning \\*int with parent "
+            "class method LJ::prog\\(\\) returning int", "an abstract variant first");
+        assertRejected("class P { int m() { return 12345; } } class AJ { abstract int m(); } "
+            "class LJ { string m() { return \"LJ\"; } } class J inherits AJ, LJ, P {}",
+            "cannot inherit method AJ::m\\(\\) returning int with parent class method LJ::m\\(\\) returning string",
+            "an abstract variant implemented by a later parent class");
+        # the class resolves it with its own variant
+        parseAccepted("class AJ { abstract *int prog(); } class LJ { int prog() { return 1; } } "
+            "class J inherits AJ, LJ { int prog() { return LJ::prog(); } }", "the class's own implementation");
+        # compatible sibling parent classes
+        Program p = parseAccepted("class A3 { int m(softint i) { return 1; } } class B3 { *int m(int i) { return i; } } "
+            "class C3 inherits A3, B3 {} *int sub get() { B3 b = new C3(); return b.m(5); }", "compatible siblings");
+        assertEq(1, p.callFunction("get"));
+    }
+
+    testGeneric() {
+        assertRejected("class Box<T> { T get() { return NOTHING; } } class SBox inherits Box<int> { string get() { "
+            "return \"s\"; } }", "child class method SBox::get\\(\\) returning string cannot override parent class "
+            "method Box::get\\(\\) returning int", "an instantiation of a generic class");
+        Program p = parseAccepted("class Box<T> { *T get() { return NOTHING; } } class IBox inherits Box<int> { int get() "
+            "{ return 2; } } *int sub get() { Box<int> b = new IBox(); return b.get(); }", "a compatible instantiation");
+        assertEq(2, p.callFunction("get"));
+        # a generic child class that returns its own type parameter for the parent's
+        parseAccepted("class Box<T> { *T get() { return NOTHING; } } class Sub<T> inherits Box<T> { *T get() { "
+            "return NOTHING; } }", "a generic child class");
+        # a generic child class cannot return a concrete type for the parent's type parameter: an instantiation can
+        # bind it to another type
+        assertRejected("class Box<T> { T get() { return NOTHING; } } class Box2<U> inherits Box<U> { string get() { "
+            "return \"s\"; } }", "child class method Box2::get\\(\\) returning string cannot override parent class "
+            "method Box::get\\(\\)", "a concrete type for a type parameter");
+    }
+
+    testSameName() {
+        # hashdecls of the same name in different namespaces are different types
+        assertRejected("namespace NA { hashdecl H { int a; } } namespace NB { hashdecl H { string a; } } "
+            "class P { hash<NA::H> h() { return <NA::H>{\"a\": 1}; } } "
+            "class Q inherits P { hash<NB::H> h() { return <NB::H>{\"a\": \"x\"}; } }",
+            "child class method Q::h\\(\\) returning hash<::NB::H> cannot override parent class method P::h\\(\\) "
+            "returning hash<::NA::H>", "hashdecls of the same name: the message shows their paths");
+    }
+
+    #! issue #5591: an or-nothing reference parameter and an or-nothing parameter both accept no value
+    testFinalReference() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        assertThrows("PARSE-EXCEPTION", "cannot overload parent class method final", \p.parse(),
+            ("class F { final string m(string a, *hash<auto> h, int x) { return \"final\"; } } "
+            "class G inherits F { string m(string a, *reference<hash<auto>> h, int x) { return \"child\"; } }",
+            "final"), "an or-nothing reference parameter");
+        assertRejected("class F2 { int m(string a, *hash<auto> h, int x) { return x; } } "
+            "class G2 inherits F2 { string m(string a, *reference<hash<auto>> h, int x) { return \"child\"; } }",
+            "child class method G2::m\\(string a, \\*reference<hash<auto>> h, int x\\) returning string cannot overload",
+            "an or-nothing reference parameter overload");
+    }
+
+    testBuiltinParent() {
+        # a builtin method's declared return type holds too
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        assertThrows("PARSE-TYPE-ERROR", "MyCounter::getCount\\(\\) returning string cannot override parent class "
+            "method Counter::getCount\\(\\) returning int", \p.parse(),
+            ("class MyCounter inherits Qore::Thread::Counter { string getCount() { return \"x\"; } }", "builtin"),
+            "a builtin parent class method");
+
+        # HTTPClient::get() and post() return union<*data, hash<auto>>, so a subclass can return a decoded hash
+        parseAccepted("class MyHttp inherits Qore::HTTPClient { hash<auto> get(string path, *hash<auto> headers, "
+            "*reference<hash<auto>> info) { return {\"path\": path}; } }", "HTTPClient subclass");
+    }
+
+    #! the issue's example: the compiled modes gave z = 1 for a string returned by the child's variant
+    testIssueExample() {
+        assertRejected("class D inherits Base { string m(softint i) { return \"derived\"; } int a() { return 1; } }
+int sub f() { Base b = new D(); int z = b.m(1) + 1; return z; }", "cannot overload parent class method Base::m",
+            "#5838");
+    }
+}

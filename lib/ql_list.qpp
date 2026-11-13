@@ -50,7 +50,7 @@ bool inlist_intern(const QoreValue arg, const QoreListNode* l, ExceptionSink* xs
         if (iter && !(iter % 100) && qore_check_cancel(xsink, "list membership comparison")) {
             return false;
         }
-        bool b = QoreLogicalEqualsOperatorNode::softEqual(arg, li.getValue(), xsink);
+        bool b = QoreLogicalEqualsOperatorNode::softEqualNative(arg, li.getValue(), xsink);
         if (*xsink) {
             return false;
         }
@@ -68,7 +68,7 @@ QoreListNode* range_intern(int64 start, int64 stop, int64 step, ExceptionSink* x
         return 0;
     }
 
-    bool broken_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_RANGE);
+    bool broken_range = qore_get_native_semantic_policy().brokenRange();
     // a large range is checked against the sandbox memory limit before it is built
     {
         uint64_t span = start < stop ? static_cast<uint64_t>(stop) - static_cast<uint64_t>(start)

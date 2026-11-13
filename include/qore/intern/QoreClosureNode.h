@@ -128,6 +128,19 @@ struct QoreClosureTypeContext {
 };
 
 class QoreClosureBase : public ResolvedCallReferenceNode {
+public:
+    QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override = 0;
+
+    QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
+        return dispatchValue(args, xsink);
+    }
+
+    // A closure is user code; its declaration owns the argument filters, and its body owns its operations.
+    QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const override {
+        return dispatchValue(args, xsink);
+    }
+
 protected:
     const QoreClosureParseNode* closure;
     mutable ThreadSafeLocalVarRuntimeEnvironment closure_env;
@@ -309,7 +322,7 @@ public:
     DLLLOCAL virtual ~QoreClosureNode() {
     }
 
-    DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
@@ -363,7 +376,7 @@ public:
         assert(!obj);
     }
 
-    DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return obj->getProgram();

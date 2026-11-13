@@ -885,6 +885,10 @@ public class DataProviderTest inherits QUnit::Test {
         DataProviderTypeEntry::setEpheremalIdStart(-1);
 
         addTestCase("expression tests", \expressionTests());
+        # the $args substitution of a render template reads each argument's info by the argument's position
+        addTestCase("template rendering: list arguments", \renderTemplateListArgTest());
+        addTestCase("template rendering: scalar arguments", \renderTemplateScalarArgTest());
+        addTestCase("template rendering: hash arguments", \renderTemplateHashArgTest());
         addTestCase("get display name", \getDisplayNameTest());
         addTestCase("get display name - locale", \getDisplayNameLocaleTest());
         addTestCase("empty action option fields", \emptyActionOptionFieldsTest());
@@ -1404,6 +1408,98 @@ public class DataProviderTest inherits QUnit::Test {
         };
         assertThrows("INVALID-EXPRESSION", "\"no-such-expression\" not found",
             \DataProvider::renderExpression(), (outer,), "unknown expression as an argument");
+    }
+
+    #! The $args substitution of a render template reads each argument's info by the argument's position
+    /** It read it by the argument's value: a list value became a list slice of the argument info, so the call
+        rendering it matched no variant (RUNTIME-OVERLOAD-ERROR), and a missing argument read the info of the
+        first argument, so its description showed the first argument's default instead of its own.
+
+        @return an expression map with an operator whose three arguments each have a default of their own
+    */
+    private static hash<string, hash<DataProviderExpressionInfo>> getPositionalArgExpressionMap() {
+        hash<DataProviderExpressionInfo> info = <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "positional",
+            "display_name": "Positional",
+            "short_desc": "Takes three arguments with distinct defaults",
+            "desc": "Takes three arguments with distinct defaults",
+            "symbol": "positional",
+            "render_template": "$symbol $args",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{"default_value": "first-default"},
+                <DataProviderArgInfo>{"default_value": "second-default"},
+                <DataProviderArgInfo>{"default_value": "third-default"},
+            ),
+            "return_type": AbstractDataProviderTypeMap."any",
+        };
+        return DataProviderGenericExpressions + {"positional": info};
+    }
+
+    #! A list argument is rendered as a list: read by value, it was a list slice of the argument info
+    renderTemplateListArgTest() {
+        # the source list of the DPQL map expression
+        list<hash<auto>> source = ({"a": 1}, {"a": 2});
+        hash<DataProviderExpression> exp = <DataProviderExpression>{
+            "exp": DP_OP_MAP,
+            "args": (<DataProviderFieldReference>{"field": "a"}, source),
+        };
+        assertEq("map @a, [{a: 1}, {a: 2}]", DataProvider::renderExpression(exp), "map with a list source");
+        exp = <DataProviderExpression>{
+            "exp": DP_OP_MAP,
+            "args": (
+                <DataProviderFieldReference>{"field": "a"},
+                source,
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_GT,
+                    "args": (<DataProviderFieldReference>{"field": "a"}, 1),
+                },
+            ),
+        };
+        assertEq("map @a, [{a: 1}, {a: 2}], (@a > 1)", DataProvider::renderExpression(exp),
+            "map with a list source and a filter");
+
+        # a list argument between missing arguments, each described with its own default
+        exp = <DataProviderExpression>{"exp": "positional", "args": (NOTHING, (1, 2), NOTHING)};
+        assertEq("positional \"first-default\", [1, 2], \"third-default\"",
+            DataProvider::renderExpression(exp, getPositionalArgExpressionMap()),
+            "list argument between missing arguments");
+    }
+
+    #! Each missing argument beside scalar arguments is described with its own default
+    /** Read by value, a missing argument (no value) read the first argument's info, and an int argument the info of
+        the position equal to its value
+    */
+    renderTemplateScalarArgTest() {
+        hash<string, hash<DataProviderExpressionInfo>> emap = getPositionalArgExpressionMap();
+        hash<DataProviderExpression> exp = <DataProviderExpression>{
+            "exp": "positional",
+            "args": (2, NOTHING, NOTHING),
+        };
+        assertEq("positional 2, \"second-default\", \"third-default\"", DataProvider::renderExpression(exp, emap),
+            "int argument followed by missing arguments");
+        exp = <DataProviderExpression>{"exp": "positional", "args": (NOTHING, 0, NOTHING)};
+        assertEq("positional \"first-default\", 0, \"third-default\"", DataProvider::renderExpression(exp, emap),
+            "missing arguments around an int argument");
+        exp = <DataProviderExpression>{"exp": "positional", "args": ("x", NOTHING)};
+        assertEq("positional \"x\", \"second-default\"", DataProvider::renderExpression(exp, emap),
+            "string argument followed by a missing argument");
+        # all arguments given: no default is read, whatever the argument values are
+        exp = <DataProviderExpression>{"exp": "positional", "args": (2, 1, 0)};
+        assertEq("positional 2, 1, 0", DataProvider::renderExpression(exp, emap), "all arguments given");
+    }
+
+    #! A hash argument is rendered as given, and a missing argument after it with its own default
+    renderTemplateHashArgTest() {
+        hash<DataProviderExpression> exp = <DataProviderExpression>{
+            "exp": "positional",
+            "args": ({"k": "v"}, NOTHING, 1),
+        };
+        assertEq("positional {k: \"v\"}, \"second-default\", 1",
+            DataProvider::renderExpression(exp, getPositionalArgExpressionMap()),
+            "hash argument followed by a missing argument");
     }
 
     getDisplayNameLocaleTest() {
@@ -2092,9 +2188,11 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(my_app, DataProviderActionCatalog::getApp(app));
 
         {
+            # the API declares the PROCESS functional domain (issue #5803): a Program with PO_NO_PROCESS_CONTROL
+            # cannot reference it
             Program p(PO_NO_PROCESS_CONTROL);
-            p.parse("sub test(string name) { DataProviderActionCatalog::deregisterDynamicApp(name); }", "test");
-            assertThrows("PERMISSION-DENIED", \p.callFunction(), ("test", app));
+            assertThrows("PARSE-EXCEPTION", "deregisterDynamicApp\\(\\)'; functional domain: PROCESS", \p.parse(),
+                ("sub test(string name) { DataProviderActionCatalog::deregisterDynamicApp(name); }", "test"));
         }
 
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getAppEx(), get_random_string());

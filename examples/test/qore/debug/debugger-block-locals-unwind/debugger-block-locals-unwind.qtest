@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - debugger attach, destructors, and AOT code generation and linking of debug IR
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class DebuggerBlockLocalsUnwindTest
+
+#! The locals of a block that an exception leaves with a debugger attached (#5867, #5921)
+/** The debug IR of AOT code released the locals of a block that has no exception path of its own when the frame
+    ended, after the debugger's exception events of the statements that contain the block, whether or not the block
+    has handlers; the AST interpreter releases them when the exception leaves the block (after its handlers), before
+    those events.  The children run with DBG=1,
+    which attaches the debugger of DebuggerBlockLocalsUnwind.q, whose output is that of the AST interpreter in every
+    execution mode and compiled with qcc; the interpreter modes run on the AST tier while the debugger is attached,
+    so that they check the agreement with it, while the qcc cases check the debug IR.
+*/
+class DebuggerBlockLocalsUnwindTest inherits QUnit::Test {
+    public {
+        #! the output of DebuggerBlockLocalsUnwind.q with the AST interpreter
+        const Expected = "a: [\"A@39\", \"x\", \"~a\", \"A@36\", \"caught:A\"]
+b: [\"B@49\", \"x\", \"~b\", \"B@44\", \"caught:B\"]
+c: [\"x0\", \"~c0\", \"C@57\", \"C@56\", \"x1\", \"~c1\", \"C@53\", \"caught:C\"]
+d: [\"D@68\", \"x\", \"~d2\", \"D@65\", \"e\", \"~d1\", \"D@62\", \"caught:D\"]
+e: [\"E@77\", \"x\", \"~e\", \"E@73\", \"caught:E\"]
+f: [\"x\", \"F@84\", \"F@83\", \"~f\", \"caught:F\"]
+g: [\"G@94\", \"G@93\", \"x\", \"G@91\", \"caught:G\"]
+h: [\"y\", \"H@105\", \"H@104\", \"x\", \"H@101\", \"~h\", \"caught:H\"]
+i: [\"x\", \"I@113\", \"~iu\", \"I@112\", \"~i\", \"caught:I\"]
+n2: [\"x\", \"N2@123\", \"N2@122\", \"~n2\", \"caught:N2\"]
+n3: [\"x\", \"N3@131\", \"N3@130\", \"~n3\", \"caught:N3\"]
+n4: [\"x\", \"N4@139\", \"N4@138\", \"~n4\", \"caught:N4\"]
+n5: [\"x\", \"N5@146\", \"N5@145\", \"~n5\", \"caught:N5\"]
+n6: [\"x\", \"N6@153\", \"N6@152\", \"~n6\", \"caught:N6\"]
+k1: [\"K1@167\", \"x\", \"~k1b\", \"K1@164\", \"~k1a\", \"K1@162\", \"~k1o\", \"caught:K1\"]
+k2: [\"K2@180\", \"x\", \"K2@178\", \"~k2b\", \"K2@176\", \"~k2a\", \"K2@174\", \"~k2o\", \"caught:K2\"]
+k3: [\"K3@190\", \"~k3a\", \"K3@188\", \"c\", \"~k3z\"]
+k4: [\"K4A@204\", \"x\", \"K4A@202\", \"c\", \"K4B@210\", \"~k4b\", \"~k4a\", \"K4B@199\", \"caught:K4B\"]
+k5: [\"~k5a1\", \"K5@220\", \"x\", \"K5@218\", \"K5@217\", \"~k5a2\", \"K5@215\", \"caught:K5\"]
+m1: [\"x\", \"M1@232\", \"M1@231\", \"~m1u\", \"M1@228\", \"~m1\", \"caught:M1\"]
+m2: [\"x\", \"M2@242\", \"M2@241\", \"M2@238\", \"~m2\", \"caught:M2\"]
+m3: [\"x\", \"M3@251\", \"M3@250\", \"M3@248\", \"~m3\", \"caught:M3\"]
+m4: [\"x\", \"M4@261\", \"M4@260\", \"M4@257\", \"~m4\", \"caught:M4\"]
+m5: [\"x\", \"M5@273\", \"M5@272\", \"~m5u\", \"M5@270\", \"M5@268\", \"~m5\", \"caught:M5\"]
+closure: [5]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("DebuggerBlockLocalsUnwindTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/DebuggerBlockLocalsUnwind.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the locals of a block that an exception leaves", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the locals of a block that an exception leaves", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("DBG=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-debugger-block-locals-unwind-");
+        string exe = tmp.path + DirSep + "debugger-block-locals-unwind";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("DBG=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

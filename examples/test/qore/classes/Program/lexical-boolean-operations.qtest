@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - UTF-16 string conversion in lexical boolean operations
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalBooleanOperationsTest
+
+class LexicalBooleanObject {
+}
+
+#! Values created by modern code keep the boolean semantics of each consuming legacy operation.
+class LexicalBooleanOperationsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LexicalBooleanOperationsTest", "1.0", \ARGV) {
+        addTestCase("short string", \checkValue(), ("text", True, False));
+        addTestCase("long string", \checkValue(), ("long text value", True, False));
+        addTestCase("numeric string", \checkValue(), ("2", True, True));
+        addTestCase("zero string", \checkValue(), ("0", False, False));
+        addTestCase("empty string", \checkValue(), ("", False, False));
+        addTestCase("UTF-16 text", \checkValue(), (convert_encoding("text", "UTF-16LE"), True, False));
+        addTestCase("UTF-16 number", \checkValue(), (convert_encoding("2", "UTF-16BE"), True, True));
+        addTestCase("list", \checkValue(), ((1, 2), True, False));
+        addTestCase("empty list", \checkValue(), (new list<auto>(), False, False));
+        addTestCase("hash", \checkValue(), ({"key": 1}, True, False));
+        addTestCase("empty hash", \checkValue(), (new hash<auto>(), False, False));
+        addTestCase("binary", \checkValue(), (<01>, True, False));
+        addTestCase("empty binary", \checkValue(), (binary(), False, False));
+        addTestCase("buffer", \checkValue(), (new buffer<int8>((1,)), True, False));
+        addTestCase("object", \checkValue(), (new LexicalBooleanObject(), True, False));
+        addTestCase("call reference", \checkValue(), (\sprintf(), True, False));
+        addTestCase("closure", \checkValue(), (int sub () { return 1; }, True, False));
+        addTestCase("integer", \checkValue(), (2, True, True));
+        addTestCase("zero integer", \checkValue(), (0, False, False));
+        addTestCase("float", \checkValue(), (2.5, True, True));
+        addTestCase("number", \checkValue(), (2n, True, True));
+        addTestCase("boolean", \checkValue(), (True, True, True));
+        addTestCase("null", \checkValue(), (NULL, False, False));
+        addTestCase("nothing", \checkValue(), (NOTHING, False, False));
+        addTestCase("short circuit side effects", \shortCircuit());
+        set_return_value(main());
+    }
+
+    private checkValue(auto value, bool canonical, bool strict) {
+        foreach bool legacy in (False, True) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+            if (legacy) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse("list<bool> sub sample(auto v) {\n"
+                "    list<bool> result = (!!v, v && True, v || False, True && v, False || v, v ? True : False);\n"
+                "    bool condition = False;\n"
+                "    if (v) condition = True;\n"
+                "    push result, condition;\n"
+                "    condition = False;\n"
+                "    while (v) { condition = True; break; }\n"
+                "    push result, condition;\n"
+                "    condition = False;\n"
+                "    for (; v;) { condition = True; break; }\n"
+                "    push result, condition;\n"
+                "    int iterations;\n"
+                "    do { ++iterations; if (iterations == 2) break; } while (v);\n"
+                "    push result, iterations == 2;\n"
+                "    push result, (select (1,), v).size() == 1;\n"
+                "    push result, (map $1, (1,), v).size() == 1;\n"
+                "    push result, (select 1, v) == 1;\n"
+                "    push result, (select new ListIterator((1,)), v).size() == 1;\n"
+                "    push result, (select (map $1, (1,)), v).size() == 1;\n"
+                "    push result, (map $1, 1, v) == 1;\n"
+                "    push result, (map $1, new ListIterator((1,)), v).size() == 1;\n"
+                "    push result, (map $1, (map $1, (1,)), v).size() == 1;\n"
+                "    push result, !!(v ?: False);\n"
+                "    push result, !!(v ?* False);\n"
+                "    push result, ((map {1: 1}, (1,), v) ?? {}).size() == 1;\n"
+                "    push result, ((map {1: 1}, 1, v) ?? {}).size() == 1;\n"
+                "    push result, ((map {1: 1}, new ListIterator((1,)), v) ?? {}).size() == 1;\n"
+                "    return result;\n"
+                "}\n", "boolean-operations");
+            list<bool> expected = map legacy ? strict : canonical, (1..23);
+            assertEq(expected, p.callFunction("sample", value), "original lexical conversions");
+            if (legacy) {
+                p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            } else {
+                p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+            assertEq(expected, p.callFunction("sample", value), "conversions after Program option mutation");
+        }
+    }
+
+    private shortCircuit() {
+        foreach bool strict in (False, True) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('list<int> sub sample(auto v) {
+                int calls = 0;
+                auto ignored = v && ++calls;
+                int and_calls = calls;
+                calls = 0;
+                ignored = v || ++calls;
+                int or_calls = calls;
+                calls = 0;
+                ignored = v ? ++calls : (calls += 2);
+                int ternary_calls = calls;
+                calls = 0;
+                ignored = v ?: ++calls;
+                int coalescing_calls = calls;
+                calls = 0;
+                ignored = v ?* ++calls;
+                return (and_calls, or_calls, ternary_calls, coalescing_calls, calls);
+            }', "boolean-short-circuit");
+            foreach int mutation in (0, 1) {
+                assertEq(strict ? (0, 1, 2, 1, 1) : (1, 0, 1, 0, 0), p.callFunction("sample", "text"),
+                    sprintf("string predicate, mutation %d", mutation));
+                assertEq((1, 0, 1, 0, 0), p.callFunction("sample", True));
+                assertEq((0, 1, 2, 1, 1), p.callFunction("sample", False));
+                if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+        }
+    }
+}

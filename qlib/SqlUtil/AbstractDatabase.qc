@@ -1780,7 +1780,19 @@ db.refreshMaterializedView("mv_sales_by_region", {"concurrent": True});
         return mn;
     }
 
+    #! Returns an AbstractDatabase object for the database that the given connection string names
+    /** @param dsstr the datasource connection string
+        @param opts the database options
+
+        @throw PERMISSION-DENIED code that a sandbox governs cannot open a connection from a connection string (since
+        SqlUtil 3.11.0)
+    */
     static AbstractDatabase getDatabase(string dsstr, *hash<auto> opts) {
+        # a connection string opens a connection of its own: sandboxed code may use only the datasources that the host
+        # provides
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot open a database connection from a connection string or configuration; use a datasource that the host provides";
+        }
         Datasource nds(dsstr);
         return AbstractDatabase::getDatabase(nds, opts);
     }

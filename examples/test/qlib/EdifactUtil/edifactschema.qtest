@@ -16,6 +16,7 @@ public class EdifactSchemaTest inherits QUnit::Test {
         addTestCase("Schema loader fixture", \schemaLoaderFixtureTest());
         addTestCase("Schema loader raw storage", \schemaLoaderRawStorageTest());
         addTestCase("Schema loader cache behavior", \schemaLoaderCacheBehaviorTest());
+        addTestCase("Schema cache directory option", \schemaCacheDirOptionTest());
         addTestCase("Schema loader strict edge fixtures", \schemaLoaderStrictEdgeFixtureTest());
         addTestCase("Schema loader invalid fixtures", \schemaLoaderInvalidFixtureTest());
         addTestCase("Schema loader golden fixtures validation", \schemaLoaderGoldenFixturesValidationTest());
@@ -493,6 +494,35 @@ public class EdifactSchemaTest inherits QUnit::Test {
                 ));
             }
         );
+    }
+
+    #! the cache_dir option of the data provider and of loadRelease() leaves the process environment unchanged
+    schemaCacheDirOptionTest() {
+        string fixtures_root = getFixturesRoot();
+        string base_cache_dir = FsUtil::make_tmp_dir("edifactcachedir");
+        on_exit FsUtil::remove_tree(base_cache_dir);
+        *string env_before = getenv(EdifactCacheEnvVar);
+
+        EdifactSchemaDataProvider dp({
+            "release": "D21A",
+            "dir": fixtures_root + "D21A" + DirSep,
+            "cache_dir": base_cache_dir,
+            "reload": True,
+            "skip_cache_read": True,
+        });
+        assertEq(env_before, getenv(EdifactCacheEnvVar));
+        string schema_path = (new EdifactDirectoryCache(base_cache_dir)).getSchemaPath("D21A");
+        assertEq(0, schema_path.find(base_cache_dir));
+        assertTrue(is_file(schema_path), schema_path);
+
+        # the cached schema is read from the given directory
+        EdifactSchema cached = EdifactSchemaRegistry::loadRelease("D21A", {
+            "cache_dir": base_cache_dir,
+            "cache_only": True,
+            "reload": True,
+        });
+        assertEq("D21A", cached.release);
+        assertEq(env_before, getenv(EdifactCacheEnvVar));
     }
 
     schemaLoaderCacheBehaviorTest() {

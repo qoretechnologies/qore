@@ -1220,6 +1220,18 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     return inst;
 }
 
+QoreIRExprInstruction* QoreIRBuilder::createCheckCallTarget(const QoreValue& call, QoreIRValue target,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRExprInstruction>(QoreIROpcode::CheckCallTarget, call);
+    // no target: the call is made through self, on the current object (issue #5823)
+    if (target.isValid()) {
+        inst->operands.push_back(target);
+    }
+    inst->exception_target = exception_target;
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRBackgroundInstruction* QoreIRBuilder::createBackground(QoreIRBackgroundKind kind,
         const std::string& name, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc) {
@@ -1541,9 +1553,11 @@ QoreIRThrowInstruction* QoreIRBuilder::createRethrow(QoreIRBasicBlock* exception
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc) {
+QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc,
+        QoreIRBasicBlock* exception_target) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ThreadExit);
     inst->loc = loc;
+    inst->exception_target = exception_target;
     return inst;
 }
 

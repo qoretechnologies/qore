@@ -28,6 +28,7 @@
     information.
 */
 
+#include <qore/intern/LexicalReflection.h>
 #include <qore_reflection.h>
 #include <QC_Class.h>
 #include <QC_AbstractMethod.h>
@@ -322,6 +323,140 @@ hashdecl MethodAccessInfo {
     //! access string for the class containing the method; one of \c "public", \c "private", or \c "private:internal"
     string access_string;
 }
+
+// Both entries share the reflection authority checks; only the final invocation differs.
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue Class_callConstructor_C15_softlist_auto_C15_softlist_Type__impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionClass* c, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, const QoreListNode* arguments, const QoreListNode* type_args) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, c->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the class ptr must be valid
+    if (check_constructor(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
+        return QoreValue();
+    }
+
+    if (c->cls->runtimeCheckInstantiateClass(xsink)) {
+        return QoreValue();
+    }
+
+    const QoreTypeInfo* object_type_info = get_parameterized_class_type_info(c, type_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
+    QoreReflectionCallCheckHelper call_check(caller, c->pgm);
+    if constexpr (Lexical) return qore_lexical_reflection_construct(policy, *c->cls, nullptr, arguments, object_type_info, xsink);
+    else return c->cls->execConstructor(arguments, object_type_info, xsink);
+}
+
+static QoreValue Class_callConstructor_C15_softlist_auto_C15_softlist_Type__lexical(QoreObject* self, QoreReflectionClass* c, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    const QoreListNode* arguments = get_param_value(args, 0).get<const QoreListNode>();
+    const QoreListNode* type_args = get_param_value(args, 1).get<const QoreListNode>();
+    return Class_callConstructor_C15_softlist_auto_C15_softlist_Type__impl<true>(qore_get_native_semantic_policy(), self, c, args, runtime_cfg, xsink, arguments, type_args);
+}
+
+static QoreValue Class_callConstructor_C15_softlist_auto_C15_softlist_Type_(QoreObject* self, QoreReflectionClass* c, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue Class_newObject_VV_impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionClass* c, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, c->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the class ptr must be valid
+    if (check_constructor(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
+        return QoreValue();
+    }
+
+    if (c->cls->runtimeCheckInstantiateClass(xsink)) {
+        return QoreValue();
+    }
+
+    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
+    QoreReflectionCallCheckHelper call_check(caller, c->pgm);
+    if constexpr (Lexical) return qore_lexical_reflection_construct(policy, *c->cls, nullptr, args, nullptr, xsink);
+    else return c->cls->execConstructor(args, xsink);
+}
+
+static QoreValue Class_newObject_VV_lexical(QoreObject* self, QoreReflectionClass* c, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    return Class_newObject_VV_impl<true>(qore_get_native_semantic_policy(), self, c, args, runtime_cfg, xsink);
+}
+
+static QoreValue Class_newObject_VV(QoreObject* self, QoreReflectionClass* c, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue Class_newObjectArgs_nl_impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionClass* c, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, const QoreListNode* argv) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, c->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the class ptr must be valid
+    if (check_constructor(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, c->cls, c->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
+        return QoreValue();
+    }
+
+    if (c->cls->runtimeCheckInstantiateClass(xsink)) {
+        return QoreValue();
+    }
+
+    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
+    QoreReflectionCallCheckHelper call_check(caller, c->pgm);
+    if constexpr (Lexical) return qore_lexical_reflection_construct(policy, *c->cls, nullptr, argv, nullptr, xsink);
+    else return c->cls->execConstructor(argv, xsink);
+}
+
+static QoreValue Class_newObjectArgs_nl_lexical(QoreObject* self, QoreReflectionClass* c, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    const QoreListNode* argv = get_param_value(args, 0).get<const QoreListNode>();
+    return Class_newObjectArgs_nl_impl<true>(qore_get_native_semantic_policy(), self, c, args, runtime_cfg, xsink, argv);
+}
+
+static QoreValue Class_newObjectArgs_nl(QoreObject* self, QoreReflectionClass* c, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+static const QoreLexicalMethodRegistrationHelper::Entry lexical_entries_Class[] = {
+    {reinterpret_cast<q_method_t>(Class_callConstructor_C15_softlist_auto_C15_softlist_Type_), reinterpret_cast<q_method_t>(Class_callConstructor_C15_softlist_auto_C15_softlist_Type__lexical)},
+    {reinterpret_cast<q_method_t>(Class_newObject_VV), reinterpret_cast<q_method_t>(Class_newObject_VV_lexical)},
+    {reinterpret_cast<q_method_t>(Class_newObjectArgs_nl), reinterpret_cast<q_method_t>(Class_newObjectArgs_nl_lexical)},
+};
+
+
 
 //! This class provides information about %Qore classes
 /** @since %Qore 0.9
@@ -1551,34 +1686,7 @@ object o = cls.newObject();
     - create_object_args()
 */
 object Class::newObject(...) {
-    // the privileges of the calling code, captured before switching to the class's Program
-    QoreReflectionCaller caller;
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, c->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // the class ptr must be valid
-    if (check_constructor(caller, c->cls, c->pgm, xsink)) {
-        return QoreValue();
-    }
-    // a class that a user module does not export cannot be used by a caller its export boundary applies to
-    if (reflection_check_class_export(caller, c->cls, c->pgm, xsink)) {
-        return QoreValue();
-    }
-    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
-    if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
-        return QoreValue();
-    }
-
-    if (c->cls->runtimeCheckInstantiateClass(xsink)) {
-        return QoreValue();
-    }
-
-    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
-    QoreReflectionCallCheckHelper call_check(caller, c->pgm);
-    return c->cls->execConstructor(args, xsink);
+    return Class_newObject_VV_impl<false>({}, self, c, args, runtime_cfg, xsink);
 }
 
 //! creates an object if the current class with the arguments for the constructor given as a list
@@ -1606,34 +1714,7 @@ object o = cls.newObjectArgs(args);
     - create_object_args()
 */
 object Class::newObjectArgs(*softlist argv) {
-    // the privileges of the calling code, captured before switching to the class's Program
-    QoreReflectionCaller caller;
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, c->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // the class ptr must be valid
-    if (check_constructor(caller, c->cls, c->pgm, xsink)) {
-        return QoreValue();
-    }
-    // a class that a user module does not export cannot be used by a caller its export boundary applies to
-    if (reflection_check_class_export(caller, c->cls, c->pgm, xsink)) {
-        return QoreValue();
-    }
-    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
-    if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
-        return QoreValue();
-    }
-
-    if (c->cls->runtimeCheckInstantiateClass(xsink)) {
-        return QoreValue();
-    }
-
-    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
-    QoreReflectionCallCheckHelper call_check(caller, c->pgm);
-    return c->cls->execConstructor(argv, xsink);
+    return Class_newObjectArgs_nl_impl<false>({}, self, c, args, runtime_cfg, xsink, argv);
 }
 
 //! creates an object of the current class with the arguments for the constructor and optional type arguments
@@ -1668,39 +1749,7 @@ object q = cls.callConstructor((), (IntType,));
     - create_object_args()
 */
 object Class::callConstructor(*softlist<auto> arguments, *softlist<Type> type_args) [flags=NAMED_ARGS] {
-    // the privileges of the calling code, captured before switching to the class's Program
-    QoreReflectionCaller caller;
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, c->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // the class ptr must be valid
-    if (check_constructor(caller, c->cls, c->pgm, xsink)) {
-        return QoreValue();
-    }
-    // a class that a user module does not export cannot be used by a caller its export boundary applies to
-    if (reflection_check_class_export(caller, c->cls, c->pgm, xsink)) {
-        return QoreValue();
-    }
-    // the access of the constructor's variants, for code that a sandbox governs or that is restricted
-    if (reflection_check_method_access(caller, c->cls->getConstructor(), xsink)) {
-        return QoreValue();
-    }
-
-    if (c->cls->runtimeCheckInstantiateClass(xsink)) {
-        return QoreValue();
-    }
-
-    const QoreTypeInfo* object_type_info = get_parameterized_class_type_info(c, type_args, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
-    QoreReflectionCallCheckHelper call_check(caller, c->pgm);
-    return c->cls->execConstructor(arguments, object_type_info, xsink);
+    return Class_callConstructor_C15_softlist_auto_C15_softlist_Type__impl<false>({}, self, c, args, runtime_cfg, xsink, arguments, type_args);
 }
 
 //! Returns the type object for this class
@@ -2308,3 +2357,6 @@ static list<Class> Class::findAllRegex(Program[QoreProgram] pgm, string pattern,
     }
     return find_all_classes(caller, *pattern, re_opts, *pgm, xsink);
 }
+
+
+//! @qppinit: QoreLexicalMethodRegistrationHelper lexical_registration(lexical_entries_Class);

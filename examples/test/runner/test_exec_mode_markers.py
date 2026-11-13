@@ -166,7 +166,11 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTConstantImportStale (#5798) and AOTDumpInfoPendingConstants (#5799): their checks run qcc and the
         #   programs and modules it compiles in child processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
-        # - RestSchemaModuleLazyTypes: the modules are loaded and compared in child processes
+        # - JitTeardownAtExit: JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
+        # - qlib-module-domains: each module is loaded first by a restricted Program in a child process, as a loaded
+        #   module is not checked again for the next Program (#5803)
+        # - nested-module-parse: the module is loaded in a child process whose module path holds it (#5803, #5938)
+        # - RestSchemaModuleLazyTypes-<n>: the modules are loaded and compared in child processes
         # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
         #   WebSocket client in the test's own process only drives it
         # - callref-object-method-program and reflection-typed-hash-visibility (#5692): their probes run in child
@@ -176,7 +180,17 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
-                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest",
+                                 "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-3.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-4.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-5.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-6.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest"]),
                          sorted(non_harness_children))
 

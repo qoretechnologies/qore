@@ -332,7 +332,8 @@ log("started listener on %s", lh.desc);
     - fixed sending two conflicting response header fields when a handler or the server configuration used a
       name in another case than the server, as with \c "content-type": the server added its own
       \c Content-Type, \c Date, \c Server, or \c Connection field, and a configured header was not replaced by
-      the handler's; header names are now matched case-insensitively (see
+      the handler's; header names are now matched case-insensitively, also for the configured headers that a
+      subclass sets or changes after the constructor, such as security headers like \c X-Frame-Options (see
       @ref HttpServer::http_canonicalize_reply_header_names() "http_canonicalize_reply_header_names()")
     - a multipart request body is delivered to the handler as binary data, since the request charset describes
       neither the container nor the parts inside it, each of which carries its own encoding
@@ -343,6 +344,11 @@ log("started listener on %s", lh.desc);
       handler that never returns; the no-argument call is unchanged
     - new @ref HttpServer::HttpServer::getRunningListenerCount() "getRunningListenerCount()" method, so callers
       can report what is still in flight after a bounded wait times out
+    - @ref HttpServer::HttpServer::stop() "stop()" lets the requests in progress finish before it closes the
+      connections (HTTP/2 and HTTP/3 \c GOAWAY, HTTP/1.1 \c Connection: \c close), waiting at most the new
+      \c drain_timeout option (the \c quic_drain_timeout option is a deprecated alias);
+      @ref HttpServer::HttpServer::stopNoWait() "stopNoWait()" does the same in the background, and the new
+      @ref HttpServer::HttpServer::stopImmediate() "stopImmediate()" stops at once, as \c stop() did before
     - fixed keeping the connection open after the response to an HTTP/1.0 request without the \c keep-alive
       connection option, or to a request with the \c close option (RFC 9112 section 9.3): a handler can close a
       connection, but a handler response can no longer keep open a connection that the request requires to close
@@ -797,18 +803,27 @@ public hashdecl HttpServerOptionInfo {
     */
     int alt_svc_max_age = 3600;
 
-    #! QUIC GOAWAY drain timeout — duration to wait for in-flight requests during graceful shutdown
-    /** Per RFC 9114 Section 5.2, the server sends a GOAWAY notice first, then waits
-        for in-flight requests to complete before sending the final GOAWAY.  This
-        timeout controls that waiting period.
+    #! The maximum time that @ref HttpServer::HttpServer::stop() "HttpServer::stop()" waits for the requests in progress to finish
+    /** When the server stops, it accepts no new connections and tells its clients that it is closing their
+        connections (HTTP/2 and HTTP/3: \c GOAWAY; HTTP/1.1: \c Connection: \c close), then waits at most this long
+        for the requests that it has accepted to be answered before it closes whatever is left (see
+        @ref HttpServer::HttpServer::stop() "HttpServer::stop()").
 
-        The default (5s) allows sufficient time for remote clients to receive the
-        GOAWAY notice and for in-flight requests to complete.  For localhost or
-        low-latency testing, a shorter value (e.g. 100ms) may be used.
+        The default is 5 seconds; zero or a negative value means that the server does not wait, as with
+        @ref HttpServer::HttpServer::stopImmediate() "HttpServer::stopImmediate()".
+
+        @since HttpServer 1.7
+    */
+    *timeout drain_timeout;
+
+    #! Deprecated: use \c drain_timeout instead
+    /** Used as the \c drain_timeout option when that option is not set.
+
+        @deprecated use \c drain_timeout, which applies to every HTTP version
 
         @since HttpServer 1.6
     */
-    timeout quic_drain_timeout = 5s;
+    *timeout quic_drain_timeout;
 
     #! The maximum time to wait for an HTTP/1.x client to close its side of the connection after the last response
     /** When the server closes an HTTP/1.x connection after a response, the client may still be sending data that
@@ -912,6 +927,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         const ReadTimeout = HttpServer::ReadTimeout;  # recvs timeout after 30 seconds
         #! default poll timeout in ms
         const PollTimeout = 250ms;
+
+        #! The default maximum time that stop() waits for the requests in progress (the \c drain_timeout option)
+        /** @since HttpServer 1.7
+        */
+        const DefaultDrainTimeout = 5s;
 
         # logging options
         const LP_LOGPARAMS = HttpServer::LP_LOGPARAMS;
@@ -1058,6 +1078,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! True while stop() is in progress
         bool stopping = False;
 
+        #! Signaled with stop_m when a stop in progress has ended
+        Condition stop_cond();
+
+        #! The maximum time that stop() waits for the requests in progress (the \c drain_timeout option)
+        timeout drain_timeout = DefaultDrainTimeout;
+
         # permanent handlers; these handlers are never removed
         HttpHandlerList handlers();
 
@@ -1087,10 +1113,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         # other misc response headers
         hash<auto> hdr;
-
-        # the lower-case names of the configured response headers that are not managed by the server, each between
-        # newlines; see getMergedResponseHeaders()
-        list<string> hdr_merge_names();
 
         #! override message body encoding if none is received from the sender
         /** @note http://tools.ietf.org/html/rfc2616#section-3.7.1 states that it must be iso-8850-1
@@ -1203,6 +1225,16 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         const MaxCachedEncodingPreferences = 64;
         const MaxCachedEncodingHeaderLength = 256;
+    }
+
+    private:internal {
+        #! The information about the names of the fields of the configured response headers (\c hdr)
+        /** A subclass can change \c hdr after the constructor and while requests are served; each response reads
+            \c hdr and this once and compares the headers that this was made for with its own, so that the names are
+            examined again only when the headers change (see getConfiguredHeaderInfo()).  It is replaced as a whole,
+            so that the information read is that of the headers that it was made for
+        */
+        *hash<Priv::ConfiguredHeaderInfo> hdr_info;
     }
     #! @endcond
 
@@ -1348,8 +1380,10 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
     }
 
     #! calls stop() and destroys the object
+    /** If a stop is in progress (for example one started with stopNoWait()), waits for it to end first
+    */
     destructor() {
-        stop();
+        stopIntern(True, True);
     }
 
     #! Returns default response headers
@@ -2045,31 +2079,32 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         return listeners.size();
     }
 
-    #! stops all listeners; does not wait for all connections on the listeners to close
+    #! Starts stopping the server in the background, as stop() does, and returns at once
+    /** The server stops accepting connections and drains the connections that it has, then closes whatever is
+        left, exactly as stop() does, in a thread of its own; use waitStop() to wait for the stop to end, with a
+        timeout to bound the wait.
+
+        @note before HttpServer 1.7, this method stopped the listeners without closing the connections that the server
+        had: they were served until the server was destroyed
+
+        @see
+        - stop()
+        - stopImmediate()
+        - waitStop()
+    */
     stopNoWait() {
-        # Wake dedicated persistent-handler threads (see HttpListener::handleQueuedPersistentConnection)
-        # so they return immediately instead of waiting up to their idle TTL in
-        # Queue::get().  Without this, HttpListener::stop()'s cThreads.wait()
-        # below blocks for the full TTL even though all I/O is already async.
-        # (The synchronous HttpServer::stop() path does this via asyncIo.stop();
-        # stopNoWait() users must get the same fast-exit behaviour.)
-        if (asyncIo) {
+        # the stop is claimed here, so that a stop() or the destructor called while it runs does not start another
+        if (beginStop(False)) {
             try {
-                asyncIo.signalPersistentQueuesToClose();
-            } catch () {
-                # asyncIo may already be stopped; safe to ignore
+                background runStop(True);
+            } catch (hash<ExceptionInfo> ex) {
+                # no thread could be started: the stop is not claimed any more
+                AutoLock al(stop_m);
+                stopping = False;
+                stop_cond.broadcast();
+                rethrow;
             }
         }
-
-        # stop all listeners
-        {
-            lm.enter();
-            on_exit lm.exit();
-
-            map $1.stopNoWait(), listeners.iterator();
-        }
-
-        threadPool.stop();
     }
 
     #! waits for all listeners to be stopped; call after calling HttpServer::stopNoWait()
@@ -2209,31 +2244,96 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         #printf("stopped %s c=%y\n", l.getAddress(), c.getCount());
     }
 
-    #! Stops the HTTP server and releases all resources
+    #! Stops the HTTP server and releases all resources, letting the requests in progress finish first
     /** Performs a synchronous, ordered shutdown:
+        -# Starts draining the connections: closes the listening sockets, and tells the clients that their connections
+           are closing: HTTP/2 and HTTP/3 connections are sent a \c GOAWAY frame with the last request that the server
+           processed, an idle HTTP/1.1 connection is closed, and a request in progress on an HTTP/1.1 connection is
+           answered with \c Connection: \c close; each connection is closed when it has answered its requests.  A
+           protocol upgrade or an event stream that a handler starts now is refused with a 503 response, and a
+           CONNECT tunnel is ended
         -# Closes the dedicated connections with their protocol's closing handshake, all at the same time: WebSocket
            connections are sent a close frame (code 1001, going away), and the server waits for the clients' close
            frames at most the close timeout of their handlers in total (see
            @ref WebSocketHandler::WebSocketHandler::setCloseTimeout() "WebSocketHandler::setCloseTimeout()")
         -# Signals streaming handlers (SSE, WebSocket) to stop
+        -# Waits for the drain to end, at most the \c drain_timeout option from the start of the stop (5 seconds by
+           default; see @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), woken by the last connection
+           that closes
         -# Stops the async I/O controller (cancels all accept, connection, and streaming
-           operations and waits for in-flight handler tasks to complete)
+           operations that are left and waits for in-flight handler tasks to complete)
         -# Cancels remaining ops by owner on the global async I/O controller
         -# Stops listeners and waits for all listener-stopped callbacks
         -# Flushes any remaining async callbacks and stops the internal thread pool
 
         This method blocks until all connections are closed and handler tasks complete.
 
-        @note HttpServer instances are not restartable after \c stop(). Create a new
-        HttpServer if a restart is needed.
+        @note
+        - HttpServer instances are not restartable after \c stop(). Create a new HttpServer if a restart is needed.
+        - if a stop is in progress (for example one started with stopNoWait()), this method returns at once; use
+          waitStop() to wait for it
+        - before HttpServer 1.7, this method did not wait for the requests in progress: it closed the connections at
+          once, as stopImmediate() does
+
+        @see
+        - stopImmediate()
+        - stopNoWait()
     */
     stop() {
-        {
-            AutoLock al(stop_m);
-            if (stopped || stopping) {
-                return;
+        stopIntern(True, False);
+    }
+
+    #! Stops the HTTP server and releases all resources without waiting for the requests in progress
+    /** Performs the same shutdown as stop() without draining the connections: HTTP/2 and HTTP/3 clients are sent a
+        \c GOAWAY frame, and all connections are closed at once.
+
+        This method blocks until all connections are closed and handler tasks complete.
+
+        @since HttpServer 1.7
+
+        @see
+        - stop()
+    */
+    stopImmediate() {
+        stopIntern(False, False);
+    }
+
+    #! Stops the server, draining the connections first if \a drain is @ref True
+    /** @param drain if @ref True, the connections are drained (see stop()) before the controller is stopped
+        @param wait_in_progress if @ref True and a stop is in progress, waits for it to end (used by the destructor,
+        which must not destroy the object under a stop that runs in another thread)
+    */
+    private stopIntern(bool drain, bool wait_in_progress) {
+        if (beginStop(wait_in_progress)) {
+            runStop(drain);
+        }
+    }
+
+    #! Claims the stop of the server; returns @ref True if the caller is to run it with runStop()
+    /** A stop that is in progress or done is not run again: the call returns @ref False at once, or, with
+        \a wait_in_progress, when the stop in progress has ended
+    */
+    private bool beginStop(bool wait_in_progress) {
+        AutoLock al(stop_m);
+        if (stopping && wait_in_progress) {
+            while (stopping) {
+                stop_cond.wait(stop_m);
             }
-            stopping = True;
+        }
+        if (stopped || stopping) {
+            return False;
+        }
+        stopping = True;
+        return True;
+    }
+
+    #! Runs a stop claimed with beginStop()
+    private runStop(bool drain) {
+        # the stop is ended (and waiting destructors woken) whatever happens below
+        on_exit {
+            AutoLock al(stop_m);
+            stopping = False;
+            stop_cond.broadcast();
         }
         # the global controller logs through this server's logger until the server has stopped
         on_exit restoreControllerLogger();
@@ -2244,10 +2344,32 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             }
             callback_appender = NOTHING;
         }
+        # A drain starts first: the server accepts no new connection and takes no new long-lived stream, so that
+        # nothing new starts while the long-lived connections are closed below; a drain timeout of zero or less
+        # means no drain
+        bool do_drain = drain && asyncIo && drain_timeout > 0;
+        int drain_start_us = clock_getmicros();
+        if (do_drain) {
+            asyncIo.startDrain();
+        }
+
         # Close the dedicated connections (for example WebSocket connections) with their protocol's closing handshake
-        # first, while the I/O that the handshakes need still runs; all of them close at the same time, so this
+        # while the I/O that the handshakes need still runs; all of them close at the same time, so this
         # waits at most one handshake timeout in total
         closeDedicatedConnections();
+
+        # Wait for the requests in progress to be answered, at most what is left of the drain timeout; the other
+        # long-lived streams (SSE, persistent handler loops) are ended first, as they have no end that a drain could
+        # wait for
+        if (do_drain) {
+            signalStreamingHandlersToStop();
+            asyncIo.signalPersistentQueuesToClose();
+            int remaining_ms = drain_timeout - (clock_getmicros() - drain_start_us) / 1000;
+            if (remaining_ms <= 0 || !asyncIo.waitDrain(remaining_ms)) {
+                log("stop: the requests in progress did not finish in the drain timeout (%y); closing the connections "
+                    "that are left", drain_timeout);
+            }
+        }
 
         # Cancel operations owned by this server on the global controller FIRST
         # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation).
@@ -3432,6 +3554,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
+        drain_timeout = opts.drain_timeout ?? opts.quic_drain_timeout ?? DefaultDrainTimeout;
         # checked before anything is created
         compression_levels = checkCompressionLevels(opts.compression_levels ?? {});
         int idle_threads = opts.idle_threads;
@@ -3461,11 +3584,6 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         hdr = opts.hdr.val()
             ? http_canonicalize_reply_header_names(opts.hdr)
             : {"X-Powered-By": "Qore/" + Qore::VersionString};
-        {
-            # see getMergedResponseHeaders()
-            hash<string, bool> managed = map {$1.lwr(): True}, HttpServerManagedHeaderNames;
-            hdr_merge_names = map "\n" + $1.lwr() + "\n", keys hdr, !managed{$1.lwr()};
-        }
         protect_last_listener = opts.protect_last_listener ?? False;
         logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
         date effective_ttl = opts.ttl ? opts.ttl : HttpServer::DefaultTtl;
@@ -3486,7 +3604,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             "max_handler_threads": opts.max_handler_threads,
             "min_idle_handler_threads": opts.min_idle_handler_threads,
             "max_idle_handler_threads": opts.max_idle_handler_threads,
-            "quic_drain_timeout": opts.quic_drain_timeout,
+            "quic_drain_timeout": drain_timeout,
             "quic_headers_only": opts.quic_headers_only,
             "lingering_close_timeout": opts.lingering_close_timeout,
             "peer_hostname_lookup": opts.peer_hostname_lookup,
@@ -3603,7 +3721,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     /** @param listener_id the TCP listener ID (from cx."listener-id")
         @return the base response headers with Alt-Svc for this listener's QUIC counterpart
     */
-    private hash<auto> getResponseHeaders(int listener_id) {
+    private:internal hash<auto> getResponseHeaders(int listener_id) {
         # the headers are copied to an "auto!" local: the hdr option may be narrowed (e.g. hash<string, int> for
         # {"X-Instance": 1}), and every response adds string headers to them
         hash<auto!> rv = self.hdr;
@@ -3634,29 +3752,59 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     }
 
     #! Returns the configured response headers of the listener merged with a handler's response headers
-    /** @param listener_id the listener ID
+    /** @param conf_hdr the configured response headers (\c hdr), read once for the response
+        @param info the information about the names of the fields of \a conf_hdr; see getConfiguredHeaderInfo()
+        @param listener_id the listener ID
         @param hdr the response headers of the handler; the names of the fields managed by the server must be
         canonical (see @ref HttpServer::http_canonicalize_reply_header_names())
 
         @return the merged headers; a field in \a hdr replaces the configured fields with the same name in any case
     */
-
-    private hash<auto> getMergedResponseHeaders(int listener_id, *hash<auto> hdr) {
-        hash<auto> base = getResponseHeaders(listener_id);
+    private:internal hash<auto> getMergedResponseHeaders(hash<auto> conf_hdr, hash<Priv::ConfiguredHeaderInfo> info,
+            int listener_id, *hash<auto> hdr) {
+        # the headers of getResponseHeaders(), built here, as this is called for every response and a call of that
+        # method costs more than building them
+        hash<auto!> base = conf_hdr;
+        *string alt_svc = listener_alt_svc{listener_id};
+        if (alt_svc) {
+            base."Alt-Svc" = alt_svc;
+        }
         if (!hdr) {
             return base;
         }
-        # this is called for every response: the managed fields have canonical names in both hashes, so they are
-        # replaced by the plain hash addition, and only the other configured fields can be named in another case
-        if (hdr_merge_names) {
+        # this is called for every response: the plain hash addition gives the merged headers when the handler's
+        # headers have no field of the configured headers in any case; when they have one, the merge removes the
+        # configured field, so that the handler's field is sent in its own place, as any other field of the handler
+        if (info.merge_names || alt_svc) {
             string names = "\n" + (keys hdr).join("\n").lwr() + "\n";
-            foreach string name in (hdr_merge_names) {
+            if (alt_svc && names.find("\nalt-svc\n") >= 0) {
+                return mergeResponseHeaders(base, hdr);
+            }
+            foreach string name in (info.merge_names) {
                 if (names.find(name) >= 0) {
                     return mergeResponseHeaders(base, hdr);
                 }
             }
         }
         return base + hdr;
+    }
+
+    #! Returns the information about the names of the fields of the configured response headers given
+    /** Called by sendReply() when the configured headers (\c hdr) of a response are not equal to those that
+        \c hdr_info was made for (a subclass can change \c hdr after the constructor and while requests are served);
+        the information is kept in \c hdr_info for the next responses.  It depends only on the names of the fields,
+        which equal headers share, so a response uses it with its own configured headers, whose fields can be in
+        another order
+    */
+    private:internal hash<Priv::ConfiguredHeaderInfo> getConfiguredHeaderInfo(hash<auto> conf_hdr) {
+        hash<Priv::ConfiguredHeaderInfo> info = <Priv::ConfiguredHeaderInfo>{
+            "hdr": conf_hdr,
+            # the canonical names replace the others, so the keys differ unless they are all canonical
+            "canonical": http_canonicalize_reply_header_names(conf_hdr) == conf_hdr,
+            "merge_names": map "\n" + $1.lwr() + "\n", keys conf_hdr,
+        };
+        hdr_info = info;
+        return info;
     }
 
     #! Returns \a hdr merged into \a base; a field in \a hdr replaces the fields of \a base with the same name in any case
@@ -4970,6 +5118,21 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     private sendReply(RequestHelper request_helper, HttpListener listener, Socket s,
             *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, reference<hash> cx, hash<auto> hdr,
             bool head, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        # a stopping server takes no new long-lived connection, which would hold its drain until the drain timeout:
+        # a protocol upgrade (HTTP/1.1 101, or an HTTP/2 or HTTP/3 extended CONNECT), a CONNECT tunnel or an event
+        # stream is refused (qore#5899)
+        if (stopping && (rv."code" == 101 || hdr.method == "CONNECT"
+                || (rv.sse_source ? rv.sse_source.isUsed() : rv.hdr."Content-Type" == MimeTypeSse))) {
+            listener.log("cid %d: refusing %s from handler %y: the server is stopping", cx.id,
+                (rv."code" == 101 || hdr.method == "CONNECT") ? "a protocol upgrade or tunnel" : "an event stream",
+                cx.handler_name);
+            cx.close = True;
+            rv = <HttpResponseInfo>{
+                "code": 503,
+                "body": "the server is stopping",
+                "hdr": {"Content-Type": "text/plain", "Connection": "close"},
+            };
+        }
         if (request_helper.log_info) {
             listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
                 rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
@@ -5037,8 +5200,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         # MUST NOT include a message-body. All other responses do include a
         # message-body, although it MAY be of zero length.
 
+        # the configured headers of this response, read once, as a subclass can change them while requests are served,
+        # and the information about their names, made again only when they change
+        hash<auto> conf_hdr = self.hdr;
+        *hash<Priv::ConfiguredHeaderInfo> hdr_info = self.hdr_info;
+        if (!hdr_info || hdr_info.hdr !== conf_hdr) {
+            hdr_info = getConfiguredHeaderInfo(conf_hdr);
+        }
         # the names of the fields managed by the server are canonical from here on
-        rv.hdr = getMergedResponseHeaders(cx."listener-id", http_canonicalize_reply_header_names(rv.hdr));
+        rv.hdr = getMergedResponseHeaders(conf_hdr, hdr_info, cx."listener-id",
+            http_canonicalize_reply_header_names(rv.hdr));
 
         # a response to a HEAD request has the headers of the GET response (RFC 9110 section 9.3.2)
         if (head && rv."code" >= 200 && rv."code" != 204 && rv."code" != 304) {
@@ -5124,7 +5295,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         rv.hdr.Date = getDateHeader();
 
-        HttpServer::http_set_reply_headers(s, cx, \rv);
+        # the names of the fields managed by the server are canonical since getMergedResponseHeaders() above if they
+        # are canonical in the configured headers, as the handler's headers were made canonical and the server sets
+        # only canonical names after that; whether they are canonical in the configured headers merged above is known
+        # from getConfiguredHeaderInfo(), which costs less than finding the names of the merged headers canonical again
+        HttpServer::http_set_reply_headers(s, cx, \rv, NOTHING, hdr_info.canonical);
 
         # Detect HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)
         bool ext_connect = is_extended_connect(cx, hdr);
@@ -5151,13 +5326,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # the headers of the handler's response describe the representation that is not sent (ETag,
             # Content-Range, Set-Cookie, ...): the refusal has only the listener's headers and the standard ones
             # (RFC 9110 sections 8.8 and 14.4)
-            rv.hdr = getMergedResponseHeaders(cx."listener-id", NOTHING) + {"Date": getDateHeader()};
+            rv.hdr = getMergedResponseHeaders(conf_hdr, hdr_info, cx."listener-id", NOTHING)
+                + {"Date": getDateHeader()};
             HttpServer::http_set_reply_headers(s, cx, \rv);
         }
 
         if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
-            doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
+            doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out,
+                request_helper.log_info);
         } else if (rv."code" >= 400) {
             # a send_callback provides the message body
             if (!head && !rv.body && !rv.hasKeyValue("chunked_body") && !rv.send_callback) {
@@ -5176,7 +5353,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         rv.hdr."Content-Type" = default_content_type;
                     }
                 }
-                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out,
+                    request_helper.log_info);
             } else {
                 sendHttpError(listener, cx, s, rv."code", rv.body,
                     rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
@@ -5192,9 +5370,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             #    rv.hdr."Transfer-Encoding", cx.encoding, rv.body);
 
             # the Content-Type of a body without one depends on the data, which compression below turns into
-            # binary data
-            *string default_content_type = getDefaultContentType(rv, cx."response-encoding"
-                ?? s.getEncoding().lwr());
+            # binary data; compression does not set a Content-Type, so it is determined only for a response without one
+            *string default_content_type = rv.hdr."Content-Type"
+                ? NOTHING
+                : getDefaultContentType(rv, cx."response-encoding" ?? s.getEncoding().lwr());
 
             # compress body if eligible for compression; skip InputStream bodies (streaming),
             # send_callback responses, and handlers that manage their own content encoding
@@ -5234,7 +5413,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # For HTTP/2 and HTTP/3 extended CONNECT streaming, don't send response here -
             # it's handled in the dedicated socket section
             if (!rv.streaming || !ext_connect) {
-                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out,
+                    request_helper.log_info);
             }
         }
 
@@ -5884,7 +6064,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         };
     }
 
-    #! Returns the code that the async I/O controller calls when an SSE stream has ended
+    #! Returns the code that is called when an SSE stream has ended: by the async I/O controller, or, for a client dropped for its bound, on the thread that queued the data
     /** Deregisters a socket handler's connection, ends the run of the stream's event source, if any, and reports the
         end to the request's async target, if given.  Created here so that the frame of sendReply() keeps no locals
         for it.
@@ -5979,8 +6159,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
     # chunked_allowed: False for a response to an HTTP/1.0 request, where a streamed message body is delimited by
     # closing the connection instead of chunked transfer encoding
+    # log_info: if True, the request's INFO messages are logged (RequestHelper::log_info)
     private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv, bool chunked_allowed,
-            *ResponseAfterSendNotifier after_send, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            *ResponseAfterSendNotifier after_send, *reference<hash<HttpAsyncResponseInfo>> async_response_out,
+            bool log_info) {
         # Handle send_callback responses (e.g. DataStream protocol)
         if (rv.send_callback) {
             # Capture callback for the response-sending code
@@ -6055,8 +6237,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             is.unassignThread();
             body = NOTHING;
         }
-        listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
-            rv."code", body ? body.size() : 0, exists is);
+        # the message is built only if it is logged; whether it is was decided when the request started
+        if (log_info) {
+            listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
+                rv."code", body ? body.size() : 0, exists is);
+        }
         async_response_out = <HttpAsyncResponseInfo>{
             "code": rv."code",
             "hdr": rv.hdr ?? {},
@@ -8640,6 +8825,16 @@ hashdecl ControllerLoggerInfo {
     LoggerInterface logger;
     #! the controller's logger that the server's replaced, restored when the server stops
     *LoggerInterfaceBase prev;
+}
+
+#! the information about the names of the fields of the configured response headers of a server (HttpServer::hdr_info)
+hashdecl ConfiguredHeaderInfo {
+    #! the configured response headers that the information is about
+    hash<auto> hdr;
+    #! @ref True if the names of the fields managed by the server are canonical in \c hdr
+    bool canonical;
+    #! the lower-case names of the fields in \c hdr, each between newlines
+    list<string> merge_names;
 }
 
 # class containing handler info

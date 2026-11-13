@@ -402,6 +402,12 @@ public class KitDataProviderTest inherits QUnit::Test {
         }
         # an error response other than 429 is not retried
         assertEq(1, handler.requests.size());
+
+        # issue #5838: the record type is the hash of the fields of the tag type, which the base class uses for the
+        # example record data (the child class's method returned the type object instead)
+        hash<auto> example = provider.getChildProviderPath("tags").getExampleRecordData();
+        assertEq(True, example.hasKey("id"), "example record data has the id field");
+        assertEq(True, example.hasKey("name"), "example record data has the name field");
     }
 
     # ========== INTEGRATION TESTS ==========
