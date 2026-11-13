@@ -113,21 +113,16 @@
     and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
     the class and its subclasses (\c METHOD-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR for a private variant), as documented.
 
-    @par No-Op Builtin Variants Are Not Called With Strict Arguments
-    With @ref Qore::PO_STRICT_ARGS or @ref Qore::PO_REQUIRE_TYPES (as with @ref modern "%modern"), @ref NOOP variants
-    are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and one with no value at run time, for
-    example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR instead of returning a constant.
-
     @par Debugger Callbacks Run With the Cancellation Deferred
     The notification methods of a @ref Qore::DebugProgram "DebugProgram" run with the cancellation of the thread
     deferred, so a thread that is cancelled or interrupted while it is stopped in the debugger stays stopped until the
     debugger resumes it (issue #5794).
 
-    @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
+    @par No-Op Builtin Variants Are Not Called With Strict Arguments
     With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
-    flagged @ref NOOP are no longer resolved at run time, as at parse time: the no-op calls, for example
-    <tt>chr()</tt> of an unassigned member, raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant value.
-    The most common cases keep their results with regular variants:
+    flagged @ref NOOP are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and a no-op call at run
+    time, for example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR; common cases keep their
+    results with regular variants:
     - <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing return \c 0;
     - <tt>sort()</tt>, <tt>sort_descending()</tt>, <tt>sort_stable()</tt> and <tt>sort_descending_stable()</tt> of
       no value (such as \c keys of an unassigned hash) return no value; as these calls are resolved at run time, a
@@ -1791,14 +1786,10 @@
     - @ref Qore::reload_module() "reload_module()" of a module that other modules require corrupted the module
       dependency records when the reload failed or when it succeeded, which stopped a debug build with an assertion
       at exit; the records of the module that the reload replaces are now kept until the module is deleted
-    - \c qcc and <tt>qore --compile-module</tt> kept the dependency records of a directory (separated) module that
-      loaded another module and then failed to parse, which stopped a debug build with an assertion at exit
-      (\c SIGABRT); the records that a module's load makes are now released whenever the module is not registered,
-      including when it is only compiled or when the error was already handled, and the binary modules it required
-      are released with them, while a module whose initialization fails, which stays registered, keeps them, so the
-      binary modules it requires are not deleted before it at exit; the user modules that the initialization of an AOT
-      module compiled by an older qcc loads are no longer recorded as dependencies of the module, a binary module,
-      which kept them forever (<a href="https://github.com/qoretechnologies/qore/issues/5953">issue 5953</a>)
+    - a debug build of \c qcc or <tt>qore --compile-module</tt> stopped with an assertion at exit after a directory
+      module that loaded another module failed to parse; a failed module load now always releases its dependency
+      records, and an AOT module compiled by an older \c qcc no longer keeps the modules that its initialization
+      loads (<a href="https://github.com/qoretechnologies/qore/issues/5953">issue 5953</a>)
     - in native AOT code (qcc), a closure in an @ref on_error "on_error", @ref on_exit "on_exit" or
       @ref on_success "on_success" handler that captured a variable the handler declares (a catch or foreach variable)
       and a local of the function made a later read of that local raise LVALUE-ERROR, or read NOTHING; the output
