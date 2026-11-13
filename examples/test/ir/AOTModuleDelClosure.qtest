@@ -42,6 +42,8 @@ class AOTModuleDelClosureTest inherits QUnit::Test {
         addTestCase("the del closure of a module runs before those of the modules it requires, indirectly too",
             \testDelOrder());
         addTestCase("the del closure of a local module of a compiled script runs", \testScriptLocalModuleDel());
+        addTestCase("the del closures of the local modules of a compiled script run in the order of their dependencies",
+            \testScriptLocalModuleDelOrder());
 
         set_return_value(main());
     }
@@ -341,6 +343,38 @@ printf(\"value=%%d\\n\", AotScriptDel::value());
             assertEq(expected, result, "output of the executable with " + opt);
             assertEq("del\n", is_file(marker) ? ReadOnlyFile::readTextFile(marker) : "",
                 "the del closure of the embedded local module runs with " + opt + ": " + result);
+        }
+    }
+
+    #! two local modules of a script, the first requiring the second: its del closure runs first, though the names sort
+    #! the other way for the closures that the compiler collects
+    testScriptLocalModuleDelOrder() {
+        TmpDir tmp("qore-aot-del-script-order-");
+        string dir = tmp.path;
+        mkdir(dir + "/mods");
+        string marker = dir + "/marker.txt";
+        write(dir + "/mods/AotScrA.qm", orderModuleSource("AotScrA", marker, "AotScrB"));
+        write(dir + "/mods/AotScrB.qm", orderModuleSource("AotScrB", marker));
+        string script = dir + "/script.qr";
+        write(script, sprintf("%%modern
+%%no-child-restrictions
+%%append-module-path %s/mods
+%%requires AotScrA
+printf(\"value=%%d\\n\", AotScrA::value());
+", dir));
+        unlink(marker);
+        string expected = run(sprintf("%s %s -b %s", env(), qore_bin, script));
+        assertEq("value=2\n", expected, "interpreter output");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = dir + "/script" + opt;
+            unlink(exe);
+            string out = run(sprintf("%s %s %s -o %s %s", env(), qcc_bin, opt, exe, script));
+            assertTrue(is_file(exe), "executable compiled with " + opt + ": " + out);
+            unlink(marker);
+            string result = run(sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, exe));
+            assertEq(expected, result, "output of the executable with " + opt);
+            assertEq("AotScrA\nAotScrB\n", is_file(marker) ? ReadOnlyFile::readTextFile(marker) : "",
+                "the closure of AotScrA runs before that of AotScrB with " + opt + ": " + result);
         }
     }
 

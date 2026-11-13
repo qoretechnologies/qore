@@ -1671,16 +1671,18 @@ public:
 
 class qore_program_private : public qore_program_private_base {
 public:
-    //! the del closures of the local modules that a compiled script embeds, in the order in which they were loaded
+    //! the del closures of the local modules that a compiled script embeds, in the order that the compiler gave them
+    /** A module comes before the modules that it requires, as the closure of a module can use those (see qore#6015)
+    */
     std::vector<std::unique_ptr<AOTScriptDelClosure>> aot_script_dels;
 
-    //! runs the del closures of the embedded local modules in the reverse order of their load, once
+    //! runs the del closures of the embedded local modules in their order, once
     DLLLOCAL void runAOTScriptDelClosures() {
         // a closure that runs can end up registering no other
         std::vector<std::unique_ptr<AOTScriptDelClosure>> dels;
         dels.swap(aot_script_dels);
-        for (auto i = dels.rbegin(), e = dels.rend(); i != e; ++i) {
-            (*i)->run();
+        for (auto& i : dels) {
+            i->run();
         }
     }
 

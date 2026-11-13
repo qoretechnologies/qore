@@ -11174,7 +11174,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     QoreProgram* shadow_pgm,
     const char* mod_path,
     bool write_shadow,
-    ExceptionSink* failure_sink);
+    ExceptionSink* failure_sink,
+    bool script_load = false);
 static void preInitStaticVarsInProgram(QoreProgram* pgm);
 
 static std::string makeAOTRegistrationFailureMessage(const char* label,
@@ -11647,7 +11648,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true, /*failure_sink=*/nullptr);
+                            /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
                     }
                 }
             }
@@ -11766,7 +11767,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     QoreProgram* shadow_pgm,
     const char* mod_path,
     bool write_shadow,
-    ExceptionSink* failure_sink);
+    ExceptionSink* failure_sink,
+    bool script_load);
 
 struct AotModuleState {
     QoreProgram* pgm = nullptr;
@@ -13467,7 +13469,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true, /*failure_sink=*/nullptr);
+                            /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
                     }
                 }
             }
@@ -14290,27 +14292,28 @@ DLLLOCAL void qore_aot_run_all_module_del_closures() {
     }
     // the closure of a module that requires another module, directly or through other modules, runs before that of
     // the module it requires, which it can use; a cycle (not possible for loaded modules) runs the rest in any order
-    auto requires_module = [](const std::string& from, const std::string& target) {
-        std::unordered_set<std::string> seen;
-        std::vector<std::string> todo{from};
-        while (!todo.empty()) {
-            std::string name = std::move(todo.back());
-            todo.pop_back();
-            if (!seen.insert(name).second) {
-                continue;
-            }
-            std::vector<std::string> deps;
-            if (!qore_aot_get_module_dependencies(name.c_str(), deps)) {
-                continue;
-            }
-            for (const std::string& d : deps) {
-                if (d == target) {
-                    return true;
+    // the modules that a module requires, directly or through other modules (also user modules loaded from source and
+    // native binary modules), found once for each module
+    std::unordered_map<std::string, std::unordered_set<std::string>> requires_map;
+    auto requires_module = [&requires_map](const std::string& from, const std::string& target) {
+        auto ri = requires_map.find(from);
+        if (ri == requires_map.end()) {
+            std::unordered_set<std::string> all;
+            std::vector<std::string> todo{from};
+            while (!todo.empty()) {
+                std::string name = std::move(todo.back());
+                todo.pop_back();
+                std::set<std::string> deps;
+                QMM.getModuleDependencies(name.c_str(), deps);
+                for (const std::string& d : deps) {
+                    if (all.insert(d).second) {
+                        todo.push_back(d);
+                    }
                 }
-                todo.push_back(d);
             }
+            ri = requires_map.emplace(from, std::move(all)).first;
         }
-        return false;
+        return ri->second.find(target) != ri->second.end();
     };
     while (!dels.empty()) {
         size_t pick = 0;
@@ -15339,7 +15342,8 @@ static int executeInitFunctions(
         QoreProgram* shadow_pgm,
         const char* mod_path,
         bool write_shadow,
-        ExceptionSink* failure_sink) {
+        ExceptionSink* failure_sink,
+        bool script_load) {
     if (exec_infos.empty() || descriptors.empty()) {
         return 0;
     }
@@ -16126,7 +16130,7 @@ static int executeInitFunctions(
     // shadow (see AotModuleState::del_ctx), so only that pass keeps it; the context of any other import is freed
     // with the others, as the closure runs only once, when the module is unloaded (#6015).  A compiled script holds
     // the closures of the local modules that it embeds in its Program, which runs them when it is cleared.
-    if (write_shadow && (shadow_pgm || pgm)) {
+    if (write_shadow && (shadow_pgm || script_load)) {
         for (size_t di = 0; di < descriptors.size(); ++di) {
             if (descriptors[di].target_type != AOTCompiledInitFunc::MODULE_DEL) {
                 continue;
@@ -16135,20 +16139,7 @@ static int executeInitFunctions(
             if (it == exec_map.end() || !it->second->ctx || !it->second->fn_ptr) {
                 continue;
             }
-            bool is_module = false;
-            if (mod_name) {
-                AutoLocker aot_state_al(get_aot_module_state_lock());
-                auto sit = aot_module_map.find(mod_name);
-                if (sit != aot_module_map.end()) {
-                    is_module = true;
-                    if (shadow_pgm && !sit->second.del_ctx) {
-                        sit->second.del_ctx.reset(it->second->ctx);
-                        sit->second.del_fn = it->second->fn_ptr;
-                        deferred_contexts.insert(it->second->ctx);
-                    }
-                }
-            }
-            if (!is_module && !shadow_pgm && pgm) {
+            if (script_load) {
                 // a script: the Program that the closure was built for owns it and runs it when it is cleared
                 struct ScriptDel : public AOTScriptDelClosure {
                     QoreProgram* pgm;
@@ -16169,6 +16160,14 @@ static int executeInitFunctions(
                 qore_program_private::get(*pgm)->aot_script_dels.push_back(std::make_unique<ScriptDel>(pgm,
                     descriptors[di].ns_path, descriptors[di].item_name, it->second->ctx, it->second->fn_ptr));
                 deferred_contexts.insert(it->second->ctx);
+            } else if (shadow_pgm && mod_name) {
+                AutoLocker aot_state_al(get_aot_module_state_lock());
+                auto sit = aot_module_map.find(mod_name);
+                if (sit != aot_module_map.end() && !sit->second.del_ctx) {
+                    sit->second.del_ctx.reset(it->second->ctx);
+                    sit->second.del_fn = it->second->fn_ptr;
+                    deferred_contexts.insert(it->second->ctx);
+                }
             }
         }
     }
@@ -16909,7 +16908,8 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
                 executeInitFunctions(tpgm, init_func_contexts,
                     init_descriptors, label ? label : "<script>",
                     /*shadow_pgm=*/nullptr, /*mod_path=*/nullptr,
-                    /*write_shadow=*/true, /*failure_sink=*/nullptr);
+                    /*write_shadow=*/true, /*failure_sink=*/nullptr,
+                    /*script_load=*/true);
             }
         }
     }
@@ -17119,7 +17119,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                             /*shadow_pgm=*/nullptr,
                             /*mod_path=*/nullptr,
                             /*write_shadow=*/true,
-                            /*failure_sink=*/nullptr);
+                            /*failure_sink=*/nullptr,
+                    /*script_load=*/true);
                     }
                 }
             } else {
@@ -17476,7 +17477,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                     /*shadow_pgm=*/nullptr,
                     /*mod_path=*/nullptr,
                     /*write_shadow=*/true,
-                    /*failure_sink=*/nullptr);
+                    /*failure_sink=*/nullptr,
+                    /*script_load=*/true);
                 if (time_on) {
                     us_init += now_us() - t1;
                 }

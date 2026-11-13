@@ -23965,25 +23965,70 @@ bool QoreAOT::compile(QoreProgram* pgm,
         }
     }
     // the del closures of the local modules run when the compiled script's Program is cleared (qore#6015); a module
-    // without an init closure can have one
-    for (auto& root : local_module_roots) {
-        QoreAbstractModule* mod = QMM.findModule(root.first.c_str());
-        QoreUserModule* user_mod = mod && mod->isUser() ? dynamic_cast<QoreUserModule*>(mod) : nullptr;
-        if (!user_mod) {
-            continue;
+    // without an init closure can have one.  The closure of a module can use the modules that it requires, so the
+    // closures are compiled, and run, in the order that puts a module before the modules it requires
+    {
+        std::vector<std::string> del_modules;
+        for (auto& root : local_module_roots) {
+            QoreAbstractModule* mod = QMM.findModule(root.first.c_str());
+            QoreUserModule* user_mod = mod && mod->isUser() ? dynamic_cast<QoreUserModule*>(mod) : nullptr;
+            if (!user_mod) {
+                continue;
+            }
+            QoreValue del_c = user_mod->refDelClosure();
+            if (del_c) {
+                del_modules.push_back(root.first);
+            }
+            del_c.discard(nullptr);
         }
-        QoreValue del_c = user_mod->refDelClosure();
-        if (!del_c) {
-            continue;
+        // the modules that each module requires, directly or through other modules
+        std::map<std::string, std::set<std::string>> requires_map;
+        for (const std::string& name : del_modules) {
+            std::set<std::string> all;
+            std::vector<std::string> todo{name};
+            while (!todo.empty()) {
+                std::string cur = std::move(todo.back());
+                todo.pop_back();
+                std::set<std::string> deps;
+                QMM.getModuleDependencies(cur.c_str(), deps);
+                for (const std::string& d : deps) {
+                    if (all.insert(d).second) {
+                        todo.push_back(d);
+                    }
+                }
+            }
+            requires_map[name] = std::move(all);
         }
-        std::string del_error;
-        bool del_ok = compileModuleInitClosureAsInitFunc(del_c, root.first.c_str(), user_mod->getProgram(),
-            ctx, *module, di_builder, di_cu, compiled_init_funcs, &const_reverse_map,
-            del_error, user_mod->getFileName(), true);
-        del_c.discard(nullptr);
-        if (!del_ok) {
-            error = del_error;
-            return false;
+        std::vector<std::string> ordered;
+        while (!del_modules.empty()) {
+            size_t pick = 0;
+            for (size_t i = 0; i < del_modules.size(); ++i) {
+                bool required = false;
+                for (size_t j = 0; j < del_modules.size() && !required; ++j) {
+                    required = i != j && requires_map[del_modules[j]].count(del_modules[i]);
+                }
+                if (!required) {
+                    pick = i;
+                    break;
+                }
+            }
+            ordered.push_back(del_modules[pick]);
+            del_modules.erase(del_modules.begin() + pick);
+        }
+        for (const std::string& name : ordered) {
+            QoreAbstractModule* mod = QMM.findModule(name.c_str());
+            QoreUserModule* user_mod = dynamic_cast<QoreUserModule*>(mod);
+            assert(user_mod);
+            QoreValue del_c = user_mod->refDelClosure();
+            std::string del_error;
+            bool del_ok = compileModuleInitClosureAsInitFunc(del_c, name.c_str(), user_mod->getProgram(),
+                ctx, *module, di_builder, di_cu, compiled_init_funcs, &const_reverse_map,
+                del_error, user_mod->getFileName(), true);
+            del_c.discard(nullptr);
+            if (!del_ok) {
+                error = del_error;
+                return false;
+            }
         }
     }
 
