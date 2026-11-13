@@ -1074,7 +1074,9 @@ namespace {
     LLVM registers an entry while the object is finalized, in the materialization of a lookup; the JIT only looks up
     and removes code with QoreJIT::compile_mutex held, so the registrations, this plugin's callbacks and its changes
     to the list are serialized by that lock.  An entry that LLVM added is identified as one at the head of the list
-    that this plugin has not seen yet: LLVM inserts entries at the head.
+    that this plugin has not seen yet: LLVM inserts entries at the head.  Another user of the GDB JIT interface in the
+    process that registers entries while this JIT links an object (outside compile_mutex) would have its entries
+    attributed to that object; the JIT is the only user that Qore starts.
 */
 class QoreGdbJitDeregistrationPlugin : public llvm::orc::ObjectLinkingLayer::Plugin {
 public:
@@ -1218,11 +1220,17 @@ bool QoreJIT::initialize(std::string& error) {
         // Non-fatal: JIT works fine without debugger support
         printd(1, "QoreJIT::init() WARNING: failed to enable debugger support: %s\n",
             llvm::toString(std::move(err)).c_str());
-    } else if (auto* oll = llvm::dyn_cast<llvm::orc::ObjectLinkingLayer>(&jit->getObjLinkingLayer())) {
-        // LLVM never deregisters what its debugger support registers; this plugin does when the code is removed
-        // (qore#5772)
+    }
+#if LLVM_VERSION_MAJOR <= 22
+    // LLVM (checked up to 22.1.8) never deregisters what its debugger support registers; this plugin does when the
+    // code is removed (qore#5772).  A newer LLVM can deregister and delete the entries itself
+    // (https://github.com/llvm/llvm-project/issues/242224): the plugin would then unlink and delete them a second
+    // time, so it is installed only for the versions checked; ir/jit-code-release fails with a newer version until it
+    // is checked again
+    else if (auto* oll = llvm::dyn_cast<llvm::orc::ObjectLinkingLayer>(&jit->getObjLinkingLayer())) {
         oll->addPlugin(std::make_unique<QoreGdbJitDeregistrationPlugin>());
     }
+#endif
 
     if (!registerRuntimeSymbols(error)) {
         jit.reset();
@@ -1326,7 +1334,7 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
         return false;
     }
     // the code units released while the lock was held are removed before it is released
-    PendingCodeReleaseGuard release_guard(*this);
+    CompileLockScope lock_scope(*this, compile_lock);
     if (!initializeLocked(error)) {
         return false;
     }
@@ -1472,46 +1480,70 @@ std::vector<std::string> QoreJIT::getLinkedSymbols(const llvm::Module& module) {
 }
 
 void QoreJIT::addCodeUnitLocked(llvm::orc::ResourceTrackerSP rt, const std::vector<std::string>& linked,
-        std::vector<std::string> symbols, const std::vector<const void*>& owners) {
-    std::unique_ptr<CodeUnit> unit(new CodeUnit);
-    unit->rt = std::move(rt);
-    std::sort(symbols.begin(), symbols.end());
-    symbols.erase(std::unique(symbols.begin(), symbols.end()), symbols.end());
-    unit->symbols = std::move(symbols);
-
+        std::vector<std::string> symbols, const std::vector<const void*>& owners) noexcept {
+    std::unique_ptr<CodeUnit> unit;
     std::lock_guard<std::mutex> lock(cache_mutex);
-    // the units that the code links to stay while it does: compile_mutex is held since the module was built, so none
-    // of them has been removed
-    for (const std::string& name : linked) {
-        auto i = symbol_units.find(name);
-        if (i == symbol_units.end()) {
-            continue;
+    try {
+        unit.reset(new CodeUnit);
+        unit->rt = rt;
+        std::sort(symbols.begin(), symbols.end());
+        symbols.erase(std::unique(symbols.begin(), symbols.end()), symbols.end());
+        unit->symbols = std::move(symbols);
+        // the units that the code links to stay while it does: compile_mutex is held since the module was built, so
+        // none of them has been removed
+        for (const std::string& name : linked) {
+            auto i = symbol_units.find(name);
+            if (i == symbol_units.end()) {
+                continue;
+            }
+            CodeUnit* dep = i->second;
+            if (std::find(unit->deps.begin(), unit->deps.end(), dep) == unit->deps.end()) {
+                unit->deps.push_back(dep);
+                ++dep->refs;
+            }
         }
-        CodeUnit* dep = i->second;
-        if (std::find(unit->deps.begin(), unit->deps.end(), dep) == unit->deps.end()) {
-            unit->deps.push_back(dep);
-            ++dep->refs;
+        for (const void* owner : owners) {
+            if (!owner) {
+                continue;
+            }
+            std::vector<CodeUnit*>& units = owner_units[owner];
+            if (std::find(units.begin(), units.end(), unit.get()) == units.end()) {
+                units.push_back(unit.get());
+                ++unit->refs;
+            }
         }
-    }
-    for (const void* owner : owners) {
-        if (!owner) {
-            continue;
+        // a unit without an owner (code compiled from AOT IR, which has no Program) stays for the life of the
+        // process, as do the units that it links to
+        if (!unit->refs) {
+            unit->refs = 1;
         }
-        std::vector<CodeUnit*>& units = owner_units[owner];
-        if (std::find(units.begin(), units.end(), unit.get()) == units.end()) {
-            units.push_back(unit.get());
-            ++unit->refs;
+        code_units.insert(unit.get());
+        for (const std::string& name : unit->symbols) {
+            symbol_units[name] = unit.get();
         }
+    } catch (...) {
+        // no memory: nothing refers to the unit, and its code stays in the JIT for the life of the process, as the
+        // code of a unit without an owner does
+        if (unit) {
+            for (CodeUnit* dep : unit->deps) {
+                --dep->refs;
+            }
+            for (auto i = owner_units.begin(); i != owner_units.end();) {
+                i->second.erase(std::remove(i->second.begin(), i->second.end(), unit.get()), i->second.end());
+                i = i->second.empty() ? owner_units.erase(i) : std::next(i);
+            }
+            for (auto i = symbol_units.begin(); i != symbol_units.end();) {
+                i = i->second == unit.get() ? symbol_units.erase(i) : std::next(i);
+            }
+            code_units.erase(unit.get());
+        }
+        if (rt) {
+            // the extra reference keeps the tracker, and so its code, as unit->rt is released with the unit
+            rt->Retain();
+        }
+        printd(0, "QoreJIT: a compiled module was not recorded as a code unit (out of memory); it stays\n");
+        return;
     }
-    // a unit without an owner (code compiled from AOT IR, which has no Program) stays for the life of the process,
-    // as do the units that it links to
-    if (!unit->refs) {
-        unit->refs = 1;
-    }
-    for (const std::string& name : unit->symbols) {
-        symbol_units[name] = unit.get();
-    }
-    code_units.insert(unit.get());
     unit.release();
 }
 
@@ -1530,6 +1562,59 @@ void QoreJIT::addCodeOwnerLocked(const std::string& symbol, const void* owner) {
     }
 }
 
+namespace {
+//! true while the calling thread holds QoreJIT::compile_mutex (see QoreJIT::holdsCompileLock())
+thread_local bool qore_jit_holds_compile_lock = false;
+}
+
+bool QoreJIT::holdsCompileLock() {
+    return qore_jit_holds_compile_lock;
+}
+
+void QoreJIT::setHoldsCompileLock(bool holds) {
+    qore_jit_holds_compile_lock = holds;
+}
+
+QoreJIT::CompileLockScope::CompileLockScope(QoreJIT& jit, std::unique_lock<std::mutex>& lock) : jit(jit), lock(lock) {
+    assert(lock.owns_lock());
+    setHoldsCompileLock(true);
+}
+
+QoreJIT::CompileLockScope::~CompileLockScope() {
+    // the code units released while the lock was held are removed before it is released
+    jit.processPendingCodeReleasesLocked();
+    setHoldsCompileLock(false);
+    if (lock.owns_lock()) {
+        lock.unlock();
+    }
+    jit.processPendingCodeReleasesAfterUnlock();
+}
+
+void QoreJIT::processPendingCodeReleasesAfterUnlock() noexcept {
+    // a releaser that did not get the lock left its release to the thread holding it; one queued after that thread
+    // processed the queue is processed here, unless another thread holds the lock now, which processes it then.  The
+    // releases stay queued while the abandoned compile thread runs in LLVM (see processPendingCodeReleasesLocked()),
+    // so a pass that takes nothing ends the loop
+    while (!bg_thread_abandoned.load(std::memory_order_acquire)) {
+        bool pending;
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex);
+            pending = !pending_unit_unrefs.empty();
+        }
+        if (!pending || !compile_mutex.try_lock()) {
+            return;
+        }
+        setHoldsCompileLock(true);
+        bool taken = processPendingCodeReleasesLocked();
+        setHoldsCompileLock(false);
+        compile_mutex.unlock();
+        // nothing was taken (the abandoned compile thread runs in LLVM, or there was no memory): the releases stay
+        if (!taken) {
+            return;
+        }
+    }
+}
+
 void QoreJIT::releaseCodeOwner(const void* owner) noexcept {
     if (!owner) {
         return;
@@ -1541,32 +1626,44 @@ void QoreJIT::releaseCodeOwner(const void* owner) noexcept {
             return;
         }
         // the references are taken from the owner at once, as its address can be reused by a new owner
-        pending_unit_unrefs.insert(pending_unit_unrefs.end(), i->second.begin(), i->second.end());
+        try {
+            pending_unit_unrefs.insert(pending_unit_unrefs.end(), i->second.begin(), i->second.end());
+        } catch (...) {
+            // no memory: the owner's units stay (and its entry, which a reused address shares)
+            printd(0, "QoreJIT: the code of an owner was not released (out of memory)\n");
+            return;
+        }
         owner_units.erase(i);
     }
     // never waits: a compile that holds the lock (possibly without bound, when detached) processes the releases when
-    // it releases the lock (PendingCodeReleaseGuard)
-    if (compile_mutex.try_lock()) {
-        processPendingCodeReleasesLocked();
-        compile_mutex.unlock();
+    // it releases the lock (CompileLockScope, releaseCompileLock()), also when that is the calling thread
+    if (holdsCompileLock() || !compile_mutex.try_lock()) {
+        return;
     }
+    setHoldsCompileLock(true);
+    processPendingCodeReleasesLocked();
+    setHoldsCompileLock(false);
+    compile_mutex.unlock();
+    processPendingCodeReleasesAfterUnlock();
 }
 
-void QoreJIT::processPendingCodeReleasesLocked() noexcept {
+bool QoreJIT::processPendingCodeReleasesLocked() noexcept {
     // the compile thread abandoned at process exit can be in LLVM: nothing is removed then, as the engine is left to
     // the operating system (see shutdown())
     if (bg_thread_abandoned.load(std::memory_order_acquire)) {
-        return;
+        return false;
     }
     std::vector<CodeUnit*> removed;
-    {
+    bool taken = false;
+    try {
         std::lock_guard<std::mutex> lock(cache_mutex);
         if (pending_unit_unrefs.empty()) {
-            return;
+            return false;
         }
         // a unit no longer referenced is removed after the units that link to it, which release it
         std::vector<CodeUnit*> work;
         work.swap(pending_unit_unrefs);
+        taken = true;
         while (!work.empty()) {
             CodeUnit* unit = work.back();
             work.pop_back();
@@ -1574,6 +1671,8 @@ void QoreJIT::processPendingCodeReleasesLocked() noexcept {
             if (--unit->refs) {
                 continue;
             }
+            // taken for removal first: if there is no memory below, it is removed all the same
+            removed.push_back(unit);
             // its functions can no longer be looked up, and a later compile defines them again if it needs them
             for (const std::string& name : unit->symbols) {
                 compiled_functions.erase(name);
@@ -1584,10 +1683,13 @@ void QoreJIT::processPendingCodeReleasesLocked() noexcept {
                     symbol_units.erase(i);
                 }
             }
-            work.insert(work.end(), unit->deps.begin(), unit->deps.end());
             code_units.erase(unit);
-            removed.push_back(unit);
+            work.insert(work.end(), unit->deps.begin(), unit->deps.end());
         }
+    } catch (...) {
+        // no memory: the units taken from the cache so far are removed below; the references not processed yet were
+        // taken from the queue and are dropped, so the units that they refer to stay in the JIT
+        printd(0, "QoreJIT: code units were not removed (out of memory)\n");
     }
     for (CodeUnit* unit : removed) {
         if (unusable_after_fork || !jit) {
@@ -1605,6 +1707,7 @@ void QoreJIT::processPendingCodeReleasesLocked() noexcept {
         }
         delete unit;
     }
+    return taken;
 }
 
 #ifdef DEBUG
@@ -1618,7 +1721,8 @@ size_t QoreJIT::dbgGetCodeUnitCount() {
             compile_lock.lock();
         }
         if (compile_lock) {
-            processPendingCodeReleasesLocked();
+            // processes the pending releases
+            CompileLockScope lock_scope(*this, compile_lock);
         }
     }
     std::lock_guard<std::mutex> lock(cache_mutex);
@@ -1633,12 +1737,18 @@ size_t QoreJIT::dbgGetDebuggerEntryCount() {
             && !bg_thread_abandoned.load(std::memory_order_acquire)) {
         compile_lock.lock();
     }
-    if (compile_lock) {
-        processPendingCodeReleasesLocked();
+    if (!compile_lock) {
+        // a detached compile holds the lock and can register entries meanwhile: they are not counted (test hook)
+        return 0;
     }
     size_t n = 0;
-    for (jit_code_entry* e = __jit_debug_descriptor.first_entry; e; e = e->next_entry) {
-        ++n;
+    {
+        // processes the pending releases first, and those queued meanwhile after the lock is released
+        CompileLockScope lock_scope(*this, compile_lock);
+        processPendingCodeReleasesLocked();
+        for (jit_code_entry* e = __jit_debug_descriptor.first_entry; e; e = e->next_entry) {
+            ++n;
+        }
     }
     return n;
 }
@@ -1798,7 +1908,7 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
         return false;
     }
     // the code units released while the lock was held are removed before it is released
-    PendingCodeReleaseGuard release_guard(*this);
+    CompileLockScope lock_scope(*this, compile_lock);
     if (!initializeLocked(error)) {
         return false;
     }
@@ -2715,7 +2825,9 @@ bool QoreJIT::lockForSyncCompileForTest() {
     if (!lockForSyncCompile(lock, error)) {
         return false;
     }
+    // released with releaseCompileLock()
     lock.release();
+    setHoldsCompileLock(true);
     return true;
 }
 
@@ -2852,7 +2964,7 @@ void QoreJIT::bgCompileThreadLoop() {
         // Unclaimed work is still in the queue, where a teardown cancels it.
         std::unique_lock<std::mutex> compile_lock(compile_mutex);
         // the code units released while this thread holds the lock are removed before it releases it
-        PendingCodeReleaseGuard release_guard(*this);
+        CompileLockScope lock_scope(*this, compile_lock);
         {
             std::unique_lock<std::mutex> lock(bg_queue_mutex);
             // once the compiler stops, the queued work is left to stopBackgroundCompiler(), which cancels it: it
@@ -3631,11 +3743,17 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
 }
 
 bool QoreJIT::tryAcquireCompileLock() {
-    return compile_mutex.try_lock();
+    if (!compile_mutex.try_lock()) {
+        return false;
+    }
+    setHoldsCompileLock(true);
+    return true;
 }
 
 void QoreJIT::releaseCompileLock() {
     // the code units released while the lock was held are removed before it is released
     processPendingCodeReleasesLocked();
+    setHoldsCompileLock(false);
     compile_mutex.unlock();
+    processPendingCodeReleasesAfterUnlock();
 }

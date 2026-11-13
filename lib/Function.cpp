@@ -8003,6 +8003,24 @@ void UserVariantBase::attemptJITRecompilation() const {
         jit_recompile_state.store(0, std::memory_order_release);
         return;
     }
+    // released on every path, also when the compile throws (qore#5772: the lock holder is marked while it holds it);
+    // a compile that throws is recorded as failed, as one that returns an error is
+    struct CompileLockRelease {
+        std::atomic<int>& state;
+        bool held = true;
+        void release() {
+            if (held) {
+                held = false;
+                QoreJIT::instance().releaseCompileLock();
+            }
+        }
+        ~CompileLockRelease() {
+            if (held) {
+                release();
+                state.store(2, std::memory_order_release);
+            }
+        }
+    } compile_lock_release{jit_recompile_state};
 
     // Demote to IR tier while recompiling
     cached_jit_fn.store(nullptr, std::memory_order_release);
@@ -8021,14 +8039,14 @@ void UserVariantBase::attemptJITRecompilation() const {
     std::string error;
     if (!QoreJIT::instance().compileFunctionLocked(*ir, error,
             const_cast<void*>(static_cast<const void*>(&deopt_count)), &lookup_name)) {
-        QoreJIT::instance().releaseCompileLock();
+        compile_lock_release.release();
         jit_recompile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' failed: %s\n",
             orig_name.c_str(), error.c_str());
         return;
     }
     JitFunctionPtr fn = QoreJIT::instance().lookupFunction(lookup_name);
-    QoreJIT::instance().releaseCompileLock();
+    compile_lock_release.release();
     if (!fn) {
         jit_recompile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' lookup failed\n",

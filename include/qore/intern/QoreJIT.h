@@ -966,6 +966,7 @@ public:
     */
     void lockCompileForTest() {
         compile_mutex.lock();
+        setHoldsCompileLock(true);
     }
 
     //! For tests: starts the background compilation thread
@@ -1151,7 +1152,7 @@ private:
         without an owner stays in the JIT
     */
     void addCodeUnitLocked(llvm::orc::ResourceTrackerSP rt, const std::vector<std::string>& linked,
-            std::vector<std::string> symbols, const std::vector<const void*>& owners);
+            std::vector<std::string> symbols, const std::vector<const void*>& owners) noexcept;
 
     //! Makes \a owner an owner of the unit that defines \a symbol, if it is recorded; cache_mutex must be held
     void addCodeOwnerLocked(const std::string& symbol, const void* owner);
@@ -1159,22 +1160,34 @@ private:
     //! Drops the references released by releaseCodeOwner() and removes the units that are no longer referenced
     /** compile_mutex must be held; called before the lock is released
     */
-    void processPendingCodeReleasesLocked() noexcept;
+    //! @return true if the queue was taken and processed, false if nothing was taken (empty, abandoned, no memory)
+    bool processPendingCodeReleasesLocked() noexcept;
 
     //! Releases the units that each acquisition of compile_mutex leaves pending when the lock is released
-    class PendingCodeReleaseGuard {
+    class CompileLockScope {
     public:
-        PendingCodeReleaseGuard(QoreJIT& jit) : jit(jit) {
-        }
-        ~PendingCodeReleaseGuard() {
-            jit.processPendingCodeReleasesLocked();
-        }
-        PendingCodeReleaseGuard(const PendingCodeReleaseGuard&) = delete;
-        PendingCodeReleaseGuard& operator=(const PendingCodeReleaseGuard&) = delete;
+        //! marks the calling thread as the holder of compile_mutex, which \a lock owns
+        CompileLockScope(QoreJIT& jit, std::unique_lock<std::mutex>& lock);
+        //! processes the pending releases, releases the lock, and processes the releases added meanwhile
+        ~CompileLockScope();
+        CompileLockScope(const CompileLockScope&) = delete;
+        CompileLockScope& operator=(const CompileLockScope&) = delete;
 
     private:
         QoreJIT& jit;
+        std::unique_lock<std::mutex>& lock;
     };
+
+    //! Processes the releases that a thread added while another held compile_mutex; called after releasing it
+    /** A thread that releases code while another holds the lock only queues the release; each thread that releases
+        the lock checks the queue again, so a release queued just before is processed
+    */
+    void processPendingCodeReleasesAfterUnlock() noexcept;
+
+    //! True if the calling thread holds compile_mutex (a releaser then only queues; see releaseCodeOwner())
+    static bool holdsCompileLock();
+    //! Marks or unmarks the calling thread as the holder of compile_mutex
+    static void setHoldsCompileLock(bool holds);
     //! true once initialize() has run; protected by compile_mutex
     bool init_done = false;
     //! the result of initialize(); protected by compile_mutex

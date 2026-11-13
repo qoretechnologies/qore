@@ -117,7 +117,9 @@ hash<string, int> base = counts();
     check("deleted Programs leave no code", !diffs, {"base": base, "after": diffs});
     if (compiles) {
         check("the code of a live Program is compiled", grew, base);
-        check("the code of a live Program is registered for debuggers", registered, base);
+        # ELF objects are registered for debuggers (ELFDebugObjectPlugin); on macOS, LLVM registers only objects with
+        # debug sections
+        check("the code of a live Program is registered for debuggers", registered || PlatformOS != "Linux", base);
     }
 }
 
