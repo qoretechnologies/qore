@@ -10396,9 +10396,13 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     return std::string();
                 };
 
-                // Case 1: no-arg function call default (e.g., getcwd(), now())
+                // Case 1: no-arg function call default (e.g., getcwd(), now()); a call with explicit type
+                // arguments (inner<T>()) is written as an expression below, which keeps them (issue #5964)
                 auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
-                if (fcn && fcn->getName() && (!fcn->getArgs() || fcn->getArgs()->empty())) {
+                const QoreTypeParamInstantiation* fcn_type_args = fcn ? fcn->getExplicitTypeParamInstantiation()
+                    : nullptr;
+                if (fcn && fcn->getName() && (!fcn->getArgs() || fcn->getArgs()->empty())
+                        && (!fcn_type_args || fcn_type_args->type_args.empty())) {
                     writer.writeU8(2);  // expression default: function call
                     // Emit the namespace-qualified name.  The reader resolves this
                     // name against the root function index, and a function declared
@@ -10437,7 +10441,11 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 //   dynamic dispatch at each call.
                 if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
                     MethodCallNode* mc = de->getMethodCall();
-                    if (mc && mc->getName() && (!mc->getArgs() || mc->getArgs()->empty())) {
+                    // a call with explicit type arguments is written as an expression below (issue #5964)
+                    const QoreTypeParamInstantiation* mc_type_args = mc ? mc->getExplicitTypeParamInstantiation()
+                        : nullptr;
+                    if (mc && mc->getName() && (!mc->getArgs() || mc->getArgs()->empty())
+                            && (!mc_type_args || mc_type_args->type_args.empty())) {
                         QoreValue left = de->getExpression();
                         std::string fqn;
                         if (left.hasNode()) {
@@ -10493,7 +10501,12 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     const QoreMethod* m = smcn->getMethod();
                     const QoreClass* qc = m ? m->getClass() : nullptr;
                     const char* mname = smcn->getName();
-                    if (no_args && qc && mname && *mname) {
+                    // a call with explicit type arguments, or of a static method of a generic class instantiation
+                    // (G<int>::m()), is written as an expression below, which keeps them (issue #5964)
+                    const QoreTypeParamInstantiation* smcn_type_args = smcn->getExplicitTypeParamInstantiation();
+                    if (no_args && qc && mname && *mname
+                            && (!smcn_type_args || smcn_type_args->type_args.empty())
+                            && !smcn->getReceiverTypeInfo()) {
                         writer.writeU8(6);  // expression default: static method call
                         std::string class_ref = qore_aot_encode_class_ref(qc);
                         writer.writeStringRef(class_ref.c_str());
