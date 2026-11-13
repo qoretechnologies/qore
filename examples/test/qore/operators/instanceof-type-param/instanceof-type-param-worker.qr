@@ -97,6 +97,24 @@ bool sub inferredIsU<U>(U sample, auto v) {
     return v instanceof U;
 }
 
+#! the results of instanceof checks of one generic method and one generic function, called in turn with two
+#! instantiations in one thread: "T" for True, "F" for False
+/** The type of an instanceof in compiled code can be resolved once and kept, but its type parameter is the type
+    argument of each instantiation that runs (#5976, qore#6016)
+*/
+string sub alternating() {
+    Holder<int> hi();
+    Holder<string> hs();
+    string rv;
+    for (int i = 0; i < 4; ++i) {
+        rv += hi.isT(1) ? "T" : "F";
+        rv += hs.isT(1) ? "T" : "F";
+        rv += isUFn<int>(1) ? "T" : "F";
+        rv += isUFn<string>(1) ? "T" : "F";
+    }
+    return rv;
+}
+
 hash<string, bool> sub checks() {
     Holder<Base> hb();
     Holder<int> hi();
@@ -145,3 +163,4 @@ hash<string, bool> sub checks() {
 }
 
 map printf("%s=%y\n", $1.key, $1.value), checks().pairIterator();
+printf("alternating=%s\n", alternating());

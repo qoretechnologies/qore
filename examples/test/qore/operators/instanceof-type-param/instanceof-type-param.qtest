@@ -60,6 +60,7 @@ class InstanceofTypeParamTest inherits QUnit::Test {
             "class-via-method-other": "False",
             "static": "True",
             "static-other": "False",
+            "alternating": "TFTFTFTFTFTFTFTF",
         };
 
         #! the execution modes that the worker is run in
@@ -103,6 +104,9 @@ class InstanceofTypeParamTest inherits QUnit::Test {
             qcc_bin, exe, getWorker()));
         assertTrue(is_file(exe), "compiled program: " + compile_out);
         checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+        # the same without the cache of the resolved types of instanceof (#5976)
+        checkWorkerOutput("aot without type cache", backquote(sprintf(
+            "QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
     }
 
     private string getWorker() {
