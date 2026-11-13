@@ -891,15 +891,15 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* ar
         return QoreValue();
     }
     if (!m) {
-        // a method of the name is handled by the class's methodGate() method, which takes its arguments by position:
-        // a named call of it is refused, as at parse time for a direct call
+        // as for a named call of the method (AbstractMethodCallNode::execNamed()): a method of the name is handled by
+        // the class's methodGate() method, which takes its arguments by position, so a named call of it is refused,
+        // as at parse time for a direct call
         if (cls->methodGate) {
             xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "cannot call %s::%s() with named arguments: the class "
                 "has no method of the name, and its methodGate() method takes the arguments of the call by position",
                 obj->getClassName(), method.c_str());
             return QoreValue();
         }
-        // as for a named call of the method (AbstractMethodCallNode::execNamed())
         xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined", obj->getClassName(),
             method.c_str());
         return QoreValue();

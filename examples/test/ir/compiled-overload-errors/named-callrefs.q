@@ -187,7 +187,7 @@ code sub cref() { return string sub (int count, string label) { return sprintf('
     place(), count, label); }; }", "child-refs");
     child.run();
     code cfr = child.callFunction("fref");
-    # the reference holds its object weakly: the object is kept with it
+    # the reference holds its object weakly, so the list that mref() returns keeps the object alive
     list<auto> cm = child.callFunction("mref");
     code cmr = cm[1];
     code ccl = child.callFunction("cref");

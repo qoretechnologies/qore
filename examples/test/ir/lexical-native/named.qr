@@ -3,8 +3,8 @@
 %no-child-restrictions
 %requires compatprobe
 
-# named calls whose variant is resolved at run time by parameter name (the argument has no type at parse time), also
-# through call references, keep the semantic policy of the call, as calls with positional arguments do: the value "text" given to a builtin converts
+# named calls whose variant is resolved at run time by parameter name (the argument has no type at parse time),
+# also through call references, keep the semantic policy of the call, as calls with positional arguments do: the value "text" given to a builtin converts
 # to False with strict boolean evaluation and to True without it, in the builtin's body and for a soft parameter
 const Source = '%requires compatprobe
 class Derived inherits CompatProbe::NativeProbe {

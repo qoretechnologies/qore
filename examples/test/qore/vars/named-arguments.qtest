@@ -2220,17 +2220,22 @@ public class NamedArgumentsTest inherits QUnit::Test {
             p.parse("class HasFoo { string foo(int count, string label) { return sprintf('%d %s', count, label); } }
 class GateFoo { string methodGate(string m, auto a, auto b) { return sprintf('gate %s %y %y', m, a, b); } }
 class NoFoo {}
+class GateChild inherits GateFoo {}
 code sub foo_ref(object o) { return \\o.foo(); }
 HasFoo has_foo();
 GateFoo gate_foo();
 NoFoo no_foo();
+GateChild gate_child();
 code hf = foo_ref(has_foo);
 code gf = foo_ref(gate_foo);
 code nf = foo_ref(no_foo);
+code cf = foo_ref(gate_child);
 string sub has_named() { return hf(label: 'h', count: 1); }
 string sub gate_positional() { return gf(1, 'g'); }
 string sub gate_named() { return gf(label: 'g', count: 1); }
-string sub missing_named() { return nf(label: 'n', count: 1); }", "method-gate-reference");
+string sub missing_named() { return nf(label: 'n', count: 1); }
+string sub inherited_gate_named() { return cf(label: 'c', count: 1); }
+string sub inherited_gate_positional() { return cf(1, 'c'); }", "method-gate-reference");
             p.run();
             assertEq("1 h", p.callFunction("has_named"));
             assertEq("gate foo 1 \"g\"", p.callFunction("gate_positional"));
@@ -2238,6 +2243,11 @@ string sub missing_named() { return nf(label: 'n', count: 1); }", "method-gate-r
                 "gate_named");
             assertThrows("METHOD-DOES-NOT-EXIST", "no method NoFoo::foo\\(\\) has been defined", \p.callFunction(),
                 "missing_named");
+            # a methodGate() method is not inherited (a positional call of the subclass's object raises the same error)
+            assertThrows("METHOD-DOES-NOT-EXIST", "no method GateChild::foo\\(\\) has been defined", \p.callFunction(),
+                "inherited_gate_named");
+            assertThrows("METHOD-DOES-NOT-EXIST", "no method GateChild::foo\\(\\) has been defined", \p.callFunction(),
+                "inherited_gate_positional");
         }
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {

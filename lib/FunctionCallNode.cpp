@@ -555,11 +555,20 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Lexi
     }
     if (!m) {
         // the method of the class of the object, which inherits or overrides the method that the call was parsed with
-        m = qore_class_private::get(*o->getClass())->getMethodForEval(c_str, o->getProgram(), ctx, xsink);
+        const qore_class_private* cls = qore_class_private::get(*o->getClass());
+        m = cls->getMethodForEval(c_str, o->getProgram(), ctx, xsink);
         if (*xsink) {
             return QoreValue();
         }
         if (!m) {
+            // a method of the name is handled by the class's methodGate() method, which takes its arguments by
+            // position: a named call of it is refused, as at parse time
+            if (cls->methodGate) {
+                xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "cannot call %s::%s() with named arguments: the "
+                    "class has no method of the name, and its methodGate() method takes the arguments of the call by "
+                    "position", o->getClassName(), c_str);
+                return QoreValue();
+            }
             xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined",
                 o->getClassName(), c_str);
             return QoreValue();
