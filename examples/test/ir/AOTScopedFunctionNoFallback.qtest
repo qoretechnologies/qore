@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - AOT code generation and linking of scoped function calls and their exact symbol binding
 
 %modern
 %no-child-restrictions

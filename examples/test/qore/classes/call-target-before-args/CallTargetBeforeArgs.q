@@ -37,7 +37,10 @@ class StringMember {
     }
 }
 
-#! a method returning a string, which a subclass overrides with a method that can return no value
+#! a method returning a string, which a subclass overrides with a method that returns auto (no type) and returns no
+#! value; an override returning auto is not checked against the base method's return type (#5838), so a call typed
+#! against this class cannot trust its declared return type: if overrides returning auto are ever rejected, this
+#! case and the check that it covers are no longer needed
 class StringSource {
     string get() {
         return "abc";
@@ -50,7 +53,7 @@ class StringSource {
 }
 
 class NoStringSource inherits StringSource {
-    *string get() {
+    auto get() {
     }
 }
 
