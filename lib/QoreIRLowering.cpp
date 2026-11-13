@@ -1714,6 +1714,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING)) {
                 return false;
             }
+            // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a
+            // return): the code after it is unreachable and is not lowered, as its values would have no definitions
+            // (#6030)
+            if (blockHasTerminator(builder.getBlock())) {
+                return true;
+            }
             // Emit CatchCleanup for all active catch scopes before returning
             for (int i = 0; i < catch_cleanup_depth; ++i) {
                 builder.createCatchCleanup(stmt->loc);
@@ -1797,6 +1803,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING)) {
             return false;
         }
+        // the Return is emitted even when a handler that the cleanups lowered inline ended the block (a throw or a
+        // thread_exit in it): it is unreachable then, but its value is defined before the cleanups, and it records the
+        // value of the return that the exception interrupts for the IR interpreter (its return slot) and for the try
+        // statements that can catch the exception (try_return_value_stack, qore#5941); emitBlockCleanups() lowers
+        // nothing after such a handler (#6030)
         // Emit CatchCleanup for all active catch scopes before returning
         for (int i = 0; i < catch_cleanup_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -3361,6 +3372,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_NONE, target_temp_depth, stmt->loc)) {
             return false;
         }
+        // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a return): the
+        // code after it is unreachable and is not lowered, as its values would have no definitions (#6030)
+        if (blockHasTerminator(builder.getBlock())) {
+            return true;
+        }
         // Emit CatchCleanup for catch scopes entered since the loop started
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
@@ -3403,6 +3419,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // releasing the temp scopes left on the way
         if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_NONE, target_temp_depth, stmt->loc)) {
             return false;
+        }
+        // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a return): the
+        // code after it is unreachable and is not lowered, as its values would have no definitions (#6030)
+        if (blockHasTerminator(builder.getBlock())) {
+            return true;
         }
         // Emit CatchCleanup for catch scopes entered since the loop started
         for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
@@ -4507,6 +4528,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     assert(unwind_temp_depth == SIZE_MAX || unwind_temp_depth <= builder.getTempScopeDepth());
     size_t unwound_temp_depth = builder.getTempScopeDepth();
     for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
+        // a handler lowered inline for an entry ended the block (a throw, a thread_exit or a return in it): the
+        // cleanups of the remaining entries are unreachable here; the exception path of the block runs them (#6030)
+        if (blockHasTerminator(builder.getBlock())) {
+            return true;
+        }
         // Copy by value: lowerHandlersAtExit() can trigger cleanup_stack reallocation
         // (when inlining handler bodies that push to cleanup_stack), which would
         // invalidate a reference into the vector.
@@ -4996,6 +5022,12 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
             if (!lowerHandlerAtExit(handler, i - start_index, error, barrier_depth, scope_id, scope_loc,
                     set_exception_target, handler_exception_target)) {
                 return false;
+            }
+            // the handler ended the block (a throw, a thread_exit or a return in it): the handlers after it and the
+            // scope exit are unreachable here; the exception path of the block runs the handlers still registered
+            // (#6030)
+            if (blockHasTerminator(builder.getBlock())) {
+                return true;
             }
         }
     }
