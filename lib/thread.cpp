@@ -7375,11 +7375,25 @@ static int q_check_thread_start_allowed(ExceptionSink* xsink, int flags) {
     return 0;
 }
 
+//! raises THREAD-CREATION-FAILURE if a background thread cannot be started because the library is being cleaned up
+/** Unlike q_start_thread(), a background expression can start a thread after qore_shutdown has been set: the user
+    module cleanup (QMM.delUser()) hands work to other threads (see module-code-cleanup.qtest), so only the Qore code
+    that runs once no thread can be started any more is refused (qore#6045)
+*/
+static int q_check_background_start_allowed(ExceptionSink* xsink) {
+    if (qore_thread_start_closed.load(std::memory_order_acquire)) {
+        xsink->raiseException("THREAD-CREATION-FAILURE", "cannot start a thread: the Qore library is being cleaned "
+            "up");
+        return -1;
+    }
+    return 0;
+}
+
 QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink) {
     if (!left) {
         return QoreValue();
     }
-    if (q_check_thread_start_allowed(xsink, QTF_NONE)) {
+    if (q_check_background_start_allowed(xsink)) {
         return QoreValue();
     }
 
@@ -7428,7 +7442,7 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
 
 QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
         const QoreValue* values, size_t num, bool uses_self, ExceptionSink* xsink) {
-    if (q_check_thread_start_allowed(xsink, QTF_NONE)) {
+    if (q_check_background_start_allowed(xsink)) {
         return QoreValue();
     }
     // the new thread inherits the sandbox of the starting code; capturing it counts the thread against the sandbox's
