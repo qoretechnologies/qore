@@ -528,6 +528,12 @@ protected:
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const;
 
+    //! Keeps the owned argument copy of a reusable background call out of the ordinary method-call frame.
+    template <bool Lexical>
+    DLLLOCAL QoreValue execReusableTmpArgs(LexicalSemanticPolicy policy, const QoreMethod& target,
+            RuntimeConfig& rc, QoreObject* o, const qore_class_private* ctx,
+            const AbstractQoreFunctionVariant* call_variant, ExceptionSink* xsink) const;
+
 public:
     DLLLOCAL AbstractMethodCallNode(const QoreProgramLocation* loc, qore_type_t t, QoreParseListNode* n_args,
             const QoreClass* n_qc = nullptr, const QoreMethod* m = nullptr)

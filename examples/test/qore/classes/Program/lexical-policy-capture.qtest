@@ -22,6 +22,7 @@ class LexicalPolicyCaptureTest inherits QUnit::Test {
         addTestCase("for condition before body directive", \condition(), ("for",));
         addTestCase("pending default expressions", \defaults());
         addTestCase("background expression copies", \backgroundCopy());
+        addTestCase("reusable background method arguments", \backgroundMethods());
         addTestCase("background assignment copies", \backgroundAssignment());
         addTestCase("background cast copies", \backgroundCasts());
         addTestCase("background construction copies", \backgroundConstruction());
@@ -103,6 +104,36 @@ class LexicalPolicyCaptureTest inherits QUnit::Test {
             assertEq((!strict, strict ? 0 : 1, strict ? 0 : 1, !strict, !strict, !strict, strict ? "fallback" : (1,2),
                 !strict, strict, strict ? 0 : 2, strict ? 0 : 2), p.callFunction("sample", (1,2)),
                 "copied operations retain their source policy in another thread");
+        }
+    }
+
+    private backgroundMethods() {
+        foreach bool strict in (False, True) {
+            foreach bool dynamic in (False, True) {
+                Program p(Base);
+                if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                p.parse('auto sub opaque(auto value) { return value; }
+                    class Target {
+                        list<auto> take(int i, softbool value) { return (i, value); }
+                    }
+                    auto sub sample(Program program) {
+                        Target typed(); auto untyped = opaque(typed); Queue q();
+                        auto untyped_program = opaque(program); Queue native();
+                        auto value = opaque("text");
+                        thread_join(background map q.push(' + (dynamic ? "untyped" : "typed")
+                        + '.take($1, value)), (1, 2, 3));
+                        thread_join(background map native.push(' + (dynamic ? "untyped_program" : "program")
+                        + '.callFunction("inlist", True, ({"value": $1},))), (1, 2, 3));
+                        return ((q.get(-1), q.get(-1), q.get(-1)),
+                            (native.get(-1), native.get(-1), native.get(-1)));
+                    }', "reusable-background-method-policy");
+                if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                Program destination(Base);
+                assertEq((((1, !strict), (2, !strict), (3, !strict)), (!strict, !strict, !strict)),
+                    p.callFunction("sample", destination),
+                    "reused arguments retain declaration policy and native methods forward invocation policy");
+            }
         }
     }
 
