@@ -33309,6 +33309,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::DebugStatement: {
+            // the start of the exception path of a block (QORE_IR_DEBUG_NEST_UNWIND) is no step: native code
+            // makes no exception events of enclosing statements (#5954)
+            if (static_cast<const QoreIRDebugStatementInstruction*>(inst)->nest_flags & QORE_IR_DEBUG_NEST_UNWIND) {
+                return true;
+            }
             // Issue #5352: the per-statement debug-step hook, so that JIT native code produces dbgStep events at
             // every statement when a debugger attaches.
             emitDebugStepHook(module, llvm_func, inst, /*synthetic=*/false);

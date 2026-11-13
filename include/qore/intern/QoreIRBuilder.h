@@ -387,6 +387,8 @@ public:
     //! Emit the end of a statement at the given depth for the debugger (QORE_IR_DEBUG_NEST_END), where a frame
     //! continues when a debugger dismisses an exception of the statement
     QoreIRInstruction* createDebugStatementEnd(uint16_t depth, const QoreProgramLocation* loc);
+    //! Emit the start of the exception path of a block whose statements are at the given depth (QORE_IR_DEBUG_NEST_UNWIND)
+    QoreIRInstruction* createDebugBlockUnwind(uint16_t depth, const QoreProgramLocation* loc);
     //! Emit a pending-exception check after cleanup code that can run destructors.
     QoreIRInstruction* createCheckException(const QoreProgramLocation* loc = nullptr);
     //! Emit the check of the value of a return statement against the declared return type (CheckReturnValue)
