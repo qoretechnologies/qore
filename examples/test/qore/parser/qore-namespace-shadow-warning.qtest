@@ -31,6 +31,12 @@ class QoreNamespaceShadowWarningTest inherits QUnit::Test {
         addTestCase("a function with several variants warns once", \testOverloads());
         addTestCase("another function of the Qore namespace", \testOtherQoreFunction());
         addTestCase("the warning is off unless language-traps is enabled", \testOff());
+        addTestCase("a class with the name of a Qore class", \testClass());
+        addTestCase("a constant with the name of a Qore constant", \testConstant());
+        addTestCase("a hashdecl with the name of a Qore hashdecl", \testHashDecl());
+        addTestCase("a global variable with the name of a Qore variable", \testGlobalVar());
+        addTestCase("no warning for the other kinds with %broken-namespace-resolution or in a module",
+            \testOtherKindsExempt());
         addTestCase("no warning with %broken-namespace-resolution", \testBrokenNamespaceResolution());
         addTestCase("no warning for a function that does not clash", \testNoClash());
         addTestCase("no warning in a user module", \testUserModule());
@@ -91,6 +97,63 @@ class QoreNamespaceShadowWarningTest inherits QUnit::Test {
         list<hash<ParseDiagnosticInfo>> diags = parseWarnings("int sub gettid() { return -1; }");
         assertEq(1, diags.size());
         assertEq("Qore::gettid()", diags[0].facts.shadowedBy);
+    }
+
+    testClass() {
+        # a user class named like a class of the Qore namespace is never reached by `new Mutex()`
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings("class Mutex { string who() { return \"user\"; } }");
+        assertEq(1, diags.size());
+        assertEq("USER-SYMBOL-SHADOWED-BY-QORE", diags[0].id);
+        assertEq("class", diags[0].facts.kind);
+        assertEq("Mutex", diags[0].facts.name);
+        assertEq("::Mutex", diags[0].facts.declared);
+        assertRegex("^Qore::.*Mutex$", diags[0].facts.shadowedBy);
+        assertRegex("class 'Mutex' declared in namespace '::' is not reachable by an unqualified reference",
+            diags[0].message);
+
+        diags = parseWarnings("namespace N { class Mutex { } }");
+        assertEq(1, diags.size());
+        assertEq("N::Mutex", diags[0].facts.declared);
+        assertEq(0, parseWarnings("class MyOwnUniqueClassName { }").size());
+    }
+
+    testConstant() {
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings("const M_PI = \"user\";");
+        assertEq(1, diags.size());
+        assertEq("constant", diags[0].facts.kind);
+        assertEq("M_PI", diags[0].facts.name);
+        assertEq("Qore::M_PI", diags[0].facts.shadowedBy);
+        assertRegex("constant 'M_PI' declared in namespace '::' is not reachable by an unqualified reference",
+            diags[0].message);
+        assertEq(0, parseWarnings("const MY_OWN_UNIQUE_CONSTANT = 1;").size());
+    }
+
+    testHashDecl() {
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings("hashdecl StatInfo { string who; }");
+        assertEq(1, diags.size());
+        assertEq("hashdecl", diags[0].facts.kind);
+        assertEq("StatInfo", diags[0].facts.name);
+        assertEq("Qore::StatInfo", diags[0].facts.shadowedBy);
+        assertEq(0, parseWarnings("hashdecl MyOwnUniqueHashDecl { string who; }").size());
+    }
+
+    testGlobalVar() {
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings("our string ARGV = \"user\";");
+        assertEq(1, diags.size());
+        assertEq("global variable", diags[0].facts.kind);
+        assertEq("ARGV", diags[0].facts.name);
+        assertEq("::ARGV", diags[0].facts.declared);
+        diags = parseWarnings("namespace N { our string ARGV; }");
+        assertEq(1, diags.size());
+        assertEq("N::ARGV", diags[0].facts.declared);
+        assertEq(0, parseWarnings("our string my_own_unique_global = \"\";").size());
+    }
+
+    testOtherKindsExempt() {
+        string source = "class Mutex { }\nconst M_PI = 1;\nhashdecl StatInfo { string who; }\nour string ARGV = \"u\";\n";
+        assertEq(0, parseWarnings(source, LegacyOptions | PO_BROKEN_NAMESPACE_RESOLUTION).size());
+        assertEq(0, parseWarnings(source, PO_MODERN, WARN_ALL).size(), "off without the strict warnings");
+        assertEq(4, parseWarnings(source).size(), "each declaration once");
     }
 
     testOff() {

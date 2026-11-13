@@ -1875,6 +1875,35 @@ protected:
     DLLLOCAL void parseWarnShadowedByQoreFunction(const QoreProgramLocation* loc, const char* fname,
             const qore_ns_private* declaring_ns, const FunctionEntry* declared);
 
+    //! Returns true if a symbol that is declared in \a declaring_ns can be reported as one that unqualified resolution
+    //! cannot reach (qore#6034): the strict language-traps warning is on, and the program does not use
+    //! %broken-namespace-resolution, is not a user module, and the namespace is not the Qore namespace or under it
+    DLLLOCAL bool parseShadowWarningEnabled(const qore_ns_private* declaring_ns);
+
+    //! Raises the warning for a class, constant, hashdecl or global variable of the program with the name of one of the
+    //! Qore namespace (the check of parseShadowWarningEnabled() is made by the caller)
+    /** @param kind the kind of the symbol: "class", "constant", "hashdecl" or "global variable"
+        @param qore_symbol_ns the namespace of the symbol of the Qore namespace, if known
+    */
+    DLLLOCAL void parseWarnShadowedByQoreSymbol(const QoreProgramLocation* loc, const char* kind, const char* name,
+            const qore_ns_private* declaring_ns, const qore_ns_private* qore_symbol_ns);
+
+    //! Checks, and raises the warning, for a class declared in \a declaring_ns
+    DLLLOCAL void parseCheckClassShadowedByQore(const QoreProgramLocation* loc, const QoreClass* oc,
+            const qore_ns_private* declaring_ns);
+
+    //! Checks, and raises the warning, for a constant declared in \a declaring_ns
+    DLLLOCAL void parseCheckConstantShadowedByQore(const QoreProgramLocation* loc, const char* cname,
+            const qore_ns_private* declaring_ns);
+
+    //! Checks, and raises the warning, for a hashdecl declared in \a declaring_ns
+    DLLLOCAL void parseCheckHashDeclShadowedByQore(const QoreProgramLocation* loc, const TypedHashDecl* hd,
+            const qore_ns_private* declaring_ns);
+
+    //! Checks, and raises the warning, for a global variable declared in \a declaring_ns
+    DLLLOCAL void parseCheckGlobalVarShadowedByQore(const QoreProgramLocation* loc, const char* vname,
+            const qore_ns_private* declaring_ns);
+
     DLLLOCAL const FunctionEntry* parseResolveFunctionEntryIntern(const QoreProgramLocation* loc, const char* fname) {
         QORE_TRACE("qore_root_ns_private::parseResolveFunctionEntryIntern()");
 
