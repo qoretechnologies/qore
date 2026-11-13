@@ -17815,6 +17815,9 @@ load_local_done:
                         consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
                             value_use_counts, &weak_load_temp_slots, borrowed_temp_remaining, xsink);
                         if (xsink && *xsink) {
+                            // the release of an argument raised an exception after the call returned its value, which
+                            // is released after the arguments, as the AST interpreter releases it (#6051)
+                            res.discard(xsink);
                             return returnAfterUnhandledException();
                         }
                     }

@@ -13661,6 +13661,9 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         if (selfid_instantiated) {
             selfid->uninstantiateSelf();
         }
+        // the release of a consumed argument raised an exception after the call gave its value, which is
+        // released then, as the AST interpreter releases it (#6051)
+        val.discard(xsink);
         return toBits(QoreValue());
     }
 
@@ -19461,6 +19464,9 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         if (selfid_instantiated) {
             selfid->uninstantiateSelf();
         }
+        // the release of a consumed argument raised an exception after the call gave its value, which is
+        // released then, as the AST interpreter releases it (#6051)
+        val.discard(xsink);
         result = toBits(QoreValue());
         return true;
     }
