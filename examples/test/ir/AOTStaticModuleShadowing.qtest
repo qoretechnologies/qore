@@ -16,20 +16,69 @@
 
 #! A statically registered module is checked as a file load of the same module from outside the module path is
 /** A module that qcc compiled to a .qo and that is linked into a program is registered with its register function
-    (qore_<name>_register(), qore_aot_register_into_program_v2()), not loaded from a file.  It is not library code:
-    its code is linked into the program, not loaded from the process-wide module path.  Registered for code that is
-    not trusted (here: by the code of a Program whose parse options restrict a functional domain), it is checked as a
-    load of the module's .qmod from outside the module path (issue #5986):
-    - it cannot have the name of a library module, which it would replace for every later user;
-    - with a name of its own, it is registered as chosen by that code, and is not given to other code;
+    (qore_<name>_register(), qore_aot_register_into_program_v2()) or with ModuleManager::registerAOTStaticModule(),
+    not loaded from a file.  It is never library code: its code is linked into the program, not loaded from the
+    process-wide module path, whatever path label it is given.  It is checked as a load of the module's .qmod by
+    path from outside the module path, for the code that calls the registration (issue #5986):
+    - code that is not trusted (code of a Program with a sandbox manager, or whose parse options restrict a
+      functional domain) cannot register a module with the name of a library module, which would replace it for
+      every later user, also into another Program;
+    - a module with a name of its own that such code registers is recorded as chosen by it: code with the same
+      sandbox gets it, code with another sandbox and other code do not;
+    - a native host that registers a module with no Qore code running is trusted, unless the target Program has a
+      sandbox manager;
+    - a library module of the name that is already loaded is attached instead;
+    - a module registered while a library module that sandboxed code loaded is initialized is governed by the
+      sandbox of that code: it is not initialized as library code, and gets the modules that the code chose;
     and a registration for trusted code is not restricted, as for a file load.
 
-    The registration is made by the code of a Program of a C++ host (aot-static-shadowing/host.cpp), which calls a
-    native function of the host that registers the module, into its own Program or into another one.  Each case
-    runs the host twice, once registering the statically linked modules and once loading the .qmod files of the same
-    modules by path, and the two must give the same result.
+    The registrations are made by a C++ host (aot-static-shadowing/host.cpp), directly or from the code of its
+    Programs through native functions of the host, or from the initialization of a library module
+    (aot-static-shadowing/liftlib-module.cpp).  Each scenario runs the host twice, once registering the statically
+    linked modules and once loading the .qmod files of the same modules by path, and the two must give the same
+    result.
 */
 class AOTStaticModuleShadowingTest inherits QUnit::Test {
+    public {
+        #! the source of the module that reports whether its initialization is sandboxed
+        const ProbeModSource = "%modern
+module ProbeMod {
+    version = \"1.0\";
+    desc = \"test\";
+    author = \"Qore\";
+    license = \"MIT\";
+    init = sub () { ProbeMod::Probe::init_sandboxed = SandboxManager::isSandboxed(); };
+}
+public namespace ProbeMod {
+public class Probe {
+    public {
+        static bool static_sandboxed = SandboxManager::isSandboxed();
+        static bool init_sandboxed;
+    }
+}
+public string sub value() {
+    return sprintf(\"static=%y,init=%y\", Probe::static_sandboxed, Probe::init_sandboxed);
+}
+}
+";
+
+        #! the source of the module that the library module's initialization registers; it requires TenantMod
+        const LiftModSource = "%modern
+%requires TenantMod
+module LiftMod {
+    version = \"1.0\";
+    desc = \"test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace LiftMod {
+public string sub value() {
+    return \"dep=\" + TenantMod::value();
+}
+}
+";
+    }
+
     private {
         string qore_bin;
         string qcc_bin;
@@ -43,7 +92,7 @@ class AOTStaticModuleShadowingTest inherits QUnit::Test {
         *string exe;
         #! the reason the host could not be built, if it could not
         *string skip_reason;
-        #! the directory of the library module
+        #! the directory of the library modules
         string lib_dir;
         #! the directory of the .qmod files of the modules
         string qmod_dir;
@@ -58,14 +107,26 @@ class AOTStaticModuleShadowingTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
             libqore_dir);
 
-        addTestCase("a static registration for restricted code cannot shadow a library module",
-            \shadowRestrictedTest());
-        addTestCase("a static registration into another Program for restricted code cannot shadow a library module",
+        addTestCase("restricted code cannot register a module with a library module's name", \shadowRestrictedTest());
+        addTestCase("restricted code cannot register a module with a library module's name into another Program",
             \shadowRestrictedOtherTest());
-        addTestCase("a static registration for trusted code may have a library module's name",
-            \shadowTrustedTest());
-        addTestCase("a static registration for restricted code is not given to other code", \ownRestrictedTest());
-        addTestCase("a static registration for trusted code is given to any code", \ownTrustedTest());
+        addTestCase("sandboxed code cannot register a module with a library module's name", \shadowSandboxedTest());
+        addTestCase("a library module of the name that is already loaded is attached", \shadowLibraryLoadedTest());
+        addTestCase("trusted code may register a module with a library module's name", \shadowTrustedTest());
+        addTestCase("a module that restricted code registers is not given to other code", \ownRestrictedTest());
+        addTestCase("a module that sandboxed code registers is given only to code with the same sandbox",
+            \ownSandboxedTest());
+        addTestCase("a module that trusted code registers is given to any code", \ownTrustedTest());
+        addTestCase("the host cannot register a module with a library module's name into a sandboxed Program",
+            \directShadowSandboxedTest());
+        addTestCase("a module that the host registers into a sandboxed Program is chosen by its sandbox",
+            \directOwnSandboxedTest());
+        addTestCase("the host registering into a restricted Program with no sandbox is trusted",
+            \directOwnRestrictedTest());
+        addTestCase("a path label in the module path does not make a module registered with the C++ API trusted",
+            \apiPathSandboxedTest());
+        addTestCase("a module registered while a library module is initialized has the loader's sandbox",
+            \liftSandboxedTest());
         set_return_value(main());
     }
 
@@ -113,12 +174,15 @@ class AOTStaticModuleShadowingTest inherits QUnit::Test {
         mkdir(qmod_dir);
         # the library module, in the module path of the host
         AOTStaticModuleShadowingTest::writeModule(lib_dir, "ShadowLib", "library");
-        # the module that is linked into the host (and its .qmod) with the library module's name, and one with a
-        # name of its own
+        # the modules that are linked into the host (and their .qmod files): one with the library module's name, one
+        # with a name of its own, one that reports whether its initialization is sandboxed, and one that requires
+        # the module with a name of its own
         AOTStaticModuleShadowingTest::writeModule(src_dir, "ShadowLib", "tenant");
         AOTStaticModuleShadowingTest::writeModule(src_dir, "TenantMod", "own");
+        AOTStaticModuleShadowingTest::write(src_dir + "/ProbeMod.qm", ProbeModSource);
+        AOTStaticModuleShadowingTest::write(src_dir + "/LiftMod.qm", LiftModSource);
         list<string> objs;
-        foreach string name in ("ShadowLib", "TenantMod") {
+        foreach string name in ("ShadowLib", "TenantMod", "ProbeMod", "LiftMod") {
             string obj = sprintf("%s/%s.qo", tmp.path, name);
             string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -c -o %s %s/%s.qm", env, src_dir, qcc_bin, obj,
                 src_dir, name));
@@ -130,30 +194,43 @@ class AOTStaticModuleShadowingTest inherits QUnit::Test {
             assertTrue(is_file(qmod), "compiled the module: " + out);
         }
 
-        # the host: see aot-static-shadowing/host.cpp
-        string host = get_script_dir() + "/aot-static-shadowing/host.cpp";
-        string host_exe = tmp.path + "/static-host";
         string cxx = ENV.CXX ?? "c++";
-        string out = run(sprintf("%s -std=c++17 -I%s -I%s %s %s -L%s -Wl,-rpath,%s -lqore -o %s %s", cxx,
-            source_root + "/include", libqore_dir + "/include", host, objs.join(" "), libqore_dir, libqore_dir,
-            host_exe, AOTStaticModuleShadowingTest::libqoreTargetFlags().join(" ")));
-        if (!is_file(host_exe)) {
+        string flags = AOTStaticModuleShadowingTest::libqoreTargetFlags().join(" ");
+        string includes = sprintf("-I%s -I%s", source_root + "/include", libqore_dir + "/include");
+        # the library module whose initialization calls the host: see aot-static-shadowing/liftlib-module.cpp
+        string liftlib = lib_dir + "/LiftLib.qmod";
+        string out = run(sprintf("%s -std=c++17 -shared -fPIC %s -o %s %s/aot-static-shadowing/liftlib-module.cpp "
+            "-L%s -Wl,-rpath,%s -lqore %s", cxx, includes, liftlib, get_script_dir(), libqore_dir, libqore_dir,
+            flags));
+        if (!is_file(liftlib)) {
             if (out =~ /not found/) {
-                skip_reason = "no C++ compiler to build the host: " + out;
+                skip_reason = "no C++ compiler to build the library module: " + out;
                 testSkip(skip_reason);
             }
+            assertTrue(False, "built the library module: " + out);
+        }
+        # the host, which exports its hook for the library module: see aot-static-shadowing/host.cpp
+        string host_exe = tmp.path + "/static-host";
+        out = run(sprintf("%s -std=c++17 -rdynamic %s %s/aot-static-shadowing/host.cpp %s -L%s -Wl,-rpath,%s -lqore "
+            "-o %s %s", cxx, includes, get_script_dir(), objs.join(" "), libqore_dir, libqore_dir, host_exe, flags));
+        if (!is_file(host_exe)) {
             assertTrue(False, "linked the C++ host: " + out);
         }
         return exe = host_exe;
     }
 
-    #! runs a scenario with the statically linked modules and with their .qmod files; returns the outputs
-    private hash<auto> runScenario(string scenario) {
+    #! runs a scenario with the statically linked modules and, unless only static, with their .qmod files
+    /** @return the output of each run, which must have ended normally
+    */
+    private hash<auto> runScenario(string scenario, bool static_only = False) {
         string host = getHost();
         hash<auto> rv;
-        foreach string mode in ("static", "file") {
-            rv{mode} = trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s %s %s", env, lib_dir, host, mode, scenario,
-                qmod_dir)));
+        foreach string mode in (static_only ? ("static",) : ("static", "file")) {
+            string out = trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s %s %s %s 2>&1; echo \"exit: $?\"", env, lib_dir,
+                host, mode, scenario, qmod_dir, lib_dir)));
+            # the host ended normally, also its cleanup
+            assertRegex("\nexit: 0$", out, mode + ": " + out);
+            rv{mode} = out;
         }
         return rv;
     }
@@ -163,56 +240,100 @@ class AOTStaticModuleShadowingTest inherits QUnit::Test {
         return map $1, out.split("\n"), $1 =~ /^[a-z-]+: (loaded|refused|value=)/;
     }
 
+    #! checks the steps of each run, and that no run raised an exception
+    private checkSteps(hash<auto> out, list<string> expected) {
+        foreach string mode in (out.keyIterator()) {
+            assertEq(expected, AOTStaticModuleShadowingTest::steps(out{mode}), mode + ": " + out{mode});
+            assertFalse(out{mode} =~ /LOAD-MODULE-ERROR/, mode + ": " + out{mode});
+        }
+    }
+
+    #! checks the steps of each run, and the number of times the module chosen by other code was refused
+    private checkTenantRefused(hash<auto> out, list<string> expected, string mod, int count) {
+        string err = sprintf("LOAD-MODULE-ERROR: cannot use module '%s' \\([^)]+\\): it was loaded from outside the "
+            "module path by code that a sandbox governs or whose functional domains are restricted", mod);
+        foreach string mode in (out.keyIterator()) {
+            assertEq(expected, AOTStaticModuleShadowingTest::steps(out{mode}), mode + ": " + out{mode});
+            assertEq(count, (map $1, out{mode}.split("\n"), regex($1, err)).size(), mode + ": " + out{mode});
+        }
+    }
+
     #! checks that the module was refused because it has the name of the library module
-    private checkShadowRefused(string mode, string out) {
-        assertEq(("register: refused", "library: value=library"), AOTStaticModuleShadowingTest::steps(out),
-            mode + ": " + out);
-        assertRegex("LOAD-MODULE-ERROR: cannot load module 'ShadowLib' from path '[^']+': code that a sandbox "
-            "governs or whose functional domains are restricted cannot load a module outside the module path under "
-            "the name of module '[^']*/lib/ShadowLib.qm' in the module path", out, mode + ": " + out);
+    private checkShadowRefused(hash<auto> out) {
+        foreach string mode in (out.keyIterator()) {
+            assertEq(("register: refused", "library: value=library"), AOTStaticModuleShadowingTest::steps(out{mode}),
+                mode + ": " + out{mode});
+            assertRegex("LOAD-MODULE-ERROR: cannot load module 'ShadowLib' from path '[^']+': code that a sandbox "
+                "governs or whose functional domains are restricted cannot load a module outside the module path "
+                "under the name of module '[^']*/lib/ShadowLib.qm' in the module path", out{mode},
+                mode + ": " + out{mode});
+        }
     }
 
     shadowRestrictedTest() {
-        hash<auto> out = runScenario("shadow-restricted");
-        foreach string mode in (out.keyIterator()) {
-            checkShadowRefused(mode, out{mode});
-        }
+        checkShadowRefused(runScenario("shadow-restricted"));
     }
 
     shadowRestrictedOtherTest() {
-        hash<auto> out = runScenario("shadow-restricted-other");
-        foreach string mode in (out.keyIterator()) {
-            checkShadowRefused(mode, out{mode});
-        }
+        checkShadowRefused(runScenario("shadow-restricted-other"));
+    }
+
+    shadowSandboxedTest() {
+        checkShadowRefused(runScenario("shadow-sandboxed"));
+    }
+
+    shadowLibraryLoadedTest() {
+        checkSteps(runScenario("shadow-library-loaded"), ("library: value=library", "register: loaded",
+            "use: value=library"));
     }
 
     shadowTrustedTest() {
-        hash<auto> out = runScenario("shadow-trusted");
-        foreach string mode in (out.keyIterator()) {
-            assertEq(("register: loaded", "use: value=tenant"), AOTStaticModuleShadowingTest::steps(out{mode}),
-                mode + ": " + out{mode});
-            assertFalse(out{mode} =~ /LOAD-MODULE-ERROR/, mode + ": " + out{mode});
-        }
+        checkSteps(runScenario("shadow-trusted"), ("register: loaded", "use: value=tenant"));
     }
 
     ownRestrictedTest() {
-        hash<auto> out = runScenario("own-restricted");
-        foreach string mode in (out.keyIterator()) {
-            assertEq(("register: loaded", "use: value=own", "other-register: refused", "other-require: refused"),
-                AOTStaticModuleShadowingTest::steps(out{mode}), mode + ": " + out{mode});
-            # refused for each of the two later users
-            string err = "LOAD-MODULE-ERROR: cannot use module 'TenantMod' \\([^)]+\\): it was loaded from outside "
-                "the module path by code that a sandbox governs or whose functional domains are restricted";
-            assertEq(2, (map $1, out{mode}.split("\n"), regex($1, err)).size(), mode + ": " + out{mode});
-        }
+        checkTenantRefused(runScenario("own-restricted"), ("register: loaded", "use: value=own",
+            "other-register: refused", "other-require: refused"), "TenantMod", 2);
+    }
+
+    ownSandboxedTest() {
+        checkTenantRefused(runScenario("own-sandboxed"), ("register: loaded", "use: value=own",
+            "same-sandbox-register: loaded", "same-sandbox-use: value=own", "other-sandbox-register: refused",
+            "other-register: refused", "other-require: refused"), "TenantMod", 3);
     }
 
     ownTrustedTest() {
-        hash<auto> out = runScenario("own-trusted");
-        foreach string mode in (out.keyIterator()) {
-            assertEq(("register: loaded", "use: value=own", "other-register: loaded", "other-use: value=own",
-                "other-require: value=own"), AOTStaticModuleShadowingTest::steps(out{mode}), mode + ": " + out{mode});
-            assertFalse(out{mode} =~ /LOAD-MODULE-ERROR/, mode + ": " + out{mode});
-        }
+        checkSteps(runScenario("own-trusted"), ("register: loaded", "use: value=own", "other-register: loaded",
+            "other-use: value=own", "other-require: value=own"));
+    }
+
+    directShadowSandboxedTest() {
+        checkShadowRefused(runScenario("direct-shadow-sandboxed"));
+    }
+
+    directOwnSandboxedTest() {
+        checkTenantRefused(runScenario("direct-own-sandboxed"), ("register: loaded", "use: value=own",
+            "same-sandbox-register: loaded", "same-sandbox-use: value=own", "other-sandbox-register: refused",
+            "other-require: refused"), "TenantMod", 2);
+    }
+
+    directOwnRestrictedTest() {
+        checkSteps(runScenario("direct-own-restricted"), ("register: loaded", "use: value=own",
+            "other-require: value=own"));
+    }
+
+    apiPathSandboxedTest() {
+        # registered with ModuleManager::registerAOTStaticModule() in both runs; the module is not library code: it
+        # is initialized under the sandbox of the code that registers it, and is chosen by that code
+        checkTenantRefused(runScenario("api-path-sandboxed", True), ("register: loaded",
+            "use: value=static=True,init=True", "other-sandbox-register: refused", "other-require: refused"),
+            "ProbeMod", 2);
+    }
+
+    liftSandboxedTest() {
+        # LiftMod is registered while the library module that the sandboxed code loaded is initialized: it is not
+        # initialized as library code, which would not get the module that the sandboxed code chose
+        checkTenantRefused(runScenario("lift-sandboxed"), ("dep-register: loaded", "register: loaded",
+            "use: value=dep=own", "other-sandbox-register: refused"), "LiftMod", 1);
     }
 }

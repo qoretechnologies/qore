@@ -2455,9 +2455,6 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
 
     OptLocker ol(&mutex);
 
-    // tag any namespaces created by the module's init callback with the module name
-    QoreModuleNameContextHelper mnch(feature);
-
     // see if the module is already registered with QMM; if so skip the init path
     // and just stitch it into the target program
     QoreAbstractModule* mi = findModuleUnlocked(feature);
@@ -2485,6 +2482,19 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         }
         // recorded on the module when it is registered; takes over the reference of owner
         QoreModuleLoadFrameHelper load_frame(feature, false, tenant_chosen, owner, owner_pgm_id);
+        // as for a file load (see loadBinaryModuleFromPath()): registered while library code that code that is not
+        // trusted loaded is initialized, the module is governed by the sandbox of that code, not initialized as
+        // library code
+        QoreModuleInitSandboxBarrierHelper init_barrier(false);
+        if (init_barrier.failed()) {
+            xsink.outOfMemory();
+            return -1;
+        }
+        // tag any namespaces created by the module's init callback with the module name; only while the module is
+        // loaded, as in loadBinaryModuleFromPath(): a module that is already registered is attached to tpgm in the
+        // context of the caller, as by a load of a loaded feature (loadModuleIntern()); in its own context, a source
+        // module would be recorded as requiring itself (issue #5986)
+        QoreModuleNameContextHelper mnch(feature);
 
         // the metadata record linked with the module: as for a .qmod (see loadBinaryModuleFromPath()), the module
         // must be the one it describes, an optional module it was compiled without must not be available now, and its
