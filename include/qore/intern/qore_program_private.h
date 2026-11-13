@@ -4018,6 +4018,19 @@ public:
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* class_name, ExceptionSink* xsink) const;
 
+    //! Compiled metadata keeps canonical lookup semantics, including pending declarations and parse access guards.
+    DLLLOCAL const QoreClass* findClassCanonical(const char* path, ExceptionSink* xsink) const;
+    DLLLOCAL const TypedHashDecl* findHashDeclCanonical(const char* path, const QoreNamespace*& pns) const;
+    DLLLOCAL const QoreEnumDecl* findEnumCanonical(const char* path, const QoreNamespace*& pns) const;
+
+    template <bool Native>
+    DLLLOCAL const QoreClass* runtimeFindClassImpl(const char* path, ExceptionSink* xsink) const;
+    template <bool Native>
+    DLLLOCAL const TypedHashDecl* findHashDeclImpl(const char* path, const QoreNamespace*& pns) const;
+    template <bool Native>
+    DLLLOCAL const QoreEnumDecl* findEnumImpl(const char* path, const QoreNamespace*& pns) const;
+
+
     //! waits until no child Program copies the external data of this Program; plock must be held
     DLLLOCAL void waitForExternalDataCopiesIntern() {
         while (ext_copy_count) {

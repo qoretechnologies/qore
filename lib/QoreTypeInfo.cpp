@@ -3337,7 +3337,7 @@ qore_type_result_e QoreTypeSpec::matchReturnType(qore_type_t t) const {
     return matchType(t);
 }
 
-static bool type_spec_accept_object(const QoreClass& type_class, const QoreClass& object_class, bool& priv_error) {
+static QORE_INTERN_ALWAYS_INLINE bool type_spec_accept_object(const QoreClass& type_class, const QoreClass& object_class, bool& priv_error) {
     assert(!priv_error);
 
     bool priv;

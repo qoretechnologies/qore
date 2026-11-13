@@ -947,7 +947,7 @@ static bool instRegistryResolveGlobalLValueRoot(AOTInstReadCtx& ctx, LVPathStep&
 
     qore_program_private* pp = qore_program_private::get(*ctx.pgm);
     const qore_ns_private* vns = nullptr;
-    Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name.c_str(), vns);
+    Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name.c_str(), vns, LexicalSemanticPolicy{});
     if (!var) {
         ctx.error = "cannot resolve global lvalue path root '" + name + "'";
         return false;
@@ -1153,7 +1153,7 @@ static std::unique_ptr<QoreIRInstruction> readConst(
             const char* member_name = ctx.reader.readStringRef(ctx.ptr);
             if (enum_path && *enum_path && member_name && *member_name) {
                 const QoreNamespace* pns = nullptr;
-                const QoreEnumDecl* ed = ctx.pgm->findEnum(enum_path, pns);
+                const QoreEnumDecl* ed = qore_program_private::get(*ctx.pgm)->findEnumCanonical(enum_path, pns);
                 if (ed) {
                     ci->constant.enum_member = ed->findMember(member_name);
                     if (ci->constant.enum_member) {
@@ -1502,7 +1502,7 @@ static std::unique_ptr<QoreIRInstruction> readVar(
     if (vname && *vname) {
         qore_program_private* pp = qore_program_private::get(*ctx.pgm);
         const qore_ns_private* vns = nullptr;
-        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns);
+        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns, LexicalSemanticPolicy{});
     }
     auto* vi = new QoreIRVarInstruction(static_cast<QoreIROpcode>(opcode_raw), var);
     vi->mode = mode;

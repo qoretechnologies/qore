@@ -792,7 +792,7 @@ public:
     /** compiled code stores container elements through runtime helpers instead of an LValueHelper, and must report
         the same diagnostic as the AST interpreter for the same assignment
     */
-    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
             ExceptionSink* xsink, q_lvalue_vts_e vts) {
         assert(text && text[0] == '<');
         if (hasType(ti)) {
@@ -4758,7 +4758,7 @@ public:
     //! Creates the helper for a type-acceptance call reporting into \a xs
     /** @param xs the caller's sink; may be nullptr, in which case no failure can be reported at all (as before)
     */
-    DLLLOCAL ScopedTypeCheckSink(ExceptionSink* xs) : xsink(xs) {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE ScopedTypeCheckSink(ExceptionSink* xs) : xsink(xs) {
         // only allocate on the slow path: with a clean sink, any exception raised below is unambiguously ours
         if (xs && *xs) {
             tmp.reset(new ExceptionSink);

@@ -1703,8 +1703,12 @@ protected:
     }
 
     DLLLOCAL const QoreClass* runtimeFindClassIntern(const char* name, const qore_ns_private*& ns) const {
+        return runtimeFindClassIntern(name, ns, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const QoreClass* runtimeFindClassIntern(const char* name, const qore_ns_private*& ns, LexicalSemanticPolicy policy) const {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const QoreClass* qc = runtimeFindQoreClassIntern(name, ns)) {
                 return qc;
             }
@@ -1732,8 +1736,12 @@ protected:
     DLLLOCAL const QoreClass* runtimeFindClassIntern(const NamedScope& name, const qore_ns_private*& ns) const;
 
     DLLLOCAL const TypedHashDecl* runtimeFindHashDeclIntern(const char* name, const qore_ns_private*& ns) {
+        return runtimeFindHashDeclIntern(name, ns, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const TypedHashDecl* runtimeFindHashDeclIntern(const char* name, const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const TypedHashDecl* hd = runtimeFindQoreHashDeclIntern(name, ns)) {
                 return hd;
             }
@@ -1759,8 +1767,12 @@ protected:
     }
 
     DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const char* name, const qore_ns_private*& ns) {
+        return runtimeFindEnumIntern(name, ns, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const char* name, const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const QoreEnumDecl* ed = runtimeFindQoreEnumIntern(name, ns)) {
                 return ed;
             }
@@ -2115,8 +2127,12 @@ protected:
     }
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* name) const {
+        return runtimeFindClass(name, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const QoreClass* runtimeFindClass(const char* name, LexicalSemanticPolicy policy) const {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const QoreClass* qc = runtimeFindQoreClassIntern(name)) {
                 return qc;
             }
@@ -2278,13 +2294,22 @@ protected:
     DLLLOCAL Var* runtimeFindGlobalVar(const NamedScope& nscope, const qore_ns_private*& vns) const;
 
     DLLLOCAL Var* runtimeFindGlobalVar(const char* vname, const qore_ns_private*& vns) const {
+        return runtimeFindGlobalVarImpl<true>(vname, vns, {});
+    }
+
+    DLLLOCAL Var* runtimeFindGlobalVar(const char* vname, const qore_ns_private*& vns, LexicalSemanticPolicy policy) const {
+        return runtimeFindGlobalVarImpl<false>(vname, vns, policy);
+    }
+
+    template <bool Native>
+    DLLLOCAL Var* runtimeFindGlobalVarImpl(const char* vname, const qore_ns_private*& vns, LexicalSemanticPolicy policy) const {
         RuntimeNamespaceReadLocker rnl(*this);
         if (strstr(vname, "::")) {
             NamedScope nscope(vname);
             return runtimeFindGlobalVar(nscope, vns);
         }
 
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!(Native ? useBrokenNamespaceResolutionRuntime() : policy.brokenNamespace())) {
             if (Var* v = runtimeFindQoreGlobalVarIntern(vname, vns)) {
                 return v;
             }
@@ -2303,13 +2328,22 @@ protected:
             const qore_ns_private*& cns) const;
 
     DLLLOCAL const ConstantEntry* runtimeFindNamespaceConstant(const char* cname, const qore_ns_private*& cns) const {
+        return runtimeFindNamespaceConstantImpl<true>(cname, cns, {});
+    }
+
+    DLLLOCAL const ConstantEntry* runtimeFindNamespaceConstant(const char* cname, const qore_ns_private*& cns, LexicalSemanticPolicy policy) const {
+        return runtimeFindNamespaceConstantImpl<false>(cname, cns, policy);
+    }
+
+    template <bool Native>
+    DLLLOCAL const ConstantEntry* runtimeFindNamespaceConstantImpl(const char* cname, const qore_ns_private*& cns, LexicalSemanticPolicy policy) const {
         RuntimeNamespaceReadLocker rnl(*this);
         if (strstr(cname, "::")) {
             NamedScope nscope(cname);
             return runtimeFindNamespaceConstant(nscope, cns);
         }
 
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!(Native ? useBrokenNamespaceResolutionRuntime() : policy.brokenNamespace())) {
             if (const ConstantEntry* ce = runtimeFindQoreConstantEntryIntern(cname, cns)) {
                 return ce;
             }
@@ -2883,6 +2917,15 @@ public:
         return rns.rpriv->runtimeFindClassIntern(name, ns);
     }
 
+    DLLLOCAL static const QoreClass* runtimeFindClass(RootQoreNamespace& rns, const char* name,
+            const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->runtimeFindClassIntern(nscope, ns);
+        }
+        return rns.rpriv->runtimeFindClassIntern(name, ns, policy);
+    }
+
     DLLLOCAL static const TypedHashDecl* runtimeFindHashDecl(RootQoreNamespace& rns, const char* name,
             const qore_ns_private*& ns) {
         if (strstr(name, "::")) {
@@ -2890,6 +2933,15 @@ public:
             return rns.rpriv->runtimeFindHashDeclIntern(nscope, ns);
         }
         return rns.rpriv->runtimeFindHashDeclIntern(name, ns);
+    }
+
+    DLLLOCAL static const TypedHashDecl* runtimeFindHashDecl(RootQoreNamespace& rns, const char* name,
+            const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->runtimeFindHashDeclIntern(nscope, ns);
+        }
+        return rns.rpriv->runtimeFindHashDeclIntern(name, ns, policy);
     }
 
     DLLLOCAL static TypedHashDecl* parseTryFindHashDecl(RootQoreNamespace& rns, const char* name) {
@@ -2909,6 +2961,15 @@ public:
             return rns.rpriv->runtimeFindEnumIntern(nscope, ns);
         }
         return rns.rpriv->runtimeFindEnumIntern(name, ns);
+    }
+
+    DLLLOCAL static const QoreEnumDecl* runtimeFindEnum(RootQoreNamespace& rns, const char* name,
+            const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->runtimeFindEnumIntern(nscope, ns);
+        }
+        return rns.rpriv->runtimeFindEnumIntern(name, ns, policy);
     }
 
     DLLLOCAL static const QoreFunction* runtimeFindFunction(RootQoreNamespace& rns, const char* name,
@@ -3204,6 +3265,11 @@ public:
         return rns.rpriv->runtimeFindGlobalVar(vname, vns);
     }
 
+    DLLLOCAL static Var* runtimeFindGlobalVar(const RootQoreNamespace& rns, const char* vname, const qore_ns_private*& vns,
+            LexicalSemanticPolicy policy) {
+        return rns.rpriv->runtimeFindGlobalVar(vname, vns, policy);
+    }
+
     DLLLOCAL static Var* runtimeCreateVar(RootQoreNamespace& rns, QoreNamespace& vns, const char* vname, const QoreTypeInfo* typeInfo, bool builtin = false) {
         return rns.rpriv->runtimeCreateVar(*vns.priv, vname, typeInfo, builtin);
     }
@@ -3221,8 +3287,18 @@ public:
         return rns.rpriv->runtimeFindClass(name);
     }
 
+    DLLLOCAL static const QoreClass* runtimeFindClass(RootQoreNamespace& rns, const char* name,
+            LexicalSemanticPolicy policy) {
+        return rns.rpriv->runtimeFindClass(name, policy);
+    }
+
     DLLLOCAL static const ConstantEntry* runtimeFindNamespaceConstant(const RootQoreNamespace& rns, const char* cname, const qore_ns_private*& cns) {
         return rns.rpriv->runtimeFindNamespaceConstant(cname, cns);
+    }
+
+    DLLLOCAL static const ConstantEntry* runtimeFindNamespaceConstant(const RootQoreNamespace& rns, const char* cname, const qore_ns_private*& cns,
+            LexicalSemanticPolicy policy) {
+        return rns.rpriv->runtimeFindNamespaceConstant(cname, cns, policy);
     }
 
 private:

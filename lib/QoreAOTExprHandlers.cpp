@@ -1262,7 +1262,7 @@ static Var* resolve_global_varref_payload(const char* ref, QoreProgram* pgm,
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* vns = nullptr;
-    return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns);
+    return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns, LexicalSemanticPolicy{});
 }
 
 static bool write_expr_global_varref(AOTExprWriteCtx& ctx) {
@@ -2644,7 +2644,7 @@ static QoreValue read_expr_const_enum(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     const QoreNamespace* pns = nullptr;
-    const QoreEnumDecl* ed = ctx.pgm->findEnum(enum_path, pns);
+    const QoreEnumDecl* ed = qore_program_private::get(*ctx.pgm)->findEnumCanonical(enum_path, pns);
     if (!ed) {
         return QoreValue();
     }

@@ -111,7 +111,7 @@ static const QoreClass* en_resolveClass(QoreProgram* pgm, const std::string& nam
     if (path[0] == ':' && path[1] == ':') {
         path += 2;
     }
-    return qore_root_ns_private::runtimeFindClass(*pp->RootNS, path, found_ns);
+    return qore_root_ns_private::runtimeFindClass(*pp->RootNS, path, found_ns, LexicalSemanticPolicy{});
 }
 
 static const QoreMethod* en_resolveSelfMethod(const QoreClass* qc, const char* method_name,
@@ -239,7 +239,7 @@ static QoreValue read_node_EN_ENUM(AOTExprNodeReadCtx& ctx) {
     std::string member_name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);
     const QoreNamespace* pns = nullptr;
-    const QoreEnumDecl* ed = ctx.pgm->findEnum(enum_path.c_str(), pns);
+    const QoreEnumDecl* ed = qore_program_private::get(*ctx.pgm)->findEnumCanonical(enum_path.c_str(), pns);
     if (!ed) {
         printd(0, "AOT expr tree: cannot resolve enum '%s'\n", enum_path.c_str());
         return QoreValue();
@@ -276,7 +276,7 @@ static QoreValue read_node_EN_GLOBAL_VAR(AOTExprNodeReadCtx& ctx) {
         qore_program_private* pp = qore_program_private::get(*ctx.pgm);
         const qore_ns_private* found_ns = nullptr;
         Var* v = qore_root_ns_private::runtimeFindGlobalVar(
-            *pp->RootNS, name.c_str(), found_ns);
+            *pp->RootNS, name.c_str(), found_ns, LexicalSemanticPolicy{});
         if (!v) {
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
             v = root_ns->var_list.runtimeFindVar(name.c_str());
@@ -1727,7 +1727,7 @@ static QoreValue read_node_EN_STATIC_METH_REF(AOTExprNodeReadCtx& ctx) {
     std::string method_name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);  // 0 children
     ExceptionSink xsink;
-    const QoreClass* qc = ctx.pgm->findClass(class_path.c_str(), &xsink);
+    const QoreClass* qc = qore_program_private::get(*ctx.pgm)->findClassCanonical(class_path.c_str(), &xsink);
     if (xsink.isException()) {
         xsink.clear();
     }
@@ -1755,7 +1755,7 @@ static QoreValue read_node_EN_BOUND_METH_REF(AOTExprNodeReadCtx& ctx) {
     std::string method_name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);  // 0 children
     ExceptionSink xsink;
-    const QoreClass* qc = ctx.pgm->findClass(class_path.c_str(), &xsink);
+    const QoreClass* qc = qore_program_private::get(*ctx.pgm)->findClassCanonical(class_path.c_str(), &xsink);
     if (xsink.isException()) {
         xsink.clear();
     }

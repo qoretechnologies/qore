@@ -3137,7 +3137,8 @@ void qore_program_private::del(ExceptionSink* xsink) {
     leaveThreadDataFamily();
 }
 
-const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, ExceptionSink* xsink) const {
+template <bool Native>
+const QoreClass* qore_program_private::runtimeFindClassImpl(const char* class_name, ExceptionSink* xsink) const {
     // acquire safe access to parse structures in the source program
     ProgramRuntimeParseAccessHelper rah(xsink, pgm);
     if (*xsink)
@@ -3145,7 +3146,19 @@ const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, 
 
     // include the ns arg to ensure that namespace-justified classes are resolved properly
     const qore_ns_private* ns;
-    return qore_root_ns_private::runtimeFindClass(*RootNS, class_name, ns);
+    if constexpr (Native) {
+        return qore_root_ns_private::runtimeFindClass(*RootNS, class_name, ns);
+    } else {
+        return qore_root_ns_private::runtimeFindClass(*RootNS, class_name, ns, LexicalSemanticPolicy{});
+    }
+}
+
+const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, ExceptionSink* xsink) const {
+    return runtimeFindClassImpl<true>(class_name, xsink);
+}
+
+const QoreClass* qore_program_private::findClassCanonical(const char* path, ExceptionSink* xsink) const {
+    return runtimeFindClassImpl<false>(path, xsink);
 }
 
 int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, ExceptionSink* xsink) {
@@ -5415,11 +5428,12 @@ func_ns_vec_t QoreProgram::findAllFunctionsRegexNs(const QoreString& pattern, in
     return qore_root_ns_private::get(*priv->RootNS)->runtimeFindAllFunctionsRegexNs(pattern, re_opts, xsink);
 }
 
-const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {
+template <bool Native>
+const TypedHashDecl* qore_program_private::findHashDeclImpl(const char* path, const QoreNamespace*& pns) const {
     pns = nullptr;
 
-    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
-        TypedHashDecl* hd = qore_root_ns_private::parseTryFindHashDecl(*priv->RootNS, path);
+    if (parsing_in_progress || parse_commit_in_progress) {
+        TypedHashDecl* hd = qore_root_ns_private::parseTryFindHashDecl(*RootNS, path);
         if (hd) {
             pns = hd->getNamespace();
             return hd;
@@ -5427,18 +5441,32 @@ const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNames
     }
 
     const qore_ns_private* pns_priv;
-    const TypedHashDecl* th = qore_root_ns_private::runtimeFindHashDecl(*priv->RootNS, path, pns_priv);
+    const TypedHashDecl* th;
+    if constexpr (Native) {
+        th = qore_root_ns_private::runtimeFindHashDecl(*RootNS, path, pns_priv);
+    } else {
+        th = qore_root_ns_private::runtimeFindHashDecl(*RootNS, path, pns_priv, LexicalSemanticPolicy{});
+    }
     if (th) {
         pns = pns_priv->ns;
     }
     return th;
 }
 
-const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*& pns) const {
+const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {
+    return priv->findHashDeclImpl<true>(path, pns);
+}
+
+const TypedHashDecl* qore_program_private::findHashDeclCanonical(const char* path, const QoreNamespace*& pns) const {
+    return findHashDeclImpl<false>(path, pns);
+}
+
+template <bool Native>
+const QoreEnumDecl* qore_program_private::findEnumImpl(const char* path, const QoreNamespace*& pns) const {
     pns = nullptr;
 
-    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
-        const QoreEnumDecl* e = qore_root_ns_private::parseTryFindEnum(*priv->RootNS, path);
+    if (parsing_in_progress || parse_commit_in_progress) {
+        const QoreEnumDecl* e = qore_root_ns_private::parseTryFindEnum(*RootNS, path);
         if (e) {
             pns = e->getNamespace();
             return e;
@@ -5446,11 +5474,24 @@ const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*
     }
 
     const qore_ns_private* pns_priv;
-    const QoreEnumDecl* e = qore_root_ns_private::runtimeFindEnum(*priv->RootNS, path, pns_priv);
+    const QoreEnumDecl* e;
+    if constexpr (Native) {
+        e = qore_root_ns_private::runtimeFindEnum(*RootNS, path, pns_priv);
+    } else {
+        e = qore_root_ns_private::runtimeFindEnum(*RootNS, path, pns_priv, LexicalSemanticPolicy{});
+    }
     if (e) {
         pns = pns_priv->ns;
     }
     return e;
+}
+
+const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*& pns) const {
+    return priv->findEnumImpl<true>(path, pns);
+}
+
+const QoreEnumDecl* qore_program_private::findEnumCanonical(const char* path, const QoreNamespace*& pns) const {
+    return findEnumImpl<false>(path, pns);
 }
 
 // issue #1796: include a non-const variant for binary modules

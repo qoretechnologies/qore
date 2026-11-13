@@ -33,6 +33,16 @@ public namespace LexicalAotCanonical {
     public list<*int> sub slice(list<*int> value = items()[0..3]) { return value; }
     public auto sub body_only<T = softint>() { return new list<T>("23"); }
     public auto sub default_only<T = softint>(auto value = body_only<T>()) { return value; }
+    public class Base {}
+    public class Derived inherits Base {}
+    public enum Mode { Ready = 1 }
+    public hashdecl Options { int value = 17; }
+    public list<Base> sub objects() { return (new Derived(), new Derived()); }
+    public auto sub materialize(hash<Options> options = new hash<Options>(), Mode mode = Mode::Ready) {
+        list<Base> values = objects();
+        return ((map $1, values).size(), (select values, True).size(), (take 2, values).size(),
+            options.value, mode == Mode::Ready);
+    }
     public class Probe {
         private static string text() { return "text"; }
         static bool truth(bool value = !!text()) { return value; }
@@ -43,20 +53,25 @@ public namespace LexicalAotCanonical {
     const ConsumerSource = '%modern
 %no-child-restrictions
 auto sub invoke(Program target) { return target.callFunction("sample"); }
-Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS
-    | PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_RANGE);
-p.parse("%requires LexicalAotCanonical\n"
+Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE
+    | PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_RANGE | PO_BROKEN_NAMESPACE_RESOLUTION);
+# Load through a native builtin invoked by legacy code, while its namespace policy bridge is active.
+p.parsePending("sub preload() { load_module(\"LexicalAotCanonical\"); }", "legacy-native-module-loader");
+p.parseCommit();
+p.callFunction("preload");
+p.parsePending("%requires LexicalAotCanonical\n"
     "auto sub sample() { return (LexicalAotCanonical::truth(), LexicalAotCanonical::slice(),"
     "LexicalAotCanonical::Probe::truth(), LexicalAotCanonical::body_only(),"
-    "LexicalAotCanonical::default_only()); }", "legacy-module-consumer");
+    "LexicalAotCanonical::default_only(), LexicalAotCanonical::materialize()); }", "legacy-module-consumer");
+p.parseCommit();
 foreach bool strict in (True, False, True) {
     if (strict) {
-        p.setParseOptions(PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_RANGE);
+        p.setParseOptions(PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_RANGE | PO_BROKEN_NAMESPACE_RESOLUTION);
     } else {
-        p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_RANGE);
+        p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL | PO_BROKEN_LIST_RANGE | PO_BROKEN_NAMESPACE_RESOLUTION);
     }
     auto result = invoke(p);
-    if (result !== (True, (1,2), True, (23,), (23,))) throw "AOT-CANONICAL-POLICY", result;
+    if (result !== (True, (1,2), True, (23,), (23,), (2, 2, 2, 17, True))) throw "AOT-CANONICAL-POLICY", result;
 }
 printf("PASS\n");
 ';

@@ -3589,7 +3589,7 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
     if (!module_qualified) {
         const qore_ns_private* found_ns = nullptr;
         if (Var* var = qore_root_ns_private::runtimeFindGlobalVar(
-                *pp->RootNS, full_path.c_str(), found_ns)) {
+                *pp->RootNS, full_path.c_str(), found_ns, LexicalSemanticPolicy{})) {
             return toBits(qore_rt_eval_runtime_var(var, xsink));
         }
         if (*xsink) {
@@ -3598,7 +3598,7 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
 
         found_ns = nullptr;
         if (const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
-                *pp->RootNS, full_path.c_str(), found_ns)) {
+                *pp->RootNS, full_path.c_str(), found_ns, LexicalSemanticPolicy{})) {
             return toBits(ce->getReferencedValue());
         }
     }
@@ -3611,7 +3611,7 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
     if (!module_qualified) {
         const qore_ns_private* found_ns = nullptr;
         if (const QoreEnumDecl* ed = qore_root_ns_private::runtimeFindEnum(
-                *pp->RootNS, resolved_class_path, found_ns)) {
+                *pp->RootNS, resolved_class_path, found_ns, LexicalSemanticPolicy{})) {
             if (const QoreEnumMember* member = ed->findMember(var_name)) {
                 return toBits(QoreValue::makeEnum(member));
             }
@@ -3889,7 +3889,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     if (!hd) {
         // Try direct hashdecl lookup by path
         const QoreNamespace* pns = nullptr;
-        hd = pgm->findHashDecl(resolve_path, pns);
+        hd = qore_program_private::get(*pgm)->findHashDeclCanonical(resolve_path, pns);
     }
     if (hd) {
         if (inner.isNothing() && or_nothing) {
@@ -4158,7 +4158,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_method_call_ref_aot(QoreAOTCo
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, resolved_class_path, found_ns);
+        *pp->RootNS, resolved_class_path, found_ns, LexicalSemanticPolicy{});
     if (!qc) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
             "cannot resolve class '%s' for method call reference '%s()'",
@@ -13828,7 +13828,7 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
     qore_program_private* pp = ctx->pgm ? qore_program_private::get(*ctx->pgm) : nullptr;
     if (pp && pp->RootNS) {
         const qore_ns_private* vns = nullptr;
-        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, ctx->global_names[idx].c_str(), vns);
+        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, ctx->global_names[idx].c_str(), vns, LexicalSemanticPolicy{});
         if (var) {
             slot.store(var, std::memory_order_release);
             if (trace_slot()) {
