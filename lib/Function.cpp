@@ -68,6 +68,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <cassert>
 #include <cctype>
 #include <chrono>
@@ -122,7 +123,13 @@ static thread_local const QoreTypeParamInstantiation* runtime_type_param_instant
 
 UserSignatureTypeParamContextHelper::UserSignatureTypeParamContextHelper(const UserSignature* sig)
         : old_sig(parse_signature_type_param_context) {
-    parse_signature_type_param_context = sig && sig->hasTypeParameters() ? sig : nullptr;
+    if (sig && sig->hasTypeParameters()) {
+        parse_signature_type_param_context = sig;
+    } else if (!sig || !sig->closure) {
+        // a closure, which has no type parameters of its own, names those of the code that it is in, which is
+        // parsed around it (qore#5733); the type parameters of any other code are not visible in a function
+        parse_signature_type_param_context = nullptr;
+    }
 }
 
 UserSignatureTypeParamContextHelper::~UserSignatureTypeParamContextHelper() {
@@ -246,15 +253,15 @@ static bool qore_type_contains_type_param(const QoreTypeInfo* ti) {
         return qore_type_contains_type_param(cti->getReturnType())
             || qore_type_contains_type_param_vec(cti->getParamTypes());
     }
-    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
     if (qore_type_contains_type_param(subtype)) {
         return true;
     }
-    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    subtype = QoreTypeInfo::getReturnComplexListOrNothing(ti);
     if (qore_type_contains_type_param(subtype)) {
         return true;
     }
-    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(ti);
     return qore_type_contains_type_param(subtype);
 }
 
@@ -291,15 +298,15 @@ static bool qore_type_contains_type_param_key(const QoreTypeInfo* ti, const Gene
         return qore_type_contains_type_param_key(cti->getReturnType(), key)
             || qore_type_vec_contains_type_param_key(cti->getParamTypes(), key);
     }
-    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
     if (qore_type_contains_type_param_key(subtype, key)) {
         return true;
     }
-    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    subtype = QoreTypeInfo::getReturnComplexListOrNothing(ti);
     if (qore_type_contains_type_param_key(subtype, key)) {
         return true;
     }
-    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(ti);
     return qore_type_contains_type_param_key(subtype, key);
 }
 
@@ -380,22 +387,28 @@ static bool qore_generic_types_unify(const QoreTypeInfo* a, const QoreTypeInfo* 
                 saw_type_param);
     }
 
-    const QoreTypeInfo* hash_a = QoreTypeInfo::getUniqueReturnComplexHash(a);
-    const QoreTypeInfo* hash_b = QoreTypeInfo::getUniqueReturnComplexHash(b);
+    // containers, also or-nothing ones (qore#5849): both or neither accept NOTHING, as for code types above
+    bool nothing_a = QoreTypeInfo::parseAcceptsReturns(a, NT_NOTHING);
+    bool nothing_b = QoreTypeInfo::parseAcceptsReturns(b, NT_NOTHING);
+    const QoreTypeInfo* hash_a = QoreTypeInfo::getReturnComplexHashOrNothing(a);
+    const QoreTypeInfo* hash_b = QoreTypeInfo::getReturnComplexHashOrNothing(b);
     if (hash_a || hash_b) {
-        return hash_a && hash_b && qore_generic_types_unify(hash_a, hash_b, bindings, saw_type_param);
+        return hash_a && hash_b && nothing_a == nothing_b
+            && qore_generic_types_unify(hash_a, hash_b, bindings, saw_type_param);
     }
 
-    const QoreTypeInfo* list_a = QoreTypeInfo::getUniqueReturnComplexList(a);
-    const QoreTypeInfo* list_b = QoreTypeInfo::getUniqueReturnComplexList(b);
+    const QoreTypeInfo* list_a = QoreTypeInfo::getReturnComplexListOrNothing(a);
+    const QoreTypeInfo* list_b = QoreTypeInfo::getReturnComplexListOrNothing(b);
     if (list_a || list_b) {
-        return list_a && list_b && qore_generic_types_unify(list_a, list_b, bindings, saw_type_param);
+        return list_a && list_b && nothing_a == nothing_b
+            && qore_generic_types_unify(list_a, list_b, bindings, saw_type_param);
     }
 
-    const QoreTypeInfo* ref_a = QoreTypeInfo::getUniqueReturnComplexReference(a);
-    const QoreTypeInfo* ref_b = QoreTypeInfo::getUniqueReturnComplexReference(b);
+    const QoreTypeInfo* ref_a = QoreTypeInfo::getReturnComplexReferenceOrNothing(a);
+    const QoreTypeInfo* ref_b = QoreTypeInfo::getReturnComplexReferenceOrNothing(b);
     if (ref_a || ref_b) {
-        return ref_a && ref_b && qore_generic_types_unify(ref_a, ref_b, bindings, saw_type_param);
+        return ref_a && ref_b && nothing_a == nothing_b
+            && qore_generic_types_unify(ref_a, ref_b, bindings, saw_type_param);
     }
 
     return false;
@@ -491,17 +504,17 @@ static const UserSignature* qore_find_signature_type_param_owner_in_type(const Q
         }
         return qore_find_signature_type_param_owner_in_vec(cti->getParamTypes());
     }
-    if (const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti)) {
+    if (const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexHashOrNothing(ti)) {
         if (const UserSignature* sig = qore_find_signature_type_param_owner_in_type(subtype)) {
             return sig;
         }
     }
-    if (const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexList(ti)) {
+    if (const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexListOrNothing(ti)) {
         if (const UserSignature* sig = qore_find_signature_type_param_owner_in_type(subtype)) {
             return sig;
         }
     }
-    if (const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti)) {
+    if (const QoreTypeInfo* subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(ti)) {
         return qore_find_signature_type_param_owner_in_type(subtype);
     }
     return nullptr;
@@ -660,24 +673,24 @@ static bool qore_infer_signature_type_args_from_type(const UserSignature* sig, c
                 actual_code->getParamTypes(), bindings);
     }
 
-    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getUniqueReturnComplexHash(formal);
-    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getUniqueReturnComplexHash(actual);
+    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getReturnComplexHashOrNothing(formal);
+    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getReturnComplexHashOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_signature_type_args_from_type(sig, formal_subtype, actual_subtype, bindings)
             : true;
     }
 
-    formal_subtype = QoreTypeInfo::getUniqueReturnComplexList(formal);
-    actual_subtype = QoreTypeInfo::getUniqueReturnComplexList(actual);
+    formal_subtype = QoreTypeInfo::getReturnComplexListOrNothing(formal);
+    actual_subtype = QoreTypeInfo::getReturnComplexListOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_signature_type_args_from_type(sig, formal_subtype, actual_subtype, bindings)
             : true;
     }
 
-    formal_subtype = QoreTypeInfo::getUniqueReturnComplexReference(formal);
-    actual_subtype = QoreTypeInfo::getUniqueReturnComplexReference(actual);
+    formal_subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(formal);
+    actual_subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_signature_type_args_from_type(sig, formal_subtype, actual_subtype, bindings)
@@ -971,10 +984,10 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()),
-        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
         explicit_receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     // Qore code must never be started on an async I/O thread answering a fast route
@@ -992,7 +1005,6 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         return;
     }
 
-    defer_domain_po = n_defer_domain_po;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -1000,12 +1012,12 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po,
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
         bool n_hide_call_site)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(n_hide_call_site ? hide_runtime_call_site(hidden_call_site_slot, hidden_call_site)
             : take_runtime_call_location()),
-        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
         explicit_receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     if (self && !self->isValid()) {
@@ -1021,7 +1033,6 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         return;
     }
 
-    defer_domain_po = n_defer_domain_po;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -1123,12 +1134,24 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     }
 }
 
-void CodeEvaluationHelper::setCallName(const QoreFunction* func) {
-    if (qc) {
-        callName = qc->name.c_str();
-        callName += "::";
+const std::string& CodeEvaluationCallName::build(const qore_class_private* qc, const QoreFunction* func) const {
+    // the name of a frame of a call that did not start (see CodeEvaluationHelper::setCallName())
+    static const std::string no_name;
+    if (!func) {
+        return no_name;
     }
-    callName += func->getName();
+    std::unique_ptr<std::string> n(new std::string);
+    if (qc) {
+        *n = qc->name.c_str();
+        *n += "::";
+    }
+    *n += func->getName();
+    std::string* expected = nullptr;
+    if (name.compare_exchange_strong(expected, n.get(), std::memory_order_acq_rel, std::memory_order_acquire)) {
+        return *n.release();
+    }
+    // another thread installed the same name first
+    return *expected;
 }
 
 namespace {
@@ -1167,8 +1190,17 @@ private:
 };
 }
 
+#ifdef DEBUG
+thread_local bool qore_dbg_runtime_chosen_variant = false;
+#endif
+
 void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx) {
+#ifdef DEBUG
+    // a variant that the caller chose at runtime was not committed at parse time
+    const bool runtime_chosen_variant = qore_dbg_runtime_chosen_variant;
+    qore_dbg_runtime_chosen_variant = false;
+#endif
     sandbox_provenance.set(self);
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
@@ -1218,7 +1250,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         // against the Program where they run (their target/creation context).  For a cross-Program
         // callFunction() the switch is deferred (see below) so the dom check is evaluated against the
         // CALLER's options (the cross-Program privilege model).
-        if (!defer_domain_po) {
+        if (!(call_flags & QCEF_DEFER_DOMAIN_PO)) {
             QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
             if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
                 old_rc_po = rc.getParseOptions();
@@ -1261,8 +1293,22 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             // again, as for a call without a committed variant, and called with the arguments as the caller gave
             // them, not as they were converted for the variant that does not match (issue #5686).
             saved.restore(tmp);
+            // the type parameters that a closure names (those of the code that created it) are bound by the type
+            // arguments of that code, which are current: the variant is resolved with them as the explicit type
+            // arguments, so that they are not inferred from the arguments that the closure does not accept, which
+            // then raise the error that a call of a function with the same signature raises (qore#5733)
+            bool closure_type_args = variant_needs_type_param_substitution && variant->isUser()
+                && variant->getUserVariantBase()->getUserSignature()->closure;
+            const QoreTypeParamInstantiation* old_explicit_inst = explicit_type_param_instantiation;
+            if (closure_type_args) {
+                explicit_type_param_instantiation = runtime_get_type_param_instantiation();
+            }
             // if no match can be found, return with the exception raised
-            if (findVariant(func, variant, cctx)) {
+            int find_rc = findVariant(func, variant, cctx);
+            if (closure_type_args) {
+                explicit_type_param_instantiation = old_explicit_inst;
+            }
+            if (find_rc) {
                 xsink2.clear();
                 return;
             }
@@ -1274,7 +1320,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 #ifdef DEBUG
             // the invariant of the parse-time variant commitment (see QoreFunction::parseFindVariant())
             {
-                bool runtime_state = false;
+                bool runtime_state = runtime_chosen_variant;
                 for (size_t i = 0, e = tmp.size(); i < e && !runtime_state; ++i) {
                     QoreValue a = tmp->retrieveEntry(i);
                     runtime_state = a.isNothing() || (a.getType() == NT_OBJECT && !a.get<const QoreObject>()->isValid());
@@ -1339,7 +1385,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     // options) can invoke a privileged builtin (e.g. set_save_object_callback(), dom=PROCESS) on a
     // sandboxed target Program, while the body itself still runs under the called Program's options (so
     // e.g. load_module() registers into the target with the target's options).
-    if (pgm_ctx && defer_domain_po) {
+    if (pgm_ctx && (call_flags & QCEF_DEFER_DOMAIN_PO)) {
         QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
         if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
             old_rc_po = rc.getParseOptions();
@@ -1389,8 +1435,12 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         class_ctx = nullptr;
     }
 
-    variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx, receiver_type_info,
-        &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent);
+    // the search with no variant filter, the usual case, can use a specialization of the search for no filter;
+    // the search with a filter is out of line
+    variant = (call_flags & QRFV_MASK)
+        ? findFilteredVariant(func, class_ctx)
+        : func->runtimeFindVariant(xsink, getArgs(), 0, class_ctx, receiver_type_info, &type_param_instantiation,
+            explicit_type_param_instantiation, &variant_content_dependent);
     if (!variant) {
         assert(*xsink);
         return -1;
@@ -1408,6 +1458,12 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         }
     }
     return 0;
+}
+
+const AbstractQoreFunctionVariant* CodeEvaluationHelper::findFilteredVariant(const QoreFunction* func,
+        const qore_class_private* class_ctx) {
+    return func->runtimeFindVariant(xsink, getArgs(), call_flags & QRFV_MASK, class_ctx, receiver_type_info,
+        &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent);
 }
 
 int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
@@ -1432,6 +1488,26 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
             old_type_param_instantiation = nullptr;
         }
         return 0;
+    }
+
+    // a closure has no type parameters of its own; the type parameters that its signature names (its generic
+    // signature is the code that created it) are bound by the type arguments of that code, which are current (see
+    // QoreClosureTypeContextHelper; qore#5733), so the call leaves them as they are instead of inferring them from the
+    // closure's arguments; only a closure whose signature names type parameters gets here
+    // (sig is the variant's own signature: only a variant whose generic signature is another one can be a closure)
+    if (static_cast<const AbstractFunctionSignature*>(generic_sig) != sig) {
+        const UserVariantBase* uvb = variant->getUserVariantBase();
+        if (uvb && uvb->getUserSignature()->closure) {
+            // the parameter and return types of the closure are substituted with them
+            const QoreTypeParamInstantiation* current = variant_needs_type_param_substitution
+                ? runtime_get_type_param_instantiation() : nullptr;
+            if (current) {
+                type_param_instantiation = *current;
+            } else {
+                type_param_instantiation.clear();
+            }
+            return 0;
+        }
     }
 
     // an explicit type argument can be a type parameter of the CALLER's class (g.m<A>() in a method of a generic class
@@ -1465,7 +1541,7 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     }
     if (!inferred) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
-            callName.c_str(), sig ? sig->getSignatureText() : "");
+            getCallName().c_str(), sig ? sig->getSignatureText() : "");
         return -1;
     }
 
@@ -2114,6 +2190,10 @@ int UserSignature::resolve() {
     }
 
     resolved = true;
+    // a closure names the type parameters of the code that it is in (qore#5733)
+    if (closure && type_params.empty() && !enclosing_signature) {
+        enclosing_signature = parse_get_signature_type_param_context();
+    }
     UserSignatureTypeParamContextHelper type_param_context(this);
 
     int err = 0;
@@ -2846,24 +2926,24 @@ static bool qore_infer_class_type_args_from_type(const QoreClass* cls, const Qor
                 actual_code->getParamTypes(), bindings);
     }
 
-    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getUniqueReturnComplexHash(formal);
-    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getUniqueReturnComplexHash(actual);
+    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getReturnComplexHashOrNothing(formal);
+    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getReturnComplexHashOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_class_type_args_from_type(cls, formal_subtype, actual_subtype, bindings)
             : true;
     }
 
-    formal_subtype = QoreTypeInfo::getUniqueReturnComplexList(formal);
-    actual_subtype = QoreTypeInfo::getUniqueReturnComplexList(actual);
+    formal_subtype = QoreTypeInfo::getReturnComplexListOrNothing(formal);
+    actual_subtype = QoreTypeInfo::getReturnComplexListOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_class_type_args_from_type(cls, formal_subtype, actual_subtype, bindings)
             : true;
     }
 
-    formal_subtype = QoreTypeInfo::getUniqueReturnComplexReference(formal);
-    actual_subtype = QoreTypeInfo::getUniqueReturnComplexReference(actual);
+    formal_subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(formal);
+    actual_subtype = QoreTypeInfo::getReturnComplexReferenceOrNothing(actual);
     if (formal_subtype) {
         return actual_subtype
             ? qore_infer_class_type_args_from_type(cls, formal_subtype, actual_subtype, bindings)
@@ -3264,7 +3344,7 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
-        bool only_user, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
+        unsigned variant_filter, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
         bool* content_dependent) const {
     if (type_param_inst) {
@@ -3323,8 +3403,8 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         //  last_class, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            // skip checking variant if we are only looking for user variants and this variant is builtin
-            if (only_user && !(*i)->isUser()) {
+            // skip a variant that the filter excludes (a builtin one when only user variants are wanted)
+            if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
                 continue;
             }
 
@@ -3476,7 +3556,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         *content_dependent = elements_checked;
     }
 
-    if (!variant && !only_user) {
+    if (!variant && !(variant_filter & QRFV_ONLY_USER)) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, args, receiver_type_info, true);
         desc->concat("' can be found; ");
@@ -3503,6 +3583,10 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                         && (skip_method_variant(*i, class_ctx, internal_access)
                             || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                             continue;
+                    }
+                    // a variant that the filter excludes was not tested, and is not shown to the caller
+                    if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
+                        continue;
                     }
                     // a noop variant that is not a candidate for the caller was not tested
                     if (qore_runtime_skip_noop_variant((*i)->getParseOptions(ppo), (*i)->getFlags())) {
@@ -3539,7 +3623,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             //    variant ? variant->getSignature()->getSignatureText() : "n/a", (vflags & po & ~PO_POSITIVE_OPTIONS));
             if ((vflags & po & ~PO_POSITIVE_OPTIONS) || ((vflags & PO_POSITIVE_OPTIONS) && (((vflags & PO_POSITIVE_OPTIONS) & po) != (vflags & PO_POSITIVE_OPTIONS)))) {
                 //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) getProgram(): %p getProgram()->getParseOptions(): %x variant->getFunctionality(): %x\n", this, getName(), variant->getSignature()->getSignatureText(), getProgram(), getProgram()->getParseOptions(), variant->getFunctionality());
-                if (!only_user) {
+                if (!(variant_filter & QRFV_ONLY_USER)) {
                     std::string class_path = classPath();
                     xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to builtin " \
                         "%s '%s%s%s(%s)'", !class_path.empty() ? "method" : "function",
@@ -3574,7 +3658,8 @@ bool QoreFunction::hasInheritedVariants() const {
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
-        QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst) const {
+        QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
+        unsigned variant_filter) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -3615,6 +3700,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                 && (skip_method_variant(*i, class_ctx, internal_access)
                     || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
+            }
+            if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
+                continue;
             }
 
             // get runtime parse options
@@ -3689,7 +3777,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             break;
     }
     return checkVariant(xsink, args, class_ctx, aqf, last_class, internal_access, ppo, variant, receiver_type_info,
-        explicit_type_param_inst);
+        explicit_type_param_inst, variant_filter);
 }
 
 DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(ExceptionSink* xsink,
@@ -3726,7 +3814,8 @@ DLLLOCAL const AbstractQoreFunctionVariant* QoreFunction::checkVariantDomain(Exc
 const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsink, const type_vec_t& args,
         const qore_class_private* class_ctx, const QoreFunction* aqf, const qore_class_private* last_class,
         bool internal_access, const QoreParseOptions& ppo, const AbstractQoreFunctionVariant* variant,
-        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_inst) const {
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_inst,
+        unsigned variant_filter) const {
     if (!variant) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
         do_call_str(*desc, this, args, nullptr, receiver_type_info, true);
@@ -3750,6 +3839,10 @@ const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsi
                     && (skip_method_variant(*i, class_ctx, internal_access)
                         || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                         continue;
+                }
+                // a variant that the filter excludes is not shown to the caller
+                if (variant_filter && skipFilteredVariant(variant_filter, *i)) {
+                    continue;
                 }
                 desc->concat("\n   ");
                 QoreTypeParamInstantiation candidate_inst;
@@ -5427,7 +5520,7 @@ private:
 // identified at run time
 QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags) const {
     const char* fname = getName();
 
     // issue #3027: catch recursive references during parse initialization
@@ -5464,7 +5557,7 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, call_pgm_entry.getArgs(args), nullptr, nullptr,
-        CT_UNUSED, false, nullptr, exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+        CT_UNUSED, false, nullptr, exec_pgm, nullptr, explicit_type_param_instantiation, call_flags);
     if (*xsink) {
         return QoreValue();
     }
@@ -5475,7 +5568,7 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
 // identified at run time
 QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags) const {
     const char* fname = getName();
     // a user function runs in the Program that defined it, as a method runs in its class's (see
     // qore_get_function_pgm_context()); the holder keeps that Program until the call has left it
@@ -5493,7 +5586,7 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        exec_pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
+        exec_pgm, nullptr, explicit_type_param_instantiation, call_flags);
     if (*xsink) {
         return QoreValue();
     }
@@ -5795,6 +5888,77 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
         recheck(false), init(false) {
     //printd(5, "UserVariantBase::UserVariantBase() this: %p params: %p rv: %p b: %p synced: %d\n", params, rv, b,
     //    synced);
+    // the variant is in its Program's list of variants and keeps the Program allocated while it lives (see
+    // setProgram())
+    if (pgm) {
+        qore_program_private::get(*pgm)->registerUserVariant(this);
+        pgm->depRef();
+    }
+}
+
+void UserVariantBase::setProgram(QoreProgram* p) {
+    // the AOT runtime sets the Program that the variant was created in again
+    if (p == pgm) {
+        return;
+    }
+    // the variant leaves the old Program's registry first, so that it is never in two at once, where the deletion of
+    // the old Program could mark it; neither step can fail (the registry is an intrusive list)
+    if (pgm) {
+        qore_program_private::get(*pgm)->unregisterUserVariant(this);
+    }
+    if (p) {
+        // sets pgm_deleted if the deletion of the Program has started
+        qore_program_private::get(*p)->registerUserVariant(this);
+        p->depRef();
+    } else {
+        pgm_deleted.store(false, std::memory_order_relaxed);
+    }
+    if (pgm) {
+        // can delete the Program, whose memory the variant kept: no lock is held here
+        pgm->depDeref();
+    }
+    pgm = p;
+    pgm_id = p ? p->getProgramId() : 0;
+    pgm_module_lifetime.store(false, std::memory_order_relaxed);
+}
+
+void qore_program_private::registerUserVariant(const UserVariantBase* v) {
+    std::lock_guard<std::mutex> lock(user_variant_lock);
+    assert(!v->uv_prev && !v->uv_next && user_variants != v);
+    v->uv_next = user_variants;
+    if (user_variants) {
+        user_variants->uv_prev = v;
+    }
+    user_variants = v;
+    // a variant registered while the Program is being deleted (an AOT closure deserialized lazily, for example) is
+    // marked as those that existed when the deletion started
+    v->pgm_deleted.store(user_variants_deleted, std::memory_order_release);
+}
+
+void qore_program_private::unregisterUserVariant(const UserVariantBase* v) {
+    std::lock_guard<std::mutex> lock(user_variant_lock);
+    // a variant that is not in the list leaves it unchanged
+    if (!v->uv_prev && user_variants != v) {
+        assert(false);
+        return;
+    }
+    if (v->uv_prev) {
+        v->uv_prev->uv_next = v->uv_next;
+    } else {
+        user_variants = v->uv_next;
+    }
+    if (v->uv_next) {
+        v->uv_next->uv_prev = v->uv_prev;
+    }
+    v->uv_prev = v->uv_next = nullptr;
+}
+
+void qore_program_private::markUserVariantsDeleted() {
+    std::lock_guard<std::mutex> lock(user_variant_lock);
+    user_variants_deleted = true;
+    for (const UserVariantBase* v = user_variants; v; v = v->uv_next) {
+        v->pgm_deleted.store(true, std::memory_order_release);
+    }
 }
 
 //! Marks the helpers of the background expressions in \a func, and in its helpers and handlers, as code of \a s
@@ -5843,6 +6007,13 @@ UserVariantBase::~UserVariantBase() {
     delete gate;
     delete aot_entry_statement;
     delete statements;
+    if (pgm) {
+        qore_program_private::get(*pgm)->unregisterUserVariant(this);
+        // the last reference deletes the Program, whose memory the variant kept after its deletion: that happens in
+        // the thread that releases the last variant of a deleted Program (its last call reference, closure or
+        // imported function, or a background compile's reference), with no lock of the Program held
+        pgm->depDeref();
+    }
 }
 
 void UserVariantBase::setAOTEntryStatementBlock(StatementBlock* b) {
@@ -5981,7 +6152,9 @@ UserVariantBase::IRContextFlags UserVariantBase::getIRContextFlags(const QoreIRF
     assert(ir);
     IRContextFlags flags;
     flags.all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
-    if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    // the frame of a call that needs one has argv and self, as in the AST interpreter, also when the code does not
+    // use them
+    if (ir->needs_call_frame || q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
         flags.uses_argv = signature.argvid != nullptr;
         flags.uses_self = signature.selfid != nullptr;
     } else {
@@ -6018,6 +6191,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
         ir->computeIROnlyLocals();
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+            ir->needs_call_frame = true;
             if (!ir->ir_only_locals.empty() || !ir->reference_slot_locals.empty()
                     || !ir->real_reference_locals.empty()) {
                 ir->ir_only_locals.clear();
@@ -6672,6 +6846,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // When debugger is enabled, all locals must be on the TLS stack so
     // get_local_vars() and set_local_var_value() can access them
     if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+        func->needs_call_frame = true;
         if (!func->ir_only_locals.empty() || !func->reference_slot_locals.empty()
                 || !func->real_reference_locals.empty()) {
             func->ir_only_locals.clear();
@@ -6843,6 +7018,21 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
 
 void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
         bool promote_to_ir) const {
+    // A mixed body is AST-only even when its first statement and its Program's final options are modern.
+    // This is a cold compilation decision; ordinary call dispatch and promotion keep their existing checks.
+    if (statements && statements->native_parse_info.legacy_location) {
+        ir_lower_failed = true;
+        const QoreNativeParseInfo& info = statements->native_parse_info;
+        std::string reason = info.describe();
+        if (pgm) {
+            pgm->recordIRFallback(reason.c_str());
+        }
+        // Separately parsed wholly legacy callees remain callable from modern code on the AST tier.
+        if (raise_on_failure && info.has_modern && pgm && pgm->getExecMode() != QEM_TIERED) {
+            parseException(*info.legacy_location, "IR-COMPILATION-ERROR", "%s: %s", name, reason.c_str());
+        }
+        return;
+    }
     // Only %modern functions may be IR-lowered.  The eager-compile path
     // (eagerlyCompileAllFunctions()) and threshold-promotion path both gate on
     // the *program's* parse options, but a %modern program can legitimately
@@ -6914,6 +7104,15 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
         return false;
     }
 
+    // a call through the fast entry pushes no frame on the stack of local variables
+    if (callee_ir->needs_call_frame) {
+        if (batch_debug) {
+            printd(5, "  APPROACH_B: '%s' ineligible: its calls need frames (PO_ALLOW_DEBUGGER)\n",
+                callee_ir->name.c_str());
+        }
+        return false;
+    }
+
     // All body locals must be IR-only (or no body locals at all).
     // areAllBodyLocalsIROnly() returns false when all_body_locals is empty,
     // but for Approach B, no body locals is trivially fine.
@@ -6971,6 +7170,20 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     return true;
 }
 
+//! Returns true if the code of \a variant can be compiled into a batch
+/** The code of a function whose Program's deletion has started (UserVariantBase::pgm_deleted, also set before the
+    tearing-down thread can run code of the Program) is not collected: its own calls refer to that Program's functions,
+    which are freed with its namespaces, and the function is called through the call path, which refuses the call
+    (qore#5822).  The variant and its Program stay allocated while code that calls it refers to it (see
+    UserVariantBase::setProgram()).  The functions of other live Programs (inherited from a parent, imported, or of a
+    module) are collected: a deletion that another thread starts while a batch is being collected is not excluded by
+    this check, a race that does not depend on this check and that is tracked separately.
+*/
+static bool qore_batch_callee_collectable(const AbstractQoreFunctionVariant* variant) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    return !uvb || !uvb->pgm_deleted.load(std::memory_order_acquire);
+}
+
 // Collect direct and transitive callees from an IR function's direct calls and
 // eligible nonmethod closure definitions.
 // Returns a vector of BatchCallee entries for callees that have cached IR.
@@ -6999,6 +7212,9 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                 if (inst->opcode == QoreIROpcode::CallDirect) {
                     const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
                     variant = direct->variant;
+                    if (!qore_batch_callee_collectable(variant)) {
+                        continue;
+                    }
                     if (direct->func) {
                         callee_name = direct->func->getName();
                     }
@@ -7009,6 +7225,9 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                                 inv->expr.getInternalNode());
                         if (call) {
                             variant = call->getVariant();
+                            if (!qore_batch_callee_collectable(variant)) {
+                                continue;
+                            }
                             if (call->getFunction()) {
                                 callee_name = call->getFunction()->getName();
                             }
@@ -7764,9 +7983,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                         val = statements->exec(xsink);
                     }
                 } else {
-                    QoreValue result;
-                    std::memcpy(&result, &result_bits, sizeof(result));
-                    val = result;
+                    // a bit cast, not memcpy(), which a fortified C library checks (see QoreJITIncludes.h)
+                    val = std::bit_cast<QoreValue>(result_bits);
                 }
 
                 // Restore thread-local parse options
@@ -8198,21 +8416,24 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
         const qore_class_private* qc, bool ref_obj) const {
     QORE_TRACE("UserVariantBase::eval()");
 
-    assert(!self || (ceh ? ceh->getClass() : qc));
+    if (!ceh) {
+        return evalWithoutHelper(name, self, xsink, qc, ref_obj);
+    }
+    assert(!self || ceh->getClass());
 
     // the effective options of the caller, before the call switched to the Program the variant runs in
-    QoreParseOptions caller_po = ceh ? ceh->getCallerRuntimeParseOptions()
-        : runtime_get_effective_program_parse_options();
+    const QoreParseOptions& caller_po = ceh->getCallerRuntimeParseOptions();
     // the Program making the call, before the call switches to the Program the variant runs in
     const QoreProgram* caller_pgm = getProgram();
     UserVariantExecHelper uveh(this, ceh, xsink);
     if (!uveh) {
         return QoreValue();
     }
-    // a call that entered a module's Program from another Program has the override of the crossing already
-    RuntimeParseOptionsOverrideHelper po_override;
-    if (!ceh || !ceh->hasModuleCallOverride()) {
-        qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
+    // a call that entered a module's Program from another Program has the override of the crossing already;
+    // otherwise the override of the variant's code is set in the call's helper, and restored when this returns
+    CodeEvaluationPoOverrideBorrow po_override(*ceh);
+    if (po_override.get()) {
+        qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
     }
 
     // This is a normal function/method call, not a closure invocation.  If the
@@ -8220,7 +8441,29 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     // callee's own closure-use locals when evalIntern() dispatches to AOT/JIT code.
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
 
-    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr), ref_obj);
+    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : ceh->getClass(), ref_obj);
+    return qore_release_value_with_exception(evalIntern(name, uveh.getArgv(), self, xsink), xsink);
+}
+
+QoreValue UserVariantBase::evalWithoutHelper(const char* name, QoreObject* self, ExceptionSink* xsink,
+        const qore_class_private* qc, bool ref_obj) const {
+    assert(!self || qc);
+
+    // the effective options of the caller, before the call switched to the Program the variant runs in
+    QoreParseOptions caller_po = runtime_get_effective_program_parse_options();
+    // the Program making the call, before the call switches to the Program the variant runs in
+    const QoreProgram* caller_pgm = getProgram();
+    UserVariantExecHelper uveh(this, nullptr, xsink);
+    if (!uveh) {
+        return QoreValue();
+    }
+    RuntimeParseOptionsOverrideHelper po_override;
+    qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
+
+    // see eval()
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+
+    CodeContextHelper cch(xsink, CT_USER, name, self, qc, ref_obj);
     return qore_release_value_with_exception(evalIntern(name, uveh.getArgv(), self, xsink), xsink);
 }
 
@@ -8235,17 +8478,18 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
         return QoreValue();
     }
 
-    QoreParseOptions caller_po = ceh.getCallerRuntimeParseOptions();
+    const QoreParseOptions& caller_po = ceh.getCallerRuntimeParseOptions();
     // the Program making the call, before the call switches to the Program the variant runs in
     const QoreProgram* caller_pgm = getProgram();
     UserVariantExecHelper uveh(this, &ceh, xsink);
     if (!uveh) {
         return QoreValue();
     }
-    // a call that entered a module's Program from another Program has the override of the crossing already
-    RuntimeParseOptionsOverrideHelper po_override;
-    if (!ceh.hasModuleCallOverride()) {
-        qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
+    // a call that entered a module's Program from another Program has the override of the crossing already;
+    // otherwise the override of the closure's code is set in the call's helper (see UserVariantBase::eval())
+    CodeEvaluationPoOverrideBorrow po_override(ceh);
+    if (po_override.get()) {
+        qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
     }
 
     CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
@@ -8669,9 +8913,15 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     // setup call, save runtime position
     // issue #1303: do not check for object validity here in the call, we already have a weak reference to the object,
     // so it will stay valid, if the closure code itself refers to the object, it will fail then if the object is invalid
+    // the closure's code, including its parameter types, runs with the type arguments of the code that created it
+    // (qore#5733)
+    QoreClosureTypeContextHelper type_context(&closure_base);
+    // the receiver type of a generic class that created the closure binds the type parameters of the class in the
+    // closure's parameter and return types (qore#5733)
+    const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
-        false, nullptr, pgm);
+        false, nullptr, pgm, closure_type_context ? closure_type_context->receiver_type_info : nullptr);
     if (*xsink) {
         return QoreValue();
     }
@@ -8692,8 +8942,9 @@ int UserFunctionVariant::parseInit(QoreFunction* f) {
     // resolve and push current return type on stack
     ParseCodeInfoHelper rtih(f->getName(), signature.getReturnTypeInfo());
 
-    // set implicit argv arg type as unknown
-    ParseImplicitArgTypeHelper pia(nullptr);
+    // set implicit argv arg type as unknown; a read of the implicit arguments outside any operator that sets them is
+    // noted (qore#5805)
+    ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
 
     // For AOT-compiled functions, statements is null (pre-compiled code)
     int err = statements ? statements->parseInit(this) : 0;
@@ -8713,6 +8964,9 @@ int UserClosureVariant::parseInit(QoreFunction* f) {
 
     // resolve and push current return type on stack
     ParseCodeInfoHelper rtih(f->getName(), signature.getReturnTypeInfo());
+
+    // the implicit arguments of the body are those of the call of the closure (qore#5805)
+    ParseFunctionBodyImplicitArgHelper pia(reads_implicit_args);
 
     // For AOT-compiled closures, statements is null (pre-compiled code)
     if (statements) {

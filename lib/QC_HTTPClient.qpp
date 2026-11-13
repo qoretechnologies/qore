@@ -1011,7 +1011,7 @@ hash<auto> resp = httpclient.sendHttp3Connect("/chat", {"Sec-WebSocket-Protocol"
     "websocket", \info);
 if (resp.status_code == 200) {
     int stream_id = resp.stream_id;
-    # Now use submitQuicStreamData/readQuicConnectStreamData for WebSocket frames
+    # Now use sendHttp3StreamData()/readHttp3StreamData() for WebSocket frames
 }
     @endcode
 

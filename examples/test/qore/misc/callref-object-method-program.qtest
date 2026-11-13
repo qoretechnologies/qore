@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class CallRefObjectMethodProgramTest
+
+#! A call reference to a method of an object runs as a direct call of the method in the Program that created it
+/** A reference to a method that the object's class inherits (\\o.m() with m inherited, or \\m() in a base class's
+    code for an object of a subclass) is resolved when it is called; it runs in the Program that created the
+    reference, as a direct call o.m() at the creation site does, not in the Program that calls it: a restricted
+    child's reference to its parent's builtin object does not run with the parent's privileges when the parent calls
+    it, and a reference that the parent hands to a restricted child keeps the parent's privileges, as a reference to
+    a method of the object's own class does.  User methods run in the Program that defines their class.  A sandbox
+    restricts every call that a sandboxed Program makes and every reference that it creates (sandbox provenance).
+    The probe runs in every execution mode and as a qcc-compiled executable.
+*/
+class CallRefObjectMethodProgramTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+        const Expected = "trusted file: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+trusted pfile: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok self-direct-child=ok self-ref-child=ok
+trusted ofile: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+trusted ofile2: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+trusted ubase: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+trusted uderived: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+trusted uoverride: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+restricted file: direct-child=INVALID-FUNCTION-ACCESS ref-child-child=INVALID-FUNCTION-ACCESS ref-child-parent=INVALID-FUNCTION-ACCESS direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+restricted pfile: direct-child=INVALID-FUNCTION-ACCESS ref-child-child=INVALID-FUNCTION-ACCESS ref-child-parent=INVALID-FUNCTION-ACCESS direct-parent=ok ref-parent-parent=ok ref-parent-child=ok self-direct-child=ok self-ref-child=ok
+restricted ofile: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+restricted ofile2: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+restricted ubase: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+restricted uderived: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+restricted uoverride: direct-child=ok ref-child-child=ok ref-child-parent=ok direct-parent=ok ref-parent-parent=ok ref-parent-child=ok
+sandbox file: direct-child=FILESYSTEM-ACCESS-DENIED ref-child-child=FILESYSTEM-ACCESS-DENIED ref-child-parent=FILESYSTEM-ACCESS-DENIED direct-parent=ok ref-parent-parent=ok ref-parent-child=FILESYSTEM-ACCESS-DENIED
+sandbox pfile: direct-child=FILESYSTEM-ACCESS-DENIED ref-child-child=FILESYSTEM-ACCESS-DENIED ref-child-parent=FILESYSTEM-ACCESS-DENIED direct-parent=ok ref-parent-parent=ok ref-parent-child=FILESYSTEM-ACCESS-DENIED self-direct-child=FILESYSTEM-ACCESS-DENIED self-ref-child=FILESYSTEM-ACCESS-DENIED
+sandbox ofile: direct-child=FILESYSTEM-ACCESS-DENIED ref-child-child=FILESYSTEM-ACCESS-DENIED ref-child-parent=FILESYSTEM-ACCESS-DENIED direct-parent=ok ref-parent-parent=ok ref-parent-child=FILESYSTEM-ACCESS-DENIED
+sandbox ofile2: direct-child=FILESYSTEM-ACCESS-DENIED ref-child-child=FILESYSTEM-ACCESS-DENIED ref-child-parent=FILESYSTEM-ACCESS-DENIED direct-parent=ok ref-parent-parent=ok ref-parent-child=FILESYSTEM-ACCESS-DENIED
+sandbox ubase: direct-child=FILESYSTEM-ACCESS-DENIED ref-child-child=FILESYSTEM-ACCESS-DENIED ref-child-parent=FILESYSTEM-ACCESS-DENIED direct-parent=ok ref-parent-parent=ok ref-parent-child=FILESYSTEM-ACCESS-DENIED
+sandbox uderived: direct-child=FILESYSTEM-ACCESS-DENIED ref-child-child=FILESYSTEM-ACCESS-DENIED ref-child-parent=FILESYSTEM-ACCESS-DENIED direct-parent=ok ref-parent-parent=ok ref-parent-child=FILESYSTEM-ACCESS-DENIED
+sandbox uoverride: direct-child=FILESYSTEM-ACCESS-DENIED ref-child-child=FILESYSTEM-ACCESS-DENIED ref-child-parent=FILESYSTEM-ACCESS-DENIED direct-parent=ok ref-parent-parent=ok ref-parent-child=FILESYSTEM-ACCESS-DENIED
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probe = get_script_dir() + "/callref-object-method-program/probe.q";
+    }
+
+    constructor() : QUnit::Test("call references to object methods run in the creating Program", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("the creating Program decides in every execution mode and in AOT", \testProgram());
+        set_return_value(main());
+    }
+
+    testProgram() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1", libqore_dir,
+            libqore_dir);
+        # the probe writes a file in the directory given
+        TmpDir tmp("qore-callref-object-method-program-");
+        foreach string mode in (ExecModes) {
+            assertEq(Expected, backquote(sprintf("%s %s --exec-mode=%s %s %s 2>&1", env, qore_bin, mode, probe,
+                tmp.path)), mode);
+        }
+        string exe = tmp.path + DirSep + "probe";
+        string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, probe));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(Expected, backquote(sprintf("%s %s %s 2>&1", env, exe, tmp.path)), "executable");
+    }
+}

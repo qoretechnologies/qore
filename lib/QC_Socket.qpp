@@ -9405,6 +9405,13 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
 
+    @note On a client, the data of a CONNECT stream is held once, in the stream, and is also delivered by the
+    stream's streaming action (for example the Channel read by HTTPClient::readHttp3StreamData(), or a WebSocket
+    frame state): this method and that action take the data from the same place, so a stream must be read by only
+    one of them.  The data of a client stream that is not read is released with the stream: when its end is
+    delivered to the streaming action, when the stream is cancelled or reset, or at the latest with the session.  On a
+    client, a stream that is not a CONNECT stream has no data for this method.
+
     @since %Qore 3.0
 */
 *binary Socket::readQuicConnectStreamData(int session_id, int stream_id) [flags=NAMED_ARGS] {

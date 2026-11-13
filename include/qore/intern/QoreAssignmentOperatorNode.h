@@ -62,6 +62,18 @@ protected:
     }
 };
 
+//! returns true if a weak assignment from a variable of the given declared type makes the variable's container unique
+/** the variable must be declared with a type that can be a hash or a list and cannot be an object: the other
+    variables (untyped, object, scalar) are not touched, so that the weak assignment of an object, whose lifetime the
+    execution modes manage by the way the variable is accessed, is not changed (qore#5756)
+*/
+static inline bool qore_weak_assignment_source_made_unique(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::hasType(ti)
+        && QoreTypeInfo::parseReturns(ti, NT_OBJECT) == QTI_NOT_EQUAL
+        && (QoreTypeInfo::parseReturns(ti, NT_HASH) != QTI_NOT_EQUAL
+            || QoreTypeInfo::parseReturns(ti, NT_LIST) != QTI_NOT_EQUAL);
+}
+
 class QoreWeakAssignmentOperatorNode : public QoreAssignmentOperatorNode {
 OP_COMMON
 public:

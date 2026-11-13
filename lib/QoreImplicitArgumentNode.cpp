@@ -44,6 +44,7 @@ QoreImplicitArgumentNode::~QoreImplicitArgumentNode() {
 }
 
 int QoreImplicitArgumentNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    parse_note_implicit_arg_use();
     parse_context.typeInfo = getTypeInfo();
     parse_context.analysis.clear();
     parse_context.markExpressionNeverThrows();

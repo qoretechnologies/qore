@@ -581,15 +581,55 @@ int ParseScopedSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseC
     return method ? 0 : -1;
 }
 
+// the Program of a method call reference is a tagged pointer, whose low bit is a flag
+static_assert(alignof(QoreProgram) > 1, "a QoreProgram pointer must have its low bit free");
+
+RunTimeResolvedMethodReferenceNode::RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc,
+        QoreObject* n_obj, const QoreMethod* n_method)
+        : ResolvedCallReferenceNodeIntern(loc), obj(n_obj), method(n_method) {
+    QoreProgram* creator;
+    // the Program and the class context of the creating code with one thread-local lookup
+    runtime_get_program_and_class(creator, qc);
+    init(creator);
+}
+
 RunTimeResolvedMethodReferenceNode::RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc,
         QoreObject* n_obj, const QoreMethod* n_method, const qore_class_private* ctx)
         : ResolvedCallReferenceNodeIntern(loc), obj(n_obj), method(n_method), qc(ctx) {
+    init(::getProgram());
+}
+
+void RunTimeResolvedMethodReferenceNode::init(QoreProgram* creator) {
     printd(5, "RunTimeResolvedMethodReferenceNode::RunTimeResolvedMethodReferenceNode() this: %p obj: %p\n", this, obj);
     obj->tRef();
+    QoreProgram* opgm = qore_object_private::get(*obj)->pgm;
+    // created in the object's own Program, the usual case, or a user method: the reference runs there, as before,
+    // and needs no reference of its own to the Program (the object holds one)
+    if (creator == opgm || qore_method_private::get(*method)->isUniquelyUser()) {
+        pgm_ref = reinterpret_cast<uintptr_t>(opgm);
+        return;
+    }
+    // a builtin method of a reference created with no Program runs with none
+    if (!creator) {
+        pgm_ref = 0;
+        return;
+    }
+    // a builtin method runs in the Program of the code that creates the reference, not in the object's: a builtin
+    // object belongs to the Program it was created for, which need not be the Program of the code that uses it (a
+    // reflection handle belongs to the Program it describes), and a call of the reference must not run in that
+    // Program with its parse options and so as code of that Program; a weak reference, as a strong one could cause
+    // a recursive reference
+    creator->depRef();
+    pgm_ref = reinterpret_cast<uintptr_t>(creator) | PGM_CREATOR;
 }
 
 RunTimeResolvedMethodReferenceNode::~RunTimeResolvedMethodReferenceNode() {
     printd(5, "RunTimeResolvedMethodReferenceNode::~RunTimeResolvedMethodReferenceNode() this: %p obj: %p\n", this, obj);
+    // released here and not in derefImpl(), which keeps the dereference of the usual reference, which holds no
+    // Program, free of an extra call; the weak reference only keeps the Program's memory
+    if (pgm_ref & PGM_CREATOR) {
+        reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR)->depDeref();
+    }
     obj->tDeref();
 }
 
@@ -597,15 +637,27 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args
     QoreSandboxProvenanceHelper provenance(this);
     //printd(5, "RunTimeResolvedMethodReferenceNode::execValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
     // issue #2145: do not set the call reference class context before arguments are evaluted
-    // run the reference in the Program where it was originally created
     // NOTE: check this for race conditions
-    if (obj && !obj->isValid()) {
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
         qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
             "deleted");
         return QoreValue();
     }
     RuntimeConfig& rc = rc_get_current_ref();
-    return qore_method_private::eval(*method, xsink, rc, obj, args, qc, pgm);
+    // a user method runs in the Program that defines its class; the object's Program is used only when that
+    // Program has released the class (it raises PROGRAM-ERROR once the object's Program has been deleted).  A
+    // builtin method runs as a direct call in the Program that created the reference: called there, it is not given
+    // a Program, so it runs as a direct call there does, with the runtime parse options in effect; called from
+    // another Program, it runs in the creating Program with its parse options, as a static method call reference
+    // does (StaticMethodCallReferenceNode)
+    QoreProgram* pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref);
+    if (pgm_ref & PGM_CREATOR) {
+        pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR);
+        if (pgm_ctx == rc_get_current_program(rc)) {
+            pgm_ctx = nullptr;
+        }
+    }
+    return qore_method_private::eval(*method, xsink, rc, obj, args, qc, pgm_ctx);
 }
 
 QoreProgram* RunTimeResolvedMethodReferenceNode::getProgram() const {
@@ -622,29 +674,52 @@ QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() const {
 }
 
 RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
-        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), obj(n_obj), method(n_method),
-        qc(runtime_get_class()) {
+        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), obj(n_obj), method(n_method) {
+    QoreProgram* creator;
+    runtime_get_program_and_class(creator, qc);
     printd(5, "RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode() this: %p obj: %p (method: %s " \
         "qc: %p)\n", this, obj, n_method, qc);
+    // the method is called as a direct call in the Program that creates the reference would be; the object holds a
+    // weak reference to its own Program, which is where a reference is usually created; any other Program is held
+    // with a weak reference of the reference's own, as a strong one could cause a recursive reference
+    pgm_ref = reinterpret_cast<uintptr_t>(creator);
+    if (creator != qore_object_private::get(*n_obj)->pgm && creator) {
+        creator->depRef();
+        pgm_ref |= PGM_WEAK_REF;
+    }
     obj->tRef();
 }
 
 RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
     printd(5, "RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() this: %p obj: %p (method: %s " \
         "qc: %p)\n", this, obj, method.c_str(), qc);
+    // released here and not in derefImpl(), which keeps the dereference of the usual reference, which holds no
+    // Program, free of an extra call; the weak reference only keeps the Program's memory
+    if (pgm_ref & PGM_WEAK_REF) {
+        reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF)->depDeref();
+    }
     obj->tDeref();
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    if (obj && !obj->isValid()) {
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
         qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
             "deleted");
         return QoreValue();
     }
     // issue #2145: set class context after evaluating arguments
     RuntimeConfig& rc = rc_get_current_ref();
-    return qore_class_private::get(*obj->getClass())->evalMethod(obj, method.c_str(), args, qc, rc, xsink);
+    // the method runs as a direct call in the Program that created the reference does: called there, it is not
+    // given a Program; called from another Program, it runs in the creating Program with its parse options, as a
+    // reference to a builtin method of the object's own class does (RunTimeResolvedMethodReferenceNode), and not
+    // with the privileges or restrictions of the Program that calls it.  A user method runs in the Program that
+    // defines its class in any case; rc_get_current_ref() has set the current Program
+    // (a reference created with no Program has none to run in: nullptr differs from the current Program)
+    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF);
+    QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
+    return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethod(obj, method.c_str(), args,
+        qc, rc, xsink, nullptr, pgm_ctx);
 }
 
 QoreProgram* RunTimeObjectMethodReferenceNode::getProgram() const {

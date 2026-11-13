@@ -118,6 +118,12 @@ struct Http2StreamInfo {
     */
     bool body_too_large = false;
 
+    //! client: the error that the stream failed with (see Http2Session::failStream()); the stream's response is
+    //! this error, and its data is discarded as it arrives, as for @ref body_too_large
+    std::string fail_err;
+    //! client: the description of @ref fail_err
+    std::string fail_desc;
+
     // Stream priority
     int32_t weight = 16;
     int32_t dependency = 0;
@@ -163,6 +169,13 @@ struct Http2StreamInfo {
     */
     bool end_stream_received = false;
     bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
+    //! The stream credit of the stream's data is granted when the data is consumed, not when it is received
+    /** Set by setStreamCreditOnConsume(): on a client once a consume hook reports the stream's consumption (issue
+        #5820), or once a stream queue is registered for it; on a server once a bounded stream queue is registered
+        for it, the data being consumed when the queue's drain takes it (issue #5859).  Data received before is
+        credited when it is received.
+    */
+    bool credit_on_consume = false;
     bool headers_streamed = false; //!< True after a headers-only event has been pushed for a non-CONNECT streaming
                                    //!< response.  Separate from @c dispatched because we do NOT want to inhibit
                                    //!< markStreamComplete's callback (which still needs to fire on END_STREAM to
@@ -367,6 +380,23 @@ public:
     DLLLOCAL int submitGoaway(uint32_t error_code, const char* opaque_data = nullptr,
         size_t len = 0, ExceptionSink* xsink = nullptr);
 
+    //! Submits a GOAWAY with NO_ERROR and the last stream processed, unless one was submitted already (qore#5899)
+    /** Used when the server closes the connection because it stops (RFC 9113 section 6.8): the client learns which
+        of its requests were processed and that it must not send more.  Does nothing before the connection preface
+        was submitted.  Performs no socket I/O: the frame is written by the next flush of the session's pending data.
+
+        @return 0 for success, -1 if the frame could not be submitted (an exception is raised)
+    */
+    DLLLOCAL int submitShutdownGoaway(ExceptionSink* xsink);
+
+    //! Submits a GOAWAY with submitShutdownGoaway() and writes it without blocking (qore#5899)
+    /** If the socket cannot take the frame, or if the peer has closed the connection, it is not sent and no error is
+        raised (the connection is closed anyway).  Called on the I/O thread of the socket only.
+
+        @return 0 for success, -1 if the frame could not be submitted (an exception is raised)
+    */
+    DLLLOCAL int sendShutdownGoaway(ExceptionSink* xsink);
+
     //! Submit a PING frame
     DLLLOCAL int submitPing(const uint8_t* opaque_data = nullptr, ExceptionSink* xsink = nullptr);
 
@@ -382,6 +412,39 @@ public:
         @return 0 on success, or an nghttp2 error code
     */
     DLLLOCAL int consumeReceivedData(int32_t stream_id, size_t len);
+
+    //! Grants the stream flow-control credit of data that the application of a client has consumed (issue #5820)
+    /** The client grants the connection credit of a streaming response's data when it is received, and the stream
+        credit only when the application takes the data from the Channel or Queue that delivers it (see
+        QoreConsumeHook), so that the data held for an application that does not read is bounded by the stream's
+        window.  The credit is capped at the stream credit that was deferred for the stream, so that a value reported
+        twice, or data that was credited when it was received, is never credited twice; a stream that has closed
+        takes no credit (its connection credit was granted when the data was received).
+
+        Thread-safe; the caller wakes the I/O controller so that the WINDOW_UPDATE is sent.
+
+        @param stream_id the stream
+        @param len the number of bytes consumed
+
+        @return the number of bytes credited if a WINDOW_UPDATE is now pending (the caller wakes the I/O thread), else 0
+    */
+    DLLLOCAL size_t creditConsumedStreamData(int32_t stream_id, size_t len);
+
+    //! Defers the stream credit of the stream's data until the data is consumed
+    /** Called on a client once a consume hook that reports the stream's consumption has been installed (see
+        HttpStreamConsumeHook), or once a stream queue is registered for the stream; on a server once a bounded
+        stream queue is registered for it (issue #5859).  The stream credit of data received from then on is
+        deferred; the connection credit is granted as the data is received.
+    */
+    DLLLOCAL void setStreamCreditOnConsume(int32_t stream_id);
+
+    //! Fails a client stream: its response is the error given, and the stream is canceled (issue #5859)
+    /** The data already received and the data still arriving are discarded and credited; the stream ends with the
+        error as its response.  Does nothing if the stream has ended.
+
+        @return true if the stream was failed
+    */
+    DLLLOCAL bool failStream(int32_t stream_id, const char* err, const std::string& desc);
 
     //! Submit a PRIORITY frame to set stream priority
     /** @param stream_id Stream ID to prioritize
@@ -410,7 +473,22 @@ public:
         reset with an error code raises \c HTTP2-STREAM-RESET.
     */
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
-        bool end_stream, ExceptionSink* xsink);
+        bool end_stream, ExceptionSink* xsink, bool ignore_limit = false);
+
+    //! Sends a WebSocket control frame that the frame state of a WebSocket stream answers with (issue #5900)
+    /** The frame state answers a ping with a pong and a close frame with its echo on the async I/O thread, which
+        cannot wait for the stream's send buffer to drain, so these frames are never refused for a full buffer:
+        - a close frame is buffered past the stream's send limit, once per stream (a later one is sent as data);
+        - a pong is buffered when there is room; otherwise it is kept, replacing a pong kept before it (a pong
+          answers the most recent ping, RFC 6455 section 5.5.3), and buffered when the buffered data falls under
+          the limit, so that a ping flood from a peer that does not read keeps at most one pong.
+
+        The opcode is taken from the frame's first byte; any other frame is sent as data.
+
+        @return 0 if the frame was buffered or kept, 1 if it was refused (not a control frame, buffer full), -1 on
+        error (exception raised)
+    */
+    DLLLOCAL int sendStreamControlFrame(int32_t stream_id, const void* data, size_t len, ExceptionSink* xsink);
 
     //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
     /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
@@ -522,8 +600,24 @@ public:
     /** @param stream_id stream ID
         @param max_bytes maximum bytes to return; 0 means all available
         @param xsink Exception sink for error reporting
+        @param credit_deferred true if the caller hands the data to its consumer directly: the stream credit deferred
+        for it is granted now; false if it is delivered through a Channel or Queue that reports its consumption
+        @param credit_due if not null, set to true if credit was granted and the session has a frame to send (the
+        WINDOW_UPDATE, or any other frame queued meanwhile); the caller then calls
+        sendStreamCredit() (on any thread)
+
+        Raises no exception.
     */
-    DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
+    DLLLOCAL BinaryNode* takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink,
+        bool credit_deferred = true, bool* credit_due = nullptr);
+
+    //! Sends the stream credit that a take queued (issue #5820)
+    /** The socket's I/O thread is woken to send it, as only the thread that owns the socket writes to it; this is
+        also correct on that thread, as the wake-up runs its poll operation again.
+
+        @param route_key the socket's I/O identity hash, to wake the I/O thread with
+    */
+    DLLLOCAL void sendStreamCredit(const std::string& route_key);
 
     //! Take a completed stream (removes it from the session)
     DLLLOCAL std::unique_ptr<Http2StreamInfo> takeCompletedStream();
@@ -611,6 +705,9 @@ public:
         it was closed without END_STREAM (for example, by RST_STREAM); see Http2StreamInfo::end_stream_received
     */
     DLLLOCAL bool isStreamEndStreamReceived(int32_t stream_id) const;
+
+    //! Returns true if the stream is known and was reset (RST_STREAM sent or received) (issue #5859)
+    DLLLOCAL bool isStreamReset(int32_t stream_id) const;
 
     //! Returns the trailers received for a stream, or nullptr if none were received
     /** Server streams keep the trailers of the request until the stream is cleaned up, so that a handler can read
@@ -1082,6 +1179,22 @@ private:
 
     //! Per-stream limits of the data buffered for sending, set with setStreamSendLimit(); erased with the stream
     std::unordered_map<int32_t, size_t> stream_send_limits;
+    //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
+    std::unordered_map<int32_t, size_t> deferred_stream_credit;
+
+    //! The latest pong of a stream whose send buffer was full, buffered when the buffer falls under its limit;
+    //! erased with the stream (issue #5900)
+    std::unordered_map<int32_t, std::vector<uint8_t>> pending_pongs;
+
+    //! The streams whose close frame was buffered past the send limit (once per stream); erased with the stream
+    std::unordered_set<int32_t> close_frame_streams;
+
+    //! Returns true if the stream's send buffer, with \a pending bytes buffered, takes \a len more bytes
+    /** The condition with which sendStreamData() admits data: with the stream's own limit (setStreamSendLimit()),
+        the data must fit under it unless nothing is buffered; otherwise up to MAX_STREAM_BUFFER may be buffered
+        before more is taken
+    */
+    DLLLOCAL bool hasSendRoomUnlocked(int32_t stream_id, size_t pending, size_t len) const;
 
     //! Peer-initiated stream reset info, persisted beyond streams.erase()
     /** Populated by onStreamCloseCallback() (when error_code!=0) so that

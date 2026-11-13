@@ -36,6 +36,7 @@
 
 #include <qore/safe_dslist>
 
+#include <atomic>
 #include <cassert>
 #include <cstdio>
 
@@ -121,6 +122,14 @@ QoreException* QoreException::replaceTop(const QoreListNode& new_ex, ExceptionSi
         }
     }
     return this;
+}
+
+int64 QoreException::getDebugId() {
+    static std::atomic<int64> qore_exception_debug_id_seq{0};
+    if (!debug_id) {
+        debug_id = ++qore_exception_debug_id_seq;
+    }
+    return debug_id;
 }
 
 QoreException* QoreException::rethrow() {

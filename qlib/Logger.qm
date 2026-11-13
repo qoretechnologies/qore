@@ -400,7 +400,16 @@ public class LoggerEventParameter {
     - \c limit: maximum number of matched entries
     - \c cursor: an appender-specific continuation token returned by an earlier search
     - \c direction: \c "backward" (default) or \c "forward"
-    - \c max_scanned_bytes: backend scan cap when applicable
+    - \c max_scanned_bytes: backend scan cap when applicable; for file-backed appenders, the number of bytes of
+      rendered lines (with their line terminators) that one call scans, from where the search starts or the cursor
+      points (default: @ref LoggerSearchUtil::DefaultMaxScannedBytes; @ref LoggerSearchUtil::UnlimitedScannedBytes
+      for no limit).  When the budget is used up the result is \c "partial" with reason \c "max-scanned-bytes" and a
+      \c next_cursor at the first line not scanned; a call scans at least one line, so following \c next_cursor
+      always reaches the rest of a source that is larger than the budget, and then the next sources (a budget of 0,
+      or a negative one other than @ref LoggerSearchUtil::UnlimitedScannedBytes, scans one line per call).  The
+      budget limits the lines matched, not the file data read: each call reads the sources it reaches whole.  A
+      cursor into an active \c file-ring source is stale once the appender writes to it, as the ring can rewrite
+      its lines
     - \c include_compressed_rotated: include compressed rotated file sources when applicable
 
     Implementations return a hash with stable generic fields including \c status, \c source, \c capabilities,
@@ -997,21 +1006,37 @@ public class LoggerSearchUtil {
             if (!stat || !stat.size) {
                 continue;
             }
+            # a budget used up by the sources before this one: the source is not read just to point a cursor at it
+            if (req.max_scanned_bytes != UnlimitedScannedBytes && scanned_events
+                    && scanned_bytes >= req.max_scanned_bytes) {
+                return makeSearchResult("partial", caps, entries,
+                    makeCursor(sources, source_idx, req.direction == "backward" ? -1 : 0, req.direction),
+                    scanned_bytes, scanned_events, True, "max-scanned-bytes");
+            }
 
             string content = readSourceContent(source);
-            if (req.max_scanned_bytes != UnlimitedScannedBytes
-                    && scanned_bytes + content.size() > req.max_scanned_bytes) {
-                truncated = True;
-                reason = "max-scanned-bytes";
-                next_cursor = makeCursor(sources, source_idx, req.direction == "backward" ? -1 : 0,
-                    req.direction);
-                break;
-            }
-            scanned_bytes += content.size();
             list<string> lines = content.split("\n");
+            # split() leaves out the empty string after a final line terminator, so the last line has a terminator
+            # if the content ends with one
+            bool last_terminated = content.size() && content.substr(-1) == "\n";
             int line_idx = getInitialLineIndex(lines, req.direction, source_idx == source_start ? cursor_line : NOTHING);
 
             while (line_idx >= 0 && line_idx < lines.size()) {
+                # the budget counts the bytes of the lines scanned, each with its line terminator; a search that has
+                # scanned nothing yet scans the next line whatever its size, so that following next_cursor always
+                # gets further (issue #5817: a source larger than the budget was never scanned, and the cursor
+                # returned pointed at the same place)
+                int line_bytes = lines[line_idx].size()
+                    + ((line_idx < lines.size() - 1 || last_terminated) ? 1 : 0);
+                if (req.max_scanned_bytes != UnlimitedScannedBytes && scanned_events
+                        && scanned_bytes + line_bytes > req.max_scanned_bytes) {
+                    truncated = True;
+                    reason = "max-scanned-bytes";
+                    next_cursor = makeCursorForNextPosition(sources, source_idx, line_idx, req.direction);
+                    return makeSearchResult("partial", caps, entries, next_cursor, scanned_bytes, scanned_events,
+                        truncated, reason);
+                }
+                scanned_bytes += line_bytes;
                 ++scanned_events;
                 bool matched;
                 try {

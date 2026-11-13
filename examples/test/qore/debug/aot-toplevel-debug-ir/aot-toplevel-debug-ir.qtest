@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of top-level code and its debug IR
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class AOTTopLevelDebugIRTest
+
+#! The debugger's events of top-level code compiled ahead of time (#5851)
+/** Top-level code compiled ahead of time ran as native code while a debugger was attached: the debugger got no step
+    events and no event for an exception that a try statement of the top-level code catches.  It now runs its debug
+    IR in the IR interpreter, as a function compiled ahead of time does.  AOTTopLevelDebugIR.q attaches a recorder
+    before its top-level code runs and gives the events of the AST interpreter, with the values of top-level local
+    variables that the top-level code, a closure and a function change, in every execution mode and compiled with
+    qcc.
+
+    The recorder is in the debugged Program: one in a Program of its own, as that of DebugProgramControl, leaves the
+    top-level local variables uninstantiated when it attaches while the constants are initialized
+    (https://github.com/qoretechnologies/qore/issues/5860).
+*/
+class AOTTopLevelDebugIRTest inherits QUnit::Test {
+    public {
+        #! the output of AOTTopLevelDebugIR.q with the AST interpreter
+        const Expected = "a=14 b=19
+step@68 a=null b=null
+step@69 a=1 b=null
+step@70 a=3 b=null
+step@72 a=3 b=6
+step@75 a=3 b=6
+step@73 a=3 b=6
+step@76 a=13 b=6
+step@77 a=13 b=19
+step@78 a=13 b=19
+step@79 a=13 b=19
+TL@79
+TL@78
+step@84 a=13 b=19
+step@85 a=13 b=19
+step@86 a=13 b=19
+TH@49
+TH@86
+step@88 a=13 b=19
+step@85 a=13 b=19
+step@86 a=13 b=19
+TH@49
+TH@86
+step@88 a=13 b=19
+step@91 a=14 b=19
+step@96 a=14 b=19
+step@97 a=14 b=19
+step@92 a=14 b=19
+step@93 a=14 b=19
+CL@93
+CL@92
+CL@97
+step@100 a=14 b=19
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AOTTopLevelDebugIRTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/AOTTopLevelDebugIR.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the debugger's events of top-level code", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the debugger's events of top-level code", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the events of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-aot-toplevel-debug-ir-");
+        string exe = tmp.path + DirSep + "toplevel-debug-ir";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the events of the AST interpreter", opt));
+    }
+}

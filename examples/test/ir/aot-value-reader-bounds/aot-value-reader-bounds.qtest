@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class AOTValueReaderBoundsTest
+
+#! The AOT value reader with crafted payloads (#5848)
+/** A value of an AOT image that cannot be read (an element of a list or a hash, an argument of a constructor
+    default, a plugin value) stopped inside itself, and the reader of the record that holds it read the rest of the
+    record from there, past the end of the data for a malformed value.  The value reader now leaves the read pointer
+    past the value, or at the end of the data, and the closure records read their fields with their bounds checked.
+    The C++ unit tests (dbg_run_aot_value_reader_tests()) read crafted payloads from buffers of their exact size.
+*/
+class AOTValueReaderBoundsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AOTValueReaderBoundsTest", "1.0") {
+        addTestCase("crafted AOT value payloads", \valueReaderTest());
+        set_return_value(main());
+    }
+
+    valueReaderTest() {
+        hash<auto> result = call_function("dbg_run_aot_value_reader_tests");
+        assertEq(0, result.fail_count, sprintf("%d of %d native assertions failed: %y", result.fail_count,
+            result.test_count, result.failures));
+        assertTrue(result.test_count > 0);
+    }
+}

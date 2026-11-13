@@ -74,8 +74,15 @@ Enum::constructor(string path) {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str(), lookup_pgm), xsink);
     if (*xsink) {
+        return;
+    }
+    // a declaration that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeDeclaration(lookup_pgm, en->ns, reflection_exported(en->ed))) {
+        xsink->raiseException("UNKNOWN-ENUM", "cannot resolve enum '%s'", npath->c_str());
         return;
     }
     self->setPrivate(CID_ENUM, en.release());
@@ -450,8 +457,15 @@ static Enum Enum::forName(string path) [flags=RET_VALUE_ONLY] {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str(), lookup_pgm), xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a declaration that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeDeclaration(lookup_pgm, en->ns, reflection_exported(en->ed))) {
+        xsink->raiseException("UNKNOWN-ENUM", "cannot resolve enum '%s'", npath->c_str());
         return QoreValue();
     }
     assert(*en);
@@ -492,6 +506,11 @@ static Enum Enum::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALU
 
     ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str(), *pgm), xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a declaration that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeDeclaration(*pgm, en->ns, reflection_exported(en->ed))) {
+        xsink->raiseException("UNKNOWN-ENUM", "cannot resolve enum '%s'", npath->c_str());
         return QoreValue();
     }
 

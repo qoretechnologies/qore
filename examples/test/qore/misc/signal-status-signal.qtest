@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the signal that wakes the signal handling thread is reserved; SIGSYS on macOS
+
+/*  signal-status-signal.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5787: the signal handling thread is woken with SIGRTMIN+1 on Linux (SIGSYS elsewhere): that signal is
+    reserved, and on Linux a handler can be set for SIGSYS.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SignalStatusSignalTest
+
+class SignalStatusSignalTest inherits QUnit::Test {
+    constructor() : Test("SignalStatusSignalTest", "1.0") {
+        addTestCase("the wake-up signal is reserved", \testReserved());
+        addTestCase("SIGSYS can be handled on Linux", \testSigsys());
+        set_return_value(main());
+    }
+
+    testReserved() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("signal handling is disabled");
+        }
+        # the reserved signal is refused with the reason that names it
+        bool linux = Qore::PlatformOS == "Linux";
+        string desc = linux ? "QORE (SIGRTMIN+1 for internal use)" : "QORE (SIGSYS for internal use)";
+        *int reserved;
+        foreach int sig in (xrange(1, 65)) {
+            try {
+                set_signal_handler(sig, sub (int s) {});
+                remove_signal_handler(sig);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.desc =~ /for internal use/) {
+                    assertNothing(reserved, sprintf("only one signal is reserved for the wake-up (%d and %d)",
+                        reserved ?? -1, sig));
+                    assertTrue(ex.desc.find(desc) >= 0, sprintf("the reserved signal is named: %y", ex.desc));
+                    reserved = sig;
+                }
+            }
+        }
+        assertTrue(exists reserved, "a signal is reserved for the wake-up");
+        if (linux) {
+            assertNeq(SIGSYS, reserved, "SIGSYS is not the wake-up signal on Linux");
+            assertGt(SIGSYS, reserved, "the wake-up signal is a real-time signal");
+        } else {
+            assertEq(SIGSYS, reserved, "SIGSYS is the wake-up signal");
+        }
+    }
+
+    testSigsys() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("signal handling is disabled");
+        }
+        if (Qore::PlatformOS != "Linux") {
+            testSkip("SIGSYS is the wake-up signal on this platform");
+        }
+        # a handler for SIGSYS can be set (it was reserved before)
+        Counter ran(1);
+        set_signal_handler(SIGSYS, sub (int sig) { ran.dec(); });
+        on_exit remove_signal_handler(SIGSYS);
+        # valgrind treats a SIGSYS that a process sends as a fault signal and cannot deliver it to a handler; the
+        # delivery is checked without it
+        if (ENV.LD_PRELOAD =~ /vgpreload/) {
+            return;
+        }
+        kill(getpid(), SIGSYS);
+        assertEq(0, ran.waitForZero(60s), "the SIGSYS handler ran");
+    }
+}

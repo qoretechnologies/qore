@@ -867,6 +867,22 @@ It carries the `THREAD_CONTROL` functional domain, like `clear_thread_cancel()`,
 `PO_NO_THREAD_CONTROL` program cannot defer at all.  In C++, use the header-inline RAII
 `QoreCancelDeferralHelper` rather than the raw push/pop.
 
+#### Debugger callbacks: a deliberate unbounded deferral
+
+The callbacks of a `DebugProgram` (`QoreDebugProgramWithQoreObject::callMethod()`,
+`include/qore/intern/QC_DebugProgram.h`) run the debugger's Qore code on the debugged thread with
+a deferral (qore#5794), except for a debugger object of a sandboxed Program.  The debugger's code
+then always completes, its loops and lock waits never raise a cancellation that the debugged code
+would not raise without a debugger, and the debugged code is cancelled where it would be without
+one.  The wait of a stopped thread for its clients is inside the callback, so it is the one
+unbounded wait in a deferral: `cancel_thread()`, `Program::cancelThreads()`, a program interrupt
+and a sandbox limit do not end a stopped thread.  It is released by the debugger: a client's
+command, `DebugProgramControl::terminateProgram()`, `shutdown()` (also when the last client
+disconnects), or the end of debugging.  A cancellation that arrives while a callback runs is raised
+when the callback returns (`qore_is_thread_cancel_requested()` before and after), so that it is not
+lost when no other cancellation point follows; one that was pending before the callback is raised
+where the debugged code raises it.
+
 #### Without thread control: synchronized state
 
 Code that must also run under `PO_NO_THREAD_CONTROL` (a module whose user may be sandboxed) cannot call
@@ -1180,7 +1196,8 @@ After teardown, `thread_list.deleteDataRelease()` releases the TID slot, whose
 
 ### Program Scope: Who Can Cancel Whom?
 
-`Program::cancelThread(tid, reason)` uses the Program as an explicit target scope. It checks membership under the
+`Program::cancelThread(tid, reason)` (and `ProgramControl::cancelThread()`, with which a debugger ends the threads
+of a program it debugs; qore#5854) uses the Program as an explicit target scope. It checks membership under the
 Program lock, releases that lock before entering the thread registry, and sends the Program ID with the request.
 The target's normal cancellation checkpoint rejects a request if the ID was recycled outside that scope.
 `Program::cancelThreads(reason)` also sets a cancellation wave under the Program lock: preregistered threads and
