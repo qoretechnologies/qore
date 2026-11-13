@@ -99,6 +99,124 @@ sub f1() { T z("f1-z"); auto v = two((foldl $1, mkl("f1-l")), thr()); }
 auto sub t1() { T z("t1-z"); if (True) { on_exit { log += "x"; thread_exit; } T t("t1-t"); return t; } }
 sub t2() { T z("t2-z"); for (int i = 0; i < 3; ++i) { on_exit log += "x" + i; T t("t2-" + i); if (i == 1) thread_exit; } }
 
+# a try statement in the function that catches the exception that interrupted a return releases its value before
+# the catch block runs (#5941): from a nested block, from the try block itself, through two blocks with locals, and
+# from a return in a catch block, which the enclosing try statement catches
+T sub u1() {
+    try {
+        if (True) {
+            T t("u1");
+            if (True) {
+                on_exit { log += "x"; throw "U1"; }
+                return t;
+            }
+        }
+    } catch () {
+        log += "c";
+    }
+    return new T("u1-other");
+}
+T sub u2() {
+    try {
+        T t("u2");
+        on_exit { log += "x"; throw "U2"; }
+        return t;
+    } catch () {
+        log += "c";
+    }
+    return new T("u2-other");
+}
+T sub u3() {
+    T z("u3-z");
+    try {
+        T a("u3-a");
+        if (True) {
+            T b("u3-b");
+            if (True) {
+                on_exit { log += "x"; throw "U3"; }
+                return b;
+            }
+        }
+    } catch () {
+        log += "c";
+    }
+    return new T("u3-other");
+}
+T sub u4() {
+    try {
+        try {
+            throw "FIRST";
+        } catch () {
+            T t("u4");
+            on_exit { log += "x"; throw "U4"; }
+            return t;
+        }
+    } catch () {
+        log += "c";
+    }
+    return new T("u4-other");
+}
+
+# an outer try statement catches the exception that a handler between it and an inner try statement raises
+T sub u5() {
+    try {
+        if (True) {
+            on_exit { log += "x"; throw "U5"; }
+            try {
+                T t("u5");
+                return t;
+            } catch () {
+                log += "ic";
+            }
+        }
+    } catch () {
+        log += "c";
+    }
+    return new T("u5-other");
+}
+# the value of the return is a temporary
+T sub u6() {
+    try {
+        if (True) {
+            on_exit { log += "x"; throw "U6"; }
+            return new T("u6");
+        }
+    } catch () {
+        log += "c";
+    }
+    return new T("u6-other");
+}
+# the locals of the try block are released before the value of the return
+T sub u7() {
+    try {
+        T q("u7-q");
+        on_exit { log += "x"; throw "U7"; }
+        T t("u7");
+        return t;
+    } catch () {
+        log += "c";
+    }
+    return new T("u7-other");
+}
+
+# the functions are called directly, so that the jit mode runs their native code
+sub run_returns() {
+    hash<string, code> fns = {
+        "u1": sub () { T r = u1(); },
+        "u2": sub () { T r = u2(); },
+        "u3": sub () { T r = u3(); },
+        "u4": sub () { T r = u4(); },
+        "u5": sub () { T r = u5(); },
+        "u6": sub () { T r = u6(); },
+        "u7": sub () { T r = u7(); },
+    };
+    foreach hash<auto> i in (fns.pairIterator()) {
+        log = ();
+        i.value();
+        printf("%s: %y\n", i.key, log);
+    }
+}
+
 sub run_thread(string fn) {
     log = ();
     Counter c(1);
@@ -111,10 +229,7 @@ sub run_thread(string fn) {
 }
 
 sub run() {
-    # "native": compiled with qcc, whose native code releases the value of an interrupted return before the locals
-    # of the function (temporary: https://github.com/qoretechnologies/qore/issues/5941), so e is left out
-    list<string> fns = ARGV[0] == "native" ? ("a", "b", "c", "d")
-        : ("a", "b", "c", "d", "e", "r1", "r2", "r3", "r4", "r5", "r6", "f1");
+    list<string> fns = ("a", "b", "c", "d", "e", "r1", "r2", "r3", "r4", "r5", "r6", "f1");
     foreach string fn in (fns) {
         log = ();
         try {
@@ -126,7 +241,6 @@ sub run() {
     }
 }
 run();
+run_returns();
 run_thread("t2");
-if (ARGV[0] != "native") {
-    run_thread("t1");
-}
+run_thread("t1");
