@@ -1441,6 +1441,13 @@ constexpr uint8_t QORE_IR_DEBUG_NEST_IN_CATCH = 0x04;
 //! is reported for; it makes no event
 constexpr uint8_t QORE_IR_DEBUG_NEST_END = 0x08;
 
+//! The locals of a block, for the debugger's release of the locals of a block that an exception leaves (#5921)
+struct QoreIRDebugBlockLocals {
+    std::vector<LocalVar*> locals;
+    //! the slots of the locals, embedded by QoreIRFunction::computeSlotIdsAndEmbed() (UINT32_MAX if one has none)
+    std::vector<uint32_t> slots;
+};
+
 //! The step event of the debugger for a statement (QoreIROpcode::DebugStatement)
 class QoreIRDebugStatementInstruction : public QoreIRInstruction {
 public:
@@ -1470,6 +1477,10 @@ public:
     //! QORE_IR_DEBUG_NEST_* flags; QORE_IR_DEBUG_NEST_VALID is not set if the nesting is not known (AOT debug IR
     //! before format version 26)
     uint8_t nest_flags = 0;
+    //! for a DebugBlock with locals in code with debug statements: the locals of the block, which an exception that
+    //! leaves the block releases before the debugger's exception event of the statement that contains it, with a
+    //! debugger attached (#5921); a pointer, so that the instructions of other code are not larger
+    std::unique_ptr<QoreIRDebugBlockLocals> block_locals;
 };
 
 class QoreIRConstInstruction : public QoreIRInstruction {

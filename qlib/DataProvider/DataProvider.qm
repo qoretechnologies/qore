@@ -49,6 +49,9 @@
 %endtry
 
 module DataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks), and starts
+    # the background threads of its asynchronous operations (ex: AbstractDataProvider::searchRecordsAsync())
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "3.12";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
@@ -1741,6 +1744,12 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - the process-wide registration and setter APIs (factories, types, apps, actions, file APIs, discovery inventory
+      providers, webhook APIs, the global logger and options, template and dynamic value callbacks, the generic API
+      call builders, the scheme lookup callback, static initialization and shutdown handlers) declare the \c PROCESS
+      functional domain: a Program with @ref Qore::PO_NO_PROCESS_CONTROL cannot call them, and the module declares
+      the domain for its own code in its module declaration, as do the modules that register functionality with them
+      (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
     - added the @ref DataProvider::DataProviderAppInfo::external_io "external_io" and
       @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" fields to
       @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo", which declare that an app does I/O that the

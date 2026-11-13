@@ -46,6 +46,8 @@
 %requires json
 
 module WebSocketClient {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "2.5";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
@@ -345,6 +347,10 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - \c WebSocketConnectionObject::getImpl() is declared to return a
+      @ref WebSocketClient::WebSocketClient "WebSocketClient", as subclasses return other clients (see
+      @ref override_return_types); \c getAsync() raises \c CONNECTION-ASYNC-UNSUPPORTED for a connection whose client
+      is not a @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization"
     - a connection closed because a message was larger than the maximum message size of 16 MiB is reported with its
       close code 1009 (Message Too Big) and reason, on HTTP/1.1, HTTP/2 and HTTP/3: added
       @ref WebSocketClient::WebSocketClient::getCloseCode() "WebSocketClient::getCloseCode()" and
@@ -1176,8 +1182,10 @@ public const MESSAGE_WS_PONG = "pong";
 
     The @ref WebSocketClient::WebSocketClient "WebSocketClient" class includes support for running in sandboxed
     Program objects with the following parse options set:
-    - \c PO_NO_PROCESS_CONTROL: in this case the \c "yield" option is required in
-      @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()"
+    - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, the \c "yield" option is not required in
+      @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
 */
 public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper {
     public {
@@ -1589,7 +1597,8 @@ WebSocketClient ws(\event(), {
           overrides \a asyncapi
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
             current thread's execution to another thread (default value: @ref Qore::thread_yield());
-            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
+            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context and the module is
+            loaded by its path
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
 
@@ -1618,6 +1627,12 @@ WebSocketClient ws(\event(), {
             self.reconnect_stopping = True;
             self.stop = WSCC_GoingAway;
             self.sleep_cond.broadcast();
+        }
+        # an exception of a subclass's hook does not keep the destructor from closing the connection
+        try {
+            destructorStopping();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("exception in destructorStopping(): %s", get_exception_string(ex));
         }
         disconnectIntern(WSCC_GoingAway, True);
         # Skip the delivery-task wait only in the self-deadlock case: a user callback on the delivery
@@ -4776,6 +4791,16 @@ ws.setEventQueue();
         }
     }
 
+    #! Called by the destructor once the client is stopping, before it takes the client's connection; does nothing
+    /** An automatic reconnect that established its connection meanwhile sees the client stopping and disconnects the
+        connection itself, so the destructor may find no connection; a test holds the destructor here to make that
+        order (issue #5981).  Never called with the client's lock held.
+
+        @since WebSocketClient 2.5
+    */
+    private destructorStopping() {
+    }
+
     #! Waits in the destructor for the threads the client started for itself, except the calling thread
     /** Not bounded: these threads end once they see the client being destroyed (an action wait, a connect and the
         automatic reconnect's retry wait end at once; a close handshake ends at its close timeout).  User code they
@@ -5733,7 +5758,8 @@ class MyObserver inherits Observer {
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
             current thread's execution to another thread (default value: @ref Qore::thread_yield());
-            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
+            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context and the module is
+            loaded by its path
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
 
@@ -6359,7 +6385,9 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 
         @return a @ref WebSocketClient object
     */
-    private WebSocketClientWithSerialization getImpl(bool connect = True, *hash<auto> rtopts) {
+    # returns a WebSocketClient: a subclass's connection can return another WebSocketClient (SewioWebSocketClient);
+    # this class's own client is a WebSocketClientWithSerialization (issue #5838)
+    private WebSocketClient getImpl(bool connect = True, *hash<auto> rtopts) {
         # to avoid type issues with rtopts
         if (rtopts) {
             rtopts = {} + rtopts;
@@ -6386,10 +6414,19 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 
         @return an async-I/O-capable @ref WebSocketClientWithSerialization object
 
+        @throw CONNECTION-ASYNC-UNSUPPORTED the client of the connection (from a subclass's getImpl()) is not a
+        @ref WebSocketClientWithSerialization object
+
         @since WebSocketClient 2.5
     */
     private WebSocketClientWithSerialization getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
-        return getImpl(connect, rtopts);
+        WebSocketClient client = getImpl(connect, rtopts);
+        if (!(client instanceof WebSocketClientWithSerialization)) {
+            throw "CONNECTION-ASYNC-UNSUPPORTED", sprintf("connection %y (%s) does not provide an async-I/O-capable "
+                "WebSocketClientWithSerialization object; its client is %y", name, self.className(),
+                client.className());
+        }
+        return cast<WebSocketClientWithSerialization>(client);
     }
 
     #! returns an WebSocketClientDelayedDataProvider object for this connection
@@ -8310,7 +8347,10 @@ public class WebSocketClientHcioPollOp {
         when the server, having answered the close frame, ends the stream (RFC 8441 section 5, RFC 9220 section 3),
         or at the close timeout (15 seconds without one, as in waitClosed()).  Either way it is reported as an
         \c "error" message with the error's code and reason.  Tearing the connection down at once lost the close frame
-        when it had not been written yet, so the server never learned why the connection closed (issue #5910).
+        when it had not been written yet, so the server never learned why the connection closed (issue #5910).  When
+        the client had sent its own close frame and a teardown took the connection (which cancels the close timer),
+        the teardown waits for the end of the close handshake within its own bound (see waitClosed()), and the
+        connection ends when the server ends the stream (issue #5993).
 
         @param code the close code of the error
         @param reason the reason of the error
@@ -8318,6 +8358,8 @@ public class WebSocketClientHcioPollOp {
     private startErrorClose(int code, string reason) {
         # a close timer ends the close if the server does not end the stream; the logging is done without the lock
         bool timer;
+        # the close handshake of the client's own close goes on: a teardown waits for its end
+        bool handshake;
         *hash<ExceptionInfo> timer_err;
         {
             AutoLock al(heartbeat_mutex);
@@ -8327,6 +8369,7 @@ public class WebSocketClientHcioPollOp {
             error_close_code = code;
             error_close_reason = reason;
             error_close = True;
+            bool own_close = ws_close_sent;
             # the frame state sent the close frame: no other is sent, and no data frame follows it
             ws_close_sent = True;
             # no PING follows the close frame, and the connection is not idle-closed while the server answers
@@ -8334,6 +8377,13 @@ public class WebSocketClientHcioPollOp {
             if (close_timer_id) {
                 # the timer of a close the client started ends this close too, with the error's code
                 timer = True;
+            } else if (callbacks_cleared && own_close) {
+                # the client's close frame was sent before the error, and the connection was taken by a teardown that
+                # cleared the callbacks (with the close timer) and waits for the end of the close handshake (see
+                # waitClosed(), which is bounded by the close timeout): the handshake goes on, as closing the
+                # connection now ended the wait, and the teardown dropped the client's close frame when it had not
+                # been written yet (issue #5993)
+                handshake = True;
             } else if (!callbacks_cleared) {
                 try {
                     AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
@@ -8345,7 +8395,7 @@ public class WebSocketClientHcioPollOp {
                 }
             }
         }
-        if (timer) {
+        if (timer || handshake) {
             logDebug("closing the connection for an error: close code %d: %s; waiting for the server to end the "
                 "stream", code, reason);
             return;
@@ -8354,8 +8404,8 @@ public class WebSocketClientHcioPollOp {
             logError("cannot arm the close timer: %s: %s; the connection is closed at once", timer_err.err,
                 timer_err.desc);
         }
-        # without a close timer (it cannot be armed, or the callbacks were cleared in a teardown), nothing would end
-        # the close: the connection is closed now
+        # without a close timer (it cannot be armed, or the callbacks were cleared in a teardown that did not send the
+        # client's close), nothing would end the close: the connection is closed now
         markClosedAndEnqueue(code, reason, NOTHING, "error");
     }
 

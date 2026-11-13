@@ -47,6 +47,8 @@ module VoyageRestClient {
         QoreRagUtils::RagProviderRegistry::registerRerankerFactory(
             new QoreRagUtils::VoyageRerankerFactory());
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage VoyageRestClient Module

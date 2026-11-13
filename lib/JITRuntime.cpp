@@ -197,6 +197,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_call_target_needs_no_check_aot", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check_aot) },
     { "qore_rt_check_call_target", reinterpret_cast<void*>(&qore_rt_check_call_target) },
     { "qore_rt_check_call_target_aot", reinterpret_cast<void*>(&qore_rt_check_call_target_aot) },
+    { "qore_rt_current_self_bits", reinterpret_cast<void*>(&qore_rt_current_self_bits) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
     { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
     { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
@@ -419,6 +420,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_raise_typed_foreach_nothing) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
     { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
+    { "qore_rt_cleanup_release_slots", reinterpret_cast<void*>(&qore_rt_cleanup_release_slots) },
     { "qore_rt_object_slot_release", reinterpret_cast<void*>(&qore_rt_object_slot_release) },
     { "qore_rt_object_slot_replace", reinterpret_cast<void*>(&qore_rt_object_slot_replace) },
     { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
@@ -1168,6 +1170,20 @@ extern "C" DLLEXPORT void qore_rt_object_slot_replace(uint64_t old_value, uint64
     qore_rt_object_slot_release(old_value, xsink);
 }
 
+//! Releases the temporaries of the cleanup slots given by \a order, in its order (see
+//! QoreIRToLLVM::emitTempReleaseSequence()): as the inline sequence does for each, the value is taken from the slot,
+//! which is cleared, and released
+extern "C" DLLEXPORT void qore_rt_cleanup_release_slots(uint64_t** slots, const uint32_t* order, int32_t count,
+        ExceptionSink* xsink) {
+    for (int32_t i = 0; i < count; ++i) {
+        uint64_t* slot = slots[order[i]];
+        uint64_t val = *slot;
+        // NOTHING (VAL_NOTHING)
+        *slot = 0;
+        qore_rt_decref(val, xsink);
+    }
+}
+
 extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink) {
     // Cleanup slots are registered in construction order.  Destruct in LIFO
     // order so dependent temporaries (for example iterators) are released
@@ -1801,6 +1817,14 @@ int qore_check_call_target(const QoreValue& call, const QoreValue& target, Excep
         assert(dynamic_cast<const ResolvedCallReferenceNode*>(target_node));
         return qore_call_reference_check_target(static_cast<const ResolvedCallReferenceNode*>(target_node), xsink);
     }
+    if (node && node->getType() == NT_SELF_CALL) {
+        // an unqualified call to a method: its object is self (issue #5823)
+        const SelfFunctionCallNode* self_call = static_cast<const SelfFunctionCallNode*>(node);
+        return target.getType() == NT_OBJECT
+            ? self_call->checkObject(const_cast<QoreObject*>(target.get<const QoreObject>()), self_call->getName(),
+                xsink)
+            : 0;
+    }
     if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         return dot->checkReceiver(target, xsink);
     }
@@ -1809,6 +1833,17 @@ int qore_check_call_target(const QoreValue& call, const QoreValue& target, Excep
 
 extern "C" DLLEXPORT void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink) {
     qore_check_call_target(fromBits(call_bits), fromBits(target_bits), xsink);
+}
+
+QoreValue qore_rt_current_self_value() {
+    // the object of the current frame, as the direct call of a method through self (CallMethodDirect) takes it; not
+    // through rc_get_current_ref(), which sets up the runtime configuration of the thread on each call
+    QoreObject* self = runtime_get_stack_object();
+    return self ? QoreValue(static_cast<AbstractQoreNode*>(self)) : QoreValue();
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_current_self_bits() {
+    return toBits(qore_rt_current_self_value());
 }
 
 extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits,
@@ -5076,6 +5111,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_push_implicit_arg(uint64_t value_bits, Exc
     const QoreListNode* old_argv = thread_get_implicit_args();
     QoreValue old_context = old_argv ? const_cast<QoreListNode*>(old_argv)->refSelf() : QoreValue();
 
+    // a value of NOTHING gives no list, as the AST interpreter's SingleArgvContextHelper and the IR interpreter do, so
+    // that $$ is NOTHING (qore#5804); NULL is a value
+    if (value.isNothing()) {
+        thread_set_implicit_args(nullptr);
+        return toBits(old_context);
+    }
+
     // Create new single-element list with the value
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> new_argv(new QoreListNode(autoTypeInfo), xsink);
@@ -5231,10 +5273,126 @@ static const QoreTypeInfo* qore_rt_resolve_ctx_type_path(QoreAOTContext* ctx, co
     return type_info;
 }
 
+//! returns true if a type path consists only of the keywords of the builtin value types and the punctuation of
+//! complex types (qore#5979)
+/** Such a path (hash<string, int>, list<*int>, hash<string, list<auto>>) names no class, hashdecl, enum, typedef or
+    type parameter, so it resolves to the same process-wide type whatever the receiver, the instantiation of the
+    call or the state of the Program: its resolution can be kept at the address of the path.
+*/
+static bool qore_rt_type_path_is_builtin_only(const char* path) {
+    static const char* const keywords[] = {
+        "hash", "list", "string", "int", "float", "bool", "date", "number", "binary", "any", "auto", "nothing",
+        "null", "softint", "softfloat", "softbool", "softstring", "softdate", "softnumber", "softlist",
+    };
+    // a hash<X> with one argument can name a hashdecl (a hashdecl can have the name of a keyword), which depends on
+    // the namespaces of the Program: only hash<K, V>, hash<auto> and hash<auto!> are builtin-only
+    struct Level {
+        bool is_hash = false;
+        bool has_comma = false;
+        std::string content;
+    };
+    static constexpr size_t MAX_DEPTH = 16;
+    Level stack[MAX_DEPTH];
+    size_t depth = 0;
+    bool pending_hash = false;
+    const char* p = path;
+    size_t tokens = 0;
+    while (*p) {
+        char c = *p;
+        if (c == ' ') {
+            ++p;
+            continue;
+        }
+        if (c == '<') {
+            if (depth + 1 >= MAX_DEPTH) {
+                return false;
+            }
+            ++depth;
+            stack[depth] = Level();
+            stack[depth].is_hash = pending_hash;
+            pending_hash = false;
+            ++p;
+            continue;
+        }
+        pending_hash = false;
+        if (c == '>') {
+            if (!depth) {
+                return false;
+            }
+            const Level& level = stack[depth];
+            if (level.is_hash && !level.has_comma && level.content != "auto" && level.content != "auto!") {
+                return false;
+            }
+            --depth;
+            ++p;
+            continue;
+        }
+        if (c == ',') {
+            if (depth) {
+                stack[depth].has_comma = true;
+            }
+            ++p;
+            continue;
+        }
+        if (c == '*' || c == '|' || c == '!') {
+            if (depth) {
+                stack[depth].content += c;
+            }
+            ++p;
+            continue;
+        }
+        const char* start = p;
+        while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_') {
+            ++p;
+        }
+        if (p == start) {
+            // any other character (a namespace separator, a quote, ...)
+            return false;
+        }
+        size_t len = p - start;
+        bool found = false;
+        for (const char* kw : keywords) {
+            if (strlen(kw) == len && !strncmp(kw, start, len)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return false;
+        }
+        if (depth) {
+            stack[depth].content.append(start, len);
+        }
+        pending_hash = len == 4 && !strncmp(start, "hash", 4);
+        ++tokens;
+    }
+    return tokens > 0 && !depth;
+}
+
+//! the resolutions of the builtin-only type paths, found by the address of the path (qore#5979)
+struct QoreBuiltinTypePathEntry {
+    const char* address;
+    const QoreTypeInfo* type_info;
+    //! the text of the path: a path address that a module unload frees can be used again for another path
+    std::string text;
+};
+static constexpr size_t QORE_BUILTIN_TYPE_PATH_TABLE_SIZE = 256;
+//! an entry is allocated once and never freed or replaced, so that a reader needs no lock
+static std::atomic<const QoreBuiltinTypePathEntry*> qore_builtin_type_path_table[QORE_BUILTIN_TYPE_PATH_TABLE_SIZE];
+
 static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext* ctx,
         const char* type_path, const char* op, ExceptionSink* xsink) {
     static constinit QoreEnvFlag cache_enabled_env("QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE");
     const bool cache_enabled = !cache_enabled_env.get();
+    // the type of a builtin-only path does not depend on the receiver, the instantiation or the generation
+    const size_t builtin_slot = (reinterpret_cast<uintptr_t>(type_path) >> 4) % QORE_BUILTIN_TYPE_PATH_TABLE_SIZE;
+    if (cache_enabled && type_path) {
+        const QoreBuiltinTypePathEntry* entry =
+            qore_builtin_type_path_table[builtin_slot].load(std::memory_order_acquire);
+        if (entry && entry->address == type_path && !strcmp(entry->text.c_str(), type_path)) {
+            return entry->type_info;
+        }
+    }
     // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached
     if (!cache_enabled || !ctx || !type_path || !*type_path || qore_aot_type_path_has_signature_type_param(type_path)) {
         return qore_rt_resolve_full_type_path(type_path, op, xsink);
@@ -5290,6 +5448,25 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
         qore_rt_aot_path_cache_add(ctx->type_path_cache, ctx->type_path_cache_order, std::move(key), type_info);
     }
     front_entry = {ctx->hashdecl_cache_generation, epoch, type_path, receiver_type_info, type_info};
+    // a builtin-only path is kept at its address, in a slot that is empty (a slot that another path holds is left
+    // as it is, and that path keeps the slower cache)
+    if (qore_rt_type_path_is_builtin_only(type_path)) {
+        const QoreBuiltinTypePathEntry* expected = nullptr;
+        // an allocation failure only means that the path is not kept
+        auto* entry = new (std::nothrow) QoreBuiltinTypePathEntry{type_path, type_info, std::string()};
+        if (entry) {
+            try {
+                entry->text = type_path;
+            } catch (...) {
+                delete entry;
+                return type_info;
+            }
+            if (!qore_builtin_type_path_table[builtin_slot].compare_exchange_strong(expected, entry,
+                    std::memory_order_release, std::memory_order_relaxed)) {
+                delete entry;
+            }
+        }
+    }
     return type_info;
 }
 
@@ -13261,6 +13438,12 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
     }
 
     if (target.self_ns_single) {
+        // as AbstractMethodCallNode::exec(), which SelfFunctionCallNode::evalImpl() calls: an object that has been
+        // deleted raises the error of the call, which names the variant resolved at parse time (issue #5823)
+        if (!self->isValid()) {
+            qore_raise_deleted_method_call(xsink, self, method_name, target.qc, method, target.variant);
+            return toBits(QoreValue());
+        }
         // Match SelfFunctionCallNode::evalImpl(): unqualified self calls are virtual, so unless the object's class
         // is the parse-time class (or the method's), the method is resolved by name on the object's class
         if (target.qc && method && (self->getClass() == target.qc || self->getClass() == method->getClass())) {
@@ -19977,7 +20160,11 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         rc_get_current_ref(), object, *arg_list, class_ctx, nullptr,
         receiver_type_info, explicit_type_param_instantiation,
         &resolved_variant);
-    if (cacheable && resolved_variant && !*xsink) {
+    // a variant with functional domains declared in Qore source is checked against the caller's effective
+    // restrictions on each call that resolves it at run time (see qore_get_variant_denied_domains()), which the
+    // cache key does not hold, so it is not cached
+    if (cacheable && resolved_variant && !*xsink
+        && !(resolved_variant->isUser() && resolved_variant->getUserVariantBase()->getDeclaredDomain())) {
         qore_rt_add_aot_method_dispatch_cache_entry(cache,
             object->getClass(), receiver_type_info, class_ctx, caller_program_id,
             object_program_id, parse_options, dispatch_epoch, arg_types,

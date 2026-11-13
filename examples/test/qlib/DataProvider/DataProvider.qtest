@@ -2188,9 +2188,11 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(my_app, DataProviderActionCatalog::getApp(app));
 
         {
+            # the API declares the PROCESS functional domain (issue #5803): a Program with PO_NO_PROCESS_CONTROL
+            # cannot reference it
             Program p(PO_NO_PROCESS_CONTROL);
-            p.parse("sub test(string name) { DataProviderActionCatalog::deregisterDynamicApp(name); }", "test");
-            assertThrows("PERMISSION-DENIED", \p.callFunction(), ("test", app));
+            assertThrows("PARSE-EXCEPTION", "deregisterDynamicApp\\(\\)'; functional domain: PROCESS", \p.parse(),
+                ("sub test(string name) { DataProviderActionCatalog::deregisterDynamicApp(name); }", "test"));
         }
 
         assertThrows("APP-ERROR", \DataProviderActionCatalog::getAppEx(), get_random_string());

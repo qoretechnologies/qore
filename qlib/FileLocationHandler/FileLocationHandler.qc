@@ -692,7 +692,7 @@ public class FileLocationHandler {
     }
 
     #! Initializes default handlers
-    static init() {
+    static init() [dom=PROCESS_CONTROL] {
         # register default handlers
         FileLocationHandler::registerHandler("conn", new FileLocationHandlerConnection());
         FileLocationHandler::registerHandler("connection", new FileLocationHandlerConnection());
@@ -714,7 +714,7 @@ public class FileLocationHandler {
 
         @throw LOCATION-HANDLER-ERROR the given location handler scheme has already been registered
     */
-    static registerHandler(string scheme, AbstractFileLocationHandler handler) {
+    static registerHandler(string scheme, AbstractFileLocationHandler handler) [dom=PROCESS_CONTROL] {
         bool has_lock = handler_lock.lockOwner();
         if (!has_lock) {
             handler_lock.lock();
@@ -739,7 +739,7 @@ public class FileLocationHandler {
 
         @code{.py} data sub (string scheme, bool text, string location) {} @endcode
     */
-    static bool tryRegisterHandler(string scheme, AbstractFileLocationHandler handler) {
+    static bool tryRegisterHandler(string scheme, AbstractFileLocationHandler handler) [dom=PROCESS_CONTROL] {
         bool has_lock = handler_lock.lockOwner();
         if (!has_lock) {
             handler_lock.lock();
@@ -1128,7 +1128,7 @@ getHandlerNames
 
         @since FileLocationHandler 3.0
     */
-    static setConnectionFilter(*code<bool(string, bool)> filter) {
+    static setConnectionFilter(*code<bool(string, bool)> filter) [dom=PROCESS_CONTROL] {
         handler_lock.lock();
         on_exit handler_lock.unlock();
 

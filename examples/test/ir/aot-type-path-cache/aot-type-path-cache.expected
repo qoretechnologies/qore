@@ -1,0 +1,21 @@
+hash<string, int>: {a: 2} (hash<string, int>)
+list<int>: [2, 3] (list<int>)
+list<*int>: [2, null] (list<*int>)
+hash<string, list<int>>: {k: [2]} (hash<string, list<int>>)
+nested hash: {o: {f: 3.5}} (hash<string, hash<string, float>>)
+list<list<string>>: [["x", "y"]] (list<list<string>>)
+hash<auto>: {z: "s", n: 2} (hash<auto>)
+list<auto>: [1, "two", 3.0] (list<auto>)
+list<softint>: [4, 5] (list<softint>)
+0: RUNTIME-TYPE-ERROR
+0: RUNTIME-TYPE-ERROR
+1: RUNTIME-TYPE-ERROR
+1: RUNTIME-TYPE-ERROR
+2: RUNTIME-TYPE-ERROR
+2: RUNTIME-TYPE-ERROR
+hashdecl: {x: 2, y: 3} (hash<Point>)
+class list: 2
+list of hashdecl: [{x: 1, y: 2}] (list<hash<Point>>)
+generic class: [2, 3] (list<int>)
+Box<string>: ["a"] (list<string>)
+Box<float>: [1.5] (list<float>)

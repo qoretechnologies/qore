@@ -244,8 +244,9 @@ static bool write_slot_DOT_EVAL_TARGET(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
-//! DOT_EVAL_EXPR: full inline dot-eval expression payload for AST consumers such as Context
-static bool write_slot_DOT_EVAL_EXPR(AOTExprSlotWriteCtx& ctx) {
+//! AST_EXPR: a full inline expression that the runtime evaluates as an AST (a dot-eval expression; the expressions
+//! of find and context, see AOTSlotMap::ast_expr_bits)
+static bool write_slot_AST_EXPR(AOTExprSlotWriteCtx& ctx) {
     return write_slot_inline_expr(ctx, ctx.expr.child_expr);
 }
 
@@ -712,6 +713,62 @@ static bool write_slot_SOURCE_LOCATION(AOTExprSlotWriteCtx& ctx) {
 
 static bool write_slot_SHR_EQ(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreShiftRightEqualsOperatorNode>(ctx);
+}
+
+//! Writes the lvalue, offset, length and new value expressions of a splice or extract operator (issue #5947)
+template <typename NodeT>
+static bool write_splice_extract_slot_payload(AOTExprSlotWriteCtx& ctx) {
+    auto* op = dynamic_cast<const NodeT*>(ctx.expr.child_expr.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    for (const QoreValue& v : {op->getLValue(), op->getOffset(), op->getLength(), op->getNewValue()}) {
+        if (!classifyAndWriteExpr(ctx.writer, v, ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+            return false;
+        }
+    }
+    return true;
+}
+static bool write_slot_SPLICE(AOTExprSlotWriteCtx& ctx) {
+    return write_splice_extract_slot_payload<QoreSpliceOperatorNode>(ctx);
+}
+static bool write_slot_EXTRACT(AOTExprSlotWriteCtx& ctx) {
+    return write_splice_extract_slot_payload<QoreExtractOperatorNode>(ctx);
+}
+
+//! Writes a regex substitution operator's pattern, replacement, options, global flag and lvalue (issue #5947)
+static bool write_slot_REGEX_SUBST(AOTExprSlotWriteCtx& ctx) {
+    auto* op = dynamic_cast<const QoreRegexSubstOperatorNode*>(ctx.expr.child_expr.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    QoreRegexSubst* rs = op->getRegexSubst();
+    const QoreString* repl = rs ? rs->getNewStr() : nullptr;
+    if (!rs || !rs->getPatternCStr() || !qore_aot_regex_string_ok(repl)) {
+        return false;
+    }
+    ctx.writer.writeStringRef(rs->getPatternCStr());
+    ctx.writer.writeStringRef(repl ? repl->c_str() : "");
+    ctx.writer.writeI64(rs->getOptions());
+    ctx.writer.writeU8(rs->isGlobal() ? 1 : 0);
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals, ctx.parent_globals,
+        ctx.const_reverse_map);
+}
+
+//! Writes a transliteration operator's source and target sets and lvalue (issue #5947)
+static bool write_slot_TRANSLIT(AOTExprSlotWriteCtx& ctx) {
+    auto* op = dynamic_cast<const QoreTransliterationOperatorNode*>(ctx.expr.child_expr.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    QoreTransliteration* tr = op->getTransliteration();
+    if (!tr || !qore_aot_regex_string_ok(&tr->getSource()) || !qore_aot_regex_string_ok(&tr->getTarget())) {
+        return false;
+    }
+    ctx.writer.writeStringRef(tr->getSource().c_str());
+    ctx.writer.writeStringRef(tr->getTarget().c_str());
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals, ctx.parent_globals,
+        ctx.const_reverse_map);
 }
 
 static bool write_slot_LOG_AND(AOTExprSlotWriteCtx& ctx) {

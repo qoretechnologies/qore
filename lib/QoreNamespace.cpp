@@ -3070,7 +3070,9 @@ AbstractCallReferenceNode* qore_root_ns_private::parseResolveCallReferenceIntern
             parseWarnAmbiguousFunctionCall(fr->loc, fname, fe);
         }
         // check parse options to see if access is allowed
-        if (!qore_program_private::parseAddDomain(getProgram(), fe->getFunction()->parseGetUniqueFunctionality())) {
+        QoreParseOptions denied = qore_program_private::parseDeniedDomains(getProgram(),
+            fe->getFunction()->parseGetUniqueFunctionality(), fe->getFunction()->parseGetUniqueDeclaredDomain());
+        if (!denied) {
             ResolvedCallReferenceNode* ref = fe->makeCallReference(fr->loc);
             // the explicit type arguments of \f<T>() instantiate the function when the reference is called
             if (!fr->explicit_parse_type_args.empty()) {
@@ -3083,7 +3085,8 @@ AbstractCallReferenceNode* qore_root_ns_private::parseResolveCallReferenceIntern
             }
             return ref;
         }
-        parse_error(*fr->loc, "parse options do not allow access to function '%s'", fname);
+        parse_error(*fr->loc, "parse options do not allow access to function '%s'; functional domain: %s", fname,
+            qore_describe_source_domains(denied.getLo()).c_str());
     } else { // cannot find function, throw exception
         parse_error(*fr->loc, "reference to function '%s()' cannot be resolved", fname);
     }

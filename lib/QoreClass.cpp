@@ -279,6 +279,9 @@ int qore_method_private::parseInit() {
             if (func->checkConstOverrides() && !err) {
                 err = -1;
             }
+            if (func->checkDomainOverrides() && !err) {
+                err = -1;
+            }
         }
     }
 
@@ -5653,6 +5656,11 @@ int qore_class_private::parseInit() {
         err = -1;
     }
 
+    // issue #5838: a variant that a call typed against a parent class can select must return a compatible type
+    if (!err && parseCheckReturnTypeHierarchy()) {
+        err = -1;
+    }
+
     if (parseInitConstants() && !err) {
         err = -1;
     }
@@ -5896,7 +5904,59 @@ const MethodFunctionBase* find_first_parent_method(const qore_class_private& qc,
     return nullptr;
 }
 
+// collects the non-static methods of the parent classes, with their names
+void collect_parent_methods(const qore_class_private& qc,
+        std::vector<std::pair<std::string, const MethodFunctionBase*>>& methods,
+        std::unordered_set<qore_classid_t>& visited) {
+    if (!qc.scl) {
+        return;
+    }
+    for (auto& i : *qc.scl) {
+        if (!i->sclass) {
+            continue;
+        }
+        const qore_class_private& pc = *qore_class_private::get(*i->sclass);
+        if (!visited.insert(pc.classID).second) {
+            continue;
+        }
+        for (const auto& mi : pc.hm) {
+            if (is_special_method_name(mi.second->getName())) {
+                continue;
+            }
+            methods.emplace_back(mi.first, qore_method_private::get(*mi.second)->getFunction());
+        }
+        collect_parent_methods(pc, methods, visited);
+    }
+}
+
 } // namespace
+
+int qore_class_private::parseCheckReturnTypeHierarchy() const {
+    if (!scl) {
+        return 0;
+    }
+    // with a single parent class, the parent class's check covers the variants of its hierarchy, so only the class's
+    // own variants are checked; with more than one, a parent class's variants can be selected before another's
+    bool single_parent = scl->size() == 1;
+    // static methods are not dispatched by the object's class
+    std::vector<std::pair<std::string, const MethodFunctionBase*>> methods;
+    std::unordered_set<qore_classid_t> visited;
+    collect_parent_methods(*this, methods, visited);
+    for (const auto& i : methods) {
+        hm_method_t::const_iterator mi = hm.find(i.first);
+        if (single_parent && mi == hm.end()) {
+            continue;
+        }
+        const MethodFunctionBase* start = mi != hm.end()
+            ? qore_method_private::get(*mi->second)->getFunction()
+            : find_first_parent_method(*this, i.first, false);
+        assert(start);
+        if (start->checkReturnTypeResolution(*this, *i.second, single_parent)) {
+            return -1;
+        }
+    }
+    return 0;
+}
 
 int qore_class_private::parseCheckFinalHierarchy() const {
     if (!scl) {
@@ -6609,6 +6669,12 @@ static bool final_param_types_intersect(const QoreTypeInfo* a, const QoreTypeInf
         || qore_type_contains_type_parameter(b)) {
         return true;
     }
+    // a reference parameter is bound only to a reference argument (\var), and a parameter of another type does not
+    // accept one, so a call matches at most one of them, unless both accept no value (*reference<T> and *T)
+    if (QoreTypeInfo::isReference(a) != QoreTypeInfo::isReference(b)) {
+        return QoreTypeInfo::parseAccepts(a, nothingTypeInfo) != QTI_NOT_EQUAL
+            && QoreTypeInfo::parseAccepts(b, nothingTypeInfo) != QTI_NOT_EQUAL;
+    }
     return QoreTypeInfo::parseAccepts(a, b) != QTI_NOT_EQUAL || QoreTypeInfo::parseAccepts(b, a) != QTI_NOT_EQUAL;
 }
 
@@ -6829,6 +6895,245 @@ int MethodFunctionBase::checkConstOverrides() const {
     }
 
     return 0;
+}
+
+//! Returns true if a value of the child variant's return type is always a value of the parent variant's return type
+/** The compiled modes trust the return type of the variant that a call resolves to at parse time; a child class
+    variant that the call selects at run time must therefore return the same type or a narrower one (covariant return
+    types).  A conversion (a filter) changes the value, so a type that the parent's accepts only by converting it is
+    not compatible.  A variant without a declared return type is not checked: its calls are not typed; nor is a return
+    type with a type parameter of a generic class, which has its type only in an instantiation (issue #5838).
+*/
+// returns the class of a type that returns only objects of a single class (X), or also no value (*X)
+static const QoreClass* unique_class(const QoreTypeInfo* ti) {
+    const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(ti);
+    return qc ? qc : QoreTypeInfo::getUniqueReturnClassOrNothing(ti);
+}
+
+// returns true if two types of the same name have the same declarations: a class, hashdecl or enum type, or a
+// container of them; the copies of a declaration that a module exports to each Program that imports it are the same
+static bool same_declarations(const QoreTypeInfo* a, const QoreTypeInfo* b) {
+    if (a == b) {
+        return true;
+    }
+    if (!QoreTypeInfo::hasType(a) || !QoreTypeInfo::hasType(b)) {
+        return QoreTypeInfo::hasType(a) == QoreTypeInfo::hasType(b);
+    }
+    const QoreClass* ac = unique_class(a);
+    const QoreClass* bc = unique_class(b);
+    if (ac || bc) {
+        // the copies of a class that a module exports are identified by name and signature, as the type system does;
+        // an object's class is also checked at run time in every execution mode
+        return ac && bc && qore_class_private::get(*ac)->equal(*qore_class_private::get(*bc));
+    }
+    const TypedHashDecl* ah = QoreTypeInfo::getUniqueReturnHashDecl(a);
+    const TypedHashDecl* bh = QoreTypeInfo::getUniqueReturnHashDecl(b);
+    if (ah || bh) {
+        return ah && bh && typed_hash_decl_private::get(*ah)->equal(*typed_hash_decl_private::get(*bh));
+    }
+    const QoreEnumDecl* ae = QoreTypeInfo::getUniqueReturnEnum(a);
+    const QoreEnumDecl* be = QoreTypeInfo::getUniqueReturnEnum(b);
+    if (ae || be) {
+        return ae && be && qore_enum_decl_private::get(*ae)->equal(*qore_enum_decl_private::get(*be));
+    }
+    // a container: the declarations of its elements
+    const QoreTypeInfo* ael = QoreTypeInfo::getElementType(a);
+    const QoreTypeInfo* bel = QoreTypeInfo::getElementType(b);
+    if (ael || bel) {
+        return ael && bel && same_declarations(ael, bel);
+    }
+    // another type of the same name: a builtin type
+    return true;
+}
+
+// returns true if both types are the same type: also the copies of a declaration in different Programs
+static bool same_declared_type(const QoreTypeInfo* a, const QoreTypeInfo* b) {
+    // the names include the or-nothing marker and the type arguments
+    return !strcmp(QoreTypeInfo::getName(a), QoreTypeInfo::getName(b)) && same_declarations(a, b);
+}
+
+static bool return_type_compatible(const QoreTypeInfo* parent_rt, const QoreTypeInfo* child_rt) {
+    if (!QoreTypeInfo::hasType(parent_rt) || !QoreTypeInfo::hasType(child_rt) || parent_rt == child_rt) {
+        return true;
+    }
+    // a parent class method that returns nothing gives a call typed against it no value to rely on, so a child class
+    // method may return a value (a writer that returns what it wrote, a ping that returns its result)
+    if (parent_rt == nothingTypeInfo) {
+        return true;
+    }
+    // a type parameter of a generic class has its type only in an instantiation of the class: a child class method
+    // returning another type than the parent's type parameter cannot return every type that an instantiation binds
+    // to it, and the types of two type parameters can only be compared in an instantiation
+    bool parent_tp = qore_type_contains_type_parameter(parent_rt);
+    if (parent_tp || qore_type_contains_type_parameter(child_rt)) {
+        return !parent_tp || qore_type_contains_type_parameter(child_rt);
+    }
+    // the same type: also the copies of a type that a module exports to each Program that imports it, which have the
+    // same name and the same declaration
+    if (QoreTypeInfo::isOutputIdentical(parent_rt, child_rt) || same_declared_type(parent_rt, child_rt)) {
+        return true;
+    }
+    bool may_not_match = false;
+    bool may_need_filter = false;
+    qore_type_result_e r = QoreTypeInfo::parseAccepts(parent_rt, child_rt, may_not_match, may_need_filter);
+    if (r != QTI_NOT_EQUAL && !may_not_match && !may_need_filter) {
+        return true;
+    }
+    // a soft return type converts the value returned, so it is compared by the types it returns: a child class method
+    // returning softlist<string> returns a list<string>, which a parent class method returning softlist<auto> returns
+    return QoreTypeInfo::outputAccepts(parent_rt, child_rt);
+}
+
+// returns the return type of a variant of a method as a class sees it: the type arguments of the class's parent
+// class instantiation are substituted for the type parameters of a generic parent class
+static const QoreTypeInfo* class_return_type(const qore_class_private& cls, const MethodFunctionBase* f,
+        const QoreTypeInfo* rt) {
+    if (!qore_type_contains_type_parameter(rt) || qore_class_private::sameDeclaration(f->getClass(), cls.cls)) {
+        return rt;
+    }
+    const QoreTypeInfo* receiver = cls.getConcreteParameterizedBaseTypeInfo(f->getClass(), false);
+    return receiver ? qore_substitute_type_params_if_needed(rt, receiver) : rt;
+}
+
+int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
+        const MethodFunctionBase& parent_func, bool own_only) const {
+    // the position of the parent class method in the order in which the class's calls select a variant; the variants
+    // of the methods before it win a tie with it, and all of them when calls do not reach it
+    size_t pos = 0;
+    for (; pos < ilist.size(); ++pos) {
+        if (ilist[pos].func == &parent_func) {
+            break;
+        }
+    }
+    if (!pos) {
+        return 0;
+    }
+
+    for (vlist_t::const_iterator pi = parent_func.vlist.begin(), pe = parent_func.vlist.end(); pi != pe; ++pi) {
+        MethodVariantBase* pv = const_cast<MethodVariantBase*>(METHVB_const(*pi));
+        // a private:internal variant is not inherited
+        if (pv->getAccess() == Internal) {
+            continue;
+        }
+        pv->parseResolveUserSignature();
+        const AbstractFunctionSignature* psig = pv->getSignature();
+        const QoreTypeInfo* prt = class_return_type(cls, &parent_func, psig->getReturnTypeInfo());
+        if (!QoreTypeInfo::hasType(prt)) {
+            continue;
+        }
+        for (size_t i = 0, e = own_only ? 1 : pos; i < e; ++i) {
+            const MethodFunctionBase* g = METHFB_const(ilist[i].func);
+            // the variant of the method with the same signature, if any: it overrides the parent variant
+            const AbstractFunctionSignature* override_sig = nullptr;
+            if (parseCompareResolvedSignature(g->vlist, psig, override_sig) == QTI_NOT_EQUAL
+                || (override_sig && (override_sig->numParams() != psig->numParams()
+                    || override_sig->hasVarargs() != psig->hasVarargs()))) {
+                override_sig = nullptr;
+            }
+            for (vlist_t::const_iterator gi = g->vlist.begin(), ge = g->vlist.end(); gi != ge; ++gi) {
+                MethodVariantBase* gv = const_cast<MethodVariantBase*>(METHVB_const(*gi));
+                if (gv->getAccess() == Internal) {
+                    continue;
+                }
+                gv->parseResolveUserSignature();
+                const AbstractFunctionSignature* gsig = gv->getSignature();
+                // a variant that a call of the parent variant cannot select is another method
+                if (gsig != override_sig && !final_variant_may_be_bypassed(gsig, psig)) {
+                    continue;
+                }
+                const QoreTypeInfo* grt = class_return_type(cls, g, gsig->getReturnTypeInfo());
+                if (return_type_compatible(prt, grt)) {
+                    continue;
+                }
+                // the paths of the types when their names do not tell them apart
+                bool same_name = !strcmp(QoreTypeInfo::getName(grt), QoreTypeInfo::getName(prt));
+                const char* gname = same_name ? QoreTypeInfo::getPath(grt) : QoreTypeInfo::getName(grt);
+                const char* pname = same_name ? QoreTypeInfo::getPath(prt) : QoreTypeInfo::getName(prt);
+                QoreString desc;
+                const QoreProgramLocation* loc;
+                if (qore_class_private::sameDeclaration(g->getClass(), cls.cls)) {
+                    const UserSignature* usig = dynamic_cast<const UserSignature*>(gsig);
+                    loc = usig ? usig->getParseLocation() : &loc_builtin;
+                    desc.sprintf("child class method %s::%s(%s) returning %s cannot %s parent class method %s::%s(%s) "
+                        "returning %s", g->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
+                        gsig == override_sig ? "override" : "overload", parent_func.getClass()->getName(), getName(),
+                        psig->getSignatureText(), pname);
+                } else {
+                    loc = cls.loc ? cls.loc : &loc_builtin;
+                    desc.sprintf("class '%s' cannot inherit method %s::%s(%s) returning %s with parent class method "
+                        "%s::%s(%s) returning %s: calls of '%s' in this class are resolved in %s::%s() first",
+                        cls.name.c_str(), g->getClass()->getName(), getName(), gsig->getSignatureText(), gname,
+                        parent_func.getClass()->getName(), getName(), psig->getSignatureText(), pname, getName(),
+                        g->getClass()->getName(), getName());
+                }
+                if (gsig != override_sig) {
+                    desc.concat(": it accepts arguments that the parent class method accepts, so a call of the "
+                        "parent class method can select it");
+                }
+                desc.concat("; the return type must be the parent class method's or a narrower type that it accepts "
+                    "without a conversion (a call typed against the parent class trusts its return type)");
+                parseException(*loc, "PARSE-TYPE-ERROR", "%s", desc.c_str());
+                return -1;
+            }
+            // a method that overrides the parent variant takes all of its calls, so the methods after it are not
+            // reached for them (a parent class declared through more than one inheritance path)
+            if (override_sig) {
+                break;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int MethodFunctionBase::checkDomainOverrides() const {
+    if (vlist.empty()) {
+        return 0;
+    }
+
+    int rc = 0;
+    ilist_t::const_iterator i = ilist.begin(), e = ilist.end();
+    ++i;
+    for (; i != e; ++i) {
+        const MethodFunctionBase* m = METHFB_const((*i).func);
+        for (vlist_t::const_iterator vi = m->vlist.begin(), ve = m->vlist.end(); vi != ve; ++vi) {
+            const MethodVariantBase* base_variant = METHVB_const(*vi);
+            // only the functional domains declared on user methods in Qore source must be repeated in an override
+            if (!base_variant->isUser()) {
+                continue;
+            }
+            int64 base_dom = base_variant->getUserVariantBase()->getDeclaredDomain();
+            if (!base_dom) {
+                continue;
+            }
+
+            const AbstractFunctionSignature* child_sig = nullptr;
+            if (parseCompareResolvedSignature(vlist, base_variant->getSignature(), child_sig) == QTI_NOT_EQUAL) {
+                continue;
+            }
+
+            const MethodVariantBase* child_variant = find_method_variant_by_signature(vlist, child_sig);
+            if (!child_variant || !child_variant->isUser()) {
+                continue;
+            }
+            int64 missing = base_dom & ~child_variant->getUserVariantBase()->getDeclaredDomain();
+            if (!missing) {
+                continue;
+            }
+
+            const UserSignature* usig = dynamic_cast<const UserSignature*>(child_variant->getSignature());
+            const QoreProgramLocation* loc = usig ? usig->getParseLocation() : &loc_builtin;
+            parseException(*loc, "DOMAIN-METHOD-ERROR",
+                "child class method %s::%s(%s) overrides parent class method %s::%s(%s) [dom=%s] without declaring "
+                "functional domain %s; an override must declare every functional domain of the method it overrides",
+                qc->getName(), getName(), child_variant->getSignature()->getSignatureText(), m->qc->getName(),
+                getName(), base_variant->getSignature()->getSignatureText(),
+                qore_get_source_domain_names(base_dom).c_str(), qore_get_source_domain_names(missing).c_str());
+            rc = -1;
+        }
+    }
+
+    return rc;
 }
 
 void MethodFunctionBase::addBuiltinMethodVariant(MethodVariantBase* variant) {
