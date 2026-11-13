@@ -19118,6 +19118,24 @@ static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, Runtime
     return q_get_lvalue_scan_count();
 }
 
+//! returns the number of values visited by removal bookkeeping in the current thread
+static QoreValue f_dbg_get_lvalue_removal_visit_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_lvalue_removal_visit_count();
+}
+
+//! returns the number of object identity probes made by removal bookkeeping in the current thread
+static QoreValue f_dbg_get_lvalue_removal_probe_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_lvalue_removal_probe_count();
+}
+
+//! returns the number of lazy removal-tracker states allocated in the current thread
+static QoreValue f_dbg_get_lvalue_removal_allocation_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_lvalue_removal_allocation_count();
+}
+
 //! returns the number of objects that recursive-reference scans have entered in the current thread
 /** A scan takes the rsection of every object it enters and follows all of its references, so this reports the
     size of the graph the scans of the current thread have walked; tests use it to verify that a scan does not
@@ -22472,6 +22490,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_arg_presence", f_dbg_arg_presence, QCF_USES_EXTRA_ARGS, QDOM_DEBUG_HOOK,
         listTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_lvalue_removal_visit_count", f_dbg_get_lvalue_removal_visit_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_lvalue_removal_allocation_count", f_dbg_get_lvalue_removal_allocation_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_lvalue_removal_probe_count", f_dbg_get_lvalue_removal_probe_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
