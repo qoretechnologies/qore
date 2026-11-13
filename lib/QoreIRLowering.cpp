@@ -6957,11 +6957,15 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     //
     // AOT compilation names the constant instead of embedding it, and excludes constants whose
     // value an initializer produces; see constantContainerLoadsByReference().
-    if ((expr.getType() == NT_LIST || expr.getType() == NT_HASH)
-            && expr.isValue()
-            && qoreIrConstantContainerEntryCount(expr) > qore_ir_max_rebuilt_constant_entries
-            && constantContainerLoadsByReference(expr)
-            && qoreIrConstantValueIsFullyConcrete(expr)) {
+    //
+    // A smaller container is rebuilt for the scalar replacement, and the constant is recorded on the
+    // MakeList/MakeHash, so that an instruction the scalar replacement cannot remove - a read
+    // through a run-time key, as in Labels{enc} - is loaded instead (qore#5977, qore_ir_optimize()).
+    const bool loadable_container = (expr.getType() == NT_LIST || expr.getType() == NT_HASH)
+        && expr.isValue()
+        && constantContainerLoadsByReference(expr)
+        && qoreIrConstantValueIsFullyConcrete(expr);
+    if (loadable_container && qoreIrConstantContainerEntryCount(expr) > qore_ir_max_rebuilt_constant_entries) {
         return builder.createLoadConstant(nullptr, expr, nullptr)->result;
     }
     if (expr.getType() == NT_LIST && expr.isValue()) {
@@ -6983,6 +6987,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             if (qoreIrContainerLiteralMayRaise(cti, false, list->size(),
                     [list](size_t i) { return list->retrieveEntry(i); })) {
                 inst->exception_target = getCurrentExceptionTarget();
+            }
+            if (loadable_container) {
+                static_cast<QoreIRMakeListInstruction*>(inst)->rebuilt_constant.set(expr);
             }
             return inst->result;
         }
@@ -7018,6 +7025,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             if (qoreIrContainerLiteralMayRaise(cti, true, entries.size(),
                     [&entries](size_t i) { return entries[i]; })) {
                 inst->exception_target = getCurrentExceptionTarget();
+            }
+            if (loadable_container) {
+                static_cast<QoreIRMakeHashInstruction*>(inst)->rebuilt_constant.set(expr);
             }
             return inst->result;
         }

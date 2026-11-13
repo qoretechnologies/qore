@@ -12,6 +12,8 @@ Relevant code:
 - `lib/QoreIRLowering.cpp` — `QoreIRLowering::lowerConstant()` and
   `constantContainerLoadsByReference()` (whether lowered code names a constant
   or rebuilds its value)
+- `lib/QoreIRAnalysis.cpp` — `qore_ir_load_read_only_constant_containers()`
+  (a small rebuilt constant that is only read is loaded instead)
 - `lib/QoreAOTBinary.cpp` — `aot_add_constant_value_reverse_mappings_impl()`
   (which constant a node is recorded under),
   `QoreAOTBinaryWriter::writeValue()` (`VT_CONST_REF` emission),
@@ -337,6 +339,27 @@ pass consumes that form and can delete the container outright, which beats
 materializing it once; it only ever applies to a handful of members, while
 rebuilding costs O(entries) at every read. Loading *every* concrete container by
 reference regressed ten IR tests that use 1-3 entry aggregates.
+
+The scalar replacement cannot remove a container read through a run-time key or
+index, though — `HttpCharsetLabels{enc}` in `http_get_charset_label()`
+([#5977](https://github.com/qoretechnologies/qore/issues/5977)) — so such a read
+rebuilt the constant, keys included, at every call: 10k instructions a call on the
+HttpServer response path. `lowerConstant()` therefore records the constant on the
+`MakeHash`/`MakeList` it rebuilds (`QoreIRRebuiltConstant`) whenever the container
+could be loaded by reference — the same `constantContainerLoadsByReference()` and
+full-concreteness conditions as above — and `qore_ir_optimize()` replaces the
+instruction with a `LoadConstant` of it, right after the scalar replacement, when
+the scalar replacement left it in place and every use only reads one element of it
+(`HashDerefDynamic`, `ListIndexDynamic`, `HashKeyAccess`, `ListIndexAccess`).  The
+operand definitions that only the replaced instruction used are removed with it, so
+the entries are not built either.
+
+Any other use keeps the rebuild: a store, a call argument, a return or a mutation
+may rely on the container being a fresh one of its own, which the later in-place
+mutation passes assume of a `MakeHash`/`MakeList`.  So does an instruction with an
+exception target (a typed container whose entries must be checked), as its exception
+edge is part of the CFG.  `QORE_DISABLE_IR_CONSTANT_CONTAINER_LOAD` turns the
+replacement off, and `QORE_IR_OPT_STATS` reports it as `constant-loads`.
 
 ## The load-side guard
 

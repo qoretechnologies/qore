@@ -2370,6 +2370,50 @@ public:
     std::string key2;  //!< secondary key (HashMapTwoKeys only)
 };
 
+//! The constant container that a MakeList or MakeHash rebuilds from its entries (qore#5977)
+/** QoreIRLowering::lowerConstant() rebuilds a small constant container from one operand per entry, so that the
+    fixed-aggregate scalar replacement can remove it; it records the constant here when the container could be loaded
+    by reference instead (QoreIRLowering::constantContainerLoadsByReference()).  An instruction that the scalar
+    replacement leaves in place is then turned into a LoadConstant of the value when all its uses only read it
+    (qore_ir_optimize()).  The holder owns a reference to the value; a fully concrete constant holds no object, so
+    releasing it runs no code.
+*/
+class QoreIRRebuiltConstant {
+public:
+    DLLLOCAL QoreIRRebuiltConstant() = default;
+    QoreIRRebuiltConstant(const QoreIRRebuiltConstant&) = delete;
+    QoreIRRebuiltConstant& operator=(const QoreIRRebuiltConstant&) = delete;
+
+    DLLLOCAL ~QoreIRRebuiltConstant() {
+        clear();
+    }
+
+    //! Records \a value, which must be a concrete list or hash
+    DLLLOCAL void set(const QoreValue& value) {
+        clear();
+        value_ = value.refSelf();
+    }
+
+    DLLLOCAL void clear() {
+        if (value_.hasNode()) {
+            ExceptionSink xsink;
+            value_.discard(&xsink);
+            value_ = QoreValue();
+        }
+    }
+
+    DLLLOCAL bool isSet() const {
+        return value_.hasNode();
+    }
+
+    DLLLOCAL const QoreValue& get() const {
+        return value_;
+    }
+
+private:
+    QoreValue value_;
+};
+
 //! Make list instruction with optional parse-time type info
 class QoreIRMakeListInstruction : public QoreIRInstruction {
 public:
@@ -2377,6 +2421,7 @@ public:
     }
 
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+    QoreIRRebuiltConstant rebuilt_constant;  //!< the constant this instruction rebuilds, if any
 };
 
 //! Make hash instruction with optional parse-time type info.
@@ -2388,6 +2433,7 @@ public:
     }
 
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+    QoreIRRebuiltConstant rebuilt_constant;  //!< the constant this instruction rebuilds, if any
 };
 
 //! Make hash with constant string keys - operands are values only, keys are pre-stored
