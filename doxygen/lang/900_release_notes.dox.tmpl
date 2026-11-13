@@ -1688,6 +1688,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a statically linked AOT module registered for sandboxed or restricted code could take the name of a library
+      module or be given to other code, and a static registration of a module that was already loaded could crash at
+      exit; it is now checked as a load of the module by path and is never library code (see
+      @ref sandbox_static_modules) (<a href="https://github.com/qoretechnologies/qore/issues/5986">issue 5986</a>)
     - a block whose @ref on_exit "on_exit" or @ref on_success "on_success" handler raised a
       @ref thread_exit "thread_exit" ran its @ref on_error "on_error" handlers with no exception, which crashed the
       process
