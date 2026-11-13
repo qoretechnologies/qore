@@ -18,7 +18,19 @@
 # - that the top-level IR does not use the native list.push sequence (deterministic)
 # - that the results, including aliases, type errors, and auto-vivification, are the same in every execution mode
 #   and in an AOT-compiled program
-# - that 4x the pushes costs no more than ~8x the time (linear is ~4x, a copy per push ~16x)
+# - that the pushes copy no list (deterministic): with library debugging, dbg_get_container_copy_count() counts the
+#   lists and hashes the current thread copies with QoreListNode::copy() and QoreHashNode::copy(); a push in place
+#   copies none, a copy-on-write push copies the list on every push to an existing list, so the count is exact in
+#   both cases.  The pushes are counted in top-level code, for locals that may hold NOTHING, and for an assigned
+#   local, whose push in the IR interpreter uses the native sequence that is only in place when
+#   qore_ir_mark_local_list_pushes() marks it; each function is counted in its first call, which the JIT and tiered
+#   modes also run in the IR interpreter, and in a second call, which may run compiled code (the AOT program is
+#   counted too).  A control run with that marking disabled in the IR, JIT, and tiered modes (its
+#   QORE_DISABLE_IR_IN_PLACE_LIST_PUSH and QORE_DISABLE_IR_BORROWED_LIST_PUSH_LOAD switches) must copy the assigned
+#   local's list on every push, which proves that the count sees the copies.  Without library debugging nothing is
+#   counted and the copy checks are skipped: the Linux CI jobs build libqore with CMAKE_BUILD_TYPE=debug, so they count
+#   the copies; the release library of the macOS CI job has only the deterministic IR dump check.  (This replaced a
+#   wall-clock check that 4x the pushes cost no more than ~8x the time, which failed on loaded CI hosts.)
 
 %modern
 %no-child-restrictions
@@ -102,48 +114,50 @@ int sub pushNullable(int n) {
     return l.size();
 }
 
-# returns True if 4x the pushes costs no more than ~8x the time (linear is ~4x, a copy per push ~16x)
-bool sub scalesLinearly(code<int(int)> pusher) {
-    pusher(1000);
-    int started = clock_get_monotonic_us();
-    int small_size = pusher(10000);
-    int small_elapsed = clock_get_monotonic_us() - started;
-    started = clock_get_monotonic_us();
-    int large_size = pusher(40000);
-    int large_elapsed = clock_get_monotonic_us() - started;
-    return small_size == 10000 && large_size == 40000
-        && (large_elapsed < 8 * small_elapsed || large_elapsed < 250000);
+int sub pushAssigned(int n) {
+    list<int> l = ();
+    for (int i = 0; i < n; ++i) {
+        push l, i;
+    }
+    return l.size();
 }
 
-# clock_get_monotonic_us() is a monotonic clock: an NTP step cannot corrupt the elapsed times
-bool linear = True;
-if (ENV.QORE_TEST_LIST_PUSH_SCALING == \"1\") {
-    list<int> warmup = ();
-    for (int i = 0; i < 1000; ++i) {
-        push warmup, i;
+# the lists and hashes copied in this thread so far, or -1 without library debugging
+int sub copies() {
+    if (!Option::HAVE_LIBRARY_DEBUGGING) {
+        return -1;
     }
-    list<int> small = ();
-    int started = clock_get_monotonic_us();
-    for (int i = 0; i < 10000; ++i) {
-        push small, i;
-    }
-    int small_elapsed = clock_get_monotonic_us() - started;
-    list<int> large = ();
-    started = clock_get_monotonic_us();
-    for (int i = 0; i < 40000; ++i) {
-        push large, i;
-    }
-    int large_elapsed = clock_get_monotonic_us() - started;
-    # the absolute bound keeps timer noise on loaded hosts from failing runs that are already an order of
-    # magnitude below the quadratic cost (more than 3 seconds for 40000 pushes)
-    linear = small.size() == 10000 && large.size() == 40000
-        && (large_elapsed < 8 * small_elapsed || large_elapsed < 250000)
-        && scalesLinearly(\\pushUninit()) && scalesLinearly(\\pushNullable());
+    return call_function(\"dbg_get_container_copy_count\");
 }
 
-printf(\"%d:%d|%s:%d|%s:%y:%d|%d:%d|%y|%y|%s|%y\\n\", direct_alias.size(), direct.size(), type_error,
+# the containers copied by the call, or -1 without library debugging; -2 if it did not push all elements
+int sub copiedBy(code<int(int)> pusher) {
+    int before = copies();
+    int size = pusher(PushCount);
+    if (size != PushCount) {
+        return -2;
+    }
+    return before < 0 ? -1 : copies() - before;
+}
+
+const PushCount = 1000;
+
+# top-level code
+list<int> top = ();
+int before = copies();
+for (int i = 0; i < PushCount; ++i) {
+    push top, i;
+}
+int top_copies = top.size() != PushCount ? -2 : (before < 0 ? -1 : copies() - before);
+# the first call of each function, which the JIT and tiered modes also run in the IR interpreter
+list<int> copied = (top_copies, copiedBy(\\pushUninit()), copiedBy(\\pushNullable()),
+    copiedBy(\\pushAssigned()));
+# a second call, which may run compiled code
+list<int> copied_again = (copiedBy(\\pushUninit()), copiedBy(\\pushNullable()), copiedBy(\\pushAssigned()));
+
+printf(\"%d:%d|%s:%d|%s:%y:%d|%d:%d|%y|%y|%s|%y|%y\\n\", direct_alias.size(), direct.size(), type_error,
     typed.size(), empty_type_error, invalid_empty === NOTHING, invalid_empty.size(), empty.size(), empty[0], soft,
-    nested_alias, functionCases(), linear);
+    nested_alias, functionCases(), copied, copied_again);
 ";
 
 string base_path = "/tmp/qore-ir-local-list-push-linear-" + string(getpid());
@@ -172,15 +186,35 @@ if (ir_dump =~ /list\.push/) {
     ++failures;
 }
 
-string expected = "1:2|RUNTIME-TYPE-ERROR:1|RUNTIME-TYPE-ERROR:False:0|1:4|[3]|[1, 2, 9]"
-    "|[1]:[2]:[3]:RUNTIME-TYPE-ERROR:[]|True\n";
+# the pushes copy no list; without library debugging nothing is counted (-1)
+string copied = Option::HAVE_LIBRARY_DEBUGGING ? "[0, 0, 0, 0]|[0, 0, 0]" : "[-1, -1, -1, -1]|[-1, -1, -1]";
+string results = "1:2|RUNTIME-TYPE-ERROR:1|RUNTIME-TYPE-ERROR:False:0|1:4|[3]|[1, 2, 9]"
+    "|[1]:[2]:[3]:RUNTIME-TYPE-ERROR:[]|";
+string expected = results + copied + "\n";
 foreach string mode in ("ast", "ir", "tiered", "jit") {
-    string actual = ExecModeHarness::run(sprintf(
-        "QORE_TEST_LIST_PUSH_SCALING=1 LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+    string actual = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
         libqore_dir, qore_bin, mode, script_path));
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
         ++failures;
+    }
+}
+
+# control: without the marking of qore_ir_mark_local_list_pushes(), the assigned local's native push copies its list
+# on every push in its first call, which runs in the IR interpreter in each of these modes, and the count must see
+# each copy; the other pushes do not depend on the marking.  The second calls are not compared: in the JIT and tiered
+# modes they may run compiled code, which does not depend on the marking.
+if (Option::HAVE_LIBRARY_DEBUGGING) {
+    string control_expected = results + "[0, 0, 0, 1000]|";
+    foreach string mode in ("ir", "tiered", "jit") {
+        string actual = ExecModeHarness::run(sprintf("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH=1 "
+            "QORE_DISABLE_IR_BORROWED_LIST_PUSH_LOAD=1 LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+            libqore_dir, qore_bin, mode, script_path));
+        if (actual.substr(0, control_expected.length()) != control_expected) {
+            printf("control mismatch in %s (in-place list push marking disabled)\nexpected:\n%sactual:\n%s", mode,
+                control_expected, actual);
+            ++failures;
+        }
     }
 }
 
@@ -190,8 +224,7 @@ if (!is_file(base_path)) {
     printf("AOT compile failed:\n%s", compile_out);
     ++failures;
 } else {
-    string aot = backquote(sprintf("QORE_TEST_LIST_PUSH_SCALING=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
-        base_path));
+    string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, base_path));
     if (aot != expected) {
         printf("mismatch in AOT\nexpected:\n%sactual:\n%s", expected, aot);
         ++failures;
