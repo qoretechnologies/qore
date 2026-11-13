@@ -15696,6 +15696,28 @@ static QoreValue f_dbg_http_client_drain_limit(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: sets the number of streaming streams whose buffered data an HTTP/2 client delivers in one pass; 0: the
+//! default
+static QoreValue f_dbg_http2_client_streaming_batch(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t batch = get_param_value(params, 0).getAsBigInt();
+    if (batch < 0 || batch > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http2_client_streaming_batch(): invalid batch %lld",
+            (long long)batch);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().streaming_batch.store(static_cast<int>(batch), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: waits until an HTTP/2 client pass left no buffered data of streaming streams in its session
+/** @return False if the wait timed out
+*/
+static QoreValue f_dbg_http2_client_wait_streaming_delivered(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return QoreHttpClientDrainDebug::get().waitStreamingDelivered(get_param_value(params, 0).getAsBigInt());
+}
+
 //! Debug-only: holds the completed responses of HTTP/2 and HTTP/3 clients from now on (True), or not (False)
 /** While held, the responses accumulate; the read pass after the hold dispatches them all
 */
@@ -22172,6 +22194,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http_client_drain_limit", f_dbg_http_client_drain_limit,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "limit");
+    qns.addBuiltinVariant("dbg_http2_client_streaming_batch", f_dbg_http2_client_streaming_batch,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "batch");
+    qns.addBuiltinVariant("dbg_http2_client_wait_streaming_delivered", f_dbg_http2_client_wait_streaming_delivered,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_http_client_hold_outputs", f_dbg_http_client_hold_outputs,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");

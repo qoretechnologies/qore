@@ -706,6 +706,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 #ifdef DEBUG
     // the hold is read once per pass: the test can release it while the pass runs
     dbg_read_pass_exempt = QoreHttpClientDrainDebug::get().hold.load(std::memory_order_acquire);
+    // the operation's delivery of streaming data uses the same decision
+    static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->dbgSetOutputsHeld(dbg_read_pass_exempt);
 #endif
 
     ExceptionSink poll_xsink;
@@ -785,10 +787,11 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     }
 
 #ifdef DEBUG
-    // a test can hold the completed responses, which then accumulate in the operation (issue #5839)
+    // a test can hold the completed responses, which then accumulate in the operation, and the data of streaming
+    // responses, which accumulates in the session
     if (dbg_read_pass_exempt) {
-        QoreHttpClientDrainDebug::get().recordHeld(
-            static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->completedResponseCount());
+        SocketHttp2ClientMultiplexPollOperation* mop = static_cast<SocketHttp2ClientMultiplexPollOperation*>(op);
+        QoreHttpClientDrainDebug::get().recordHeld(mop->completedResponseCount() + mop->dbgStreamingDataCount());
         setStateUnlessClosed(H2State::WAIT_READ, "dbg-hold-outputs");
         if (!poll_info) {
             poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);

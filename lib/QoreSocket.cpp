@@ -20258,6 +20258,7 @@ QoreValue SocketSendStreamAndReadHeaderPollOperation::getOutput() const {
 }
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock) {
@@ -21843,7 +21844,15 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     int32_t streaming_id = 0;
                     int batch = 0;
                     static const int MAX_STREAMING_BATCH = 16;
-                    while (batch < MAX_STREAMING_BATCH
+                    const int max_batch = qore_http2_client_streaming_batch(MAX_STREAMING_BATCH);
+#ifdef DEBUG
+                    // a test can hold the data of streaming responses in the session
+                    // the read pass's decision, made once per pass (see dbgSetOutputsHeld())
+                    const bool held = dbg_outputs_held;
+#else
+                    const bool held = false;
+#endif
+                    while (!held && batch < max_batch
                             && h2_session->hasStreamingData(streaming_id)) {
                         // Take body data from the streaming stream
                         // delivered through the stream's action, whose Channel or Queue reports the consumption (issue #5820)
@@ -21871,6 +21880,12 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                         }
                         ++batch;
                     }
+#ifdef DEBUG
+                    // a test waits until a pass left no data in the session
+                    if (!held) {
+                        QoreHttpClientDrainDebug::get().recordStreamingLeft(h2_session->dbgStreamingDataCount());
+                    }
+#endif
                 }
 
                 // Surface peer END_STREAM for dispatched streaming streams (RFC 8441
