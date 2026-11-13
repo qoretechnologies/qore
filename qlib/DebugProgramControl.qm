@@ -595,6 +595,33 @@ public namespace DebugProgramControl {
             # the threads that end with the cancellation end without an error; this is set before any thread is resumed
             # or cancelled, as a thread that ended first would report its exception as unhandled
             setProgramTerminating(pgm);
+            # the threads are cancelled before any stopped thread is resumed: a thread that was resumed first could run
+            # to the end of the code of the program before its cancellation, which is then not made, as the thread has
+            # ended its code, so the program would end without the cancellation (qore#5960).  A thread that the
+            # cancellation ends and that stops at its end before the threads are resumed is not resumed below.  A
+            # thread that is stopped is cancelled too, so that its end is sticky: the debugger's callbacks run with the
+            # cancellation deferred (qore#5794), so its stop is not ended by the cancellation but by the command below,
+            # with THREAD-CANCELLED, and a try statement of the program that catches that exception, or the exception
+            # that the thread was stopped at, does not keep the thread running: the next cancellation point raises the
+            # cancellation again (qore#5797); the lock makes checking and cancelling a thread atomic against a thread
+            # that ends its code (see threadEnds())
+            {
+                AutoLock al(startedLock);
+                foreach int tid in (pgm.getThreadList()) {
+                    if (tid == gettid() || endedThreads{pgm_id}{tid}) {
+                        continue;
+                    }
+                    # the request is scoped to the program: a thread that called into it, such as a host thread,
+                    # does not raise it in its own code after the call returns, also when debugging ends before the
+                    # thread detaches and nothing in the debugger clears it (qore#5854)
+                    try {
+                        pgm.cancelThread(tid, TerminateReason);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # not expected: the current thread is skipped and the IDs are valid; a thread that has left the
+                        # program is not cancelled (False)
+                    }
+                }
+            }
             {
                 # no thread is registered as stopped while the program is marked, so each thread that is stopped is
                 # resumed here and no other one stops (see handleInterrupt()); a thread that stops at its end (exit or
@@ -611,29 +638,6 @@ public namespace DebugProgramControl {
                         # the command itself tells the thread to end: the mark of the program is gone if debugging
                         # ends before the thread continues (see handleInterrupt())
                         i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}, "terminate": True});
-                    }
-                }
-            }
-            # a thread that is stopped is cancelled too, so that its end is sticky: the debugger's callbacks run with
-            # the cancellation deferred (qore#5794), so its stop is not ended by the cancellation but by the command
-            # above, with THREAD-CANCELLED, and a try statement of the program that catches that exception, or the
-            # exception that the thread was stopped at, does not keep the thread running: the next cancellation point
-            # raises the cancellation again (qore#5797); the lock makes checking and cancelling a thread atomic against
-            # a thread that ends its code (see threadEnds())
-            {
-                AutoLock al(startedLock);
-                foreach int tid in (pgm.getThreadList()) {
-                    if (tid == gettid() || endedThreads{pgm_id}{tid}) {
-                        continue;
-                    }
-                    # the request is scoped to the program: a thread that called into it, such as a host thread,
-                    # does not raise it in its own code after the call returns, also when debugging ends before the
-                    # thread detaches and nothing in the debugger clears it (qore#5854)
-                    try {
-                        pgm.cancelThread(tid, TerminateReason);
-                    } catch (hash<ExceptionInfo> ex) {
-                        # not expected: the current thread is skipped and the IDs are valid; a thread that has left the
-                        # program is not cancelled (False)
                     }
                 }
             }
