@@ -166,6 +166,28 @@ auto sub case_foldl_single_element() {
     string s = f1(foldl $1 + $2, l) + ((l = NOTHING) ?? "") + mark("fold0");
 }
 
+# a fold over a pipeline (a fused fold) given to a call: the Phi that takes the fold's value from the loop (qore#5801)
+# owns the accumulator, which the fold takes over from the pipeline's elements (qore#5883)
+auto sub case_foldl_pipeline() {
+    *list<E> l = (new E("fp1"), new E("fp2"));
+    string s = f1(foldl $2, (map $1, l)) + ((l = NOTHING) ?? "") + mark("fp");
+}
+
+auto sub case_foldl_pipeline_iterator() {
+    *It it = new It((new E("fpi1"), new E("fpi2")));
+    string s = f1(foldl $2, (map $1, it)) + ((it = NOTHING) ?? "") + mark("fpi");
+}
+
+auto sub case_foldl_pipeline_concat() {
+    *list<E> l = (new E("fpc1"), new E("fpc2"));
+    string s = f1(foldl $1 + $2, (map ($1,), l)) + ((l = NOTHING) ?? "") + mark("fpc");
+}
+
+auto sub case_foldl_pipeline_single_element() {
+    *list<E> l = (new E("fps"),);
+    string s = f1(foldl $1 + $2, (map ($1,), l)) + ((l = NOTHING) ?? "") + mark("fps");
+}
+
 #! runs a case
 sub t(string name, code<auto()> c) {
     printf("%s:\n", name);
@@ -279,6 +301,10 @@ sub main() {
     t("select typed", \case_select_typed());
     t("foldl", \case_foldl());
     t("foldl single element", \case_foldl_single_element());
+    t("foldl pipeline", \case_foldl_pipeline());
+    t("foldl pipeline iterator", \case_foldl_pipeline_iterator());
+    t("foldl pipeline concat", \case_foldl_pipeline_concat());
+    t("foldl pipeline single element", \case_foldl_pipeline_single_element());
     t("map iterator", \case_map_iterator());
     t("map single value", \case_map_single());
     t("map exception", \case_map_exception());
