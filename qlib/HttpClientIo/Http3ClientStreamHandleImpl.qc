@@ -396,6 +396,21 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         send_trailers = trailers;
     }
 
+    #! Waits until the peer has acknowledged the data sent on the stream
+    /** @see HttpClientStreamHandle::waitSendFlushed()
+    */
+    int waitSendFlushed(timeout timeout_ms) {
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!stream_id) {
+                return 0;
+            }
+            sid = stream_id;
+        }
+        return h3conn.getSocket().waitForQuicClientStreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
+    }
+
     #! Sends data on a streaming connection
     /** The request can be sent whatever has been read of the response: a server can send its complete response
         before the request is complete and keep reading the request (RFC 9114 section 4.1), and a send reports a stop,

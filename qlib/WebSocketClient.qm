@@ -4205,6 +4205,14 @@ ws.setEventQueue();
         @since WebSocketClient 2.5
     */
     private releaseAsyncIo(hash<WscAsyncIoResources> res) {
+        # the data queued on an HTTP/2 or HTTP/3 stream (such as the client's close frame, or its answer to the
+        # server's, when it waited for flow-control credit) is sent before the stream is canceled and the connection
+        # closed, within the close timeout (issue #6001); not after a lost connection or a close handshake that timed
+        # out (1006), when the connection is closed at once (RFC 6455 section 7.1.7)
+        if (res.stream && !(res.op instanceof WebSocketClientHcioPollOp
+                && cast<WebSocketClientHcioPollOp>(res.op).closeEndedAbnormally())) {
+            flushStream(res.stream);
+        }
         if (res.owner) {
             try {
                 AsyncSocketIo::AsyncSocketIoController controller =
@@ -4223,6 +4231,31 @@ ws.setEventQueue();
                 res.mgr.closeAll();
             } catch () {
             }
+        }
+    }
+
+    #! Waits until the data queued on the stream of a connection taken from the client has been sent
+    /** Bounded by the close timeout: the I/O timeout, or 15 seconds (the default close timeout of the poll
+        operation); errors are logged
+
+        @param stream the stream of the connection
+
+        @since WebSocketClient 2.5
+    */
+    private flushStream(HttpClientIo::HttpClientStreamHandle stream) {
+        timeout close_timeout = timeout_ms > 0 ? timeout_ms : 15s;
+        try {
+            if (!stream.waitSendFlushed(0)) {
+                return;
+            }
+            logDebug("waiting for the queued data of the stream to be sent (at most %y)",
+                milliseconds(close_timeout));
+            if (stream.waitSendFlushed(close_timeout)) {
+                logWarn("the queued data of the stream was not sent within %y; closing the connection",
+                    milliseconds(close_timeout));
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            logDebug("cannot wait for the queued data of the stream to be sent: %s: %s", ex.err, ex.desc);
         }
     }
 
@@ -7792,6 +7825,13 @@ public class WebSocketClientHcioPollOp {
         #! True when the connection is closed
         bool closed = False;
 
+        #! True when the close ended at the close timeout or with the loss of the stream; protected by
+        #! @ref heartbeat_mutex
+        /** The connection is then closed at once, without waiting for the data queued on the stream (RFC 6455 section
+            7.1.7); see closeEndedAbnormally()
+        */
+        bool abnormal_close = False;
+
         #! True when WS close handshake is complete
         bool ws_close_sent = False;
 
@@ -8005,6 +8045,7 @@ public class WebSocketClientHcioPollOp {
         int close_c = WSCC_AbnormalClosure;
         string close_r = stream_error ?? "stream ended";
         bool error = exists stream_error;
+
         string cause;
         {
             AutoLock al(heartbeat_mutex);
@@ -8019,7 +8060,9 @@ public class WebSocketClientHcioPollOp {
                 cause = pending_close_cause;
             }
         }
-        markClosedAndEnqueue(close_c, close_r, cause.val() ? cause : NOTHING, error ? "error" : "closed");
+        # a stream that failed is closed at once (see closeEndedAbnormally())
+        markClosedAndEnqueue(close_c, close_r, cause.val() ? cause : NOTHING, error ? "error" : "closed",
+            exists stream_error);
     }
 
     #! Drains all typed frame hashes from msg_queue and dispatches them
@@ -8428,9 +8471,10 @@ public class WebSocketClientHcioPollOp {
             error = error_close;
         }
         if (error) {
-            return markClosedAndEnqueue(code, reason, cause.val() ? cause : NOTHING, "error");
+            return markClosedAndEnqueue(code, reason, cause.val() ? cause : NOTHING, "error", True);
         }
-        return markClosedAndEnqueue(WSCC_AbnormalClosure, "close handshake timed out", cause.val() ? cause : NOTHING);
+        return markClosedAndEnqueue(WSCC_AbnormalClosure, "close handshake timed out", cause.val() ? cause : NOTHING,
+            "closed", True);
     }
 
     #! Sends a ping frame (non-blocking)
@@ -8454,6 +8498,14 @@ public class WebSocketClientHcioPollOp {
     bool isClosed() {
         AutoLock al(heartbeat_mutex);
         return closed;
+    }
+
+    #! Returns True if the close ended at the close timeout or with the loss of the stream
+    /** The connection is then closed at once, without waiting for the data queued on the stream
+    */
+    bool closeEndedAbnormally() {
+        AutoLock al(heartbeat_mutex);
+        return abnormal_close;
     }
 
     int getCloseCode() {
@@ -8742,7 +8794,18 @@ public class WebSocketClientHcioPollOp {
         rescheduleHeartbeatTimer();
     }
 
-    private bool markClosedAndEnqueue(int code, string reason, *string cause, string event_type = "closed") {
+    #! Marks the connection closed with the given close code and reason, and enqueues its close event
+    /** @param code the close code
+        @param reason the close reason
+        @param cause the cause tag of the close, if any
+        @param event_type \c "closed" or \c "error"
+        @param abnormal @ref True if the close ended at the close timeout or with the loss of the stream (also implied
+        by the close code 1006); see closeEndedAbnormally()
+
+        @return @ref True if the connection was closed by this call
+    */
+    private bool markClosedAndEnqueue(int code, string reason, *string cause, string event_type = "closed",
+            bool abnormal = False) {
         {
             AutoLock al(heartbeat_mutex);
             if (closed) {
@@ -8754,11 +8817,18 @@ public class WebSocketClientHcioPollOp {
             if (cause) {
                 close_cause = cause;
             }
+            # set only by the call that closes the connection, so a close that ended normally is never reported as
+            # abnormal (see closeEndedAbnormally())
+            if (abnormal || code == WSCC_AbnormalClosure) {
+                abnormal_close = True;
+            }
             cancelHeartbeatTimerLocked();
             cancelCloseTimerLocked();
-            closed_counter.dec();
+            # logged with the lock held and before a thread waiting for the close (see waitClosed()) goes on, so that
+            # the close is logged before that thread continues; it goes on also when the logging fails
+            on_exit closed_counter.dec();
+            logDebug("the connection is closed: close code %d: %s", code, reason);
         }
-        logDebug("the connection is closed: close code %d: %s", code, reason);
 
         if (event_type == "error") {
             recv_channel.send({"type": "error", "error": {"code": code, "reason": reason}});
