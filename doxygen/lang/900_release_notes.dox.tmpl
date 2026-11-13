@@ -79,6 +79,49 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Functional-Domain Attribute Lists
+    <tt>[dom=</tt> after a parameter list starts a @ref function_domains "functional-domain attribute list", so an
+    index expression that assigns to a variable named \c dom (<tt>x[dom = y]</tt>) must be written
+    <tt>x[(dom = y)]</tt>; the process-wide registration and setter APIs of the @ref dataproviderintro "DataProvider"
+    module declare \c PROCESS, so a Program with @ref Qore::PO_NO_PROCESS_CONTROL cannot call them, and the
+    \c INVALID-FUNCTION-ACCESS and parse errors for code a Program may not use name the restricted functional domain.
+
+
+    @par Adding a Value in Front of a Typed List Keeps Its Type
+    The @ref plus_operator "+" operator gives a list of the type of a typed list when it adds a value in front of it,
+    as it does when it adds the value at the end (ex: \c list&lt;int&gt; for <tt>1 + l</tt> for a \c list&lt;int&gt;
+    \c l); it gave a \c list&lt;auto&gt;, so a value of another type could be assigned to an element of the result.
+
+    @par Child Class Methods Must Return a Type Compatible With the Parent Class Method
+    A child class method variant that overrides a parent class variant, or that a call typed against the parent class
+    can select, must return the parent class variant's type or a narrower one, or the class raises a
+    \c PARSE-TYPE-ERROR; see @ref override_return_types.
+
+    @par Builtin Methods That Subclasses Override Return Wider Types
+    @ref Qore::HTTPClient::get() "HTTPClient::get()" and @ref Qore::HTTPClient::post() "HTTPClient::post()" return
+    <tt>union&lt;*data, hash&lt;auto&gt;&gt;</tt>, @ref Qore::HTTPClient::getDefaultHeaders() "HTTPClient::getDefaultHeaders()"
+    <tt>hash&lt;auto&gt;</tt> and @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()" an or-nothing
+    hash, as subclasses return; code that assigns their results to narrower types must accept the wider ones.
+
+    @par Plain Function Bodies No Longer Inherit a Caller's Class Context
+    A plain function's body could be parse-initialized in the class context of the method that first called it, which
+    gave it access to that class's private and static members depending on the parse order; such code now raises a
+    parse error and must qualify its references (<tt>Class::member</tt>).
+
+    @par Dynamic Static Method Calls Respect Private Access
+    call_static_method(), call_static_method_args(), @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()"
+    and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
+    the class and its subclasses (\c METHOD-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR for a private variant), as documented.
+
+    @par No-Op Builtin Variants Are Not Called With Strict Arguments
+    With @ref Qore::PO_STRICT_ARGS or @ref Qore::PO_REQUIRE_TYPES (as with @ref modern "%modern"), @ref NOOP variants
+    are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and one with no value at run time, for
+    example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR instead of returning a constant.
+
+    @par Debugger Callbacks Run With the Cancellation Deferred
+    The notification methods of a @ref Qore::DebugProgram "DebugProgram" run with the cancellation of the thread
+    deferred, so a thread that is cancelled or interrupted while it is stopped in the debugger stays stopped until the
+    debugger resumes it (issue #5794).
 
     @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
     With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
@@ -100,6 +143,17 @@
     Each frame that get_thread_call_stack() and exception call stacks give is located at its call expression, with
     its columns in new \c start_column and \c end_column keys, in every execution mode, so a call in a statement of
     more than one line gives the call's lines instead of the statement's; see @ref Qore::CallStackInfo "CallStackInfo".
+
+    @par The Implicit Index Is Unset Outside the Code of Its Operator
+    An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
+    map, select or other iterating operator or of a foreach statement, in a fold expression (also one in the code of
+    such an operator or statement), or at the top level gives @ref nothing instead of an enclosing index, and a typed
+    use of it there (<tt>int i = $#;</tt>, <tt>"s" + $#</tt>) is a parse error.
+
+    @par An Operator over a Single Value Gives It the Implicit Index 0
+    A @ref map "map", @ref select "select" or @ref hmap "hash map" over a single value (not a list or an iterator) gives
+    it the @ref implicit_index "implicit index" (<tt>$#</tt>) \c 0, as for a list of one element, instead of leaving
+    the enclosing index.
 
     @par Accepted Sockets Do Not Resolve the Peer's Hostname by Default
     Socket::accept() and Socket::acceptSSL() no longer look up the peer's hostname, so the accepted Socket's
@@ -142,6 +196,11 @@
     imported with @ref Qore::Program::importFunction() "Program::importFunction()", runs in the %Program that defined
     it with that %Program's names and options, governed by the caller's @ref Qore::SandboxManager "SandboxManager"
     and, for module code, by a sandboxed caller's restrictions (see @ref user_module_runtime_context).
+
+    @par The Keys of an Lvalue Path Are Evaluated From the Root Out
+    The AST interpreter evaluated the keys and indices of an lvalue path of two or more steps from the last step to
+    the root (ex: <tt>h.(k1()).(k2())[i()] = v</tt> evaluated \c i(), \c k2(), \c k1()); every execution mode now
+    evaluates them from the root out, also for a reference (see @ref lvalue_evaluation_order).
 
     @par A List of Selectors Removes Nothing From a Value That Is Not a List, a String or a Binary
     @ref remove "remove" and @ref delete "delete" with a list of selectors in square brackets on a hash, a number, an
@@ -190,10 +249,11 @@
     A child process created with @ref Qore::fork() "fork()" gives up the database connections that it inherits and
     opens its own; continuing a transaction of the parent raises \c DATASOURCE-FORK-ERROR.  See @ref datasource_fork.
 
-    @par Binary Modules Implement Module API 2.0
-    Every external binary module must be rebuilt for module API 2.0, which registers its metadata with a
-    \c {name}_qore_module_desc() function and reports initialization errors as exceptions; see "Developing Qore
-    Modules" in the C++ API documentation.
+    @par Binary Modules Implement Module API 2.1
+    Every external binary module must be rebuilt for module API 2.1, which registers its metadata with a
+    \c {name}_qore_module_desc() function, reports initialization errors as exceptions and covers all public ABI
+    changes of %Qore 3.0; a module built for another module API is not found by its feature name, and the
+    \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
 
     @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
     @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" requires an \c owner
@@ -314,6 +374,12 @@
     or loaded at runtime are no longer exported to the importing @ref Qore::Program "Program"; a program using such
     a constant must require the module declaring it, unless a module it requires reexports it; see
     @ref user_module_exports.
+
+    @par HttpServer::stop() Lets the Requests in Progress Finish
+    @ref HttpServer::HttpServer::stop() "HttpServer::stop()" and
+    @ref HttpServer::HttpServer::stopNoWait() "stopNoWait()" now drain the connections first, waiting at most the
+    new \c drain_timeout option, and @ref HttpServer::HttpServer::stopImmediate() "stopImmediate()" stops at once as
+    \c stop() did before.
 
     @par HttpServer Labels Responses by Their Data and With Registered Charset Names
     @ref httpserverintro "HttpServer" sends a binary response body without a \c Content-Type as
@@ -441,8 +507,9 @@
 
     @par Compatibility Parse Options Refused Under \%modern
     Parse directives and options that change the meaning of code, such as @ref no-negative-offsets "%no-negative-offsets" and
-    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect; legacy code that needs them is
-    parsed without @ref modern "%modern" (see @ref modern_option_consistency).
+    the \c %%broken-* options, cannot be used while @ref modern "%modern" is in effect, nor can
+    @ref modern "%modern" be set while one of them is in effect; legacy code that needs them is parsed without
+    @ref modern "%modern" (see @ref modern_option_consistency).
 
     @par summarize Statement Rejected Under \%modern
     @ref modern "%modern" implies @ref no-summarize "%no-summarize", so the \c summarize statement fails to parse in
@@ -483,6 +550,10 @@
     - a value returned by builtin code together with an exception is released, so API callers receive no value
       with an exception (see \c q_func_t)
     - \c QoreFile::write() returns \c int64
+    - \c QoreProgram::deref() without an \c ExceptionSink releases the Program's own dependency reference with the last
+      reference, and the Program is destroyed once nothing depends on it, instead of at once, so a Program must first
+      be cleared with \c QoreProgram::waitForTerminationAndDeref() or \c QoreProgram::deref(ExceptionSink*) (see
+      \c QoreProgram::deref())
     @endparblock
 
     @par qget Command-Line Changes
@@ -561,6 +632,17 @@
     another @ref Qore::Program "Program" reads or writes its values, calls its code, or creates objects in it; see
     @ref reflection_caller_privilege (<a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>).
 
+    @par Reflection Respects the Export Boundary of User Modules
+    Sandboxed and restricted code no longer finds, calls, reads or writes through reflection what a user module does
+    not export, nor constructs or uses the static members of a class it does not export; see
+    @ref reflection_module_exports (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
+    @par Call References to Builtin Methods Run in the Program That Made Them
+    A call reference to a builtin method of an object (<tt>\\o.readLock()</tt>) runs with the parse options of the
+    %Program that made it, wherever it is called, so restricted code's reference is refused like its direct call, also
+    for an object that module code created, and it raises \c PROGRAM-ERROR once that %Program is deleted; see
+    @ref call_reference_program (<a href="https://github.com/qoretechnologies/qore/issues/5692">issue 5692</a>).
+
     @par CsvUtil Writes and Reads RFC 4180 CSV Data by Default
     The @ref csvutilintro "CsvUtil" writers escape quotes by doubling them and the readers read a backslash as an
     ordinary character; set the \c quote_escape option to a backslash to read or write files in the earlier format;
@@ -572,12 +654,39 @@
     limit is pending, and sandboxed code never runs with cancellation deferred; see @ref cancel_destructors and
     @ref cancel_security (<a href="https://github.com/qoretechnologies/qore/issues/5634">issue 5634</a>).
 
+    @par Slow Server-Sent Events Clients Are Dropped
+    Every SSE stream bounds the data queued for its client (the \c sse_max_buffer_size listener and
+    \c ServerSentEventHandler options, default 1 MiB): queueing an event never waits for the client, a client whose
+    data would exceed the bound is dropped, and a send to that stream alone raises \c SSE-CLIENT-OVERFLOW, while a
+    send to several streams raises nothing for one of them; see @ref httpserverasyncio_sse_buffer
+    (<a href="https://github.com/qoretechnologies/qore/issues/5792">issue 5792</a>).
+
+    @par The Signal Handling Thread Is Woken With SIGRTMIN+1 on Linux
+    On Linux, the signal that wakes the signal handling thread is the real-time signal \c SIGRTMIN+1 instead of
+    @ref Qore::SIGSYS "SIGSYS", so \c SIGRTMIN+1 is reserved by the library and @ref Qore::SIGSYS "SIGSYS" can have
+    a %Qore-language handler; valgrind no longer kills or hangs the process at the wake-up (see
+    @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Debugger Exception IDs
+    The exception hash of @ref Qore::DebugProgram::onException() "DebugProgram::onException()" has the
+    \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo", the same in each event of an exception, so that
+    @ref dc_v0_1_3 "DebugProgramControl" stops once per exception and a step after an exception stop goes to its
+    handler (<a href="https://github.com/qoretechnologies/qore/issues/5906">issue 5906</a>).
+
+    @par Functional-Domain Declarations on Functions and Methods
+    Functions and methods written in %Qore declare the @ref function_domains "functional domains" they provide with an
+    attribute list (<tt>sub f() [dom=PROCESS_CONTROL]</tt>), which a restricted Program cannot reference or call, and a
+    user module declares the domains its own code uses with the \c domains key of its
+    @ref user_module_declarations "module declaration"
+    (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>).
+
     @par Program Thread Coordination
     @ref Qore::Program::waitForThreads() "Program::waitForThreads()" and
     @ref Qore::Program::waitForThread() "waitForThread()" provide cancellable, condition-driven waits for Program
     activity. @ref Qore::Program::cancelThread() "cancelThread()" and
-    @ref Qore::Program::cancelThreads() "cancelThreads()" request cooperative cancellation scoped to that Program.
+    @ref Qore::Program::cancelThreads() "cancelThreads()" request cooperative cancellation scoped to that Program,
+    as @ref Qore::ProgramControl::cancelThread() "ProgramControl::cancelThread()" does for a debugger.
     The all-thread request includes starting threads and descendants until the Program becomes idle. These APIs
     allow an embedding UI to keep responding while waiting for the Program to become safe to parse or reset;
     they do not enable concurrent parsing or forcibly kill native threads.
@@ -698,6 +807,12 @@
     \c q_get_module_cpp_api(), which raises a %Qore exception on a version mismatch, so an optional C++ dependency
     between modules is possible; see "Sharing a C++ API Between Modules" in the C++ API documentation.
 
+    @par Module State Released Before the Library Shuts Down
+    A binary module registers its static namespace with \c QoreModuleInfo::ns (\c QORE_HAS_MODULE_NS_PURGE), and the
+    library releases it when it deletes the module, not in a C++ static destructor.  All bundled modules do, so a
+    process that exits during a background JIT compile no longer leaks their values; see "Releasing Module State at
+    Shutdown" in the module development guide of the C++ API documentation.
+
     @par Cross-Module Links in External Module Documentation
     The %Qore SDK installs reference indexes of the language and bundled module documentation, so the documentation
     of an external module can link to %Qore types and to the modules named in \c QORE_DOXYGEN_MODULES; see
@@ -779,6 +894,9 @@
       @ref Qore::SQL::make_datasource_string() "make_datasource_string()",
       @ref Qore::get_value_byte_size() "get_value_byte_size()", @ref <binary>::toHexArray() "<binary>::toHexArray()",
       and @ref Qore::ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()"
+    - @ref Qore::get_qore_library_info() "get_qore_library_info()" also reports the compiler version and target, the
+      build type and its compiler flags, the hardening options the compiler applied, whether link-time optimization
+      was used and whether the library was compiled as a single compilation unit
     @endparblock
 
     @par Generic Builtin Classes and Result Records
@@ -996,6 +1114,8 @@
       - see @ref connectionprovider_3_1 for all changes
 
     - @ref dataproviderintro "DataProvider" module
+      - the process-wide registration and setter APIs declare the \c PROCESS @ref function_domains "functional domain"
+        (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
       - added DPQL, the Data Provider Query Language (see @ref dataprovider_dpql)
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool
@@ -1178,6 +1298,8 @@
       - see @ref serversenteventclient_v1_1 for all changes
 
     - @ref serversenteventhandlerintro "ServerSentEventHandler" module
+      - every SSE stream bounds the data held for its client, and a slow client is dropped instead of making the
+        publisher wait or the server's memory grow (see @ref httpserverasyncio_sse_buffer)
       - see @ref serversenteventhandler_v1_2_0 for all changes
 
     - @ref servicenowrestdataproviderintro "ServiceNowRestDataProvider" module
@@ -1200,6 +1322,9 @@
       - @ref SqlUtil::RestartableTransaction "RestartableTransaction" restarts Oracle transactions when sessions are
         killed (ex: during RAC rolling patching) or the connection is lost
       - see @ref sqlutilv3_11_0 for all changes
+
+    - @ref tablemapperintro "TableMapper" module
+      - see @ref tablemapperv1_3_1 for all changes
 
     - @ref utilintro "Util" module
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
@@ -1234,6 +1359,9 @@
       - @ref WebUtil::FileHandler "FileHandler" sends caching headers, answers conditional and range requests, and
         serves pre-compressed files
       - see @ref webutil_v1_8_1 for all changes
+
+    - @ref zeyosrestclientintro "ZeyosRestClient" module
+      - see @ref Zeyosrestclientv1_2 for all changes
 
     @subsection qore_3_0_0_new_builtin_modules New Builtin Modules
 
@@ -1561,12 +1689,108 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a block whose @ref on_exit "on_exit" or @ref on_success "on_success" handler raised a
+      @ref thread_exit "thread_exit" ran its @ref on_error "on_error" handlers with no exception, which crashed the
+      process
+    - a @ref rethrow "rethrow" in an @ref on_error "on_error" handler discarded a pending
+      @ref thread_exit "thread_exit" that another handler had executed, so the thread continued
+      (<a href="https://github.com/qoretechnologies/qore/issues/5904">issue 5904</a>)
+    - a @ref closure "closure" in a member initializer or in the default value of a method's parameter ran in the class
+      context of the caller or of the object's class instead of the class that declares it, so it read a subclass's
+      \c private:internal member with the same name or raised \c PRIVATE-MEMBER for a member read at run time
+    - in the IR, JIT and AOT @ref execution_modes "execution modes", a method call or a call through a method call
+      reference evaluated its arguments before it raised \c OBJECT-ALREADY-DELETED for an object that had been
+      deleted, or \c PSEUDO-METHOD-DOES-NOT-EXIST for a value without the method; as in the AST interpreter, no
+      argument is evaluated then
+    - a @ref closure "closure" whose parameter's default value used a local variable of the code that created it
+      (for example in a closure as the default value) crashed when it was called after that variable's scope was left;
+      the closure now captures the variables that its default values use
+    - the @ref logical_less_than_operator "<", @ref logical_less_than_or_equals_operator "<=",
+      @ref logical_greater_than_operator ">" and @ref logical_greater_than_or_equals_operator ">=" operators compared a
+      \c float with an or-nothing \c number (\c *number, \c *softnumber) as floats, losing the precision of the number
+      (issue #5875)
+    - the @ref logical_equality_operator "==" and @ref logical_inequality_operator "!=" operators compared an \c int or a
+      \c bool with an or-nothing \c float or \c int (ex: \c *float) as an \c int or \c bool (ex: \c 2 \c == \c 2.5
+      was @ref True; issue #5875)
+    - a weak assignment from a variable that holds a hash or a list shared with another owner (a literal of the
+      program, another variable) now gives the variable a copy of its own first, so that later changes made through
+      the variable are seen through the weak reference in every execution mode; previous releases shared the value,
+      and the weak reference then kept the old one; see the @ref weak_assignment_operator "weak assignment operator"
+
+    - a \c copy() call run by the @ref background "background operator" (ex: <tt>background obj.copy()</tt>, or
+      <tt>background copy()</tt> in a method) crashed the process; it now copies the object in every execution mode
+      and in programs compiled with \c qcc (issue #5917)
+    - a qualified call of a method of the object (<tt>Base::method()</tt>) raised \c BACKGROUND-ERROR in the
+      background in programs compiled with \c qcc, and \c METHOD-DOES-NOT-EXIST for an abstract method; it calls the
+      method of the class that it names, or that the object's class implements for an abstract method; programs
+      compiled with \c qcc before must be recompiled (issue #5933)
+    - a background call of a method of the object that compiled code dispatches by name (a call that the AOT runtime
+      could not resolve when it loaded the code) aborted a debug build when the thread was started, and a qualified
+      such call crashed when it was made; the thread now holds the object unless the name resolves only to a static
+      method, and a qualified call calls the method of the class that it names (issue #5917)
+    - the default values of a @ref closure "closure" created in a method did not see the closure's object in qcc code
+      or in a closure that they created; they are now in the object's context, as the closure's code is (see
+      @ref closure_default_values "closure default values")
+    - a @ref closure "closure" in the default value of a static method's parameter ran in the class context of the
+      caller, so it could not access the private members and methods of the class that declares it, as a closure in the
+      static method's code can
+    - a @ref closure "closure" in a namespace constant whose value was first evaluated for a class constant or a static
+      member initializer, or in a member initializer of a hashdecl first used in a class's code, ran in the class
+      context of that class, so it could access the class's private members
+    - a sandboxed Program could not load a compiled (qcc) library module whose source has a
+      \c %%module-cmd directive (\c MODULE-LOAD-ERROR: "AOT module-command replay error"), although it
+      could load the module's source: the directive recorded in the compiled module was replayed in the module's
+      Program as a command from the sandboxed loader to another Program; it now runs in the module's Program, with
+      the sandbox that the module's Program gets from the loader, as when its source is parsed there, and sandboxed
+      code still cannot issue a module command to another Program with
+      @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()" (issue #5905)
+    - a compiled (qcc) module that sandboxed code loaded from outside the module path (by path, for example) ran
+      without the sandbox of that code, both its own code and the \c %%module-cmd directives replayed in its
+      Program, whereas the source module is governed by that sandbox; the compiled module's Program now gets the
+      sandbox that its source module's Program gets (issue #5913)
+    - an object collected with a reference cycle could be freed while it was still in use, which could crash the
+      process, when another thread released the last reference to it through a weak reference (or C++ code through
+      an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
+    - \c $2 and the following implicit arguments had the type of the element in the code of every operator, so
+      <tt>map ($2,), l</tt> over a typed list raised \c RUNTIME-TYPE-ERROR; only foldl and foldr, whose \c $2 is the
+      next element, now give it that type
+    - a hash or list whose value type is \c date&lt;absolute&gt; or \c date&lt;relative&gt; took a container of
+      \c date values without checking them and then had the value type \c date; it now checks each value and has
+      its declared type (see @ref date_literal_subtypes)
+    - a @ref call_reference "call reference" to a method of a builtin object (<tt>\\o.write()</tt>) ran with the
+      parse options of the object's @ref Qore::Program "Program", and one to an inherited method with those of the
+      Program calling it, so restricted code could use a privileged Program's object past the checks that a direct
+      call makes; it now runs as a direct call in the Program that created the reference
+    - a call through a fixed function variant (ex: <tt>FunctionVariant::call()</tt>) with arguments that only another
+      variant accepts called that variant without its arguments
+    - @ref Qore::set_signal_handler() "set_signal_handler()" and @ref Qore::remove_signal_handler()
+      "remove_signal_handler()" accepted a signal number one past the end of the library's signal table, which
+      corrupted memory, and a number that the platform has no signal for; both are refused now
+      (<a href="https://github.com/qoretechnologies/qore/issues/5829">issue 5829</a>)
+    - a @ref foreach "foreach" loop over a slice of a list read from a variable (ex:
+      <tt>foreach auto v in (l[1..2])</tt>) read freed memory when its body removed or assigned the variable; the loop
+      now keeps the list until it ends (issue #5770)
+    - @ref Qore::Program::getCallReference() "Program::getCallReference()" resolved a name as a method of the
+      @ref Qore::Program "Program" object first, so a function of the Program with the name of a method of the class
+      (ex: \c run()) could not be referenced; a class path naming a non-static method of the Program class no longer
+      returns a reference bound to the Program object (issue #5863)
+    - @ref WebSocketUtil::ws_read_message() "ws_read_message()" read a 64-bit WebSocket frame length with its most
+      significant bit set as a negative length, and then read the socket until the peer closed it, buffering without
+      limit; such a frame is now an error (issue #5878)
+    - the parse result types of the @ref plus_operator "+", @ref minus_operator "-", @ref multiplication_operator "*"
+      and @ref division_operator "/" operators did not allow every value the operator gives at runtime (ex: \c float
+      for <tt>number * float</tt>), so a typed container built from the result raised \c RUNTIME-TYPE-ERROR, and the
+      AST interpreter gave a \c float instead of a \c number for \c / of a \c float and a \c *number (issue #5663)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)
     - @ref Qore::reload_module() "reload_module()" of a module that other modules require corrupted the module
       dependency records when the reload failed or when it succeeded, which stopped a debug build with an assertion
       at exit; the records of the module that the reload replaces are now kept until the module is deleted
+    - a debug build of \c qcc or <tt>qore --compile-module</tt> stopped with an assertion at exit after a directory
+      module that loaded another module failed to parse; a failed module load now always releases its dependency
+      records, and an AOT module compiled by an older \c qcc no longer keeps the modules that its initialization
+      loads (<a href="https://github.com/qoretechnologies/qore/issues/5953">issue 5953</a>)
     - in native AOT code (qcc), a closure in an @ref on_error "on_error", @ref on_exit "on_exit" or
       @ref on_success "on_success" handler that captured a variable the handler declares (a catch or foreach variable)
       and a local of the function made a later read of that local raise LVALUE-ERROR, or read NOTHING; the output
@@ -1810,6 +2034,9 @@
       yet, of a class that declares no members, crashed the process
     - resolving a long chain of references, as made by a recursion that passes on a reference, could overflow the
       stack and crash the process instead of raising \c STACK-LIMIT-EXCEEDED, seen in JIT and AOT code on Linux
+    - each level of a recursion of interpreted function, method and closure calls uses less stack (on Alpine Linux,
+      a third less with the IR interpreter), so that a deeper recursion fits in a thread's stack before
+      \c STACK-LIMIT-EXCEEDED is raised, as on Alpine Linux, whose threads have 8 MB stacks
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date
@@ -2289,6 +2516,10 @@
     - a function first referenced in a method was parse-initialized in the method's class, namespace and local
       variables, so its body and default argument values could call the class's private methods or read the
       method's locals, also when called from elsewhere; see @ref private_methods
+    - the frame of the top-level code of a Program, including the main Program, was not reachable by
+      @ref Qore::get_local_vars() "get_local_vars()" and @ref Qore::set_local_var_value() "set_local_var_value()"
+      from the calls it makes or from a debugger's callbacks in the same thread
+      (<a href="https://github.com/qoretechnologies/qore/issues/5871">issue 5871</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

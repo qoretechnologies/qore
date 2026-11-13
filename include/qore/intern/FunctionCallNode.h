@@ -115,6 +115,13 @@ public:
 
     DLLLOCAL const QoreListNode* getArgs() const { return args; }
 
+    //! Transfers ownership of evaluated arguments to the caller for exception-aware cleanup
+    DLLLOCAL QoreListNode* takeArgs() {
+        QoreListNode* rv = args;
+        args = nullptr;
+        return rv;
+    }
+
     //! the names of the arguments in source order of a named call resolved at run time by parameter name, if any
     DLLLOCAL const name_vec_t* getRuntimeArgNames() const { return runtime_arg_names; }
 
@@ -458,12 +465,6 @@ public:
         return rv;
     }
 
-    DLLLOCAL QoreListNode* takeArgs() {
-        QoreListNode* rv = args;
-        args = nullptr;
-        return rv;
-    }
-
     DLLLOCAL AbstractQoreNode* makeReferenceNodeAndDeref() {
         if (args) {
             parse_error(*loc, "argument given to call reference");
@@ -499,7 +500,7 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     //! evaluates a named call whose variant is resolved at run time by parameter name
-    DLLLOCAL QoreValue evalNamed(QoreFunction* func, QoreProgram* call_pgm, RuntimeConfig& rc, bool defer_domain_po,
+    DLLLOCAL QoreValue evalNamed(QoreFunction* func, QoreProgram* call_pgm, RuntimeConfig& rc, unsigned call_flags,
             ExceptionSink* xsink) const;
 
     //! the Program to execute this call in (see evalImpl())
@@ -560,6 +561,15 @@ public:
     DLLLOCAL virtual AbstractQoreNode* makeReferenceNodeAndDerefImpl();
 };
 
+//! Raises the exception for a call of the method @a name on the object @a o that has been deleted, as the AST
+//! interpreter raises it (issue #5784)
+/** Through the method resolved at parse time (@a method of the class @a qc, with its variant if known) if @a o is an
+    object of either class, or as the dynamic dispatch by name does otherwise; every execution mode uses it, so that
+    they give the same message.
+*/
+DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
+        const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant);
+
 class AbstractMethodCallNode : public AbstractFunctionCallNode {
 protected:
     // if a method pointer can be resolved at parse time, then the class
@@ -589,6 +599,11 @@ public:
     DLLLOCAL QoreValue exec(QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
             const;
 
+    //! Raises the exception that exec() raises for an object that has been deleted before it evaluates the
+    //! arguments (issue #5784)
+    /** @return -1 if the exception was raised, 0 if the object is valid
+    */
+    DLLLOCAL int checkObject(QoreObject* o, const char* cstr, ExceptionSink* xsink) const;
     //! evaluates a named call of a method of an object resolved at run time by parameter name (qore#5990)
     /** the names are bound to the parameters of the variants of \a bind_m, and the method is then called with the
         arguments at those positions as a call with positional arguments is
@@ -742,11 +757,12 @@ public:
             : AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, parse_get_class()), ns(n), is_copy(false) {
     }
 
+    //! creates a call of a resolved method, as the AOT runtime does for the calls of compiled code
+    /** issue #5933: the call of an abstract method is dispatched by name on the class of the object, as when it is
+        parsed (see parseInitImpl())
+    */
     DLLLOCAL SelfFunctionCallNode(const QoreProgramLocation* loc, char* n, QoreParseListNode* n_args,
-            const QoreMethod* m, const QoreClass* n_qc, const qore_class_private* class_ctx) :
-        AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc, m), ns(n),
-        class_ctx(class_ctx), is_copy(false) {
-    }
+            const QoreMethod* m, const QoreClass* n_qc, const qore_class_private* class_ctx);
 
     DLLLOCAL SelfFunctionCallNode(const QoreProgramLocation* loc, char* n, QoreParseListNode* n_args,
             const QoreClass* n_qc, bool n_is_copy = false)
@@ -806,6 +822,21 @@ public:
         return is_abstract;
     }
 
+    //! returns the name of the method without a class qualifier
+    DLLLOCAL const char* getMethodName() const {
+        return ns.getIdentifier();
+    }
+
+    //! returns true if the call of a normal (non-static) method needs the object of the starting code in a
+    //! background thread
+    /** @param obj the object of the starting code, if any
+
+        A call without a method, which is an implicit copy() call or a call that the AOT runtime dispatches by name
+        (issue #5917), is a call of a normal method unless its name resolves only to a static method: of the class
+        that a qualified call names, or of the class of \a obj (or the class of the call if there is no object)
+    */
+    DLLLOCAL bool backgroundCallIsStatic(const QoreObject* obj) const;
+
 protected:
     NamedScope ns;
     const qore_class_private* class_ctx = nullptr;
@@ -813,6 +844,10 @@ protected:
     bool is_abstract = false;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+
+    //! evaluates a qualified call without a method (one that the AOT runtime dispatches by name)
+    DLLLOCAL QoreValue evalUnresolvedQualified(QoreObject* self, const qore_class_private* ctx, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
 };
 
 //! Used in arguments background expressions to ensure that the object context is set for the call

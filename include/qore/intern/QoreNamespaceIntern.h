@@ -196,6 +196,12 @@ public:
         imported = false, // was this namespace imported?
         parseCommitRuntimeInitDone = false; // has parseCommitRuntimeInit() been called?
 
+    //! set for the namespace that a binary module registered with QoreModuleInfo::ns
+    /** Its content is released when the module is deleted (see QoreNamespace::purge()), never by a C++ static
+        destructor; debug builds assert that it is empty if it is destroyed after the types were freed
+    */
+    bool module_owned = false;
+
     // pointer to parent namespace (nullptr if this is the root namespace or an unattached namespace)
     const qore_ns_private* parent = nullptr;
     q_ns_class_handler_t class_handler = nullptr;
@@ -389,6 +395,15 @@ public:
             nsl.push_front(w);
             w = w->parent;
         }
+    }
+
+    //! releases all content of the namespace, leaving it empty; see QoreNamespace::purge()
+    DLLLOCAL void purgeAll(ExceptionSink* xsink);
+
+    //! returns true if the namespace holds nothing, including key-value properties
+    DLLLOCAL bool isReleased() const {
+        AutoLocker al(kvlck);
+        return isEmpty() && kvmap.empty();
     }
 
     // destroys the object and frees all associated memory
@@ -2772,6 +2787,9 @@ public:
             ExceptionSink* xsink) const;
 
     DLLLOCAL func_vec_t runtimeFindAllFunctionsRegex(const QoreString& pattern, int re_opts,
+            ExceptionSink* xsink) const;
+
+    DLLLOCAL func_ns_vec_t runtimeFindAllFunctionsRegexNs(const QoreString& pattern, int re_opts,
             ExceptionSink* xsink) const;
 
     DLLLOCAL ns_vec_t runtimeFindAllNamespacesRegex(const QoreString& pattern, int re_opts,

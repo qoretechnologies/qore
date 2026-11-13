@@ -346,6 +346,9 @@ public:
         bool read_state = false;
         //! For DT_CONTINUE_POLL: the ID of the operation in the I/O thread's cache; see OpCache
         uint64_t op_id = 0;
+        //! For DT_ABORT: the task in native_task delivers the result after abort() (see
+        //! AsyncIoControllerPriv::AbortThenDeliverTask) and calls onComplete() when it is run
+        bool after_abort_on_complete = false;
     };
 
     //! Creates the dispatcher
@@ -360,9 +363,15 @@ public:
     //! Dispatch an abort() call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
         @param owner optional owner identifier for per-owner flush tracking
+        @param sandbox_ctx the sandbox of the operation's submitter
+        @param after_abort a task that delivers the operation's result after abort() returns (ownership transferred),
+        or nullptr: the worker runs it after abort() unless the operation's Program or owner has begun to shut down
+        in the meantime, and discards it (AsyncIoNativeTask::discard()) otherwise, and also if the item is not run
+        @param after_abort_on_complete true if @a after_abort calls the operation's onComplete() when it is run
     */
     DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        AsyncIoNativeTask* after_abort = nullptr, bool after_abort_on_complete = false);
 
     //! Dispatch an onComplete(result) call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -867,6 +876,14 @@ public:
         @return true if the worker threads are idle, false if they were not when \a timeout_ms elapsed
     */
     DLLLOCAL bool dbgWaitWorkersIdle(int timeout_ms, int64_t& on_complete_dispatched);
+
+    //! Debug-only: the number of onComplete() calls dispatched so far; 0 if no dispatcher has been created
+    DLLLOCAL int64_t dbgOnCompleteDispatched();
+
+    //! Debug-only: sets or clears the shutdown mark of an owner, as flushCallbacksByOwner() does around its wait
+    /** For tests of the work of an owner that is shutting down, which cannot otherwise hold the mark at a given point
+    */
+    DLLLOCAL void dbgSetOwnerShuttingDown(const std::string& owner, bool mark);
 #endif
 
     //! Wakes a socket operation by QoreObject identity
@@ -1400,6 +1417,66 @@ private:
         AsyncIoSandboxContext sandbox_ctx; //!< The submitter's sandbox context, for onComplete()
         //! The references taken by the synchronous exec() call that waits for the result, or empty
         std::shared_ptr<AsyncIoSyncRelease> sync_release;
+    };
+
+    //! Delivers the result of an operation whose abort() runs on a callback worker, after abort() has returned
+    /** A canceled or timed-out operation is aborted before its result is delivered, so that the receiver of the
+        result (its onComplete() or the waiter on its result queue) sees the operation in its aborted state.  When
+        abort() runs on a callback worker (an abort() implemented in Qore, or one that needsWorkerDispatch()), the
+        result is delivered by this task on the same worker once abort() has returned: delivered separately, the
+        result could be handled on another worker before, or while, abort() runs.
+
+        Run on the worker, the task pushes the result to the operation's result queue and calls its onComplete()
+        itself, in the work item of abort() (under the same Program, sandbox and owner, after the cancellation and the
+        thread-local data of abort() have been cleared, as between two items), so that a stop of the dispatcher, which
+        waits for the item, also waits for onComplete().  A task that is not run pushes the result to the result
+        queue only, as onComplete() would be discarded as a work item of its own: when the item itself is discarded
+        (the dispatcher is stopping, or the operation's Program or owner is shutting down; on the I/O thread, the
+        task is discarded there, so the result does not wait for a worker), and when the operation's Program or
+        owner has begun to shut down while abort() ran.
+
+        As the result is delivered only once abort() has returned, an abort() run on a worker must not wait for the
+        receiver of the result (see AbstractPollOperation::abort()).
+    */
+    class AbortThenDeliverTask : public AsyncIoNativeTask {
+    public:
+        //! Takes over the references of @a dd
+        /** @param ctrl the controller, not referenced: the dispatcher that runs or discards the task is stopped,
+            and so the task is run or discarded, before the controller is deleted
+            @param dd the delivery
+        */
+        DLLLOCAL AbortThenDeliverTask(AsyncIoControllerPriv* ctrl, DeferredDelivery&& dd);
+
+        DLLLOCAL ~AbortThenDeliverTask() override;
+
+        DLLLOCAL void run(ExceptionSink* xsink) override {
+            deliver(true, xsink);
+        }
+
+        DLLLOCAL void discard(ExceptionSink* xsink) override {
+            deliver(false, xsink);
+        }
+
+        DLLLOCAL QoreProgram* getProgram() const override {
+            return dd.spop_obj ? dd.spop_obj->getProgram() : nullptr;
+        }
+
+    private:
+        AsyncIoControllerPriv* ctrl;
+        DeferredDelivery dd;
+        bool delivered = false;
+
+        //! Delivers the result once, and calls onComplete() if @a call_on_complete is true
+        DLLLOCAL void deliver(bool call_on_complete, ExceptionSink* xsink);
+    };
+
+    //! An abort() dispatched to a callback worker with the delivery of the result, after the cache is updated
+    struct DeferredAbort {
+        QoreObject* spop_obj;               //!< Referenced
+        std::string owner;                  //!< Owner identifier for per-owner flush tracking
+        AsyncIoSandboxContext sandbox_ctx;  //!< The submitter's sandbox context
+        AsyncIoNativeTask* after_abort;     //!< Owned, or nullptr
+        bool after_abort_on_complete;       //!< True if after_abort calls onComplete() when it is run
     };
 
     //! Timer info stored under lock
@@ -2015,6 +2092,38 @@ public:
     DLLLOCAL static int64_t dbgDispatchHeldOffIoThreadReleases(size_t count, int64_t timeout_ms,
         ExceptionSink* xsink);
 
+    //! Debug-only: the points after which a delivery can pause; see dbgPauseAfterDelivery()
+    enum DbgPausePoint {
+        //! an I/O thread pushes an operation's result to its result Queue, or dispatches the callback of a fired
+        //! timer (see deliverResult())
+        DBG_PAUSE_DELIVERY,
+        //! a callback worker sends the result of a continuePoll() step to the I/O thread
+        DBG_PAUSE_STEP_RESULT,
+    };
+
+    //! Debug-only: makes the next delivery at @p point wait after the delivery until this is called with
+    //! @p pause = false
+    /** Called by the dbg_async_io_pause_after_delivery() and dbg_async_io_pause_after_step_result() test hooks, so
+        that a test can check what a thread that receives an operation's result, or sees a timer callback's work
+        done, observes before the thread that delivered it does anything after the delivery.  The pause is taken by
+        the next delivery at @p point only, and it is taken before the delivery, so that a thread that sees the
+        delivery also sees that it was taken.
+
+        @param point the point to pause after
+        @param pause true to pause the next delivery, false to end a pause (and to cancel one not taken yet)
+
+        @return with @p pause = false: true if a delivery took the pause since it was requested; false otherwise
+    */
+    DLLLOCAL static bool dbgPauseAfterDelivery(DbgPausePoint point, bool pause);
+
+    //! Debug-only: returns true if a pause after a delivery at @p point was requested (dbgPauseAfterDelivery()) and
+    //! the calling thread (an I/O thread, or a callback worker for DBG_PAUSE_STEP_RESULT) has taken it; the caller
+    //! then calls dbgWaitAfterDelivery() after the delivery
+    DLLLOCAL static bool dbgTakeDeliveryPause(DbgPausePoint point);
+
+    //! Debug-only: waits until the pause taken by dbgTakeDeliveryPause() is ended
+    DLLLOCAL static void dbgWaitAfterDelivery(DbgPausePoint point);
+
     //! Debug-only: holds the callbacks of timers that fire from now on, instead of dispatching them
     /** Called by the dbg_async_io_hold_timer_callbacks() test hook, so that a test can run the callback of a timer
         that fired before the timer's owner stopped it, after the owner has stopped it (see
@@ -2071,6 +2180,12 @@ private:
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
+
+    //! Delivers a deferred result and releases the references of @a dd
+    DLLLOCAL void deliverDeferred(DeferredDelivery& dd, ExceptionSink* xsink);
+
+    //! Returns a deferred delivery of @a result (referenced; ownership transferred) to the receivers of @a pinfo
+    DLLLOCAL DeferredDelivery makeDeferredDelivery(const std::string& key, PollInfo& pinfo, QoreHashNode* result);
 
     //! Deliver-exactly-once backstop: if \a pinfo owns a result queue but no
     //! terminal completion was ever committed, synthesize and deliver a
@@ -2516,6 +2631,9 @@ private:
 
 //! Returns the global AsyncIoController singleton QoreObject (ref'd for caller); lazy-creates on first call
 DLLLOCAL QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink);
+
+//! Returns the global async I/O controller with a reference, or nullptr if none has been created; never creates one
+DLLLOCAL AsyncIoControllerPriv* qore_get_async_io_controller_if_exists();
 
 //! Cleans up the global AsyncIoController singleton (called from qore_cleanup())
 DLLLOCAL void qore_async_io_controller_cleanup();

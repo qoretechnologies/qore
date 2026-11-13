@@ -2,13 +2,15 @@
 
 %modern
 
-# usage: hs-client.qr <keepalive 0|1> <requests> [<quit 0|1>]; prints microseconds per request, then asks the server to
-# quit unless the third argument is 0 (several clients can run at once; one of them quits the server)
-const Port = 38765;
+# usage: http-client.qr <keepalive 0|1> <requests> [<quit 0|1> [<port>]]; prints microseconds per request, then asks
+# the server to quit unless the third argument is 0 (several clients can run at once; one of them quits the server);
+# the port is the one that http-server.qr printed in its "ready <port>" line (default 38765, for a server started with
+# HTTP_BENCH_PORT=38765)
 bool keepalive = ARGV[0] == "1";
 int n = ARGV[1].toInt();
+int port = (ARGV[3] ?? 38765).toInt();
 
-HTTPClient c({"url": "http://127.0.0.1:" + Port});
+HTTPClient c({"url": "http://127.0.0.1:" + port});
 for (int i = 0; i < 50; ++i) {
     c.get("/");
     if (!keepalive) {

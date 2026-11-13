@@ -761,25 +761,34 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
     } else {
         if (rhs.eval(right))
             return nullptr;
-
-        // we only support functional iteration when the lhd is a list and the rhs is a list; the rhs is evaluated
-        // once (qore#5684)
-        if (lhs->getType() == NT_LIST && rhs->getType() == NT_LIST) {
-            value_type = list;
-            return new QoreFunctionalSquareBracketsOperator(lhs, rhs, string_index_char, negative_offsets, xsink);
-        }
+        return getIndexesIterator(lhs, rhs, string_index_char, negative_offsets, value_type, xsink);
     }
 
-    ValueHolder res(xsink);
-
-    if (rhs_list_range)
-        res = doSquareBracketsListRange(*lhs, right.get<const QoreParseListNode>(), string_index_char,
-            negative_offsets, xsink);
-    else
-        res = doSquareBrackets(*lhs, *rhs, true, string_index_char, negative_offsets, xsink);
-
+    ValueHolder res(doSquareBracketsListRange(*lhs, right.get<const QoreParseListNode>(), string_index_char,
+        negative_offsets, xsink), xsink);
     if (*xsink)
         return nullptr;
+    return getResultIterator(res, value_type, xsink);
+}
+
+FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getIndexesIterator(ValueEvalRefHolder& lhs,
+        ValueEvalRefHolder& rhs, bool string_index_char, bool negative_offsets, FunctionalValueType& value_type,
+        ExceptionSink* xsink) {
+    // we only support functional iteration when the lhd is a list and the rhs is a list; the rhs is evaluated
+    // once (qore#5684)
+    if (lhs->getType() == NT_LIST && rhs->getType() == NT_LIST) {
+        value_type = list;
+        return new QoreFunctionalSquareBracketsOperator(lhs, rhs, string_index_char, negative_offsets, xsink);
+    }
+
+    ValueHolder res(doSquareBrackets(*lhs, *rhs, true, string_index_char, negative_offsets, xsink), xsink);
+    if (*xsink)
+        return nullptr;
+    return getResultIterator(res, value_type, xsink);
+}
+
+FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getResultIterator(ValueHolder& res,
+        FunctionalValueType& value_type, ExceptionSink* xsink) {
     if (res->isNothing()) {
         value_type = nothing;
         return nullptr;

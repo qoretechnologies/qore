@@ -102,6 +102,24 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
         #! Maximum time producer/control threads may wait for the stream state lock
         const StateLockTimeoutMs = 5000;
+
+        #! Protects the accounting of the queued data; never held while waiting for anything
+        Mutex qm();
+
+        #! Bytes queued but not yet written to the socket (the event being written counts until it is written)
+        int queued_bytes = 0;
+
+        #! The bytes of @ref pending_data counted in @ref queued_bytes (0 for a heartbeat)
+        int pending_counted = 0;
+
+        #! The bound of the queued data set with @ref setMaxBufferSize(), if any
+        *int max_buffer_size;
+
+        #! The callback that logs a warning when the client is dropped
+        *code<nothing(string)> warning_callback;
+
+        #! Set when the client was dropped because its queued data would have exceeded the bound
+        bool overflowed = False;
     }
 
     #! Creates the poll operation
@@ -142,9 +160,11 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     }
 
     #! Sets the callback invoked when the stream has ended
-    /** The async I/O controller calls it exactly once on a thread of its handler pool when the stream has ended
-        for any reason: a disconnect by the client, the end of a stream that the producer closed, a connection
-        error, or the removal of the listener or a stop of the controller (see @ref takeCloseCallback()).
+    /** The callback is called exactly once when the stream has ended for any reason: by the async I/O controller, on a
+        thread of its handler pool, for a disconnect by the client, the end of a stream that the producer closed, a
+        connection error, or the removal of the listener or a stop of the controller (see @ref takeCloseCallback());
+        or, for a client dropped because its data would exceed its bound, on the thread that queued the data, before
+        \c SSE-CLIENT-OVERFLOW is raised.
     */
     setCloseCallback(*code<nothing()> cb) {
         lockState("setCloseCallback");
@@ -161,7 +181,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns the callback invoked when the stream has ended and clears it, so that it is called at most once
     /** The async I/O controller takes the callback on every path that ends the stream: a disconnect, a connection
-        error, and the removal of the listener or a stop of the controller.
+        error, and the removal of the listener or a stop of the controller; a stream whose client is dropped for its
+        bound takes it itself, before it ends, and runs it on the thread that queued the data.
     */
     *code<nothing()> takeCloseCallback() {
         lockState("takeCloseCallback");
@@ -250,6 +271,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             pending_data = result.value.typeCode() == NT_STRING
                 ? result.value
                 : formatSseEvent(result.value);
+            pending_counted = pending_data.size();
         }
 
         # Graceful end-of-stream: producer signalled close() and we have
@@ -308,6 +330,11 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
             remove send_op;
             remove pending_data;
+            if (pending_counted) {
+                AutoLock al(qm);
+                queued_bytes -= pending_counted;
+                pending_counted = 0;
+            }
             last_send_us = clock_getmicros();
             return NOTHING;
         } catch (hash<ExceptionInfo> ex) {
@@ -322,6 +349,10 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param data the event data
         @param id the event ID (optional)
         @param retry retry interval in ms (optional)
+
+        @throw SSE-EVENT-ERROR the event cannot be written; see @ref queueRawEvent()
+        @throw SSE-CLIENT-OVERFLOW the event would take the queued data over its bound; see @ref queueRawString()
+        @throw SSE-CLOSED the client was dropped because its queued data would have exceeded the bound
     */
     queueEvent(*string event_type, string data, *string id, *int retry) {
         queueRawEvent({
@@ -340,18 +371,156 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
         @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, or the retry value is not a
         non-negative integer; see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat"
+        @throw SSE-CLIENT-OVERFLOW the event would take the queued data over its bound; see @ref queueRawString()
+        @throw SSE-CLOSED the client was dropped because its queued data would have exceeded the bound
     */
     queueRawEvent(hash<auto> event) {
-        event_channel.send(formatSseEvent(event));
-        notifier.notify();
+        queueIntern(formatSseEvent(event));
     }
 
     #! Queues a pre-formatted SSE string for sending
-    /** @param data already-formatted SSE text (e.g., from ServerSentEventHandler::encodeMessage())
+    /** Never waits for the client.  The data queued but not yet written to the socket is bounded (see
+        @ref setMaxBufferSize()); data that would take it over the bound, when it is not the only data queued, drops
+        the client: a warning is logged through the warning callback, the connection is closed, the end of the
+        stream is reported through the close callback, and \c SSE-CLIENT-OVERFLOW is raised.
+
+        @param data already-formatted SSE text (e.g., from ServerSentEventHandler::encodeMessage())
+
+        @throw SSE-CLIENT-OVERFLOW the data would take the queued data over its bound; it is not queued, and the
+        client has been dropped
+        @throw SSE-CLOSED the client was dropped because its queued data would have exceeded the bound
     */
     queueRawString(string data) {
-        event_channel.send(data);
-        notifier.notify();
+        queueIntern(data);
+    }
+
+    #! Sets the bound of the data queued for the client but not yet written to the socket
+    /** @param size the bound in bytes; must be > 0
+
+        @throw SSE-OPTION-ERROR the size is not positive
+
+        @see @ref HttpServerAsyncIo::DefaultSseMaxBufferSize "DefaultSseMaxBufferSize"
+    */
+    setMaxBufferSize(int size) {
+        if (size <= 0) {
+            throw "SSE-OPTION-ERROR", sprintf("the SSE buffer bound must be > 0; got %d", size);
+        }
+        AutoLock al(qm);
+        max_buffer_size = size;
+    }
+
+    #! Returns the bound of the data queued for the client, in bytes
+    /** @return the bound set with @ref setMaxBufferSize(), or
+        @ref HttpServerAsyncIo::DefaultSseMaxBufferSize "DefaultSseMaxBufferSize" if none was set
+    */
+    int getMaxBufferSize() {
+        AutoLock al(qm);
+        return max_buffer_size ?? DefaultSseMaxBufferSize;
+    }
+
+    #! Returns @ref True if a bound was set with @ref setMaxBufferSize()
+    bool hasMaxBufferSize() {
+        AutoLock al(qm);
+        return exists max_buffer_size;
+    }
+
+    #! Returns the number of bytes queued for the client but not yet written to the socket
+    int getQueuedBytes() {
+        AutoLock al(qm);
+        return queued_bytes;
+    }
+
+    #! Sets the callback that logs a warning when the client is dropped
+    /** @param cb the callback, called with the message; exceptions that it raises are ignored
+    */
+    setWarningCallback(*code<nothing(string)> cb) {
+        AutoLock al(qm);
+        warning_callback = cb;
+    }
+
+    #! Returns @ref True if a warning callback was set with @ref setWarningCallback()
+    bool hasWarningCallback() {
+        AutoLock al(qm);
+        return exists warning_callback;
+    }
+
+    #! Queues data unless it would take the queued data over the bound, in which case the client is dropped
+    private queueIntern(string data) {
+        int len = data.size();
+        *code<nothing(string)> cb;
+        int limit;
+        {
+            AutoLock al(qm);
+            if (overflowed) {
+                throw "SSE-CLOSED", "SSE stream is closed: the client was dropped when its queued data would have "
+                    "exceeded the bound";
+            }
+            limit = max_buffer_size ?? DefaultSseMaxBufferSize;
+            if (!queued_bytes || (queued_bytes + len) <= limit) {
+                queued_bytes += len;
+                event_channel.send(data);
+                notifier.notify();
+                return;
+            }
+            overflowed = True;
+            cb = warning_callback;
+        }
+        # a stream that has already ended (the client went away, or it was aborted) is not dropped for its bound: it
+        # is closed; a draining stream (see close()) still has a client, which is dropped
+        bool ended;
+        try {
+            string st = getState();
+            ended = st == STATE_DISCONNECTED || st == STATE_ERROR;
+        } catch (hash<ExceptionInfo> ex) {
+            # the state lock could not be taken: the stream is dropped below
+        }
+        if (ended) {
+            throw "SSE-CLOSED", "SSE stream is closed";
+        }
+        string msg = sprintf("http1 SSE stream: queueing %d bytes would take the data queued for the client over its "
+            "bound of %d bytes; dropping the client", len, limit);
+        if (cb) {
+            try {
+                cb(msg);
+            } catch (hash<ExceptionInfo> ex) {
+                # logging must not change the outcome
+            }
+        }
+        # the end of the stream is reported here, on the thread that queued the data, before the stream is aborted: the
+        # callback is taken first, so that the controller, which ends the operation once the socket is closed, finds
+        # none, and the client has been dropped and deregistered when the exception is raised (a callback run by the
+        # controller could still be running then)
+        *code<nothing()> end_cb;
+        try {
+            # the callback is taken and the stream ended in one locked section (as abort() does)
+            lockState("queueIntern");
+            on_exit m.unlock();
+            end_cb = remove close_callback;
+            state = STATE_DISCONNECTED;
+            notifier.notify();
+        } catch (hash<ExceptionInfo> ex) {
+            # the state lock could not be taken: the controller reports the end
+        }
+        # the socket is closed even if the state lock could not be taken, so that the client is dropped in any case
+        try {
+            sock.close();
+        } catch () {
+        }
+        if (end_cb) {
+            try {
+                end_cb();
+            } catch (hash<ExceptionInfo> ex) {
+                # the end of the stream is reported; the exception raised is the overflow, and this one is logged
+                if (cb) {
+                    try {
+                        cb(sprintf("http1 SSE stream: the close callback of the dropped client raised %s: %s",
+                            ex.err, ex.desc));
+                    } catch () {
+                    }
+                }
+            }
+        }
+        throw SseClientOverflowErr, msg;
     }
 
     private hash<SocketPollInfo> getIdlePollInfo(*int poll_timeout_ms) {

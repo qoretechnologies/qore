@@ -265,6 +265,44 @@ static inline int eval_check_stack(const AbstractQoreNode& node, ExceptionSink* 
 #endif
 }
 
+// Returns the value that a weak reference returned by an expression refers to
+/** Outlined from AbstractQoreNode::eval(): the frame of the evaluation of an expression is on the stack at every level
+    of a recursion through it (e.g. a method call evaluated from the IR interpreter), and this rarely taken path would
+    otherwise make it larger (issue #5852)
+*/
+static QORE_INTERN_NOINLINE QoreValue eval_resolve_weakref(QoreValue rv, bool needs_deref, ExceptionSink* xsink) {
+    switch (rv.getType()) {
+        case NT_WEAKREF: {
+            QoreObject* o = rv.get<WeakReferenceNode>()->get();
+            if (needs_deref) {
+                o->ref();
+                rv.discard(xsink);
+            }
+            return o;
+        }
+
+        case NT_WEAKREF_HASH: {
+            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->get();
+            if (needs_deref) {
+                h->ref();
+                rv.discard(xsink);
+            }
+            return h;
+        }
+
+        case NT_WEAKREF_LIST: {
+            QoreListNode* l = rv.get<WeakListReferenceNode>()->get();
+            if (needs_deref) {
+                l->ref();
+                rv.discard(xsink);
+            }
+            return l;
+        }
+    }
+    assert(false);
+    return rv;
+}
+
 QoreValue AbstractQoreNode::eval(ExceptionSink* xsink) const {
     if (!needs_eval_flag) {
         return refSelf();
@@ -293,35 +331,10 @@ QoreValue AbstractQoreNode::eval(bool& needs_deref, ExceptionSink* xsink) const 
     needs_deref = true;
     QoreValue rv = evalImpl(needs_deref, xsink);
 
-    switch (rv.getType()) {
-        case NT_WEAKREF: {
-            QoreObject* o = rv.get<WeakReferenceNode>()->get();
-            if (needs_deref) {
-                o->ref();
-                rv.discard(xsink);
-            }
-            return o;
-        }
-
-        case NT_WEAKREF_HASH: {
-            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->get();
-            if (needs_deref) {
-                h->ref();
-                rv.discard(xsink);
-            }
-            return h;
-        }
-
-        case NT_WEAKREF_LIST: {
-            QoreListNode* l = rv.get<WeakListReferenceNode>()->get();
-            if (needs_deref) {
-                l->ref();
-                rv.discard(xsink);
-            }
-            return l;
-        }
+    qore_type_t t = rv.getType();
+    if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
+        return eval_resolve_weakref(rv, needs_deref, xsink);
     }
-
     return rv;
 }
 
@@ -339,35 +352,10 @@ QoreValue AbstractQoreNode::eval(RuntimeConfig& rc, bool& needs_deref, Exception
     needs_deref = true;
     QoreValue rv = evalImpl(rc, needs_deref, xsink);
 
-    switch (rv.getType()) {
-        case NT_WEAKREF: {
-            QoreObject* o = rv.get<WeakReferenceNode>()->get();
-            if (needs_deref) {
-                o->ref();
-                rv.discard(xsink);
-            }
-            return o;
-        }
-
-        case NT_WEAKREF_HASH: {
-            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->get();
-            if (needs_deref) {
-                h->ref();
-                rv.discard(xsink);
-            }
-            return h;
-        }
-
-        case NT_WEAKREF_LIST: {
-            QoreListNode* l = rv.get<WeakListReferenceNode>()->get();
-            if (needs_deref) {
-                l->ref();
-                rv.discard(xsink);
-            }
-            return l;
-        }
+    qore_type_t t = rv.getType();
+    if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
+        return eval_resolve_weakref(rv, needs_deref, xsink);
     }
-
     return rv;
 }
 

@@ -394,6 +394,28 @@ int cpp_api_counter_live_count() [flags=RET_VALUE_ONLY] {
     return api->counter_live_count();
 }
 
+//! returns the module commands that the module has received, in the order received
+/** The module records each module command that it receives (\c \%module-cmd(cppapiuser) and
+    Program::issueModuleCmd()), with \c " [sandboxed]" appended when the Program that the command runs in has a
+    sandbox manager; the command \c "fail" raises \c CPPAPIUSER-COMMAND-ERROR instead and is not recorded
+
+    @return the commands received so far in the process
+*/
+list<string> cpp_api_module_cmds() [flags=RET_VALUE_ONLY] {
+    return cppapiuser_get_module_cmds();
+}
+
+//! returns whether the Program of the calling code has a sandbox manager
+/** Called from a user module's code, it tells whether the module's own Program is governed by a sandbox, which is
+    what a module that takes the sandbox from the Program (QoreSandboxManagerHelper(QoreProgram*)) uses
+
+    @return @ref True if the Program of the calling code has a sandbox manager
+*/
+bool cpp_api_program_has_sandbox() [flags=RET_VALUE_ONLY] {
+    QoreSandboxManagerHelper sm(getProgram());
+    return static_cast<bool>(sm);
+}
+
 //! adds a namespace to the root namespace of a loaded user module's Program, as a binary module does at runtime
 /** Takes the module Program's parse ownership, as module-jni does when it attaches its \c Jni namespace to a Program
     the first time the Program's Java classes are used, and adds a new namespace through the public

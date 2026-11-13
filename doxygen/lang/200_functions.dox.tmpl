@@ -6,7 +6,7 @@
     A function is declared in %Qore by using the keyword <tt><b>sub</b></tt> (for subroutine) as follows.
 
     @par Function Declaration Syntax
-    <tt>[@ref mod_public "public"] [@ref synchronized "synchronized"] [@ref deprecated "deprecated"]</tt> <em>@ref data_type_declarations "[return_type]"</em> <tt><b>sub</b></tt> <em>function_name</em><tt>(</tt><em>@ref data_type_declarations "[param_type]"</em> <em>var_name</em> ...<tt>]) {</tt>\n
+    <tt>[@ref mod_public "public"] [@ref synchronized "synchronized"] [@ref deprecated "deprecated"]</tt> <em>@ref data_type_declarations "[return_type]"</em> <tt><b>sub</b></tt> <em>function_name</em><tt>(</tt><em>@ref data_type_declarations "[param_type]"</em> <em>var_name</em> ...<tt>])</tt> <em>@ref function_domains "[[dom=domain,...]]"</em> <tt>{</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<em>@ref statements "statement(s)..."</em>\n
     }\n\n
     or the deprecated alternate syntax with the <tt><b>returns</b></tt> keyword:\n
@@ -379,4 +379,101 @@ int sub fibonacci(int num) {
     Functions declared with the @ref deprecated keyword will cause a @ref deprecated-warning "deprecated warning" to be raised when the function is referenced (but not when it's declared).
 
     In this way API functions (or methods) can be declared as @ref deprecated before eventual removal from the API set.
+
+    @subsection function_domains Functional Domains of Functions and Methods
+    A function or method declares the @ref sandbox_parse_options "functional domains" that it provides with an
+    attribute list after its parameter list, as builtin functions and methods are declared in their sources: code that
+    a @ref Qore::Program "Program" may not use because of a restriction in its parse options (such as
+    @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL") is then refused to that %Program, as builtin code is.
+
+    @par Attribute List Syntax
+    <tt>[dom=</tt><em>domain</em><tt>[,</tt><em>domain</em> ...<tt>][;]]</tt>
+
+    The domains are given without the \c QDOM_ prefix, in upper or lower case, separated by commas; elements of the
+    list are separated by semicolons, and a trailing semicolon is allowed.  The only key is \c dom; an unknown key or
+    an unknown domain is a parse error.  The names are those of the \c DOM_* constants, which the
+    reflection module also gives (\c getDomainStringList()); \c PROCESS and \c MODULES, the names that
+    the sources of builtin code use, are accepted for \c PROCESS_CONTROL and \c MODULE.  The domains and the parse
+    options that restrict them:
+    |!Domain|!Restricted by
+    |\c PROCESS_CONTROL (or \c PROCESS)|@ref Qore::PO_NO_PROCESS_CONTROL
+    |\c NETWORK|@ref Qore::PO_NO_NETWORK
+    |\c EXTERNAL_PROCESS|@ref Qore::PO_NO_EXTERNAL_PROCESS
+    |\c FILESYSTEM|@ref Qore::PO_NO_FILESYSTEM
+    |\c THREAD_CLASS|@ref Qore::PO_NO_THREAD_CLASSES
+    |\c THREAD_CONTROL|@ref Qore::PO_NO_THREAD_CONTROL
+    |\c DATABASE|@ref Qore::PO_NO_DATABASE
+    |\c GUI|@ref Qore::PO_NO_GUI
+    |\c TERMINAL_IO|@ref Qore::PO_NO_TERMINAL_IO
+    |\c EXTERNAL_INFO|@ref Qore::PO_NO_EXTERNAL_INFO
+    |\c THREAD_INFO|@ref Qore::PO_NO_THREAD_INFO
+    |\c LOCALE_CONTROL|@ref Qore::PO_NO_LOCALE_CONTROL
+    |\c MODULE (or \c MODULES)|@ref Qore::PO_NO_MODULES
+    |\c IN_MODULE|@ref Qore::PO_IN_MODULE
+    |\c EMBEDDED_LOGIC|@ref Qore::PO_NO_EMBEDDED_LOGIC
+    |\c REFLECTION|@ref Qore::PO_NO_REFLECTION
+    |\c UNCONTROLLED_API|@ref Qore::PO_NO_UNCONTROLLED_APIS
+    |\c INJECTION|requires @ref Qore::PO_ALLOW_INJECTION
+    |\c DEBUGGER|requires @ref Qore::PO_ALLOW_DEBUGGER
+
+    The attribute list follows the parameter list and the @ref const_methods "const" qualifier, and precedes a base
+    class constructor list and the deprecated \c returns clause:
+    @code{.py}
+%modern
+
+# a function that changes the state of the whole process
+public sub register_handler(string name, code handler) [dom=PROCESS_CONTROL] {
+    ...
+}
+
+# a function that uses the network and the filesystem
+public string sub fetch_to_file(string url, string path) [dom=NETWORK,FILESYSTEM] {
+    ...
+}
+
+public class Registry {
+    # static, abstract and const methods, constructors
+    static setLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] { ... }
+    abstract register(string name) [dom=PROCESS_CONTROL];
+    int count() const [dom=PROCESS_CONTROL] { ... }
+    constructor(string name) [dom=PROCESS_CONTROL] : Base(name) { ... }
+}
+    @endcode
+
+    Destructors, \c copy(), \c methodGate(), \c memberGate() and \c memberNotification() methods, which run without
+    being named, and @ref closure "closures" cannot declare functional domains.
+
+    A %Program whose parse options restrict a domain:
+    - cannot reference code that declares it: a call of the function or method (including a constructor called with
+      @ref new "new" or a variable declaration, and a base class constructor list), and a
+      @ref call_reference "call reference" to it, raise a \c PARSE-EXCEPTION naming the domain and the parse option
+      that restricts it.  A call of an overloaded function whose variant cannot be chosen when the code is parsed is
+      checked when the variant is chosen at run time
+    - is refused a call made at run time: a method call on an object whose class is not known when the code is parsed,
+      including a call that dispatches to an override in a subclass, @ref Qore::call_function() "call_function()",
+      @ref Qore::call_object_method() "call_object_method()", @ref Qore::create_object() "create_object()", a base
+      class constructor run for a subclass without a base class constructor list, and the reflection API raise an
+      \c INVALID-FUNCTION-ACCESS exception
+
+    A call reference or a @ref closure "closure" runs with the permissions of the context that created it: a call
+    reference to code with a functional domain that code allowed to use the domain created can be called by code
+    that is not allowed to use it.  A closure created in code that declares a functional domain does not inherit the
+    domain.
+
+    @par Overrides
+    A method that overrides a method declaring functional domains must declare every one of them; a method that does
+    not raises a \c DOMAIN-METHOD-ERROR parse exception.  An override may declare more functional domains than the
+    method it overrides; a call that dispatches to it at run time is then checked against them.  Static methods do not
+    override.
+
+    @par Functional Domains and User Modules
+    The code of a @ref user_modules "user module" runs in the module's own @ref Qore::Program "Program", which has the
+    restrictions of the %Program that loads the module, so module code that uses a functional domain that the loading
+    %Program may not use cannot be loaded by it.  A module that uses functional domains itself, such as a module that
+    registers process-wide functionality when it is loaded, declares them with the \c domains key of its
+    @ref user_module_declarations "module declaration": its %Program then does not have the restrictions of those
+    domains, if the module is found in a directory of the process-wide module path (see
+    @ref user_module_declarations).  The code that calls the module is still checked against its own restrictions.
+
+    @since %Qore 3.0
 */

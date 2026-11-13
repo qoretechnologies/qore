@@ -93,6 +93,10 @@ option(QORE_BUILD_WITH_EXTERNAL_MODULES
        "Allow installed Qore modules to provide optional features in build outputs"
        ON)
 
+option(QORE_STACK_USAGE_REPORT
+       "Compile libqore with -fstack-usage for tools/check-stack-usage.py (frame sizes of the per-call path)"
+       OFF)
+
 option(QORE_INSTALL_DEPENDS_ON_ALL
        "Make the install target build the all target before installing"
        OFF)
@@ -2728,6 +2732,70 @@ if (ADDRESS_SANITIZER)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+# What decides the frame sizes of libqore besides its code (issue #5852), as get_qore_library_info() reports it and
+# tools/check-stack-usage.py checks it: the build type and its flags (a multi-config generator chooses the
+# configuration at build time, so it has none here), the target triple, which names the C library
+# (x86_64-linux-gnu, x86_64-alpine-linux-musl), and link-time optimization
+get_property(_qore_lib_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if (_qore_lib_multi_config)
+    set(QORE_LIB_BUILD_TYPE_VALUE "multi-config")
+    set(_qore_lib_build_type_flags "")
+else()
+    set(QORE_LIB_BUILD_TYPE_VALUE "${CMAKE_BUILD_TYPE}")
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_lib_build_type_upper)
+    set(_qore_lib_build_type_flags "${CMAKE_CXX_FLAGS_${_qore_lib_build_type_upper}}")
+endif()
+execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine OUTPUT_VARIABLE QORE_LIB_TARGET_VALUE
+    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+# link-time optimization is enabled for all configurations or for the build type (INTERPROCEDURAL_OPTIMIZATION_<CONFIG>,
+# initialized from CMAKE_INTERPROCEDURAL_OPTIMIZATION_<CONFIG>)
+get_target_property(_qore_lib_ipo libqore INTERPROCEDURAL_OPTIMIZATION)
+if (NOT _qore_lib_multi_config AND _qore_lib_build_type_upper)
+    # the property of the configuration, if it is set, decides for that configuration (ON or OFF)
+    get_target_property(_qore_lib_ipo_config libqore INTERPROCEDURAL_OPTIMIZATION_${_qore_lib_build_type_upper})
+    if (NOT _qore_lib_ipo_config STREQUAL "_qore_lib_ipo_config-NOTFOUND")
+        set(_qore_lib_ipo "${_qore_lib_ipo_config}")
+    endif()
+endif()
+if (_qore_lib_ipo)
+    set(QORE_LIB_IPO_VALUE 1)
+else()
+    set(QORE_LIB_IPO_VALUE 0)
+endif()
+
+# The frame sizes of libqore's functions for tools/check-stack-usage.py, which checks the per-call path of interpreted
+# code against tools/stack-usage-budgets.txt (issue #5852): -fstack-usage writes a .su file next to each object and
+# does not change the generated code.  It is a target option, not part of CMAKE_CXX_FLAGS, so it does not change the
+# AOT identity (qcc-format-config.txt).
+if (QORE_STACK_USAGE_REPORT)
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        message(FATAL_ERROR "QORE_STACK_USAGE_REPORT needs a compiler with -fstack-usage (GCC or Clang), not "
+            "${CMAKE_CXX_COMPILER_ID}")
+    endif()
+    target_compile_options(libqore PRIVATE -fstack-usage)
+    # the hardening macros that the compiler driver predefines with these flags (stack protector, fortification,
+    # control-flow protection, libstdc++ assertions): distributions' compilers enable different ones by default
+    separate_arguments(_qore_stack_usage_flags UNIX_COMMAND "${CMAKE_CXX_FLAGS} ${_qore_lib_build_type_flags}")
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} ${_qore_stack_usage_flags} -dM -E -x c++ /dev/null
+        OUTPUT_VARIABLE _qore_stack_usage_macros ERROR_QUIET)
+    string(REGEX MATCHALL "#define (_FORTIFY_SOURCE|__SSP__|__SSP_STRONG__|__SSP_ALL__|__SSP_EXPLICIT__|__CET__|_GLIBCXX_ASSERTIONS) [^\n]*"
+        _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    list(SORT _qore_stack_usage_macros)
+    string(REPLACE "#define " "" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    string(REPLACE " " "=" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    string(REPLACE ";" " " _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    file(WRITE "${CMAKE_BINARY_DIR}/stack-usage-config.txt"
+        "# written by CMake for tools/check-stack-usage.py\n"
+        "compiler=${CMAKE_CXX_COMPILER_ID}\n"
+        "compiler-version=${CMAKE_CXX_COMPILER_VERSION}\n"
+        "build-type=${QORE_LIB_BUILD_TYPE_VALUE}\n"
+        "build-type-flags=${_qore_lib_build_type_flags}\n"
+        "cxx-flags=${CMAKE_CXX_FLAGS}\n"
+        "hardening=${_qore_stack_usage_macros}\n"
+        "ipo=${QORE_LIB_IPO_VALUE}\n"
+        "target=${QORE_LIB_TARGET_VALUE}\n")
+endif()
+
 # prepare qore target
 add_executable(qore ${QORE_CPP_SRC})
 add_dependencies(qore qore-aot-link-config)
@@ -2754,10 +2822,19 @@ add_executable(qore-hash-lookup-test examples/test/qore/misc/hash_lookup.cpp)
 target_include_directories(qore-hash-lookup-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-hash-lookup-test PRIVATE libqore)
+add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_validation.cpp)
+target_include_directories(qore-aot-ir-instruction-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-instruction-test PRIVATE libqore)
 add_executable(qore-declaration-owner-test examples/test/qore/misc/declaration_owner.cpp)
 target_include_directories(qore-declaration-owner-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-declaration-owner-test PRIVATE libqore)
+# Exercise the production AOT IR decoder with crafted serialized instructions.
+add_executable(qore-aot-ir-opcode-test examples/test/ir/aot_ir_opcode_validation.cpp)
+target_include_directories(qore-aot-ir-opcode-test PRIVATE
+    ${CMAKE_BINARY_DIR} ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-opcode-test PRIVATE libqore)
 # the module cleanup test uses POSIX APIs (mkdtemp(), alarm())
 if (UNIX)
     add_executable(qore-module-cleanup-unlocked-test examples/test/qore/misc/module_cleanup_unlocked.cpp)
@@ -2782,6 +2859,10 @@ target_link_libraries(qore-utf8-validation-test PRIVATE libqore ${ICONV_LIBRARY}
 # the keep-alive interval policy of QUIC connections is header-only, so the test needs no library
 add_executable(qore-quic-keep-alive-test examples/test/qore/misc/quic_keep_alive.cpp)
 target_include_directories(qore-quic-keep-alive-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+# the poll timeout policy of QUIC operations is header-only, so the test needs no library
+add_executable(qore-quic-poll-timeout-test examples/test/qore/misc/quic_poll_timeout.cpp)
+target_include_directories(qore-quic-poll-timeout-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 # the lock-free publication of the state of the HTTP fast routes (HttpFastPublished) uses only the C++ standard
 # library, so the test needs no libqore
@@ -3000,6 +3081,13 @@ set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 # .cpp files, but this custom command does not inherit compiler depfile
 # scanning from the libqore/qcc compilation rules.
 set(_qcc_format_sources
+    # Lexical native eligibility changes which source bodies/initializers qcc can compile.
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreNativeParseInfo.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/ParserSupport.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/StatementBlock.h
+    ${CMAKE_SOURCE_DIR}/lib/parser.ypp
+    ${CMAKE_SOURCE_DIR}/lib/scanner.lpp
+    ${CMAKE_SOURCE_DIR}/lib/StatementBlock.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOT.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBinary.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTExprNodeRegistry.h
@@ -3236,6 +3324,14 @@ if (APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
 endif()
 include(cmake/QoreRecordedCFlags.cmake)
 qore_record_cflags(QORE_LIB_CFLAGS_VALUE "${QORE_LIB_CFLAGS_VALUE}")
+# the build type and its flags, which get_qore_library_info() reports with the compiler version: they decide the frame
+# sizes of the library (see examples/test/qore/stack/recursion-frame-budget.qtest)
+qore_record_cflags(QORE_LIB_BUILD_TYPE_CFLAGS_VALUE "${_qore_lib_build_type_flags}")
+if (SINGLE_COMPILATION_UNIT)
+    set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 1)
+else()
+    set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 0)
+endif()
 message(STATUS "Generating unix-config.h")
 configure_file(${CMAKE_SOURCE_DIR}/cmake/unix-config.h.cmake
                ${CMAKE_BINARY_DIR}/include/qore/intern/unix-config.h)
@@ -3273,7 +3369,7 @@ install(FILES ${QCC_FORMAT_STAMP}
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake
+install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
@@ -3528,29 +3624,17 @@ set(QORE_AOT_MODULES_DIR ${MODULE_VER_DIR})
 
 # metadata extraction for qlib modules (uses build-tree qore + astparser)
 # QM metadata extraction needs the json binary module (via QoreApiMetadata), which is built
-# from this tree -- see modules/json.  It is listed in QORE_QM_METADATA_MODULE_DIRS below so
-# the build-tree qore can load it, and in QORE_AOT_BINARY_MODULE_TARGETS so it is always built
-# before any metadata scan runs.  Metadata extraction is therefore unconditional; it no longer
+# from this tree -- see modules/json.  It is on QORE_QM_METADATA_MODULE_DIRS below so the
+# build-tree qore can load it, and in QORE_AOT_BINARY_MODULE_TARGETS so it is always built
+# before any metadata scan runs; both are made from the modules that QORE_BINARY_MODULE_QORE()
+# records.  Metadata extraction is therefore unconditional; it no longer
 # depends on a compatible qore+json pair already being installed on the build host.
 set(QORE_EXECUTABLE ${CMAKE_BINARY_DIR}/qore)
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
-set(QORE_QM_METADATA_MODULE_DIRS
-    ${CMAKE_BINARY_DIR}/modules/astparser
-    ${CMAKE_BINARY_DIR}/modules/avro
-    ${CMAKE_BINARY_DIR}/modules/json
-    ${CMAKE_BINARY_DIR}/modules/yaml
-    ${CMAKE_BINARY_DIR}/modules/reflection
-    ${CMAKE_BINARY_DIR}/modules/i18n
-    ${CMAKE_BINARY_DIR}/modules/logger_bin
-    ${CMAKE_BINARY_DIR}/modules/linenoise
-    ${CMAKE_BINARY_DIR}/modules/krb5
-    ${CMAKE_BINARY_DIR}/modules/mongodb
-    ${CMAKE_BINARY_DIR}/modules/ml
-    ${CMAKE_BINARY_DIR}/modules/tokenizer
-    ${CMAKE_BINARY_DIR}/modules/ocr
-    ${CMAKE_BINARY_DIR}/modules/dataframe
-    ${CMAKE_BINARY_DIR}/modules/protobuf)
+# the build directories of the in-tree binary modules, which QORE_BINARY_MODULE_QORE() records as the modules are
+# declared above, so that a new module is on the module path of the metadata extraction without a list to keep in sync
+get_property(QORE_QM_METADATA_MODULE_DIRS GLOBAL PROPERTY QORE_INTREE_BINARY_MODULE_DIRS)
 string(REPLACE ";" ":" QORE_QM_METADATA_MODULE_DIRS_STR "${QORE_QM_METADATA_MODULE_DIRS}")
 set(QORE_BUILD_EXTERNAL_MODULE_DIRS)
 if (QORE_BUILD_WITH_EXTERNAL_MODULES)
@@ -3600,12 +3684,11 @@ if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
     # becomes a hard dependency of the resulting AOT artifact.
     list(APPEND QORE_QM_METADATA_ENV "QORE_MODULE_DIR_ONLY=1")
 endif()
-set(QORE_AOT_BINARY_MODULE_TARGETS)
-foreach(_qore_build_module astparser avro json yaml reflection i18n logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
-    if(TARGET ${_qore_build_module})
-        list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_build_module})
-    endif()
-endforeach()
+# every in-tree binary module (QORE_BINARY_MODULE_QORE()) installs its qmod with the qore-bootstrap component, so the
+# qore-bootstrap target builds each of them; the list is recorded as the modules are declared above, so a new module
+# cannot be left out (a module missing from a list kept by hand failed only at install time: "file INSTALL cannot find
+# ...-api-<x>.qmod")
+get_property(QORE_AOT_BINARY_MODULE_TARGETS GLOBAL PROPERTY QORE_INTREE_BINARY_MODULE_TARGETS)
 set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
 
 # QM metadata extraction is unconditional: json is built from this tree and is guaranteed to

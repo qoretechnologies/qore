@@ -183,18 +183,19 @@ class DeadPeerWsHandler inherits WebSocketHandler {
     logWarn(string fmt) {}
 }
 
-#! SSE handler that streams until the peer's QUIC session dies
-/** Pushes far more than the 1 MB per-stream QUIC send buffer so that, against a
-    dead peer, the producer is parked in Http3SseStream::sendRawStringIntern()
-    waiting for a drain that will never come.  The QUIC idle close is the only
-    thing that can release it: SSE is server-to-client only, so there are no
-    inbound frames to time out on.
+#! SSE handler that streams to a peer that has died
+/** Pushes far more than the 1 MiB bound of the data staged for an SSE stream once the test has killed the peer:
+    queueing never waits for the peer (qore#5792), so the producer is never parked on the full buffer; the dead peer
+    is dropped with \c SSE-CLIENT-OVERFLOW as soon as the data staged for it would exceed the bound, without waiting
+    for the QUIC idle close.
 */
 class DeadPeerSseHandler inherits AbstractHttpRequestHandler {
     public {
         Queue connected_signal();
         #! Receives the error code that ended the producer loop, or "no-error"
         Queue producer_done();
+        #! The producer starts when this reaches zero (once the test has killed the peer)
+        Counter go(1);
     }
 
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
@@ -216,11 +217,13 @@ class DeadPeerSseHandler inherits AbstractHttpRequestHandler {
         sse_stream.sendHeaders();
         connected_signal.push("connected");
 
-        # 64 KB per event: fills the 1 MB stream buffer quickly once the peer
-        # stops reading, then blocks in the drain wait.
+        # 64 KB per event: fills the 1 MiB stream bound quickly, as the dead peer
+        # takes nothing
         string payload = strmul("x", 65536);
         string err = "no-error";
         try {
+            # a hang guard only: the test releases the producer once the peer is dead
+            go.waitForZero(60s);
             # Bounded so a bug cannot hang the suite forever: at 64 KB each,
             # this is ~128 MB, far beyond the buffer, so a live peer never
             # exhausts it before the test's assertions run.
@@ -385,7 +388,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         addTestCase("HTTP/3 WebSocket dead peer is reaped by the QUIC idle close",
             \testH3WsDeadPeerReaped());
-        addTestCase("HTTP/3 SSE dead peer releases the parked producer",
+        addTestCase("HTTP/3 SSE dead peer is dropped at the stream's bound",
             \testH3SseDeadPeerReaped());
         addTestCase("HTTP/3 WebSocket live peer survives the idle window",
             \testH3WsLivePeerNotReaped());
@@ -502,7 +505,7 @@ l50Xb2GWQesIt9k5jF5IOw==
                 elapsed));
     }
 
-    #! A dead HTTP/3 SSE peer must release the producer parked on a full buffer
+    #! A dead HTTP/3 SSE peer is dropped as soon as the data staged for it would exceed the stream's bound
     testH3SseDeadPeerReaped() {
         checkDeadPeerSupported();
 
@@ -524,13 +527,11 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertGt(0, pid, "client process recorded its pid");
 
         kill(pid, SIGKILL);
-        advanceClockPastIdle(pid_path);
-
-        # The producer fills the 1 MB stream buffer, parks in the drain wait, and
-        # is released only when the QUIC idle close marks the session closed and
-        # waitForQuicStreamDrain() starts reporting -1 (stream gone).
-        assertEq("SSE-CLOSED", sse_handler.producer_done.get(ReapTimeout),
-            "parked SSE producer was released by the QUIC idle close");
+        # the producer starts once the peer is dead: it is never parked on the full buffer, and the dead peer is
+        # dropped without waiting for the QUIC idle close (qore#5792)
+        sse_handler.go.dec();
+        assertEq("SSE-CLIENT-OVERFLOW", sse_handler.producer_done.get(ReapTimeout),
+            "the dead SSE peer was dropped when its data reached the stream's bound");
     }
 
     #! A live peer must not be reaped: keepalive PINGs hold the session open

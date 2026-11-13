@@ -1,0 +1,216 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over HTTP/3 (QUIC) and the reset of their stream
+
+/*  WebSocketH3ConnectReset.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5862: when the server reset the extended-CONNECT stream of an HTTP/3 WebSocket client without END_STREAM,
+    the client's QUIC session only marked the stream's body complete: the tunnel stayed active, so the stream was
+    never released or reported, and the client was not told: its connection stayed open until a timeout.  The reset
+    now ends the tunnel: the stream is released and the reset reaches the client as an error close.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketH3ConnectResetTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Resets its stream when the client sends "reset"
+class TestConnection inherits WebSocketConnection {
+    private {
+        TestHandler test_handler;
+        string conn_id;
+    }
+
+    constructor(TestHandler handler, string cid) : WebSocketConnection(handler) {
+        test_handler = handler;
+        conn_id = cid;
+    }
+
+    gotMessage(string msg) {
+        if (msg == "reset") {
+            test_handler.resetStream(conn_id);
+        }
+    }
+}
+
+class TestHandler inherits WebSocketHandler {
+    private {
+        #! the server socket and the HTTP/3 session and stream of each connection, by connection ID
+        hash<string, hash<auto>> streams;
+        Mutex streams_lock();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TestConnection(self, cid);
+    }
+
+    bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
+        {
+            AutoLock al(streams_lock);
+            streams{cx.id.toString()} = {
+                "sock": sock,
+                "session_id": cx."header-info".session_id,
+                "stream_id": cx."header-info".stream_id,
+            };
+        }
+        return WebSocketHandler::startImpl(lid, cx, hdr, sock);
+    }
+
+    #! Resets the HTTP/3 stream of the connection (RESET_STREAM with an error, no END_STREAM)
+    resetStream(string cid) {
+        hash<auto> st;
+        {
+            AutoLock al(streams_lock);
+            st = streams{cid};
+        }
+        st.sock.cancelQuicStream(st.session_id, st.stream_id);
+    }
+}
+
+class WebSocketH3ConnectResetTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        TestHandler handler();
+        int port;
+    }
+
+    constructor() : QUnit::Test("WebSocketH3ConnectReset", "1.0") {
+        addTestCase("HTTP/3: the reset of the WebSocket stream by the server reaches the client as an error",
+            \testReset());
+        addTestCase("HTTP/3: the reset of a CONNECT stream releases it and reaches its reader as an error",
+            \testRawReset());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    testReset() {
+        Queue closed();
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (!exists msg) {
+                closed.push({"code": wsc.getCloseCode(), "reason": wsc.getCloseReason()});
+            }
+        }, {
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+            # a hang guard only: without the fix, nothing ended the connection before a timeout
+            "timeout": HangGuard,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp3(), "the connection uses HTTP/3");
+        wsc.send("reset");
+        hash<auto> c = closed.get(HangGuard);
+        assertEq(WSCC_AbnormalClosure, c.code, "the connection is lost");
+        assertRegex("^QUIC-STREAM-RESET: ", c.reason, "the close reports the reset of the stream");
+    }
+
+    #! A raw extended-CONNECT stream (no WebSocket client): the reader gets the reset, and the stream is released
+    testRawReset() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_socket_stream_records() is only registered in a library-debug build");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(sprintf("https://localhost:%d/", port));
+        on_exit {
+            try {
+                stream.cancel();
+            } catch () {
+            }
+        }
+        stream.startStreaming("CONNECT", "/", {
+            ":protocol": "websocket",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        }, True);
+        auto rh = stream.readData(HangGuard);
+        assertEq(200, rh.status_code, "the server accepts the WebSocket connection");
+        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+        Socket sock = conn.getSocket();
+        int session_id = cast<HttpClientIo::Http3ClientConnection>(conn).getSessionId();
+        assertEq(1, call_function("dbg_socket_stream_records", sock, session_id).streams, "the stream is recorded");
+
+        # the server resets the stream when it gets this message (client frames are masked)
+        stream.sendData(ws_encode_message("reset", WSOP_Text, True));
+        # the reader gets the reset as an error: without the fix it waited (the hang guard)
+        *hash<auto> err;
+        while (True) {
+            auto d = stream.readData(HangGuard);
+            if (!exists d) {
+                break;
+            }
+            if (d.typeCode() == NT_HASH && (d.error || d.err)) {
+                err = d.error ?? d;
+                break;
+            }
+        }
+        assertEq("QUIC-STREAM-RESET", err.err, "the reader gets the reset of the stream");
+        # and the stream's record is released
+        assertEq(0, call_function("dbg_socket_stream_records", sock, session_id).streams,
+            "the stream's record is released");
+    }
+}

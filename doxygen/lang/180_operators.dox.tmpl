@@ -1430,6 +1430,28 @@ foreach string key in (keys hash)
     |@ref int_type "int"|Gives the result of adding its arguments
     |@ref hash_type "hash"|Gives the result of concatenating/merging its arguments. Any common keys will be overwritten by the values in the second hash (\a expression2)
 
+    @par Lists
+    A list that \c + gives keeps the type of a typed list where it can:
+    - a value added at either end of a list gives a list of the common type of the list's element type and the type
+      of the value (ex: \c list&lt;int&gt; for <tt>l + 1</tt> and for <tt>1 + l</tt>, if \c l is a
+      \c list&lt;int&gt;; \c list&lt;*int&gt; for a \c list&lt;*int&gt;), or \c list&lt;auto&gt; if they have none;
+      an empty \c list&lt;auto&gt; takes the type of the value, and a plain list (with no element type) gives a
+      \c list&lt;auto&gt;
+    - two lists give a list of the common type of their element types, or \c list&lt;auto&gt; if they have none
+      (also for a plain list and a typed list); two plain lists give a plain list, and an empty \c list&lt;auto&gt; on
+      the left takes the type of the list on the right
+    @par
+    As these types are those of the values at runtime, the result has a type at parse time only when it does not
+    depend on them: when a value of type \c int, \c float, \c number, \c string, \c bool or \c binary is added to a
+    plain list or to a list whose element type is \c int, \c float, \c number, \c string, \c bool, \c binary,
+    \c *bool or \c *binary.  Otherwise the result has no parse-time type, and an error in its use is raised at
+    runtime, in every execution mode:
+    @code{.py}
+list<softint> l = (1, 2);
+# raises RUNTIME-TYPE-ERROR when executed: the result is a list
+int x = l + 1;
+    @endcode
+
     This operator does not throw any exceptions.
 
     <hr>
@@ -2263,6 +2285,8 @@ if (x || y)
     @par Synopsis
     Assigns a value to an lvalue and returns the value assigned.
 
+    @anchor lvalue_evaluation_order The keys and indices of an lvalue path are evaluated from the root out, and the index of its last step after them, in every @ref execution_modes "execution mode", as when the path is read as a value: <tt>h.(k1()).(k2())[i()] = v()</tt> evaluates \c v(), \c k1(), \c k2() and \c i() in this order.  The same order applies to every operator that changes an lvalue (compound assignments, \c ++ and \c --, @ref remove "remove", @ref delete "delete", @ref splice "splice", @ref extract "extract", @ref push "push", @ref unshift "unshift", @ref pop "pop") and to a @ref lvalue_references "reference" to it; a key or an index of the path that raises an exception stops the evaluation, and the lvalue is not changed.
+
     @par Syntax
     \a lvalue <tt>=</tt> \a expression
 
@@ -2312,6 +2336,11 @@ if (x || y)
     closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
     its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
     destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
+    When the rvalue is a variable (a local variable, a parameter, a global variable, a variable captured by a closure
+    or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
+    program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
+    variable's own value and shows the changes later made through the variable; this is the same in every
+    @ref exec_mode_overview "execution mode".\n<br>
     This operator should only be used in very special circumstances by
     expert users and is only allowed when the @ref allow-weak-references "%allow-weak-references" sandbox
     permission is set.
@@ -2403,6 +2432,16 @@ if (x || y)
     |\a lvalue (@ref nothing)|if the \a lvalue's type has a default value (ex: @ref int_type "int", @ref string_type "string"), the \a lvalue first takes that value and is processed as above; an or-nothing lvalue (ex: \c *string) takes the default value of its plain type, unless \a expression has no value, which leaves it with no value; otherwise the \a lvalue will be assigned to the value of \a expression.
     |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer, and the \a expression will be evaluated and converted to an integer if necessary, and then the result will be added to the \a lvalue.
 
+    @anchor compound_assignment_union_nothing
+    @note A union type (ex: <tt>union&lt;int, float&gt;</tt>, <tt>*union&lt;int, float&gt;</tt>) has no default value,
+    and its \a lvalue is not a list or a hash \a lvalue even if a member of the union is a list or a hash; an or-nothing
+    union with no value is therefore assigned the value of the \a expression, which the union must accept, or
+    \c RUNTIME-TYPE-ERROR is raised; ex:
+    - <tt>*union&lt;int, float&gt; u; u += 2.5;</tt> gives \c 2.5
+    - <tt>*union&lt;float, int&gt; u; u += 2;</tt> gives \c 2.0
+    - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u += 2;</tt> gives \c 2
+    - <tt>*union&lt;int, float&gt; u; u += 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
+
     <hr>
     @subsection minus_equals_operator Minus Equals Operator (-=)
 
@@ -2432,6 +2471,13 @@ if (x || y)
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref list_type "list")|each element in the list will be converted to a string (if necessary) and the key represented by each string will be removed from the hash or object
     |\a lvalue (@ref nothing), \a expression (any type)|a hash lvalue is left with no value; otherwise, if the \a lvalue's type, or for an or-nothing lvalue (ex: \c *int) its plain type, has a default value, the \a lvalue first takes that value and is processed as above (ex: <tt>int i; i -= 0;</tt> gives 0); otherwise the negated \a expression will be assigned to \a lvalue; an \a expression with no value leaves the \a lvalue unchanged
     |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer (if necessary), and the \a expression will be evaluated and converted to an integer (if necessary), and then the result will be subtracted from the \a lvalue; for an lvalue of an int type and a date \a expression, the \a lvalue is assigned the result of <tt>lvalue - expression</tt>, a date, which an \c int or \c *int lvalue (including an int member of a typed hash) refuses with \c RUNTIME-TYPE-ERROR and a \c softint lvalue converts to an int; a \c timeout lvalue subtracts the date in milliseconds
+
+    @note A union type has no default value (see @ref compound_assignment_union_nothing "+="): an or-nothing union with
+    no value is assigned the negated \a expression, which the union must accept, or \c RUNTIME-TYPE-ERROR is raised;
+    ex:
+    - <tt>*union&lt;int, float&gt; u; u -= 2.5;</tt> gives \c -2.5
+    - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u -= 2;</tt> gives \c -2
+    - <tt>*union&lt;int, float&gt; u; u -= 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
 
     <hr>
     @subsection and_equals_operator And Equals Operator (&=)

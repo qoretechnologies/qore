@@ -1,0 +1,275 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class UserFunctionalDomainsTest
+
+#! Tests functional-domain declarations on Qore functions and methods (issue #5803)
+/** A function or method declares the functional domains it provides with an attribute list after its parameter list,
+    as builtin code does in qpp: <tt>sub f() [dom=PROCESS_CONTROL] {}</tt> (the names of the \c DOM_* constants; the
+    qpp names \c PROCESS and \c MODULES are accepted too).  A Program whose parse options restrict a domain
+    cannot reference the code directly (a parse error), and is refused an indirect call at run time.  An override must
+    declare every functional domain of the method it overrides.
+
+    The run-time paths, user modules, AOT modules and the execution modes are tested in
+    user-functional-domains-modes.qtest.
+*/
+public class UserFunctionalDomainsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("UserFunctionalDomainsTest", "1.0") {
+        addTestCase("attribute list forms", \testGrammar());
+        addTestCase("out-of-line method definitions", \testOutOfLine());
+        addTestCase("attribute list errors", \testGrammarErrors());
+        addTestCase("domain names", \testDomainNames());
+        addTestCase("index expressions are not attribute lists", \testIndexExpressions());
+        addTestCase("direct references are refused at parse time", \testParseRefusal());
+        addTestCase("call references are refused at parse time", \testReferenceRefusal());
+        addTestCase("overloads resolved at run time", \testOverloads());
+        addTestCase("overrides must declare the domains of the method they override", \testOverrides());
+        addTestCase("unrestricted Programs call declared code", \testUnrestricted());
+        set_return_value(main());
+    }
+
+    #! code with every form of attribute list, defined in a Program without restrictions
+    const DefinitionCode = "
+public int sub tagged() [dom=PROCESS_CONTROL] { return 1; }
+public int sub tagged_two(int x) [dom=NETWORK,FILESYSTEM;] { return x; }
+public int sub tagged_case() [ dom = process ] { return 2; }
+public int sub plain() { return 3; }
+
+public class Tagged inherits Base {
+    constructor() [dom=PROCESS_CONTROL] {}
+    constructor(int x) [dom=PROCESS_CONTROL] : Base(x) {}
+    static int s() [dom=PROCESS_CONTROL] { return 4; }
+    int m() [dom=PROCESS_CONTROL] { return 5; }
+    int k() const [dom=PROCESS_CONTROL] { return 6; }
+    int plain() { return 7; }
+}
+
+public class Base {
+    constructor() {}
+    constructor(int x) {}
+}
+
+public class Abstract {
+    abstract int a() [dom=PROCESS_CONTROL];
+}
+";
+
+    #! parses \a code in a new Program with the given parse options and returns the Program
+    private Program parse(string code, int po = PO_NEW_STYLE) {
+        Program p(po);
+        p.parse(code, "test");
+        return p;
+    }
+
+    #! parses \a code in a Program restricted with PO_NO_PROCESS_CONTROL after the definitions and returns the
+    #! exception description, or nothing if there was no exception
+    private *string parseRestricted(string code) {
+        Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        try {
+            p.parse(DefinitionCode + code, "restricted");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+
+    testGrammar() {
+        Program p = parse(DefinitionCode);
+        assertEq(1, p.callFunction("tagged"));
+        assertEq(2, p.callFunction("tagged_two", 2));
+        assertEq(2, p.callFunction("tagged_case"));
+        assertEq(3, p.callFunction("plain"));
+    }
+
+    #! the names of the DOM_* constants, and the qpp names PROCESS and MODULES for two of them (issue #5843)
+    testDomainNames() {
+        # an alias restricts the same domain as the canonical name, which the messages give
+        foreach string name in ("PROCESS_CONTROL", "PROCESS", "process_control", "process") {
+            Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+            assertThrows("PARSE-EXCEPTION", "functional domain: PROCESS_CONTROL \\(restricted by "
+                "PO_NO_PROCESS_CONTROL\\)$", \p.parse(), (sprintf("int sub f() [dom=%s] { return 1; } "
+                "int sub g() { return f(); }", name), "names"), name);
+        }
+        foreach string name in ("MODULE", "MODULES") {
+            Program p(PO_NEW_STYLE | PO_NO_MODULES);
+            assertThrows("PARSE-EXCEPTION", "functional domain: MODULE \\(restricted by PO_NO_MODULES\\)$",
+                \p.parse(), (sprintf("int sub f() [dom=%s] { return 1; } int sub g() { return f(); }", name), "names"),
+                name);
+            # a Program without the restriction calls the code
+            Program u = parse(sprintf("int sub f() [dom=%s] { return 1; }", name));
+            assertEq(1, u.callFunction("f"), name);
+        }
+        # an alias and its canonical name are the same domain
+        assertThrows("PARSE-EXCEPTION", "functional domain 'PROCESS_CONTROL' given twice", \parse(),
+            "int sub f() [dom=PROCESS,PROCESS_CONTROL] { return 1; }");
+        assertThrows("PARSE-EXCEPTION", "functional domain 'MODULES' given twice", \parse(),
+            "int sub f() [dom=MODULE,MODULES] { return 1; }");
+        # an override may declare the domain of the method it overrides with the other name
+        Program o = parse("class A { int m() [dom=PROCESS] { return 1; } } class B inherits A { "
+            "int m() [dom=PROCESS_CONTROL] { return 2; } } int sub t() { B b(); return b.m(); }");
+        assertEq(2, o.callFunction("t"));
+        # the error for a missing domain names it as the DOM_* constant does
+        assertThrows("DOMAIN-METHOD-ERROR", "without declaring functional domain MODULE", \parse(),
+            "class A { int m() [dom=MODULES] { return 1; } } class B inherits A { int m() { return 2; } }");
+    }
+
+    testOutOfLine() {
+        # out-of-line method definitions are not allowed with PO_STRONG_ENCAPSULATION
+        Program p(PO_DEFAULT);
+        p.parse("
+class D;
+static D::sdef() [dom=PROCESS_CONTROL] { return 5; }
+static D::other() [ dom = PROCESS ; ] { return 6; }
+static D::idx() { return (1, 2); }
+sub f() { return (D::sdef(), D::other(), D::idx()[1]); }
+", "ool");
+        assertEq((5, 6, 2), p.callFunction("f"));
+
+        # the out-of-line definition declares the domain
+        Program r(PO_NO_PROCESS_CONTROL);
+        assertThrows("PARSE-EXCEPTION", "functional domain: PROCESS_CONTROL \\(restricted by PO_NO_PROCESS_CONTROL\\)",
+            \r.parse(), ("class D; static D::sdef() [dom=PROCESS_CONTROL] { return 5; } sub f() { return D::sdef(); }",
+            "ool"));
+    }
+
+    testGrammarErrors() {
+        assertThrows("PARSE-EXCEPTION", "unknown functional domain 'NOPE'", \parse(), "sub f() [dom=NOPE] {}");
+        assertThrows("PARSE-EXCEPTION", "functional domain 'PROCESS_CONTROL' given twice", \parse(),
+            "sub f() [dom=PROCESS_CONTROL,PROCESS_CONTROL] {}");
+        assertThrows("PARSE-EXCEPTION", "attribute key given twice", \parse(),
+            "sub f() [dom=PROCESS;dom=NETWORK] {}");
+        # an unknown key is not recognized as an attribute list
+        assertThrows("PARSE-EXCEPTION", "syntax error", \parse(), "sub f() [foo=PROCESS] {}");
+        assertThrows("PARSE-EXCEPTION", "destructor\\(\\) methods cannot declare functional domains", \parse(),
+            "class A { destructor() [dom=PROCESS_CONTROL] {} }");
+        assertThrows("PARSE-EXCEPTION", "copy\\(\\) methods cannot declare functional domains", \parse(),
+            "class A { copy() [dom=PROCESS_CONTROL] {} }");
+        assertThrows("PARSE-EXCEPTION", "methodGate\\(\\) methods cannot declare functional domains", \parse(),
+            "class A { methodGate(string m) [dom=PROCESS_CONTROL] {} }");
+        # closures cannot declare functional domains
+        assertThrows("PARSE-EXCEPTION", "unexpected attribute list", \parse(),
+            "code c = sub () [dom=PROCESS_CONTROL] {};");
+        # the attribute list follows the const qualifier
+        assertThrows("PARSE-EXCEPTION", "syntax error", \parse(),
+            "class A { int k() [dom=PROCESS_CONTROL] const { return 1; } }");
+    }
+
+    testIndexExpressions() {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+list<int> sub l() { return (7, 8, 9); }
+int sub eq() { int dom = 1; return l()[dom == 1]; }
+int sub idx() { int dom = 2; return l()[dom]; }
+bool sub match() { string dom = \"x\"; return (dom =~ /x/); }
+int sub spaced() { int dom = 0; return l()[ dom ]; }
+", "idx");
+        assertEq(8, p.callFunction("eq"));
+        assertEq(9, p.callFunction("idx"));
+        assertTrue(p.callFunction("match"));
+        assertEq(7, p.callFunction("spaced"));
+    }
+
+    testParseRefusal() {
+        string msg = "functional domain: PROCESS_CONTROL \\(restricted by PO_NO_PROCESS_CONTROL\\)";
+        assertRegex("access to function 'tagged\\(\\)'; " + msg, parseRestricted("auto sub t() { return tagged(); }"));
+        assertRegex("access to method 'Tagged::s\\(\\)'; " + msg,
+            parseRestricted("auto sub t() { return Tagged::s(); }"));
+        assertRegex("access to method 'Tagged::m\\(\\)'; " + msg,
+            parseRestricted("auto sub t(Tagged t) { return t.m(); }"));
+        assertRegex("access to method 'Tagged::k\\(\\)'; " + msg,
+            parseRestricted("auto sub t(Tagged t) { return t.k(); }"));
+        assertRegex("access to method 'Tagged::constructor\\(\\)'; " + msg,
+            parseRestricted("auto sub t() { return new Tagged(); }"));
+        assertRegex("access to method 'Tagged::constructor\\(\\)'; " + msg,
+            parseRestricted("auto sub t() { Tagged t(); return t; }"));
+        # several domains: only the restricted one is named
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        assertThrows("PARSE-EXCEPTION", "functional domain: NETWORK \\(restricted by PO_NO_NETWORK\\)$", \p.parse(),
+            (DefinitionCode + "auto sub t() { return tagged_two(1); }", "net"));
+        # code without the domain is not refused
+        assertNothing(parseRestricted("auto sub t(Tagged t) { return t.plain(); } auto sub u() { return plain(); }"));
+        # a subclass constructor with an explicit base class constructor call is refused
+        assertRegex("access to method 'Tagged::constructor\\(int x\\)'|access to method 'Tagged::constructor\\(\\)'",
+            parseRestricted("class Sub inherits Tagged { constructor() : Tagged(1) {} }"));
+    }
+
+    testReferenceRefusal() {
+        string msg = "functional domain: PROCESS_CONTROL \\(restricted by PO_NO_PROCESS_CONTROL\\)";
+        assertRegex("access to function 'tagged'; " + msg, parseRestricted("code sub t() { return \\tagged(); }"));
+        assertRegex("call reference to method 'Tagged::s\\(\\)'; " + msg,
+            parseRestricted("code sub t() { return \\Tagged::s(); }"));
+        assertRegex("call reference to method 'Tagged::m\\(\\)'; " + msg,
+            parseRestricted("code sub t(Tagged t) { return \\t.m(); }"));
+        # a reference to a method of the own class
+        assertRegex("call reference to method 'Own::m\\(\\)'; " + msg,
+            parseRestricted("class Own { int m() [dom=PROCESS_CONTROL] { return 1; } code r() { return \\m(); } }"));
+    }
+
+    testOverloads() {
+        # a call that cannot be resolved at parse time is checked when it is resolved at run time
+        Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        p.parse("
+int sub f(int x) [dom=PROCESS_CONTROL] { return x; }
+string sub f(string x) { return x; }
+auto sub call(auto v) { return f(v); }
+", "overload");
+        assertEq("a", p.callFunction("call", "a"));
+        assertThrows("INVALID-FUNCTION-ACCESS", "access to function 'f\\(int x\\)'; functional domain: PROCESS_CONTROL ",
+            \p.callFunction(), ("call", 1));
+    }
+
+    testOverrides() {
+        string err = "overrides parent class method A::m\\(\\) \\[dom=PROCESS_CONTROL\\] without declaring functional "
+            "domain PROCESS_CONTROL";
+        assertThrows("DOMAIN-METHOD-ERROR", err, \parse(),
+            "class A { int m() [dom=PROCESS_CONTROL] { return 1; } } class B inherits A { int m() { return 2; } }");
+        # the implementation of an abstract method
+        assertThrows("DOMAIN-METHOD-ERROR", err, \parse(),
+            "class A { abstract int m() [dom=PROCESS_CONTROL]; } class B inherits A { int m() { return 2; } }");
+        # a missing domain is named
+        assertThrows("DOMAIN-METHOD-ERROR", "without declaring functional domain NETWORK", \parse(),
+            "class A { int m() [dom=PROCESS_CONTROL,NETWORK] { return 1; } } class B inherits A { "
+            "int m() [dom=PROCESS_CONTROL] { return 2; } }");
+        # repeating the domains and adding others is allowed
+        Program p = parse("class A { int m() [dom=PROCESS_CONTROL] { return 1; } } "
+            "class B inherits A { int m() [dom=PROCESS_CONTROL,NETWORK] { return 2; } } "
+            "int sub t() { B b(); return b.m(); }");
+        assertEq(2, p.callFunction("t"));
+        # a method with another signature does not override
+        p = parse("class A { int m(int x) [dom=PROCESS_CONTROL] { return x; } } "
+            "class B inherits A { int m(string x) { return 2; } } int sub t() { B b(); return b.m(\"x\"); }");
+        assertEq(2, p.callFunction("t"));
+        # a static method does not override
+        p = parse("class A { static int s() [dom=PROCESS_CONTROL] { return 1; } } "
+            "class B inherits A { static int s() { return 2; } } int sub t() { return B::s(); }");
+        assertEq(2, p.callFunction("t"));
+
+        # an override that adds a domain is refused when a call through a base class type dispatches to it
+        p = new Program(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        p.parse("class A { int m() { return 1; } } class B inherits A { int m() [dom=PROCESS_CONTROL] { return 2; } } "
+            "int sub t(A a) { return a.m(); } int sub run_a() { return t(new A()); } "
+            "int sub run_b() { return t(new B()); }", "dispatch");
+        assertEq(1, p.callFunction("run_a"));
+        assertThrows("INVALID-FUNCTION-ACCESS", "access to method '::B::m\\(\\)'; functional domain: PROCESS_CONTROL ",
+            \p.callFunction(), "run_b");
+    }
+
+    testUnrestricted() {
+        Program p = parse(DefinitionCode + "
+auto sub t() {
+    Tagged t();
+    code r = \\t.m();
+    return (tagged(), Tagged::s(), t.m(), t.k(), r(), call_function(\"tagged\"), call_object_method(t, \"m\"));
+}
+");
+        assertEq((1, 4, 5, 6, 5, 1, 5), p.callFunction("t"));
+    }
+}

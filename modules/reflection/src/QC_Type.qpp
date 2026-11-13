@@ -878,7 +878,12 @@ list<Type> args = new Type("Queue<int>").getTypeArguments();
     if (!hashdecl) {
         return QoreValue();
     }
-    QoreProgram* pgm = t->source_pgm ? t->source_pgm : get_reflection_lookup_program(runtime_cfg);
+    // the Program that declares the typed hash, if the type has no source Program: its initializers run there (they
+    // can call its functions), and the export boundary of a user module is decided on it
+    QoreProgram* pgm = t->source_pgm ? t->source_pgm : hashdecl->getProgram();
+    if (!pgm) {
+        pgm = get_reflection_lookup_program(runtime_cfg);
+    }
     return new QoreObject(QC_TYPEDHASH, pgm, new QoreReflectionTypedHash(pgm, hashdecl));
 }
 

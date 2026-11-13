@@ -185,8 +185,10 @@ static int qore_aot_parse_size(const std::string& s, size_t start, size_t end, s
 int qore_aot_parse_named_call_arg_suffix(std::string& ref, QoreAOTNamedCallArgs& named) {
     static constexpr const char* map_marker = "\nargmap:";
     static constexpr const char* names_marker = "\nargnames:";
-    size_t map_pos = ref.find(map_marker);
-    size_t names_pos = ref.find(names_marker);
+    // the binding is written last, after the signature and the explicit type arguments, whose text (a default
+    // value) can contain a marker
+    size_t map_pos = ref.rfind(map_marker);
+    size_t names_pos = ref.rfind(names_marker);
     if (map_pos != std::string::npos && names_pos != std::string::npos) {
         return -1;
     }
@@ -247,6 +249,38 @@ int qore_aot_parse_named_call_arg_suffix(std::string& ref, QoreAOTNamedCallArgs&
     return 0;
 }
 
+int qore_aot_apply_named_call_args(QoreValue& call, QoreAOTNamedCallArgs& named, std::string& error) {
+    if (!named.has_names && !named.has_map) {
+        return 0;
+    }
+    AbstractQoreNode* node = call.getInternalNode();
+    // the call of a method of an object is the method call of the dot operator
+    QoreDotEvalOperatorNode* dot = node ? dynamic_cast<QoreDotEvalOperatorNode*>(node) : nullptr;
+    FunctionCallBase* fcb = dot ? static_cast<FunctionCallBase*>(dot->getMethodCall())
+        : (node ? dynamic_cast<FunctionCallBase*>(node) : nullptr);
+    if (!fcb) {
+        error = "the named call is not a call that can bind its arguments";
+        return -1;
+    }
+    // the binding has one entry for each argument
+    size_t nargs = fcb->getArgs() ? fcb->getArgs()->size() : 0;
+    if ((named.has_names && named.names.size() != nargs)
+            || (named.has_map && named.source_to_param.size() != nargs)) {
+        error = "the binding of the named call does not match the number of its arguments";
+        return -1;
+    }
+    if (named.has_map) {
+        fcb->setCallArgEvalMap(std::move(named.source_to_param), named.result_size);
+        return 0;
+    }
+    fcb->setRuntimeArgNames(std::move(named.names));
+    // a function call resolved at run time by parameter name is of a class of its own
+    if (FunctionCallNode* fcn = dot ? nullptr : dynamic_cast<FunctionCallNode*>(node)) {
+        call = FunctionCallNode::makeRuntimeNamed(fcn);
+    }
+    return 0;
+}
+
 // ============================================================================
 // FUNC_CALL (1)
 // ============================================================================
@@ -279,20 +313,13 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
             ctx.writer.writeStringRef(call->getName());
         }
         if (!deferred_source_function) {
-            std::string sig_ref;
-            if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
-                if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
-                    sig_ref = "sig:";
-                    sig_ref += sig->getSignatureText();
-                }
-            }
             // the arguments of a named call are written in source order (the order of their evaluation); the call
             // keeps the positions of their parameters (a call bound at parse time) or their names (a call resolved
-            // at run time by parameter name) after the signature
-            sig_ref += qore_aot_named_call_arg_suffix(call);
-            ctx.writer.writeStringRef(sig_ref.c_str());
+            // at run time by parameter name) last
+            ctx.writer.writeStringRef((qore_aot_get_function_call_signature_ref(call)
+                + qore_aot_named_call_arg_suffix(call)).c_str());
         } else {
-            ctx.writer.writeStringRef("");
+            ctx.writer.writeStringRef(QORE_AOT_DEFERRED_SOURCE_CALL_SLOT);
         }
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -314,6 +341,38 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
         return true;
     }
     return false;
+}
+
+// ============================================================================
+// SOURCE_LOCATION (122): the location of the call expression that follows (#5745)
+// ============================================================================
+
+//! not written through the registry: classifyAndWriteExpr() writes the location before a call
+static bool write_expr_source_location(AOTExprWriteCtx& ctx) {
+    return false;
+}
+
+//! Gives a call node read from an AOT image the location of the call
+static void qore_aot_set_call_location(AbstractQoreNode* node, const QoreProgramLocation* loc) {
+    if (auto* pn = dynamic_cast<ParseNode*>(node)) {
+        pn->loc = loc;
+    }
+    // the frame of a method call through the dot operator is located at its method call node
+    if (auto* dot = dynamic_cast<QoreDotEvalOperatorNode*>(node)) {
+        if (MethodCallNode* m = dot->getMethodCall()) {
+            m->loc = loc;
+        }
+    }
+}
+
+static QoreValue read_expr_source_location(AOTExprReadCtx& ctx) {
+    const QoreProgramLocation* loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
+    QoreValue v = readOneExpr(ctx.reader, ctx.ptr, ctx.end, ctx.error, ctx.pgm, ctx.locals, ctx.num_locals,
+        ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (loc && ctx.error.empty() && v.hasNode()) {
+        qore_aot_set_call_location(v.getInternalNode(), loc);
+    }
+    return v;
 }
 
 static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
@@ -348,7 +407,9 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
         ctx.error = "empty function name in inline FUNC_CALL expression";
         return QoreValue();
     }
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
+    const FunctionEntry* fe = sig_ref && !strcmp(sig_ref, QORE_AOT_DEFERRED_SOURCE_CALL_SLOT)
+        ? qore_aot_resolve_deferred_source_function_entry(ctx.pgm, func_name)
+        : qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
     if (!fe) {
         QoreValue fallback = qore_aot_make_deferred_function_call(ctx.pgm, func_name, pln);
         pln = nullptr;
@@ -365,41 +426,57 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
     // the active runtime program when they execute.
     FunctionCallNode* fcn = new FunctionCallNode(
         &loc_builtin, fe, pln);
-    // the signature, followed by the binding of the arguments of a named call
-    std::string sig_text = sig_ref ? sig_ref : "";
+    // the binding of the arguments of a named call is written last, after the signature and the explicit type
+    // arguments (see qore_aot_named_call_arg_suffix())
+    std::string sig_storage = sig_ref ? sig_ref : "";
     QoreAOTNamedCallArgs named;
-    if (qore_aot_parse_named_call_arg_suffix(sig_text, named)) {
-        fcn->deref(nullptr);
+    if (qore_aot_parse_named_call_arg_suffix(sig_storage, named)) {
+        fcn->deref();
         ctx.error = "invalid named call arguments in inline FUNC_CALL expression for '";
         ctx.error += func_name;
         ctx.error += "'";
         return QoreValue();
     }
-    if (sig_text.compare(0, 4, "sig:") == 0) {
-        if (const AbstractQoreFunctionVariant* v =
-                fe->getFunction()->findVariantBySignatureText(sig_text.c_str() + 4)) {
-            fcn->setVariant(v);
+    if (sig_ref) {
+        sig_ref = sig_storage.c_str();
+    }
+    // the signature reference: the variant, then the explicit type arguments of the call, if any (qore#5865)
+    const char* type_args = qore_aot_find_call_type_args(sig_ref);
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    if (sig_ref && strncmp(sig_ref, "sig:", 4) == 0) {
+        std::string sig_text = type_args ? std::string(sig_ref + 4, type_args - sig_ref - 4) : std::string(sig_ref + 4);
+        variant = fe->getFunction()->findVariantBySignatureText(sig_text.c_str());
+        if (variant) {
+            fcn->setVariant(variant);
+        }
+    }
+    if (type_args) {
+        const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+        QoreTypeParamInstantiation inst;
+        // the type arguments can name the type parameters of the code whose context is being built (qore#5733)
+        if (!qore_aot_decode_call_type_args(ctx.pgm, type_args, uvb ? uvb->getUserSignature() : nullptr,
+                qore_aot_get_type_param_owner(), inst)) {
+            fcn->deref();
+            ctx.error = "cannot resolve the explicit type arguments of the call of '";
+            ctx.error += func_name;
+            ctx.error += "' in inline FUNC_CALL expression";
+            return QoreValue();
+        }
+        if (!inst.type_args.empty()) {
+            fcn->setExplicitTypeParamInstantiation(std::move(inst));
         }
     }
     if (pln) {
         fcn->resolveParseArgs();
     }
-    // the binding has one entry for each argument
-    size_t nargs = fcn->getArgs() ? fcn->getArgs()->size() : 0;
-    if ((named.has_names && named.names.size() != nargs)
-            || (named.has_map && named.source_to_param.size() != nargs)) {
-        fcn->deref(nullptr);
-        ctx.error = "named call arguments that do not match the number of arguments in inline FUNC_CALL expression";
+    QoreValue rv(fcn);
+    std::string named_error;
+    if (qore_aot_apply_named_call_args(rv, named, named_error)) {
+        rv.discard(nullptr);
+        ctx.error = named_error + " in inline FUNC_CALL expression";
         return QoreValue();
     }
-    if (named.has_names) {
-        fcn->setRuntimeArgNames(std::move(named.names));
-        return QoreValue(FunctionCallNode::makeRuntimeNamed(fcn));
-    }
-    if (named.has_map) {
-        fcn->setCallArgEvalMap(std::move(named.source_to_param), named.result_size);
-    }
-    return QoreValue(fcn);
+    return rv;
 }
 
 // ============================================================================
@@ -482,9 +559,8 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
         ctx.writer.writeStringRef(class_ref.c_str());
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo());
-        // the binding of the arguments of a named call follows the method reference (see
-        // read_expr_self_method_call())
+            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        // the binding of the arguments of a named call is written last (see read_expr_method_call_named())
         method_ref += qore_aot_named_call_arg_suffix(call);
         ctx.writer.writeStringRef(method_ref.c_str());
         const QoreListNode* args = call->getArgs();
@@ -506,38 +582,10 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
     return false;
 }
 
-static QoreValue read_expr_self_method_call_intern(AOTExprReadCtx& ctx, const char* class_path,
-        const char* method_ref_str);
-
-int qore_aot_apply_named_call_args(QoreValue& call, QoreAOTNamedCallArgs& named, std::string& error);
-
-static QoreValue read_expr_self_method_call(AOTExprReadCtx& ctx) {
+//! \a method_ref_str: the method reference without the binding of the arguments of a named call
+static QoreValue read_expr_self_method_call_intern(AOTExprReadCtx& ctx, const char* method_ref_str) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
-    const char* method_ref_str = ctx.reader.readStringRef(ctx.ptr);
-    // the arguments are written in source order: a named call keeps the positions of their parameters (bound at parse
-    // time) or their names (resolved at run time by parameter name) after the method reference
-    std::string method_ref_text = method_ref_str ? method_ref_str : "";
-    QoreAOTNamedCallArgs named;
-    if (qore_aot_parse_named_call_arg_suffix(method_ref_text, named)) {
-        ctx.error = "invalid named call arguments in inline SELF_METHOD_CALL expression";
-        return QoreValue();
-    }
-    QoreValue rv = read_expr_self_method_call_intern(ctx, class_path,
-        method_ref_str ? method_ref_text.c_str() : nullptr);
-    if (!ctx.error.empty() || rv.isNothing()) {
-        return rv;
-    }
-    std::string error;
-    if (qore_aot_apply_named_call_args(rv, named, error)) {
-        rv.discard(nullptr);
-        ctx.error = error + " in inline SELF_METHOD_CALL expression";
-        return QoreValue();
-    }
-    return rv;
-}
-
-static QoreValue read_expr_self_method_call_intern(AOTExprReadCtx& ctx, const char* class_path,
-        const char* method_ref_str) {
+    ctx.reader.readStringRef(ctx.ptr);
     QoreAOTStaticMethodRef method_ref(method_ref_str);
     QoreParseListNode* pln = nullptr;
     if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_SELF_CALL_ARGS) != 0) {
@@ -775,9 +823,8 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
         }
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo());
-        // the binding of the arguments of a named call follows the method reference (see
-        // read_expr_static_method_call())
+            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        // the binding of the arguments of a named call is written last (see read_expr_method_call_named())
         method_ref += qore_aot_named_call_arg_suffix(call);
         ctx.writer.writeStringRef(method_ref.c_str());
         if ((ctx.writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
@@ -807,68 +854,10 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
     return false;
 }
 
-static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx, const char* class_path,
-        const char* method_ref_str);
-
-int qore_aot_apply_named_call_args(QoreValue& call, QoreAOTNamedCallArgs& named, std::string& error) {
-    if (!named.has_names && !named.has_map) {
-        return 0;
-    }
-    AbstractQoreNode* node = call.getInternalNode();
-    // the call of a method of an object is the method call of the dot operator
-    QoreDotEvalOperatorNode* dot = node ? dynamic_cast<QoreDotEvalOperatorNode*>(node) : nullptr;
-    FunctionCallBase* fcb = dot ? static_cast<FunctionCallBase*>(dot->getMethodCall())
-        : (node ? dynamic_cast<FunctionCallBase*>(node) : nullptr);
-    if (!fcb) {
-        error = "the named call is not a call that can bind its arguments";
-        return -1;
-    }
-    // the binding has one entry for each argument
-    size_t nargs = fcb->getArgs() ? fcb->getArgs()->size() : 0;
-    if ((named.has_names && named.names.size() != nargs)
-            || (named.has_map && named.source_to_param.size() != nargs)) {
-        error = "the binding of the named call does not match the number of its arguments";
-        return -1;
-    }
-    if (named.has_map) {
-        fcb->setCallArgEvalMap(std::move(named.source_to_param), named.result_size);
-        return 0;
-    }
-    fcb->setRuntimeArgNames(std::move(named.names));
-    // a function call resolved at run time by parameter name is of a class of its own
-    if (FunctionCallNode* fcn = dot ? nullptr : dynamic_cast<FunctionCallNode*>(node)) {
-        call = FunctionCallNode::makeRuntimeNamed(fcn);
-    }
-    return 0;
-}
-
-static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
+//! \a method_ref_str: the method reference without the binding of the arguments of a named call
+static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx, const char* method_ref_str) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
-    const char* method_ref_str = ctx.reader.readStringRef(ctx.ptr);
-    // the arguments are written in source order: a named call keeps the positions of their parameters (bound at parse
-    // time) or their names (resolved at run time by parameter name) after the method reference
-    std::string method_ref_text = method_ref_str ? method_ref_str : "";
-    QoreAOTNamedCallArgs named;
-    if (qore_aot_parse_named_call_arg_suffix(method_ref_text, named)) {
-        ctx.error = "invalid named call arguments in inline STATIC_METHOD_CALL expression";
-        return QoreValue();
-    }
-    QoreValue rv = read_expr_static_method_call_intern(ctx, class_path,
-        method_ref_str ? method_ref_text.c_str() : nullptr);
-    if (!ctx.error.empty() || rv.isNothing()) {
-        return rv;
-    }
-    std::string error;
-    if (qore_aot_apply_named_call_args(rv, named, error)) {
-        rv.discard(nullptr);
-        ctx.error = error + " in inline STATIC_METHOD_CALL expression";
-        return QoreValue();
-    }
-    return rv;
-}
-
-static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx, const char* class_path,
-        const char* method_ref_str) {
+    ctx.reader.readStringRef(ctx.ptr);
     QoreAOTStaticMethodRef method_ref(method_ref_str);
     const char* receiver_type_path = nullptr;
     if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
@@ -1022,6 +1011,70 @@ static QoreValue read_expr_static_method_call_intern(AOTExprReadCtx& ctx, const 
     }
     return QoreValue(call_node);
 }
+
+//! Sets the explicit type arguments of a serialized method or static call on the call read (qore#5865)
+/** @param method_ref_str the method reference of the call, which carries its explicit type arguments, if any
+*/
+static QoreValue aot_apply_method_ref_type_args(AOTExprReadCtx& ctx, QoreValue rv, const char* method_ref_str) {
+    if (!rv.hasNode() || !method_ref_str) {
+        return rv;
+    }
+    QoreAOTStaticMethodRef method_ref(method_ref_str);
+    if (!method_ref.explicit_type_args_present) {
+        return rv;
+    }
+    auto* call = dynamic_cast<FunctionCallBase*>(rv.getInternalNode());
+    // the type arguments can name the type parameters of the code whose context is being built (qore#5733)
+    if (!call || !qore_aot_apply_explicit_type_args(*call, method_ref, ctx.pgm, qore_aot_get_type_param_owner())) {
+        rv.discard(nullptr);
+        ctx.error = "cannot resolve the explicit type arguments of the call of '";
+        ctx.error += method_ref.method_name ? method_ref.method_name : "";
+        ctx.error += "' in an inline method call expression";
+        return QoreValue();
+    }
+    return rv;
+}
+
+//! Reads a serialized self (SELF) or static method call: <class path> <method reference> ...
+/** the method reference ends with the binding of the arguments of a named call, if any, which is removed before the
+    reference is read and set on the call that is read (see qore_aot_named_call_arg_suffix())
+*/
+template <bool SELF>
+static QoreValue read_expr_method_call_named(AOTExprReadCtx& ctx) {
+    const uint8_t* refs = ctx.ptr;
+    ctx.reader.readStringRef(refs);
+    const char* method_ref_str = ctx.reader.readStringRef(refs);
+    std::string method_ref_text = method_ref_str ? method_ref_str : "";
+    QoreAOTNamedCallArgs named;
+    if (qore_aot_parse_named_call_arg_suffix(method_ref_text, named)) {
+        ctx.error = "invalid named call arguments in an inline method call expression";
+        return QoreValue();
+    }
+    const char* ref = method_ref_str ? method_ref_text.c_str() : nullptr;
+    QoreValue rv = SELF ? read_expr_self_method_call_intern(ctx, ref) : read_expr_static_method_call_intern(ctx, ref);
+    rv = aot_apply_method_ref_type_args(ctx, rv, ref);
+    if (!ctx.error.empty() || rv.isNothing()) {
+        return rv;
+    }
+    std::string error;
+    if (qore_aot_apply_named_call_args(rv, named, error)) {
+        rv.discard(nullptr);
+        ctx.error = error + " in an inline method call expression";
+        return QoreValue();
+    }
+    return rv;
+}
+
+//! Reads a serialized self method call: <class path> <method reference> ...
+static QoreValue read_expr_self_method_call(AOTExprReadCtx& ctx) {
+    return read_expr_method_call_named<true>(ctx);
+}
+
+//! Reads a serialized static method call: <class path> <method reference> ...
+static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
+    return read_expr_method_call_named<false>(ctx);
+}
+
 
 // ============================================================================
 // NEW_OBJECT (4)
@@ -1576,46 +1629,113 @@ static bool write_expr_closure_create(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
+    // The closure record is read and the closure constructed in the closure's Program: the types and default values
+    // of its parameters (a default can be an expression tree that calls a function of the Program, qore#5827), its
+    // class and the closure itself.  This runs when a cold call or a closure's first call deserializes IR, so it
+    // selects the Program without claiming parse ownership, like the CLOSURE_CREATE slot reader in
+    // buildContextFromSlotMap(): a module loader can own parsing while waiting for this thread.  The caller keeps the
+    // Program alive, and the Program's runtime metadata lock protects the locations, strings, and locals that the
+    // closure signature allocates.
+    QoreProgramContextHelper closure_program_context(ctx.pgm);
+
+    // the record is read with its bounds checked: a malformed record, or one that a default that cannot be read
+    // left at the end of the data (QoreAOTBinaryReader::readValue()), fails with the read pointer at the end of the
+    // data (qore#5848); the error of a default comes first
+    std::vector<QoreValue> defaults;
+    std::string default_error;
+    auto have = [&ctx](size_t n) -> bool {
+        return ctx.ptr <= ctx.end && static_cast<size_t>(ctx.end - ctx.ptr) >= n;
+    };
+    auto fail = [&ctx, &defaults, &default_error](const char* what) -> QoreValue {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        ctx.ptr = ctx.end;
+        if (!default_error.empty()) {
+            ctx.error = std::move(default_error);
+        } else {
+            ctx.error = "unexpected end of data reading closure ";
+            ctx.error += what;
+        }
+        return QoreValue();
+    };
+
+    const bool has_native_body_key = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0;
+    if (!have(has_native_body_key ? 16 : 12)) {
+        return fail("flags");
+    }
     // Read flags
     const char* flags_str = ctx.reader.readStringRef(ctx.ptr);
     const char* class_type_path = ctx.reader.readStringRef(ctx.ptr);
-    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
+    if (has_native_body_key) {
         ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
     }
+    // the location of the closure (see v26), which its signature gets: two lines, the offset and two string refs,
+    // followed by the return type, which the size check above counted before the location was added
+    const QoreProgramLocation* closure_loc = nullptr;
+    if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+        if (!have(2 * qore_aot_line_size(ctx.reader) + 8 + 8 + 4)) {
+            return fail("location");
+        }
+        closure_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
+    }
 
-    bool is_lambda = false, is_in_method = false;
+    bool is_lambda = false, is_in_method = false, needs_type_context = false, defaults_need_object = false;
     if (flags_str) {
         is_lambda = (flags_str[0] == '1');
         is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
+        needs_type_context = (strlen(flags_str) >= 5 && flags_str[4] == '1');
+        // the fourth flag: the default values use the closure's object (issue #5931)
+        defaults_need_object = (strlen(flags_str) >= 7 && flags_str[6] == '1');
     }
 
     // Read return type
     const char* ret_type_path = ctx.reader.readStringRef(ctx.ptr);
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
+    // the closure's types name the type parameters of the function whose context is being built (qore#5733)
+    const UserSignature* closure_type_param_owner = qore_aot_get_type_param_owner();
     const QoreTypeInfo* ret_type = (ret_type_path && *ret_type_path)
-        ? type_resolver.resolve(ret_type_path, type_error) : nullptr;
+        ? type_resolver.resolveForSignature(ret_type_path, type_error, closure_type_param_owner) : nullptr;
 
     // Read params
+    if (!have(2)) {
+        return fail("parameter count");
+    }
     uint16_t closure_num_params = QoreAOTBinaryReader::readU16(ctx.ptr);
     std::vector<std::string> param_names(closure_num_params);
     std::vector<const QoreTypeInfo*> param_types(closure_num_params);
-    std::vector<QoreValue> defaults(closure_num_params);
+    defaults.resize(closure_num_params);
     for (uint16_t p = 0; p < closure_num_params; ++p) {
+        if (!have(9)) {
+            return fail("parameter");
+        }
         const char* pname = ctx.reader.readStringRef(ctx.ptr);
         param_names[p] = pname ? pname : "";
         const char* ptype = ctx.reader.readStringRef(ctx.ptr);
         param_types[p] = (ptype && *ptype)
-            ? type_resolver.resolve(ptype, type_error) : nullptr;
+            ? type_resolver.resolveForSignature(ptype, type_error, closure_type_param_owner) : nullptr;
         uint8_t has_default = QoreAOTBinaryReader::readU8(ctx.ptr);
         if (has_default) {
+            // a closure in the default value binds to the variables of this context, as the closure's own captures
+            // do (issue #5903)
+            QoreAOTValueLocalsHelper value_locals(ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals,
+                ctx.local_owner_pgm);
             std::string val_error;
             defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
+            if (!val_error.empty() && default_error.empty()) {
+                // a closure without the default would run with another value
+                default_error = "closure parameter '" + param_names[p] + "' default: " + val_error;
+            }
         }
     }
     bool closure_sig_has_varargs = false;
     bool closure_needs_extra_args = false;
-    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
+    const bool has_varargs_flags = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0;
+    if (!have(has_varargs_flags ? 4 : 3)) {
+        return fail("flags and captures");
+    }
+    if (has_varargs_flags) {
         uint16_t closure_flags = QoreAOTBinaryReader::readU16(ctx.ptr);
         closure_needs_extra_args = (closure_flags & 0x0001) != 0;
         closure_sig_has_varargs = (closure_flags & 0x0004) != 0;
@@ -1630,32 +1750,62 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     std::vector<std::string> captured_names(num_captured);
     std::vector<int32_t> captured_parent_slots(num_captured, -1);
     for (uint16_t c = 0; c < num_captured; ++c) {
+        if (!have(8)) {
+            return fail("capture");
+        }
         const char* cname = ctx.reader.readStringRef(ctx.ptr);
         captured_names[c] = cname ? cname : "";
         captured_parent_slots[c] = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ctx.ptr));
     }
 
     // Read closure body IR
+    if (!have(1)) {
+        return fail("IR flag");
+    }
     uint8_t has_ir = QoreAOTBinaryReader::readU8(ctx.ptr);
     if (!has_ir) {
-        ctx.error = "closure has no IR data";
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        ctx.error = default_error.empty() ? std::string("closure has no IR data") : std::move(default_error);
         return QoreValue();
     }
 
+    if (!have(4)) {
+        return fail("IR size");
+    }
     uint32_t ir_size = QoreAOTBinaryReader::readU32(ctx.ptr);
+    // the IR must be in the data, as in the slot-map reader (buildContextFromSlotMap())
+    if (ctx.ptr > ctx.end || ir_size > static_cast<size_t>(ctx.end - ctx.ptr)) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        // at the end of the data, so that no reader reads the IR as an expression
+        ctx.ptr = ctx.end;
+        ctx.error = default_error.empty() ? std::string("closure IR range exceeds the expression data")
+            : std::move(default_error);
+        return QoreValue();
+    }
     const uint8_t* ir_end_ptr = ctx.ptr + ir_size;
+    if (!default_error.empty()) {
+        for (QoreValue& v : defaults) {
+            v.discard(nullptr);
+        }
+        ctx.ptr = ir_end_ptr;
+        ctx.error = std::move(default_error);
+        return QoreValue();
+    }
 
-    // Resolve the class for the method context and construct the closure in the
-    // closure's Program.  This runs when a cold call or a closure's first call
-    // deserializes IR, so it selects the Program without claiming parse ownership,
-    // like the CLOSURE_CREATE slot reader in buildContextFromSlotMap(): a module
-    // loader can own parsing while waiting for this thread.  The caller keeps the
-    // Program alive, and the Program's runtime metadata lock protects the
-    // locations, strings, and locals that the closure signature allocates.
-    QoreProgramContextHelper closure_program_context(ctx.pgm);
+    // Resolve the class for the method context (in the closure's Program; see closure_program_context above)
     const QoreClass* closure_class = nullptr;
     if (class_type_path && *class_type_path) {
         closure_class = qore_aot_resolve_class_ref(ctx.pgm, class_type_path, false);
+    }
+    // the class of a closure that is not in a method is the class it runs in, not a class type with self (#5907)
+    const QoreClass* static_class = nullptr;
+    if (flags_str && !is_in_method && class_type_path && *class_type_path) {
+        static_class = QoreTypeInfo::getUniqueReturnClass(type_resolver.resolve(class_type_path, type_error));
+        closure_class = nullptr;
     }
 
     // Construct UserClosureFunction + UserClosureVariant
@@ -1663,10 +1813,12 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     auto* closure_variant = static_cast<UserClosureVariant*>(
         const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
     UserSignature* closure_sig = closure_variant->getUserSignature();
+    closure_sig->enclosing_signature = closure_type_param_owner;
     closure_sig->setupFromAOTMetadata(
         ctx.pgm, ret_type,
         std::move(param_names), std::move(param_types), std::move(defaults),
-        closure_sig_has_varargs, closure_class, nullptr, 0, 0,
+        closure_sig_has_varargs, closure_class, closure_loc ? closure_loc->getFile() : nullptr,
+        closure_loc ? closure_loc->start_line : 0, closure_loc ? closure_loc->end_line : 0,
         std::vector<uint8_t>(), ctx.local_owner_pgm);
     if (closure_needs_extra_args) {
         closure_variant->setFlag(QCF_USES_EXTRA_ARGS);
@@ -1776,6 +1928,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             if (!lv->closureUse()) {
                 lv->setClosureUse();
             }
+        } else if (lv) {
+            // a closure that uses the self of the method that it is in takes the object when it is created, as a
+            // closure of the method does (issue #5931): a closure in a default value of a method's closure, for one
+            is_in_method = true;
+            defaults_need_object = true;
         }
     }
 
@@ -1835,12 +1992,19 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_variant->setProgram(ctx.pgm);
 
     // Set class type if in a method context
-    if (class_type_path && *class_type_path) {
+    if (!static_class && class_type_path && *class_type_path) {
         ucf->setClassType(type_resolver.resolve(class_type_path, type_error));
     }
 
     // Create QoreClosureParseNode
     auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+    closure_node->setNeedsTypeContext(needs_type_context);
+    if (defaults_need_object) {
+        closure_node->setDefaultsNeedObject();
+    }
+    if (static_class) {
+        closure_node->setStaticClass(qore_class_private::get(*static_class));
+    }
     return QoreValue(closure_node);
 }
 
@@ -1894,14 +2058,11 @@ static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
         ctx.error = "empty call reference function name";
         return QoreValue();
     }
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
-    QoreFunction* f = fe ? fe->getFunction() : nullptr;
-    if (!f) {
+    LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(ctx.pgm, func_name);
+    if (!fcr) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
         return QoreValue();
     }
-    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
-    fcr->setFunctionEntry(fe);
     return QoreValue(fcr);
 }
 
@@ -2007,14 +2168,11 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
 
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, func_name);
-    QoreFunction* f = fe ? fe->getFunction() : nullptr;
-    if (!f) {
+    LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(ctx.pgm, func_name);
+    if (!fcr) {
         ctx.error = std::string("cannot resolve function call reference '") + func_name + "'";
         return QoreValue();
     }
-    LocalFunctionCallReferenceNode* fcr = new LocalFunctionCallReferenceNode(&loc_builtin, f);
-    fcr->setFunctionEntry(fe);
     return QoreValue(fcr);
 }
 
@@ -2564,6 +2722,10 @@ static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
         if (call_args) {
             call_args->deref(nullptr);
         }
+        ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex hash constructor";
+        if (!type_error.empty()) {
+            ctx.error += ": " + type_error;
+        }
         return QoreValue();
     }
     // Convert call_args to QoreParseListNode for NewComplexHashNode
@@ -2629,6 +2791,10 @@ static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
     const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
     if (!ti) {
         arg_val.discard(nullptr);
+        ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex list constructor";
+        if (!type_error.empty()) {
+            ctx.error += ": " + type_error;
+        }
         return QoreValue();
     }
     NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, arg_val);
@@ -3453,18 +3619,38 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     // classifyAndWriteExpr in QoreAOTBinary.cpp.
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_name_ref = ctx.reader.readStringRef(ctx.ptr);
-    // the binding of the arguments of a named call follows the name of the method
-    std::string method_name_storage = method_name_ref ? method_name_ref : "";
+    // the binding of the arguments of a named call is written last (see qore_aot_named_call_arg_suffix())
+    std::string method_ref_storage = method_name_ref ? method_name_ref : "";
     QoreAOTNamedCallArgs named;
-    if (qore_aot_parse_named_call_arg_suffix(method_name_storage, named)) {
+    if (qore_aot_parse_named_call_arg_suffix(method_ref_storage, named)) {
         ctx.error = "invalid named call arguments in inline DOT_EVAL_TARGET expression";
         return QoreValue();
     }
-    size_t sig_sep = method_name_storage.find('\n');
-    if (sig_sep != std::string::npos) {
-        method_name_storage.erase(sig_sep);
+    if (method_name_ref) {
+        method_name_ref = method_ref_storage.c_str();
     }
-    const char* method_name = method_name_ref ? method_name_storage.c_str() : nullptr;
+    std::string method_name_storage;
+    const char* method_name = method_name_ref;
+    // the explicit type arguments of the call, if any (qore#5865)
+    const char* type_args = qore_aot_find_call_type_args(method_name_ref);
+    // the variant resolved at parse time ("<variant class>\n<signature>"), if any (issue #5823)
+    const char* variant_ref = nullptr;
+    // the variant comes before the type arguments, whose marker starts with a newline: a call without a variant has
+    // the marker right after the method name
+    std::string variant_ref_storage;
+    if (method_name_ref) {
+        const char* sig_sep = strchr(method_name_ref, '\n');
+        if (sig_sep) {
+            method_name_storage.assign(method_name_ref, sig_sep - method_name_ref);
+            method_name = method_name_storage.c_str();
+            if (!type_args) {
+                variant_ref = sig_sep + 1;
+            } else if (sig_sep < type_args) {
+                variant_ref_storage.assign(sig_sep + 1, type_args - sig_sep - 1);
+                variant_ref = variant_ref_storage.c_str();
+            }
+        }
+    }
     uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ctx.ptr);
 
     // Target expression
@@ -3536,6 +3722,26 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
         if (is_pseudo) {
             mc->setPseudo(resolved_qc->getTypeInfo());
         }
+        if (const AbstractQoreFunctionVariant* variant = qore_aot_find_method_variant(ctx.pgm, resolved_m,
+                method_name, variant_ref, is_pseudo != 0)) {
+            mc->setVariant(variant);
+        }
+    }
+    if (type_args) {
+        // the variant is chosen when the call is made: the type arguments have no owner, as for a parsed call whose
+        // variant is chosen at run time (qore#5791); they can name the type parameters of the code whose context is
+        // being built (qore#5733)
+        QoreTypeParamInstantiation inst;
+        if (!qore_aot_decode_call_type_args(ctx.pgm, type_args, nullptr, qore_aot_get_type_param_owner(), inst)) {
+            ctx.error = std::string("cannot resolve the explicit type arguments of the call of method '")
+                + method_name + "' in an inline DOT_EVAL_TARGET expression";
+            mc->deref();
+            target.discard(nullptr);
+            return QoreValue();
+        }
+        if (!inst.type_args.empty()) {
+            mc->setExplicitTypeParamInstantiation(std::move(inst));
+        }
     }
     mc->resolveParseArgs();
     // the binding has one entry for each argument
@@ -3558,16 +3764,16 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
 }
 
 // ============================================================================
-// DOT_EVAL_EXPR (103)
+// AST_EXPR (103)
 // ============================================================================
 
-static bool write_expr_dot_eval_expr(AOTExprWriteCtx& ctx) {
-    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_EXPR));
+static bool write_expr_ast_expr(AOTExprWriteCtx& ctx) {
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::AST_EXPR));
     return classifyAndWriteExpr(ctx.writer, ctx.expr, ctx.parent_locals,
         ctx.parent_globals, ctx.const_reverse_map);
 }
 
-static QoreValue read_expr_dot_eval_expr(AOTExprReadCtx& ctx) {
+static QoreValue read_expr_ast_expr(AOTExprReadCtx& ctx) {
     return readOneExpr(ctx.reader, ctx.ptr, ctx.end, ctx.error, ctx.pgm,
         ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
 }
@@ -3583,7 +3789,12 @@ static bool write_expr_const_value(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_const_value(AOTExprReadCtx& ctx) {
     std::string value_error;
-    QoreValue rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error);
+    // the Program resolves the hashdecls and types of typed container values (#5895)
+    QoreValue rv;
+    {
+        QoreProgramContextHelper value_pch(ctx.pgm);
+        rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error);
+    }
     if (!value_error.empty()) {
         ctx.error = value_error;
     }
@@ -4303,6 +4514,170 @@ static bool write_expr_shr_eq(AOTExprWriteCtx& ctx) {
 }
 static QoreValue read_expr_shr_eq(AOTExprReadCtx& ctx) {
     return read_binary_expr<QoreShiftRightEqualsOperatorNode>(ctx);
+}
+
+// ============================================================================
+// SPLICE/EXTRACT (122-123)
+// ============================================================================
+
+//! Writes a splice or extract operator: its lvalue, offset, length and new value expressions (issue #5947)
+/** a length or a new value that the expression does not have is NOTHING, which is written as a constant
+*/
+template <typename NodeT>
+static bool write_splice_extract_expr(AOTExprWriteCtx& ctx, AOTExprKind kind) {
+    auto* op = dynamic_cast<const NodeT*>(ctx.expr.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(kind));
+    for (const QoreValue& v : {op->getLValue(), op->getOffset(), op->getLength(), op->getNewValue()}) {
+        if (!classifyAndWriteExpr(ctx.writer, v, ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+template <typename NodeT>
+static QoreValue read_splice_extract_expr(AOTExprReadCtx& ctx) {
+    QoreValue v[4];
+    for (unsigned i = 0; i < 4; ++i) {
+        std::string err;
+        v[i] = readOneExpr(ctx.reader, ctx.ptr, ctx.end, err, ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals,
+            ctx.num_globals, ctx.local_owner_pgm);
+        if (!err.empty()) {
+            for (unsigned j = 0; j <= i; ++j) {
+                v[j].discard(nullptr);
+            }
+            ctx.error = err;
+            return QoreValue();
+        }
+    }
+    return QoreValue(new NodeT(&loc_builtin, v[0], v[1], v[2], v[3]));
+}
+
+static bool write_expr_splice(AOTExprWriteCtx& ctx) {
+    return write_splice_extract_expr<QoreSpliceOperatorNode>(ctx, AOTExprKind::SPLICE);
+}
+static QoreValue read_expr_splice(AOTExprReadCtx& ctx) {
+    return read_splice_extract_expr<QoreSpliceOperatorNode>(ctx);
+}
+static bool write_expr_extract(AOTExprWriteCtx& ctx) {
+    return write_splice_extract_expr<QoreExtractOperatorNode>(ctx, AOTExprKind::EXTRACT);
+}
+static QoreValue read_expr_extract(AOTExprReadCtx& ctx) {
+    return read_splice_extract_expr<QoreExtractOperatorNode>(ctx);
+}
+
+// ============================================================================
+// REGEX_SUBST/TRANSLIT (124-125)
+// ============================================================================
+
+QoreValue qore_aot_make_regex_subst(const char* pattern, const char* replacement, int64_t options, bool global,
+        QoreValue operand, std::string& error) {
+    if (!pattern) {
+        operand.discard(nullptr);
+        error = "missing regex substitution pattern";
+        return QoreValue();
+    }
+    QoreRegexSubst* rs = new QoreRegexSubst();
+    // all options of the pattern (i, s, x, m, u, U)
+    rs->addOptions(static_cast<int>(options));
+    ExceptionSink xsink;
+    if (rs->parseRT(pattern, &xsink)) {
+        xsink.clear();
+        delete rs;
+        operand.discard(nullptr);
+        error = "regex substitution compile error for pattern '" + std::string(pattern) + "'";
+        return QoreValue();
+    }
+    if (global) {
+        rs->setGlobal();
+    }
+    for (const char* c = replacement; c && *c; ++c) {
+        rs->concatTarget(*c);
+    }
+    return QoreValue(new QoreRegexSubstOperatorNode(&loc_builtin, operand, rs));
+}
+
+QoreValue qore_aot_make_transliteration(const char* source, const char* target, QoreValue operand) {
+    QoreTransliteration* tr = new QoreTransliteration(&loc_builtin);
+    for (const char* c = source; c && *c; ++c) {
+        tr->concatSource(*c);
+    }
+    tr->finishSource();
+    for (const char* c = target; c && *c; ++c) {
+        tr->concatTarget(*c);
+    }
+    tr->finishTarget();
+    return QoreValue(new QoreTransliterationOperatorNode(&loc_builtin, operand, tr));
+}
+
+//! Writes a regex substitution operator, which modifies its lvalue (issue #5947)
+static bool write_expr_regex_subst(AOTExprWriteCtx& ctx) {
+    auto* op = dynamic_cast<const QoreRegexSubstOperatorNode*>(ctx.expr.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    QoreRegexSubst* rs = op->getRegexSubst();
+    const QoreString* repl = rs ? rs->getNewStr() : nullptr;
+    if (!rs || !rs->getPatternCStr() || !qore_aot_regex_string_ok(repl)) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::REGEX_SUBST));
+    ctx.writer.writeStringRef(rs->getPatternCStr());
+    ctx.writer.writeStringRef(repl ? repl->c_str() : "");
+    ctx.writer.writeI64(rs->getOptions());
+    ctx.writer.writeU8(rs->isGlobal() ? 1 : 0);
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals, ctx.parent_globals,
+        ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_regex_subst(AOTExprReadCtx& ctx) {
+    const char* pattern = ctx.reader.readStringRef(ctx.ptr);
+    const char* replacement = ctx.reader.readStringRef(ctx.ptr);
+    int64_t options = QoreAOTBinaryReader::readI64(ctx.ptr);
+    bool global = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    std::string err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, err, ctx.pgm, ctx.locals, ctx.num_locals,
+        ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = err;
+        return QoreValue();
+    }
+    return qore_aot_make_regex_subst(pattern, replacement, options, global, operand, ctx.error);
+}
+
+//! Writes a transliteration operator, which modifies its lvalue (issue #5947)
+static bool write_expr_translit(AOTExprWriteCtx& ctx) {
+    auto* op = dynamic_cast<const QoreTransliterationOperatorNode*>(ctx.expr.getInternalNode());
+    if (!op) {
+        return false;
+    }
+    QoreTransliteration* tr = op->getTransliteration();
+    if (!tr || !qore_aot_regex_string_ok(&tr->getSource()) || !qore_aot_regex_string_ok(&tr->getTarget())) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::TRANSLIT));
+    ctx.writer.writeStringRef(tr->getSource().c_str());
+    ctx.writer.writeStringRef(tr->getTarget().c_str());
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals, ctx.parent_globals,
+        ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_translit(AOTExprReadCtx& ctx) {
+    const char* source = ctx.reader.readStringRef(ctx.ptr);
+    const char* target = ctx.reader.readStringRef(ctx.ptr);
+    std::string err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, err, ctx.pgm, ctx.locals, ctx.num_locals,
+        ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+    if (!err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = err;
+        return QoreValue();
+    }
+    return qore_aot_make_transliteration(source, target, operand);
 }
 
 static bool write_expr_log_eq(AOTExprWriteCtx& ctx) {

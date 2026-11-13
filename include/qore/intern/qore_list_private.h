@@ -132,8 +132,15 @@ struct qore_list_private {
     }
 
     DLLLOCAL void setListTypeFromNewElementType(const QoreTypeInfo* newElementType) {
+        complexTypeInfo = getListTypeForNewElementType(complexTypeInfo, length, newElementType);
+    }
+
+    //! returns the type of a list of type \a list_type with \a length elements after a value of type
+    //! \a newElementType is added to it (at either end)
+    DLLLOCAL static const QoreTypeInfo* getListTypeForNewElementType(const QoreTypeInfo* list_type, size_t length,
+            const QoreTypeInfo* newElementType) {
         const QoreTypeInfo* orig_ctype, * ctype;
-        orig_ctype = ctype = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
+        orig_ctype = ctype = QoreTypeInfo::getUniqueReturnComplexList(list_type);
         // Treat 'auto' as unset only for true first-element initialization.
         // An already-populated list<auto> may contain heterogeneous values;
         // appending or concatenating a typed value must not retroactively
@@ -141,19 +148,20 @@ struct qore_list_private {
         if (ctype == autoTypeInfo && !length) {
             ctype = newElementType;
             if (ctype && ctype != autoTypeInfo && ctype != anyTypeInfo) {
-                complexTypeInfo = qore_get_complex_list_type(ctype);
+                return qore_get_complex_list_type(ctype);
             }
-            return;
+            return list_type;
         }
         if ((!ctype || ctype == anyTypeInfo) && (!newElementType || newElementType == anyTypeInfo)) {
-            complexTypeInfo = nullptr;
-        } else if (QoreTypeInfo::matchCommonType(ctype, newElementType)) {
-            if (ctype != orig_ctype) {
-                complexTypeInfo = qore_get_complex_list_type(ctype);
-            }
-        } else {
-            complexTypeInfo = autoListTypeInfo;
+            return nullptr;
         }
+        if (QoreTypeInfo::matchCommonType(ctype, newElementType)) {
+            if (ctype != orig_ctype) {
+                return qore_get_complex_list_type(ctype);
+            }
+            return list_type;
+        }
+        return autoListTypeInfo;
     }
 
     DLLLOCAL QoreListNode* copy(const QoreTypeInfo* newComplexTypeInfo) const {
@@ -203,9 +211,11 @@ struct qore_list_private {
 
     DLLLOCAL QoreListNode* prependElement(QoreValue e, ExceptionSink* xsink) const {
         // issue #3429: maintain types unless we have a plain list; convert to list<auto> if the types are not compatible
-        ReferenceHolder<QoreListNode> rv(new QoreListNode(complexTypeInfo), xsink);
-        // set type of new list with the new element
-        rv->priv->setListTypeFromNewElementType(e.getTypeInfo());
+        // the type of the new list is that of this list with the new element added, as for concatenateElement()
+        // (qore#5936: the list type was given as the element type of the new list, which then had no type in common
+        // with the element, so element + list<int> gave list<auto>)
+        ReferenceHolder<QoreListNode> rv(new QoreListNode, xsink);
+        rv->priv->complexTypeInfo = getListTypeForNewElementType(complexTypeInfo, length, e.getTypeInfo());
         if (rv->priv->pushWithoutTypeConversion(e, xsink)) {
             return nullptr;
         }

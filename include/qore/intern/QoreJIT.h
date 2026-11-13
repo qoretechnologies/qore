@@ -841,12 +841,23 @@ public:
     */
     void joinAbandonedCompileThread();
 
+    //! Releases the LLVM execution engine, its code and the caches (see shutdown())
+    void releaseEngine();
+
+    //! Releases the engine if shutdown() left it to a compile thread that has been joined since (see exitQuickly())
+    void releaseDeferredEngine();
+
+    //! Calls releaseDeferredEngine(); an error leaves the engine to the operating system
+    void releaseDeferredEngineNoThrow() noexcept;
+
     //! Stop compilation and release the LLVM execution engine.
     /** Every UserVariantBase that can call a published native entry point must already be destroyed
         before this function is called.
 
-        The engine is not released if stopBackgroundCompiler() left a detached compile running: it cannot be destroyed
-        under an active compile, and the process is exiting.
+        The engine is not released here if stopBackgroundCompiler() left a detached compile running: it cannot be
+        destroyed under an active compile.  It is released when the process ends with qore_fork_child_quick_exit() and
+        the thread has ended (exitQuickly()), which deregisters the EH frames of the compiled code before \c exit()
+        (qore#5842); if the thread still runs then, the process ends with \c _exit().
     */
     void shutdown();
     void setDeoptPolicy(DeoptPolicy policy);
@@ -962,11 +973,40 @@ public:
     //! For tests: returns true if the background compile thread is stopped at a hold point
     bool dbgBgCompileHeld();
 
+    //! For tests: takes the compilation mutex as a synchronous compile does (see lockForSyncCompile())
+    /** @return false if the JIT refused, as for a synchronous compile; else the mutex is held: release it with
+        releaseCompileLock()
+    */
+    bool lockForSyncCompileForTest();
+
+    //! For tests: the number of synchronous compiles that wait for the compilation mutex
+    int syncCompileWaitersForTest();
+
+    //! For tests: waits until a synchronous compile waits for the compilation mutex (see sync_compile_waiters)
+    /** @return false if no synchronous compile waited within \a timeout_ms milliseconds
+    */
+    bool dbgWaitSyncCompileWaiting(int64_t timeout_ms);
+
     //! For tests: lets the held background compile continue and waits until it has left the hold point
     /** @return -1 if no compile is held, 0 if it did not leave the hold point within \a timeout_ms milliseconds,
         1 if it did
     */
     int dbgContinueBgCompile(int64_t timeout_ms);
+
+    //! Where a held compile that stopBackgroundCompiler() abandons ends, for a test (qore#5842)
+    enum class DbgFinishAbandoned {
+        //! it stays held, and the process ends with _exit()
+        None,
+        //! it is let go when it is abandoned, and shutdown() waits for its thread: the engine is released there
+        Shutdown,
+        //! it is let go at the end of the process (exitQuickly()), which waits for its thread: the engine is released
+        //! there
+        Exit,
+    };
+
+    //! Test hook: a held compile that stopBackgroundCompiler() abandons ends before the process does, as an abandoned
+    //! compile can, at the given point (qore#5842)
+    void dbgFinishAbandonedCompile(DbgFinishAbandoned where);
 
     //! For tests: waits until a Program teardown waits for the in-progress background compile
     /** Only a teardown that has to wait counts: one that finds the compile in the LLVM phase detaches it and does
@@ -993,9 +1033,14 @@ public:
     //! Enqueue a function for background JIT compilation.
     //! The function stays at IR tier until compilation finishes in the background.
     //! Safe to call from any thread, including during tiered execution.
+    /** @param queued called once the work is queued, before a synchronous compile is waited for
+        (QORE_JIT_SYNC_COMPILE), and not called if the work is refused; the teardown of the work's Programs drains or
+        detaches queued work
+    */
     void enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
             void* deopt_counter, const std::vector<BatchCallee>* callees = nullptr,
-            std::shared_ptr<QoreIRFunction> owned_ir_func = nullptr);
+            std::shared_ptr<QoreIRFunction> owned_ir_func = nullptr,
+            const std::function<void()>& queued = std::function<void()>());
 
     //! Wait for all pending background compilations to complete.
     //! Used during shutdown, and after every enqueue when syncBgCompile() is set.
@@ -1112,6 +1157,17 @@ private:
     std::atomic<bool> bg_thread_running{false};             //!< shutdown flag
     std::atomic<int> bg_active_work{0};                     //!< count of pending+in-progress compilations
     std::condition_variable bg_queue_empty_cv;              //!< signals when queue becomes empty
+    //! the number of synchronous compiles that wait for compile_mutex; protected by bg_queue_mutex
+    /** The background thread takes no more work while a synchronous compile waits: a thread waits for that compile
+        (top-level code, for example), and the background thread, which takes compile_mutex for each work item of its
+        queue, would otherwise take it again and again, as a mutex grants no order, so that the synchronous compile
+        waited until the queue was empty.  Changes are signalled with bg_queue_cv (see lockForSyncCompile())
+    */
+    int sync_compile_waiters = 0;
+#ifdef DEBUG
+    //! signalled when sync_compile_waiters is incremented, for dbgWaitSyncCompileWaiting()
+    std::condition_variable dbg_sync_compile_waiting_cv;
+#endif
     //! The work item currently being compiled by the bg thread (nullptr when
     //! idle).  Protected by bg_queue_mutex; points at the bg thread's local while
     //! it holds compile_mutex.  Used by waitForBgCompileQueue(QoreProgram*) to
@@ -1153,6 +1209,10 @@ private:
         process ends with \c _exit() if the thread still runs at the end (see exitQuickly()).
     */
     std::atomic<bool> bg_thread_abandoned{false};
+    //! shutdown() did not release the engine, as a compile ran in it (bg_thread_abandoned); it is released by
+    //! releaseDeferredEngine(), which exitQuickly() calls after it has joined the finished compile thread; the join of
+    //! the atexit() handler (joinAbandonedCompileThread()) does not release it
+    std::atomic<bool> shutdown_deferred{false};
 
     //! true once the compile thread has left its loop: it touches nothing of the JIT or LLVM any more
     std::atomic<bool> bg_thread_done{false};
@@ -1213,6 +1273,9 @@ private:
     unsigned dbg_bg_hold_exits = 0;
     //! the number of Program teardowns that waited for the in-progress compile; protected by bg_queue_mutex
     unsigned dbg_bg_teardown_waits = 0;
+    //! where a held compile that stopBackgroundCompiler() abandons ends (see dbgFinishAbandonedCompile()); protected
+    //! by bg_queue_mutex
+    DbgFinishAbandoned dbg_finish_abandoned = DbgFinishAbandoned::None;
     //! for each hold point, the function whose compile stops there, all if empty; protected by bg_queue_mutex
     std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Install) + 1];
     //! the name of the in-progress compile's root function up to the "@"; protected by bg_queue_mutex

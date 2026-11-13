@@ -567,6 +567,19 @@ public:
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getReturnComplexHashOrNothing(const QoreTypeInfo* ti);
 
+    // static version of method, checking for null pointer; returns the value type of reference<T> or *reference<T>
+    DLLLOCAL static const QoreTypeInfo* getReturnComplexReferenceOrNothing(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return nullptr;
+        }
+        if (ti->return_vec.size() > 1) {
+            if (ti->return_vec.size() != 2 || ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT) {
+                return nullptr;
+            }
+        }
+        return ti->return_vec[0].spec.getComplexReference();
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getReturnComplexListOrNothing(const QoreTypeInfo* ti) {
         if (!ti || !hasType(ti))
@@ -798,13 +811,49 @@ public:
         values of the types it accepts: a date value must still be checked for a date<absolute> parameter.
     */
     DLLLOCAL static bool acceptsInputUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+        // the same type, the common case, is decided where the function is called; the other cases are compared out
+        // of line, as the comparison of container value types recurses (issue #5782)
         if (target == source) {
             return true;
         }
+        return acceptsInputUncheckedDifferent(target, source);
+    }
+
+    //! Compares two different types for acceptsInputUnchecked() (issue #5782)
+    DLLLOCAL static __attribute__((noinline)) bool acceptsInputUncheckedDifferent(const QoreTypeInfo* target,
+            const QoreTypeInfo* source) {
         if (!isInputIdentical(target, source)) {
             return false;
         }
-        return !target || !target->validatesInputImpl();
+        if (!target) {
+            return true;
+        }
+        if (target->validatesInputImpl()) {
+            return false;
+        }
+        // a container accepts the values of another one unchecked only if its value type accepts the other's: a
+        // list<date> must still be checked for list<date<absolute>> (issue #5782)
+        return acceptsValuesUnchecked(target, source);
+    }
+
+    //! Returns true if the values of the container type @a source are accepted unchecked by the container type
+    //! @a target, or if @a target is not a hash, list or softlist type (issue #5782)
+    /** Called only for two types with the same signature (see acceptsInputUnchecked()).
+    */
+    DLLLOCAL static bool acceptsValuesUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+        const QoreTypeInfo* target_value = getReturnComplexHashOrNothing(target);
+        if (target_value) {
+            return acceptsInputUnchecked(target_value, getReturnComplexHashOrNothing(source));
+        }
+        target_value = getReturnComplexListOrNothing(target);
+        if (target_value) {
+            return acceptsInputUnchecked(target_value, getReturnComplexListOrNothing(source));
+        }
+        target_value = getReturnComplexSoftListOrNothing(target);
+        if (target_value) {
+            return acceptsInputUnchecked(target_value, getReturnComplexSoftListOrNothing(source));
+        }
+        return true;
     }
 
     // static version of method, checking for null pointer
@@ -850,6 +899,17 @@ public:
         if (hasType(second))
             return first == second ? true : first->outputSuperSetOf(second);
         return false;
+    }
+
+    //! Returns true if each type that \a second returns is a type that \a first returns, with no conversion
+    /** A missing type returns any value: \a first without a type accepts any output, and \a second without one is
+        accepted only by \a first without a type
+    */
+    DLLLOCAL static bool outputAccepts(const QoreTypeInfo* first, const QoreTypeInfo* second) {
+        if (!hasType(first) || first == second) {
+            return true;
+        }
+        return hasType(second) ? first->outputAccepts(second) : false;
     }
 
     // static version of method, checking for null pointer
@@ -1095,6 +1155,13 @@ protected:
 
     // returns true if "this"'s output is a superset of the argument's output with a strict interpretation that the order of return declarations must also be the same
     DLLLOCAL bool outputSuperSetOf(const QoreTypeInfo* t) const;
+
+    //! Returns true if each type that \a t returns is a type that this type returns, with no conversion
+    /** Unlike outputSuperSetOf(), the order of the return types is not significant, and a match that may need a
+        conversion (filter) is refused: a soft type is compared by the types it returns (\c softlist<string> returns
+        \c list<string>), not by the types it accepts.
+    */
+    DLLLOCAL bool outputAccepts(const QoreTypeInfo* t) const;
 
     DLLLOCAL qore_type_t getSingleType() const {
         if (accept_vec.size() == 1 && return_vec.size() == 1) {
@@ -4228,9 +4295,12 @@ constexpr size_t QORE_MAX_UNION_MEMBERS = 100;
 class QoreUnionTypeInfo : public QoreTypeInfo {
 public:
     //! Constructor for explicit union types
+    /** @param members the member types as declared (without duplicates)
+    */
     DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
-            const QoreString& name, bool or_nothing = false)
-            : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing) {
+            const QoreString& name, type_vec_t members, bool or_nothing = false)
+            : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
+            members(std::move(members)) {
     }
 
     //! Returns true if this is an or-nothing union type
@@ -4238,21 +4308,18 @@ public:
         return orNothing;
     }
 
-    //! Returns the member types of this union
+    //! Returns the member types of this union as declared
+    /** The return types of the union give only the base type of a member (ex: \c hash for <tt>hash<H></tt>, \c object
+        for a class, \c string for a string enum), so the members are kept as declared (qore#5858)
+    */
     DLLLOCAL type_vec_t getMemberTypes() const {
-        type_vec_t result;
-        for (const auto& rt : return_vec) {
-            const QoreTypeInfo* ti = rt.spec.getBaseTypeInfo();
-            // Skip NOTHING type for or-nothing unions
-            if (ti && ti != nothingTypeInfo) {
-                result.push_back(ti);
-            }
-        }
-        return result;
+        return members;
     }
 
 protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
+    //! the member types as declared, without duplicates
+    const type_vec_t members;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         qore_string_private::get(str)->concat(&tname);

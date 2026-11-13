@@ -143,8 +143,9 @@ public class OracleRunSchema {
         from the first one's schema: its letters and digits, at most 8 of them
 
         @return the datasource string of the run's user: the given one with the run's user and its password; the
-        given one if it is not for the \c oracle driver, or if no user can be created for the run (see the
-        introduction); no value if none is given
+        given one if it is not for the \c oracle driver, if the module of the driver of the administrator's
+        datasource string cannot be loaded (it is not installed, or it was built for another module API), or if no
+        user can be created for the run (see the introduction); no value if none is given
     */
     static *string getConnectionString(*string connstr, string suite, *string tag) {
         try {
@@ -180,7 +181,18 @@ public class OracleRunSchema {
             TestRun::lockHost("oracle", connstr);
             return connstr;
         }
-        Datasource ds(admin_connstr);
+        Datasource ds;
+        try {
+            ds = new Datasource(admin_connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            # the module of the driver cannot be loaded (it is not installed, or it was built for another module
+            # API): the test finds it so when it connects, and reports or skips it; any other error, such as a
+            # datasource string that cannot be parsed, is raised
+            if (ex.err == "LOAD-MODULE-ERROR") {
+                return connstr;
+            }
+            rethrow;
+        }
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {

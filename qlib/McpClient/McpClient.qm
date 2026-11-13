@@ -45,6 +45,9 @@ module McpClient {
         ConnectionSchemeCache::registerScheme("mcp", McpConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("mcps", McpConnection::ConnectionScheme);
     };
+    # the module's own code waits between task status polls with usleep()
+    # and starts background threads to handle streamed server messages
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage McpClient Module

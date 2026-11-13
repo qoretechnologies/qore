@@ -141,8 +141,9 @@ public class CloseTasksDataProvider inherits CloseDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl() {
-        return new CloseTaskDataType();
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        # the fields of the record type (issue #5838: AbstractDataProvider calls this method for them)
+        return (new CloseTaskDataType()).getFields();
     }
 
     #! Returns an iterator for records matching the search criteria

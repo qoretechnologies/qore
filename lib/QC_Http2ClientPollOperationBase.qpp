@@ -34,6 +34,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -41,6 +42,7 @@
 #include "qore/intern/HttpClientEventSink.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/RSet.h"
+#include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/PollStateCloseHook.h"
 
 // Forward declarations for QPP type references
@@ -300,9 +302,14 @@ QoreHashNode* Http2ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
             case H2State::PROXY_CONNECT_RECV:
                 return clampConnectDeadline(handleProxyConnectRecv(xsink), xsink);
 
-            case H2State::READING:
+            case H2State::READING: {
                 // an h2c connection is not ready until the peer has answered the preface
-                return clampConnectDeadline(handleReading(xsink), xsink);
+                QoreHashNode* rv = clampConnectDeadline(handleReading(xsink), xsink);
+#ifdef DEBUG
+                dbgCheckReadPass(rv);
+#endif
+                return rv;
+            }
 
             case H2State::WAIT_READ:
                 setStateUnlessClosed(H2State::READING, "cycle-start");
@@ -680,12 +687,26 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     // registers the returned stream id.  If that handoff is active, do not
     // let the multiplex reader drain a fast response with no action; also do
     // not block the I/O thread, since it may need to run the submit exec.
+    // the flag is set before the lock is tried: when the lock is held, the submitter sees the flag once it has
+    // released the lock and wakes the operation, so that this pass runs again (issue #5839)
+    read_pass_skipped.store(true, std::memory_order_seq_cst);
+    // the store is ordered before the lock's load, as the submitter's unlock is before its exchange of the flag
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+#ifdef DEBUG
+    // the debug check of the pass sees the state of this pass, not the shared flag, which the submitter clears
+    dbg_read_pass_exempt = true;
+#endif
     if (submission_lock.trylock() != 0) {
         op->deref(xsink);
         setStateUnlessClosed(H2State::WAIT_READ, "submission-busy");
         return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
     }
+    read_pass_skipped.store(false, std::memory_order_relaxed);
     AutoLocker submission_al(submission_lock, true);
+#ifdef DEBUG
+    // the hold is read once per pass: the test can release it while the pass runs
+    dbg_read_pass_exempt = QoreHttpClientDrainDebug::get().hold.load(std::memory_order_acquire);
+#endif
 
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = op->continuePoll(&poll_xsink);
@@ -763,16 +784,34 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         }
     }
 
+#ifdef DEBUG
+    // a test can hold the completed responses, which then accumulate in the operation (issue #5839)
+    if (dbg_read_pass_exempt) {
+        QoreHttpClientDrainDebug::get().recordHeld(
+            static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->completedResponseCount());
+        setStateUnlessClosed(H2State::WAIT_READ, "dbg-hold-outputs");
+        if (!poll_info) {
+            poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        }
+        op->deref(xsink);
+        return applyIdleTimeout(poll_info, xsink);
+    }
+#endif
+
     // Drain completed responses
     int drain_count = 0;
+    const int drain_limit = qore_http_client_drain_limit(MAX_DRAIN_ITERATIONS);
     while (true) {
+        // a response is taken from the operation only when it can be dispatched: one taken past the limit would be
+        // lost (issue #5839)
+        if (drain_count >= drain_limit) {
+            break;
+        }
         ValueHolder output_val(op->getOutput(), xsink);
         if (output_val->isNullOrNothing()) {
             break;
         }
-        if (++drain_count > MAX_DRAIN_ITERATIONS) {
-            break;
-        }
+        ++drain_count;
         empty_read_count = 0;
 
         QoreHashNode* output = output_val->get<QoreHashNode>();
@@ -912,20 +951,25 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     }
 
     // Check dispatched flag
+    // the responses left at the drain limit are dispatched by a pass that runs at once: no socket event may come for
+    // them (issue #5839)
+    const bool remaining = static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->completedResponseCount() > 0;
+
     bool dispatched;
     {
         AutoLocker al(stream_lock);
         dispatched = response_dispatched;
     }
-    if (dispatched) {
-        setStateUnlessClosed(H2State::WAIT_READ, "response-dispatched");
+    // responses left in the operation are not an end of the connection (see goalReached() below)
+    if (dispatched || remaining) {
+        setStateUnlessClosed(H2State::WAIT_READ, dispatched ? "response-dispatched" : "responses-left");
         // Use C++ events when available — they include SOCK_POLLOUT if there
         // are pending sends (e.g., WINDOW_UPDATE after receiving data)
         if (!poll_info) {
             poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
         }
         op->deref(xsink);
-        return applyIdleTimeout(poll_info, xsink);
+        return qore_http_client_finish_read_pass(applyIdleTimeout(poll_info, xsink), remaining, xsink);
     }
 
     if (poll_info) {
@@ -933,7 +977,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         // response output — reset the empty read counter
         empty_read_count = 0;
         op->deref(xsink);
-        return applyIdleTimeout(poll_info, xsink);
+        return qore_http_client_finish_read_pass(applyIdleTimeout(poll_info, xsink), remaining, xsink);
     }
 
     if (op->goalReached()) {
@@ -968,7 +1012,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 
     setStateUnlessClosed(H2State::WAIT_READ, "read-idle");
     op->deref(xsink);
-    return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+    return qore_http_client_finish_read_pass(applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink),
+        remaining, xsink);
 }
 
 int Http2ClientPollOperationPriv::checkConnectDeadline(ExceptionSink* xsink) {
@@ -992,6 +1037,24 @@ int Http2ClientPollOperationPriv::checkConnectDeadline(ExceptionSink* xsink) {
     setError("HTTP2-CONNECT-TIMEOUT", desc.c_str(), xsink);
     return -1;
 }
+
+#ifdef DEBUG
+void Http2ClientPollOperationPriv::dbgCheckReadPass(const QoreHashNode* poll_info) {
+    // a pass that found the submission lock held is run again by the submitter's wake
+    if (!poll_info || dbg_read_pass_exempt) {
+        return;
+    }
+    SocketPollOperationBase* op = refCurrentOp();
+    if (!op) {
+        return;
+    }
+    ExceptionSink xs;
+    SocketHttp2ClientMultiplexPollOperation* mop = dynamic_cast<SocketHttp2ClientMultiplexPollOperation*>(op);
+    bool remaining = mop && mop->completedResponseCount() > 0;
+    op->deref(&xs);
+    qore_dbg_http_client_check_read_pass(poll_info, remaining);
+}
+#endif
 
 QoreHashNode* Http2ClientPollOperationPriv::clampConnectDeadline(QoreHashNode* poll_info,
         ExceptionSink* xsink) {
@@ -1231,30 +1294,12 @@ void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue*
         pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj}});
     }
 
-    // Drain any data already buffered in the H2 session for this stream.
-    // DATA frames may arrive in the same TCP segment as the CONNECT response.
-    // queue->push() wakes the consumer directly; readHttp2StreamDataForAsyncPoll()
-    // and Queue::push() are thread-safe — no lock needed.
-    ExceptionSink xsink;
-    while (true) {
-        BinaryNode* data = sock_obj->readHttp2StreamDataForAsyncPoll(stream_id, 0, &xsink);
-        if (xsink) {
-            xsink.clear();
-            break;
-        }
-        if (!data || data->empty()) {
-            if (data) {
-                data->deref(&xsink);
-            }
-            break;
-        }
-        queue->push(&xsink, data);
-        if (xsink) {
-            data->deref(&xsink);
-            xsink.clear();
-            break;
-        }
-    }
+    // the stream's data is credited as the drain takes it, so the data that a bounded queue has no room for stays in
+    // the stream without credit (issue #5859)
+    sock_obj->setHttp2StreamCreditOnConsume(stream_id);
+
+    // the I/O thread applies the registration and drains the data already received for the stream: a push here,
+    // on the caller's thread, could wait for room in a bounded queue, and would race with the I/O thread's drain
 
     // Wake the I/O thread so it applies the pending registration via
     // continuePoll() → drainStreamQueues()
@@ -1265,7 +1310,15 @@ void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue*
 void Http2ClientPollOperationPriv::releaseStreamQueueInfos(std::vector<StreamQueueInfo>& infos,
         ExceptionSink* xsink) {
     for (StreamQueueInfo& info : infos) {
+        // data that the queue never took is released with the registration
+        if (info.pending) {
+            info.pending->deref(xsink);
+            info.pending = nullptr;
+        }
         if (info.queue) {
+            if (info.room) {
+                info.queue->removeRoomListener(info.room.get());
+            }
             info.queue->deref(xsink);
         }
         if (info.queue_obj) {
@@ -1279,6 +1332,58 @@ void Http2ClientPollOperationPriv::releaseStreamQueueInfos(std::vector<StreamQue
         }
     }
     infos.clear();
+}
+
+std::shared_ptr<QoreQueueRoomListener> Http2ClientPollOperationPriv::makeStreamQueueRoomListener() {
+    return std::make_shared<HttpStreamQueueRoomListener>(sock_obj->getIoIdentityHash(), stream_queue_room);
+}
+
+int Http2ClientPollOperationPriv::pushStreamQueueData(int32_t stream_id, StreamQueueInfo& info, BinaryNode* data) {
+    assert(!info.pending);
+    // the queue's own exceptions are not raised (see drainStreamQueuesLocked())
+    ExceptionSink push_xsink;
+    QoreQueue::TryPushResult rc = info.queue->tryPush(&push_xsink, data);
+    push_xsink.clear();
+    if (rc == QoreQueue::QTP_PUSHED) {
+        return 0;
+    }
+    if (rc == QoreQueue::QTP_FULL) {
+        // the data is kept, and the drain resumes when the queue has room; the listener is added to the queue once
+        info.pending = data;
+        if (!info.room) {
+            info.room = makeStreamQueueRoomListener();
+            info.queue->addRoomListener(info.room);
+            // room may have appeared before the listener was added: the next drain tries again
+            ExceptionSink retry_xsink;
+            QoreQueue::TryPushResult rc2 = info.queue->tryPush(&retry_xsink, data);
+            retry_xsink.clear();
+            if (rc2 == QoreQueue::QTP_PUSHED) {
+                info.pending = nullptr;
+                return 0;
+            }
+            if (rc2 != QoreQueue::QTP_FULL) {
+                info.pending = nullptr;
+                rc = rc2;
+            } else {
+                return 1;
+            }
+        } else {
+            return 1;
+        }
+    }
+    // the queue refused the data (deleted, or in an error state) and released it: the data is lost, so the stream
+    // fails rather than ending without it
+    std::string desc = "the Queue registered for HTTP/2 stream ";
+    desc += std::to_string(stream_id);
+    desc += rc == QoreQueue::QTP_DELETED
+        ? " was deleted; the stream's data could not be delivered"
+        : " is in an error state and refused the stream's data";
+    if (!sock_obj->failHttp2Stream(stream_id, "HTTP2-STREAM-QUEUE-ERROR", desc.c_str())) {
+        // the stream has ended, and its response was delivered without the data that the queue refused
+        printd(1, "Http2ClientPollOperationPriv::pushStreamQueueData() stream %d: %s; the stream has already "
+            "ended\n", stream_id, desc.c_str());
+    }
+    return -1;
 }
 
 void Http2ClientPollOperationPriv::markStreamQueuesRemoved() {
@@ -1324,12 +1429,25 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
             if (it != stream_queues.end()) {
                 // Replace — the old references that the new registration does not hold are released
                 StreamQueueInfo old = it->second;
-                released.push_back({
-                    old.queue != info.queue ? old.queue : nullptr,
-                    old.queue_obj != info.queue_obj ? old.queue_obj : nullptr,
-                    old.notifier != info.notifier ? old.notifier : nullptr,
-                    old.notifier_obj != info.notifier_obj ? old.notifier_obj : nullptr,
-                });
+                // the old registration's room listener is removed from its queue; its pending data goes to the new
+                // registration (see below)
+                if (old.room) {
+                    old.queue->removeRoomListener(old.room.get());
+                }
+                StreamQueueInfo rel;
+                rel.queue = old.queue != info.queue ? old.queue : nullptr;
+                rel.queue_obj = old.queue_obj != info.queue_obj ? old.queue_obj : nullptr;
+                rel.notifier = old.notifier != info.notifier ? old.notifier : nullptr;
+                rel.notifier_obj = old.notifier_obj != info.notifier_obj ? old.notifier_obj : nullptr;
+                released.push_back(rel);
+                // the data that the old queue had no room for was taken from the stream: it goes to the new
+                // registration's queue first, so nothing is lost (issue #5859); a frame state gets the stream's
+                // data through the stream's action, so raw data for its queue is released
+                if (info.frame_state) {
+                    released.back().pending = old.pending;
+                } else {
+                    info.pending = old.pending;
+                }
                 it->second = info;
             } else {
                 stream_queues[sid] = info;
@@ -1338,19 +1456,45 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
         pending_stream_registrations.clear();
     }
 
+    // the queues are drained now: a room notification after this point wakes the I/O thread again
+    stream_queue_room->store(false, std::memory_order_seq_cst);
+
     if (stream_queues.empty()) {
         return;
     }
 
     std::vector<int32_t> completed;
+    // set when reading a stream fails: the drain ends, after the streams completed so far are removed
+    bool read_failed = false;
     for (auto& [stream_id, info] : stream_queues) {
         int drain_count = 0;
+        // a queue that refuses a value (one in an error state, or deleted) ends the registration of its stream: the
+        // refusal is the consumer's, not an error of the connection, so it is not raised to the caller of the poll
+        // operation (issue #5840); data it refused is lost, so the stream fails (issue #5859)
+        bool refused = false;
+        // set when the queue is bounded and full: the stream's data stays in the stream, without stream credit,
+        // until the queue has room (issue #5859)
+        bool full = false;
+        // the data that the queue had no room for is pushed first
+        if (!info.frame_state && info.pending) {
+            BinaryNode* data = info.pending;
+            info.pending = nullptr;
+            int rc = pushStreamQueueData(stream_id, info, data);
+            if (rc > 0) {
+                full = true;
+            } else if (rc < 0) {
+                refused = true;
+            } else {
+                ++drain_count;
+            }
+        }
         // the data of a stream decoded by a frame state reaches the queue through the frame state; reading it here
         // would take it from the decoder
-        while (!info.frame_state) {
+        while (!info.frame_state && !full && !refused) {
             BinaryNode* data = sock_obj->readHttp2StreamDataForAsyncPoll(stream_id, 0, xsink);
             if (*xsink) {
-                return;
+                read_failed = true;
+                break;
             }
             if (!data) {
                 break;
@@ -1359,26 +1503,60 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
                 data->deref(xsink);
                 break;
             }
-            ++drain_count;
-            info.queue->push(xsink, data);
-            if (*xsink) {
-                data->deref(xsink);
-                return;
+            int rc = pushStreamQueueData(stream_id, info, data);
+            if (rc > 0) {
+                full = true;
+            } else if (rc < 0) {
+                refused = true;
+            } else {
+                ++drain_count;
             }
         }
 
-        if (drain_count > 0) {
+        if (read_failed) {
+            break;
+        }
+        // a refused stream is dispatched too, so that its listener reads its queue and sees the error; the reading
+        // cycle may have listed the stream already
+        if ((drain_count > 0 || refused) && std::find(data_ready_streams.begin(), data_ready_streams.end(),
+                stream_id) == data_ready_streams.end()) {
             data_ready_streams.push_back(stream_id);
+        }
+        if (refused) {
+            completed.push_back(stream_id);
+            continue;
+        }
+        // the stream does not end before the queue has taken its data, unless it is known to have been reset: no
+        // more data comes, and the data that the queue has no room for is released with the registration, which
+        // ends with the end of the stream (issue #5859); a stream that ended normally, or whose record is gone,
+        // keeps its data for a reader that reads the queue to its end
+        if (full) {
+            if (sock_obj->isHttp2StreamResetForAsyncPoll(stream_id)) {
+                if (info.pending) {
+                    info.pending->deref(xsink);
+                    info.pending = nullptr;
+                }
+                ExceptionSink push_xsink;
+                info.queue->tryPush(&push_xsink, QoreValue(), true);
+                push_xsink.clear();
+                if (std::find(data_ready_streams.begin(), data_ready_streams.end(), stream_id)
+                        == data_ready_streams.end()) {
+                    data_ready_streams.push_back(stream_id);
+                }
+                completed.push_back(stream_id);
+            }
+            continue;
         }
 
         // Check stream closure (remote END_STREAM or RST_STREAM/GOAWAY)
         if (sock_obj->isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
                 || sock_obj->isHttp2StreamClosedForAsyncPoll(stream_id)) {
-            // Push NOTHING sentinel so the handler thread knows the stream is done
-            info.queue->push(xsink, QoreValue());
-            if (*xsink) {
-                return;
-            }
+            // Push NOTHING sentinel so the handler thread knows the stream is done; it is pushed even if the queue
+            // is full, after the stream's data; a queue that refuses it ends the registration all the same, and its
+            // listener reads the error from it
+            ExceptionSink push_xsink;
+            info.queue->tryPush(&push_xsink, QoreValue(), true);
+            push_xsink.clear();
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
                 data_ready_streams.push_back(stream_id);
@@ -1401,13 +1579,33 @@ void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
     // the registrations are taken out of the containers under their locks and processed after them, as pushing to
     // the queues and releasing the registrations can block and run destructors
     std::vector<StreamQueueInfo> cleared;
+    // registrations replaced by pending ones, released after the locks
+    std::vector<StreamQueueInfo> replaced;
     {
         AutoLocker ml(stream_queues_lock);
         // Drain pending registrations so we clean up everything
         {
             AutoLocker al(sq_lock);
             for (auto& [sid, info] : pending_stream_registrations) {
-                stream_queues[sid] = info;
+                auto it = stream_queues.find(sid);
+                if (it != stream_queues.end()) {
+                    // a registration that replaces another: the old references that the new one does not hold are
+                    // released, and the old one's pending data and room listener with them
+                    StreamQueueInfo& old = it->second;
+                    if (old.room) {
+                        old.queue->removeRoomListener(old.room.get());
+                    }
+                    StreamQueueInfo rel;
+                    rel.queue = old.queue != info.queue ? old.queue : nullptr;
+                    rel.queue_obj = old.queue_obj != info.queue_obj ? old.queue_obj : nullptr;
+                    rel.notifier = old.notifier != info.notifier ? old.notifier : nullptr;
+                    rel.notifier_obj = old.notifier_obj != info.notifier_obj ? old.notifier_obj : nullptr;
+                    rel.pending = old.pending;
+                    replaced.push_back(rel);
+                    it->second = info;
+                } else {
+                    stream_queues[sid] = info;
+                }
             }
             pending_stream_registrations.clear();
         }
@@ -1427,12 +1625,17 @@ void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
         err_hash->setKeyValue("error", true, xsink);
         err_hash->setKeyValue("end_stream", true, xsink);
-        info.queue->push(xsink, err_hash.release());
+        // a queue that refuses the marker (one in an error state) has its error for the consumer already (issue #5840);
+        // the marker is pushed even if the queue is full, without waiting (issue #5859)
+        ExceptionSink push_xsink;
+        info.queue->tryPush(&push_xsink, err_hash.release(), true);
+        push_xsink.clear();
         if (info.notifier) {
             info.notifier->notify();
         }
     }
     releaseStreamQueueInfos(cleared, xsink);
+    releaseStreamQueueInfos(replaced, xsink);
 }
 
 // --- Stream management (app thread) ---
@@ -1524,6 +1727,37 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         return -1;
     }
 
+    // a drain of the stream queues that the I/O thread skipped while the submission lock was taken is repeated
+    // after it is released (issue #5859); declared before the lock guard, so that it runs after the lock is released
+    struct StreamQueueRoomRewake {
+        Http2ClientPollOperationPriv* priv;
+        ~StreamQueueRoomRewake() {
+            // sequentially consistent with the listener's store: a failed trylock() of the submission lock gives no
+            // ordering between the I/O thread and this thread, and the fence orders the load after the unlock
+            std::atomic_thread_fence(std::memory_order_seq_cst);
+            if (priv->stream_queue_room->load(std::memory_order_seq_cst)) {
+                ExceptionSink wake_xsink;
+                priv->wakeIoThread(&wake_xsink);
+                wake_xsink.clear();
+            }
+        }
+    } room_rewake{this};
+    // a read pass that found the lock held runs again once the lock is released, on every exit (issue #5839); this
+    // is declared before the lock so that it runs after the lock has been released
+    struct SkippedReadPassWake {
+        Http2ClientPollOperationPriv* priv;
+        ~SkippedReadPassWake() {
+            // a destructor must not throw: a failed wake leaves the pass to the next socket event
+            try {
+                if (priv->read_pass_skipped.exchange(false, std::memory_order_seq_cst)) {
+                    ExceptionSink wake_xsink;
+                    priv->wakeIoThread(&wake_xsink);
+                    wake_xsink.clear();
+                }
+            } catch (...) {
+            }
+        }
+    } skipped_read_pass_wake{this};
     AutoLocker submission_al(submission_lock);
 
     bool reserved_stream_slot = false;
@@ -1604,6 +1838,9 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
     // for END_STREAM (which never comes for SSE streams).
     if (action->isStreaming()) {
         sock_obj->setHttp2StreamStreamingDirect(stream_id);
+        // the stream credit of the response data is granted as the action's consumer takes it (issue #5820);
+        // installed before the action is registered, so before it can receive anything
+        sock_obj->installHttp2StreamConsumeHook(stream_id, action);
     }
 
     // Register action (take ownership — action was created with refcount 1 by caller)
@@ -1638,6 +1875,8 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         reserved_stream_slot = false;
     }
 
+    // a read pass that this wake starts while the lock is still held is skipped and run again by the wake when the
+    // lock is released (skipped_read_pass_wake; issue #5839)
     wakeIoThread(xsink);
     if (*xsink) {
         AbstractAsyncAction* registered_action = nullptr;
@@ -1696,6 +1935,26 @@ void Http2ClientPollOperationPriv::sendStreamData(int64_t stream_id, const Binar
     sock_obj->sendHttp2StreamData(stream_id, data, end_stream, xsink);
 }
 
+int Http2ClientPollOperationPriv::markFrameStateCloseSent(int32_t stream_id, ExceptionSink* xsink) {
+    ChannelAction* ch_action = nullptr;
+    std::string sid = std::to_string(stream_id);
+    {
+        AutoLocker al(stream_lock);
+        auto it = stream_actions.find(sid);
+        if (it == stream_actions.end()) {
+            return 0;
+        }
+        ch_action = dynamic_cast<ChannelAction*>(it->second);
+        if (!ch_action) {
+            return 0;
+        }
+        ch_action->ref();
+    }
+    int rv = ch_action->markFrameStateCloseSent();
+    ch_action->deref(xsink);
+    return rv;
+}
+
 void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* msg_queue,
         QoreValue initial, ExceptionSink* xsink) {
     ValueHolder initial_holder(initial, xsink);
@@ -1712,7 +1971,7 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendHttp2StreamDataForAsyncPoll(stream_id, *holder, false, &cxsink);
+            int rv = sock_ptr->sendHttp2StreamControlFrameForAsyncPoll(stream_id, *holder, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path
                 cxsink.clear();
@@ -1763,6 +2022,16 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
     auto it = stream_queues.find(stream_id);
     if (it != stream_queues.end() && it->second.queue == msg_queue) {
         it->second.frame_state = true;
+        // raw data that the queue had no room for is not for a frame state's queue, which gets the stream's
+        // decoded messages: it is released (issue #5859)
+        if (it->second.pending) {
+            it->second.pending->deref(xsink);
+            it->second.pending = nullptr;
+        }
+        if (it->second.room) {
+            it->second.queue->removeRoomListener(it->second.room.get());
+            it->second.room.reset();
+        }
     }
     AutoLocker al(sq_lock);
     for (auto& i : pending_stream_registrations) {
@@ -2460,6 +2729,20 @@ nothing Http2ClientPollOperationBase::sendStreamData(int stream_id, data data,
 
     @note Must be called on the I/O controller thread before the handler starts reading.
 
+    @note A Queue that refuses the stream's data (one in an error state, see Queue::setError(), or a deleted Queue) ends
+    the registration and fails the stream: its response is an \c HTTP2-STREAM-QUEUE-ERROR error, the stream is
+    canceled, and the stream is still dispatched to its listener; the refusal is not raised to the connection's other
+    streams.
+
+    @note A Queue with a maximum size is supported: the I/O thread never waits for room in it; the data that it has no
+    room for stays in the stream, whose window is not credited for it, so the server cannot send more than about a
+    window beyond what the Queue holds.  The end of the stream is added even if the Queue is full, so it can hold one
+    more value than its maximum size.  For a request whose response is returned whole, the data still in the stream
+    when the response ends is the response's body, not values of the Queue.  A reader that stops reading a bounded
+    Queue before the end of the stream must set an error on it or delete it, or the registration and the data that
+    the Queue has no room for are kept until the connection is closed (or, for a CONNECT stream, until the stream
+    is reset)
+
     @since %Qore 3.0
 */
 nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
@@ -2495,6 +2778,21 @@ nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
 */
 nothing Http2ClientPollOperationBase::clearStreamQueues() {
     priv->clearStreamQueues(xsink);
+}
+
+//! Records on the stream's frame state that the application sends its WebSocket close frame itself
+/** When a frame state is installed on the stream (see installFrameState()), it then sends no close frame of its own
+    when it fails the connection later with an error (an endpoint sends one close frame, RFC 6455 section 5.5.1).
+
+    @param stream_id the stream ID
+
+    @return 0 if the stream has no frame state, 1 if the close is recorded (the caller sends its close frame), 2 if
+    the frame state sent a close frame before (the caller sends none)
+
+    @since %Qore 3.0
+*/
+int Http2ClientPollOperationBase::markFrameStateCloseSent(int stream_id) [flags=NAMED_ARGS] {
+    return priv->markFrameStateCloseSent(static_cast<int32_t>(stream_id), xsink);
 }
 
 //! Installs a WebSocket frame-state decoder for a CONNECT tunnel stream

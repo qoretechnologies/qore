@@ -24,7 +24,8 @@
 
     A sandboxed caller's restrictions are part of its sandbox and apply to module code in every mode, so the calls are
     refused for a sandboxed lockdown caller; a caller restricted only by its parse options restricts its own code, and
-    the module code runs with the module's own options.  Each case runs the same script with the source module and
+    the module code runs with the module's own options.  A call reference that the caller's code makes to a builtin
+    method of an object that module code created is the caller's code: it is refused as the direct call is (#5692).  Each case runs the same script with the source module and
     with the module AOT-compiled with <tt>--compile-module</tt>, in every execution mode, and expects the output of
     the source module with the AST interpreter, which is the reference.
 */
@@ -56,8 +57,8 @@ sandboxed member_default_arg: \"member\"
 sandboxed member_default_arg: \"member\"
 sandboxed holder: \"member\"
 sandboxed holder: \"member\"
-unsandboxed callref: null
-unsandboxed callref_default_arg: null
+unsandboxed callref: INVALID-FUNCTION-ACCESS
+unsandboxed callref_default_arg: INVALID-FUNCTION-ACCESS
 unsandboxed direct: INVALID-FUNCTION-ACCESS
 unsandboxed create_obj: \"RWLock\"
 unsandboxed create_obj: \"RWLock\"

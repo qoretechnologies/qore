@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CompoundAssignmentNothingUnionTest
+
+#! issue #5739: += and -= on a union lvalue with no value
+/** An or-nothing union (<tt>*union<...></tt>) reported NOTHING as its default value, so += and -= gave its lvalue with
+    no value the result of an int lvalue (<tt>*union<int, float> u; u -= 2.5</tt> gave -2) in the AST interpreter
+    and wherever the shared code saw the declared type (globals, members), while IR and JIT locals gave the documented
+    result.  As documented, an or-nothing lvalue takes the default value of its plain type, and a union has none, so
+    the lvalue takes the value of the operand (negated for -=), which the union must accept.  A union that has a list
+    or a hash as its first member was also taken for a list or a hash lvalue; it is a union whatever the order of its
+    members.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables, and its output
+    must be that of the AST interpreter.
+*/
+class CompoundAssignmentNothingUnionTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "nothing-union-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("compound assignment on a union lvalue with no value", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        list<string> lines = select astOutput().split("\n"), $1 =~ / => /;
+        assertEq(548, lines.size(), "every case ran");
+        hash<string, string> res = map {$1.split(" => ")[0]: $1.split(" => ")[1]}, lines;
+
+        # the issue: the negated operand, in a local, a global, a member and with an operand of a type not known at
+        # parse time
+        foreach string kind in ("local", "global", "member") {
+            assertEq("-2.5 float", res{kind + " *union<int, float> -= 2.5"}, kind);
+            assertEq("2.5 float", res{kind + " *union<int, float> += 2.5"}, kind);
+            assertEq("-2.5 float", res{kind + " *union<float, int> -= 2.5"}, kind);
+            assertEq("-2.0 float", res{kind + " *union<float, int> -= 2"}, kind);
+            assertEq("-2.5 number", res{kind + " *union<int, number> -= 2.5n"}, kind);
+            # an operand that the union does not accept
+            assertEq("RUNTIME-TYPE-ERROR", res{kind + " *union<int, float> -= 2.5n"}, kind);
+            assertEq("RUNTIME-TYPE-ERROR", res{kind + " *union<string, int> += 2.5"}, kind);
+            assertEq("\"3\" string", res{kind + " *union<string, int> += '3'"}, kind);
+            # a union with a list or a hash member is not a list or a hash lvalue
+            assertEq("2 integer", res{kind + " *union<hash<auto>, int> += 2"}, kind);
+            assertEq("-2 integer", res{kind + " *union<hash<auto>, int> -= 2"}, kind);
+            assertEq("2 integer", res{kind + " union<hash<auto>, int> += 2"}, kind);
+            assertEq("2 integer", res{kind + " union<list<int>, int> += 2"}, kind);
+            # an or-nothing type with a default value: unchanged
+            assertEq("-2 integer", res{kind + " *int -= 2.5"}, kind);
+            assertEq("-2.0 float", res{kind + " *float -= 2"}, kind);
+        }
+        assertEq("-2.5 float", res{"runtime *union<int, float> -= 2.5 float"});
+        assertEq("RUNTIME-TYPE-ERROR", res{"runtime *union<int, float> -= 2.5 number"});
+        assertEq("-2.5 float", res{"reference *union<int, float> -= 2.5"});
+        assertEq("RUNTIME-TYPE-ERROR", res{"reference *union<int, float> += 2.5n"});
+        assertEq("2 integer", res{"reference *union<hash<auto>, int> += 2"});
+        assertEq("-2 integer", res{"reference union<int, list<int>> -= 2"});
+
+        # the order of the members of a union does not matter, and an or-nothing union gives what the plain union gives
+        list<string> diffs = ();
+        foreach string label in (keys res) {
+            *list<*string> m = (label
+                =~ x/^(local|global|member|runtime) (\*?)union<(list<int>|hash<auto>), int> (.*)$/);
+            if (!m) {
+                continue;
+            }
+            string swapped = sprintf("%s %sunion<int, %s> %s", m[0], m[1], m[2], m[3]);
+            if (res{swapped} != res{label}) {
+                diffs += sprintf("%s: %s, %s: %s", label, res{label}, swapped, res{swapped});
+            }
+            if (m[1] == "*") {
+                string plain = sprintf("%s union<%s, int> %s", m[0], m[2], m[3]);
+                if (res{plain} != res{label}) {
+                    diffs += sprintf("%s: %s, %s: %s", label, res{label}, plain, res{plain});
+                }
+            }
+        }
+        assertEq((), diffs, "member order and or-nothing");
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("compound-assignment-nothing-union-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

@@ -451,6 +451,47 @@
     }
   },
   {
+    "type": "callable_attribute",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "callable_attributes",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "callable_attribute",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "case_comparison",
     "named": true,
     "fields": {
@@ -1022,6 +1063,10 @@
         },
         {
           "type": "block",
+          "named": true
+        },
+        {
+          "type": "callable_attributes",
           "named": true
         },
         {
@@ -2635,6 +2680,10 @@
           "named": true
         },
         {
+          "type": "callable_attributes",
+          "named": true
+        },
+        {
           "type": "method_qualifier",
           "named": true
         },
@@ -3861,6 +3910,10 @@
       "types": [
         {
           "type": "block",
+          "named": true
+        },
+        {
+          "type": "callable_attributes",
           "named": true
         },
         {

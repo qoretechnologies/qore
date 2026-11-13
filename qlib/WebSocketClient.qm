@@ -46,6 +46,8 @@
 %requires json
 
 module WebSocketClient {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "2.5";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
@@ -345,6 +347,20 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - \c WebSocketConnectionObject::getImpl() is declared to return a
+      @ref WebSocketClient::WebSocketClient "WebSocketClient", as subclasses return other clients (see
+      @ref override_return_types); \c getAsync() raises \c CONNECTION-ASYNC-UNSUPPORTED for a connection whose client
+      is not a @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization"
+    - a connection closed because a message was larger than the maximum message size of 16 MiB is reported with its
+      close code 1009 (Message Too Big) and reason, on HTTP/1.1, HTTP/2 and HTTP/3: added
+      @ref WebSocketClient::WebSocketClient::getCloseCode() "WebSocketClient::getCloseCode()" and
+      @ref WebSocketClient::WebSocketClient::getCloseReason() "WebSocketClient::getCloseReason()", which return the
+      close's status code and reason, also in the closing callback, and the \c close_code and \c close_reason keys of
+      the @ref WebSocketClient::EVENT_WS_CLOSED "EVENT_WS_CLOSED" event; a fragmented message is checked against the
+      limit as its fragments arrive, and on HTTP/1.1 the data received after the client closed the connection
+      because of an error or an idle timeout is discarded; on HTTP/2 and HTTP/3, a connection that the client closes
+      because of such an error ends when the server ends the stream after answering the client's close frame (at
+      most the close timeout), so that the server always receives the close frame (issue #5861)
     - an HTTP/2 or HTTP/3 extended \c CONNECT that the server answers with a response that ends the stream (a
       server without a WebSocket endpoint for the path) fails the handshake, so the connection is not reported as
       connected and the \c "auto" mode tries the HTTP/1.1 Upgrade; any 2xx status accepts the connection, and the
@@ -636,6 +652,10 @@ public hashdecl WscAsyncIoResources {
     *Socket wake_socket;
     #! the close cause captured from the poll operation, if any
     *string close_cause;
+    #! the status code of the close of the connection, captured from the poll operation; 0 if none
+    int close_code = 0;
+    #! the reason of the close of the connection, captured from the poll operation
+    string close_reason = "";
     #! the state event Queue of an HTTP/1.1 poll operation, which gets an event with \c done set when it ends
     *Queue<hash<SocketPollStateInfo>> state_queue;
     #! @ref True if the client's close frame was sent on the connection
@@ -1093,7 +1113,14 @@ public const EVENT_WS_PING = "ws-ping-event";
 public const EVENT_WS_PONG = "ws-pong-event";
 
 #! WebSocket connection closed event constant
-/** This event has no data
+/** The event data has the following keys:
+    - \c cid: the ID of the connection closed
+    - \c reason: the cause of a close that the client started itself, if any (e.g. \c "idle-timeout")
+    - \c close_code: the status code with which the connection was closed (RFC 6455 section 7.4), for example
+      @ref WebSocketUtil::WSCC_MessageTooBig "WSCC_MessageTooBig" (1009) when a message was larger than the maximum
+      message size; see WebSocketClient::getCloseCode() (since WebSocketClient 2.5)
+    - \c close_reason: the reason with which the connection was closed; see WebSocketClient::getCloseReason() (since
+      WebSocketClient 2.5)
 */
 public const EVENT_WS_CLOSED = "ws-closed-event";
 
@@ -1155,8 +1182,10 @@ public const MESSAGE_WS_PONG = "pong";
 
     The @ref WebSocketClient::WebSocketClient "WebSocketClient" class includes support for running in sandboxed
     Program objects with the following parse options set:
-    - \c PO_NO_PROCESS_CONTROL: in this case the \c "yield" option is required in
-      @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()"
+    - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, the \c "yield" option is not required in
+      @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
 */
 public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper {
     public {
@@ -1222,6 +1251,12 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
             closingConnection() can surface it to observers.
         */
         string async_close_cause = "";
+
+        #! The status code of the close of the last connection reported closed; 0 if none (issue #5861)
+        int async_close_code = 0;
+
+        #! The reason of the close of the last connection reported closed (issue #5861)
+        string async_close_reason = "";
 
         #! Reconnect flag
         bool reconnect = False;
@@ -1562,7 +1597,8 @@ WebSocketClient ws(\event(), {
           overrides \a asyncapi
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
             current thread's execution to another thread (default value: @ref Qore::thread_yield());
-            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
+            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context and the module is
+            loaded by its path
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
 
@@ -1591,6 +1627,12 @@ WebSocketClient ws(\event(), {
             self.reconnect_stopping = True;
             self.stop = WSCC_GoingAway;
             self.sleep_cond.broadcast();
+        }
+        # an exception of a subclass's hook does not keep the destructor from closing the connection
+        try {
+            destructorStopping();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("exception in destructorStopping(): %s", get_exception_string(ex));
         }
         disconnectIntern(WSCC_GoingAway, True);
         # Skip the delivery-task wait only in the self-deadlock case: a user callback on the delivery
@@ -2343,6 +2385,9 @@ ws.connect();
 
         @throw WEBSOCKET-ACTION-TIMEOUT another connect, disconnect or reconnect did not end within the I/O timeout; see
         @ref websocketclient_lifecycle
+
+        @note over HTTP/2 and HTTP/3, the close frame waits for flow-control credit as a message that is sent does,
+        before the close handshake starts
     */
     disconnect(int cmd = WSCC_GoingAway) {
         # an explicit disconnect stops automatic reconnects once it holds the action; see disconnectIntern()
@@ -2598,6 +2643,50 @@ ws.connect();
     int getCurrentConnectionId() {
         *WscConnection c = conn;
         return c ? c.cid : -1;
+    }
+
+    #! Returns the status code with which the connection was closed (RFC 6455 section 7.4)
+    /** The code of the close frame received from the server (RFC 6455 section 7.1.5); when the client closed the
+        connection because of an error (on HTTP/2 and HTTP/3 always that error's code; on HTTP/1.1 the server's answer,
+        which has the same code as a rule), or @ref WebSocketUtil::WSCC_AbnormalClosure "WSCC_AbnormalClosure" (1006)
+        when no close frame was received.  For example
+        @ref WebSocketUtil::WSCC_MessageTooBig "WSCC_MessageTooBig" (1009) when a message was larger than the maximum
+        message size of 16 MiB, whether the client or the server received it.  Called in the closing callback, it
+        returns the code of the connection being reported closed, even when a new connection was started meanwhile.
+
+        @return the close status code; 0 if no connection was closed
+
+        @since WebSocketClient 2.5
+    */
+    int getCloseCode() {
+        {
+            AutoLock al(delivery_mutex);
+            *list<hash<auto>> l = closing_info{gettid()};
+            if (l) {
+                return l.last().code ?? 0;
+            }
+        }
+        return async_close_code;
+    }
+
+    #! Returns the reason with which the connection was closed
+    /** The reason of the close frame received from the server (RFC 6455 section 7.1.6); after a close that the client
+        started because of an error (for example a message that is too big), that error's description when the
+        server's answer has no reason (on HTTP/2 and HTTP/3 always); see getCloseCode().
+
+        @return the close reason; an empty string if none
+
+        @since WebSocketClient 2.5
+    */
+    string getCloseReason() {
+        {
+            AutoLock al(delivery_mutex);
+            *list<hash<auto>> l = closing_info{gettid()};
+            if (l) {
+                return l.last().reason ?? "";
+            }
+        }
+        return async_close_reason;
     }
 
     #! Returns the ID of the connection being reported closed in a closing callback
@@ -2947,16 +3036,26 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected: the connection was never opened, or was
+        closed and no new one is open yet (also while an automatic reconnect is in progress); the message was not
+        sent
+
+        @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
+        flow-control credit for it, for at most the \c timeout option, after which \c HTTP2-FLOW-CONTROL or
+        \c HTTP3-FLOW-CONTROL is raised; the message was not sent then
     */
     send(string str) {
         logDebug("sending string: %y (open: %y)", LoggerUtil::getArgSummary(str), isOpen());
         # during the close handshake of a connection taken by this client, its operation raises
         # WEBSOCKET-CLOSING-ERROR
         *object po = poll_op ?? closing_op;
-        if (po) {
-            po.sendText(str);
-            wakeAsyncIo();
+        # without a connection the message cannot be sent: it was dropped silently (issue #5894)
+        if (!po) {
+            throw "WEBSOCKET-NOT-CONNECTED-ERROR", sprintf("cannot send a message: the WebSocket client is not "
+                "connected to %y (the connection was closed or was never opened)", url);
         }
+        po.sendText(str);
+        wakeAsyncIo();
     }
 
     #! Sends binary data over the web socket with timeout specified in options; if any errors occur, an exception is thrown
@@ -2970,16 +3069,26 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected: the connection was never opened, or was
+        closed and no new one is open yet (also while an automatic reconnect is in progress); the message was not
+        sent
+
+        @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
+        flow-control credit for it, for at most the \c timeout option, after which \c HTTP2-FLOW-CONTROL or
+        \c HTTP3-FLOW-CONTROL is raised; the message was not sent then
     */
     send(binary bin) {
         logDebug("sending binary: %y (open: %y)", LoggerUtil::getArgSummary(bin), isOpen());
         # during the close handshake of a connection taken by this client, its operation raises
         # WEBSOCKET-CLOSING-ERROR
         *object po = poll_op ?? closing_op;
-        if (po) {
-            po.sendBinary(bin);
-            wakeAsyncIo();
+        # without a connection the message cannot be sent: it was dropped silently (issue #5894)
+        if (!po) {
+            throw "WEBSOCKET-NOT-CONNECTED-ERROR", sprintf("cannot send a message: the WebSocket client is not "
+                "connected to %y (the connection was closed or was never opened)", url);
         }
+        po.sendBinary(bin);
+        wakeAsyncIo();
     }
 
     #! pushes an unencoded message on the connection's message queue
@@ -2990,6 +3099,13 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected: the connection was never opened, or was
+        closed and no new one is open yet (also while an automatic reconnect is in progress); the message was not
+        sent
+
+        @note over HTTP/2 and HTTP/3, a send waits while the stream's send buffer is full, for the server to grant the
+        flow-control credit for it, for at most the \c timeout option, after which \c HTTP2-FLOW-CONTROL or
+        \c HTTP3-FLOW-CONTROL is raised; the message was not sent then
     */
     send(data msg, int op, bool fin) {
         logDebug("sending message: %y op: %d/%y fin: %y (open: %y)", LoggerUtil::getArgSummary(msg), op,
@@ -2997,10 +3113,13 @@ ws.setEventQueue();
         # during the close handshake of a connection taken by this client, its operation raises
         # WEBSOCKET-CLOSING-ERROR
         *object po = poll_op ?? closing_op;
-        if (po) {
-            po.sendRaw(msg, op, fin);
-            wakeAsyncIo();
+        # without a connection the message cannot be sent: it was dropped silently (issue #5894)
+        if (!po) {
+            throw "WEBSOCKET-NOT-CONNECTED-ERROR", sprintf("cannot send a message: the WebSocket client is not "
+                "connected to %y (the connection was closed or was never opened)", url);
         }
+        po.sendRaw(msg, op, fin);
+        wakeAsyncIo();
     }
 
     #! Starts a non-blocking send operation for string data
@@ -3011,6 +3130,7 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected (see @ref send())
 
         @since WebSocketClient 2.4
     */
@@ -3026,6 +3146,7 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected (see @ref send())
 
         @since WebSocketClient 2.4
     */
@@ -3043,6 +3164,7 @@ ws.setEventQueue();
         @throw WEBSOCKET-CLOSING-ERROR a data message is sent after the close handshake of the connection started,
         for example when the server sent a close frame: no data frame may follow a close frame (RFC 6455 section
         5.5.1)
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected (see @ref send())
 
         @since WebSocketClient 2.4
     */
@@ -3061,6 +3183,10 @@ ws.setEventQueue();
             *object op_obj = poll_op ?? closing_op;
             if (op_obj) {
                 op_obj.checkDataSend();
+            } else {
+                # as send(): without a connection the message cannot be sent (issue #5894)
+                throw "WEBSOCKET-NOT-CONNECTED-ERROR", sprintf("cannot send a message: the WebSocket client is not "
+                    "connected to %y (the connection was closed or was never opened)", url);
             }
         }
         int rsv_bits = 0;
@@ -3459,7 +3585,8 @@ ws.setEventQueue();
         {
             AutoLock al(delivery_mutex);
             # a stack: a closing callback can report another connection closed on the same thread
-            push closing_info{t}, {"cause": res.close_cause ?? "", "cid": res.conn ? res.conn.cid : -1};
+            push closing_info{t}, {"cause": res.close_cause ?? "", "cid": res.conn ? res.conn.cid : -1,
+                "code": res.close_code, "reason": res.close_reason};
             # getEventConnectionId() in the closing callback gives the closed connection's ID too
             push event_cids{t}, res.conn ? res.conn.cid : -1;
         }
@@ -3937,6 +4064,8 @@ ws.setEventQueue();
         # own close reason; otherwise a later peer-initiated close on a
         # reconnected session could surface a stale value to observers.
         async_close_cause = "";
+        async_close_code = 0;
+        async_close_reason = "";
 
         if (hcio_stream) {
             if (transport == "http1") {
@@ -4048,6 +4177,13 @@ ws.setEventQueue();
                     async_close_cause = cause;
                     res.close_cause = cause;
                 }
+            } catch () {}
+            # the close's status code and reason, for the closing callback (issue #5861)
+            try {
+                res.close_code = call_object_method(op, "getCloseCode") ?? 0;
+                res.close_reason = call_object_method(op, "getCloseReason") ?? "";
+                async_close_code = res.close_code;
+                async_close_reason = res.close_reason;
             } catch () {}
             res.op = op;
         }
@@ -4472,7 +4608,13 @@ ws.setEventQueue();
                 return WSEDC_BREAK;
             }
             case "error": {
-                logError("WebSocket error: %s", msg.error ? get_exception_string(msg.error) : "unknown");
+                # a WebSocket error closes the connection with a status code (for example 1009 for a message that
+                # is too big); see getCloseCode() (issue #5861)
+                if (msg.error.code) {
+                    logError("WebSocket error: close code %d: %s", msg.error.code, msg.error.reason ?? "");
+                } else {
+                    logError("WebSocket error: %s", msg.error ? get_exception_string(msg.error) : "unknown");
+                }
                 return WSEDC_BREAK;
             }
             default: {
@@ -4647,6 +4789,16 @@ ws.setEventQueue();
                 logDebug("error shutting down the connection manager of the connect: %s: %s", ex.err, ex.desc);
             }
         }
+    }
+
+    #! Called by the destructor once the client is stopping, before it takes the client's connection; does nothing
+    /** An automatic reconnect that established its connection meanwhile sees the client stopping and disconnects the
+        connection itself, so the destructor may find no connection; a test holds the destructor here to make that
+        order (issue #5981).  Never called with the client's lock held.
+
+        @since WebSocketClient 2.5
+    */
+    private destructorStopping() {
     }
 
     #! Waits in the destructor for the threads the client started for itself, except the calling thread
@@ -4933,56 +5085,6 @@ ws.setEventQueue();
 
     private logError(string fmt, ...) {
         logArgs(LoggerLevel::ERROR, fmt, argv);
-    }
-
-    #! Reads a WebSocket message from a stream (HTTP/2 or HTTP/3)
-    /** Large WebSocket frames may be split across multiple protocol DATA frames,
-        so data is accumulated until a complete WebSocket frame is available.
-
-        @param frame_buf reference to the persistent frame buffer for this stream
-        @param read_data callback \c code<*binary(int)> that accepts a timeout in milliseconds and returns stream data
-        @param proto_label protocol label for error messages (e.g. \c "HTTP/2", \c "HTTP/3")
-
-        @return WebSocket message info hash
-
-        @since WebSocketClient 2.4
-    */
-    private hash<WsMsgInfo> readWsMessageFromStream(
-            reference<*binary> frame_buf,
-            code<*binary(int)> read_data,
-            string proto_label) {
-        binary buf = frame_buf ?? binary();
-        date deadline = now_us() + timeout_ms;
-        while (True) {
-            *int needed = ws_get_frame_size(buf);
-            if (exists needed && buf.size() >= needed) {
-                binary frame = buf.substr(0, needed);
-                frame_buf = buf.size() > needed ? buf.substr(needed) : NOTHING;
-                return ws_parse_frame(frame);
-            }
-
-            date remaining = deadline - now_us();
-            if (remaining <= 0s) {
-                throw "WEBSOCKET-ERROR", sprintf("timeout reading WebSocket frame from %s stream "
-                    "(have %d bytes, need %s)", proto_label, buf.size(),
-                    exists needed ? needed.toString() : "unknown");
-            }
-
-            int read_timeout_ms = min(remaining.durationMilliseconds(), 100);
-            *binary data = read_data(read_timeout_ms);
-            if (data) {
-                buf += data;
-            }
-
-            *int needed2 = ws_get_frame_size(buf);
-            if (exists needed2 && buf.size() >= needed2) {
-                binary frame = buf.substr(0, needed2);
-                frame_buf = buf.size() > needed2 ? buf.substr(needed2) : NOTHING;
-                return ws_parse_frame(frame);
-            } else if (!data && buf.empty()) {
-                throw "WEBSOCKET-ERROR", sprintf("no data available from %s stream", proto_label);
-            }
-        }
     }
 
     private sendClose(int code, *string txtmsg) {
@@ -5656,7 +5758,8 @@ class MyObserver inherits Observer {
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
             current thread's execution to another thread (default value: @ref Qore::thread_yield());
-            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
+            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context and the module is
+            loaded by its path
 
         @throw WEBSOCKET-ERROR unknown scheme, missing 'url' key in option hash; invalid option value
 
@@ -5693,6 +5796,9 @@ class MyObserver inherits Observer {
         @param value The value to serialize and send over the WebSocket
 
         If an AsyncAPI validator is set, the outgoing message will be validated before sending.
+
+        @throw WEBSOCKET-NOT-CONNECTED-ERROR the client is not connected (see @ref send())
+        @throw WEBSOCKET-CLOSING-ERROR the close handshake of the connection started (see @ref send())
     */
     sendData(auto value) {
         hash<auto> headers = {};
@@ -5844,6 +5950,9 @@ class MyObserver inherits Observer {
         if (cause.val()) {
             info.reason = cause;
         }
+        # the close's status code and reason (issue #5861)
+        info.close_code = getCloseCode();
+        info.close_reason = getCloseReason();
         notifyObservers(EVENT_WS_CLOSED, info);
     }
 
@@ -6276,7 +6385,9 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 
         @return a @ref WebSocketClient object
     */
-    private WebSocketClientWithSerialization getImpl(bool connect = True, *hash<auto> rtopts) {
+    # returns a WebSocketClient: a subclass's connection can return another WebSocketClient (SewioWebSocketClient);
+    # this class's own client is a WebSocketClientWithSerialization (issue #5838)
+    private WebSocketClient getImpl(bool connect = True, *hash<auto> rtopts) {
         # to avoid type issues with rtopts
         if (rtopts) {
             rtopts = {} + rtopts;
@@ -6303,10 +6414,19 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
 
         @return an async-I/O-capable @ref WebSocketClientWithSerialization object
 
+        @throw CONNECTION-ASYNC-UNSUPPORTED the client of the connection (from a subclass's getImpl()) is not a
+        @ref WebSocketClientWithSerialization object
+
         @since WebSocketClient 2.5
     */
     private WebSocketClientWithSerialization getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
-        return getImpl(connect, rtopts);
+        WebSocketClient client = getImpl(connect, rtopts);
+        if (!(client instanceof WebSocketClientWithSerialization)) {
+            throw "CONNECTION-ASYNC-UNSUPPORTED", sprintf("connection %y (%s) does not provide an async-I/O-capable "
+                "WebSocketClientWithSerialization object; its client is %y", name, self.className(),
+                client.className());
+        }
+        return cast<WebSocketClientWithSerialization>(client);
     }
 
     #! returns an WebSocketClientDelayedDataProvider object for this connection
@@ -7628,6 +7748,11 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
     @since WebSocketClient 2.4
 */
 public class WebSocketClientHcioPollOp {
+    public {
+        #! How long a close waits for the server's answer without a close timeout (see setCloseTimeout())
+        const DefaultCloseWaitMs = 15000;
+    }
+
     private {
         #! HttpClientIo stream handle for CONNECT tunnel (protocol-agnostic)
         HttpClientIo::HttpClientStreamHandle stream;
@@ -7670,10 +7795,11 @@ public class WebSocketClientHcioPollOp {
         #! True when WS close handshake is complete
         bool ws_close_sent = False;
 
-        #! Close code
+        #! Close code; set only by markClosedAndEnqueue(), when the connection is marked closed; protected by
+        #! heartbeat_mutex
         int close_code = 0;
 
-        #! Close reason
+        #! Close reason; set only with close_code; protected by heartbeat_mutex
         string close_reason = "";
 
         #! True if extensions are active
@@ -7721,6 +7847,23 @@ public class WebSocketClientHcioPollOp {
         /** @since WebSocketClient 2.5
         */
         *int close_timer_id;
+
+        #! True once the frame state rejected a frame and sent the client's close frame for it
+        /** The close is then reported as an \c "error" message with the code and reason of the error (see
+            startErrorClose()); protected by @ref heartbeat_mutex.
+
+            @since WebSocketClient 2.5
+        */
+        bool error_close = False;
+
+        #! The close code and reason of the error that the client closed the connection for (see startErrorClose());
+        #! reported when the close ends; protected by @ref heartbeat_mutex
+        int error_close_code = 0;
+        string error_close_reason = "";
+
+        #! True once the callbacks were cleared (clearCallbacks()): no close timer is armed after it; protected by
+        #! @ref heartbeat_mutex
+        bool callbacks_cleared = False;
 
         #! Reaches zero when the connection is closed; see markClosedAndEnqueue() and waitClosed()
         /** @since WebSocketClient 2.5
@@ -7799,6 +7942,10 @@ public class WebSocketClientHcioPollOp {
     notifyIo() {
         AutoLock al(process_mutex);
         if (isClosed()) {
+            # the frames that arrive after the connection was closed (for example a close frame after the close
+            # handshake timed out) are discarded, and a close frame is logged, as when it arrives with the frames
+            # before it (see processFrameHash())
+            discardMsgQueue();
             return;
         }
         # the frames that arrived before start() are delivered by initialDrain(), which the client calls without its
@@ -7820,6 +7967,17 @@ public class WebSocketClientHcioPollOp {
         }
     }
 
+    #! Discards the frames that arrived after the connection was closed; logs a close frame among them
+    private discardMsgQueue() {
+        while (*hash<auto> wrap = msg_queue.tryGet()) {
+            auto entry = wrap.value;
+            if (entry.typeCode() == NT_HASH && entry.type == "close") {
+                logDebug("discarding a close frame (code %d) that arrived after the connection was closed",
+                    entry.code ?? WSCC_NormalClosure);
+            }
+        }
+    }
+
     #! Marks the adapter as started — enables on_poll_complete delivery
     start() {
         started = True;
@@ -7833,6 +7991,35 @@ public class WebSocketClientHcioPollOp {
     bool initialDrain() {
         AutoLock al(process_mutex);
         return drainMsgQueue();
+    }
+
+    #! Closes the connection when its stream ended without a close frame, or failed
+    /** After an error that the client closed the connection for, the server answered the client's close frame (see
+        startErrorClose()), and the close is reported with the error's code; a connection that was closed already keeps
+        its close code and reason (issue #5880).  A stream that failed (\a stream_error) is reported as an error with
+        the failure as the reason, unless the client had started an error close (issue #5862).
+
+        @param stream_error the error of the stream, if it failed
+    */
+    private closeOnStreamEnd(*string stream_error) {
+        int close_c = WSCC_AbnormalClosure;
+        string close_r = stream_error ?? "stream ended";
+        bool error = exists stream_error;
+        string cause;
+        {
+            AutoLock al(heartbeat_mutex);
+            if (error_close) {
+                close_c = error_close_code;
+                close_r = error_close_reason;
+                error = True;
+            }
+            # the cause of a close that the client started (for example "idle-timeout") is reported also when the
+            # server ends the stream instead of answering the close frame
+            if (ws_close_sent) {
+                cause = pending_close_cause;
+            }
+        }
+        markClosedAndEnqueue(close_c, close_r, cause.val() ? cause : NOTHING, error ? "error" : "closed");
     }
 
     #! Drains all typed frame hashes from msg_queue and dispatches them
@@ -7851,10 +8038,9 @@ public class WebSocketClientHcioPollOp {
             }
             auto entry = wrap.value;
             if (!exists entry) {
-                # NOTHING sentinel from FrameStateAction::complete/executeError
-                int close_c = close_code ? close_code : WSCC_AbnormalClosure;
-                string close_r = close_reason != "" ? close_reason : "stream ended";
-                markClosedAndEnqueue(close_c, close_r);
+                # NOTHING sentinel from FrameStateAction::complete/executeError: the stream ended without a close
+                # frame
+                closeOnStreamEnd();
                 processed = True;
                 break;
             }
@@ -7869,40 +8055,64 @@ public class WebSocketClientHcioPollOp {
 
     #! Processes a single typed frame hash pushed by the C++ frame-state decoder
     /** Entry shape: \c {type: text|binary|ping|pong|close|error, data?: data,
-        rsv1?: bool, rsv2?: bool, rsv3?: bool, code?: int, reason?: string}
+        rsv1?: bool, rsv2?: bool, rsv3?: bool, code?: int, reason?: string}, or \c {err: string, desc?: string}
+        without a type when the stream failed (pushed by the stream action's error handling)
     */
     private processFrameHash(hash<auto> h) {
         noteRecvActivity();
         string t = h.type ?? "";
 
         if (t == "close") {
-            close_code = h.code ?? WSCC_NormalClosure;
-            close_reason = h.reason ?? "";
+            int code = h.code ?? WSCC_NormalClosure;
+            string reason = h.reason ?? "";
+            # a close frame that arrives after the connection was closed (for example with 1006 after the close
+            # handshake timed out) changes nothing: the first close wins, and the close code and reason are set only
+            # with the connection's closed state, in markClosedAndEnqueue() (issue #5880)
+            if (isClosed()) {
+                logDebug("ignoring a close frame (code %d) received after the connection was closed", code);
+                return;
+            }
             # Frame state does NOT auto-echo close on the client — we must
             # send our side of the close handshake before marking closed; the answer echoes the server's code
             # (RFC 6455 section 5.5.1).  After a close the client started, this is the server's answer, which ends
             # the close handshake; the close code and reason are the server's (RFC 6455 sections 7.1.5 and 7.1.6)
             string cause;
-            if (!ws_close_sent) {
+            bool answer;
+            {
+                AutoLock al(heartbeat_mutex);
+                answer = !ws_close_sent;
                 ws_close_sent = True;
+                if (!answer) {
+                    cause = pending_close_cause;
+                }
+            }
+            if (answer) {
                 try {
                     # a close frame without a status code (1005) is answered with one without a status code: 1005 is
-                    # never sent (RFC 6455 section 7.4.1)
-                    stream.sendData(ws_encode_message(close_code == WSCC_NoStatusRcvd ? binary()
-                        : close_code.encodeMsb(2), WSOP_Close, True));
+                    # never sent (RFC 6455 section 7.4.1); the frame state records it, as the client's own close (see
+                    # sendCloseIntern())
+                    if (stream.markFrameStateCloseSent() != 2) {
+                        stream.sendData(ws_encode_message(code == WSCC_NoStatusRcvd ? binary()
+                            : code.encodeMsb(2), WSOP_Close, True));
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     logError("close response send error: %s: %s", ex.err, ex.desc);
                 }
-            } else {
-                AutoLock al(heartbeat_mutex);
-                cause = pending_close_cause;
             }
-            markClosedAndEnqueue(close_code, close_reason, cause.val() ? cause : NOTHING);
+            markClosedAndEnqueue(code, reason, cause.val() ? cause : NOTHING);
             return;
         }
 
         if (t == "error") {
-            markClosedAndEnqueue(h.code ?? WSCC_ProtocolError, h.reason ?? "", NOTHING, "error");
+            startErrorClose(h.code ?? WSCC_ProtocolError, h.reason ?? "");
+            return;
+        }
+
+        # a transport error of the stream (an entry without a type: the stream action failed, for example when the
+        # server reset the stream): the connection is lost, and the close reports the error (issue #5862)
+        if (!t.val() && h.err) {
+            logError("the stream failed: %s: %s", h.err, h.desc ?? "");
+            closeOnStreamEnd(h.desc.val() ? sprintf("%s: %s", h.err, h.desc) : h.err);
             return;
         }
 
@@ -8055,7 +8265,10 @@ public class WebSocketClientHcioPollOp {
 
     #! Sets how long a close started by the client waits for the server's close frame
     /** When the server's close frame does not arrive in time, the connection ends with the close code 1006 and the
-        reason <tt>"close handshake timed out"</tt>, which are reported in a \c "closed" message.
+        reason <tt>"close handshake timed out"</tt>, which are reported in a \c "closed" message.  A close that the
+        client started because the frame state rejected a frame (see startErrorClose()) ends then with the error's
+        code and reason instead, reported in an \c "error" message; without a close timeout, such a close waits at
+        most @ref DefaultCloseWaitMs.
 
         @param ms the time in milliseconds; 0 means no limit
 
@@ -8075,25 +8288,42 @@ public class WebSocketClientHcioPollOp {
         @param cause the cause tag reported when the close ends, if any
     */
     private sendCloseIntern(int code, *string reason, *string cause) {
-        if (ws_close_sent) {
-            return;
-        }
+        # logged without the lock
+        *hash<ExceptionInfo> timer_err;
         {
             AutoLock al(heartbeat_mutex);
-            if (closed) {
+            # one close frame is sent: the check and the flag are under the lock, so that a concurrent close (an idle
+            # close, an error close) does not send a second one
+            if (closed || ws_close_sent) {
                 return;
             }
+            ws_close_sent = True;
             if (cause) {
                 pending_close_cause = cause;
             }
-            if (close_timeout_ms && !close_timer_id) {
-                AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
-                close_timer_id = controller.addTimer(now_us()
-                    + milliseconds(close_timeout_ms), sub () { self.handleCloseTimer(); });
+            if (close_timeout_ms && !close_timer_id && !callbacks_cleared) {
+                # the close frame is sent whether or not the timer can be armed; without it, waitClosed() bounds the
+                # wait for the server's answer
+                try {
+                    AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+                    close_timer_id = controller.addTimer(now_us()
+                        + milliseconds(close_timeout_ms), sub () { self.handleCloseTimer(); });
+                } catch (hash<ExceptionInfo> ex) {
+                    timer_err = ex;
+                }
             }
         }
-        ws_close_sent = True;
+        if (timer_err) {
+            logError("cannot arm the close timer: %s: %s", timer_err.err, timer_err.desc);
+        }
         try {
+            # the stream's frame state records that the client sends its close frame, so that it sends no second one
+            # when it fails the connection later with an error; if it failed it already, it sent the close frame
+            # (RFC 6455 section 5.5.1)
+            if (stream.markFrameStateCloseSent() == 2) {
+                logDebug("the frame state sent the close frame already; close code %d not sent", code);
+                return;
+            }
             # Close frame body: 2-byte big-endian close code + optional reason text; 1005 and 1006 are never sent in
             # a close frame (RFC 6455 section 7.4.1), so the frame has no status code then
             binary close_body = binary();
@@ -8104,9 +8334,90 @@ public class WebSocketClientHcioPollOp {
                 }
             }
             stream.sendData(ws_encode_message(close_body, WSOP_Close, True));
+            logDebug("sent the close frame: close code %d", code);
         } catch (hash<ExceptionInfo> ex) {
             logError("close send error: %s: %s", ex.err, ex.desc);
         }
+    }
+
+    #! Starts the close of a connection that the frame state failed with an error
+    /** The frame state rejected a frame, for example with 1009 for a message larger than the maximum message size,
+        and sent the client's close frame with that code (RFC 6455 section 7.1.7); it discards everything the server
+        sends after it.  The close frame is only queued for sending, so the connection is not torn down yet: it ends
+        when the server, having answered the close frame, ends the stream (RFC 8441 section 5, RFC 9220 section 3),
+        or at the close timeout (15 seconds without one, as in waitClosed()).  Either way it is reported as an
+        \c "error" message with the error's code and reason.  Tearing the connection down at once lost the close frame
+        when it had not been written yet, so the server never learned why the connection closed (issue #5910).
+
+        @param code the close code of the error
+        @param reason the reason of the error
+    */
+    private startErrorClose(int code, string reason) {
+        # a close timer ends the close if the server does not end the stream; the logging is done without the lock
+        bool timer;
+        *hash<ExceptionInfo> timer_err;
+        {
+            AutoLock al(heartbeat_mutex);
+            if (closed || error_close) {
+                return;
+            }
+            error_close_code = code;
+            error_close_reason = reason;
+            error_close = True;
+            # the frame state sent the close frame: no other is sent, and no data frame follows it
+            ws_close_sent = True;
+            # no PING follows the close frame, and the connection is not idle-closed while the server answers
+            cancelHeartbeatTimerLocked();
+            if (close_timer_id) {
+                # the timer of a close the client started ends this close too, with the error's code
+                timer = True;
+            } else if (!callbacks_cleared) {
+                try {
+                    AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+                    close_timer_id = controller.addTimer(now_us() + milliseconds(close_timeout_ms
+                        ? close_timeout_ms : DefaultCloseWaitMs), sub () { self.handleCloseTimer(); });
+                    timer = True;
+                } catch (hash<ExceptionInfo> ex) {
+                    timer_err = ex;
+                }
+            }
+        }
+        if (timer) {
+            logDebug("closing the connection for an error: close code %d: %s; waiting for the server to end the "
+                "stream", code, reason);
+            return;
+        }
+        if (timer_err) {
+            logError("cannot arm the close timer: %s: %s; the connection is closed at once", timer_err.err,
+                timer_err.desc);
+        }
+        # without a close timer (it cannot be armed, or the callbacks were cleared in a teardown), nothing would end
+        # the close: the connection is closed now
+        markClosedAndEnqueue(code, reason, NOTHING, "error");
+    }
+
+    #! Ends a close that the server did not answer within the close timeout
+    /** A close the client started ends with the close code 1006, which is never sent in a close frame (RFC 6455
+        section 7.4.1); a close for an error ends with the error's code (see startErrorClose()).
+
+        @param cause the cause tag of the close, if any
+
+        @return @ref True if the connection was closed by this call
+    */
+    private bool markCloseTimedOut(string cause) {
+        int code;
+        string reason;
+        bool error;
+        {
+            AutoLock al(heartbeat_mutex);
+            code = error_close_code;
+            reason = error_close_reason;
+            error = error_close;
+        }
+        if (error) {
+            return markClosedAndEnqueue(code, reason, cause.val() ? cause : NOTHING, "error");
+        }
+        return markClosedAndEnqueue(WSCC_AbnormalClosure, "close handshake timed out", cause.val() ? cause : NOTHING);
     }
 
     #! Sends a ping frame (non-blocking)
@@ -8133,10 +8444,12 @@ public class WebSocketClientHcioPollOp {
     }
 
     int getCloseCode() {
+        AutoLock al(heartbeat_mutex);
         return close_code;
     }
 
     string getCloseReason() {
+        AutoLock al(heartbeat_mutex);
         return close_reason;
     }
 
@@ -8174,6 +8487,7 @@ public class WebSocketClientHcioPollOp {
 
     clearCallbacks() {
         AutoLock al(heartbeat_mutex);
+        callbacks_cleared = True;
         cancelHeartbeatTimerLocked();
         cancelCloseTimerLocked();
         on_poll_complete = NOTHING;
@@ -8190,9 +8504,7 @@ public class WebSocketClientHcioPollOp {
             remove close_timer_id;
             cause = pending_close_cause;
         }
-        # no close frame was received, so the close code is 1006, which is never sent in a close frame (RFC 6455
-        # section 7.4.1)
-        if (markClosedAndEnqueue(WSCC_AbnormalClosure, "close handshake timed out", cause.val() ? cause : NOTHING)) {
+        if (markCloseTimedOut(cause)) {
             notifyDelivery();
         }
     }
@@ -8237,14 +8549,11 @@ public class WebSocketClientHcioPollOp {
         string cause;
         {
             AutoLock al(heartbeat_mutex);
-            to = close_timeout_ms ? close_timeout_ms : 15000;
+            to = close_timeout_ms ? close_timeout_ms : DefaultCloseWaitMs;
             cause = pending_close_cause;
         }
         if (closed_counter.waitForZero(to)) {
-            # no close frame was received, so the close code is 1006, which is never sent in a close frame (RFC 6455
-            # section 7.4.1)
-            if (markClosedAndEnqueue(WSCC_AbnormalClosure, "close handshake timed out",
-                    cause.val() ? cause : NOTHING)) {
+            if (markCloseTimedOut(cause)) {
                 notifyDelivery();
             }
         }
@@ -8305,6 +8614,12 @@ public class WebSocketClientHcioPollOp {
         }
     }
 
+    private logDebug(string fmt, ...) {
+        if (logger) {
+            logger.log(LoggerLevel::DEBUG, "%s", "WebSocketClientHcioPollOp: " + vsprintf(fmt, argv));
+        }
+    }
+
     private noteRecvActivity() {
         AutoLock al(heartbeat_mutex);
         last_recv_activity_ms = clock_getmillis();
@@ -8318,7 +8633,8 @@ public class WebSocketClientHcioPollOp {
 
     private rescheduleHeartbeatTimerLocked() {
         cancelHeartbeatTimerLocked();
-        if (closed || !started || (heartbeat_ms <= 0 && idle_timeout_ms <= 0)) {
+        # no PING or idle close follows the close frame of an error (see startErrorClose())
+        if (closed || error_close || !started || (heartbeat_ms <= 0 && idle_timeout_ms <= 0)) {
             return;
         }
 
@@ -8385,8 +8701,9 @@ public class WebSocketClientHcioPollOp {
             if (idle_timeout_ms > 0 && recv_idle_ms >= idle_timeout_ms) {
                 close_idle = True;
                 ++heartbeat_generation;
-            } else if (heartbeat_ms > 0 && recv_idle_ms >= heartbeat_ms
+            } else if (heartbeat_ms > 0 && recv_idle_ms >= heartbeat_ms && !ws_close_sent
                     && (!last_ping_sent_ms || (now - last_ping_sent_ms) >= heartbeat_ms)) {
+                # no PING follows a close frame (a heartbeat that passed its generation check before the close)
                 last_ping_sent_ms = now;
                 send_ping = True;
             }
@@ -8428,6 +8745,7 @@ public class WebSocketClientHcioPollOp {
             cancelCloseTimerLocked();
             closed_counter.dec();
         }
+        logDebug("the connection is closed: close code %d: %s", code, reason);
 
         if (event_type == "error") {
             recv_channel.send({"type": "error", "error": {"code": code, "reason": reason}});

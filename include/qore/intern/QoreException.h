@@ -49,6 +49,9 @@ struct QoreExceptionBase {
     qore_call_t type;
     QoreListNode* callStack = new QoreListNode(autoTypeInfo);
     QoreValue err, desc, arg;
+    //! the ID of the exception for a debugger, given when a debugger's exception event first reports it, or 0; a
+    //! rethrow keeps it (see QoreException::getDebugId())
+    int64 debug_id = 0;
 
     DLLLOCAL QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValue n_arg = QoreValue(),
         qore_call_t n_type = CT_BUILTIN);
@@ -56,7 +59,7 @@ struct QoreExceptionBase {
     DLLLOCAL QoreExceptionBase(const QoreExceptionBase& old) :
         type(old.type), callStack(old.callStack->copy()),
         err(old.err.refSelf()), desc(old.desc.refSelf()),
-        arg(old.arg.refSelf()) {
+        arg(old.arg.refSelf()), debug_id(old.debug_id) {
     }
 
     DLLLOCAL ~QoreExceptionBase() {
@@ -227,6 +230,12 @@ public:
 
     DLLLOCAL QoreException* rethrow();
 
+    //! Returns the ID of the exception for a debugger, which is given when it is first called (#5906)
+    /** The ID is unique in the process; a rethrow of the exception keeps it, as the rethrown exception is a copy.  It
+        is given only when a debugger's exception event reports the exception, so raising an exception costs nothing.
+    */
+    DLLLOCAL int64 getDebugId();
+
 protected:
     DLLLOCAL ~QoreException() {
         assert(!callStack);
@@ -336,6 +345,16 @@ struct qore_es_private {
 
     DLLLOCAL static const qore_es_private* get(const ExceptionSink& xsink) {
         return xsink.priv;
+    }
+
+    //! clears the exceptions of a sink whose exception an on_error handler rethrew, which replaces it (#5904)
+    /** A thread exit that is pending in the sink, which another handler of the block raised, stays pending, as
+        ExceptionSink::clear() would also clear it.
+    */
+    DLLLOCAL static void clearForRethrow(ExceptionSink& xsink) {
+        bool thread_exit = xsink.priv->thread_exit;
+        xsink.clear();
+        xsink.priv->thread_exit = thread_exit;
     }
 
     DLLLOCAL static void addStackInfo(ExceptionSink& xsink, qore_call_t type, const char* class_name,

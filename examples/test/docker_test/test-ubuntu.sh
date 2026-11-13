@@ -234,16 +234,16 @@ chown -R qore:qore ${QORE_SRC_DIR}
 
 # Core tests need native modules from the image (for example yaml and xml), but
 # must not see AOT user modules compiled by the image's older Qore. Native
-# modules carry an API suffix; expose only those through an isolated link farm.
+# modules carry an API suffix; expose only those through an isolated link farm,
+# and only those built for a module API that this qore loads (see
+# ci-native-modules.sh).
+. "${QORE_SRC_DIR}/test/docker_test/ci-native-modules.sh"
 SYSTEM_BINARY_MODULE_DIR=$(${QORE_SRC_DIR}/build/qore --module-dir)
 # The link farm is a directory of this run's own, so no other content has to be removed from it; the qore user that
 # runs the tests reads it
 CI_NATIVE_MODULE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/qore-ci-native-modules.XXXXXX")
 chmod 755 "${CI_NATIVE_MODULE_DIR}"
-for qmod in "${SYSTEM_BINARY_MODULE_DIR}"/*-api-*.qmod; do
-    [ -e "${qmod}" ] || continue
-    ln -s "${qmod}" "${CI_NATIVE_MODULE_DIR}/"
-done
+qore_ci_native_module_farm "${QORE_SRC_DIR}/build/qore" "${CI_NATIVE_MODULE_DIR}" "${SYSTEM_BINARY_MODULE_DIR}"
 
 # run the tests against job-built modules, source qlib, and compatible native
 # modules only. run_tests.sh prepends the build qmod and binary-module paths.
@@ -340,6 +340,9 @@ gosu qore:qore env \
 
 # the cores of the processes the tests started are kept with those of the tests
 qore_ci_collect_cores "$CORE_DIR"
+# the notice of QORE_CI_NATIVE_MODULE_API_TRANSITION (the native modules whose tests were skipped, or that it is not
+# needed), at the end of the job's log
+qore_ci_native_module_notice
 if [ "${TEST_RC}" != "0" ]; then
     qore_ci_end_job_processes || true
     exit ${TEST_RC}
