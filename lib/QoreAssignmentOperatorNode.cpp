@@ -236,18 +236,15 @@ int QoreAssignmentOperatorNode::parseInitMode(QoreValue& val, QoreParseContext& 
     switch (mode) {
         case AssignmentMode::Weak:
             replacement = static_cast<QoreAssignmentOperatorNode*>(
-                makeSpecialization<LexicalAssignmentOperatorNode<QoreWeakAssignmentOperatorNode,
-                    AssignmentMode::Weak>>());
+                makeSpecialization<LexicalWeakAssignmentOperatorNode>());
             break;
         case AssignmentMode::Opaque:
             replacement = static_cast<QoreAssignmentOperatorNode*>(
-                makeSpecialization<LexicalAssignmentOperatorNode<QoreOpaqueAssignmentOperatorNode,
-                    AssignmentMode::Opaque>>());
+                makeSpecialization<LexicalOpaqueAssignmentOperatorNode>());
             break;
         default:
             replacement = static_cast<QoreAssignmentOperatorNode*>(
-                makeSpecialization<LexicalAssignmentOperatorNode<QoreAssignmentOperatorNode,
-                    AssignmentMode::Normal>>());
+                makeSpecialization<LexicalAssignmentOperatorNode>());
             break;
     }
     replacement->broken_int = saved_broken_int;
