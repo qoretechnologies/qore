@@ -43,6 +43,7 @@ class RuntimeConfig;
 #include <set>
 #include <map>
 #include <memory>
+#include <new>
 
 #include "qore/intern/QoreSandboxLimits.h"
 #include "qore/QoreSandboxManager.h"
@@ -2706,6 +2707,16 @@ DLLLOCAL bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid)
 */
 DLLLOCAL bool qore_thread_add_exit_cleanup(void (*fn)(void*), void* data);
 
+#ifdef DEBUG
+//! Debug-only: makes QoreThreadLocalObject::getNoThrow() fail to allocate an object in the calling thread
+/** For the tests of the callers' handling of an allocation failure; see qore_thread_test_alloc_fails()
+*/
+DLLLOCAL void qore_thread_test_set_alloc_fails(bool fails);
+
+//! Debug-only: returns true if QoreThreadLocalObject::getNoThrow() fails to allocate an object in the calling thread
+DLLLOCAL bool qore_thread_test_alloc_fails();
+#endif
+
 DLLLOCAL bool qore_thread_program_teardown_enter();
 //! records in the thread's data that it has deleted a Program's data; only after qore_thread_program_teardown_enter()
 //! returned true
@@ -3306,7 +3317,8 @@ DLLLOCAL void checkpoint_stack_pos(const char*);
     The object here is behind a thread_local pointer, which has no destructor and is valid for the life of the thread,
     created when the thread first uses it and released when the Qore thread ends (or, for the main thread, when
     qore_cleanup() deletes the thread's data; see qore_thread_add_exit_cleanup()).  A thread without thread data (a
-    thread that runs no Qore code, or one that runs after qore_cleanup()) gets an object that is never released.
+    thread that runs no Qore code, or one that runs after qore_cleanup()) gets an object from get() that is never
+    released; getNoThrow() gives it an object of its own instead, which the caller deletes.
 
     @tparam T the class of the object, default constructible
     @tparam Tag a type that identifies the use (an empty struct): each use has its own pointer
@@ -3321,6 +3333,37 @@ public:
             p = create();
         }
         return *p;
+    }
+
+    //! returns the calling thread's object, creating it if the thread has none, or nullptr if it cannot be allocated
+    /** No exception is thrown for an allocation failure (but the constructor of T can throw).
+
+        A thread without thread data does not keep the object, as nothing would release it: \a owned is then set, and
+        the caller deletes the object when it is done with it.
+
+        @param owned set to true if the caller owns the object returned and must delete it, false otherwise
+    */
+    DLLLOCAL static T* getNoThrow(bool& owned) {
+        owned = false;
+        T* p = ptr;
+        if (__builtin_expect(p != nullptr, 1)) {
+            return p;
+        }
+#ifdef DEBUG
+        if (qore_thread_test_alloc_fails()) {
+            return nullptr;
+        }
+#endif
+        p = new (std::nothrow) T;
+        if (!p) {
+            return nullptr;
+        }
+        if (!qore_thread_add_exit_cleanup(release, nullptr)) {
+            owned = true;
+            return p;
+        }
+        ptr = p;
+        return p;
     }
 
 private:
