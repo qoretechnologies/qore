@@ -514,6 +514,8 @@ static QoreListNode* crlr_list_copy(RuntimeConfig& rc, const QoreListNode* n, Ex
             return nullptr;
         }
     }
+    // the arguments of a named call bound at parse time keep their parameter positions
+    qore_list_private::get(**l)->copyCallArgEvalMap(*qore_list_private::get(*n));
     return l.release();
 }
 

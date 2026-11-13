@@ -1349,6 +1349,13 @@ QoreValue RuntimeNamedFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_
     return evalNamed(fe->getFunction(), getCallProgram(rc), rc, pgm ? QCEF_DEFER_DOMAIN_PO : 0, xsink);
 }
 
+QoreListNode* AbstractFunctionCallNode::copyEvalTmpArgs(ReferenceHolder<QoreListNode>& holder) const {
+    holder = args->copy();
+    // the arguments of a named call bound at parse time keep their parameter positions
+    qore_list_private::get(**holder)->copyCallArgEvalMap(*qore_list_private::get(*args));
+    return *holder;
+}
+
 FunctionCallNode* FunctionCallNode::copyWithArgs(QoreListNode* n_args) const {
     return qore_make_function_call(getSemanticPolicy(), *this, n_args);
 }

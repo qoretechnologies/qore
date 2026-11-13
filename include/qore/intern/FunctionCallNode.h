@@ -277,9 +277,11 @@ protected:
         if (!reusable_tmp_args || !args) {
             return args;
         }
-        holder = args->copy();
-        return *holder;
+        return copyEvalTmpArgs(holder);
     }
+
+    //! returns a copy of the temporary arguments of a reusable copy of a call (see getEvalTmpArgs())
+    DLLLOCAL QoreListNode* copyEvalTmpArgs(ReferenceHolder<QoreListNode>& holder) const;
 
     DLLLOCAL void doFlags(int64 flags) {
         if (flags & QCF_RET_VALUE_ONLY) {
