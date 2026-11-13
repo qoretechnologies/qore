@@ -1024,6 +1024,9 @@ protected:
     //! evaluates a named call resolved at run time by parameter name
     DLLLOCAL QoreValue evalNamed(LexicalSemanticPolicy policy, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
+    //! reports an unresolved target without keeping diagnostic string storage in ordinary call frames
+    DLLLOCAL QoreValue evalUnresolved(ExceptionSink* xsink) const;
+
 public:
     DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, NamedScope* n_scope, QoreParseListNode* args)
             : AbstractFunctionCallNode(loc, NT_STATIC_METHOD_CALL, args), scope(n_scope) {

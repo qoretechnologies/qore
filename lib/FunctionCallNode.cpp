@@ -2397,15 +2397,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallNode::evalCommon(LexicalSema
         || !"StaticMethodCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
     if (!method) {
-        if (qore_aot_source_parse_active() && scope && scope->size() >= 2) {
-            xsink->raiseException("AOT-PENDING-FUNCTION",
-                "static method call '%s::%s()' is pending AOT source linking",
-                getClassPath().c_str(), getName());
-            return QoreValue();
-        }
-        xsink->raiseException("METHOD-CALL-ERROR", "cannot evaluate unresolved static method call '%s::%s()'",
-            getClassPath().c_str(), getName());
-        return QoreValue();
+        return evalUnresolved(xsink);
     }
     // the class context of the variant resolved at run time is that of the caller (see
     // CodeEvaluationHelper::findVariant()): a private variant is visible only in the class and the classes with private
@@ -2438,6 +2430,21 @@ QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
 
 QoreValue StaticMethodCallNode::evalImpl(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     return evalCommon<true>(policy, rc, needs_deref, xsink);
+}
+
+// Error formatting owns temporary class-path strings.  Keep their storage and exception cleanup off every
+// resolved call, including reusable background calls whose argument holder must remain addressable.
+__attribute__((noinline, cold)) QoreValue StaticMethodCallNode::evalUnresolved(ExceptionSink* xsink) const {
+    assert(!method);
+    if (qore_aot_source_parse_active() && scope && scope->size() >= 2) {
+        xsink->raiseException("AOT-PENDING-FUNCTION",
+            "static method call '%s::%s()' is pending AOT source linking",
+            getClassPath().c_str(), getName());
+        return QoreValue();
+    }
+    xsink->raiseException("METHOD-CALL-ERROR", "cannot evaluate unresolved static method call '%s::%s()'",
+        getClassPath().c_str(), getName());
+    return QoreValue();
 }
 
 // a named call resolved at run time by parameter name; outside of evalImpl(), whose calls with positional arguments

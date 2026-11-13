@@ -54,3 +54,9 @@ background q.push(map str(label: "map" + $1, count: $1), (1, 2));
 printf("%y\n", q.get());
 background q.push(map f.sw(label: "mmap" + $1, count: $1), (1, 2));
 printf("%y\n", q.get());
+
+# literal arguments force the reusable copied-list path; keep their named parameter positions on every call
+thread_join(background q.push(map F::ss(label: "smap", count: 10), (1, 2)));
+printf("%y\n", q.get());
+thread_join(background q.push(map F::ss(11, "positional"), (1, 2)));
+printf("%y\n", q.get());

@@ -9,3 +9,5 @@ F::sw count=1 label="self"
 F::sw count=2 label="unqualified"
 ["str count=1 label=\"map1\"", "str count=2 label=\"map2\""]
 ["F::sw count=1 label=\"mmap1\"", "F::sw count=2 label=\"mmap2\""]
+["F::ss count=10 label=\"smap\"", "F::ss count=10 label=\"smap\""]
+["F::ss count=11 label=\"positional\"", "F::ss count=11 label=\"positional\""]
