@@ -82,6 +82,26 @@ class GenericHashLiteralBox<T> {
         h = {"j": v};
     }
 
+    # the literal is an argument of the call in the background expression, so it is copied for the new thread (an
+    # argument takes no value type from the parameter, so the copy is of a literal without a type parameter)
+    auto backgroundLiteral() {
+        Counter c(1);
+        background setHC({"n": v}, c);
+        c.waitForZero();
+        return h;
+    }
+
+    private setHC(hash<string, T> x, Counter c) {
+        on_exit c.dec();
+        h = x;
+    }
+
+    # a value converted to the type argument by the literal
+    auto convert(auto x) {
+        h = {"p": x};
+        return h;
+    }
+
     auto wrongType() {
         auto x = "str";
         h = {"k": x};
@@ -117,9 +137,17 @@ string sub probes() {
         generic_hash_literal_show(\bi.local()),
         generic_hash_literal_show(\bi.closure()),
         generic_hash_literal_show(\bi.backgroundArg()),
+        generic_hash_literal_show(\bi.backgroundLiteral()),
         generic_hash_literal_show(\bi.wrongType()),
         generic_hash_literal_show(auto sub () { return generic_hash_literal_func<int>(3); }),
         generic_hash_literal_show(auto sub () { return generic_hash_literal_func<string>("y"); }),
     );
     return foldl $1 + "\n" + $2, l;
+}
+
+#! the conversion of a value to the type argument follows the lexical semantic policy of the literal's code: the string
+#! "false" is False as a softbool with %strict-bool-eval, True otherwise
+string sub probes_lexical() {
+    GenericHashLiteralBox<softbool> sb(True);
+    return generic_hash_literal_show(auto sub () { return sb.convert("false"); });
 }
