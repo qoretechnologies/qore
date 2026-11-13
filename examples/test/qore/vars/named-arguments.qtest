@@ -2211,6 +2211,34 @@ public class NamedArgumentsTest inherits QUnit::Test {
             p.parse("sub t() { code c = sub (int a) {}; c(z: 1); }", "call-reference-unknown");
             p.callFunction("t");
         });
+        # a reference node resolves the method with the first object that it is evaluated with; for an object of
+        # another class it refers to the method of that object's class by name: a class without it whose methodGate()
+        # method handles it takes the arguments by position only, a class without either has no such method (in the
+        # interpreted and JIT modes; AOT code resolves the method of each object when the reference is created)
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class HasFoo { string foo(int count, string label) { return sprintf('%d %s', count, label); } }
+class GateFoo { string methodGate(string m, auto a, auto b) { return sprintf('gate %s %y %y', m, a, b); } }
+class NoFoo {}
+code sub foo_ref(object o) { return \\o.foo(); }
+HasFoo has_foo();
+GateFoo gate_foo();
+NoFoo no_foo();
+code hf = foo_ref(has_foo);
+code gf = foo_ref(gate_foo);
+code nf = foo_ref(no_foo);
+string sub has_named() { return hf(label: 'h', count: 1); }
+string sub gate_positional() { return gf(1, 'g'); }
+string sub gate_named() { return gf(label: 'g', count: 1); }
+string sub missing_named() { return nf(label: 'n', count: 1); }", "method-gate-reference");
+            p.run();
+            assertEq("1 h", p.callFunction("has_named"));
+            assertEq("gate foo 1 \"g\"", p.callFunction("gate_positional"));
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "GateFoo::foo\\(\\) with named arguments", \p.callFunction(),
+                "gate_named");
+            assertThrows("METHOD-DOES-NOT-EXIST", "no method NoFoo::foo\\(\\) has been defined", \p.callFunction(),
+                "missing_named");
+        }
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {
             Program p(PO_NEW_STYLE);

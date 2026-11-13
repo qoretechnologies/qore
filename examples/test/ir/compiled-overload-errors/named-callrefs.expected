@@ -49,6 +49,12 @@ builtin positional only: RUNTIME-OVERLOAD-ERROR: no variant matching 'sprintf(fm
    sprintf(string fmt, ...)
 deleted object positional: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
 deleted object named: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+sandbox bound: f(int count, string label) count=16 label="sb"
+sandbox system policy: f(string label, float count) label="sp" count=17.5
+child function ref: cf(int count, string label) child count=18 label="c"
+child function ref float: cf(string label, float count) child label="c" count=18.5
+child method ref: CC::m child count=19 label="c"
+child closure: child closure child count=20 label="c"
 orphan closure positional: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
 orphan closure named: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
 orphan class closure positional: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime

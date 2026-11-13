@@ -160,8 +160,42 @@ sub calls() {
         t("deleted object positional", string sub () { return gr(1, "x"); });
         t("deleted object named", string sub () { return gr(label: "x", count: 1); });
     }
+
+    # call references bound to a sandbox: untrusted and trusted (a system policy call)
+    code bound = SandboxManager::bindCall(\f());
+    t("sandbox bound", string sub () { return bound(label: "sb", count: 16); });
+    code sys = SandboxManager::createSystemPolicyCall(\f());
+    t("sandbox system policy", string sub () { return sys(count: 17.5, label: "sp"); });
 }
 calls();
+
+# call references and a closure created in another Program run in it: the named call binds the names to the
+# variants of that Program's code
+{
+    Program child(PO_NEW_STYLE);
+    child.parse("string sub place() { return 'child'; }
+string sub cf(int count, string label) { return sprintf('cf(int count, string label) %s count=%y label=%y', place(),
+    count, label); }
+string sub cf(string label, float count) { return sprintf('cf(string label, float count) %s label=%y count=%y',
+    place(), label, count); }
+class CC {
+    string m(int count, string label) { return sprintf('CC::m %s count=%y label=%y', place(), count, label); }
+}
+code sub fref() { return \\cf(); }
+list<auto> sub mref() { CC c(); return (c, \\c.m()); }
+code sub cref() { return string sub (int count, string label) { return sprintf('child closure %s count=%y label=%y',
+    place(), count, label); }; }", "child-refs");
+    child.run();
+    code cfr = child.callFunction("fref");
+    # the reference holds its object weakly: the object is kept with it
+    list<auto> cm = child.callFunction("mref");
+    code cmr = cm[1];
+    code ccl = child.callFunction("cref");
+    t("child function ref", string sub () { return cfr(label: "c", count: 18); });
+    t("child function ref float", string sub () { return cfr(count: 18.5, label: "c"); });
+    t("child method ref", string sub () { return cmr(label: "c", count: 19); });
+    t("child closure", string sub () { return ccl(label: "c", count: 20); });
+}
 
 # a closure created in a Program that has been deleted: as with positional arguments, the call is refused before the
 # closure's signature is read
