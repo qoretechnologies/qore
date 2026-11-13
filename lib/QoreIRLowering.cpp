@@ -21436,6 +21436,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // a fold releases the values of the map stages before the last stage that can skip an element or stop the
     // pipeline (see stage_value())
     size_t fold_release_stages = 0;
+    // the values of a fold's map stages after the last stage that can skip an element or stop the pipeline: the fold
+    // gets them, and its expression or its accumulator's Phi takes them over, or the next element's value replaces
+    // them; the values of the last element are released when the pipeline ends, as the AST interpreter's functional
+    // map iterator releases its value when the fold takes the next one and there is none (qore#5883)
+    std::vector<QoreIRValue> fold_last_values;
     // the values of a fold's map stages read from a local of the function, and the local
     std::unordered_map<uint32_t, const LocalVar*> fold_local_reads;
     if (root_accumulator) {
@@ -21453,9 +21458,18 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // statement ends; the accumulator's Phi owns its value, which it takes over from the slot or takes a reference of
     // its own to (qore#5883)
     auto stage_value = [&](QoreIRValue v, const QoreValue& stage_expr, size_t stage_index) {
-        if (v.id == iter_element.id
-                || (root_accumulator && stage_index >= fold_release_stages)
-                || !qore_ir_type_may_hold_object(getExprTypeInfo(stage_expr))) {
+        if (v.id == iter_element.id || !qore_ir_type_may_hold_object(getExprTypeInfo(stage_expr))) {
+            return;
+        }
+        // the values of a fold's last map stages, which the fold gets, are released when the pipeline ends (see
+        // fold_last_values)
+        if (root_accumulator && stage_index >= fold_release_stages) {
+            for (const QoreIRValue& lv : fold_last_values) {
+                if (lv.id == v.id) {
+                    return;
+                }
+            }
+            fold_last_values.push_back(v);
             return;
         }
         // a fold's stage value read from a local of the function (not a top-level local) is checked once the body is
@@ -22232,6 +22246,12 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     builder.createReleaseOwnedTemp(iter_element, loc);
     for (const QoreIRValue& v : stage_values) {
         builder.createReleaseOwnedTemp(v, loc);
+    }
+    // the values of a fold's last map stages that the last element gave (see fold_last_values); the releases run once
+    // the loop has ended, so they are not uses that keep the accumulator's Phi or a call from taking the values over
+    // (see qore_ir_is_exception_only_release()): the value that the accumulator took over is not released here
+    for (const QoreIRValue& v : fold_last_values) {
+        builder.createReleaseOwnedTemp(v, loc)->exception_cleanup_release = true;
     }
     builder.createIteratorRelease(iter_val, loc);
     return result;

@@ -364,12 +364,13 @@ Since the accumulator's Phi owns its value, the `IteratorNext` of a fold release
 a stage that can skip an element or stop the pipeline as it does for the other roots (`stage_values`): a value that a
 select stage skipped is released before the next element, as the AST interpreter releases it, and not when the
 statement ends.  A value read from a local of the function (not a top-level one) that no code in the loop assigns is
-not released: the local holds it,
-so its release cannot be observed, and the IR interpreter's read, which takes a reference of its own, keeps it when
-the next element's read gives the same value, where a release per element cost a reference and a release (a write
-through a reference or by a closure is not an assignment there: the AST interpreter keeps the value read until the
-next element)
-(qore#5883).
+not released: the local holds it, so its release cannot be observed, and the IR interpreter's read, which takes a
+reference of its own, keeps it when the next element's read gives the same value, where a release per element cost a
+reference and a release (a write through a reference or by a closure is not an assignment there: the AST interpreter
+keeps the value read until the next element).  The values of the map stages after the last stage that can skip an
+element or stop the pipeline, which the fold gets, are released when the pipeline ends (`fold_last_values`, flagged as
+`exception_cleanup_release`, so that the releases are not uses that keep the accumulator's Phi or a call from taking
+them over); they were released when the statement ended, after the code that used the fold's value (qore#5883).
 The releases of a functional operator's exception cleanup
 (`QoreIRInstruction::exception_cleanup_release`, set by `FunctionalLoopExceptionCleanup`) are not uses that keep a
 value from being taken over by a Phi or moved into a container (`qore_ir_is_exception_only_release()`, in the IR

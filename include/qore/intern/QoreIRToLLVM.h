@@ -1284,7 +1284,8 @@ private:
     //! The Phis of owning_phis whose only use is an incoming value of a Phi in the block that their block goes on to:
     //! that Phi takes their slot over on every path, so the slot is empty when they get their next value, which then
     //! releases nothing (a fold's value on the edge that gives the accumulator, see the Phi fixup)
-    std::unordered_set<uint32_t> emptied_phi_slots;
+    //! (by Phi, with the Phi that uses it)
+    std::unordered_map<uint32_t, uint32_t> emptied_phi_slots;
     //! The incoming values of QoreValue Phis that one Phi uses once, and no instruction outside the block that
     //! defines them (see consumable_phis)
     std::unordered_set<uint32_t> single_use_phi_incoming;

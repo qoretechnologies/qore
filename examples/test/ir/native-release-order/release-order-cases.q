@@ -195,6 +195,14 @@ sub set_ref(reference<auto> r, Log log, int k) {
     r = new Holder(log, "x" + k);
 }
 
+string sub holder_name(auto a) {
+    return a.typeCode() == NT_OBJECT ? a.n : a;
+}
+
+sub show_value(Log log, string str) {
+    log.add("call " + str);
+}
+
 our Holder cur;
 our Log cur_log;
 
@@ -620,6 +628,27 @@ sub foldl_pipeline_select_reference() {
     out("foldl pipeline select reference", log);
 }
 
+# a fold over a pipeline of map stages releases the value that the last element gave when the pipeline ends, before
+# the code that uses the fold's value, as the AST interpreter's functional map iterator releases it (qore#5883)
+sub foldl_pipeline_map_call() {
+    Log log();
+    show_value(log, foldl holder_name($1) + $2.n, (map new Holder(log, "i" + $1), (1, 2, 3)));
+    log.add("end");
+    out("foldl pipeline map call", log);
+}
+
+# a fold over a pipeline of map stages in the expression of a fold over a pipeline: the inner fold's last value is
+# released when the inner pipeline ends
+sub foldl_pipeline_nested() {
+    Log log();
+    {
+        auto r = foldl ($1.n + "/" + (foldl holder_name($1) + $2.n, (map new Holder(log, "i" + $1), (1, 2)))),
+            (select (map new Holder(log, "o" + $1), (1, 2, 3)), $1.n != "o2");
+        log.add("r " + r);
+    }
+    out("foldl pipeline nested", log);
+}
+
 # a select stage's predicate raises: the value of the map stage is released before the accumulator, as the AST
 # interpreter's functional iterators release it before the fold releases its value (qore#5883)
 sub foldl_pipeline_select_raises() {
@@ -728,6 +757,8 @@ sub main() {
     foldl_pipeline_select_raises();
     foldl_pipeline_select_local_next();
     foldl_pipeline_select_reference();
+    foldl_pipeline_map_call();
+    foldl_pipeline_nested();
     foldl_pipeline_next_raises();
     foldl_nested_raises();
     foldl_next_raises();

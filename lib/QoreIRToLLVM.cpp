@@ -13511,7 +13511,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         if (term->opcode == QoreIROpcode::Br
                                 && static_cast<const QoreIRBranchInstruction*>(term)->target
                                     == user_def_it->second) {
-                            emptied_phi_slots.insert(phi->result.id);
+                            emptied_phi_slots.emplace(phi->result.id, user_it->second);
                         }
                     }
                     break;
@@ -14616,7 +14616,23 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     owned = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
                 }
                 if (emptied_phi_slots.count(phi_inst->result.id)) {
-                    // the Phi that uses this one took the slot's value over (see emptied_phi_slots)
+                    // the Phi that uses this one took the slot's value over (see emptied_phi_slots): it has a slot of
+                    // its own, and it takes this Phi's slot over in its fixup, as this Phi is its only user's incoming
+                    // value with a cleanup slot of its own (an incoming value that is not one would be referenced
+                    // again there, and the slot's value would leak here)
+#ifndef NDEBUG
+                    {
+                        uint32_t user_id = emptied_phi_slots.find(phi_inst->result.id)->second;
+                        assert(single_use_phi_incoming.count(phi_inst->result.id));
+                        assert(consumable_phis.count(user_id) || owning_phis.count(user_id));
+                        auto slot_it = invoke_alloca_map.find(phi_inst->result.id);
+                        assert(slot_it != invoke_alloca_map.end() && slot_it->second == phi_temp_cleanup);
+                        assert(nanboxed_values.count(phi_inst->result.id)
+                            && !weak_load_result_ids.count(phi_inst->result.id));
+                        (void)user_id;
+                        (void)slot_it;
+                    }
+#endif
                     builder->CreateStore(owned, phi_temp_cleanup);
                 } else {
                     llvm::Value* old_val = builder->CreateLoad(i64_type, phi_temp_cleanup);
