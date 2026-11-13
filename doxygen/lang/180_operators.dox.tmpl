@@ -2435,6 +2435,10 @@ if (x || y)
     |\a lvalue (@ref nothing)|if the \a lvalue's type has a default value (ex: @ref int_type "int", @ref string_type "string"), the \a lvalue first takes that value and is processed as above; an or-nothing lvalue (ex: \c *string) takes the default value of its plain type, unless \a expression has no value, which leaves it with no value; otherwise the \a lvalue will be assigned to the value of \a expression.
     |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer, and the \a expression will be evaluated and converted to an integer if necessary, and then the result will be added to the \a lvalue.
 
+    @note If a list rejects a temporary element because of its type, the temporary is released after the list's
+    lvalue lock is released, so its destructor can read or modify the target; a destructor exception is chained
+    after the type error.
+
     @anchor compound_assignment_union_nothing
     @note A union type (ex: <tt>union&lt;int, float&gt;</tt>, <tt>*union&lt;int, float&gt;</tt>) has no default value,
     and its \a lvalue is not a list or a hash \a lvalue even if a member of the union is a list or a hash; an or-nothing

@@ -1693,6 +1693,8 @@
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash
       or object are now released after the lvalue locks, so a destructor that accesses the target does not deadlock
       or abort the process (issue #5930)
+    - a temporary rejected by a typed list's @ref plus_equals_operator "plus-equals operator" was released under
+      the lvalue lock, causing a deadlock if its destructor read or modified the target list (issue #6009)
     - a statically linked AOT module registered for sandboxed or restricted code could take the name of a library
       module or be given to other code, and a static registration of a module that was already loaded could crash at
       exit; it is now checked as a load of the module by path and is never library code (see

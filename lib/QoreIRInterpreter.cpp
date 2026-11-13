@@ -16445,6 +16445,9 @@ load_local_done:
                 if (navigation_failed || (xsink && *xsink)) {
                     res.discard(xsink);
                     res = QoreValue();
+                    // A rejected += operand can remain here; release it before the enclosing handlers and
+                    // debugger exception event, as the AST does after releasing the lvalue lock.
+                    rhs_holder = QoreValue();
                     if (xsink && *xsink && inst->exception_target) {
                         cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                         prev_block = block;
@@ -21261,11 +21264,19 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                 qore_list_private::mergeCanonical(*l, right.get<const QoreListNode>(), xsink);
             }
         } else {
-            // the reference held for the value is handed over to the list, as the AST interpreter does
-            if constexpr (Lexical) {
-                qore_list_private::push(*l, right_holder.release(), xsink, policy);
-            } else {
-                qore_list_private::pushCanonical(*l, right_holder.release(), xsink);
+            // Keep a rejected value in the caller's holder, which outlives the lvalue lock. push() would
+            // consume and release it here, so a temporary's destructor could reenter the locked lvalue.
+            qore_list_private* lp = qore_list_private::get(*l);
+            if (!lp->checkValid(xsink)) {
+                int rc;
+                if constexpr (Lexical) {
+                    rc = lp->checkVal(right_holder, nullptr, xsink, policy);
+                } else {
+                    rc = lp->checkVal(right_holder, xsink);
+                }
+                if (!rc) {
+                    lp->pushIntern(right_holder.release());
+                }
             }
         }
     } else if (vtype == NT_HASH) {
