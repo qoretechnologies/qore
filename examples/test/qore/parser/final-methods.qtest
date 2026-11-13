@@ -115,6 +115,18 @@ class Derived inherits Base {
         # fewer parameters, the final method's being optional
         assertRejected("class C inherits Base { string k(object a) { return \"c\"; } }",
             "cannot overload parent class method final Base::k", "fewer parameters");
+        # qore#5990: the names of the final variant's parameters in another order, which a named call resolved on the
+        # class of the object selects
+        assertRejected("class NB { final string m(int a, string b) { return \"b\"; } } "
+            "class NC inherits NB { string m(string b, int a) { return \"c\"; } }",
+            "child class method NC::m\\(string b, int a\\) cannot overload parent class method final "
+            "NB::m\\(int a, string b\\): it accepts the names of the parameters of the final method", "named");
+        # other names: no named call of the final variant can select it
+        Program p = parseAccepted("class NB { final string m(int a, string b) { return \"b\"; } } "
+            "class NC inherits NB { string m(string c, int d) { return \"c\"; } }\n"
+            "string sub t() { NB o = new NC(); return o.m(a: 1, b: \"x\") + o.m(1, \"x\") "
+            "+ (new NC()).m(c: \"x\", d: 1); }", "named other names");
+        assertEq("bbc", p.callFunction("t"));
         # a grandchild
         assertRejected("class C inherits Derived { string h(*string s) { return \"c\"; } }",
             "child class method C::h\\(\\*string s\\) cannot overload parent class method final Base::h",

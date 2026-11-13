@@ -40,5 +40,6 @@ static self: SA::sm(float f) / SA::sm(float f)
 static scoped: SA::sm(float f)
 generic class override: GC::m(int x) / GC::m(int x)
 generic class override runtime: GC::m(int x)
+typed results: 42 41
 background: CS::sw(int count, string label) count=1 label="x"
 background other names: B::sw(int count, string label) count=1 label="x"

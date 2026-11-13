@@ -123,6 +123,16 @@ class SBR inherits SA {
     static string sm(float g) { return "SBR::sm(float g)"; }
 }
 
+# typed results: an overload of a child class that a named call selects by the names of the parameters of the variant
+# of the parent class returns a type that the parent's accepts (refused otherwise; see override-return-types.qtest),
+# so the compiled modes can trust the type of the result
+class TB {
+    int m(int a, string b) { return 1; }
+}
+class TC inherits TB {
+    int m(string b, int a) { return 2; }
+}
+
 # a variant of a specialization of a generic class and its override
 class GB<T> {
     string m(T x) { return "GB::m(T x)"; }
@@ -244,6 +254,12 @@ printf("static scoped: %s\n", SA::sm(f: i));
 GB<int> gb = new GC();
 printf("generic class override: %s / %s\n", gb.m(x: 1), gb.m(1));
 printf("generic class override runtime: %s\n", gb.m(x: i));
+
+# typed results of calls resolved on the class of the object
+TB tb = new TC();
+int tn = tb.m(a: 1, b: "x") + 40;
+int tp = tb.m(1, "x") + 40;
+printf("typed results: %y %y\n", tn, tp);
 
 # a call made in a background thread
 Queue q();

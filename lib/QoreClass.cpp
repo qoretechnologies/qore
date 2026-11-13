@@ -6907,6 +6907,71 @@ static bool final_variant_may_be_bypassed(const AbstractFunctionSignature* other
     return true;
 }
 
+//! Returns true if a named call that the variant \a fv accepts could select the other variant (qore#5990)
+/** A named call is resolved on the class of the object, which takes the first variant that accepts the names and the
+    arguments: the other variant can be selected for a call of \a fv if both accept named calls and a set of names
+    that a call of \a fv can give (every required parameter of \a fv and none that it does not have) is also one that
+    the other variant accepts (it has a parameter of each name and no other required parameter), with parameter types
+    of the same name that can accept a common value.  The set with the required parameters of both variants is the
+    smallest such set; if neither has a required parameter, a call with any one name of both can select it.
+*/
+static bool named_variant_may_be_selected(const AbstractQoreFunctionVariant* other,
+        const AbstractQoreFunctionVariant* fv) {
+    if (!other->isNamedCallable() || !fv->isNamedCallable()) {
+        return false;
+    }
+    const AbstractFunctionSignature* osig = other->getSignature();
+    const AbstractFunctionSignature* fsig = fv->getSignature();
+    // the position of each parameter of the other variant by name
+    auto find_param = [](const AbstractFunctionSignature* sig, const char* name) -> int {
+        for (unsigned i = 0, e = sig->numParams(); i < e; ++i) {
+            const char* n = sig->getName(i);
+            if (n && *n && !strcmp(n, name)) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    };
+    bool any_required = false;
+    // every required parameter of fv must be a parameter of the other variant with a type that can accept a value
+    // of fv's parameter type
+    for (unsigned i = 0, e = fsig->numParams(); i < e; ++i) {
+        if (final_param_optional(fsig, i)) {
+            continue;
+        }
+        const char* n = fsig->getName(i);
+        int oi = n && *n ? find_param(osig, n) : -1;
+        if (oi < 0 || !final_param_types_intersect(osig->getParamTypeInfo(oi), fsig->getParamTypeInfo(i))) {
+            return false;
+        }
+        any_required = true;
+    }
+    // every required parameter of the other variant must be a parameter of fv
+    for (unsigned i = 0, e = osig->numParams(); i < e; ++i) {
+        if (final_param_optional(osig, i)) {
+            continue;
+        }
+        const char* n = osig->getName(i);
+        int fi = n && *n ? find_param(fsig, n) : -1;
+        if (fi < 0 || !final_param_types_intersect(osig->getParamTypeInfo(i), fsig->getParamTypeInfo(fi))) {
+            return false;
+        }
+        any_required = true;
+    }
+    if (any_required) {
+        return true;
+    }
+    // no required parameter: a call with one name that both have
+    for (unsigned i = 0, e = fsig->numParams(); i < e; ++i) {
+        const char* n = fsig->getName(i);
+        int oi = n && *n ? find_param(osig, n) : -1;
+        if (oi >= 0 && final_param_types_intersect(osig->getParamTypeInfo(oi), fsig->getParamTypeInfo(i))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int MethodFunctionBase::checkFinalVariant(const MethodFunctionBase* m, const MethodVariantBase* v) const {
     if (!v->isFinal()) {
         return 0;
@@ -6930,15 +6995,19 @@ int MethodFunctionBase::checkFinalVariant(const MethodFunctionBase* m, const Met
             }
             cv->parseResolveUserSignature();
             const AbstractFunctionSignature* csig = cv->getSignature();
-            if (!final_variant_may_be_bypassed(csig, sig)) {
+            // a variant that a positional call or a named call (qore#5990) of the final variant can select
+            bool by_position = final_variant_may_be_bypassed(csig, sig);
+            if (!by_position && !named_variant_may_be_selected(cv, v)) {
                 continue;
             }
             const UserSignature* usig = dynamic_cast<const UserSignature*>(csig);
             const QoreProgramLocation* loc = usig ? usig->getParseLocation() : &loc_builtin;
             parse_error(*loc, "child class method %s%s::%s(%s) cannot overload parent class method final "
-                "%s%s::%s(%s): it accepts arguments that the final method accepts, so a call could select it instead",
-                stat, qc->getName(), getName(), csig->getSignatureText(), stat, m->qc->getName(), getName(),
-                sig->getSignatureText());
+                "%s%s::%s(%s): %s", stat, qc->getName(), getName(), csig->getSignatureText(), stat,
+                m->qc->getName(), getName(), sig->getSignatureText(), by_position
+                    ? "it accepts arguments that the final method accepts, so a call could select it instead"
+                    : "it accepts the names of the parameters of the final method and arguments that it accepts, so "
+                        "a named call could select it instead");
             return -1;
         }
         return 0;
@@ -7015,7 +7084,8 @@ int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, cons
                 }
                 gv->parseResolveUserSignature();
                 const AbstractFunctionSignature* gsig = gv->getSignature();
-                if (!final_variant_may_be_bypassed(gsig, fsig)) {
+                // a variant that a positional call or a named call (qore#5990) of the final variant can select
+                if (!final_variant_may_be_bypassed(gsig, fsig) && !named_variant_may_be_selected(gv, fv)) {
                     continue;
                 }
                 parse_error(*loc, "class '%s' does not reach parent class method final %s%s::%s(%s): method "
@@ -7221,8 +7291,10 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
                 }
                 gv->parseResolveUserSignature();
                 const AbstractFunctionSignature* gsig = gv->getSignature();
-                // a variant that a call of the parent variant cannot select is another method
-                if (gsig != override_sig && !final_variant_may_be_bypassed(gsig, psig)) {
+                // a variant that a call of the parent variant cannot select, by position or by the names of its
+                // parameters (qore#5990), is another method
+                bool by_position = gsig == override_sig || final_variant_may_be_bypassed(gsig, psig);
+                if (!by_position && !named_variant_may_be_selected(gv, pv)) {
                     continue;
                 }
                 const QoreTypeInfo* grt = class_return_type(cls, g, gsig->getReturnTypeInfo());
@@ -7251,8 +7323,11 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
                         g->getClass()->getName(), getName());
                 }
                 if (gsig != override_sig) {
-                    desc.concat(": it accepts arguments that the parent class method accepts, so a call of the "
-                        "parent class method can select it");
+                    desc.concat(by_position
+                        ? ": it accepts arguments that the parent class method accepts, so a call of the parent class "
+                            "method can select it"
+                        : ": it accepts the names of the parameters of the parent class method and arguments that it "
+                            "accepts, so a named call of the parent class method can select it");
                 }
                 desc.concat("; the return type must be the parent class method's or a narrower type that it accepts "
                     "without a conversion (a call typed against the parent class trusts its return type)");
