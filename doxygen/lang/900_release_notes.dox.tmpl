@@ -1610,6 +1610,9 @@
     - a @ref closure "closure" in the default value of a static method's parameter ran in the class context of the
       caller, so it could not access the private members and methods of the class that declares it, as a closure in the
       static method's code can
+    - a @ref closure "closure" in a namespace constant whose value was first evaluated for a class constant or a static
+      member initializer, or in a member initializer of a hashdecl first used in a class's code, ran in the class
+      context of that class, so it could access the class's private members
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected

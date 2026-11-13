@@ -141,7 +141,7 @@ QoreClosureBase* QoreClosureParseNode::evalClosure() const {
         }
     }
 
-    return new QoreClosureNode(this, cvec, static_class ? static_class : runtime_get_class());
+    return new QoreClosureNode(this, cvec, static_class);
 }
 
 QoreClosureBase* QoreClosureParseNode::evalObjectClosure() const {
@@ -173,7 +173,8 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     if (!parse_context.oflag) {
         // a closure parsed in a class without an object context runs in the class context of its class, as the code
         // of a static method does, also when it is created by a call's default value in the caller's context
-        // (issue #5907)
+        // (issue #5907); one parsed outside a class runs in no class context, also when it is created in one, as is a
+        // closure in a namespace constant whose value is first evaluated for a class constant (issue #5961)
         static_class = parse_get_class_priv();
     }
     if (parse_context.oflag) {
@@ -273,5 +274,5 @@ QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) cons
         return new QoreObjectClosureNode(o, c_ctx, this, cvv);
     }
 
-    return new QoreClosureNode(this, cvv, static_class ? static_class : runtime_get_class());
+    return new QoreClosureNode(this, cvv, static_class);
 }
