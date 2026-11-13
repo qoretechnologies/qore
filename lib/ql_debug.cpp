@@ -38,6 +38,8 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/ModuleInfo.h"
+#include "qore/intern/QoreDir.h"
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
