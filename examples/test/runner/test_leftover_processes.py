@@ -216,33 +216,30 @@ def write_fake_podman(tree, log):
         """)
 
 
-@unittest.skipUnless(shutil.which("qore") or HAVE_QORE, "needs qore")
+@unittest.skipUnless(HAVE_QORE, f"no qore build in {BUILD_DIR} (QORE_TEST_BUILD_DIR)")
 class PodmanTestWithoutImageTest(unittest.TestCase):
-    """RestClientPoolPerf.qtest skips without running podman when the image is not in a local store"""
+    """RestClientPoolPerf.qtest skips without running podman when the image is not in a local store
+
+    The qtest runs through run_tests.sh with the qore of the build, as the qore cases of test_watchdog.py do: the
+    runner sets up the library path and the module path (the binary modules of the build and the qlib of this tree),
+    so the result does not depend on the qore or the modules that the host has installed or on the environment.
+    """
 
     def run_qtest(self, home_setup=None):
         with tempfile.TemporaryDirectory(prefix="qore-runner-podman-") as directory:
-            tree = RunnerTree(directory, qore=HAVE_QORE)
+            tree = RunnerTree(directory, qore=True)
             log = tree.root / "podman.log"
             write_fake_podman(tree, log)
             home = tree.root / "home"
             home.mkdir()
             if home_setup:
                 home_setup(home)
-            # the test, with the modules of this tree (QORE_TEST_QLIB_DIR: another set that the qore in use can load)
-            case = tree.root / "examples/test/qlib/RestClient"
+            case = tree.tests / "qlib/RestClient"
             case.mkdir(parents=True)
             shutil.copy(PODMAN_TEST, case / PODMAN_TEST.name)
-            (tree.root / "qlib").unlink()
-            (tree.root / "qlib").symlink_to(os.environ.get("QORE_TEST_QLIB_DIR", str(ROOT / "qlib")))
-            qore = str(BUILD_DIR / "qore") if HAVE_QORE else shutil.which("qore")
-            env = tree.env(HOME=str(home), XDG_DATA_HOME="", QORE_PODMAN_SYSTEM_STORE=str(tree.root / "no-system-store"))
-            if HAVE_QORE:
-                env["LD_LIBRARY_PATH"] = str(BUILD_DIR)
-            result = subprocess.run([qore, "--enable-debug", str(case / PODMAN_TEST.name)], env=env, cwd=case,
-                                    capture_output=True, text=True, timeout=300)
-            output = result.stdout + result.stderr
-            return result, output, (log.read_text().splitlines() if log.exists() else [])
+            result = tree.run(QORE_TEST_DIRS="qlib/RestClient", HOME=str(home), XDG_DATA_HOME="",
+                              QORE_PODMAN_SYSTEM_STORE=str(tree.root / "no-system-store"))
+            return result, result.output, (log.read_text().splitlines() if log.exists() else [])
 
     def test_no_image_store_skips_without_running_podman(self):
         result, output, calls = self.run_qtest()
