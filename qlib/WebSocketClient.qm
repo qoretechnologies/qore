@@ -1619,6 +1619,12 @@ WebSocketClient ws(\event(), {
             self.stop = WSCC_GoingAway;
             self.sleep_cond.broadcast();
         }
+        # an exception of a subclass's hook does not keep the destructor from closing the connection
+        try {
+            destructorStopping();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("exception in destructorStopping(): %s", get_exception_string(ex));
+        }
         disconnectIntern(WSCC_GoingAway, True);
         # Skip the delivery-task wait only in the self-deadlock case: a user callback on the delivery
         # thread dropped the last reference and triggered this destructor.  In that case,
@@ -4774,6 +4780,16 @@ ws.setEventQueue();
                 logDebug("error shutting down the connection manager of the connect: %s: %s", ex.err, ex.desc);
             }
         }
+    }
+
+    #! Called by the destructor once the client is stopping, before it takes the client's connection; does nothing
+    /** An automatic reconnect that established its connection meanwhile sees the client stopping and disconnects the
+        connection itself, so the destructor may find no connection; a test holds the destructor here to make that
+        order (issue #5981).  Never called with the client's lock held.
+
+        @since WebSocketClient 2.5
+    */
+    private destructorStopping() {
     }
 
     #! Waits in the destructor for the threads the client started for itself, except the calling thread
