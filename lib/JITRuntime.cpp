@@ -19337,7 +19337,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return false;
     }
     // copy() must go through dispatch_method_on_object → execCopy to create a new object
-    if (!strcmp(method->getName(), "copy")) {
+    if (method->getNameStr() == "copy") {
         return false;
     }
     // the variant of an overloaded static method called through an object is the one resolved at parse time, which
