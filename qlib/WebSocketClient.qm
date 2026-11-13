@@ -912,53 +912,80 @@ public class WscActionWaiters {
     the object is destroyed, so it gets \c WEBSOCKET-ERROR as documented, and never \c OBJECT-ALREADY-DELETED
     (issue #5983); see WscActionCall
 
+    The count is changed in synchronized methods, whose lock is not a cancellation point, and a change is reported to
+    the waiting destructor with a Queue push, which is not one either, so a cancellation cannot leave the count
+    different from the calls marked as counted
+
     @since WebSocketClient 2.5
 */
 public class WscActionWaitCount {
     private {
-        Mutex m();
-        Condition c();
         int n = 0;
-        #! the source of the keys of the clients' calls in the thread data (see WscActionCall)
+        #! wakes the destructor waiting in waitAtMost(), if any, when the count is decremented
+        *Queue waiter;
+        #! the source of the keys of the clients' calls (see WscActionCall)
         static int next_key = 0;
-        static Mutex key_lock();
     }
 
     #! Counts a call
-    inc() {
-        AutoLock al(m);
+    synchronized inc() {
         ++n;
     }
 
     #! Ends the count of a call
-    dec() {
-        AutoLock al(m);
+    synchronized dec() {
         --n;
-        c.broadcast();
+        if (waiter) {
+            waiter.push(True);
+        }
     }
 
     #! Waits until at most \a limit calls are counted; returns @ref False if the wait timed out
+    /** Called by one thread at a time (the client's destructor): the wait clears the Queue it waits on when it ends
+    */
     bool waitAtMost(int limit, timeout to) {
         date deadline = now_us() + milliseconds(to);
-        AutoLock al(m);
-        while (n > limit) {
+        on_exit clearWaiter();
+        while (*Queue q = getWaiter(limit)) {
             int remaining = (deadline - now_us()).durationMilliseconds();
             if (remaining <= 0) {
                 return False;
             }
-            c.wait(m, remaining);
+            try {
+                q.get(remaining);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUEUE-TIMEOUT") {
+                    return False;
+                }
+                rethrow;
+            }
         }
         return True;
     }
 
-    #! Returns a new key for the calls of a client in the thread data
-    static string getKey() {
-        AutoLock al(key_lock);
+    #! Returns a new key for the calls of a client (see WscActionCall)
+    static synchronized string getKey() {
         return sprintf("wsc-action-call:%d", ++next_key);
+    }
+
+    #! Returns the Queue to wait on if more than \a limit calls are counted, otherwise no value
+    private synchronized *Queue getWaiter(int limit) {
+        if (n <= limit) {
+            return;
+        }
+        if (!waiter) {
+            waiter = new Queue();
+        }
+        return waiter;
+    }
+
+    #! Ends a wait in waitAtMost()
+    private synchronized clearWaiter() {
+        remove waiter;
     }
 }
 
-#! The state of a call of a client that can wait for its action, stored in the thread data; internal to WebSocketClient
+#! The state of a call of a client that can wait for its action (see WscActionCall); internal to WebSocketClient
 /** @since WebSocketClient 2.5
 */
 public class WscActionCallState {
@@ -974,8 +1001,8 @@ public class WscActionCallState {
     #! Counts the call: it waits for the action (or the destructor ended its wait), and the destructor waits for it
     markWaited() {
         if (!counted) {
-            counted = True;
             count.inc();
+            counted = True;
         }
     }
 
@@ -996,9 +1023,11 @@ public class WscActionCallState {
 #! A call of a client that can wait for its action, from its start until it returns; internal to WebSocketClient
 /** Declared first in each method that can wait for the action, so it is destroyed after everything else the method
     does; an inner call of the same thread is part of the outer call.  It holds no reference to the client, so it ends
-    the count of the call also after the client was destroyed.  The state is kept in the thread data, where
-    acquireActionUnlocked() finds it; the call holds the state and not itself there, so it is destroyed when its method
-    returns.
+    the count of the call also after the client was destroyed.  The state is kept in a static hash by client and
+    thread (getState()), where acquireActionUnlocked() finds it; the hash holds the state and not the call, so the call
+    is destroyed when its method returns.  The hash is accessed only in static synchronized methods, whose lock is not
+    a cancellation point, so a cancelled thread always registers and removes its state, and the destructor removes
+    the state before ending its count, so no state is left behind if ending it raises an exception.
 
     @since WebSocketClient 2.5
 */
@@ -1006,24 +1035,63 @@ public class WscActionCall {
     private {
         *WscActionCallState state;
         string key;
+
+        #! the state of each thread's outermost call, by client key and TID
+        /** Kept here rather than in the thread data, so the module needs no access to the \c THREAD_CONTROL
+            functional domain; accessed only in static synchronized methods
+        */
+        static hash<string, WscActionCallState> states = {};
     }
 
     constructor(WscActionWaitCount count, string key) {
+        key += ":" + gettid();
+        WscActionCallState s(count);
         # an outer call of this thread counts this call
-        if (get_thread_data(key)) {
+        if (!registerState(key, s)) {
             return;
         }
         self.key = key;
-        state = new WscActionCallState(count);
-        save_thread_data(key, state);
+        state = s;
     }
 
     destructor() {
         if (state) {
+            # removed first, so the state is not left behind if ending its count raises an exception
+            removeState(key);
             state.end();
-            # removed, not deleted: the state is released with its last reference
-            remove_thread_data(key);
         }
+    }
+
+    #! Returns the state of the calling thread's call of the client with the given key, if any
+    static synchronized *WscActionCallState getState(string key) {
+        return states{key + ":" + gettid()};
+    }
+
+    #! Removes the states of the calls of the client with the given key; called by its destructor
+    /** A call removes its state when it ends; this removes a state that a call whose destructor was not run left
+        behind (a class of a sandboxed Program skips the destructor of an object when a cancellation is pending), so
+        it does not outlive the client.  Until then, a later thread of the client with the same TID finds that state
+        and its calls are counted with it; the client's destructor then waits for them until the action timeout.
+
+        Has no loop statement, as a loop statement is a cancellation point, and a \c map expression is not
+    */
+    static synchronized removeClient(string key) {
+        key += ":";
+        states -= (map $1, keys states, $1.equalPartial(key));
+    }
+
+    #! Stores the state of a thread's outermost call; returns False if the thread's call already has one
+    private static synchronized bool registerState(string key, WscActionCallState s) {
+        if (states{key}) {
+            return False;
+        }
+        states{key} = s;
+        return True;
+    }
+
+    #! Removes the state of a thread's outermost call
+    private static synchronized removeState(string key) {
+        remove states{key};
     }
 }
 
@@ -1470,7 +1538,7 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         WscActionWaitCount action_wait_count();
 
-        #! The key of this client's calls in the thread data (see WscActionCall)
+        #! The key of this client's calls (see WscActionCall)
         /** @since WebSocketClient 2.5
         */
         string action_call_key = WscActionWaitCount::getKey();
@@ -1779,7 +1847,9 @@ WebSocketClient ws(\event(), {
         # OBJECT-ALREADY-DELETED (issue #5983); a call of this thread that waited is not waited for; bounded by the
         # action timeout, as the threads leave at once
         {
-            *WscActionCallState own = get_thread_data(action_call_key);
+            *WscActionCallState own = WscActionCall::getState(action_call_key);
+            # also if the wait raises an exception
+            on_exit WscActionCall::removeClient(action_call_key);
             try {
                 destructorWaitingForActionWaiters();
             } catch (hash<ExceptionInfo> ex) {
@@ -4170,7 +4240,7 @@ ws.setEventQueue();
         @since WebSocketClient 2.5
     */
     private markActionCallWaited() {
-        *WscActionCallState state = get_thread_data(action_call_key);
+        *WscActionCallState state = WscActionCall::getState(action_call_key);
         if (state) {
             state.markWaited();
         }
