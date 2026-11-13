@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/qore_list_private.h"
 
 QoreString QorePushOperatorNode::push_str("push operator expression");
 

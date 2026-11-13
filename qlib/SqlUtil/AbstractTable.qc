@@ -418,8 +418,9 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         */
         #/@{
         #! Upsert option: insert first, if the insert fails, then update
-        /** with this option an insert is attempted, and if it fails due to a duplicate row, then an update is made unconditionally; with
-            this upsert strategy, the following row result codes are possible:
+        /** with this option an insert is attempted, and if it fails due to a duplicate row, then the row with the upsert key is
+            updated; if no row has the upsert key, the duplicate is on another unique key, and the database's exception for it is
+            raised; with this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Verified (the only value returned by certain drivers with optimized upsert implementations)
         */
@@ -450,7 +451,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         const UpsertAuto = 4;
 
         #! Upsert option: insert if the row does not exist, otherwise ignore
-        /** With this upsert strategy, the following row result codes are possible:
+        /** A row is ignored only if a row with its upsert key exists; a conflict with another unique key raises the database's
+            exception.  With this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Unchanged
         */
@@ -7912,27 +7914,46 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         return cmd.code(arg, uh.arg);
     }
 
+    #! Returns @ref True "True" if the table has no data rows, @ref False "False" if not
     private bool emptyDataIntern() {
         list<auto> args;
         string sql = getSelectSql({"limit": 1}, \args);
-        return boolean(ds.vselectRow(sql, args));
+        return !ds.vselectRow(sql, args);
     }
 
     private Columns checkUpsertRow(hash<auto> row, reference<int> upsert_strategy) {
         return getAllUpsertColumns(row).firstValue();
     }
 
+    #! Returns a closure that inserts a row and updates the row with its upsert key if the insert is a duplicate
+    /** A duplicate-row error on the insert does not say which unique key the row conflicts with: when it conflicts
+        with a unique key other than the upsert key, no row has the upsert key, and the update matches no row.  The
+        row is then inserted again without catching the error, so that the conflict raises the driver's exception,
+        as with @ref UpsertUpdateFirst; the row is never dropped, and no other row is changed.
+    */
     private code<int(hash<auto>)> getUpsertInsertFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
         list updc = ();
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
+        # a row with only key columns (or with all other columns omitted from the update) has nothing to update
+        *string key_sql = updc ? NOTHING : getUpsertKeySelectSql(cols);
 
         return int sub (hash<auto> row) {
-            if (tryInsertImpl(insert_sql, row))
+            if (tryInsertImpl(insert_sql, row)) {
                 return UR_Inserted;
+            }
 
-            tryUpdate(update_sql, row, cols, updc);
-            return UR_Verified;
+            if (key_sql) {
+                if (ds.vselectRow(key_sql, row{cols.keys()}.values())) {
+                    return UR_Verified;
+                }
+            } else if (tryUpdate(update_sql, row, cols, updc)) {
+                return UR_Verified;
+            }
+
+            # the duplicate was on another unique key: raise it
+            ds.vexec(insert_sql, row.values());
+            return UR_Inserted;
         };
     }
 
@@ -7975,12 +7996,35 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         };
     }
 
+    #! Returns a closure that inserts a row unless a row with its upsert key exists
+    /** A duplicate-row error on the insert does not say which unique key the row conflicts with: when no row has
+        the upsert key, the row conflicts with another unique key, and it is inserted again without catching the
+        error, so that the conflict raises the driver's exception instead of the row being dropped as unchanged.
+    */
     private code<int(hash<auto>)> getUpsertInsertOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
+        string key_sql = getUpsertKeySelectSql(cols);
 
         return int sub (hash<auto> row) {
-            return tryInsertImpl(insert_sql, row) ? UR_Inserted : UR_Unchanged;
+            if (tryInsertImpl(insert_sql, row)) {
+                return UR_Inserted;
+            }
+            if (ds.vselectRow(key_sql, row{cols.keys()}.values())) {
+                return UR_Unchanged;
+            }
+
+            # the duplicate was on another unique key: raise it
+            ds.vexec(insert_sql, row.values());
+            return UR_Inserted;
         };
+    }
+
+    #! Returns SQL that selects the row with the upsert key given by the bind values of the key columns in order
+    private string getUpsertKeySelectSql(Columns cols) {
+        return sprintf("select %s from %s where %s",
+            (foldl $1 + ", " + $2, getColumnSqlNames(cols.keys())),
+            getSqlName(),
+            (foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator())));
     }
 
     private code<int(hash<auto>)> getUpsertUpdateOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {

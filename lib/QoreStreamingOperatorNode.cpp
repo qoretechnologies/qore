@@ -33,6 +33,7 @@
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreIterateOperatorNode.h"
+#include "qore/intern/qore_list_private.h"
 
 namespace {
 class StrictBooleanStreamingOperatorNode : public QoreStreamingOperatorNode {

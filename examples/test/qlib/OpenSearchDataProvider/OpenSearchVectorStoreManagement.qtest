@@ -30,7 +30,7 @@ class FakeOpenSearchRestClient inherits RestClientIo::RestClientIo {
     constructor() : RestClientIo({"url": "http://localhost:9200", "data": "json"}) {
     }
 
-    hash<auto> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
         push requests, {"method": method, "path": path, "body": body};
         hash<auto!> result;
         if (path =~ /\/_count$/) {
@@ -50,7 +50,7 @@ class FakeOpenSearchRestClient inherits RestClientIo::RestClientIo {
         return <RestClient::RestResponseInfo>{"body": result, "status_code": 200};
     }
 
-    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
         return restDoRequest("POST", path, body, hdr);
     }
 }

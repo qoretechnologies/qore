@@ -52,3 +52,5 @@ printf("%s\n", f.unqualifiedBg(q));
 # a call evaluated for each element (the copy of the call is reused)
 background q.push(map str(label: "map" + $1, count: $1), (1, 2));
 printf("%y\n", q.get());
+background q.push(map f.sw(label: "mmap" + $1, count: $1), (1, 2));
+printf("%y\n", q.get());

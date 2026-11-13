@@ -96,6 +96,11 @@ class Base {
             "cannot overload parent class method Base::m", "an auto parameter");
         assertRejected("class C inherits Base { string m(int i, *string x) { return \"c\"; } int a() { return 1; } }",
             "cannot overload parent class method Base::m", "an optional extra parameter");
+        # another parameter type that accepts the argument: the child class's variants are searched first at run time
+        # and the first class with a matching variant is used, so b.m(1) runs C::m(float) (issue 1229)
+        assertRejected("class C inherits Base { float m(float f) { return f; } int a() { return 1; } }",
+            "C::m\\(float f\\) returning float cannot overload parent class method Base::m\\(int i\\) "
+            "returning int", "a float parameter for an int argument");
     }
 
     testNamedOverload() {

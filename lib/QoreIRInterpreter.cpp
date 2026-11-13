@@ -16440,6 +16440,9 @@ load_local_done:
                 if (navigation_failed || (xsink && *xsink)) {
                     res.discard(xsink);
                     res = QoreValue();
+                    // A rejected += operand can remain here; release it before the enclosing handlers and
+                    // debugger exception event, as the AST does after releasing the lvalue lock.
+                    rhs_holder = QoreValue();
                     if (xsink && *xsink && inst->exception_target) {
                         cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                         prev_block = block;
@@ -21186,6 +21189,30 @@ static bool is_timeout_lvalue_type(const QoreTypeInfo* ti) {
     return QoreTypeInfo::equal(get_or_nothing_base_type(ti), timeoutTypeInfo);
 }
 
+//! Hands values replaced by a merge to the lvalue that owns its locks and recursive-reference scan
+/** The merge interfaces use SafeDerefHelper, but a helper local to the operation is destroyed before its caller's
+    LValueHelper.  Releasing its values there can run a destructor under the lvalue lock.  Keep them in the lvalue's
+    existing cleanup list instead, which is released after both the locks and the recursive-reference scan.
+*/
+class LValueMergeDerefHelper : public SafeDerefHelper {
+public:
+    DLLLOCAL LValueMergeDerefHelper(LValueHelper& lvalue, ExceptionSink* xsink)
+            : SafeDerefHelper(xsink), lvalue(lvalue) {
+    }
+
+    DLLLOCAL ~LValueMergeDerefHelper() {
+        if (value_list) {
+            for (QoreValue value : *value_list) {
+                lvalue.saveTemp(value);
+            }
+            value_list->clear();
+        }
+    }
+
+private:
+    LValueHelper& lvalue;
+};
+
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
@@ -21201,9 +21228,6 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
         }
     };
     const QoreValue right = *right_holder;
-    // values requiring dereferencing must be dereferenced outside the lock
-    SafeDerefHelper sdh(xsink);
-
     qore_type_t vtype = v.getType();
 
     if (vtype == NT_NOTHING || vtype == NT_NULL) {
@@ -21254,14 +21278,23 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                 qore_list_private::mergeCanonical(*l, right.get<const QoreListNode>(), xsink);
             }
         } else {
-            // the reference held for the value is handed over to the list, as the AST interpreter does
-            if constexpr (Lexical) {
-                qore_list_private::push(*l, right_holder.release(), xsink, policy);
-            } else {
-                qore_list_private::pushCanonical(*l, right_holder.release(), xsink);
+            // Keep a rejected value in the caller's holder, which outlives the lvalue lock. push() would
+            // consume and release it here, so a temporary's destructor could reenter the locked lvalue.
+            qore_list_private* lp = qore_list_private::get(*l);
+            if (!lp->checkValid(xsink)) {
+                int rc;
+                if constexpr (Lexical) {
+                    rc = lp->checkVal(right_holder, nullptr, xsink, policy);
+                } else {
+                    rc = lp->checkVal(right_holder, xsink);
+                }
+                if (!rc) {
+                    lp->pushIntern(right_holder.release());
+                }
             }
         }
     } else if (vtype == NT_HASH) {
+        LValueMergeDerefHelper sdh(v, xsink);
         if (right.getType() == NT_HASH) {
             v.ensureUnique();
             auto* hp = qore_hash_private::get(*v.getValue().get<QoreHashNode>());
@@ -21280,6 +21313,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             }
         }
     } else if (vtype == NT_OBJECT) {
+        LValueMergeDerefHelper sdh(v, xsink);
         QoreObject* o = v.getValue().get<QoreObject>();
         if constexpr (Lexical) {
             qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink, policy);
@@ -21405,8 +21439,26 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
         }
     } else if (vtype == NT_HASH) {
         if (right.getType() != NT_HASH && right.getType() != NT_OBJECT) {
+            v.startContainerRemoval();
             v.ensureUnique();
             QoreHashNode* vh = v.getValue().get<QoreHashNode>();
+
+            auto remove_key = [&](const QoreValue& key) {
+                QoreHashKeyHelper str(key, xsink);
+                if (*xsink) {
+                    return;
+                }
+                QoreValue removed = vh->takeKeyValue(str.c_str());
+                if (needs_scan(removed)) {
+                    if (!qore_hash_private::getScanCount(*vh)) {
+                        v.setDelta(-1);
+                    }
+                }
+                // Keep the value until the lvalue's scan has finished. Do not recursively enumerate its objects:
+                // shared containers can have exponentially many paths, and ordinary orphan rechecks are safe
+                // while this reference is held (as they are for values replaced by +=).
+                v.saveTemp(removed);
+            };
 
             const QoreListNode* nrl = (right.getType() == NT_LIST)
                 ? right.get<const QoreListNode>()
@@ -21414,20 +21466,32 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             if (nrl && nrl->size()) {
                 ConstListIterator li(nrl);
                 while (li.next()) {
-                    QoreStringValueHelper val(li.getValue());
-                    vh->removeKey(*val, xsink);
+                    remove_key(li.getValue());
                     if (*xsink) {
                         return QoreValue();
                     }
                 }
             } else {
-                QoreStringValueHelper str(right);
-                vh->removeKey(*str, xsink);
+                remove_key(right);
             }
         }
     } else if (vtype == NT_OBJECT) {
         if (right.getType() != NT_HASH && right.getType() != NT_OBJECT) {
+            v.startContainerRemoval();
             QoreObject* o = v.getValue().get<QoreObject>();
+
+            auto remove_member = [&](const QoreValue& key) {
+                QoreHashKeyHelper str(key, xsink);
+                if (*xsink) {
+                    return;
+                }
+                QoreValue removed = qore_object_private::takeMember(*o, xsink, str.c_str());
+                // The lvalue still contains the same object, even when its last scannable member is removed.
+                // Record the object's changed graph without applying a delta to the lvalue's parent container.
+                bool scan_removed = needs_scan(removed);
+                v.objectRemoved(*qore_object_private::get(*o), scan_removed);
+                v.saveTemp(removed);
+            };
 
             const QoreListNode* nrl = (right.getType() == NT_LIST)
                 ? right.get<const QoreListNode>()
@@ -21435,15 +21499,13 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             if (nrl && nrl->size()) {
                 ConstListIterator li(nrl);
                 while (li.next()) {
-                    QoreStringValueHelper val(li.getValue());
-                    o->removeMember(*val, xsink);
+                    remove_member(li.getValue());
                     if (*xsink) {
                         return QoreValue();
                     }
                 }
             } else {
-                QoreStringValueHelper str(right);
-                o->removeMember(*str, xsink);
+                remove_member(right);
             }
         }
     } else {

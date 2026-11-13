@@ -1,0 +1,121 @@
+# calls values that are not call references or closures in each form of call, and prints the exception that each
+# call raises with its location; run by ../CallRefNonCallableErrorParity.qtest in each execution mode and as an AOT
+# executable, whose output must be that of the AST interpreter
+
+class Plain {
+}
+
+# a call with no arguments
+auto sub call0(auto v) {
+    return v();
+}
+
+# a call with one argument
+auto sub call1(auto v) {
+    return v(1);
+}
+
+# a call with more than one argument
+auto sub call3(auto v) {
+    return v(1, "two", 3.0);
+}
+
+# a call whose expression spans more than one line
+auto sub callMultiLine(auto v) {
+    return v(
+        1,
+        2
+    );
+}
+
+# a call of a local variable that holds the value
+auto sub callLocal(auto v) {
+    auto c = v;
+    return c(1, 2);
+}
+
+# a call of a call reference variable that holds NOTHING
+auto sub callNothingRef() {
+    *code c;
+    return c(1);
+}
+
+# a call of the result of an expression
+auto sub callExpression(auto v) {
+    return (v)(1);
+}
+
+# a call through call_function_args()
+auto sub callFunctionArgs(auto v) {
+    return call_function_args(v, (1, 2));
+}
+
+# a call whose arguments are local variables
+auto sub callLocalArgs(auto v) {
+    int i = 1;
+    return v(i, i);
+}
+
+# a function called through a call reference
+string sub showArgs(*auto a, *auto b, *auto c) {
+    return sprintf("function %y %y %y", a, b, c);
+}
+
+string sub describe(hash<ExceptionInfo> ex) {
+    return sprintf("%s: %s @ %s:%d-%d %y %y %y", ex.err, ex.desc, basename(ex.file), ex.line, ex.endline,
+        ex.source, ex.offset, ex.lang);
+}
+
+const Calls = {
+    "call0": \call0(),
+    "call1": \call1(),
+    "call3": \call3(),
+    "callMultiLine": \callMultiLine(),
+    "callLocal": \callLocal(),
+    "callExpression": \callExpression(),
+    "callFunctionArgs": \callFunctionArgs(),
+    "callLocalArgs": \callLocalArgs(),
+};
+
+list<auto> values = (NOTHING, 1, 1.5, "str", {"a": 1}, (1, 2), new Plain(), True, 2n, 2026-11-13, <bead>,
+    1 << 60, NULL);
+
+# a closure and a call reference are still called in each form of call
+code cl = auto sub (*auto a, *auto b, *auto c) { return sprintf("closure %y %y %y", a, b, c); };
+code fr = \showArgs();
+
+# enough rounds for tiered execution to compile the functions to native code and run the native code
+for (int round = 0; round < 3; ++round) {
+    foreach auto v in (values) {
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            string res;
+            try {
+                auto r = i.value(v);
+                res = sprintf("returned %y", r);
+            } catch (hash<ExceptionInfo> ex) {
+                res = describe(ex);
+            }
+            if (!round) {
+                printf("%s %s: %s\n", i.key, v.fullType(), res);
+            }
+        }
+    }
+    try {
+        auto r = callNothingRef();
+        if (!round) {
+            printf("callNothingRef: returned %y\n", r);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        if (!round) {
+            printf("callNothingRef: %s\n", describe(ex));
+        }
+    }
+    string out = sprintf("%y %y %y %y", call0(cl), call1(cl), call3(cl), callLocal(cl));
+    if (!round) {
+        printf("closure: %s\n", out);
+    }
+    out = sprintf("%y %y %y %y", call0(fr), call1(fr), call3(fr), callLocal(fr));
+    if (!round) {
+        printf("call reference: %s\n", out);
+    }
+}
