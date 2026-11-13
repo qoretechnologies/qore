@@ -688,6 +688,8 @@ public:
     */
     DLLLOCAL void markClosed() {
         session_closed_.store(true, std::memory_order_release);
+        // nothing more is sent: waiters for a stream's data to be sent are done (see streamSendFlushed())
+        notifyStreamDrain();
     }
 
     //! Returns true once @ref markClosed has been called.
@@ -1390,9 +1392,14 @@ public:
     */
     DLLLOCAL int waitForStreamDrain(int32_t stream_id, int timeout_ms);
 
+    //! Returns 0 if the stream has no data buffered to be sent (all of it was handed to the transport, or the stream
+    //! is gone), 1 otherwise; waiters are woken by notifyStreamDrain() when data is handed over or the stream closes
+    DLLLOCAL int streamSendFlushed(int32_t stream_id);
+
     //! Wake controller poll operations waiting for stream drain
-    /** Called by dataProviderReadCallback and onStreamCloseCallback.
-        Must be called while holding the session mutex m.
+    /** Called by dataProviderReadCallback, onStreamCloseCallback and sendPendingData with the session mutex m held,
+        and by markClosed() without it, which is safe: a waiter checks its condition again after it registered, and
+        the closed state is atomic.
 
         @since %Qore 3.0
     */

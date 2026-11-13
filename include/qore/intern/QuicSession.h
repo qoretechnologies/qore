@@ -600,6 +600,10 @@ public:
     */
     DLLLOCAL int waitForStreamDrain(int64_t stream_id, int timeout_ms);
 
+    //! Returns 0 if the peer has acknowledged all the data staged for the stream (or the stream is gone), 1 otherwise;
+    //! waiters are woken by notifyStreamDrain() when the data is acknowledged or the stream closes
+    DLLLOCAL int streamSendFlushed(int64_t stream_id);
+
     //! Take the next completed stream (transfers ownership)
     DLLLOCAL std::unique_ptr<QuicStreamInfo> takeCompletedStream();
 

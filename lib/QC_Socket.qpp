@@ -7966,6 +7966,30 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) [fla
     return s->waitForHttp2StreamDrain((int32_t)stream_id, (int)timeout_ms, xsink);
 }
 
+//! Waits until an HTTP/2 stream has no data buffered to be sent
+/** Unlike @ref waitForHttp2StreamDrain(), which waits until the stream's buffer drops below the backpressure
+    threshold, this method waits until all the data buffered for the stream was handed to the transport (as flow
+    control allows), or the stream is closed, or the timeout expires; for example, before a connection is closed, so
+    that data queued on a stream (such as a WebSocket close frame) is not dropped.
+
+    The wait is woken by the I/O thread when it hands the stream's data to the transport and when the stream closes.
+
+    @param stream_id the HTTP/2 stream ID
+    @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+
+    @return 0 if the stream has no data buffered to be sent (or the stream or the session is gone), 1 if the wait
+    timed out
+
+    @throw HTTP2-ERROR no HTTP/2 session is active
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread or in a controller-owned
+    \c continuePoll() worker
+
+    @since %Qore 3.0
+*/
+int Socket::waitForHttp2StreamFlushed(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
+    return qore_socket_object_wait_stream_flushed(s, true, stream_id, (int)timeout_ms, xsink);
+}
+
 //! Submits HTTP/2 streaming response headers without body or END_STREAM
 /** Used by server-side HTTP/2 handlers driven by an async I/O controller.
     The call copies caller-owned data and delegates HTTP/2 session mutation to
@@ -8752,6 +8776,29 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
     }
     int rc = s->sendQuicClientStreamData(stream_id, body_ptr, body_len, (bool)end_stream, xsink);
     return rc;
+}
+
+//! Waits until a stream of the socket's QUIC client session has no data staged to be sent
+/** Unlike @ref waitForQuicClientStreamDrain(), which waits until the stream's buffer drops below the backpressure
+    threshold, this method waits until the peer has acknowledged all the data staged for the stream (QUIC keeps the
+    data until then; it is sent as flow control allows), or the stream is closed, or the timeout expires; for
+    example, before a connection is closed, so that data queued on a stream (such as a WebSocket close frame) is not
+    dropped.
+
+    @param stream_id the HTTP/3 stream ID
+    @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
+
+    @return 0 if the peer has acknowledged all the data staged for the stream (or the stream or the session is gone),
+    1 if the wait timed out
+
+    @throw QUIC-ERROR no QUIC session is active
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread or in a controller-owned
+    \c continuePoll() worker
+
+    @since %Qore 3.0
+*/
+int Socket::waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
+    return qore_socket_object_wait_stream_flushed(s, false, stream_id, (int)timeout_ms, xsink);
 }
 
 //! Waits for a client-side HTTP/3 streaming body buffer to drain

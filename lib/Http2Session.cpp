@@ -1533,9 +1533,14 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     // Release memory when fully drained to prevent long-lived idle connections
     // from holding onto large send buffer allocations
     if (send_offset == send_buffer.size()) {
+        bool had_data = !send_buffer.empty();
         send_buffer_base += send_buffer.size();
         send_buffer.clear();
         send_offset = 0;
+        // a waiter for a stream's data to be sent (streamSendFlushed()) waits for the send buffer as well
+        if (had_data) {
+            notifyStreamDrain();
+        }
     }
 
     printd(5, "sendPendingData() complete, want_write=%d pending=%zu\n",
@@ -3536,6 +3541,20 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
     }
     size_t pending = it->second.data.size() - it->second.offset;
     return pending <= MAX_STREAM_BUFFER ? 0 : 1;
+}
+
+int Http2Session::streamSendFlushed(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // nothing more is sent on a closed session or a stream that nghttp2 no longer has
+    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+        return 0;
+    }
+    auto it = pending_body_data.find(stream_id);
+    if (it != pending_body_data.end() && it->second.offset < it->second.data.size()) {
+        return 1;
+    }
+    // the data that nghttp2 took is written from the session's send buffer
+    return send_offset < send_buffer.size() ? 1 : 0;
 }
 
 void Http2Session::notifyStreamDrain() {
