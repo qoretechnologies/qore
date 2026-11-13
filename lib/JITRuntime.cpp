@@ -1337,24 +1337,9 @@ extern "C" DLLEXPORT int64_t qore_rt_check_cancel(ExceptionSink* xsink, const ch
 // evalTiered() checks this after JIT returns and re-executes via AST if set.
 static thread_local bool tl_jit_deopt_requested = false;
 
-static LocalVar* findIRSelfLocal(const QoreIRFunction* ir) {
-    if (!ir) {
-        return nullptr;
-    }
-    LocalVar* named_self = nullptr;
-    for (const auto& [lv, slot_id] : ir->local_var_slots) {
-        (void)slot_id;
-        if (!lv || !lv->getName()) {
-            continue;
-        }
-        if (lv->isSelf()) {
-            return const_cast<LocalVar*>(lv);
-        }
-        if (!named_self && !strcmp(lv->getName(), "self")) {
-            named_self = const_cast<LocalVar*>(lv);
-        }
-    }
-    return named_self;
+// Keep the fallback out of the common method path, which already has a signature self local.
+static QORE_INTERN_NOINLINE LocalVar* findIRSelfLocal(const QoreIRFunction* ir) {
+    return ir ? ir->self_local : nullptr;
 }
 
 extern "C" DLLEXPORT void qore_rt_request_jit_deopt(void* deopt_counter_ptr) {
@@ -19264,7 +19249,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return false;
     }
     // copy() must go through dispatch_method_on_object → execCopy to create a new object
-    if (!strcmp(method->getName(), "copy")) {
+    if (method->getNameStr() == "copy") {
         return false;
     }
     const UserVariantBase* uvb = variant->getUserVariantBase();
