@@ -41,54 +41,113 @@
 #include "qore/intern/ParseNode.h"
 
 namespace {
-template <typename Base>
-class LexicalCastOperatorNode : public Base {
+// Keep concrete bases so the IR slot-coverage guard can follow each lexical operator to its operand.
+
+class LexicalScalarCastOperatorNode : public QoreScalarCastOperatorNode {
 public:
-    using Base::Base;
+    using QoreScalarCastOperatorNode::QoreScalarCastOperatorNode;
 
     QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
         ValueHolder exp(copy_value_and_resolve_lvar_refs(this->exp, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
-        if constexpr (std::is_same_v<Base, QoreHashDeclCastOperatorNode>) {
-            if (this->isDynamicHashDeclCast()) {
-                return new LexicalCastOperatorNode(this->loc, this->dynamic_hashdecl_name.c_str(), exp.release(),
-                    this->or_nothing);
-            }
-            return new LexicalCastOperatorNode(this->loc, this->hd, exp.release(), this->or_nothing);
-        } else {
-            return new LexicalCastOperatorNode(this->loc, this->typeInfo, exp.release(), this->or_nothing);
-        }
+        return new LexicalScalarCastOperatorNode(loc, typeInfo, exp.release(), or_nothing);
     }
 
     QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const override {
-        return this->template castValueImpl<true>(inner, xsink);
+        return castValueImpl<true>(inner, xsink);
     }
 
     int checkValue(ExceptionSink* xsink, const QoreValue& value, bool lvalue) const override {
-        if constexpr (std::is_same_v<Base, QoreScalarCastOperatorNode>) {
-            return this->template checkValueImpl<true>(xsink, value, lvalue);
-        } else {
-            return Base::checkValue(xsink, value, lvalue);
+        return checkValueImpl<true>(xsink, value, lvalue);
+    }
+};
+
+class LexicalHashDeclCastOperatorNode : public QoreHashDeclCastOperatorNode {
+public:
+    using QoreHashDeclCastOperatorNode::QoreHashDeclCastOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        ValueHolder exp(copy_value_and_resolve_lvar_refs(this->exp, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
         }
+        if (isDynamicHashDeclCast()) {
+            return new LexicalHashDeclCastOperatorNode(loc, dynamic_hashdecl_name.c_str(), exp.release(), or_nothing);
+        }
+        return new LexicalHashDeclCastOperatorNode(loc, hd, exp.release(), or_nothing);
+    }
+
+    QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const override {
+        return castValueImpl<true>(inner, xsink);
     }
 
 protected:
     QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
-        if constexpr (std::is_same_v<Base, QoreScalarCastOperatorNode>) {
-            return Base::evalImpl(needs_deref, xsink);
-        } else {
-            return this->template evalImplInternal<true>(needs_deref, xsink);
+        return evalImplInternal<true>(needs_deref, xsink);
+    }
+};
+
+class LexicalComplexHashCastOperatorNode : public QoreComplexHashCastOperatorNode {
+public:
+    using QoreComplexHashCastOperatorNode::QoreComplexHashCastOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        ValueHolder exp(copy_value_and_resolve_lvar_refs(this->exp, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
         }
+        return new LexicalComplexHashCastOperatorNode(loc, typeInfo, exp.release(), or_nothing);
+    }
+
+    QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const override {
+        return castValueImpl<true>(inner, xsink);
+    }
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalImplInternal<true>(needs_deref, xsink);
+    }
+};
+
+class LexicalComplexListCastOperatorNode : public QoreComplexListCastOperatorNode {
+public:
+    using QoreComplexListCastOperatorNode::QoreComplexListCastOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        ValueHolder exp(copy_value_and_resolve_lvar_refs(this->exp, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return new LexicalComplexListCastOperatorNode(loc, typeInfo, exp.release(), or_nothing);
+    }
+
+    QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const override {
+        return castValueImpl<true>(inner, xsink);
+    }
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalImplInternal<true>(needs_deref, xsink);
     }
 };
 
 template <typename Base, typename... Args>
 Base* qore_make_cast(LexicalSemanticPolicy policy, Args&&... args) {
-    return policy.needsFilter()
-        ? new LexicalCastOperatorNode<Base>(std::forward<Args>(args)...)
-        : new Base(std::forward<Args>(args)...);
+    if (!policy.needsFilter()) {
+        return new Base(std::forward<Args>(args)...);
+    }
+    if constexpr (std::is_same_v<Base, QoreScalarCastOperatorNode>) {
+        return new LexicalScalarCastOperatorNode(std::forward<Args>(args)...);
+    } else if constexpr (std::is_same_v<Base, QoreHashDeclCastOperatorNode>) {
+        return new LexicalHashDeclCastOperatorNode(std::forward<Args>(args)...);
+    } else if constexpr (std::is_same_v<Base, QoreComplexHashCastOperatorNode>) {
+        return new LexicalComplexHashCastOperatorNode(std::forward<Args>(args)...);
+    } else {
+        static_assert(std::is_same_v<Base, QoreComplexListCastOperatorNode>);
+        return new LexicalComplexListCastOperatorNode(std::forward<Args>(args)...);
+    }
 }
 }
 

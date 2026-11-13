@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires FsUtil
 
 %exec-class UserFunctionalDomainsTest
 
@@ -28,6 +29,7 @@ public class UserFunctionalDomainsTest inherits QUnit::Test {
         addTestCase("out-of-line method definitions", \testOutOfLine());
         addTestCase("attribute list errors", \testGrammarErrors());
         addTestCase("domain names", \testDomainNames());
+        addTestCase("header closures have the declared domains in either order", \testHeaderClosureOrder());
         addTestCase("index expressions are not attribute lists", \testIndexExpressions());
         addTestCase("direct references are refused at parse time", \testParseRefusal());
         addTestCase("call references are refused at parse time", \testReferenceRefusal());
@@ -119,6 +121,27 @@ public class Abstract {
         # the error for a missing domain names it as the DOM_* constant does
         assertThrows("DOMAIN-METHOD-ERROR", "without declaring functional domain MODULE", \parse(),
             "class A { int m() [dom=MODULES] { return 1; } } class B inherits A { int m() { return 2; } }");
+    }
+
+    #! a closure of a module header has the domains that the header declares, written before or after the domains key
+    #! (the header's own restrictions do not apply to them; qore#5803)
+    testHeaderClosureOrder() {
+        TmpDir tmp("qore-header-closure-order-");
+        foreach bool before in ((True, False)) {
+            string name = before ? "HdrBefore" : "HdrAfter";
+            string init = "    init = sub () { *object logger = get_async_io_logger(); };\n";
+            string dom = "    domains = \"PROCESS\";\n";
+            string path = tmp.path + "/" + name + ".qm";
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%modern\nmodule " + name + " {\n    version = \"1.0\";\n    desc = \"test\";\n    author = \"Qore\";\n"
+                "    license = \"MIT\";\n" + (before ? init + dom : dom + init) + "}\npublic namespace " + name
+                + " {\npublic int sub x() { return 1; }\n}\n");
+            f.close();
+            Program p(PO_NEW_STYLE);
+            p.parse("%requires " + path + "\nint sub t() { return " + name + "::x(); }\n", "header-order");
+            assertEq(1, p.callFunction("t"), name);
+        }
     }
 
     testOutOfLine() {

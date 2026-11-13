@@ -36,6 +36,9 @@ class RecordingDatasource inherits AbstractDatasource {
 
         #! The result of each insert, in order: an int row count, or an ExceptionInfo hash to raise
         list<auto> insert_results = ();
+
+        #! The result of each upsert key select, in order: the row found, or NOTHING if there is none
+        list<auto> key_rows = ();
     }
 
     private {
@@ -85,6 +88,12 @@ class RecordingDatasource inherits AbstractDatasource {
         if (sql =~ /set_config\('qore.physical_placement'/) {
             statements += "<set placement context>";
             return {"value": vargs[0]};
+        }
+        # an insert-first or insert-only upsert looks up the upsert key after a duplicate row
+        if (sql =~ /^select .* from public.insert_probe where /) {
+            assertTrue(key_rows.size() > 0, "an upsert key select result is scripted");
+            statements += sql;
+            return shift key_rows;
         }
         throw "UNEXPECTED-SELECT", sql;
     }
@@ -197,6 +206,8 @@ class PgsqlInsertOnlyUpsertTest inherits QUnit::Test {
         addTestCase("atomic upsert servers start the transaction without BEGIN", \atomicInsertTest());
         addTestCase("atomic upsert servers raise other insert errors with the statement", \atomicErrorTest());
         addTestCase("older servers use the savepoint insert for an insert-only upsert", \olderServerInsertOnlyTest());
+        addTestCase("older servers raise a conflict on another unique key in an insert-only upsert",
+            \olderServerOtherKeyTest());
         addTestCase("older servers isolate the insert in a savepoint without BEGIN", \savepointTest());
         addTestCase("older servers raise other insert errors after the savepoint", \savepointErrorTest());
         addTestCase("physical placement joins an open transaction without BEGIN", \placementOpenTransactionTest());
@@ -257,12 +268,30 @@ class PgsqlInsertOnlyUpsertTest inherits QUnit::Test {
     private olderServerInsertOnlyTest() {
         RecordingDatasource ds(90400);
         ds.insert_results = (DuplicateKeyError,);
+        ds.key_rows = ({"id": 1},);
         InsertProbeTable t(ds);
         assertEq(AbstractTable::UR_Unchanged, t.insertOnly(("id",), {"id": 1})({"id": 1}),
             "a duplicate row is not inserted");
         string sp = PgsqlDatabase::PGSQL_TempSavepoint;
-        assertEq(("savepoint " + sp, "insert into public.insert_probe (id) values (%v)", "rollback to savepoint " + sp),
-            ds.statements, "servers without on conflict use the savepoint insert; no BEGIN is sent");
+        assertEq(("savepoint " + sp, "insert into public.insert_probe (id) values (%v)", "rollback to savepoint " + sp,
+            "select id from public.insert_probe where id = %v"),
+            ds.statements, "servers without on conflict use the savepoint insert and look up the key; no BEGIN is "
+            "sent");
+    }
+
+    private olderServerOtherKeyTest() {
+        RecordingDatasource ds(90400);
+        # the row conflicts with another unique key: no row has its upsert key
+        ds.insert_results = (DuplicateKeyError, DuplicateKeyError);
+        ds.key_rows = (NOTHING,);
+        InsertProbeTable t(ds);
+        assertThrows("DBI:PGSQL:ERROR", "duplicate key value", t.insertOnly(("id",), {"id": 1, "code": 2}),
+            ({"id": 1, "code": 2},));
+        string sp = PgsqlDatabase::PGSQL_TempSavepoint;
+        assertEq(("savepoint " + sp, "insert into public.insert_probe (id,code) values (%v,%v)",
+            "rollback to savepoint " + sp, "select id from public.insert_probe where id = %v",
+            "insert into public.insert_probe (id,code) values (%v,%v)"),
+            ds.statements, "the conflict is raised by inserting the row without the savepoint");
     }
 
     private savepointTest() {

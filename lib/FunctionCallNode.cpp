@@ -420,6 +420,18 @@ static QORE_INTERN_NOINLINE void raise_method_call_deleted_object(ExceptionSink*
     }
 }
 
+// Only a reusable background call needs to own an argument-list copy.  Outlining its lifetime keeps the holder
+// and its exception-cleanup state out of every ordinary recursive call, including calls with a lexical policy.
+template <bool Lexical>
+QORE_INTERN_NOINLINE QoreValue AbstractMethodCallNode::execReusableTmpArgs(LexicalSemanticPolicy policy,
+        const QoreMethod& target, RuntimeConfig& rc, QoreObject* o, const qore_class_private* ctx,
+        const AbstractQoreFunctionVariant* call_variant, ExceptionSink* xsink) const {
+    assert(tmp_args && reusable_tmp_args && args);
+    ReferenceHolder<QoreListNode> args_copy(args->copy(), xsink);
+    return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, target, xsink, rc, o, *args_copy, ctx,
+        call_variant, nullptr, getExplicitTypeParamInstantiation());
+}
+
 // eval method against an object where the assumed qoreclass and method were saved at parse time
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSemanticPolicy policy, QoreObject* o, const char* c_str, const qore_class_private* ctx,
@@ -457,8 +469,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
         // CodeEvaluationHelper with const args, which calls evalList() and dereferences
         // ReferenceNodes.
         if (tmp_args) {
-            ReferenceHolder<QoreListNode> args_copy(xsink);
-            return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *method, xsink, rc, o, getEvalTmpArgs(args_copy), ctx, variant,
+            if (reusable_tmp_args && args) {
+                return execReusableTmpArgs<Lexical>(policy, *method, rc, o, ctx, variant, xsink);
+            }
+            return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, variant,
                 nullptr, explicit_inst);
         }
         return variant
@@ -482,8 +496,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
             return QoreValue();
         }
         if (w) {
-            ReferenceHolder<QoreListNode> args_copy(xsink);
-            return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *w, xsink, rc, o, getEvalTmpArgs(args_copy), ctx, nullptr,
+            if (reusable_tmp_args && args) {
+                return execReusableTmpArgs<Lexical>(policy, *w, rc, o, ctx, nullptr, xsink);
+            }
+            return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *w, xsink, rc, o, args, ctx, nullptr,
                 nullptr, explicit_inst);
         }
     }

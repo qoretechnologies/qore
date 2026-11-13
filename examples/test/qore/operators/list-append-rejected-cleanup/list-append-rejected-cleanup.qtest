@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT/AOT compilation and linking of rejected list append cleanup
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class ListAppendRejectedCleanupTest
+
+#! Rejected list append temporaries are released after the lvalue unlocks (qore#6009).
+/** Checks reentrant reads/writes, exception chaining, indirect owners, nested targets, partial merge,
+    successful ownership transfer and conversion in AST, IR, JIT, both tiered paths and AOT.
+*/
+class ListAppendRejectedCleanupTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC_BIN ?? ENV.QORE_QCC_EXECUTABLE ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/list-append-rejected-cleanup-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("ListAppendRejectedCleanup", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("rejected list append cleanup in every execution mode", \checkModes());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string checked(string command, bool ir_tier = False) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False,
+            ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
+        assertEq(0, result.rc, sprintf("child exited normally: %s\n%s", command, result.out));
+        if (ir_tier) {
+            ExecModeHarness::check_ir_tier(result);
+        } else if (result.mode) {
+            ExecModeHarness::check_native(result);
+        }
+        return result.out;
+    }
+
+    checkModes() {
+        string ast = checked(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=ast " + quote(worker));
+        assertEq("PASS read\nPASS write\nPASS throw\nPASS cow\nPASS hash-owner\nPASS closure-owner\n"
+            + "PASS reference-owner\nPASS nested-hash\nPASS object-member\nPASS partial-merge\n"
+            + "PASS handlers\nPASS handlers-throw\nPASS controls\n",
+            ast, "all rejected cleanup and successful append scenarios passed");
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(ast, checked(prefix + quote(qore_bin)
+                + " -b --enable-debug --exec-mode=" + mode + " " + quote(worker)), mode);
+        }
+        assertEq(ast, checked(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + quote(worker), True), "tiered-ir");
+        TmpDir tmp("qore-list-append-cleanup-");
+        string exe = tmp.path + DirSep + "cleanup";
+        checked(prefix + quote(qcc_bin) + " -O2 -o " + quote(exe) + " " + quote(worker));
+        assertTrue(is_file(exe), "qcc produced the executable");
+        assertEq(ast, checked(prefix + quote(exe) + " -b --enable-debug"), "AOT");
+    }
+}

@@ -2491,6 +2491,9 @@ public class HttpAsyncSocketIoController {
                 }
                 try {
                     hash<HttpRequestResultInfo> result = target.onHttpRequest(conn_info);
+                    if (result.persistent_request_end) {
+                        persistentRequestReturned(target, conn_info, result.persistent_request_end);
+                    }
                     # NOTE: no resumeMultiplexedReading() needed here — the h3op
                     # was already resumed during dispatch (getOutput() atomically
                     # transitions to STATE_READING + submitConnectionOp() resubmits
@@ -3998,6 +4001,9 @@ public class HttpAsyncSocketIoController {
         code<nothing()> request_handler = sub () {
             try {
                 hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
+                if (result.persistent_request_end) {
+                    persistentRequestReturned(dispatch_target, conn_info, result.persistent_request_end);
+                }
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
                     dispatch_target);
             } catch (hash<ExceptionInfo> ex) {
@@ -4162,6 +4168,9 @@ public class HttpAsyncSocketIoController {
         code<nothing()> request_handler = sub () {
             try {
                 hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
+                if (result.persistent_request_end) {
+                    persistentRequestReturned(dispatch_target, conn_info, result.persistent_request_end);
+                }
                 handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx, result,
                     dispatch_target);
             } catch (hash<ExceptionInfo> ex) {
@@ -4726,6 +4735,22 @@ public class HttpAsyncSocketIoController {
         dispatchSseStreamEnd(cinfo.target, cinfo.pending_stream_op, uh);
     }
 
+    #! Reports to the notifier of a request whose connection stays open that the request has returned
+    /** Called right after the target's @ref HttpAsyncTarget::onHttpRequest() "onHttpRequest()" has returned a result
+        with a \c persistent_request_end; the end of the connection is then reported to the target's
+        @ref HttpAsyncTarget::onPersistentRequestEnd() "onPersistentRequestEnd()" on a thread of the handler pool.
+
+        @param target the target that handled the request
+        @param info the information that the target was given
+        @param pend the request's notifier
+    */
+    private persistentRequestReturned(HttpAsyncTarget target, hash<HttpConnectionInfo> info,
+            HttpPersistentRequestEnd pend) {
+        pend.requestReturned(target, info, sub (code<nothing()> c) {
+            runOnHandlerPool(target, c);
+        });
+    }
+
     #! Runs code on a thread of the handler pool, on a thread of its own if the pool does not take it (when it is
     #! stopping), or in the calling thread if no thread can be started
     /** For code that must run exactly once, such as the end of a stream.
@@ -5207,6 +5232,9 @@ public class HttpAsyncSocketIoController {
                 on_exit cleanup_stream();
                 try {
                     hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
+                    if (result.persistent_request_end) {
+                        persistentRequestReturned(dispatch_target, conn_info, result.persistent_request_end);
+                    }
                     if (body_streaming) {
                         resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
                             HttpConnectionState::Http2);
@@ -5449,6 +5477,9 @@ public class HttpAsyncSocketIoController {
             submitToHandlerPool(dispatch_target, sub () {
                 try {
                     hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
+                    if (result.persistent_request_end) {
+                        persistentRequestReturned(dispatch_target, conn_info, result.persistent_request_end);
+                    }
                     handleHttp2MultiplexedResult(dispatch_uh, dispatch_cinfo,
                         dispatch_stream_id, result);
                 } catch (hash<ExceptionInfo> ex) {

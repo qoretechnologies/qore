@@ -9195,14 +9195,6 @@ static thread_local int64 cancel_check_count = 0;
 int64 q_get_cancel_check_count() {
     return cancel_check_count;
 }
-
-//! the number of cancellation checks of the current thread that looked up its governing sandbox manager; see
-//! q_get_cancel_sandbox_lookup_count()
-static thread_local int64 cancel_sandbox_lookup_count = 0;
-
-int64 q_get_cancel_sandbox_lookup_count() {
-    return cancel_sandbox_lookup_count;
-}
 #endif
 
 // the check of qore_check_cancel() for the thread's data
@@ -9260,15 +9252,7 @@ static bool qore_check_cancel_intern(ThreadData* td, ExceptionSink* xsink, const
         return true;
     }
 
-    // check program-level interrupt: the governing sandbox, never suppressed by a policy barrier; the governing manager
-    // is looked up only while an interrupt is requested of any manager, so a check with no request pending makes no
-    // lookup (see qore_sandbox_interrupt_count)
-    if (!qore_sandbox_interrupt_count.load(std::memory_order_seq_cst)) {
-        return false;
-    }
-#ifdef DEBUG
-    ++cancel_sandbox_lookup_count;
-#endif
+    // check program-level interrupt: the governing sandbox, never suppressed by a policy barrier
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
     if (smh) {
         if (xsink) {

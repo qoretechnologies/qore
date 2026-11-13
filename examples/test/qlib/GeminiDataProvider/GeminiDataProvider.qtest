@@ -26,7 +26,7 @@ class FakeGeminiRestClient inherits RestClientIo::RestClientIo {
     constructor() : RestClientIo({"url": "https://generativelanguage.googleapis.com", "data": "json"}) {
     }
 
-    hash<auto> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
         last_method = method;
         last_path = path;
         last_request = body;
@@ -36,23 +36,23 @@ class FakeGeminiRestClient inherits RestClientIo::RestClientIo {
         };
     }
 
-    hash<auto> restGet(string path, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
         return restDoRequest("GET", path, NOTHING, hdr);
     }
 
-    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
         return restDoRequest("POST", path, body, hdr);
     }
 
-    hash<auto> restPut(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
         return restDoRequest("PUT", path, body, hdr);
     }
 
-    hash<auto> restPatch(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
         return restDoRequest("PATCH", path, body, hdr);
     }
 
-    hash<auto> restDel(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
         return restDoRequest("DELETE", path, body, hdr);
     }
 }
