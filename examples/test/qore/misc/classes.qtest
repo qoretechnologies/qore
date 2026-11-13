@@ -890,8 +890,27 @@ code sub test() {
     }
 
     anotherAbstractTest() {
+        # a method of the same name with other parameters does not implement the abstract method, so the class is
+        # abstract
         Program p(PO_NEW_STYLE);
         assertThrows("ABSTRACT-CLASS-ERROR", \p.parse(), ("
+class AB;
+class AC inherits AB;
+class A {
+    abstract AC test();
+}
+class C inherits A {
+    AC test(int i) {}
+}
+
+sub test() {
+    C c();
+}
+", "test"));
+        # a method with the same parameters whose return type is wider than that of the abstract method cannot override
+        # it (#5838)
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \p2.parse(), ("
 class AB;
 class AC inherits AB;
 class A {

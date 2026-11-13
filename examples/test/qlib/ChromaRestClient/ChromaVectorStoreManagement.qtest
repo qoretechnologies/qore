@@ -25,12 +25,12 @@ class FakeChromaRest inherits ChromaRestClient::ChromaRestClientIo {
     constructor() : ChromaRestClientIo({"url": "http://localhost:8000"}) {
     }
 
-    hash<auto> restGet(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restGet(string path, auto body, *hash<auto> hdr) {
         push requests, {"method": "GET", "path": path};
         return <RestClient::RestResponseInfo>{"body": total_count, "status_code": 200};
     }
 
-    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
         push requests, {"method": "POST", "path": path, "body": body};
         auto result = {};
         if (path =~ /\/get$/) {

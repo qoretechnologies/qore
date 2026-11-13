@@ -26,9 +26,11 @@ class TestFileHandler inherits FileHandler {
     constructor(string fileRoot, string urlRoot = "/", *hash opt) : FileHandler(fileRoot, urlRoot, opt) {
     }
 
-    private *hash<auto> getResponseHeadersForFile(string path, hash<auto> cx, hash<auto> hdr) {
+    # the parent class's return type: no headers are an empty hash
+    private hash<auto> getResponseHeadersForFile(string path, hash<auto> cx, hash<auto> hdr) {
         if (addHeaders)
             return {"Cache-Control": "private, max-age=86400"};
+        return {};
     }
 }
 

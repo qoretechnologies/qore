@@ -96,9 +96,10 @@ class FakePgsqlDatasource inherits Qore::SQL::AbstractDatasource {
     nothing beginTransaction() {}
     nothing close() {}
     auto getOption(string opt) {}
-    *hash<auto> getOptionHash() {}
+    hash<auto> getOptionHash() { return {}; }
     nothing setOption(string opt, auto value) {}
-    *hash<auto> getCapabilities() {}
+    # the parent class's return type: no capabilities
+    int getCapabilities() { return 0; }
     string getOSCharset() { return "UTF-8"; }
     string getDriverName() { return "pgsql"; }
     string getDriverRealName() { return "pgsql"; }
