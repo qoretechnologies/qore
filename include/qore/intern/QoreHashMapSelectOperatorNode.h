@@ -35,6 +35,9 @@
 #include "qore/intern/AbstractIteratorHelper.h"
 
 class QoreHashMapSelectOperatorNode : public QoreNOperatorNodeBase<4> {
+    template <bool Lexical>
+    friend class QoreGenericHashMapSelectOperatorNode;
+
 public:
     DLLLOCAL static QoreHashMapSelectOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
         QoreValue p0, QoreValue p1, QoreValue p2, QoreValue p3);
@@ -65,7 +68,7 @@ public:
         ValueHolder n_e3(copy_value_and_resolve_lvar_refs_bound_implicit(e[3], xsink), xsink);
         if (*xsink)
             return nullptr;
-        auto* node = create(getSemanticPolicy(), loc, n_e0.release(), n_e1.release(), n_e2.release(), n_e3.release());
+        auto* node = createBackgroundCopy(n_e0.release(), n_e1.release(), n_e2.release(), n_e3.release());
         node->returnTypeInfo = returnTypeInfo;
         return node;
     }
@@ -79,7 +82,8 @@ public:
     }
 
 protected:
-    template <bool Lexical>
+    //! Evaluates the operator; \a Generic is true if its result type has a type parameter (issue #5988)
+    template <bool Lexical, bool Generic = false>
     DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     const QoreTypeInfo* returnTypeInfo = nullptr;
 
@@ -94,10 +98,43 @@ protected:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
-    template <bool Lexical>
+    template <bool Lexical, bool Generic = false>
     DLLLOCAL QoreValue mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreHashNode* getNewHash() const;
+
+    //! Returns a new hash for the result with the type argument of the call in place of the type parameter
+    /** For an operator whose result type has a type parameter (issue #5988)
+    */
+    DLLLOCAL QoreHashNode* getNewGenericHash() const;
+
+    //! Returns a new operator of the class of this operator with the given operands for a background expression
+    DLLLOCAL virtual QoreHashMapSelectOperatorNode* createBackgroundCopy(QoreValue p0, QoreValue p1, QoreValue p2,
+            QoreValue p3) const {
+        return create(getSemanticPolicy(), loc, p0, p1, p2, p3);
+    }
+};
+
+//! A hash map select operator whose result type has a type parameter
+/** Its result has the type argument of the call in place of the type parameter; an operator is replaced by this
+    class when it is parsed, so the other operators keep their code path (issue #5988).  \a Lexical is the
+    lexical semantic policy of the operator, as for the other operators.
+*/
+template <bool Lexical>
+class QoreGenericHashMapSelectOperatorNode : public QoreHashMapSelectOperatorNode {
+public:
+    //! Takes over the operands and the parse state of the given operator
+    DLLLOCAL QoreGenericHashMapSelectOperatorNode(QoreHashMapSelectOperatorNode& old);
+
+    //! Creates an operator for a background expression
+    DLLLOCAL QoreGenericHashMapSelectOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1,
+            QoreValue p2, QoreValue p3);
+
+protected:
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreHashMapSelectOperatorNode* createBackgroundCopy(QoreValue p0, QoreValue p1, QoreValue p2,
+            QoreValue p3) const;
 };
 
 #endif // QOREHASHMAPSELECTOPERATORNODE_H

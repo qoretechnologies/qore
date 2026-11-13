@@ -38,6 +38,7 @@
 #include "qore/intern/FunctionalOperatorInterface.h"
 
 class QoreMapOperatorNode : public QoreBinaryOperatorNode<>, public FunctionalOperator {
+    friend class QoreGenericMapOperatorNode;
     friend class QoreFunctionalMapListOperator;
     friend class QoreFunctionalMapSingleValueOperator;
     friend class QoreFunctionalMapIteratorOperator;
@@ -108,6 +109,10 @@ protected:
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
+    //! Evaluates the operator; the element type of a list result has its type parameters substituted if generic
+    template <bool generic>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalIntern(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue evalFunc(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual ~QoreMapOperatorNode() {
@@ -120,6 +125,43 @@ protected:
     }
 
     DLLLOCAL QoreValue mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
+            ExceptionSink* xsink) const;
+
+    //! Returns the functional iterator of the operator; that of a generic operator substitutes its value type
+    template <bool generic>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* getFunctionalIteratorIntern(
+            FunctionalValueType& value_type, ExceptionSink* xsink) const;
+};
+
+//! A map operator whose element type has a type parameter, which is substituted with the type argument of the call when
+//! the result is created (issue #5988)
+/** A QoreGenericMapOperatorNode is created in place of a QoreMapOperatorNode when it is parsed, so that the other
+    operators keep their code path
+*/
+class QoreGenericMapOperatorNode : public QoreMapOperatorNode {
+public:
+    //! Takes the operands and the parse state of the parsed operator
+    DLLLOCAL QoreGenericMapOperatorNode(QoreMapOperatorNode& old);
+
+    //! Creates an operator for a background expression
+    DLLLOCAL QoreGenericMapOperatorNode(const QoreProgramLocation* loc, QoreValue l, QoreValue r)
+            : QoreMapOperatorNode(loc, l, r) {
+    }
+
+    DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
+        // a background expression keeps the class of the operator
+        QoreGenericMapOperatorNode* rv = copyBackgroundIterating<QoreGenericMapOperatorNode>(xsink, true);
+        if (!rv) {
+            return nullptr;
+        }
+        rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->right.getInternalNode());
+        return rv;
+    }
+
+protected:
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
             ExceptionSink* xsink) const;

@@ -836,6 +836,8 @@ static bool qore_infer_signature_type_args_runtime(const AbstractQoreFunctionVar
         explicit_inst);
 }
 
+static bool qore_named_position_filled(const std::vector<size_t>& source_to_param, size_t pi);
+
 namespace {
 struct DefaultCallMatchPolicy {
     qore_type_result_e match(const QoreTypeInfo* ti, QoreValue arg, int& quality, bool& elements,
@@ -896,7 +898,8 @@ QORE_INTERN_ALWAYS_INLINE QoreCallMatch match_call_arguments(const AbstractQoreF
             if (rc == QTI_NOT_EQUAL) {
                 return {};
             }
-            if (pi >= input.nargs) {
+            if (pi >= input.nargs
+                    || (input.named_positions && !qore_named_position_filled(*input.named_positions, pi))) {
                 rc = QTI_IGNORE;
             }
         }
@@ -967,18 +970,69 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
         return false;
     }
 
+    // the type parameters of generic methods belong to each signature: they correspond by position, so the type
+    // parameters of both signatures are given those of this signature, which normalizes both alike (qore#6018)
+    const UserSignature* ua = declaresTypeParameters() ? dynamic_cast<const UserSignature*>(this) : nullptr;
+    const UserSignature* ub = sig.declaresTypeParameters() ? dynamic_cast<const UserSignature*>(&sig) : nullptr;
+    QoreTypeParamInstantiation a_inst, b_inst;
+    if (ua || ub) {
+        if (!ua || !ub || ua->getTypeParameterCount() != ub->getTypeParameterCount()) {
+            return false;
+        }
+        a_inst.owner = ua;
+        b_inst.owner = ub;
+        for (size_t i = 0, e = ua->getTypeParameterCount(); i < e; ++i) {
+            a_inst.type_args.push_back(ua->getTypeParameterType(i));
+        }
+        b_inst.type_args = a_inst.type_args;
+        // the type parameters accept the same types: the same bounds
+        for (size_t i = 0, e = ua->getTypeParameterCount(); i < e; ++i) {
+            if (!QoreTypeInfo::equal(
+                    qore_substitute_type_params_if_needed(ua->getTypeParameterBoundTypeInfo(i), receiver, &a_inst),
+                    qore_substitute_type_params_if_needed(ub->getTypeParameterBoundTypeInfo(i), receiver, &b_inst))) {
+                return false;
+            }
+        }
+    }
+
     // the types of a generic class's abstract method are those of the specialization that the class inherits
-    auto sig_type = [receiver] (const QoreTypeInfo* ti) {
-        return receiver ? qore_substitute_type_params_if_needed(ti, receiver) : ti;
+    auto sig_type = [receiver, ub, &b_inst] (const QoreTypeInfo* ti) {
+        return (receiver || ub) ? qore_substitute_type_params_if_needed(ti, receiver, ub ? &b_inst : nullptr) : ti;
+    };
+    auto this_type = [ua, &a_inst] (const QoreTypeInfo* ti) {
+        return ua ? qore_substitute_type_params_if_needed(ti, nullptr, &a_inst) : ti;
+    };
+    // a type parameter of each method itself at the same position: the same type, with or without "*"
+    auto same_method_type_param = [ua, ub] (const QoreTypeInfo* ati, const QoreTypeInfo* bti, bool& same) -> bool {
+        if (!ua) {
+            return false;
+        }
+        const QoreTypeParameterTypeInfo* atp = qore_get_type_parameter_type_info(ati);
+        const QoreTypeParameterTypeInfo* btp = qore_get_type_parameter_type_info(bti);
+        if (!atp || !btp || atp->getOwnerSignature() != ua || btp->getOwnerSignature() != ub) {
+            return false;
+        }
+        same = atp->getIndex() == btp->getIndex() && atp->isOrNothing() == btp->isOrNothing();
+        return true;
     };
     const QoreTypeInfo* sig_return_type = sig_type(sig.returnTypeInfo);
 
     // return types for abstract methods must be compatible if present
-    if (sig_return_type != nothingTypeInfo) {
+    // a type parameter of each method at the same position: this signature may return it without "*" for "*" (a
+    // narrower type), as for any other return type
+    const QoreTypeParameterTypeInfo* rtp_this = ua ? qore_get_type_parameter_type_info(returnTypeInfo) : nullptr;
+    const QoreTypeParameterTypeInfo* rtp_sig = ua ? qore_get_type_parameter_type_info(sig.returnTypeInfo) : nullptr;
+    if (rtp_this && rtp_sig && rtp_this->getOwnerSignature() == ua && rtp_sig->getOwnerSignature() == ub) {
+        if (rtp_this->getIndex() != rtp_sig->getIndex() || (rtp_this->isOrNothing() && !rtp_sig->isOrNothing())) {
+            return false;
+        }
+    } else if (sig_return_type != nothingTypeInfo) {
         bool may_not_match = false;
-        qore_type_result_e res = QoreTypeInfo::parseAccepts(sig_return_type, returnTypeInfo, may_not_match);
+        qore_type_result_e res = QoreTypeInfo::parseAccepts(sig_return_type, this_type(returnTypeInfo),
+            may_not_match);
+        // a type parameter of a class (not of a method, whose owner is its signature)
         const QoreTypeParameterTypeInfo* rtpi = qore_get_type_parameter_type_info(sig_return_type);
-        bool raw_generic_type_param = rtpi
+        bool raw_generic_type_param = rtpi && rtpi->getOwnerClass()
             && qore_class_private::get(*rtpi->getOwnerClass())->rawConstructionDefaultsToAuto();
         if (!res || (may_not_match && !relaxed_match
                 // auto/any return types always accept any concrete return type
@@ -993,20 +1047,28 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
     }
 
     for (unsigned i = 0; i < typeList.size(); ++i) {
+        bool same_param = false;
+        if (i < sig.typeList.size() && same_method_type_param(typeList[i], sig.typeList[i], same_param)) {
+            if (!same_param) {
+                return false;
+            }
+            continue;
+        }
         const QoreTypeInfo* ti = sig.typeList.size() <= i
             ? nullptr
             : sig_type(sig.typeList[i]);
+        const QoreTypeInfo* this_ti = this_type(typeList[i]);
         bool match;
         if (relaxed_match) {
             //printd(5, "AbstractFunctionSignature::compare() param %d (%s =~ %s) %d\n", i,
             //    QoreTypeInfo::getName(typeList[i]), QoreTypeInfo::getName(ti),
             //    QoreTypeInfo::parseAccepts(typeList[i], ti));
-            match = QoreTypeInfo::parseAccepts(typeList[i], ti) >= QTI_WILDCARD;
+            match = QoreTypeInfo::parseAccepts(this_ti, ti) >= QTI_WILDCARD;
         } else {
             //printd(5, "AbstractFunctionSignature::compare() param %d (%s =~ %s) %d\n", i,
             //    QoreTypeInfo::getName(typeList[i]), QoreTypeInfo::getName(ti),
             //    QoreTypeInfo::runtimeTypeMatch(typeList[i], ti));
-            match = QoreTypeInfo::runtimeTypeMatch(typeList[i], ti) >= QTI_NEAR;
+            match = QoreTypeInfo::runtimeTypeMatch(this_ti, ti) >= QTI_NEAR;
         }
 
         if (!match) {
@@ -1081,16 +1143,54 @@ static void add_args(QoreString &desc, const QoreListNode* args) {
     }
 }
 
-CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+// SCU callers can build the call state directly: an out-of-line constructor needs all of its arguments
+// staged on the caller's stack. Keep the much larger init() out of line, with its shorter argument list.
+// In separate-compilation builds the constructor body is not visible to QoreClass.cpp and must be emitted.
+#if QORE_LIB_SINGLE_COMPILATION_UNIT
+#define QORE_CEH_CONSTRUCTOR_INLINE QORE_INTERN_ALWAYS_INLINE
+#else
+#define QORE_CEH_CONSTRUCTOR_INLINE
+#endif
+QORE_CEH_CONSTRUCTOR_INLINE CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+        const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
+        const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
+        QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags)
+    : ct(n_ct), call_flags(n_call_flags), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
+        loc(take_runtime_call_location()),
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        receiver_type_info(n_explicit_receiver_type_info),
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+    // Qore code must never be started on an async I/O thread answering a fast route
+    QORE_ASSERT_NOT_IN_FAST_ROUTE();
+    if (self && !self->isValid()) {
+        assert(n_qc);
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
+            "deleted", qc->name.c_str(), func->getName());
+        return;
+    }
+
+    setCallName(func);
+    // taken before the arguments are evaluated, so that a call in an argument expression does not take it
+    call_ref_po = rc_take_call_reference_call(n_rc, args);
+    tmp.assignEval(args);
+    if (*xsink) {
+        return;
+    }
+
+    init(func, variant, is_copy, cctx, self, pgm_ctx);
+}
+
+QORE_CEH_CONSTRUCTOR_INLINE CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
         const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
         const QoreClosureBase* n_closure)
-    : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
+    : ct(n_ct), call_flags(n_call_flags), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()),
-        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
-        explicit_receiver_type_info(n_explicit_receiver_type_info),
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation), closure(n_closure) {
     // Qore code must never be started on an async I/O thread answering a fast route
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
@@ -1117,10 +1217,10 @@ CodeEvaluationHelper::CodeEvaluationHelper(LexicalSemanticPolicy invocation_poli
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
         const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags)
-    : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
+    : ct(n_ct), call_flags(n_call_flags), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()),
-        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
-        explicit_receiver_type_info(n_explicit_receiver_type_info),
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     // Qore code must never be started on an async I/O thread answering a fast route
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
@@ -1142,17 +1242,17 @@ CodeEvaluationHelper::CodeEvaluationHelper(LexicalSemanticPolicy invocation_poli
     initImpl<true>(func, variant, is_copy, cctx, self, pgm_ctx, invocation_policy);
 }
 
-CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+QORE_CEH_CONSTRUCTOR_INLINE CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
         const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
         bool n_hide_call_site)
-    : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
+    : ct(n_ct), call_flags(n_call_flags), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(n_hide_call_site ? hide_runtime_call_site(hidden_call_site_slot, hidden_call_site)
             : take_runtime_call_location()),
-        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
-        explicit_receiver_type_info(n_explicit_receiver_type_info),
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     if (self && !self->isValid()) {
         assert(n_qc);
@@ -1172,17 +1272,87 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
+CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+        const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
+        const qore_class_private* n_qc, const qore_class_private* cctx, QoreProgram* pgm_ctx,
+        const QoreTypeInfo* n_explicit_receiver_type_info,
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
+        const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy)
+    : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
+        loc(take_runtime_call_location()), arg_names(&n_arg_names),
+        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
+        receiver_type_info(n_explicit_receiver_type_info),
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+    // Qore code must never be started on an async I/O thread answering a fast route
+    QORE_ASSERT_NOT_IN_FAST_ROUTE();
+    assert(!variant);
+    if (self && !self->isValid()) {
+        assert(n_qc);
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
+            "deleted", qc->name.c_str(), func->getName());
+        return;
+    }
+    setCallName(func);
+    // taken before the arguments are evaluated, so that a call in an argument expression does not take it
+    call_ref_po = rc_take_call_reference_call(n_rc, args);
+    tmp.assignEval(args);
+    if (*xsink) {
+        return;
+    }
+
+    // a legacy AST call resolves and calls the variant with its own semantic policy
+    if (invocation_policy.isDefault()) {
+        initImpl<false, true>(func, variant, false, cctx, self, pgm_ctx, {});
+    } else {
+        initImpl<true, true>(func, variant, false, cctx, self, pgm_ctx, invocation_policy);
+    }
+}
+
+CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+        const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
+        const qore_class_private* n_qc, const qore_class_private* cctx, QoreProgram* pgm_ctx,
+        const QoreTypeInfo* n_explicit_receiver_type_info,
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
+        const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy)
+    : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
+        loc(take_runtime_call_location()), arg_names(&n_arg_names),
+        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
+        receiver_type_info(n_explicit_receiver_type_info),
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+    assert(!variant);
+    if (self && !self->isValid()) {
+        assert(n_qc);
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
+            "deleted", qc->name.c_str(), func->getName());
+        return;
+    }
+    setCallName(func);
+    // taken before the arguments are evaluated, so that a call in an argument expression does not take it
+    call_ref_po = rc_take_call_reference_call(n_rc, args);
+    tmp.assignEval(args);
+    if (*xsink) {
+        return;
+    }
+
+    // a legacy AST call resolves and calls the variant with its own semantic policy
+    if (invocation_policy.isDefault()) {
+        initImpl<false, true>(func, variant, false, cctx, self, pgm_ctx, {});
+    } else {
+        initImpl<true, true>(func, variant, false, cctx, self, pgm_ctx, invocation_policy);
+    }
+}
+
 CodeEvaluationHelper::CodeEvaluationHelper(LexicalSemanticPolicy invocation_policy, ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
         const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
         bool n_hide_call_site)
-    : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
+    : ct(n_ct), call_flags(n_call_flags), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(n_hide_call_site ? hide_runtime_call_site(hidden_call_site_slot, hidden_call_site)
             : take_runtime_call_location()),
-        tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
-        explicit_receiver_type_info(n_explicit_receiver_type_info),
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     if (self && !self->isValid()) {
         assert(n_qc);
@@ -1201,6 +1371,8 @@ CodeEvaluationHelper::CodeEvaluationHelper(LexicalSemanticPolicy invocation_poli
 
     initImpl<true>(func, variant, is_copy, cctx, self, pgm_ctx, invocation_policy);
 }
+
+#undef QORE_CEH_CONSTRUCTOR_INLINE
 
 #ifdef DEBUG
 // how a QCF_NO_DOMAIN_THROW violation is reported; see qore_set_flag_violation_mode()
@@ -1360,7 +1532,7 @@ private:
 thread_local bool qore_dbg_runtime_chosen_variant = false;
 #endif
 
-template <bool LexicalInvocation>
+template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, bool is_copy, const qore_class_private* cctx,
         QoreObject* self, QoreProgram* pgm_ctx, LexicalSemanticPolicy invocation_policy) {
@@ -1375,9 +1547,9 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
-    receiver_type_info = explicit_receiver_type_info
-        ? explicit_receiver_type_info
-        : (self ? qore_get_object_receiver_type_info(self) : nullptr);
+    if (!receiver_type_info && self) {
+        receiver_type_info = qore_get_object_receiver_type_info(self);
+    }
     if (receiver_type_info) {
         old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
         restore_receiver_type_info = true;
@@ -1437,7 +1609,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     }
 
     bool runtime_resolved = !variant;
-    if (runtime_resolved && findVariantImpl<LexicalInvocation>(func, variant, cctx, invocation_policy)) {
+    if (runtime_resolved && findVariantImpl<LexicalInvocation, NAMED>(func, variant, cctx, invocation_policy)) {
         return;
     }
     PreparedCall prepared;
@@ -1652,7 +1824,28 @@ CodeEvaluationHelper::PreparedCall CodeEvaluationHelper::prepareCallArgumentsImp
     return {sig->getReturnTypeInfo(), true};
 }
 
-template <bool LexicalInvocation>
+// a named call resolved by parameter name: the call is made with the arguments bound to the parameters of the
+// selected variant; outside of findVariantImpl(), whose calls with positional arguments are hot
+__attribute__((noinline, cold)) int CodeEvaluationHelper::findVariantNamed(const QoreFunction* func,
+        const AbstractQoreFunctionVariant*& variant, const qore_class_private* class_ctx,
+        LexicalSemanticPolicy invocation_policy) {
+    QoreListNode* bound_args = nullptr;
+    // the variant filter and the domain check as for a call with positional arguments (see findVariantImpl())
+    variant = func->runtimeFindVariantNamed(xsink, getArgs(), call_flags & QRFV_MASK, class_ctx,
+        receiver_type_info, &type_param_instantiation, explicit_type_param_instantiation,
+        &variant_content_dependent, invocation_policy, call_ref_po ? call_ref_po : &caller_runtime_po,
+        call_ref_po ? nullptr : caller_code_pgm, *arg_names, &bound_args);
+    if (!variant) {
+        assert(*xsink);
+        assert(!bound_args);
+        return -1;
+    }
+    assert(bound_args);
+    tmp.assign(true, bound_args);
+    return 0;
+}
+
+template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const qore_class_private* cctx,
         LexicalSemanticPolicy invocation_policy) {
@@ -1661,17 +1854,23 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         class_ctx = nullptr;
     }
 
-    if constexpr (LexicalInvocation) {
+    if constexpr (NAMED) {
+        // a named call resolved by parameter name; out of line, as it is not on a call's common path
+        if (findVariantNamed(func, variant, class_ctx, invocation_policy)) {
+            return -1;
+        }
+    } else if constexpr (LexicalInvocation) {
         variant = func->runtimeFindVariant(xsink, getArgs(), call_flags & QRFV_MASK, class_ctx, receiver_type_info,
             &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent,
             invocation_policy, call_ref_po ? call_ref_po : &caller_runtime_po,
             call_ref_po ? nullptr : caller_code_pgm);
     } else {
-        // Keep the ordinary unfiltered search separate from the cold filtered search.
+        // Keep the ordinary unfiltered search separate from the cold filtered search; the search without named
+        // arguments is called directly so that the compiler can specialize it for this hot call
         variant = (call_flags & QRFV_MASK)
             ? findFilteredVariant(func, class_ctx)
-            : func->runtimeFindVariant(xsink, getArgs(), 0, class_ctx, receiver_type_info, &type_param_instantiation,
-                explicit_type_param_instantiation, &variant_content_dependent,
+            : func->runtimeFindVariantImpl<false, false>(xsink, getArgs(), 0, class_ctx, receiver_type_info,
+                &type_param_instantiation, explicit_type_param_instantiation, &variant_content_dependent, {},
                 call_ref_po ? call_ref_po : &caller_runtime_po, call_ref_po ? nullptr : caller_code_pgm);
     }
     if (!variant) {
@@ -1820,6 +2019,7 @@ static __attribute__((noinline, cold)) QoreValue qore_eval_closure_default_arg(c
 template <int ArgType, typename FilterPolicy>
 int CodeEvaluationHelper::prepareDefaultArgsImpl(ExceptionSink* xsink, AbstractFunctionSignature* sig,
         bool is_copy, QoreObject* self, std::unique_ptr<arg_restore_vec_t>* saved, FilterPolicy policy) {
+    assert(!restore_rtflags); // the closure/old_rtflags storage is still in its argument-preparation phase
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
 
@@ -2909,6 +3109,31 @@ static void do_call_str(QoreString &desc, const QoreFunction* func, const QoreLi
     desc.concat(')');
 }
 
+// the call with the names of its arguments and the types of their values
+static void do_named_runtime_call_str(QoreString& desc, const QoreFunction* func, const QoreListNode* args,
+        const name_vec_t& names, const QoreTypeInfo* receiver_type_info = nullptr, bool use_path = false) {
+    if (receiver_type_info) {
+        std::string target;
+        add_function_target_name(target, func, receiver_type_info, use_path);
+        desc.concat(target.c_str());
+        desc.concat('(');
+    } else {
+        do_call_name(desc, func);
+    }
+    size_t nargs = args ? args->size() : 0;
+    for (size_t i = 0; i < nargs; ++i) {
+        if (i < names.size() && !names[i].empty()) {
+            desc.sprintf("%s: ", names[i].c_str());
+        }
+        QoreString scratch;
+        desc.concat(args->retrieveEntry(i).getFullTypeName(true, scratch));
+        if (i != (nargs - 1)) {
+            desc.concat(", ");
+        }
+    }
+    desc.concat(')');
+}
+
 static void do_named_call_str(QoreString &desc, const QoreFunction* func, const type_vec_t& argTypeInfo,
         const name_vec_t& argNames, const type_vec_t* explicit_type_args = nullptr,
         const QoreTypeInfo* receiver_type_info = nullptr, bool use_path = false) {
@@ -3118,6 +3343,90 @@ static bool bind_named_call_args(const AbstractFunctionSignature* sig, const typ
         }
     }
     return true;
+}
+
+// the parameter positions of the arguments of a call with positional arguments: none are recorded, as each argument
+// is at its own position
+struct qore_no_named_positions {
+    DLLLOCAL bool operator!=(const qore_no_named_positions&) const {
+        return false;
+    }
+};
+
+// true for a call with positional arguments, whose arguments are at their own positions
+static constexpr bool qore_named_position_filled(const qore_no_named_positions&, size_t) {
+    return true;
+}
+
+// true if an argument of a named call is bound to the parameter position
+static bool qore_named_position_filled(const std::vector<size_t>& source_to_param, size_t pi) {
+    for (size_t p : source_to_param) {
+        if (p == pi) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// true if the signature has a parameter for each of the arguments and each of them only accepts no value
+static bool qore_signature_takes_only_nothing(const AbstractFunctionSignature* sig, size_t nargs) {
+    if (!nargs || sig->numParams() < nargs) {
+        return false;
+    }
+    for (size_t p = 0; p < nargs; ++p) {
+        if (sig->getParamTypeInfo(p) != nothingTypeInfo) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// binds the arguments of a named call, given in source order with their names ("" for a positional argument), to the
+// parameters of the signature by name; returns 0 and the arguments at the positions of the parameters that they are
+// bound to (a position without an argument has no value), or -1 if the names cannot be bound to the signature
+static int qore_bind_runtime_named_args(const AbstractFunctionSignature* sig, const name_vec_t& names,
+        const QoreListNode* args, ReferenceHolder<QoreListNode>& bound_args, std::vector<size_t>& source_to_param) {
+    size_t nargs = args ? args->size() : 0;
+    // the call has one name for each argument, also when an argument is NOTHING; a call read from an AOT binary is
+    // not trusted
+    if (nargs != names.size()) {
+        return -1;
+    }
+    // the rules of bind_named_call_args(): positional arguments first, each named argument to the parameter with
+    // its name after them, at most once
+    size_t num_params = sig->numParams();
+    std::vector<bool> supplied(std::max(num_params, nargs), false);
+    // the list is held by the caller's holder, which releases it also when the names cannot be bound
+    bound_args = new QoreListNode(autoTypeInfo);
+    source_to_param.resize(nargs);
+    size_t positional = 0;
+    bool seen_named = false;
+    for (size_t i = 0; i < nargs; ++i) {
+        size_t target;
+        if (names[i].empty()) {
+            if (seen_named) {
+                return -1;
+            }
+            target = positional++;
+        } else {
+            seen_named = true;
+            int pi = find_named_param(sig, names[i]);
+            if (pi < 0 || static_cast<size_t>(pi) < positional) {
+                return -1;
+            }
+            target = static_cast<size_t>(pi);
+        }
+        if (target >= supplied.size()) {
+            supplied.resize(target + 1, false);
+        }
+        if (supplied[target]) {
+            return -1;
+        }
+        supplied[target] = true;
+        source_to_param[i] = target;
+        bound_args->getEntryReference(target) = args->retrieveEntry(i).refSelf();
+    }
+    return 0;
 }
 
 static bool qore_bind_class_type_param(const QoreClass* cls, const QoreTypeParameterTypeInfo* tpi,
@@ -3634,6 +3943,24 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
     return rv->empty() ? nullptr : rv.release();
 }
 
+// holds the arguments bound to the parameters of a variant for a named call resolved by parameter name; empty for a
+// call with positional arguments
+template <bool NAMED>
+struct qore_named_bound_args_holder {
+    DLLLOCAL qore_named_bound_args_holder(ExceptionSink*) {
+    }
+};
+
+template <>
+struct qore_named_bound_args_holder<true> : public ReferenceHolder<QoreListNode> {
+    DLLLOCAL qore_named_bound_args_holder(ExceptionSink* xsink) : ReferenceHolder<QoreListNode>(xsink) {
+    }
+
+    DLLLOCAL void operator=(QoreListNode* nv) {
+        ReferenceHolder<QoreListNode>::operator=(nv);
+    }
+};
+
 // finds a variant at runtime
 // returns the domain bits of \a dom that the parse options \a po do not allow (QDOM_DEFAULT if all are allowed)
 static int64 qore_denied_domains(int64 dom, const QoreParseOptions& po) {
@@ -3682,19 +4009,45 @@ static void raise_invalid_function_access(ExceptionSink* xsink, const QoreFuncti
         variant->getSignature()->getSignatureText(), qore_describe_source_domains(denied).c_str());
 }
 
-template <bool LexicalInvocation>
+const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantNamed(ExceptionSink* xsink,
+        const QoreListNode* args, unsigned variant_filter, const qore_class_private* class_ctx,
+        const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
+        const QoreTypeParamInstantiation* explicit_type_param_inst, bool* content_dependent,
+        LexicalSemanticPolicy invocation_policy, const QoreParseOptions* user_dom_po,
+        const QoreProgram* user_dom_code_pgm, const name_vec_t& arg_names, QoreListNode** named_bound_args) const {
+    assert(named_bound_args);
+    // a legacy AST call resolves the variant with its own semantic policy, as a call with positional arguments
+    if (invocation_policy.isDefault()) {
+        return runtimeFindVariantImpl<false, true>(xsink, args, variant_filter, class_ctx, receiver_type_info,
+            type_param_inst, explicit_type_param_inst, content_dependent, {}, user_dom_po, user_dom_code_pgm,
+            &arg_names, named_bound_args);
+    }
+    return runtimeFindVariantImpl<true, true>(xsink, args, variant_filter, class_ctx, receiver_type_info,
+        type_param_inst, explicit_type_param_inst, content_dependent, invocation_policy, user_dom_po,
+        user_dom_code_pgm, &arg_names, named_bound_args);
+}
+
+template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantImpl(
         ExceptionSink* xsink, const QoreListNode* args, unsigned variant_filter, const qore_class_private* class_ctx,
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
         const QoreTypeParamInstantiation* explicit_type_param_inst, bool* content_dependent,
         LexicalSemanticPolicy invocation_policy, const QoreParseOptions* user_dom_po,
-        const QoreProgram* user_dom_code_pgm) const {
+        const QoreProgram* user_dom_code_pgm, const name_vec_t* arg_names, QoreListNode** named_bound_args) const {
+    assert(NAMED == static_cast<bool>(arg_names));
     if (type_param_inst) {
         type_param_inst->clear();
     }
     if (content_dependent) {
         *content_dependent = false;
     }
+    // for a named call resolved by parameter name: the arguments bound to the parameters of the selected variant
+    qore_named_bound_args_holder<NAMED> best_bound_args(xsink);
+    // for a named call resolved by parameter name: a variant that matches as well as the selected one and binds the
+    // arguments to other positions
+    const AbstractQoreFunctionVariant* tie_variant = nullptr;
+    // for a named call: the parameter positions of the arguments for the candidate and for the selected variant
+    std::conditional_t<NAMED, std::vector<size_t>, qore_no_named_positions> positions, best_positions;
     // every argument counts toward the number of arguments, also one with no value (issue #1897: an omitted
     // argument does not count, but an explicit NOTHING does, whether a literal or a variable); the parse-time
     // resolution counts the same arguments, except a lone literal NOTHING, which the parser drops (see make_args())
@@ -3721,7 +4074,6 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
 #endif
 
     const QoreFunction* aqf = nullptr;
-    AbstractFunctionSignature* sig = nullptr;
 
     // parent class while iterating
     const qore_class_private* last_class = nullptr;
@@ -3776,9 +4128,44 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
 
             ++cnt;
 
+            // the arguments of the variant: for a named call resolved by parameter name, the arguments bound to the
+            // variant's parameters by name; a variant to whose parameters they cannot be bound is not a candidate
+            const QoreListNode* vargs = args;
+            unsigned vnargs = nargs;
+            qore_named_bound_args_holder<NAMED> bound_args(xsink);
+            if constexpr (NAMED) {
+                // only a variant that accepts named arguments is a candidate (see QCF_NAMED_ARGS)
+                if (!(*i)->isNamedCallable()) {
+                    continue;
+                }
+                const AbstractFunctionSignature* sig = (*i)->getSignature();
+                assert(sig);
+                if (!qore_bind_runtime_named_args(sig, *arg_names, args, bound_args, positions)) {
+                    vargs = *bound_args;
+                    vnargs = vargs->size();
+                } else if (qore_signature_takes_only_nothing(sig, nargs)) {
+                    // a variant whose parameters at the positions of the arguments only accept no value (type
+                    // nothing) is given no value however they are named, as at parse time (see
+                    // parseNamedBindingConflict()): it takes the arguments as they are (ex: length(nothing str) for
+                    // length(bin: b) with a *binary b that has no value)
+                    bound_args = args ? args->listRefSelf() : new QoreListNode(autoTypeInfo);
+                    positions.resize(nargs);
+                    for (size_t p = 0; p < nargs; ++p) {
+                        positions[p] = p;
+                    }
+                } else {
+                    continue;
+                }
+            }
+
             QoreTypeParamInstantiation candidate_inst;
-            QoreCallMatchInput input{args, nargs, score, receiver_type_info, explicit_type_param_inst,
+            QoreCallMatchInput input{vargs, vnargs, score, receiver_type_info, explicit_type_param_inst,
                 candidate_inst, elements_checked};
+            if constexpr (NAMED) {
+                // a parameter that no named argument is bound to is given no value: its match is not counted, as for
+                // a parameter after the arguments of a positional call
+                input.named_positions = &positions;
+            }
             QoreCallMatch match;
             if constexpr (LexicalInvocation) {
                 match = (*i)->matchLexicalInvocationArguments(input, invocation_policy);
@@ -3790,6 +4177,9 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
                 if (type_param_inst) {
                     *type_param_inst = std::move(candidate_inst);
                 }
+                if constexpr (NAMED) {
+                    best_bound_args = bound_args.release();
+                }
                 break;
             }
             if (match.score < 0) {
@@ -3800,10 +4190,10 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
             const int pquality = match.quality;
 
             // check for extra args
-            if ((num_params < nargs) && strict_args && !uses_extra_args) {
+            if ((num_params < vnargs) && strict_args && !uses_extra_args) {
                 bool has_arg = false;
-                for (unsigned pi = num_params; pi < nargs; ++pi) {
-                    if (!args->retrieveEntry(pi).isNothing()) {
+                for (unsigned pi = num_params; pi < vnargs; ++pi) {
+                    if (!vargs->retrieveEntry(pi).isNothing()) {
                         has_arg = true;
                         break;
                     }
@@ -3827,8 +4217,18 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
                 if (type_param_inst) {
                     *type_param_inst = std::move(candidate_inst);
                 }
+                if constexpr (NAMED) {
+                    best_bound_args = bound_args.release();
+                    best_positions.swap(positions);
+                    tie_variant = nullptr;
+                }
 
                 score_len = num_params;
+            } else if (NAMED && pscore == score && pquality == score_quality
+                    && num_params == static_cast<unsigned>(score_len) && positions != best_positions) {
+                // a variant that takes the arguments at the same positions as the selected one is passed the same
+                // arguments: the first one is selected, as for a call with positional arguments
+                tie_variant = *i;
             }
         }
         // issue 1229: stop searching the class hierarchy if a match found
@@ -3847,9 +4247,28 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
         *content_dependent = elements_checked;
     }
 
+    // a named call that two variants with other parameter names match equally well is ambiguous: the arguments are
+    // bound by name, and the declaration order of the variants does not decide which one is called
+    if (NAMED && variant && tie_variant) {
+        if (!(variant_filter & QRFV_ONLY_USER)) {
+            QoreStringNode* desc = new QoreStringNode("named call '");
+            do_named_runtime_call_str(*desc, this, args, *arg_names, receiver_type_info, true);
+            desc->sprintf("' is ambiguous: %s(%s) and %s(%s) match its arguments bound by name equally well; give "
+                "the arguments types that only one of the variants accepts, or use positional arguments", getName(),
+                variant->getSignature()->getSignatureText(), getName(),
+                tie_variant->getSignature()->getSignatureText());
+            xsink->raiseException("RUNTIME-OVERLOAD-ERROR", desc);
+        }
+        return nullptr;
+    }
+
     if (!variant && !(variant_filter & QRFV_ONLY_USER)) {
         QoreStringNode* desc = new QoreStringNode("no variant matching '");
-        do_call_str(*desc, this, args, receiver_type_info, true);
+        if (arg_names) {
+            do_named_runtime_call_str(*desc, this, args, *arg_names, receiver_type_info, true);
+        } else {
+            do_call_str(*desc, this, args, receiver_type_info, true);
+        }
         desc->concat("' can be found; ");
 
         if (!cnt) {
@@ -3914,6 +4333,14 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
         }
     }
 
+    // the arguments bound to the parameters of the selected variant are returned only with the variant
+    if constexpr (NAMED) {
+        if (variant) {
+            assert(*best_bound_args);
+            *named_bound_args = best_bound_args.release();
+        }
+    }
+
     //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s() returning %p %s(%s) class: %s\n", this, getName(), variant, getName(), variant ? variant->getSignature()->getSignatureText() : "n/a", variant && aqf && aqf->className() ? aqf->className() : "n/a");
 
     return variant;
@@ -3922,9 +4349,16 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
         unsigned variant_filter, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
-        bool* content_dependent, const QoreParseOptions* user_dom_po,
-        const QoreProgram* user_dom_code_pgm) const {
-    return runtimeFindVariantImpl<false>(xsink, args, variant_filter, class_ctx, receiver_type_info,
+        bool* content_dependent, const QoreParseOptions* user_dom_po, const QoreProgram* user_dom_code_pgm,
+        const name_vec_t* arg_names, QoreListNode** named_bound_args) const {
+    assert(!arg_names == !named_bound_args);
+    // a call with positional arguments has a copy of the resolution without the binding of named arguments
+    if (arg_names) {
+        return runtimeFindVariantNamed(xsink, args, variant_filter, class_ctx, receiver_type_info, type_param_inst,
+            explicit_type_param_inst, content_dependent, {}, user_dom_po, user_dom_code_pgm, *arg_names,
+            named_bound_args);
+    }
+    return runtimeFindVariantImpl<false, false>(xsink, args, variant_filter, class_ctx, receiver_type_info,
         type_param_inst, explicit_type_param_inst, content_dependent, {}, user_dom_po, user_dom_code_pgm);
 }
 
@@ -3933,7 +4367,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
         bool* content_dependent, LexicalSemanticPolicy invocation_policy, const QoreParseOptions* user_dom_po,
         const QoreProgram* user_dom_code_pgm) const {
-    return runtimeFindVariantImpl<true>(xsink, args, variant_filter, class_ctx, receiver_type_info,
+    return runtimeFindVariantImpl<true, false>(xsink, args, variant_filter, class_ctx, receiver_type_info,
         type_param_inst, explicit_type_param_inst, content_dependent, invocation_policy, user_dom_po, user_dom_code_pgm);
 }
 
@@ -4257,7 +4691,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         int& err, QoreNamedArgBinding& binding, const QoreTypeInfo* receiver_type_info,
         QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args,
         const arg_value_vec_t* args_with_value,
-        const QoreTypeInfo** deferred_rt) const {
+        const QoreTypeInfo** deferred_rt, bool allow_runtime_names) const {
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -4288,6 +4722,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
     int named_callable_cnt = 0;
     int unsupported_cnt = 0;
     int varargs_only_cnt = 0;
+    // set if no variant is selected because another one matches the arguments exactly as well (a tie); otherwise a
+    // variant that matches worse leaves the selection to the resolution at run time, as for positional arguments
+    bool tie = false;
     NamedArgBindFailure best_failure;
 
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
@@ -4482,12 +4919,16 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 score_len = sig->numParams();
                 omitted_defaultable = cb.omitted_defaultable;
                 variant = *i;
+                tie = false;
                 best_type_param_inst = candidate_inst;
                 best_binding = std::move(cb);
             } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
                 if (variant_soft_match && variant) {
                     has_possible_match = true;
                 } else {
+                    if (pscore == score && variant_nperfect == nperfect) {
+                        tie = true;
+                    }
                     variant = nullptr;
                     pmatch = variant_pmatch;
                     // the match is ambiguous and is resolved at runtime: score_len keeps the length of the best
@@ -4690,6 +5131,21 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         }
         return rv;
     };
+    // a call that can bind its arguments at run time is resolved by binding them by name to each candidate variant
+    // (QoreFunction::runtimeFindVariant()) when the variants that could be selected name their parameters
+    // differently
+    auto bind_at_runtime = [&] () {
+        binding.runtime_names = true;
+        binding.variant = nullptr;
+        binding.source_to_param.clear();
+        binding.result_size = 0;
+        if (type_param_inst) {
+            type_param_inst->clear();
+        }
+        if (deferred_rt) {
+            *deferred_rt = parseRuntimeNamedReturnType(argTypeInfo, argNames, class_ctx, po);
+        }
+    };
     auto conflict_error = [&] (const AbstractQoreFunctionVariant* bind_variant,
             const AbstractQoreFunctionVariant* conflict) {
         if (!pgm->getParseExceptionSink()) {
@@ -4712,7 +5168,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         const AbstractQoreFunctionVariant* conflict = parseNamedBindingConflict(variant, best_binding.arg_types,
             best_binding.supplied, pwv, true, class_ctx, po);
         if (conflict) {
-            conflict_error(variant, conflict);
+            if (allow_runtime_names) {
+                bind_at_runtime();
+            } else {
+                conflict_error(variant, conflict);
+            }
             return nullptr;
         }
         binding.variant = variant;
@@ -4724,6 +5184,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 deferred_rt ? &union_rt : nullptr)) {
             printd(5, "QoreFunction::parseFindVariantNamed() %s(): another variant could match at run time\n",
                 getName());
+            if (allow_runtime_names) {
+                // resolved at run time by binding the arguments by name to each candidate variant
+                bind_at_runtime();
+                return nullptr;
+            }
             if (deferred_rt) {
                 *deferred_rt = union_rt;
             }
@@ -4732,12 +5197,35 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 type_param_inst->clear();
             }
         }
+    } else if (runtime_match && first_bound && allow_runtime_names) {
+        // resolved at run time by binding the arguments by name to each candidate variant: a binding chosen here
+        // could leave a parameter without an argument that another variant takes by name
+        bind_at_runtime();
+    } else if (!variant && !binding.variant && !err && allow_runtime_names) {
+        // the arguments match several variants equally well: with arguments that always have a value of a known
+        // type, the variants match them equally well at run time too, and the call stays ambiguous (the caller
+        // raises NAMED-CALL-NOT-SUPPORTED); otherwise their values decide at run time
+        bool all_known = true;
+        for (size_t i = 0, e = argTypeInfo.size(); all_known && i < e; ++i) {
+            const QoreTypeInfo* t = argTypeInfo[i];
+            all_known = QoreTypeInfo::hasType(t) && QoreTypeInfo::parseReturns(t, NT_NOTHING) == QTI_NOT_EQUAL
+                && args_with_value && i < args_with_value->size() && (*args_with_value)[i];
+        }
+        // qore#5990: arguments that match one variant better than the others (as an int matches an int parameter
+        // better than a float parameter) select it at run time, as positional arguments do
+        if (!all_known || !tie) {
+            bind_at_runtime();
+        }
     } else if (runtime_match && first_bound) {
         arg_value_vec_t pwv = param_with_value(first_binding.supplied.size(), first_binding.source_to_param);
         const AbstractQoreFunctionVariant* conflict = parseNamedBindingConflict(first_bound, first_binding.arg_types,
             first_binding.supplied, pwv, false, class_ctx, po);
         if (conflict) {
-            conflict_error(first_bound, conflict);
+            if (allow_runtime_names) {
+                bind_at_runtime();
+            } else {
+                conflict_error(first_bound, conflict);
+            }
             return nullptr;
         }
         binding.source_to_param = std::move(first_binding.source_to_param);
@@ -5169,6 +5657,55 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
         }
     }
     return found;
+}
+
+const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo,
+        const name_vec_t& argNames, const qore_class_private* class_ctx, QoreParseOptions po) const {
+    const QoreTypeInfo* rv = nullptr;
+    bool found = false;
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop;
+        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            const AbstractQoreFunctionVariant* v = *i;
+            if ((last_class && skip_method_variant(v, class_ctx, internal_access)) || !v->isNamedCallable()) {
+                continue;
+            }
+            bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+            if (strict_args && (v->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                continue;
+            }
+            AbstractFunctionSignature* sig = v->getSignature();
+            NamedArgCandidateBinding cb;
+            NamedArgBindFailure failure;
+            if (!bind_named_call_args(sig, argTypeInfo, argNames, cb, failure)
+                    && !qore_signature_takes_only_nothing(sig, argTypeInfo.size())) {
+                continue;
+            }
+            // the return type of a generic variant depends on its type arguments, which are not known here
+            const UserVariantBase* uvb = v->getUserVariantBase();
+            if (sig->needsTypeParameterSubstitution()
+                    || (uvb && uvb->getUserSignature() && uvb->getUserSignature()->getTypeParameterCount())) {
+                return nullptr;
+            }
+            const QoreTypeInfo* vrt = v->parseGetReturnTypeInfo();
+            rv = found ? qore_union_return_type(rv, vrt) : vrt;
+            found = true;
+            // a variant without a return type, or return types that have no union: the type is not known
+            if (!rv) {
+                return nullptr;
+            }
+        }
+        if (stop) {
+            break;
+        }
+    }
+    return rv;
 }
 
 const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
@@ -5800,11 +6337,12 @@ private:
 
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
 // identified at run time
-template <bool LexicalInvocation>
+template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreFunction::evalFunctionImpl(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags,
-        LexicalSemanticPolicy invocation_policy) const {
+        LexicalSemanticPolicy invocation_policy, const name_vec_t* arg_names) const {
+    assert(NAMED == static_cast<bool>(arg_names));
     const char* fname = getName();
 
     // issue #3027: catch recursive references during parse initialization
@@ -5840,7 +6378,16 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreFunction::evalFunctionImpl(const Abstrac
     }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
-    if constexpr (LexicalInvocation) {
+    if constexpr (NAMED) {
+        // the call's semantic policy (a legacy AST call) is applied by the helper (see initImpl())
+        CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, call_pgm_entry.getArgs(args), nullptr, nullptr,
+            nullptr, exec_pgm, nullptr, explicit_type_param_instantiation, call_flags, *arg_names, invocation_policy);
+        if (*xsink) {
+            return QoreValue();
+        }
+        return invocation_policy.isDefault() ? variant->evalFunction(xsink, ceh)
+            : variant->evalLexicalFunction(xsink, ceh);
+    } else if constexpr (LexicalInvocation) {
         CodeEvaluationHelper ceh(invocation_policy, xsink, rc, this, variant, fname, call_pgm_entry.getArgs(args), nullptr, nullptr,
             CT_UNUSED, false, nullptr, exec_pgm, nullptr, explicit_type_param_instantiation, call_flags);
         if (*xsink) {
@@ -5870,13 +6417,21 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
     return evalFunctionImpl<true>(variant, args, pgm, rc, xsink, explicit_type_param_instantiation, call_flags, invocation_policy);
 }
 
+QoreValue QoreFunction::evalFunctionNamed(const QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
+        ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        unsigned call_flags, const name_vec_t& arg_names, LexicalSemanticPolicy invocation_policy) const {
+    return evalFunctionImpl<false, true>(nullptr, args, pgm, rc, xsink, explicit_type_param_instantiation,
+        call_flags, invocation_policy, &arg_names);
+}
+
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL, then it is
 // identified at run time
-template <bool LexicalInvocation>
+template <bool LexicalInvocation, bool NAMED>
 QORE_INTERN_ALWAYS_INLINE QoreValue QoreFunction::evalFunctionTmpArgsImpl(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags,
-        LexicalSemanticPolicy invocation_policy) const {
+        LexicalSemanticPolicy invocation_policy, const name_vec_t* arg_names) const {
+    assert(NAMED == static_cast<bool>(arg_names));
     const char* fname = getName();
     // a user function runs in the Program that defined it, as a method runs in its class's (see
     // qore_get_function_pgm_context()); the holder keeps that Program until the call has left it
@@ -5893,7 +6448,16 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreFunction::evalFunctionTmpArgsImpl(const 
     }
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
-    if constexpr (LexicalInvocation) {
+    if constexpr (NAMED) {
+        // the call's semantic policy (a legacy AST call) is applied by the helper (see initImpl())
+        CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, nullptr, exec_pgm, nullptr,
+            explicit_type_param_instantiation, call_flags, *arg_names, invocation_policy);
+        if (*xsink) {
+            return QoreValue();
+        }
+        return invocation_policy.isDefault() ? variant->evalFunction(xsink, ceh)
+            : variant->evalLexicalFunction(xsink, ceh);
+    } else if constexpr (LexicalInvocation) {
         CodeEvaluationHelper ceh(invocation_policy, xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
             exec_pgm, nullptr, explicit_type_param_instantiation, call_flags);
         if (*xsink) {
@@ -5921,6 +6485,13 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags,
         LexicalSemanticPolicy invocation_policy) const {
     return evalFunctionTmpArgsImpl<true>(variant, args, pgm, rc, xsink, explicit_type_param_instantiation, call_flags, invocation_policy);
+}
+
+QoreValue QoreFunction::evalFunctionTmpArgsNamed(QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
+        ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        unsigned call_flags, const name_vec_t& arg_names, LexicalSemanticPolicy invocation_policy) const {
+    return evalFunctionTmpArgsImpl<false, true>(nullptr, args, pgm, rc, xsink, explicit_type_param_instantiation,
+        call_flags, invocation_policy, &arg_names);
 }
 
 // finds a variant and checks variant capabilities against current
@@ -6373,6 +6944,9 @@ QoreSpecializedIRRef qore_ref_helper_specialization(const QoreIRFunction* helper
 
 void qore_free_specialized_ir(QoreSpecializedIR* s) {
     qore_live_generic_specializations.fetch_sub(1, std::memory_order_relaxed);
+    // no call runs the specialization any more: its native code is removed before the IR that the code refers to is
+    // deleted (qore#5772)
+    QoreJIT::instance().releaseCodeOwner(s);
     delete s->ir;
     delete s;
 }
@@ -7297,7 +7871,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     // the final IR: the interpreter makes the check of a call's target in the load of the target (issue #5784)
     qore_ir_fuse_call_target_checks(*func);
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu\n",
+        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu constant-loads=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -7321,7 +7895,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             optimization_stats.pure_calls_folded,
             optimization_stats.pure_calls_commoned,
             optimization_stats.redundant_phis_eliminated,
-            optimization_stats.return_checks_elided);
+            optimization_stats.return_checks_elided,
+            optimization_stats.constant_containers_loaded);
     }
 
     if (q_env_is_set("QORE_IR_CONTEXT_STATS")) {
@@ -8000,6 +8575,24 @@ void UserVariantBase::attemptJITRecompilation() const {
         jit_recompile_state.store(0, std::memory_order_release);
         return;
     }
+    // released on every path, also when the compile throws (qore#5772: the lock holder is marked while it holds it);
+    // a compile that throws is recorded as failed, as one that returns an error is
+    struct CompileLockRelease {
+        std::atomic<int>& state;
+        bool held = true;
+        void release() {
+            if (held) {
+                held = false;
+                QoreJIT::instance().releaseCompileLock();
+            }
+        }
+        ~CompileLockRelease() {
+            if (held) {
+                release();
+                state.store(2, std::memory_order_release);
+            }
+        }
+    } compile_lock_release{jit_recompile_state};
 
     // Demote to IR tier while recompiling
     cached_jit_fn.store(nullptr, std::memory_order_release);
@@ -8018,14 +8611,14 @@ void UserVariantBase::attemptJITRecompilation() const {
     std::string error;
     if (!QoreJIT::instance().compileFunctionLocked(*ir, error,
             const_cast<void*>(static_cast<const void*>(&deopt_count)), &lookup_name)) {
-        QoreJIT::instance().releaseCompileLock();
+        compile_lock_release.release();
         jit_recompile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' failed: %s\n",
             orig_name.c_str(), error.c_str());
         return;
     }
     JitFunctionPtr fn = QoreJIT::instance().lookupFunction(lookup_name);
-    QoreJIT::instance().releaseCompileLock();
+    compile_lock_release.release();
     if (!fn) {
         jit_recompile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' lookup failed\n",
@@ -8118,7 +8711,11 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     }
     // counted while it lives, for the debug checks of the cache eviction (issue #5765)
     qore_live_generic_specializations.fetch_add(1, std::memory_order_relaxed);
-    QoreSpecializedIRRef rv(new QoreSpecializedIR(ir.release()));
+    QoreSpecializedIR* entry = new QoreSpecializedIR(ir.get());
+    // the native code compiled from the specialization is its own, and is removed when it is freed (qore#5772)
+    ir->jit_owner = entry;
+    ir.release();
+    QoreSpecializedIRRef rv(entry);
     // a thread that runs a background helper of the specialization takes a reference to it
     qore_mark_specialization_helpers(*rv.get(), rv.getEntry());
     SpecializedIRCache* registration;
