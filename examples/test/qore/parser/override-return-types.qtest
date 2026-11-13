@@ -115,6 +115,12 @@ class Base {
             "int sub u() { NB o = new ND(); return o.m(1, \"x\"); }\n", "named overloads");
         assertEq(42, p.callFunction("t"), "a compatible return type");
         assertEq(1, p.callFunction("u"), "the positional call");
+        # a call with a positional argument and a named one: p.m(1, b: "s") binds the first argument by position in
+        # each variant and selects MC::m(int x, int y = 0, string b)
+        assertRejected("class MP { int m(int a, string b) { return 1; } } "
+            "class MC inherits MP { string m(int x, int y = 0, string b) { return \"c\"; } }",
+            "MC::m\\(int x, int y = 0, string b\\) returning string cannot overload parent class method "
+            "MP::m\\(int a, string b\\) returning int: it accepts the names", "a positional and a named argument");
         # a call of the parent class variant without its optional parameter (by position or by name) can select it
         assertRejected("class OB { int m(int a, *string b) { return 1; } } "
             "class OC inherits OB { string m(int a, binary x = <00>) { return \"c\"; } }",

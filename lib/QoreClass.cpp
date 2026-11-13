@@ -6909,11 +6909,15 @@ static bool final_variant_may_be_bypassed(const AbstractFunctionSignature* other
 
 //! Returns true if a named call that the variant \a fv accepts could select the other variant (qore#5990)
 /** A named call is resolved on the class of the object, which takes the first variant that accepts the names and the
-    arguments: the other variant can be selected for a call of \a fv if both accept named calls and a set of names
-    that a call of \a fv can give (every required parameter of \a fv and none that it does not have) is also one that
-    the other variant accepts (it has a parameter of each name and no other required parameter), with parameter types
-    of the same name that can accept a common value.  The set with the required parameters of both variants is the
-    smallest such set; if neither has a required parameter, a call with any one name of both can select it.
+    arguments.  A call gives its first \c k arguments by position, which each variant binds to its first \c k
+    parameters, and the rest by name, which each variant binds to its parameters of those names after the first \c k.
+    The other variant can be selected for a call of \a fv with a name if, for some \c k, the parameter types at the
+    first \c k positions can accept a common value, and a set of names that a call of \a fv can give (every required
+    parameter of \a fv after the first \c k and none that it does not have there) is also one that the other variant
+    accepts (it has a parameter of each name after its first \c k and no other required parameter there), with
+    parameter types of the same name that can accept a common value.  The set with the required parameters of both
+    variants is the smallest such set; if neither has a required parameter after the first \c k, a call with any one
+    name of both can select it (a call without a name is a positional call; see final_variant_may_be_bypassed()).
 */
 static bool named_variant_may_be_selected(const AbstractQoreFunctionVariant* other,
         const AbstractQoreFunctionVariant* fv) {
@@ -6922,9 +6926,9 @@ static bool named_variant_may_be_selected(const AbstractQoreFunctionVariant* oth
     }
     const AbstractFunctionSignature* osig = other->getSignature();
     const AbstractFunctionSignature* fsig = fv->getSignature();
-    // the position of each parameter of the other variant by name
-    auto find_param = [](const AbstractFunctionSignature* sig, const char* name) -> int {
-        for (unsigned i = 0, e = sig->numParams(); i < e; ++i) {
+    // the position of the parameter of the name at or after the position \a k, or -1
+    auto find_param = [](const AbstractFunctionSignature* sig, const char* name, unsigned k) -> int {
+        for (unsigned i = k, e = sig->numParams(); i < e; ++i) {
             const char* n = sig->getName(i);
             if (n && *n && !strcmp(n, name)) {
                 return static_cast<int>(i);
@@ -6932,40 +6936,54 @@ static bool named_variant_may_be_selected(const AbstractQoreFunctionVariant* oth
         }
         return -1;
     };
-    bool any_required = false;
-    // every required parameter of fv must be a parameter of the other variant with a type that can accept a value
-    // of fv's parameter type
-    for (unsigned i = 0, e = fsig->numParams(); i < e; ++i) {
-        if (final_param_optional(fsig, i)) {
-            continue;
+    // the names after the first k parameters
+    auto names_match = [&](unsigned k) -> bool {
+        bool any_required = false;
+        // every required parameter of fv must be a parameter of the other variant with a type that can accept a value
+        // of fv's parameter type
+        for (unsigned i = k, e = fsig->numParams(); i < e; ++i) {
+            if (final_param_optional(fsig, i)) {
+                continue;
+            }
+            const char* n = fsig->getName(i);
+            int oi = n && *n ? find_param(osig, n, k) : -1;
+            if (oi < 0 || !final_param_types_intersect(osig->getParamTypeInfo(oi), fsig->getParamTypeInfo(i))) {
+                return false;
+            }
+            any_required = true;
         }
-        const char* n = fsig->getName(i);
-        int oi = n && *n ? find_param(osig, n) : -1;
-        if (oi < 0 || !final_param_types_intersect(osig->getParamTypeInfo(oi), fsig->getParamTypeInfo(i))) {
-            return false;
+        // every required parameter of the other variant must be a parameter of fv
+        for (unsigned i = k, e = osig->numParams(); i < e; ++i) {
+            if (final_param_optional(osig, i)) {
+                continue;
+            }
+            const char* n = osig->getName(i);
+            int fi = n && *n ? find_param(fsig, n, k) : -1;
+            if (fi < 0 || !final_param_types_intersect(osig->getParamTypeInfo(i), fsig->getParamTypeInfo(fi))) {
+                return false;
+            }
+            any_required = true;
         }
-        any_required = true;
-    }
-    // every required parameter of the other variant must be a parameter of fv
-    for (unsigned i = 0, e = osig->numParams(); i < e; ++i) {
-        if (final_param_optional(osig, i)) {
-            continue;
+        if (any_required) {
+            return true;
         }
-        const char* n = osig->getName(i);
-        int fi = n && *n ? find_param(fsig, n) : -1;
-        if (fi < 0 || !final_param_types_intersect(osig->getParamTypeInfo(i), fsig->getParamTypeInfo(fi))) {
-            return false;
+        // no required parameter: a call with one name that both have
+        for (unsigned i = k, e = fsig->numParams(); i < e; ++i) {
+            const char* n = fsig->getName(i);
+            int oi = n && *n ? find_param(osig, n, k) : -1;
+            if (oi >= 0 && final_param_types_intersect(osig->getParamTypeInfo(oi), fsig->getParamTypeInfo(i))) {
+                return true;
+            }
         }
-        any_required = true;
-    }
-    if (any_required) {
-        return true;
-    }
-    // no required parameter: a call with one name that both have
-    for (unsigned i = 0, e = fsig->numParams(); i < e; ++i) {
-        const char* n = fsig->getName(i);
-        int oi = n && *n ? find_param(osig, n) : -1;
-        if (oi >= 0 && final_param_types_intersect(osig->getParamTypeInfo(oi), fsig->getParamTypeInfo(i))) {
+        return false;
+    };
+    // the first k arguments given by position, bound to the first k parameters of both
+    unsigned max_k = QORE_MIN(osig->numParams(), fsig->numParams());
+    for (unsigned k = 0; k <= max_k; ++k) {
+        if (k && !final_param_types_intersect(osig->getParamTypeInfo(k - 1), fsig->getParamTypeInfo(k - 1))) {
+            break;
+        }
+        if (names_match(k)) {
             return true;
         }
     }

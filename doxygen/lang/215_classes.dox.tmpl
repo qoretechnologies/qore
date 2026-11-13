@@ -475,8 +475,9 @@ int id = d.getId();          # OK
       accepts: a narrower or broader parameter type, an untyped parameter, an optional extra parameter or variable
       arguments; a variant whose parameters accept none of the same arguments is allowed
     - a variant of the same name that a @ref named_arguments_virtual_dispatch "named call" of the
-      <b><tt>final</tt></b> variant can select: it accepts the names of its parameters with types that can accept the
-      same values, such as <tt>m(string b, int a)</tt> for a <b><tt>final</tt></b> <tt>m(int a, string b)</tt>
+      <b><tt>final</tt></b> variant can select: it accepts the names of its parameters (after the arguments given by
+      position) with types that can accept the same values, such as <tt>m(string b, int a)</tt> for a
+      <b><tt>final</tt></b> <tt>m(int a, string b)</tt>
     - a parent class listed before the class with the <b><tt>final</tt></b> method that declares or inherits a method
       of the same name, as the subclass's calls of the name are then resolved in that method, or one of its variants
       is selected first
