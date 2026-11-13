@@ -24064,6 +24064,18 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     // handlers cannot be lowered, the image has no debug IR for the top-level code, which then runs
                     // as native code while a debugger is attached, as before
                     if (ir_func->emit_debug_statements) {
+                        // the runtime binds each local slot of the debug IR to the variable of the native code's
+                        // slot with the same ID (the AOT context's locals, in the order of buildAOTSlotMap()), so the
+                        // debug IR takes the native code's slots: assigned in the order of its own instructions, they
+                        // differed when a closure-bound local is instantiated before the locals that the native code
+                        // gives slots first (its InstantiateLocal takes no native slot), and the debug IR then read
+                        // and wrote other variables, as a foreach variable that got the catch variable (qore#6043)
+                        for (const auto& [lv, slot_id] : slots.local_slots) {
+                            if (lv && slot_id >= 0) {
+                                ir_func->local_var_slots[static_cast<const LocalVar*>(lv)]
+                                    = static_cast<uint32_t>(slot_id);
+                            }
+                        }
                         ir_func->computeSlotIdsAndEmbed();
                         std::string handler_error;
                         if (lowering.compileAllHandlerIRs(handler_error) < 0) {
