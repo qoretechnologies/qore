@@ -1878,8 +1878,8 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         return -1;
     }
 
-    // check for accessible variants: only of a method (a closure created in a class has the class but its variant is
-    // not a method variant)
+    // check for accessible variants: only of a method; a closure created in a class has the class (qc), but its
+    // variant is not a method variant
     if (qc && func->getClass()) {
         const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
         ClassAccess va = mv->getAccess();
