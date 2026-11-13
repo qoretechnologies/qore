@@ -3943,7 +3943,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     QoreValue expr = fromBits(ctx->exprs[idx]);
     if (expr.hasNode()) {
-        if (auto* node = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode())) {
+        if (auto* node = qore_get_runtime_constant_ref_node(expr.getInternalNode())) {
             return qore_rt_load_constant(node, xsink);
         }
     }
@@ -11297,7 +11297,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     // Phase 5: Fast-call detection for builtins
     // Skip QoreListNode allocation for builtins with fast-call variants; only for a call of the Qore builtin, never of
     // a user or module function with the same name, and each fast path returns what the builtin returns
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
+    if (auto* call = qore_get_function_call_node(expr.getInternalNode())) {
         const char* fname = qore_rt_is_qore_builtin_function(call->getFunctionEntry()) ? call->getName() : nullptr;
         if (fname) {
             // Zero-argument fast-call functions (highest priority - no arg unpacking needed)
@@ -11373,7 +11373,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     bool used_operands = false;
     QoreValue result;
 
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
+    if (auto* call = qore_get_function_call_node(expr.getInternalNode())) {
         QoreValue call_expr(new FunctionCallNode(*call, arg_list.release()));
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
@@ -15171,7 +15171,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int
             bool needs_deref = true;
             return toBits(expr.eval(needs_deref, xsink));
         }
-        if (auto* fcn = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
+        if (auto* fcn = qore_get_function_call_node(expr.getInternalNode())) {
             const char* name = fcn->getName();
             if (name && !strcmp(name, "create_object")) {
                 bool needs_deref = true;
@@ -22108,7 +22108,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_function_call_aot(
     if (!bg_op) {
         return 0;
     }
-    auto* fcn = dynamic_cast<const FunctionCallNode*>(bg_op->getExp().getInternalNode());
+    auto* fcn = qore_get_function_call_node(bg_op->getExp().getInternalNode());
     if (!fcn) {
         xsink->raiseException("AOT-BACKGROUND-ERROR",
             "background expression slot %d is not a function call", slot);

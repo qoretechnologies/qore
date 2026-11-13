@@ -516,6 +516,24 @@ Base* qore_make_function_call(LexicalSemanticPolicy policy, Args&&... args) {
 DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
         const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant);
 
+//! Returns the node as a FunctionCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const FunctionCallNode*>(), from the node type: a FunctionCallNode has
+    NT_FUNCTION_CALL and its only subclass, ProgramFunctionCallNode, NT_PROGRAM_FUNC_CALL (the lexical variants made
+    by qore_make_function_call() keep the type of their base class).  A dynamic_cast searches the class hierarchy with
+    string comparisons of the type names, which is too slow for the interpreter's per-call paths.
+*/
+DLLLOCAL inline const FunctionCallNode* qore_get_function_call_node(const AbstractQoreNode* n) {
+    if (!n) {
+        return nullptr;
+    }
+    qore_type_t t = n->getType();
+    const FunctionCallNode* rv = (t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL)
+        ? static_cast<const FunctionCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const FunctionCallNode*>(n));
+    return rv;
+}
+
 class AbstractMethodCallNode : public AbstractFunctionCallNode {
 protected:
     // if a method pointer can be resolved at parse time, then the class

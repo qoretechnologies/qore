@@ -847,7 +847,7 @@ static std::string instRegistryGetVariantSignatureRef(const AbstractQoreFunction
  */
 static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValue& expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (auto* call = qore_get_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
         std::string name = instRegistryGetFunctionCallName(call);
         ctx.writer.writeStringRef(name.c_str());
@@ -3012,7 +3012,7 @@ static std::unique_ptr<QoreIRInstruction> readLoadConst(
         ctx.error = error;
         return nullptr;
     }
-    auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode());
+    auto* rcr = qore_get_runtime_constant_ref_node(expr.getInternalNode());
     auto* lci = new QoreIRLoadConstantInstruction(rcr, expr);
     lci->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
@@ -3347,7 +3347,7 @@ static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
     // The AST statement pointer is not serializable and the source location rides on the base-instruction record;
     // from format version 26, the nesting of the statement (#5816): its depth (u16) and its flags (u8), 0 for the
     // instruction of a block
-    auto* dbg = dynamic_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
+    auto* dbg = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
     ctx.writer.writeU16(dbg ? dbg->nest_depth : 0);
     ctx.writer.writeU8(dbg ? dbg->nest_flags : 0);
     // from format version 31, the locals of the block of a DebugBlock, by name and slot (#5921)

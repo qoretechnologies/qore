@@ -144,7 +144,7 @@ static void makeExprDeserializedClosureIRNameUnique(QoreIRFunction& ir, const Us
 
 static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (auto* call = qore_get_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
         // Emit the namespace-qualified name, not the bare base name.
         // Without qualification, a caller in namespace `OMQ` whose body
@@ -1117,7 +1117,7 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
 
 static bool write_expr_runtime_const_ref(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+    if (auto* rcr = qore_get_runtime_constant_ref_node(node)) {
         std::string path;
         if (qore_aot_resolve_runtime_constant_path(rcr, ctx.const_reverse_map, path)) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
@@ -3617,7 +3617,7 @@ static QoreValue read_expr_plus(AOTExprReadCtx& ctx) {
 
 static bool write_expr_square_bracket(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!op) {
         return false;
     }

@@ -5282,7 +5282,7 @@ private:
             addArgs(call->getParseArgs(), call->getArgs());
             // a function whose variant is chosen at runtime is stepped into only if it has user code
             if (!call->getVariant()) {
-                auto* fc = dynamic_cast<const FunctionCallNode*>(call);
+                auto* fc = qore_get_function_call_node(call);
                 const QoreFunction* f = fc ? fc->getFunction() : nullptr;
                 if (f && !f->hasUser()) {
                     return;

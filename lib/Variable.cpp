@@ -1216,7 +1216,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
     QoreValue c = n;
     while (c.getType() == NT_OPERATOR) {
         const AbstractQoreNode* node = c.getInternalNode();
-        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             evaluated += op->getRight().needsEval() ? 1 : 0;
             c = op->getLeft();
         } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
@@ -1237,7 +1237,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
     c = n;
     while (c.getType() == NT_OPERATOR) {
         const AbstractQoreNode* node = c.getInternalNode();
-        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             keys.push_back(op->getRight());
             c = op->getLeft();
         } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
@@ -2071,7 +2071,7 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
             read_access = RA_ELEMENT;
         }
         const QoreSquareBracketsOperatorNode* op =
-            dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
+            qore_exact_node_cast<QoreSquareBracketsOperatorNode>(n.getInternalNode());
         if (op) {
             // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
             // outermost step of a path that needs it (qore#5753)
@@ -2209,7 +2209,7 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
             read_access = RA_ELEMENT;
         }
         const QoreSquareBracketsOperatorNode* op =
-            dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
+            qore_exact_node_cast<QoreSquareBracketsOperatorNode>(n.getInternalNode());
         if (op) {
             // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
             // outermost step of a path that needs it (qore#5753)
@@ -3819,7 +3819,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     assert(t == NT_OPERATOR);
 
     {
-        const QoreSquareBracketsOperatorNode* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(lvalue.getInternalNode());
+        const QoreSquareBracketsOperatorNode* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(lvalue.getInternalNode());
         if (op) {
             doRemove(op);
             return;

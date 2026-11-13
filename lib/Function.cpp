@@ -6348,7 +6348,7 @@ static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpe
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
                 // a background call of a function, of a closure or of a resolved self or static method is an
                 // expression instruction with the same opcode (see QoreIRLowering::lowerExprOpOrInvoke())
-                const auto* bi = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                const auto* bi = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get());
                 if (bi && bi->helper_ir) {
                     bi->helper_ir->specialization_owner = s;
                     qore_mark_specialization_helpers(*bi->helper_ir, s);
@@ -7734,7 +7734,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                 } else if (inst->opcode == QoreIROpcode::Invoke) {
                     const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
                     if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                        const auto* call = qore_get_function_call_node(
                                 inv->expr.getInternalNode());
                         if (call) {
                             variant = call->getVariant();

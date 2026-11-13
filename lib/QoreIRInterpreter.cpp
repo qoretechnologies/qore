@@ -1944,7 +1944,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         return {true, result};
     }
     // background foo(args) — free function call
-    if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
+    if (auto* fcn = qore_get_function_call_node(inner)) {
         const QoreParseListNode* pargs = fcn->getParseArgs();
         const QoreListNode* fargs = fcn->getArgs();
         size_t actual_nargs = pargs ? pargs->size() : (fargs ? fargs->size() : 0);
@@ -6667,7 +6667,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             // Native operator handling: [] and .{} with pre-evaluated operands
             if (!inv->operands.empty() && (op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect)
                     && inv->operands.size() == 2 && inv->expr.hasNode()) {
-                if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                         inv->expr.getInternalNode())) {
                     QoreValue lhs_val = getIRValue(values, inv->operands[0]);
                     QoreValue rhs_val = getIRValue(values, inv->operands[1]);
@@ -6721,7 +6721,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             bool used_operands = false;
             QoreValue res;
             if (op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect) {
-                if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                if (auto* call = qore_get_function_call_node(
                         inv->expr.getInternalNode())) {
                     // Direct evalImpl() — avoids evalExprNode() overhead
                     FunctionCallNode clone(*call, arg_list);
@@ -6953,7 +6953,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         }
 
         case QoreIROpcode::LoadConstant: {
-            if (auto* node = dynamic_cast<const RuntimeConstantRefNode*>(
+            if (auto* node = qore_get_runtime_constant_ref_node(
                     inv->expr.getInternalNode())) {
                 return fromBits(qore_rt_load_constant(node, xsink));
             }
@@ -8769,24 +8769,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (candidate->opcode == QoreIROpcode::PushTempMark) {
                     break;
                 }
-                if (auto* br = dynamic_cast<QoreIRBranchInstruction*>(candidate)) {
+                if (auto* br = qore_ir_inst_cast<QoreIRBranchInstruction*>(candidate)) {
                     stack.push_back(br->target);
                     break;
                 }
-                if (auto* br_if = dynamic_cast<QoreIRBranchIfInstruction*>(candidate)) {
+                if (auto* br_if = qore_ir_inst_cast<QoreIRBranchIfInstruction*>(candidate)) {
                     stack.push_back(br_if->false_target);
                     stack.push_back(br_if->true_target);
                     break;
                 }
-                if (auto* inv = dynamic_cast<QoreIRInvokeInstruction*>(candidate)) {
+                if (auto* inv = qore_ir_inst_cast<QoreIRInvokeInstruction*>(candidate)) {
                     stack.push_back(inv->normal_target);
                     break;
                 }
-                if (auto* inv_md = dynamic_cast<QoreIRInvokeMethodDirectInstruction*>(candidate)) {
+                if (auto* inv_md = qore_ir_inst_cast<QoreIRInvokeMethodDirectInstruction*>(candidate)) {
                     stack.push_back(inv_md->normal_target);
                     break;
                 }
-                if (auto* inv_dot = dynamic_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(candidate)) {
+                if (auto* inv_dot = qore_ir_inst_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(candidate)) {
                     stack.push_back(inv_dot->normal_target);
                     break;
                 }
@@ -12724,7 +12724,7 @@ load_local_done:
                 QoreValue out;
                 const RuntimeConstantRefNode* rcr = lc_inst->node
                     ? lc_inst->node
-                    : dynamic_cast<const RuntimeConstantRefNode*>(lc_inst->expr.getInternalNode());
+                    : qore_get_runtime_constant_ref_node(lc_inst->expr.getInternalNode());
                 if (rcr) {
                     out = const_cast<RuntimeConstantRefNode*>(rcr)->eval(
                             needs_deref, xsink);
@@ -14957,14 +14957,14 @@ load_local_done:
                 if (debug_active && !(xsink && *xsink)) {
                     // the block's locals, which an exception that leaves the block releases before the event of the
                     // statement that contains it (#5921)
-                    if (auto* dbg_block_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst);
+                    if (auto* dbg_block_inst = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(inst);
                             dbg_block_inst && dbg_block_inst->block_locals) {
                         qore_ir_dbg_nest_block(dbg_state, dbg_block_inst, &func, pre_instantiated);
                     }
                     // the block of the instruction, or the block that starts at its location, as for the debug IR of
                     // AOT code; the block of the function otherwise
                     const StatementBlock* dbg_block = nullptr;
-                    if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+                    if (auto* dbg_inst = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(inst)) {
                         dbg_block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
                     }
                     if (!dbg_block && pgm && inst->loc && inst->cached_start_line >= 0) {
@@ -16020,7 +16020,7 @@ load_local_done:
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 int32_t string_index_char = 1;
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic && expr_inst->expr.hasNode()) {
-                    if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                    if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                             expr_inst->expr.getInternalNode())) {
                         string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                     }
@@ -17984,7 +17984,7 @@ load_local_done:
                 // These are not function calls — operands are container+index, not args
                 if (!inst->operands.empty() && effective_opcode == QoreIROpcode::Call
                         && inst->operands.size() == 2 && call_expr.hasNode()) {
-                    if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                    if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                             call_expr.getInternalNode())) {
                         QoreValue lhs_val = getIRValue(values, inst->operands[0]);
                         QoreValue rhs_val = getIRValue(values, inst->operands[1]);
@@ -18041,7 +18041,7 @@ load_local_done:
                         return returnAfterUnhandledException();
                     }
                     if (effective_opcode == QoreIROpcode::Call) {
-                        if (auto* call = dynamic_cast<const FunctionCallNode*>(call_expr.getInternalNode())) {
+                        if (auto* call = qore_get_function_call_node(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             FunctionCallNode clone(*call, arg_list);
                             res = evalTmpCallAndRef(&clone, xsink);
@@ -18070,7 +18070,7 @@ load_local_done:
                             SelfFunctionCallNode clone(*call, arg_list);
                             res = evalTmpCallAndRef(&clone, xsink);
                             used_operands = true;
-                        } else if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                        } else if (auto* call = qore_get_function_call_node(
                                 call_expr.getInternalNode())) {
                             // AOT can load parser-equivalent namespace function fallbacks
                             // from Class::name() syntax through CallStatic slots.
@@ -19015,7 +19015,7 @@ load_local_done:
         case QoreIROpcode::BackgroundInt: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 QoreValue res;
-                auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
+                auto* bg_inst = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst);
                 auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
                     expr_inst->expr.getInternalNode());
                 bool matched;
