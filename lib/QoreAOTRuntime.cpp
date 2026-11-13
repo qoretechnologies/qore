@@ -8358,9 +8358,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
     }
 
-    // the handler-own local slots (QORE_AOT_HANDLER_OWN_LOCALS_VERSION): the locals that a handler declares itself
-    // (closure-bound ones; since #6002 all of them), which restoreHandlerPreInstantiatedLocals() does not mark
-    // pre-instantiated
+    // the handler-own local slots (QORE_AOT_HANDLER_OWN_LOCALS_VERSION): the closure-bound locals that a handler
+    // declares itself, which restoreHandlerPreInstantiatedLocals() does not mark pre-instantiated
     if (reader.getHeader().version >= QORE_AOT_HANDLER_OWN_LOCALS_VERSION) {
         if (!need(4, "handler-own local slot count")) {
             return nullptr;

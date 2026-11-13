@@ -15450,10 +15450,9 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         writer.writeU32(binding_index);
     }
 
-    // 2b. The handler-own local slots (QORE_AOT_HANDLER_OWN_LOCALS_VERSION): the locals that a handler declares itself
-    // (closure-bound ones; since #6002 all of them), which its lowering does not mark pre-instantiated; every one has
-    // a parent slot, as the lowering reserves slots in the function for the locals of a handler (see
-    // qore_ir_reserve_handler_local_slots())
+    // 2b. The handler-own local slots (QORE_AOT_HANDLER_OWN_LOCALS_VERSION): the closure-bound locals that a handler
+    // declares itself, which its lowering does not mark pre-instantiated; every one has a parent slot, as the lowering
+    // reserves slots in the function for the locals of a handler (see qore_ir_reserve_handler_local_slots())
     {
         std::vector<uint32_t> own_slots;
         own_slots.reserve(func.handler_own_locals.size());
