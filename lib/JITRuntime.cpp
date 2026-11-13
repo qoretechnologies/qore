@@ -38,6 +38,7 @@
 #include "qore/intern/QoreTransliteration.h"
 #include "qore/intern/QoreTransliterationOperatorNode.h"
 #include "qore/intern/QoreIterateOperatorNode.h"
+#include "qore/intern/QoreInstanceOfOperatorNode.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreForkHandlers.h"
@@ -6851,32 +6852,15 @@ extern "C" DLLEXPORT int64_t qore_rt_guard_type(uint64_t val, const QoreTypeInfo
 // --- InstanceOf helper ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_instanceof(uint64_t val_bits, const QoreTypeInfo* ti) {
-    QoreValue val = fromBits(val_bits);
-    qore_type_t t = val.getType();
-    bool result;
-    switch (t) {
-        case NT_WEAKREF:
-            result = QoreTypeInfo::runtimeAcceptsValue(ti,
-                **val.get<const WeakReferenceNode>()) != QTI_NOT_EQUAL;
-            break;
-        case NT_WEAKREF_HASH:
-            result = QoreTypeInfo::runtimeAcceptsValue(ti,
-                **val.get<const WeakHashReferenceNode>()) != QTI_NOT_EQUAL;
-            break;
-        case NT_WEAKREF_LIST:
-            result = QoreTypeInfo::runtimeAcceptsValue(ti,
-                **val.get<const WeakListReferenceNode>()) != QTI_NOT_EQUAL;
-            break;
-        default:
-            result = QoreTypeInfo::runtimeAcceptsValue(ti, val) != QTI_NOT_EQUAL;
-            break;
-    }
-    return toBits(QoreValue(result));
+    // the code generator substituted the type parameters of a specialized function; any others are those of the code
+    // that runs (qore#6016)
+    return toBits(QoreValue(QoreInstanceOfOperatorNode::runtimeInstanceOf(ti, fromBits(val_bits))));
 }
 
 // AOT mode: instanceof check with type path string instead of QoreTypeInfo pointer.
 // Resolves the type path to QoreTypeInfo* using the program's type resolver, then
-// delegates to qore_rt_instanceof.
+// delegates to qore_rt_instanceof, which substitutes the type parameters of the type with the type arguments of the
+// code that runs on every evaluation (qore#6016).
 //
 // The type is resolved once per thread, type path and Program, not on every evaluation (#5976):
 // - the type path is a constant of the compiled code (a qmod or an executable, which is not unloaded), so one address
@@ -6885,6 +6869,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof(uint64_t val_bits, const QoreTy
 // - a type resolved in a Program is owned by that Program (its namespaces or the global registries of complex types,
 //   which are not freed) or, for a path with a module reference, by the module's Program, which lives until the
 //   process exits, so it is valid as long as the Program is.
+// The resolved type keeps the type parameters of a generic class symbolic, so it is the same for every instantiation.
+// A type parameter of a generic function or method has no owner in its path: it is one of the signature of the
+// generic code that runs, so the type is resolved with the signature of the instantiation that runs, on every
+// evaluation, and is not cached (qore#6016).
 // A path that cannot be resolved is not cached and is not an error for instanceof: no value is an instance of it (a
 // deferred placeholder that the resolver returns for an unknown class or hashdecl in a complex type is cached as any
 // other type).  QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE turns the cache off.
@@ -6895,10 +6883,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
         return toBits(QoreValue(false));
     }
     static constinit QoreEnvFlag cache_disabled_env("QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE");
-    if (cache_disabled_env.get()) {
+    // a path with a type parameter of the signature of the code that runs: resolved for its instantiation
+    if (qore_aot_type_path_has_signature_type_param(type_path) || cache_disabled_env.get()) {
         std::string error;
         QoreAOTTypeResolver resolver(pgm);
-        const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+        const QoreTypeInfo* ti;
+        if (qore_aot_type_path_has_signature_type_param(type_path)) {
+            const QoreTypeParamInstantiation* inst = runtime_get_type_param_instantiation();
+            ti = resolver.resolveForSignature(type_path, error, inst ? inst->owner : nullptr);
+        } else {
+            ti = resolver.resolve(type_path, error);
+        }
         return ti ? qore_rt_instanceof(val_bits, ti) : toBits(QoreValue(false));
     }
     struct InstanceOfTypeCacheEntry {
