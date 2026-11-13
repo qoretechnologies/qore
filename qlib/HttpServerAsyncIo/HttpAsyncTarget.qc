@@ -136,6 +136,43 @@ public class HttpAsyncTarget {
     */
     abstract onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener, hash<auto> cx);
 
+    #! Called when the WebSocket connection or SSE stream that a request left open has ended
+    /** A request whose @ref onHttpRequest() returned while a WebSocket connection or an SSE stream that it set up
+        stays open (the HttpServer's handlers manage such connections after the request returns: see
+        @ref HttpServerAsyncIo::HttpPersistentRequestEnd "HttpPersistentRequestEnd") is reported here once that
+        connection or stream has ended for any reason: a close by the client or by the server, an error, a reset or
+        cancel of the stream, the removal of its listener, or a stop of the server or of the async I/O controller.
+        It is called for HTTP/1.1, HTTP/2 and HTTP/3, so a target that keeps state for a request for the life of
+        its connection (such as a reservation that a drain closes) can release it then.
+
+        The call is made:
+        - exactly once for each such request;
+        - never before the request's @ref onHttpRequest() has returned: a connection that ends while the request is
+          still being handled is reported after it returns;
+        - on a thread of the handler pool, between @ref saveDispatchContext() and @ref restoreDispatchContext() as
+          other user callbacks are, with no lock of the server, its handlers or the controller held; if the pool no
+          longer takes tasks (it is stopping, or the controller has been deleted), on a thread of its own, without
+          the dispatch context, or, if no thread can be started, on the thread that reported the end, which can hold
+          locks of its own (such as a thread that closes the stream).
+
+        A request whose @ref onHttpRequest() raised an exception, and a request whose connection is not left open
+        when it returns (an ordinary response, or a WebSocket or SSE connection that its handler served while the
+        request was handled), is not reported; neither is a connection opened by a request of a persistent HTTP/1.1
+        session (see @ref HttpServer::AbstractHttpRequestHandler::isPersistent()), whose own request keeps the
+        handler thread until the session ends.  An exception raised by this method is logged and ignored.
+
+        The end of an HTTP/2 or HTTP/3 SSE stream that the server closes is reported when the close is started, which
+        can be before the stream's last frame has been sent.
+
+        The default implementation does nothing.
+
+        @param info the information of the request as it was given to @ref onHttpRequest(): the same \c sock and
+        \c header_info (with \c http2 or \c http3, \c session_id and \c stream_id for a multiplexed stream), so that
+        a target can identify the request
+    */
+    onPersistentRequestEnd(hash<HttpConnectionInfo> info) {
+    }
+
     #! Attempts to handle a request on the async callback dispatcher worker
     /** Returns a result hash if the request was handled inline, or @ref nothing
         if it should be dispatched to the handler thread pool via onHttpRequest().
