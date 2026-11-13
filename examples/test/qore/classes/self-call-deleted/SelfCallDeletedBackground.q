@@ -57,6 +57,13 @@ final class F {
         background (t.get(), self.m(side("valid self")));
     }
 
+    #! a call through self on an object deleted before the thread starts: self is a value given to the thread, which
+    #! runs the expression up to the call
+    preSelfCall(Token t) {
+        delete self;
+        background (t.get(), side("before the call"), self.m(side("pre self")));
+    }
+
     #! an unqualified call on an object that is not deleted
     validPlain(Token t) {
         background (t.get(), m(side("valid plain")));
@@ -78,4 +85,5 @@ for (int i = 0; i < 3; ++i) {
     run("call through self", sub (Token t) { F f(); f.selfCall(t); });
     run("valid call through self", sub (Token t) { F f(); f.validSelfCall(t); });
     run("valid unqualified call", sub (Token t) { F f(); f.validPlain(t); });
+    run("call through self, deleted before the thread", sub (Token t) { F f(); f.preSelfCall(t); });
 }

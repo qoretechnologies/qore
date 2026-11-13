@@ -7,6 +7,8 @@ valid call through self:
 valid unqualified call:
   side valid plain
   F::m(1)
+call through self, deleted before the thread:
+  side before the call
 round 1
 unqualified call:
 call through self:
@@ -16,6 +18,8 @@ valid call through self:
 valid unqualified call:
   side valid plain
   F::m(1)
+call through self, deleted before the thread:
+  side before the call
 round 2
 unqualified call:
 call through self:
@@ -25,3 +29,5 @@ valid call through self:
 valid unqualified call:
   side valid plain
   F::m(1)
+call through self, deleted before the thread:
+  side before the call
