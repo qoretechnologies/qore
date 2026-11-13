@@ -33,6 +33,7 @@
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ql_crypto.h"
