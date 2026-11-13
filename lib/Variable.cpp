@@ -828,6 +828,12 @@ LValueHelper::LValueHelper(QoreObject& self, ExceptionSink* xsink) : vl(xsink), 
     ocvec.push_back(ObjCountRec(&self));
 }
 
+// Runtime native callbacks can race with other writers of the object's members. No parent-container count
+// snapshot is needed here: only the final recursive-reference scan uses this root, under its own synchronization.
+LValueHelper::LValueHelper(QoreObject& self, ExceptionSink* xsink, ObjectScan) : vl(xsink), before(true),
+        robj(qore_object_private::get(self)) {
+}
+
 LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink), assignment_only(for_assignment) {
 }
 

@@ -21166,6 +21166,32 @@ private:
     LValueHelper& lvalue;
 };
 
+template <bool Lexical>
+static __attribute__((noinline)) QoreValue mergeExternalObjectMembers(LValueHelper& v, QoreObject* o,
+        const QoreValue& right, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    // Preserve an opaque target tag as well as its ownership when returning the compound result.
+    ValueHolder target(v.getReferencedValue(), xsink);
+    v.finishForCallback();
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        LValueHelper object_scan(*o, xsink, LValueHelper::ObjectScan{});
+        LValueMergeDerefHelper sdh(object_scan, xsink);
+        if constexpr (Lexical) {
+            qore_object_private::get(*o)->plusEquals(right.getInternalNode(), object_scan.vl, sdh, xsink, policy);
+        } else {
+            qore_object_private::get(*o)->plusEquals(right.getInternalNode(), object_scan.vl, sdh, xsink);
+        }
+    }
+    // ValueHolder::release() converts opaque references to ordinary pointers. Transfer the full value instead.
+    QoreValue result;
+    if (!*xsink) {
+        result.swap(*target);
+    }
+    return result;
+}
+
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
@@ -21266,8 +21292,12 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             }
         }
     } else if (vtype == NT_OBJECT) {
-        LValueMergeDerefHelper sdh(v, xsink);
         QoreObject* o = v.getValue().get<QoreObject>();
+        if (qore_class_private::get(*o->getClass())->has_member_accessors
+                && (right.getType() == NT_HASH || right.getType() == NT_OBJECT)) {
+            return mergeExternalObjectMembers<Lexical>(v, o, right, xsink, policy);
+        }
+        LValueMergeDerefHelper sdh(v, xsink);
         if constexpr (Lexical) {
             qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink, policy);
         } else {
@@ -21337,7 +21367,60 @@ static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right,
     return doPlusEqualsOnLValue(v, right_holder, xsink);
 }
 
-// Inner function: perform -= on an already-navigated LValueHelper.
+// The target is either still held by its lvalue lock or explicitly pinned by the native-callback path.
+static QORE_INTERN_ALWAYS_INLINE void removeObjectMembers(LValueHelper& v, QoreObject* o,
+        const QoreValue& right, ExceptionSink* xsink) {
+    auto remove_member = [&](const QoreValue& key) {
+        QoreHashKeyHelper str(key, xsink);
+        if (*xsink) {
+            return;
+        }
+        QoreValue removed = qore_object_private::takeMember(*o, xsink, str.c_str());
+        // The lvalue still contains the same object, even when its last scannable member is removed.
+        // Record the object's changed graph without applying a delta to the lvalue's parent container.
+        bool scan_removed = needs_scan(removed);
+        v.objectRemoved(*qore_object_private::get(*o), scan_removed);
+        v.saveTemp(removed);
+    };
+
+    const QoreListNode* nrl = (right.getType() == NT_LIST)
+        ? right.get<const QoreListNode>()
+        : nullptr;
+    if (nrl && nrl->size()) {
+        ConstListIterator li(nrl);
+        while (li.next()) {
+            remove_member(li.getValue());
+            if (*xsink) {
+                return;
+            }
+        }
+    } else {
+        remove_member(right);
+    }
+}
+
+// Native gates/accessors can replace the parent. Finish that lvalue before the callback, and keep only the
+// original object's identity and graph bookkeeping. Neither success nor failure reads the former parent slot.
+static __attribute__((noinline)) QoreValue removeExternalObjectMembers(LValueHelper& v, QoreObject* o,
+        const QoreValue& right, ExceptionSink* xsink) {
+    // Preserve an opaque target tag as well as its ownership when returning the compound result.
+    ValueHolder target(v.getReferencedValue(), xsink);
+    v.finishForCallback();
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        LValueHelper object_scan(*o, xsink, LValueHelper::ObjectScan{});
+        removeObjectMembers(object_scan, o, right, xsink);
+    }
+    // ValueHolder::release() converts opaque references to ordinary pointers. Transfer the full value instead.
+    QoreValue result;
+    if (!*xsink) {
+        result.swap(*target);
+    }
+    return result;
+}
+
 QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
     if (right.isNothing()) {
         return v.getReferencedValue();
@@ -21433,33 +21516,11 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             v.startContainerRemoval();
             QoreObject* o = v.getValue().get<QoreObject>();
 
-            auto remove_member = [&](const QoreValue& key) {
-                QoreHashKeyHelper str(key, xsink);
-                if (*xsink) {
-                    return;
-                }
-                QoreValue removed = qore_object_private::takeMember(*o, xsink, str.c_str());
-                // The lvalue still contains the same object, even when its last scannable member is removed.
-                // Record the object's changed graph without applying a delta to the lvalue's parent container.
-                bool scan_removed = needs_scan(removed);
-                v.objectRemoved(*qore_object_private::get(*o), scan_removed);
-                v.saveTemp(removed);
-            };
-
-            const QoreListNode* nrl = (right.getType() == NT_LIST)
-                ? right.get<const QoreListNode>()
-                : nullptr;
-            if (nrl && nrl->size()) {
-                ConstListIterator li(nrl);
-                while (li.next()) {
-                    remove_member(li.getValue());
-                    if (*xsink) {
-                        return QoreValue();
-                    }
-                }
-            } else {
-                remove_member(right);
+            const qore_class_private* cls = qore_class_private::get(*o->getClass());
+            if (cls->has_member_accessors || cls->member_write_gate) {
+                return removeExternalObjectMembers(v, o, right, xsink);
             }
+            removeObjectMembers(v, o, right, xsink);
         }
     } else {
         if (right.getType() == NT_DATE) {
