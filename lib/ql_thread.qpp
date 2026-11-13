@@ -45,6 +45,7 @@
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRoutes.h"
+#include "qore/intern/QoreThreadScratch.h"
 
 #include <pthread.h>
 #include <thread>
@@ -2191,7 +2192,12 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS,CUR
     // Create randomized index order for fairness
     std::vector<int> indices(num_cases);
     std::iota(indices.begin(), indices.end(), 0);
-    static thread_local std::mt19937 rng(std::random_device{}());
+    // the generator's state (5000 bytes) is per-thread heap scratch: a static thread_local generator would take its
+    // size from the stack of every thread (see qore_thread_scratch())
+    struct ChannelSelectRng {
+        std::mt19937 rng{std::random_device{}()};
+    };
+    std::mt19937& rng = qore_thread_scratch<ChannelSelectRng>().rng;
 
     // Helper lambda: try all cases non-blocking, return result hash or nullptr
     // Sets all_dead to true if all channels are in a terminal state (no case can ever succeed)

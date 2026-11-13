@@ -89,6 +89,15 @@ static const char* staticpgm_code = R"QORE(
 int sub fib(int n) {
     return n < 2 ? n : fib(n - 1) + fib(n - 2);
 }
+# channel_select() between two ready channels (the thread's scratch random generator)
+int sub select_one() {
+    Channel c1(1);
+    Channel c2(1);
+    c1.send(1);
+    c2.send(2);
+    hash<auto> r = channel_select(({"channel": c1, "op": "recv"}, {"channel": c2, "op": "recv"}));
+    return r.value;
+}
 
 class Teardown {
     private {
@@ -132,6 +141,10 @@ class Teardown {
             hash<string, code> hc = {"a": int sub (int x) { return x + total; }, "b": int sub (int x) { return x * 2; }};
             total += hc.a(1) + hc.b(2);
         }
+        # channel_select() in the main thread at exit, after the thread's data was deleted
+        for (int i = 0; i < 5; ++i) {
+            total += select_one();
+        }
         string utf = convert_encoding("caf\xc3\xa9", "ISO-8859-1");
         total += utf.size() + convert_encoding(utf, "UTF-8").size();
         total += TeardownConst.size() + TeardownConst2.firstKey().size();
@@ -145,6 +158,8 @@ const TeardownConst = (1, 2, 3, "a", {"b": 1});
 const TeardownConst2 = {"first": TeardownConst[4], "second": (TeardownConst, 5)};
 
 our Teardown teardown_object();
+# channel_select() in the main thread when the Program runs, so its scratch generator exists before exit
+our int selected = select_one();
 )QORE";
 #endif
 

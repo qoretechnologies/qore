@@ -41,6 +41,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "qore/intern/QoreThreadScratch.h"
+
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -369,16 +371,23 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
     QuicTestSentCount sent_count(fd, addr, addrlen, total, offset);
 #endif
 #ifdef __linux__
-    // All large arrays are thread-local to avoid ~9KB of stack pressure per call.
-    // This inline function is called from many sites; without thread_local, the
+    // All large arrays are per-thread heap scratch to avoid ~9KB of stack pressure per call.
+    // This inline function is called from many sites; on the stack, the
     // inlined arrays compound with callers' own stack usage, triggering stack
     // protector failures under GCC 15+ (which enables -fstack-protector-strong
-    // by default).
+    // by default).  They are not static thread_local objects either, which would
+    // take their size from the stack of every thread (see qore_thread_scratch()).
     // Per-message cmsg buffers: each message needs its own copy because
     // sendmmsg() accesses all msg_control pointers during the single syscall.
-    static thread_local uint8_t cmsg_bufs[QUIC_COMMON_MAX_SEND_BATCH][QUIC_SEND_CMSG_BUF_SIZE];
-    static thread_local struct mmsghdr msgs[QUIC_COMMON_MAX_SEND_BATCH];
-    static thread_local struct iovec iovecs[QUIC_COMMON_MAX_SEND_BATCH];
+    struct SendBatchScratch {
+        uint8_t cmsg_bufs[QUIC_COMMON_MAX_SEND_BATCH][QUIC_SEND_CMSG_BUF_SIZE];
+        struct mmsghdr msgs[QUIC_COMMON_MAX_SEND_BATCH];
+        struct iovec iovecs[QUIC_COMMON_MAX_SEND_BATCH];
+    };
+    SendBatchScratch& scratch = qore_thread_scratch<SendBatchScratch>();
+    auto& cmsg_bufs = scratch.cmsg_bufs;
+    auto& msgs = scratch.msgs;
+    auto& iovecs = scratch.iovecs;
 
     while (offset < total) {
         int batch_size = std::min(total - offset, QUIC_COMMON_MAX_SEND_BATCH);
