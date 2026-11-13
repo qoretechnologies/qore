@@ -2860,6 +2860,10 @@ target_link_libraries(qore-utf8-validation-test PRIVATE libqore ${ICONV_LIBRARY}
 add_executable(qore-quic-keep-alive-test examples/test/qore/misc/quic_keep_alive.cpp)
 target_include_directories(qore-quic-keep-alive-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+# the poll timeout policy of QUIC operations is header-only, so the test needs no library
+add_executable(qore-quic-poll-timeout-test examples/test/qore/misc/quic_poll_timeout.cpp)
+target_include_directories(qore-quic-poll-timeout-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 # the lock-free publication of the state of the HTTP fast routes (HttpFastPublished) uses only the C++ standard
 # library, so the test needs no libqore
 add_executable(qore-http-fast-published-test examples/test/qore/misc/http_fast_published.cpp)

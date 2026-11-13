@@ -51,7 +51,7 @@ class NativeReleaseOrderTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(19, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
+        assertEq(23, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
         foreach string c in ("map", "select", "map select", "hash map") {
             assertTrue(regex(out,
                 sprintf("(^|\n)%s: released h2; released h3; released h1; catch STAGE; after(\n|$)", c)), c);
@@ -81,6 +81,15 @@ class NativeReleaseOrderTest inherits QUnit::Test {
             "a fold whose iterator's next() raises");
         assertTrue(out =~ /\nmap fold no handler: released m1; catch STAGE; after/,
             "a fold in a map in a function with no handler");
+        # qore#5884: an exception that leaves a function with no handler
+        assertTrue(out =~ /\nmap no handler: released h2; released h1; catch STAGE; after/,
+            "a map in a function with no handler");
+        assertTrue(out =~ /\nmap object fold no handler: released h1; released h2; released m1; catch STAGE; after/,
+            "a fold over objects in a map in a function with no handler");
+        assertTrue(out =~ /\nfold map no handler: released h2; released m1; released m2; released h1; catch STAGE; /,
+            "a map in a fold in a function with no handler");
+        assertTrue(out =~ /\nmap fold map no handler: released h2; released m1; released h1; catch STAGE; after/,
+            "a map in a fold in a map in a function with no handler");
     }
 
     #! runs the script in every execution mode and on the IR tier
