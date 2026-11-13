@@ -2393,6 +2393,9 @@ if (x || y)
     @code{.py} hash += ("new-key" : 1, "other" : "two");@endcode
     @code{.py} object += hash;@endcode
 
+    @note Values replaced in a hash or object are released after the merge finishes and its lvalue locks are
+    released, including after a partial merge fails; their destructors can read or modify the target.
+
     <b>Arguments Processed by +=</b>
     |!Argument|!Processing
     |\a lvalue (@ref list_type "list")|the expression will be evaluated and concatenated to the \a lvalue. If \a expression is a list, the lists will be concatenated, to ensure adding a single element to a list, use the @ref push "push operator"
@@ -2434,6 +2437,9 @@ if (x || y)
     @code{.py} hash -= ("key1", "key2");@endcode
     @code{.py} object -= "key";@endcode
     @code{.py} object -= list_of_keys;@endcode
+
+    @note Removed values are released after the removal finishes and its lvalue locks are released, including
+    after a partial removal fails; their destructors can read or modify the target.
 
     <b>Arguments Processed by -=</b>
     |!Argument|!Processing
