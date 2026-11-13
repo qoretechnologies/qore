@@ -1222,7 +1222,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()), arg_names(&n_arg_names),
         tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
-        explicit_receiver_type_info(n_explicit_receiver_type_info),
+        receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     // Qore code must never be started on an async I/O thread answering a fast route
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
@@ -1258,7 +1258,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
     : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()), arg_names(&n_arg_names),
         tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
-        explicit_receiver_type_info(n_explicit_receiver_type_info),
+        receiver_type_info(n_explicit_receiver_type_info),
         explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
     assert(!variant);
     if (self && !self->isValid()) {
