@@ -2737,8 +2737,9 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
     return desc;
 }
 
-//! returns true if a variant with signature \a a overrides one with signature \a b: the same parameter types (as
-//! the variant of a class with the parameter types of a variant of a parent class is called instead of it)
+//! returns true if a variant with signature \a a (of a child class) overrides one with signature \a b (of a parent
+//! class): the same parameter types (as the variant of a class with the parameter types of a variant of a parent
+//! class is called instead of it)
 /** @param receiver the type whose parameterized base classes give the type arguments of the type parameters in the
     signatures (a variant of a specialization of a generic class is overridden by a variant with the type arguments),
     if any
@@ -2766,6 +2767,16 @@ static bool qore_signature_overrides(const AbstractFunctionSignature& a, const A
             a_inst.type_args.push_back(ua->getTypeParameterType(i));
         }
         b_inst.type_args = a_inst.type_args;
+        // the type parameters accept the same types: the same bounds
+        for (size_t i = 0, e = ua->getTypeParameterCount(); i < e; ++i) {
+            const QoreTypeInfo* abound = qore_substitute_type_params_if_needed(ua->getTypeParameterBoundTypeInfo(i),
+                receiver, &a_inst);
+            const QoreTypeInfo* bbound = qore_substitute_type_params_if_needed(ub->getTypeParameterBoundTypeInfo(i),
+                receiver, &b_inst);
+            if (!QoreTypeInfo::equal(abound, bbound)) {
+                return false;
+            }
+        }
     }
     for (unsigned i = 0, e = a.numParams(); i < e; ++i) {
         const QoreTypeInfo* at = a.getParamTypeInfo(i);

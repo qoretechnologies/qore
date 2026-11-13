@@ -35,6 +35,9 @@ generic override runtime: GOC::id
 generic override or nothing: GOC::opt GOC::opt
 generic override list: GOC::lst
 generic override two: GOC::two GOC::two
+generic other bound: GO::bnd GO::bnd
+generic other count: GO::cnt
+generic and non-generic: GO::gen
 const method: KC::cm(int x) const x=1 / KC::cm(int x) const x=2
 static through object literal: SB::sm(float g)
 static through object runtime: SB::sm(float g)

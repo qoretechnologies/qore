@@ -75,12 +75,21 @@ class GO {
     string opt<U>(*U x) { return "GO::opt"; }
     string lst<U>(list<U> x) { return "GO::lst"; }
     string two<U, V>(U a, V b) { return "GO::two"; }
+    # other bounds, another number of type parameters, a generic and a non-generic method: not overrides
+    string bnd<U: GOA>(U x) { return "GO::bnd"; }
+    string cnt<U, V>(U x) { return "GO::cnt"; }
+    string gen<U>(U x) { return "GO::gen"; }
 }
+class GOA {}
+class GOB inherits GOA {}
 class GOC inherits GO {
     string id<U>(U y) { return "GOC::id"; }
     string opt<U>(*U y) { return "GOC::opt"; }
     string lst<U>(list<U> y) { return "GOC::lst"; }
     string two<U, V>(U c, V d) { return "GOC::two"; }
+    string bnd<U: GOB>(U y) { return "GOC::bnd"; }
+    string cnt<U>(U y) { return "GOC::cnt"; }
+    string gen(auto y) { return "GOC::gen"; }
 }
 
 # a named call in a const method
@@ -190,6 +199,10 @@ printf("generic override runtime: %s\n", go.id(x: i));
 printf("generic override or nothing: %s %s\n", go.opt(x: 2), go.opt(x: value_of(NOTHING)));
 printf("generic override list: %s\n", go.lst(x: (1, 2)));
 printf("generic override two: %s %s\n", go.two(1, "s"), go.two(b: "s", a: 1));
+# not overrides: the named call calls the variant of the receiver's static type that the names select
+printf("generic other bound: %s %s\n", go.bnd(new GOA()), go.bnd(x: new GOA()));
+printf("generic other count: %s\n", go.cnt(x: 1));
+printf("generic and non-generic: %s\n", go.gen(x: 1));
 
 # a named call in a const method calls the const variant that the names select
 printf("const method: %s\n", (new KC()).callConst());
