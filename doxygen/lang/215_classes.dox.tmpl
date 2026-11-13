@@ -428,6 +428,28 @@ int id = d.getId();          # OK
     Static methods may be declared <tt><b>private</b></tt>, <tt><b>private:internal</b></tt>, or <tt><b>public</b></tt> or <tt><b>synchronized</b></tt> like non-static methods; static methods can also access private members of a class (through an object of the class for non-static members).   Static methods may not be also @ref abstract "abstract".\n\n
     Static method calls take a special syntax as documented in @ref static_method_calls .\n
 
+    @anchor static_methods_through_object
+    A static method called through an object (<tt>o.method()</tt>) is bound to the declared class of the receiver
+    when the code is parsed, as <tt>DeclaredClass::method()</tt> is, whatever the class of the object, also when the
+    receiver's type is declared with an or-nothing class type (<tt>*DeclaredClass</tt>); a static method of the same
+    name that a child class declares is not called.  Only when the receiver's class is not known when the code is
+    parsed (an untyped receiver, or one declared as \c object) is the method resolved at runtime on the class of the
+    object.
+    @code{.py}
+class Base {
+    static int create(int x) { return x; }
+}
+class Child inherits Base {
+    static string create(int x) { return "child"; }
+}
+Base b = new Child();
+# Base::create() is called: 1
+int i = b.create(1);
+auto a = b;
+# resolved at runtime on the class of the object: Child::create() is called
+string s = a.create(1);
+    @endcode
+
     @subsection abstract Abstract Methods
     Methods declared with the <tt><b>abstract</b></tt> keyword define methods interfaces that must be defined in child
     classes for the class to be instantiated.  Methods defining the declared interfaces in child classes must define
@@ -474,6 +496,10 @@ int id = d.getId();          # OK
     - a variant of the same name with another signature that accepts arguments that the <b><tt>final</tt></b> variant
       accepts: a narrower or broader parameter type, an untyped parameter, an optional extra parameter or variable
       arguments; a variant whose parameters accept none of the same arguments is allowed
+    - a variant of the same name that a @ref named_arguments_virtual_dispatch "named call" of the
+      <b><tt>final</tt></b> variant can select: it accepts the names of its parameters (after the arguments given by
+      position) with types that can accept the same values, such as <tt>m(string b, int a)</tt> for a
+      <b><tt>final</tt></b> <tt>m(int a, string b)</tt>
     - a parent class listed before the class with the <b><tt>final</tt></b> method that declares or inherits a method
       of the same name, as the subclass's calls of the name are then resolved in that method, or one of its variants
       is selected first
