@@ -3767,13 +3767,27 @@ QoreModuleDefContext* set_module_def_context(QoreModuleDefContext* qmd) {
     return rv;
 }
 
+//! the module definition context of the thread, if it defines the module of the Program being parsed
+static QoreModuleDefContext* get_module_def_context(ThreadData* td) {
+    QoreModuleDefContext* qmd = td->qmd;
+    // another Program parsed while a module is loaded (ex: by its init closure) is not the module's: its module
+    // declarations are not the module's
+    if (qmd) {
+        const QoreProgram* def_pgm = qmd->getDefinitionProgram();
+        if (def_pgm && def_pgm != td->current_pgm) {
+            return nullptr;
+        }
+    }
+    return qmd;
+}
+
 QoreModuleDefContext* get_module_def_context() {
-    return thread_data.get()->qmd;
+    return get_module_def_context(thread_data.get());
 }
 
 void parse_set_module_def_context_name(const char* name) {
     ThreadData* td = thread_data.get();
-    if (td->qmd) {
+    if (get_module_def_context(td)) {
         QoreUserModuleDefContextHelper* uqmd = static_cast<QoreUserModuleDefContextHelper*>(td->qmd);
         // set name and setup for parsing any header closures / call references
         uqmd->setNameInit(name);
@@ -4282,7 +4296,7 @@ QoreValue run_thread_entry_handler(ThreadData* td, ResolvedCallReferenceNode* ha
         ExceptionSink& xsink) {
     ThreadEntryHandlerRunHelper rh(td);
     try {
-        return handler->execValue(args, &xsink);
+        return handler->invoke(args, &xsink);
     } catch (AbstractException& e) {
         e.convert(&xsink);
     }
@@ -6059,15 +6073,65 @@ QoreParseOptions runtime_get_effective_program_parse_options() {
 }
 
 QoreParseOptions runtime_take_call_caller_parse_options() {
+    const QoreProgram* code_pgm;
+    return runtime_take_call_caller_parse_options(code_pgm);
+}
+
+QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm) {
     ThreadData* td = thread_data.get();
     if (td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm) {
         const QoreProgram* caller = td->callback_caller_pgm;
         // the call made on behalf of the Program is the first call only; the code it calls, and any code of the
         // Program running on the thread that it calls back, have the effective options of their own callers
         td->callback_caller_pgm = nullptr;
+        code_pgm = caller;
         return caller->getParseOptions();
     }
-    return runtime_get_effective_program_parse_options();
+    code_pgm = td->current_pgm;
+    return runtime_get_effective_parse_options_for(td, td->current_pgm);
+}
+
+QoreCallReferenceCallHelper::QoreCallReferenceCallHelper(RuntimeConfig& n_rc, const QoreListNode* args,
+        const QoreParseOptions* creator_po) {
+    if (!creator_po) {
+        return;
+    }
+    rc = &n_rc;
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(n_rc);
+    old_po = i.call_ref_po;
+    old_args = i.call_ref_args;
+    i.call_ref_po = creator_po;
+    i.call_ref_args = args;
+}
+
+QoreCallReferenceCallHelper::~QoreCallReferenceCallHelper() {
+    if (rc) {
+        RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(*rc);
+        i.call_ref_po = old_po;
+        i.call_ref_args = old_args;
+    }
+}
+
+QoreCallReferenceArgEvalHelper::QoreCallReferenceArgEvalHelper(RuntimeConfig& rc, const QoreListNode* args)
+        : rc(rc), args(args) {
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(rc);
+    saved_po = i.call_ref_po;
+    saved_args = i.call_ref_args;
+    i.call_ref_po = nullptr;
+    i.call_ref_args = nullptr;
+}
+
+QoreCallReferenceArgEvalHelper::~QoreCallReferenceArgEvalHelper() {
+    RuntimeConfig::Impl& i = RuntimeConfigCallRefAccess::impl(rc);
+    i.call_ref_po = saved_po;
+    i.call_ref_args = saved_args;
+}
+
+void QoreCallReferenceArgEvalHelper::evaluated(const QoreListNode* evaluated_args) {
+    // the call is made with the evaluated arguments
+    if (saved_po && saved_args == args) {
+        saved_args = evaluated_args;
+    }
 }
 
 QoreCallbackCallerHelper::QoreCallbackCallerHelper(const QoreProgram* caller) : po(caller->getParseOptions()) {
@@ -6098,6 +6162,10 @@ QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOpti
         return po;
     }
     return po & ~td->runtime_po_caller_restrictions;
+}
+
+const QoreProgram* runtime_get_module_call_program() {
+    return thread_data.get()->runtime_po_module_pgm;
 }
 
 ThreadData* qore_get_thread_data() {
@@ -9221,6 +9289,11 @@ unsigned qore_get_cancel_raise_count() {
 
 bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {
     return qore_check_cancel(xsink, operation);
+}
+
+// documented in qore_thread_intern.h
+void qore_request_current_thread_cancel(const char* reason, qore_program_id_t scope_pgm_id) {
+    thread_list.cancelThread(q_gettid(), reason, scope_pgm_id);
 }
 
 int qore_cancel_thread(int tid, const char* reason) {

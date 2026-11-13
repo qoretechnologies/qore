@@ -1313,6 +1313,26 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
             "streaming is not supported by " + conn.getProtocol();
     }
 
+    #! Waits until the data sent on the stream with sendData() has been sent
+    /** Data sent on an HTTP/2 or HTTP/3 stream is buffered until flow control lets it be sent; this waits until the
+        stream has no data buffered (with HTTP/2, until it was written to the connection; with HTTP/3, until the peer
+        acknowledged it), or the stream is gone, or the timeout expires, for example before the
+        connection is closed, so that the data queued last (such as a WebSocket close frame) is not dropped.  For a
+        protocol that buffers no stream data, it returns at once.
+
+        Must not be called on the async I/O controller's I/O thread, nor in the \c continuePoll() of a poll operation
+        that the controller runs, which raise \c SOCKET-SYNC-ON-IO-THREAD-ERROR.
+
+        @param timeout_ms the maximum time to wait
+
+        @return 0 if the stream has no data buffered to be sent (or the stream is gone), 1 if the wait timed out
+
+        @since HttpClientIo 1.0
+    */
+    int waitSendFlushed(timeout timeout_ms) {
+        return 0;
+    }
+
     #! Closes the write side of a streaming connection
     /** Convenience method that sends an empty payload with \c end_stream = \c True.
         Override if the protocol has a dedicated half-close mechanism.

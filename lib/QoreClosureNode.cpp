@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreTypeInfo.h"
 
 static thread_local const QoreObject* closure_self_context = nullptr;
@@ -182,7 +183,7 @@ bool QoreClosureNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue QoreClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue QoreClosureNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     // Closures can be invoked on threads with no program context (e.g., AsyncIoController's
     // ioThread, ThreadPool workers). Ensure a tlpd exists before dispatch; capture CVVs are
@@ -194,8 +195,7 @@ QoreValue QoreClosureNode::execValue(const QoreListNode* args, ExceptionSink* xs
 
 bool QoreClosureNode::getAsBoolImpl() const {
     // check if we should do perl-style boolean evaluation
-    QoreProgram* pgm = getProgram();
-    if (pgm && runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL))
+    if (qore_get_native_semantic_policy().strictBoolean())
         return false;
     return true;
 }
@@ -210,7 +210,7 @@ bool QoreObjectClosureNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue QoreObjectClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue QoreObjectClosureNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     QoreClosureSelfContextHelper csch(obj);
     // See QoreClosureNode::execValue above — capture CVVs are pushed after program-context

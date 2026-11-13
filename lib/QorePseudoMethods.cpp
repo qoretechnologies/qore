@@ -219,6 +219,14 @@ QoreValue pseudo_classes_eval(const QoreValue n, const char *name, const QoreLis
     });
 }
 
+QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreValue n, const char* name,
+        const QoreListNode* args, ExceptionSink* xsink) {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return pseudo_classes_dispatch(n, xsink, [&] (const QoreClass* qc, const QoreValue v) {
+        return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<true>(policy, v, name, args, rc, xsink);
+    });
+}
+
 int pseudo_classes_check_method(const QoreValue n, const char* name, ExceptionSink* xsink) {
     bool found = false;
     pseudo_classes_dispatch(n, xsink, [&] (const QoreClass* qc, const QoreValue v) {

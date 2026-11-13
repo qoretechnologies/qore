@@ -153,8 +153,10 @@ Program p(opts);
     restricted %Program in another thread.  A Program with
     @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" can therefore cause concurrent execution of its code.  A user
     module that the restricted %Program loads first inherits its restrictions and so cannot use
-    @ref background "background" (see @ref module_parse_option_masks); module threads come from modules that the host
-    loaded already or that are loaded with a parse option mask, which the host gives the %Program as capabilities.
+    @ref background "background" (see @ref module_parse_option_masks), unless it declares the \c THREAD_CONTROL domain
+    in its module header and is library code (see the \c domains key in @ref user_module_declarations); module threads
+    come from modules that the host loaded already, from modules loaded with a parse option mask, which the host gives
+    the %Program as capabilities, and from library modules that declare the domain.
 
     What the %Program's restrictions do guarantee when module code is involved:
     - the restrictions of a sandboxed %Program apply to the builtins that module code calls for it, as described in
@@ -164,6 +166,10 @@ Program p(opts);
       caller that may not control threads (see @ref MODULE_OWNED), but the @ref background "background" operator in module code is
       checked against the module's own parse options only, and module code can always run its own closures, which can
       call the caller's code
+    - the caller's code that module code runs, on the caller's thread or on a thread of the module, keeps the
+      restrictions of its own %Program: they are checked when it is parsed and, for a dynamic call such as
+      @ref Qore::call_function() "call_function()", when the call is made; only the thread it runs on is one that the
+      caller could not have started
     - a thread that module code starts on behalf of a sandboxed caller inherits the caller's
       @ref Qore::SandboxManager "SandboxManager": its filesystem and network policy, its interrupts, its cancellation
       scope and its thread limit apply to the thread as they apply to the caller (see @ref sandbox_resources)
@@ -175,8 +181,17 @@ Program p(opts);
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" does not prevent; a pool created by a %Program without a
       sandbox manager is not limited, and runs each task under the sandbox of the code that submitted it
 
-    To bound the threads of restricted code, give its %Program a @ref Qore::SandboxManager "SandboxManager" with a
-    thread limit.  A run-time refusal of the @ref background "background" operator in module code for restricted
+    What they do not guarantee:
+    - the restrictions of a %Program without a @ref Qore::SandboxManager "SandboxManager" (parse options only) are not
+      passed on to module code at run time: module code runs with its own parse options, and the
+      @ref MODULE_OWNED checks do not apply, so module code can run the %Program's closures and call references on
+      its own threads and timers; parse options restrict the code of the %Program itself
+    - a module that module code loads at run time (with @ref Qore::load_module() "load_module()", or a data provider
+      factory or type that is loaded on demand) is loaded with the restrictions of the %Program of the module that
+      loads it, which a module's \c domains declaration relaxes, not with those of the caller
+
+    To contain restricted code that uses modules, and to bound its threads, give its %Program a
+    @ref Qore::SandboxManager "SandboxManager", with a thread limit for the latter.  A run-time refusal of the @ref background "background" operator in module code for restricted
     callers would break the modules that run their callers' code on their own threads, while the sandbox already
     governs those threads.
 
@@ -336,6 +351,25 @@ authenticate();
       that is not trusted and that has the same sandbox, or, for code with no sandbox, that runs in the same %Program:
       a later request for its name from other code, library code included, and a reload raise \c LOAD-MODULE-ERROR,
       naming the module and its file
+
+    @subsection sandbox_static_modules Statically Linked Modules
+
+    A module compiled by qcc to a <tt>.qo</tt> object and linked into a program is registered by native code (the
+    <tt>qore_</tt><em>name</em><tt>_register()</tt> function that qcc emits, or
+    \c ModuleManager::registerAOTStaticModule() in the embedding API), not loaded from a file.  It is never library
+    code, whatever path the registration names: its code is linked into the program, not loaded from a directory of
+    library code.  It is checked as a load of the same module by path from outside the directories of library code,
+    for the code that calls the registration:
+    - that is the %Qore code running in the calling thread, also when it registers the module into another %Program
+      (through a native function that it calls); an embedding application that registers a module with no %Qore code
+      running is trusted, unless the target %Program has a @ref Qore::SandboxManager "SandboxManager": the target's
+      code is then the caller;
+    - registered for code that is not trusted, the module cannot have the name of a module in a directory of library
+      code, and a module with a name of its own is given only to code with the same sandbox, as above;
+    - if a module with its name is already loaded, that module is used instead, as for a load of a module that is
+      already loaded;
+    - registered while a library module that code that is not trusted loaded is initialized, the module is governed by
+      the sandbox of that code, as a module that the library module loads by path.
 
     @section sandbox_filesystem Filesystem Security
 

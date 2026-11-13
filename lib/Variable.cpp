@@ -2786,6 +2786,21 @@ bool qore_is_indirect_ref_value(const QoreValue& val) {
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
+    return assignImpl<false>(n, desc, check_types, mode, {});
+}
+
+int LValueHelper::assign(QoreValue n, const char* desc, LexicalSemanticPolicy policy, bool check_types,
+        AssignmentMode mode) {
+    return assignImpl<true>(n, desc, check_types, mode, policy);
+}
+
+int LValueHelper::assignNative(QoreValue n, const char* desc) {
+    return assignImpl<false, true>(n, desc, true, AssignmentMode::Normal, {});
+}
+
+template <bool Lexical, bool Native>
+int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, AssignmentMode mode,
+        LexicalSemanticPolicy policy) {
     member_lvalue_modified = true;
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
@@ -2797,7 +2812,13 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, Assign
     //    qv);
     if (check_types) {
         // check type for assignment
-        QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+        if constexpr (Native) {
+            QoreTypeInfo::acceptAssignmentNative(typeInfo, desc, n, vl.xsink, this);
+        } else if constexpr (Lexical) {
+            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
+        } else {
+            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+        }
         if (*vl.xsink) {
             //printd(5, "LValueHelper::assign() this: %p saving type-rejected value: %p '%s'\n", this, n,
             //    get_type_name(n));
@@ -3900,7 +3921,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 }
 
 static void do_list_value(QoreListNode& v, QoreListNode& l, int64 ind, const QoreTypeInfo*& vtype, bool& vcommon,
-        ind_set_t& iset, unsigned i, bool negative_offsets, bool is_range = false) {
+        ind_set_t& iset, unsigned i, bool negative_offsets, bool is_range = false, bool broken_list_range = false) {
     QoreValue p{};
     bool push;
     if (negative_offsets && ind < 0) {
@@ -3911,7 +3932,7 @@ static void do_list_value(QoreListNode& v, QoreListNode& l, int64 ind, const Qor
         p = l.getReferencedEntry(ind);
         push = true;
     } else {
-        push = !is_range || runtime_get_parse_options() & PO_BROKEN_LIST_RANGE;
+        push = !is_range || broken_list_range;
     }
 
     if (push) {
@@ -4168,7 +4189,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     ConstListIterator li(rh->get<const QoreListNode>());
                     while (li.next()) {
                         do_list_value(**v, *l, li.getValue().getAsBigInt(), vtype, vcommon, iset, i + li.index(),
-                            negative_offsets, true);
+                            negative_offsets, true, op->getSemanticPolicy().brokenListRange());
                     }
                 } else {
                     do_list_value(**v, *l, rh->getAsBigInt(), vtype, vcommon, iset, i, negative_offsets);
@@ -4299,7 +4320,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
     const QoreValue* stop_index = &sel[1];
     lvh.startContainerRemoval();
 
-    bool broken_list_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
+    bool broken_list_range = op->getSemanticPolicy().brokenListRange();
     bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
 
     int64 start, stop, seq_size;

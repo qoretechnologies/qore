@@ -63,12 +63,39 @@ public:
         return exp;
     }
 
-private:
+    //! Replaces only a compatibility return, before parse initialization or debugger registration.
+    DLLLOCAL static AbstractStatement* bindDeclarationPolicy(AbstractStatement* statement);
+
+protected:
     QoreValue exp{};
+
+    //! Transfers a parse-only node; the expression's ownership and source provenance are preserved exactly.
+    DLLLOCAL explicit ReturnStatement(ReturnStatement& source) : AbstractStatement(source.loc), exp(source.exp) {
+        assert(!source.breakpoints && !source.scope_known);
+        source.exp.clear();
+        pwo = source.pwo;
+        semantic_policy = source.semantic_policy;
+        semantic_policy_bound = source.semantic_policy_bound;
+    }
+
+private:
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink *xsink);
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
+};
+
+//! Selected during parsing only for a declaration with compatibility return coercion.
+class LexicalReturnStatement : public ReturnStatement {
+public:
+    DLLLOCAL LexicalReturnStatement(ReturnStatement& source, LexicalSemanticPolicy policy)
+            : ReturnStatement(source), return_policy(policy) {
+    }
+
+private:
+    LexicalSemanticPolicy return_policy;
+    DLLLOCAL int execImpl(QoreValue& return_value, ExceptionSink* xsink) override;
+    DLLLOCAL int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) override;
 };
 
 #endif

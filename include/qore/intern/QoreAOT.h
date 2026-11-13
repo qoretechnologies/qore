@@ -133,7 +133,21 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
     ExceptionSink* xsink, std::string& error);
 
 //! Resolve an AOT-serialized function name during runtime metadata reconstruction.
+/** The name is the one the compiler recorded for a function it resolved (see qore_aot_get_function_identity_name()),
+    and it must resolve exactly: a name with a namespace path that does not resolve gives nullptr, never another
+    function with the same name.  A call that the compiler left to another source object is resolved with
+    qore_aot_resolve_deferred_source_function_entry().
+*/
 const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name);
+
+//! Resolve the function of a call that the compiler left to another source object
+/** For a FUNC_CALL whose variant reference is QORE_AOT_DEFERRED_SOURCE_CALL_SLOT.  The name is the path with which
+    the source manifest names the function, which a source written without a
+    namespace path in a namespace can record with that namespace (OMQ::QDBG_LOG for a call of QDBG_LOG() in namespace
+    OMQ), while the program that links the objects has the function elsewhere: when the exact lookup fails, the
+    function is found by its name alone, as the parser finds a function called without a namespace path
+*/
+const FunctionEntry* qore_aot_resolve_deferred_source_function_entry(QoreProgram* pgm, const char* name);
 
 //! Returns the name that identifies a function unambiguously in an AOT image
 /** The namespace path without the leading "::" and the function name, ex: "Util::substitute_env_vars". A function in
@@ -455,6 +469,12 @@ struct AOTSlotMap {
     std::unordered_map<uint64_t, DotEvalDirectTarget> dot_eval_direct_targets; //!< expr bits -> IR-selected target
     std::unordered_set<uint64_t> static_call_pre_evaluated_bits;  //!< CallStatic* expr bits whose args are IR operands
     std::unordered_map<uint64_t, QoreAOTCallRelocationTargetKind> call_relocation_kinds; //!< expr bits -> direct call relocation target kind
+    //! expr bits that the runtime evaluates whole as an AST: the expressions of find and context
+    /** classified as AOTExprKind::AST_EXPR, which writes them in full as their sub-expressions are written; the
+        identity of a call at their root (AOTExprKind::FUNC_CALL, for example) would lose its arguments, which no IR
+        instruction evaluates for them (qore#5939)
+    */
+    std::unordered_set<uint64_t> ast_expr_bits;
 
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {

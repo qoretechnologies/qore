@@ -48,6 +48,8 @@ module ZohoBooksRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("zohobooks", ZohoBooksRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage ZohoBooksRestClient Module

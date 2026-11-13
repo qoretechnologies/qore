@@ -256,8 +256,11 @@ class SocketSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
         self.sh = sh;
     }
 
-    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
-        return sh.response();
+    # the parent class's return type: the response's fields other than raw_response (False here, and removed by the
+    # server in any case) are those of an HttpResponseInfo
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        return cast<hash<HttpResponseInfo>>(map {$1.key: $1.value}, sh.response().pairIterator(),
+            $1.key != "raw_response");
     }
 }
 

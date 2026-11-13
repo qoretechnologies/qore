@@ -436,6 +436,11 @@ constexpr unsigned QORE_EVAL_STACK_CHECK_INTERVAL = 16;
 DLLLOCAL QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name,
         const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink);
 
+DLLLOCAL QoreValue q_call_static_method_args(LexicalSemanticPolicy policy, QoreProgram* pgm,
+    const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink);
+DLLLOCAL q_func_t qore_get_lexical_object_builtin(q_func_t func);
+DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
+
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
@@ -1782,9 +1787,17 @@ public:
         already hold an unrelated exception when a caller reuses a long-lived sink
     */
     DLLLOCAL int assign(QoreValue v, ExceptionSink* xsink);
+    DLLLOCAL int assignNative(QoreValue v, ExceptionSink* xsink);
+    template <bool Native>
+    DLLLOCAL int assignNativeImpl(QoreValue v, ExceptionSink* xsink);
 
     //! assigns the value to the key; returns 0 for OK, -1 if THIS assignment failed (see the overload above)
     DLLLOCAL int assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink);
+
+    DLLLOCAL int assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL int assignImpl(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink, LexicalSemanticPolicy policy);
 
     DLLLOCAL QoreValue swap(QoreValue v) {
         return swapImpl(v);
@@ -1992,6 +2005,19 @@ public:
 };
 
 DLLLOCAL extern ParseOptionMaps pomaps;
+
+//! Returns the QDOM_* bit for a functional domain name as given in a \c [dom=...] attribute list or a module's
+//! \c domains key (the names of the \c DOM_* constants, or the qpp names PROCESS and MODULES; case-insensitive,
+//! without the \c QDOM_ prefix), or -1 if the name is unknown
+DLLLOCAL int64 qore_get_source_domain(const char* name);
+
+//! Returns the domain names of the given QDOM_* bits as written in a \c [dom=...] attribute list
+//! ("PROCESS_CONTROL,NETWORK")
+DLLLOCAL std::string qore_get_source_domain_names(int64 dom);
+
+//! Returns a description of the given QDOM_* bits for error messages: each domain name with the parse option that
+//! restricts it ("PROCESS_CONTROL (restricted by PO_NO_PROCESS_CONTROL)")
+DLLLOCAL std::string qore_describe_source_domains(int64 dom);
 
 //! The parse options that code must be parsed with to be run by IR, JIT or tiered execution or compiled by qcc
 /** This is \c PO_MODERN: \c PO_ALLOW_BARE_REFS | \c PO_ASSUME_LOCAL (together \c PO_NEW_STYLE) | \c PO_REQUIRE_TYPES |

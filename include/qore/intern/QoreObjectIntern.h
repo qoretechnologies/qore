@@ -306,7 +306,58 @@ public:
         }
     }
 
+    DLLLOCAL void plusEquals(const AbstractQoreNode* v, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) {
+        if (!v) {
+            return;
+        }
+        if (v->getType() == NT_OBJECT) {
+            merge(*const_cast<QoreObject*>(static_cast<const QoreObject*>(v))->priv, vl, sdh, xsink, policy);
+        } else if (v->getType() == NT_HASH) {
+            merge(static_cast<const QoreHashNode*>(v), vl, sdh, xsink, policy);
+        }
+    }
+
     DLLLOCAL void merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
+
+    DLLLOCAL void merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL void mergeImpl(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL void mergeImpl(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL int mergeAccessorMembers(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL int mergeAccessorMembersImpl(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL void mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
+        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL void mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
+        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical>
+    DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 

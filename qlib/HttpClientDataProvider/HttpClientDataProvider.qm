@@ -35,6 +35,8 @@
 %requires(reexport) HttpClientIo
 
 module HttpClientDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.2";
     desc = "user module providing a data provider API for HTTP servers";
     author = "David Nichols <david@qore.org>";

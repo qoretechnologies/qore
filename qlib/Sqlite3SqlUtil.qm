@@ -302,6 +302,10 @@ hash<auto> desc = {
     - made SQL \c like, \c contains, \c startsWith, and \c endsWith expression behavior honor the
       DataProvider case-sensitivity contract instead of inheriting SQLite's case-insensitive ASCII \c LIKE
       behavior; a \c "[", \c "*" or \c "?" in a \c like pattern matches itself
+    - fixed upserts that inserted first, including upserts with the default strategy and bulk upserts through
+      \c BulkSqlUtil and \c DbDataProvider, dropping a row that conflicts with a unique key other than the upsert
+      key without an error; the conflict now raises \c SQLITE3-EXEC, and no other row is changed (see
+      @ref sqlutilv3_11_0 "SqlUtil v3.11.0")
 
     @section sqlite3sqlutilv11 Sqlite3SqlUtil_1_1 Sqlite3SqlUtil Module v1.1
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic

@@ -46,8 +46,9 @@
 #include <atomic>
 #include <memory>
 
-// defined in lib/QoreTypeInfo.cpp; declared in "qore/intern/QoreTypeInfo.h"
-DLLLOCAL void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink);
+// defined inline in "qore/intern/QoreTypeInfo.h"
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
+        ExceptionSink* xsink);
 
 template <class T>
 class LocalRefHelper : public RuntimeReferenceHelper {

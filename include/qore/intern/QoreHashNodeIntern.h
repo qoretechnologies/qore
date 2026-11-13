@@ -431,9 +431,18 @@ public:
     DLLLOCAL QoreListNode* getKeys() const;
 
     DLLLOCAL void merge(const qore_hash_private& h0, ExceptionSink* xsink);
+    DLLLOCAL void mergeNative(const qore_hash_private& h, ExceptionSink* xsink);
+    DLLLOCAL static int setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value,
+        ExceptionSink* xsink);
+
+    DLLLOCAL static int setKeyValueLexical(QoreHashNode& hash, const char* key, QoreValue value,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy);
 
     // to be called when a lock is held to avoid dereferencing in the lock
     DLLLOCAL void merge(const qore_hash_private& h, SafeDerefHelper& sdh, ExceptionSink* xsink);
+
+    DLLLOCAL void merge(const qore_hash_private& h, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
 
     DLLLOCAL int getLValue(const char* key, LValueHelper& lvh, bool for_remove, ExceptionSink* xsink);
 
@@ -572,6 +581,12 @@ public:
         hash_assignment_priv ha(*this, key.c_str());
         // in case of assigning keys to an initialized hashdecl, the key may already have a value
         ha.assign(val, sdh, xsink);
+    }
+
+    DLLLOCAL void setKeyValue(const char* key, QoreValue val, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) {
+        hash_assignment_priv ha(*this, key);
+        ha.assign(val, sdh, xsink, policy);
     }
 
     DLLLOCAL void setKeyValueIntern(const char* key, QoreValue v) {
@@ -788,10 +803,20 @@ public:
             const QoreTypeInfo* vti, const char* context_action, bool strict_check = true);
 
     DLLLOCAL static QoreHashNode* newComplexHash(const QoreTypeInfo* typeInfo, const QoreParseListNode* args,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    DLLLOCAL static QoreHashNode* newComplexHash(const QoreTypeInfo* typeInfo, const QoreParseListNode* args,
             ExceptionSink* xsink);
 
     DLLLOCAL static QoreHashNode* newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init,
             ExceptionSink* xsink, bool coerce_values = false);
+
+    DLLLOCAL static QoreHashNode* newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init,
+            ExceptionSink* xsink, bool coerce_values, LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL static QoreHashNode* newComplexHashFromHashImpl(const QoreTypeInfo* typeInfo, QoreHashNode* init,
+            ExceptionSink* xsink, bool coerce_values, LexicalSemanticPolicy policy);
 
     DLLLOCAL static unsigned getScanCount(const QoreHashNode& h) {
         assert(!h.priv->is_obj);

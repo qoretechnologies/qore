@@ -1661,6 +1661,21 @@ public:
     DLLLOCAL void takeResponseHeaderEvents(const std::unordered_set<int32_t>& stream_ids,
         std::vector<Http2ResponseHeaderEvent>& out);
 
+#ifdef DEBUG
+    //! Sets whether the next pass holds the data of streaming responses in the session; I/O thread only
+    /** Set by the read pass of the client's poll operation from its decision for the pass, so that the hold is read
+        once per pass
+    */
+    DLLLOCAL void dbgSetOutputsHeld(bool held) {
+        dbg_outputs_held = held;
+    }
+
+    //! Returns the number of streaming streams whose data the session buffers
+    DLLLOCAL size_t dbgStreamingDataCount() const {
+        return h2_session ? h2_session->dbgStreamingDataCount() : 0;
+    }
+#endif
+
     //! Returns the number of completed responses that getOutput() has not returned yet
     DLLLOCAL size_t completedResponseCount() const {
         AutoLocker al(response_lock);
@@ -1700,6 +1715,11 @@ public:
     }
 
 private:
+#ifdef DEBUG
+    //! true if the current pass holds the data of streaming responses (see dbgSetOutputsHeld())
+    bool dbg_outputs_held = false;
+#endif
+
     Http2SessionPtr h2_session;
     int h2_state = H2C_NONE;
     bool peer_closed = false;

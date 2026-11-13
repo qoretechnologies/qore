@@ -1593,6 +1593,8 @@ int QoreModuleDefContext::set(const QoreProgramLocation* loc, const char* key, Q
             del_c = val.refSelf();
             del_loc = loc;
         }
+    } else if (!strcmp(key, "domains")) {
+        err = setDomains(loc, val);
     } else if (vset.find(key) == vset.end()) {
         parse_error(*loc, "module key '%s' is invalid", key);
         err = -1;
@@ -1610,6 +1612,71 @@ int QoreModuleDefContext::set(const QoreProgramLocation* loc, const char* key, Q
     return err;
 }
 
+int QoreModuleDefContext::setDomains(const QoreProgramLocation* loc, QoreValue val) {
+    if (vmap.find("domains") != vmap.end()) {
+        parse_error(*loc, "module key 'domains' was given multiple times");
+        return -1;
+    }
+    if (val.getType() != NT_STRING) {
+        parse_error(*loc, "module key 'domains' assigned type '%s' (expecting 'string')", val.getTypeName());
+        return -1;
+    }
+    QoreStringValueHelper str(val);
+    vmap["domains"] = str->c_str();
+
+    // only restrictions can be declared: not the options that allow functionality (PO_ALLOW_*) nor PO_IN_MODULE,
+    // which every module has
+    static constexpr int64 not_declarable = QDOM_INJECTION | QDOM_DEBUGGER | QDOM_IN_MODULE;
+    int64 dom = QDOM_DEFAULT;
+    int err = 0;
+    const char* p = str->c_str();
+    while (true) {
+        const char* e = strchr(p, ',');
+        std::string name = e ? std::string(p, e - p) : std::string(p);
+        // trim spaces
+        size_t b = name.find_first_not_of(" \t");
+        size_t l = name.find_last_not_of(" \t");
+        name = b == std::string::npos ? std::string() : name.substr(b, l - b + 1);
+        int64 d = name.empty() ? -1 : qore_get_source_domain(name.c_str());
+        if (d <= 0 || (d & not_declarable)) {
+            parse_error(*loc, "module key 'domains': '%s' is not a functional domain that a module can declare; give "
+                "restricted domains without the QDOM_ prefix, separated by commas "
+                "(ex: \"PROCESS_CONTROL,THREAD_CONTROL\")", name.c_str());
+            err = -1;
+        } else {
+            dom |= d;
+        }
+        if (!e) {
+            break;
+        }
+        p = e + 1;
+    }
+    if (err) {
+        return err;
+    }
+
+    // a module from the process-wide module path (library code) does not inherit these restrictions from the
+    // Program loading it; the declaration is recorded in any case so that an AOT image of the module has it
+    dom_removed |= applyDomains(dom);
+    return 0;
+}
+
+int64 QoreModuleDefContext::applyDomains(int64 dom) {
+    return qore_program_private::setModuleOwnDomains(*getProgram(), dom, qore_module_load_is_trusted());
+}
+
+int64 QoreUserModuleDefContextHelper::applyDomains(int64 dom) {
+    // the restrictions inherited from the Program loading the module are removed only for library code
+    int64 removed = qore_program_private::setModuleOwnDomains(*pgm->pgm, dom, qore_module_load_is_trusted());
+    // the module header's own restrictions (MOD_HEADER_PO), which the module sets for its header code, do not
+    // restrict the declared domains: the header's init and del closures may use them, unless they are inherited
+    int64 header_only = dom & static_cast<int64>(MOD_HEADER_PO) & ~po.getLo();
+    if (header_only) {
+        pgm->pwo.parse_options &= ~QoreParseOptions(header_only);
+    }
+    return removed;
+}
+
 // called only during parsing
 int QoreModuleDefContext::parseInit() {
     int err = 0;
@@ -1625,6 +1692,22 @@ int QoreModuleDefContext::parseInit() {
 }
 
 int QoreModuleDefContext::initClosure(const QoreProgramLocation* loc, QoreValue& c, const char* n) {
+    // the closure has the domains that the header declares, also if it was written before the domains key
+    class HeaderClosureInitHelper {
+    public:
+        DLLLOCAL HeaderClosureInitHelper(QoreProgram* pgm) : pgm(pgm) {
+            if (pgm) {
+                qore_program_private::setModuleHeaderClosureInit(*pgm, true);
+            }
+        }
+        DLLLOCAL ~HeaderClosureInitHelper() {
+            if (pgm) {
+                qore_program_private::setModuleHeaderClosureInit(*pgm, false);
+            }
+        }
+    private:
+        QoreProgram* pgm;
+    } closure_init_helper(::getProgram());
     // initialize closure
     QoreParseContext parse_context;
     // check for local variables at the top level - this can only happen if the expresion is not a closure
@@ -1695,36 +1778,64 @@ QoreModuleContextHelper::~QoreModuleContextHelper() {
 }
 
 QoreUserModuleDefContextHelper::QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p,
-        ExceptionSink& xs)
+        ExceptionSink& xs, QoreModuleRecordLock rlock)
         : mod_name(name), old_name(set_module_context_name(name)), old_path(set_module_context_path(path)),
-        pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false) {
-    QMM.getUserModuleRegistration(name, saved_reg);
+        pgm(qore_program_private::get(*p)), po(0), xsink(xs), dup(false), rlock(rlock) {
+    try {
+        if (rlock == QMRL_HELD) {
+            QMM.getUserModuleRegistration(name, saved_reg);
+        } else {
+            QMM.getUserModuleRegistrationLocked(name, saved_reg);
+        }
+    } catch (...) {
+        // the destructor does not run: restore the module context here
+        set_module_context_name(old_name);
+        set_module_context_path(old_path);
+        throw;
+    }
 }
 
-bool QoreModuleManager::isUserModuleContext(const char* name) {
+const QoreProgram* QoreUserModuleDefContextHelper::getDefinitionProgram() const {
+    return pgm->pgm;
+}
+
+bool QoreModuleManager::isUserModuleContext(const char* name, bool binary_context) {
     QoreAbstractModule* mi = findModuleUnlocked(name);
     if (mi) {
         return mi->isUser();
     }
-    // a user module is registered only once its source has been parsed, and it loads the modules it requires while
-    // it is parsed: it is then the module of the thread's module definition context, which is always a user module
-    // definition context; the module context name set for the initialization of an AOT module does not change it
+    // a module is registered only once its source has been parsed, and it loads the modules it requires while it is
+    // parsed: it is then the module of the thread's module definition context; the module context name set for the
+    // initialization of an AOT module does not change it
     QoreModuleDefContext* qmd = get_module_def_context();
     if (!qmd) {
         return false;
     }
-    const char* def_name = static_cast<QoreUserModuleDefContextHelper*>(qmd)->getModuleName();
+    // every module definition context is a QoreUserModuleDefContextHelper, also that of a binary module (QMRL_BINARY)
+    const QoreUserModuleDefContextHelper* uqmd = static_cast<QoreUserModuleDefContextHelper*>(qmd);
+    // the source of an AOT module initialized with the legacy entry point is parsed in a definition context, but the
+    // module is a binary module, which delUser() does not delete, so a user module dependency of it would never be
+    // released (#5953); the user modules that an AOT module requires are tracked by the AOT module state
+    if (!binary_context && uqmd->isBinaryModuleContext()) {
+        return false;
+    }
+    const char* def_name = uqmd->getModuleName();
     return def_name && !strcmp(def_name, name);
 }
 
 void QoreModuleManager::trySetUserBinaryModuleDependency(const char* name) {
+    // the mutex must be held by this thread; trylock() only shows that it is locked, by any thread
+    assert(mutex.trylock());
     const char* old_name = get_module_context_name();
-    if (old_name && strcmp(old_name, name) && isUserModuleContext(old_name)) {
+    // a binary module that an AOT module requires is recorded as for a user module, so it is deleted after it
+    if (old_name && strcmp(old_name, name) && isUserModuleContext(old_name, true)) {
         binary_user_dep_map.addDep(name, old_name);
     }
 }
 
 void QoreModuleManager::trySetUserModuleDependency(const QoreAbstractModule* mi) {
+    // the mutex must be held by this thread; trylock() only shows that it is locked, by any thread
+    assert(mutex.trylock());
     if (!mi->isUser()) {
         return;
     }
@@ -1744,10 +1855,16 @@ void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
 
     po = pgm->pwo.parse_options;
     pgm->pwo.parse_options |= MOD_HEADER_PO;
+    // the header's own restrictions do not apply to the functional domains declared on user code
+    qore_program_private::setModuleHeaderDomains(*pgm->pgm, static_cast<int64>(MOD_HEADER_PO) & ~po.getLo());
 }
 
 void QoreUserModuleDefContextHelper::close() {
-    pgm->pwo.parse_options = po;
+    // the options in effect before the module header, without the restrictions that the header removed (domains)
+    pgm->pwo.parse_options = po & ~QoreParseOptions(dom_removed);
+    // mod_header_dom stays set: the header's closures are parse-initialized after the header with the options that
+    // were in effect when they were parsed, which include the header's restrictions; no other code has them unless
+    // the module sets them itself
 }
 
 void UniqueDirectoryList::addDirList(const char* str) {
@@ -1824,8 +1941,9 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     } else {
         tpgm->addFeature(name.c_str());
     }
-    // a user module importing a binary module can hold objects of its classes, so it is deleted first
-    QMM.trySetUserBinaryModuleDependency(name.c_str());
+    // a user module importing a binary module can hold objects of its classes, so it is deleted first; a module is
+    // applied to a Program without the module manager's mutex, which the record takes (#5953)
+    QMM.trySetUserBinaryModuleDependencyLocked(name.c_str());
 
     // Make sure getProgram() returns this Program when module_ns_init() is called.
     // A call-only context is not enough when a child Program loads a module from
@@ -1936,6 +2054,10 @@ public:
 private:
     QoreModuleLoadFrame frame;
 };
+}
+
+bool qore_module_load_is_trusted() {
+    return module_load_frame && module_load_frame->trusted;
 }
 
 void QoreModuleManager::addModule(QoreAbstractModule* m) {
@@ -2076,7 +2198,8 @@ void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) c
     // mark the feature as fully committed so the lock-free fast path in runTimeLoadModule() can see it
     qore_program_private::get(*tpgm)->commitFeature(name.c_str());
 
-    QMM.trySetUserModuleDependency(this);
+    // a module is applied to a Program without the module manager's mutex, which the record takes (#5953)
+    QMM.trySetUserModuleDependencyLocked(this);
 }
 
 void QoreBuiltinModule::issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd, ExceptionSink* xsink) {
@@ -2455,13 +2578,50 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
 
     OptLocker ol(&mutex);
 
-    // tag any namespaces created by the module's init callback with the module name
-    QoreModuleNameContextHelper mnch(feature);
-
     // see if the module is already registered with QMM; if so skip the init path
     // and just stitch it into the target program
     QoreAbstractModule* mi = findModuleUnlocked(feature);
+    // as for a file load (see loadModuleIntern()): a module that code that is not trusted chose is used only by code
+    // with the same sandbox, and not by other code (issue #5986)
+    if (mi && mi->isTenantChosen() && !mayUseTenantModule(*mi, tpgm)) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot use module '%s' (%s): it "
+            "was loaded from outside the module path by code that a sandbox governs or whose functional domains are "
+            "restricted, and cannot be used by other code, nor by code with another sandbox", feature,
+            mi->getFileName());
+        return -1;
+    }
     if (!mi) {
+        // a statically linked module is not library code: its code is linked into the program, not loaded from the
+        // process-wide module path, whatever path label it was given.  It is checked as a file load of the module
+        // from outside the module path (see loadBinaryModuleFromPath()), for the code that calls the registration
+        // (the code running in this thread; QoreCallerSandboxHelper keeps it the caller when the module is
+        // registered into another Program): when that code is not trusted, the module cannot have the name of a
+        // library module, and it is recorded as chosen by that code otherwise (issue #5986)
+        bool tenant_chosen;
+        QoreSandboxManager* owner;
+        qore_program_id_t owner_pgm_id;
+        if (checkShadowingLoad(xsink, path, feature, false, tenant_chosen, owner, owner_pgm_id)) {
+            return -1;
+        }
+        // what was decided for the module, until it is registered: the frame lasts through loadBinaryModuleFromDesc(),
+        // so the one decision that it is not library code is what addModule() records on the module and what its
+        // initialization (qore_aot_module_init_v3()) gives its Program the sandbox by (inheritAOTModuleSandbox())
+        // (issues #5913, #5986); takes over the reference of owner
+        QoreModuleLoadFrameHelper load_frame(feature, false, tenant_chosen, owner, owner_pgm_id);
+        // as for a file load (see loadBinaryModuleFromPath()): registered while library code that code that is not
+        // trusted loaded is initialized, the module is governed by the sandbox of that code, not initialized as
+        // library code
+        QoreModuleInitSandboxBarrierHelper init_barrier(false);
+        if (init_barrier.failed()) {
+            xsink.outOfMemory();
+            return -1;
+        }
+        // tag any namespaces created by the module's init callback with the module name; only while the module is
+        // loaded, as in loadBinaryModuleFromPath(): a module that is already registered is attached to tpgm in the
+        // context of the caller, as by a load of a loaded feature (loadModuleIntern()); in its own context, a source
+        // module would be recorded as requiring itself (issue #5986)
+        QoreModuleNameContextHelper mnch(feature);
+
         // the metadata record linked with the module: as for a .qmod (see loadBinaryModuleFromPath()), the module
         // must be the one it describes, an optional module it was compiled without must not be available now, and its
         // dependencies are found with its own module path directives
@@ -3524,7 +3684,12 @@ bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_
             }
         }
     }
-    // the file it is, under a directory's canonical path
+    // the file it is, under a directory's canonical path; a relative path is resolved against the current
+    // directory, which is safe: it is resolved exactly as open() or dlopen() will resolve it, and a trusted load
+    // uses the resolved canonical path (load_path), so the file loaded is always the file judged here.  Relative
+    // paths are legitimate here: a binary or AOT module found by name in a relative module directory (a relative
+    // QORE_MODULE_DIR entry, for example) keeps a relative path, while explicit paths from a Program are made
+    // absolute before they reach this check
     std::unique_ptr<char, decltype(&free)> real(realpath(path, nullptr), &free);
     if (!real) {
         return false;
@@ -3679,6 +3844,17 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     if (sm) {
         sm->deref(nullptr);
     }
+}
+
+void QoreModuleManager::inheritAOTModuleSandbox(QoreProgram& module_pgm, QoreProgram* loader_pgm,
+        const char* feature, const char* path) const {
+    // whether the module is library code was decided when its load started (every load by the module manager,
+    // also the registration of a statically linked module, records it), as for a source module and as addModule()
+    // records it on the module; a module initialized outside a load by the module manager (an init function called
+    // directly) is judged by the path it was initialized with
+    const QoreModuleLoadFrame* f = module_load_frame;
+    const bool trusted = (f && feature && !strcmp(f->feature, feature)) ? f->trusted : isTrustedModulePath(path);
+    inherit_module_sandbox_manager(module_pgm, loader_pgm, trusted);
 }
 
 //! Returns the parse options of the Program loading a user module that the module inherits
@@ -3849,7 +4025,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     userModule->addParseOptionMask(load_mask);
 
     ModuleReExportHelper reExportHelper(userModule.get(), reexport);
-    QoreUserModuleDefContextHelper qmd(feature, path,  mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
     std::string moduleCode = QoreDir::get_file_content(modulePath.c_str());
 
@@ -4362,64 +4538,6 @@ int QoreModuleManager::queueChildModules(QoreAbstractModule& mi, ExceptionSink& 
     return rc;
 }
 
-int QoreModuleManager::importModuleNSUnlocked(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
-    printd(5, "QoreModuleManager::importModuleNSUnlocked() name='%s' pgm=%p\n", name, pgm);
-
-    // Find the module (assumes lock is already held)
-    QoreAbstractModule* mi = findModuleUnlocked(name);
-    if (!mi) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
-            "cannot find module '%s' for namespace import", name);
-        return -1;
-    }
-
-    // Import the module's namespace into the program
-    // We do a direct namespace merge WITHOUT calling addToProgramImpl to avoid:
-    // 1. Module dependency tracking (causes cleanup assertion failures)
-    // 2. Reexport handling (can cause deadlock)
-    // This is specifically for AOT module initialization where dependencies
-    // are already handled by the module manager via qore_module_dependencies.
-
-    // Add the feature to the program
-    qore_program_private::get(*pgm)->addUserFeature(name);
-
-    // Get namespace pointers
-    RootQoreNamespace* target_root_ns = pgm->getRootNS();
-    RootQoreNamespace* source_root_ns = mi->isUser()
-        ? static_cast<QoreUserModule*>(mi)->getProgram()->getRootNS()
-        : nullptr;
-
-    if (source_root_ns) {
-        // For user modules, merge the namespace from the module's program
-        QoreModuleContext qmc(name, qore_root_ns_private::get(*target_root_ns), xsink);
-        // exclude runtime readers of the target namespace and runtime writers of the source while
-        // they are merged; parse ownership, held by the caller, excludes only other writers of the
-        // target
-        RuntimeNamespaceMergeLocker rnml(*target_root_ns, *source_root_ns);
-
-        qore_root_ns_private::scanMergeCommittedNamespace(*target_root_ns, *source_root_ns, qmc);
-
-        if (qmc.hasError()) {
-            qmc.rollback();
-            qore_program_private::get(*pgm)->removeUserFeature(name);
-            return -1;
-        }
-
-        qore_root_ns_private::copyMergeCommittedNamespace(*target_root_ns, *source_root_ns);
-    } else {
-        // For builtin modules, use the ns_init function to import
-        // This should not happen in typical AOT scenarios since qore_module_dependencies
-        // only lists user modules, but handle it for completeness
-        mi->addToProgramImpl(pgm, xsink);
-        if (xsink) {
-            return -1;
-        }
-    }
-
-    printd(2, "QoreModuleManager::importModuleNSUnlocked() imported '%s' into pgm %p\n", name, pgm);
-    return 0;
-}
-
 void QoreModuleManager::registerUserModuleFromSource(const char* name, const char* src, QoreProgram* pgm,
         ExceptionSink& xsink) {
     OptLocker ol(&mutex);
@@ -4672,6 +4790,9 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
             omi = mi.release();
             addModule(omi);
             trySetUserModule(name);
+            // the module stays registered, so it keeps the records of its dependencies: the binary modules that it
+            // requires are not deleted before it in delUser()
+            qmd.setRegistered();
             return nullptr;
         }
         assert(!xsink);
@@ -4706,6 +4827,8 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
     omi = mi.release();
     addModule(omi);
     trySetUserModule(name);
+    // the module keeps the dependencies that its load registered
+    qmd.setRegistered();
 
     return omi;
 }
@@ -4877,7 +5000,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     ON_BLOCK_EXIT(module_load_clear, td);
 
     ModuleReExportHelper mrh(mi.get(), reexport);
-    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
     {
         ModuleLoadMapHelper mlmh(feature, xsink);
@@ -4977,7 +5100,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
 
     ModuleReExportHelper mrh(mi.get(), reexport);
 
-    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink);
+    QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink, QMRL_HELD);
 
     {
         // run initialization unlocked
@@ -6091,7 +6214,9 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
 
 #define QORE_MAX_MODULE_ERROR_DESC 200
 int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, QoreModuleCmdOrigin origin) {
+    // a replayed directive is always issued to the Program whose directive it is
+    assert(origin == QoreModuleCmdOrigin::Caller || pgm);
     // a sandboxed caller stays the caller of the load and of the command, which runs in the target Program below; a
     // module that it chose by path is checked and governed as one that it loads itself (issue #5659)
     QoreCallerSandboxHelper caller_sandbox(pgm, xsink);
@@ -6102,8 +6227,10 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     // a command issued to another Program runs there, and the module decides what it allows by that Program's
     // parse options and sandbox: code that is not trusted would get what its own Program does not allow, such as a
     // Python interpreter with native file access (issue #5659).  It may issue a command to another Program only if its
-    // own Program is not sandboxed and the target has every restriction that its code has
-    if (pgm && pgm != getProgram()) {
+    // own Program is not sandboxed and the target has every restriction that its code has.  A Program's own
+    // directive replayed from its compiled metadata is not such a command: it runs in its Program as when the
+    // Program's source is parsed there (see issueParseCmd()), whatever code loads the Program
+    if (origin == QoreModuleCmdOrigin::Caller && pgm && pgm != getProgram()) {
         static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
             & ~QoreParseOptions(QDOM_IN_MODULE);
         if (qore_program_is_sandboxed(getProgram())) {

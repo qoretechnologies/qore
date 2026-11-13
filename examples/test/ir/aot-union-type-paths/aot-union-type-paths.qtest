@@ -50,7 +50,7 @@ class AotUnionTypePathsTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         list<string> lines = select astOutput().split("\n"), $1 =~ / => /;
-        assertEq(32, lines.size(), "every case ran");
+        assertEq(35, lines.size(), "every case ran");
         hash<string, string> res = map {$1.split(" => ")[0]: $1.split(" => ")[1]}, lines;
         assertEq("{a: 2} hash<H>", res."local hashdecl first hash");
         assertEq("RUNTIME-TYPE-ERROR union<hash<H>, int>", res."local hashdecl first refuses");
@@ -77,6 +77,10 @@ class AotUnionTypePathsTest inherits QUnit::Test {
         assertEq("RUNTIME-TYPE-ERROR union<hash<string, hash<H>>, int>", res."hash member refuses");
         assertEq("RUNTIME-TYPE-ERROR union<hash<H>, int>", res."duplicate member refuses");
         assertEq("RUNTIME-TYPE-ERROR int", res."duplicate type only refuses");
+        # the name of a union does not depend on the spelling that created it first (#5926)
+        assertEq("[1] list<union<int, string>>", res."spelling with a duplicate");
+        assertEq("[1] list<union<int, string>>", res."same union by typedef");
+        assertEq("[1] list<*union<int, string>>", res."or-nothing with a duplicate");
     }
 
     #! runs the script in every execution mode and on the IR tier

@@ -38,7 +38,9 @@ class Base {
         return self;
     }
 
-    int pubtest(int i) {
+    # float: PubChild::pubtest(float) takes calls with an int argument at run time (the child class's variants are
+    # searched first), so a call typed against this class must allow its float (qore#5838)
+    float pubtest(int i) {
         return i;
     }
 

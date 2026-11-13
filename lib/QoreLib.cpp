@@ -1038,11 +1038,8 @@ static QoreStringNode* qore_sprintf_intern(ExceptionSink* xsink, const QoreStrin
     }
     SimpleRefHolder<QoreStringNode> buf(new QoreStringNode(fmt->getEncoding()));
 
-    // the current program can be nullptr when formatting is performed on a native thread that never
-    // entered a program (ex: an async I/O thread rendering a log message); no program means no
-    // PO_BROKEN_SPRINTF
-    QoreProgram* pgm = ignore_broken_sprintf ? nullptr : getProgram();
-    bool broken_sprintf = pgm && static_cast<bool>(pgm->getParseOptions() & PO_BROKEN_SPRINTF);
+    // Native formatting uses its source-bound invocation, or canonical semantics without a Qore call site.
+    bool broken_sprintf = !ignore_broken_sprintf && qore_get_native_semantic_policy().brokenSprintf();
 
     const char* pstr = fmt->c_str();
     size_t l = fmt->strlen();
@@ -1508,7 +1505,9 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
     if (self) {
         return QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, self, meth, qore_class_private::get(*meth->getClass())));
     }
-    return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, meth));
+    // a value created at run time: it records the permissions of the code creating it, which a call through it runs
+    // with (see ResolvedCallReferenceNodeIntern::getCreatorParseOptions())
+    return QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, meth, ::getProgram(), runtime_get_class()));
 }
 
 QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink) {

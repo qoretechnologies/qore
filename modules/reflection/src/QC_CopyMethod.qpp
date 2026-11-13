@@ -32,6 +32,51 @@
 #include "QC_CopyMethod.h"
 #include "QC_Class.h"
 
+#include <qore/intern/LexicalReflection.h>
+
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue CopyMethod_call_impl(LexicalSemanticPolicy policy,
+        QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, QoreObject* obj) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
+        return QoreValue();
+    }
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // we have to explictly test object compatibility here
+    if (check_call(obj, *m->m, xsink)) {
+        return QoreValue();
+    }
+
+    const QoreClass* cls = m->m->getClass();
+    // copying creates an object of the class: the class must be allowed by the caller and the class's Program
+    if (check_constructor(caller, cls, m->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the access of the copy method, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
+    if constexpr (Lexical) return qore_lexical_reflection_copy(policy, *cls, obj, xsink);
+    else return cls->execCopy(obj, xsink);
+}
+
+static QoreValue CopyMethod_call_Vo_lexical(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    return CopyMethod_call_impl<true>(qore_get_native_semantic_policy(), self, m, args, runtime_cfg, xsink,
+        args->retrieveEntry(0).get<QoreObject>());
+}
+
+static QoreValue CopyMethod_call_Vo(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+static const QoreLexicalMethodRegistrationHelper::Entry lexical_entries_CopyMethod[] = {
+    {reinterpret_cast<q_method_t>(CopyMethod_call_Vo), reinterpret_cast<q_method_t>(CopyMethod_call_Vo_lexical)},
+};
+
 //! This class provides information about %Qore copy methods
 /**
     @see @ref Qore::Reflection::CopyMethodVariant "CopyMethodVariant"
@@ -113,31 +158,7 @@ object obj2 = m.call(obj1);
     @throw REFLECTION-ACCESS-ERROR the calling code may not execute code in the target Program (see @ref reflection_caller_privilege)
 */
 object CopyMethod::call(object obj) {
-    // the privileges of the calling code, captured before switching to the class's Program
-    QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
-        return QoreValue();
-    }
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, m->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // we have to explictly test object compatibility here
-    if (check_call(obj, *m->m, xsink)) {
-        return QoreValue();
-    }
-
-    const QoreClass* cls = m->m->getClass();
-    // copying creates an object of the class: the class must be allowed by the caller and the class's Program
-    if (check_constructor(caller, cls, m->pgm, xsink)) {
-        return QoreValue();
-    }
-    // the access of the copy method, for code that a sandbox governs or that is restricted
-    if (reflection_check_method_access(caller, m->m, xsink)) {
-        return QoreValue();
-    }
-    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
-    return cls->execCopy(obj, xsink);
+    return CopyMethod_call_impl<false>({}, self, m, args, runtime_cfg, xsink, obj);
 }
+
+//! @qppinit: QoreLexicalMethodRegistrationHelper lexical_registration(lexical_entries_CopyMethod);

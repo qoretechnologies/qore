@@ -416,6 +416,11 @@ public:
         sock->ref();
     }
 
+    //! Waits until the stream has no data buffered to be sent, instead of until its buffer is under the threshold
+    DLLLOCAL void setFlush() {
+        flush = true;
+    }
+
     DLLLOCAL ~QoreSocketObjectStreamDrainPollOperation() override {
         ExceptionSink xsink;
         cleanup(&xsink);
@@ -523,6 +528,11 @@ private:
         if (!ensureSession(xsink)) {
             return -1;
         }
+        if (flush) {
+            return h2
+                ? h2->streamSendFlushed(static_cast<int32_t>(stream_id))
+                : quic->streamSendFlushed(stream_id);
+        }
         return h2
             ? h2->waitForStreamDrain(static_cast<int32_t>(stream_id), 0)
             : quic->waitForStreamDrain(stream_id, 0);
@@ -576,6 +586,8 @@ private:
     bool wake_requested = false;
     bool use_h2_session = false;
     bool use_first_quic_session = false;
+    //! true: wait until the stream has no data buffered to be sent (see setFlush())
+    bool flush = false;
 };
 
 class QoreSocketObjectQuicStreamDataPollOperation : public SocketPollOperationBase {
@@ -6966,6 +6978,23 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
     return qore_socket_object_exec_stream_drain(this,
         new QoreSocketObjectStreamDrainPollOperation(this, stream_id), timeout_ms,
         owner_name.c_str(), xsink);
+}
+
+int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool http2, int64_t stream_id, int timeout_ms,
+        ExceptionSink* xsink) {
+    const char* method = http2 ? "waitForHttp2StreamFlushed" : "waitForQuicClientStreamFlushed";
+    SocketSyncPoll::assertNotOnIoThread("Socket", method, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    std::string owner_name(method);
+    owner_name += ":";
+    owner_name += std::to_string(stream_id);
+    QoreSocketObjectStreamDrainPollOperation* op = http2
+        ? new QoreSocketObjectStreamDrainPollOperation(s, static_cast<int32_t>(stream_id), true)
+        : new QoreSocketObjectStreamDrainPollOperation(s, stream_id);
+    op->setFlush();
+    return qore_socket_object_exec_stream_drain(s, op, timeout_ms, owner_name.c_str(), xsink);
 }
 
 void QoreSocketObject::cancelQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {

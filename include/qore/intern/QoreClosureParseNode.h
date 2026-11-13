@@ -117,7 +117,8 @@ public:
 
     //! Returns the class that a closure without an object context was parsed in, if any
     /** A closure in a static method or in its default values, or in a static member initializer, runs in the class
-        context of its class, also when it is created by a call's default value in the caller's context (issue #5907)
+        context of its class, also when it is created by a call's default value in the caller's context (issue #5907),
+        and one parsed outside a class runs in no class context (issue #5961)
     */
     DLLLOCAL const qore_class_private* getStaticClass() const { return static_class; }
 

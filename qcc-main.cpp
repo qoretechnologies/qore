@@ -1973,6 +1973,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::SOURCE_STAT_FINGERPRINT: return "SOURCE_STAT_FINGERPRINT";
         case QoreAOTSectionType::UNRUN_TOP_LEVEL_CODE: return "UNRUN_TOP_LEVEL_CODE";
         case QoreAOTSectionType::FUNCTIONAL_DOMAIN: return "FUNCTIONAL_DOMAIN";
+        case QoreAOTSectionType::MODULE_DOMAINS: return "MODULE_DOMAINS";
     }
     return "UNKNOWN";
 }
@@ -2415,6 +2416,10 @@ static const char* dump_aot_expr_kind_name(uint8_t kind) {
         case AOTExprKind::REGEX_MATCH: return "REGEX_MATCH";
         case AOTExprKind::REGEX_NMATCH: return "REGEX_NMATCH";
         case AOTExprKind::REGEX_EXTRACT: return "REGEX_EXTRACT";
+        case AOTExprKind::SPLICE: return "SPLICE";
+        case AOTExprKind::EXTRACT: return "EXTRACT";
+        case AOTExprKind::REGEX_SUBST: return "REGEX_SUBST";
+        case AOTExprKind::TRANSLIT: return "TRANSLIT";
         case AOTExprKind::PRE_INC: return "PRE_INC";
         case AOTExprKind::PRE_DEC: return "PRE_DEC";
         case AOTExprKind::POST_INC: return "POST_INC";
@@ -2719,6 +2724,27 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 && dump_skip_bytes(p, end, 8)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
+        // pattern, replacement, options, global flag, lvalue
+        case AOTExprKind::REGEX_SUBST:
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_string_ref(reader, p, end)
+                && dump_skip_bytes(p, end, 9)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        // source, target, lvalue
+        case AOTExprKind::TRANSLIT:
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_string_ref(reader, p, end)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        // lvalue, offset, length, new value
+        case AOTExprKind::SPLICE:
+        case AOTExprKind::EXTRACT:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
         case AOTExprKind::CONTEXT_REF:
             return dump_skip_string_ref(reader, p, end);
 
@@ -2914,7 +2940,7 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
             return dump_skip_string_ref(reader, p, end)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
-        case AOTExprKind::DOT_EVAL_EXPR:
+        case AOTExprKind::AST_EXPR:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::CLOSURE_CREATE: {

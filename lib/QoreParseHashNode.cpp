@@ -38,6 +38,47 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 
+namespace {
+class LexicalParseHashNode : public QoreParseHashNode {
+public:
+    using QoreParseHashNode::QoreParseHashNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreParseHashNode* QoreParseHashNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        bool curly) {
+    auto* node = policy.needsFilter() ? static_cast<QoreParseHashNode*>(new LexicalParseHashNode(loc, curly))
+        : new QoreParseHashNode(loc, curly);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
+QoreParseHashNode* QoreParseHashNode::bindSource(QoreParseHashNode* node, LexicalSemanticPolicy policy) {
+    assert(!node->parse_init && !node->semantic_policy_bound);
+    if (policy.needsFilter()) {
+        auto* replacement = create(policy, node->loc, node->curly);
+        replacement->keys.swap(node->keys);
+        replacement->values.swap(node->values);
+        replacement->lvec.swap(node->lvec);
+        replacement->kmap.swap(node->kmap);
+        replacement->parse_error = node->parse_error;
+        node->deref(nullptr);
+        return replacement;
+    }
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
+QoreParseHashNode* QoreParseHashNode::copyBackground(const QoreParseHashNode& old, ExceptionSink* xsink) {
+    auto* node = old.getSemanticPolicy().needsFilter()
+        ? static_cast<QoreParseHashNode*>(new LexicalParseHashNode(old, xsink)) : new QoreParseHashNode(old, xsink);
+    node->copySemanticPolicy(old);
+    return node;
+}
+
 static bool qore_parse_hash_literal_value_may_be_nothing(const QoreValue& v) {
     if (v.getType() == NT_VARREF) {
         const VarRefNode* vr = v.get<const VarRefNode>();
@@ -295,6 +336,11 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
 }
 
 QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreValue QoreParseHashNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     assert(keys.size() == values.size());
 
     // Use the parse-time narrowed value type when available so
@@ -362,7 +408,11 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
             QoreTypeInfo::acceptInputKey(this->vtype, key.c_str(), val, xsink);
         }
 
-        h->setKeyValue(key.c_str(), val, xsink);
+        if constexpr (Lexical) {
+            qore_hash_private::setKeyValueLexical(**h, key.c_str(), val, xsink, getSemanticPolicy());
+        } else {
+            qore_hash_private::setKeyValueCanonical(**h, key.c_str(), val, xsink);
+        }
         if (xsink && *xsink) {
             needs_deref = false;
             return QoreValue();

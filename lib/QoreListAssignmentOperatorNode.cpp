@@ -34,7 +34,30 @@
 
 QoreString QoreListAssignmentOperatorNode::op_str("list assignment operator expression");
 
+namespace {
+class LexicalListAssignmentOperatorNode : public QoreListAssignmentOperatorNode {
+public:
+    using QoreListAssignmentOperatorNode::QoreListAssignmentOperatorNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        return copyBackgroundExplicit<LexicalListAssignmentOperatorNode>(xsink);
+    }
+};
+}
+
 int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    int err = parseInitIntern(parse_context);
+    if (!err && getSemanticPolicy().needsFilter()) {
+        auto* replacement = makeSpecialization<LexicalListAssignmentOperatorNode>();
+        replacement->setParseAnalysis(parse_context.analysis);
+        val = replacement;
+    }
+    return err;
+}
+
+int QoreListAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context) {
     // turn off "return value ignored" flag
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
@@ -123,6 +146,11 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
 }
 
 QoreValue QoreListAssignmentOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreValue QoreListAssignmentOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     assert(left.getType() == NT_PARSE_LIST);
     const QoreParseListNode* llv = left.get<const QoreParseListNode>();
 
@@ -146,15 +174,11 @@ QoreValue QoreListAssignmentOperatorNode::evalImpl(bool& needs_deref, ExceptionS
         if (!v)
             return QoreValue();
 
-        // if there's only one value, then save it
-        if (nv) { // assign to list position
-            v.assign(nv->getReferencedEntry(i));
+        QoreValue assigned = nv ? nv->getReferencedEntry(i) : (!i ? new_value->refSelf() : QoreValue());
+        if constexpr (Lexical) {
+            v.assign(assigned, "<lvalue>", getSemanticPolicy());
         } else {
-            if (!i) {
-                v.assign(new_value->refSelf());
-            } else {
-                v.assign(QoreValue());
-            }
+            v.assign(assigned);
         }
         if (*xsink) {
             return QoreValue();

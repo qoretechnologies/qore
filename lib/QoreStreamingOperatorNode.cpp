@@ -33,6 +33,40 @@
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreIterateOperatorNode.h"
+#include "qore/intern/qore_list_private.h"
+
+namespace {
+class StrictBooleanStreamingOperatorNode : public QoreStreamingOperatorNode {
+public:
+    using QoreStreamingOperatorNode::QoreStreamingOperatorNode;
+    FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
+            ExceptionSink* xsink) const override {
+        return getFunctionalIteratorCommon<true>(value_type, xsink);
+    }
+private:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreStreamingOperatorNode* QoreStreamingOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc, Kind kind,
+        QoreValue predicate, QoreValue source) {
+    QoreStreamingOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanStreamingOperatorNode(loc, kind, predicate, source)
+        : new QoreStreamingOperatorNode(loc, kind, predicate, source);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
+QoreValue QoreStreamingOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+FunctionalOperatorInterface* QoreStreamingOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
+        ExceptionSink* xsink) const {
+    return getFunctionalIteratorCommon<false>(value_type, xsink);
+}
+
 
 const char* QoreStreamingOperatorNode::getOperatorName() const {
     switch (kind) {
@@ -150,7 +184,8 @@ int QoreStreamingOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     return err;
 }
 
-QoreValue QoreStreamingOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreStreamingOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     if (!isTerminal()) {
         FunctionalOperator::FunctionalValueType value_type;
         std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(value_type, xsink));
@@ -173,7 +208,7 @@ QoreValue QoreStreamingOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
                 return QoreValue();
             }
 
-            rv->push(iv.takeReferencedValue(), xsink);
+            qore_list_private::pushCanonical(**rv, iv.takeReferencedValue(), xsink);
             if (*xsink) {
                 return QoreValue();
             }
@@ -235,7 +270,7 @@ QoreValue QoreStreamingOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
             if (*xsink) {
                 return QoreValue();
             }
-            matches = predicate->getAsBool();
+            matches = LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*predicate);
         }
 
         switch (kind) {
@@ -290,7 +325,8 @@ QoreValue QoreStreamingOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
     return QoreValue();
 }
 
-FunctionalOperatorInterface* QoreStreamingOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* QoreStreamingOperatorNode::getFunctionalIteratorCommon(FunctionalValueType& value_type,
         ExceptionSink* xsink) const {
     if (isTerminal()) {
         value_type = nothing;
@@ -319,10 +355,11 @@ FunctionalOperatorInterface* QoreStreamingOperatorNode::getFunctionalIteratorImp
         }
     }
 
-    return new QoreFunctionalStreamingOperator(this, f.release(), limit);
+    return new QoreFunctionalStreamingOperator<StrictBoolean>(this, f.release(), limit);
 }
 
-bool QoreFunctionalStreamingOperator::skipDropPrefix(ExceptionSink* xsink) {
+template <bool StrictBoolean>
+bool QoreFunctionalStreamingOperator<StrictBoolean>::skipDropPrefix(ExceptionSink* xsink) {
     if (initialized) {
         return false;
     }
@@ -347,17 +384,19 @@ bool QoreFunctionalStreamingOperator::skipDropPrefix(ExceptionSink* xsink) {
     return false;
 }
 
-bool QoreFunctionalStreamingOperator::predicateMatches(ValueOptionalRefHolder& iv, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+bool QoreFunctionalStreamingOperator<StrictBoolean>::predicateMatches(ValueOptionalRefHolder& iv, ExceptionSink* xsink) {
     ImplicitElementHelper eh(index);
     SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
     ValueEvalOptimizedRefHolder result(op->left, xsink);
     if (*xsink) {
         return false;
     }
-    return result->getAsBool();
+    return LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result);
 }
 
-bool QoreFunctionalStreamingOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+bool QoreFunctionalStreamingOperator<StrictBoolean>::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
     if (done) {
         return true;
     }

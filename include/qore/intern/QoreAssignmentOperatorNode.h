@@ -51,10 +51,17 @@ protected:
 
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode);
 
+    DLLLOCAL int parseInitMode(QoreValue& val, QoreParseContext& parse_context, AssignmentMode mode);
+
+    DLLLOCAL QoreValue evalLexical(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalInternImpl(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
     DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, AssignmentMode::Normal);
+        return parseInitMode(val, parse_context, AssignmentMode::Normal);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -94,7 +101,7 @@ public:
 
 protected:
     DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, AssignmentMode::Weak);
+        return parseInitMode(val, parse_context, AssignmentMode::Weak);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -121,11 +128,71 @@ public:
 
 protected:
     DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, AssignmentMode::Opaque);
+        return parseInitMode(val, parse_context, AssignmentMode::Opaque);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         return evalIntern(xsink, needs_deref, AssignmentMode::Opaque);
+    }
+};
+
+//! Selected during parse initialization; canonical assignment nodes keep their original execution entry.
+// Concrete bases also make every lexical operator visible to the IR operand-slot coverage scan.
+
+class LexicalAssignmentOperatorNode : public QoreAssignmentOperatorNode {
+public:
+    using QoreAssignmentOperatorNode::QoreAssignmentOperatorNode;
+
+    DLLLOCAL QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = copyBackgroundExplicit<LexicalAssignmentOperatorNode>(xsink);
+        if (copy) {
+            copy->broken_int = broken_int;
+            copy->ident = ident;
+        }
+        return copy;
+    }
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(xsink, needs_deref, AssignmentMode::Normal);
+    }
+};
+
+class LexicalWeakAssignmentOperatorNode : public QoreWeakAssignmentOperatorNode {
+public:
+    using QoreWeakAssignmentOperatorNode::QoreWeakAssignmentOperatorNode;
+
+    DLLLOCAL QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = copyBackgroundExplicit<LexicalWeakAssignmentOperatorNode>(xsink);
+        if (copy) {
+            copy->broken_int = broken_int;
+            copy->ident = ident;
+        }
+        return copy;
+    }
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(xsink, needs_deref, AssignmentMode::Weak);
+    }
+};
+
+class LexicalOpaqueAssignmentOperatorNode : public QoreOpaqueAssignmentOperatorNode {
+public:
+    using QoreOpaqueAssignmentOperatorNode::QoreOpaqueAssignmentOperatorNode;
+
+    DLLLOCAL QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = copyBackgroundExplicit<LexicalOpaqueAssignmentOperatorNode>(xsink);
+        if (copy) {
+            copy->broken_int = broken_int;
+            copy->ident = ident;
+        }
+        return copy;
+    }
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(xsink, needs_deref, AssignmentMode::Opaque);
     }
 };
 

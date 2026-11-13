@@ -2672,7 +2672,7 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* cns = nullptr;
     ConstantEntry* ce = const_cast<ConstantEntry*>(
-        qore_root_ns_private::runtimeFindNamespaceConstant(*pp->RootNS, fqn, cns));
+        qore_root_ns_private::runtimeFindNamespaceConstant(*pp->RootNS, fqn, cns, LexicalSemanticPolicy{}));
     if (ce) {
         return ce;
     }
@@ -2718,7 +2718,7 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
     std::string const_name = path.substr(sep + 2);
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_path.c_str(), found_ns);
+        *pp->RootNS, class_path.c_str(), found_ns, LexicalSemanticPolicy{});
     if (!qc) {
         const char* pending_class_path = class_path.c_str();
         if (pending_class_path[0] == ':' && pending_class_path[1] == ':') {
@@ -3472,7 +3472,7 @@ const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* found_ns = nullptr;
-    if (const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS, path, found_ns)) {
+    if (const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS, path, found_ns, LexicalSemanticPolicy{})) {
         return hd;
     }
 
@@ -3643,7 +3643,7 @@ static bool qoreAOTContainerValueTypeResolvable(const QoreAOTBinaryWriter& write
     // value's
     if (kind == QoreAOTContainerValueType::HashDecl) {
         const QoreNamespace* pns = nullptr;
-        return pgm->findHashDecl(type_path, pns) == hd;
+        return qore_program_private::get(*pgm)->findHashDeclCanonical(type_path, pns) == hd;
     }
     QoreAOTTypeResolver resolver(pgm);
     std::string type_error;
@@ -3815,7 +3815,7 @@ static bool qoreAOTApplyContainerValueType(QoreValue& v,
     const QoreTypeInfo* ti = nullptr;
     if (kind == QoreAOTContainerValueType::HashDecl) {
         const QoreNamespace* pns = nullptr;
-        const TypedHashDecl* hd = pgm ? pgm->findHashDecl(type_path, pns) : nullptr;
+        const TypedHashDecl* hd = pgm ? qore_program_private::get(*pgm)->findHashDeclCanonical(type_path, pns) : nullptr;
         if (!hd) {
             error = "cannot resolve hashdecl '" + std::string(type_path)
                 + "' while reading typed AOT container value";
@@ -4772,6 +4772,7 @@ QoreAOTValueLocalsHelper::~QoreAOTValueLocalsHelper() {
 
 QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end,
         std::string& error) const {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     const uint8_t* start = ptr;
     QoreValue rv = readValueIntern(ptr, end, error);
     if (error.empty()) {
@@ -5149,10 +5150,9 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
         }
 
         case QoreAOTValueTag::VT_OPAQUE_DEFAULT:
-            // Complex expression default (e.g. function call) that couldn't be
-            // serialized. Return boolean True as a placeholder to mark the parameter
-            // as optional in the function signature. The actual default is evaluated
-            // by the compiled function code at runtime.
+            // A default value that an earlier writer could not serialize: the parameter is optional, but its
+            // default value is lost (the value True is returned in its place).  The writer no longer emits this
+            // marker: a default value that cannot be serialized fails the compilation (issue #5947)
             return QoreValue(true);
 
         case QoreAOTValueTag::VT_ENUM: {
@@ -5179,7 +5179,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 return QoreValue();
             }
             const QoreNamespace* pns = nullptr;
-            const QoreEnumDecl* ed = getProgram()->findEnum(path, pns);
+            const QoreEnumDecl* ed = qore_program_private::get(*getProgram())->findEnumCanonical(path, pns);
             if (!ed) {
                 error = std::string("enum not found: ") + path;
                 return QoreValue();
@@ -5319,7 +5319,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 // Hashdecl: type_path is a namespace path to a hashdecl
                 QoreProgram* pgm = getProgram();
                 const QoreNamespace* pns = nullptr;
-                const TypedHashDecl* hd = pgm ? pgm->findHashDecl(type_path, pns) : nullptr;
+                const TypedHashDecl* hd = pgm ? qore_program_private::get(*pgm)->findHashDeclCanonical(type_path, pns) : nullptr;
                 if (!hd) {
                     printd(0, "AOT readValue VT_NEW_COMPLEX_DEFAULT: cannot resolve hashdecl '%s'\n",
                         type_path);
@@ -5636,7 +5636,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
         }
 
         const QoreNamespace* pns = nullptr;
-        const TypedHashDecl* base_hd = pgm->findHashDecl(base_path.c_str(), pns);
+        const TypedHashDecl* base_hd = qore_program_private::get(*pgm)->findHashDeclCanonical(base_path.c_str(), pns);
         if (!base_hd) {
             return nullptr;
         }
@@ -5680,7 +5680,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
     }
 
     const QoreNamespace* pns = nullptr;
-    const TypedHashDecl* thd = pgm->findHashDecl(decl_name.c_str(), pns);
+    const TypedHashDecl* thd = qore_program_private::get(*pgm)->findHashDeclCanonical(decl_name.c_str(), pns);
     if (thd) {
         if (typed_hash_decl_private::get(*thd)->hasTypeParams()) {
             return nullptr;
@@ -5720,7 +5720,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveEnumType(const char* path) {
     }
 
     const QoreNamespace* pns = nullptr;
-    const QoreEnumDecl* ed = pgm->findEnum(enum_name.c_str(), pns);
+    const QoreEnumDecl* ed = qore_program_private::get(*pgm)->findEnumCanonical(enum_name.c_str(), pns);
     if (ed) {
         return ed->getTypeInfo(or_nothing);
     }
@@ -6114,7 +6114,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveTypeParameterType(const char* pa
         }
 
         const QoreNamespace* pns = nullptr;
-        const TypedHashDecl* hd = pgm->findHashDecl(hashdecl_path.c_str(), pns);
+        const TypedHashDecl* hd = qore_program_private::get(*pgm)->findHashDeclCanonical(hashdecl_path.c_str(), pns);
         if (!hd) {
             return nullptr;
         }
@@ -6509,9 +6509,27 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
     return qore_get_type_from_string_intern(use_path);
 }
 
+//! The signature whose type parameters the default value being read uses (see QoreAOTDefaultTypeParamSignatureHelper)
+static thread_local const UserSignature* g_aot_default_type_param_signature = nullptr;
+
+QoreAOTDefaultTypeParamSignatureHelper::QoreAOTDefaultTypeParamSignatureHelper(const UserSignature* sig)
+        : old(g_aot_default_type_param_signature) {
+    g_aot_default_type_param_signature = sig;
+}
+
+QoreAOTDefaultTypeParamSignatureHelper::~QoreAOTDefaultTypeParamSignatureHelper() {
+    g_aot_default_type_param_signature = old;
+}
+
 const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& error) {
     if (!path || !*path) {
         return nullptr;  // null/empty = no type constraint (auto)
+    }
+
+    // a type parameter of the callable whose default value is being read (issue #5928)
+    if (!signature_type_param_owner && g_aot_default_type_param_signature
+            && qore_aot_type_path_has_signature_type_param(path)) {
+        return resolveForSignature(path, error, g_aot_default_type_param_signature);
     }
 
     // Signature-owned type parameter identities include their UserSignature
@@ -10193,6 +10211,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     //   bit  1 = is_user
     //   bit  2 = signature literally has the `...` ellipsis (sig->hasVarargs())
     //   bit  3 = callable type-parameter declarations follow parse options
+    //   bit  4 = the declared functional domains (i64) follow the parse options (v33)
     //   bit 15 = format marker: "bits 2+ are meaningful" (new-format qmod)
     //
     // Bits 0 and 2 together let the reader separate two distinct
@@ -10239,6 +10258,11 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     if (usig && usig->hasTypeParameters()) {
         flags |= 0x0008;
     }
+    // bit 4: the functional domains declared on the user variant in Qore source follow its parse options (v33)
+    int64 declared_domain = uvb ? uvb->getDeclaredDomain() : QDOM_DEFAULT;
+    if (declared_domain) {
+        flags |= 0x0010;
+    }
     writer.writeU16(flags);
 
     // Per-variant signature start/end lines — plumbed into the reader's
@@ -10284,6 +10308,10 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     }
     writer.writeI64(variant_po.getLo());
     writer.writeI64(variant_po.getHi());
+
+    if (flags & 0x0010) {
+        writer.writeI64(declared_domain);
+    }
 
     if (flags & 0x0008) {
         assert(usig);
@@ -10348,9 +10376,8 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
             QoreValue dv = defaults[i];
             // Check if the default value is a serializable constant type.
             // AST expression nodes (function calls, variable refs, etc.) have types
-            // not in the switch list and would be serialized as VT_NOTHING, which
-            // would make the parameter appear required. Use VT_OPAQUE_DEFAULT instead
-            // to preserve the "has default" semantics.
+            // not in the switch list; they are written as expressions below, and one
+            // that cannot be written fails the compilation (issue #5947).
             qore_type_t dt = dv.getType();
             if (dt == NT_SCOPE_REF) {
                 const AbstractQoreNode* node = dv.getInternalNode();
@@ -10410,9 +10437,13 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     return std::string();
                 };
 
-                // Case 1: no-arg function call default (e.g., getcwd(), now())
+                // Case 1: no-arg function call default (e.g., getcwd(), now()); a call with explicit type
+                // arguments (inner<T>()) is written as an expression below, which keeps them (issue #5964)
                 auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
-                if (fcn && fcn->getName() && (!fcn->getArgs() || fcn->getArgs()->empty())) {
+                const QoreTypeParamInstantiation* fcn_type_args = fcn ? fcn->getExplicitTypeParamInstantiation()
+                    : nullptr;
+                if (fcn && fcn->getName() && (!fcn->getArgs() || fcn->getArgs()->empty())
+                        && (!fcn_type_args || fcn_type_args->type_args.empty())) {
                     writer.writeU8(2);  // expression default: function call
                     // Emit the namespace-qualified name.  The reader resolves this
                     // name against the root function index, and a function declared
@@ -10451,7 +10482,11 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 //   dynamic dispatch at each call.
                 if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
                     MethodCallNode* mc = de->getMethodCall();
-                    if (mc && mc->getName() && (!mc->getArgs() || mc->getArgs()->empty())) {
+                    // a call with explicit type arguments is written as an expression below (issue #5964)
+                    const QoreTypeParamInstantiation* mc_type_args = mc ? mc->getExplicitTypeParamInstantiation()
+                        : nullptr;
+                    if (mc && mc->getName() && (!mc->getArgs() || mc->getArgs()->empty())
+                            && (!mc_type_args || mc_type_args->type_args.empty())) {
                         QoreValue left = de->getExpression();
                         std::string fqn;
                         if (left.hasNode()) {
@@ -10507,7 +10542,12 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     const QoreMethod* m = smcn->getMethod();
                     const QoreClass* qc = m ? m->getClass() : nullptr;
                     const char* mname = smcn->getName();
-                    if (no_args && qc && mname && *mname) {
+                    // a call with explicit type arguments, or of a static method of a generic class instantiation
+                    // (G<int>::m()), is written as an expression below, which keeps them (issue #5964)
+                    const QoreTypeParamInstantiation* smcn_type_args = smcn->getExplicitTypeParamInstantiation();
+                    if (no_args && qc && mname && *mname
+                            && (!smcn_type_args || smcn_type_args->type_args.empty())
+                            && !smcn->getReceiverTypeInfo()) {
                         writer.writeU8(6);  // expression default: static method call
                         std::string class_ref = qore_aot_encode_class_ref(qc);
                         writer.writeStringRef(class_ref.c_str());
@@ -10517,18 +10557,23 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     }
                 }
 
-                // Prefer native expression metadata; otherwise keep the legacy
-                // opaque default marker instead of fabricating an executable fallback.
+                // a default value is written as native expression metadata; one that cannot be written fails the
+                // compilation: the legacy opaque default marker is read as the value True, which loses the default
+                // value and its side effects (issue #5947)
                 if (write_native_expr_default(dv)) {
                     continue;
                 }
-
-                writer.writeU8(1);
-                writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
+                error = "AOT cannot serialize the default value of parameter '";
+                error += pname ? pname : "<unknown>";
+                error += "': ";
+                error += qoreAOTDescribeExpr(dv);
+                return false;
             } else {
-                // Unknown type — write opaque placeholder
-                writer.writeU8(1);
-                writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
+                error = "AOT cannot serialize the default value of parameter '";
+                error += pname ? pname : "<unknown>";
+                error += "': ";
+                error += qoreAOTDescribeExpr(dv);
+                return false;
             }
         } else {
             writer.writeU8(0);
@@ -11217,7 +11262,9 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     // non-literal init expression (value is not foldable
                     // until the __const_init::<path>::<name> init-func runs
                     // at register time).
-                    writer.writeU8(ce->hasInitExpr() ? 1 : 0);
+                    // and, from format v32, QORE_AOT_CONST_FLAG_EXPLICIT_TYPE (#5925)
+                    writer.writeU8((ce->hasInitExpr() ? QORE_AOT_CONST_FLAG_PENDING : 0)
+                        | (ce->hasExplicitType() ? QORE_AOT_CONST_FLAG_EXPLICIT_TYPE : 0));
                     if (ce->hasInitExpr()) {
                         // Class constants with init expressions get NOTHING placeholder
                         bool placeholder_ok = writer.writeValue(QoreValue());
@@ -11502,7 +11549,9 @@ static bool writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         // __const_init::<ns>::<name> init-func runs at register time).
         // Readers wrap pending constants in a RuntimeConstantRefNode so
         // references from sibling `.qo`s defer evaluation.
-        writer.writeU8(ce->hasInitExpr() ? 1 : 0);
+        // and, from format v32, QORE_AOT_CONST_FLAG_EXPLICIT_TYPE (#5925)
+        writer.writeU8((ce->hasInitExpr() ? QORE_AOT_CONST_FLAG_PENDING : 0)
+            | (ce->hasExplicitType() ? QORE_AOT_CONST_FLAG_EXPLICIT_TYPE : 0));
         if (ce->hasInitExpr()) {
             // Constants with init expressions will be initialized at runtime
             // by their lowered init function — serialize NOTHING as placeholder
@@ -12247,6 +12296,10 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, 
     ir->emit_debug_statements = pgm && qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
+    // the object of the calls through self in a closure created in a method (issue #5823)
+    if (sig) {
+        lowering.setSelfLocal(sig->selfid);
+    }
     std::string error;
     if (!lowering.lowerStatementBlock(sb, error)) {
         printd(2, "AOT: closure IR lowering failed: %s\n", error.c_str());
@@ -12806,7 +12859,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         if (!deferred_source_function) {
             writer.writeStringRef(qore_aot_get_function_call_signature_ref(call).c_str());
         } else {
-            writer.writeStringRef("");
+            writer.writeStringRef(QORE_AOT_DEFERRED_SOURCE_CALL_SLOT);
         }
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -13308,6 +13361,39 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     if (auto* op = dynamic_cast<const QoreShiftRightEqualsOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SHR_EQ));
         return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    // regex substitution and transliteration, which modify their lvalue (issue #5947)
+    if (auto* op = dynamic_cast<const QoreRegexSubstOperatorNode*>(node)) {
+        QoreRegexSubst* rs = op->getRegexSubst();
+        const QoreString* repl = rs ? rs->getNewStr() : nullptr;
+        if (rs && rs->getPatternCStr() && qore_aot_regex_string_ok(repl)) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::REGEX_SUBST));
+            writer.writeStringRef(rs->getPatternCStr());
+            writer.writeStringRef(repl ? repl->c_str() : "");
+            writer.writeI64(rs->getOptions());
+            writer.writeU8(rs->isGlobal() ? 1 : 0);
+            return write_inline_expr(op->getExp());
+        }
+    }
+    if (auto* op = dynamic_cast<const QoreTransliterationOperatorNode*>(node)) {
+        QoreTransliteration* tr = op->getTransliteration();
+        if (tr && qore_aot_regex_string_ok(&tr->getSource()) && qore_aot_regex_string_ok(&tr->getTarget())) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::TRANSLIT));
+            writer.writeStringRef(tr->getSource().c_str());
+            writer.writeStringRef(tr->getTarget().c_str());
+            return write_inline_expr(op->getExp());
+        }
+    }
+    // splice and extract: lvalue, offset, length, new value (NOTHING if absent; issue #5947)
+    if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SPLICE));
+        return write_inline_expr(op->getLValue()) && write_inline_expr(op->getOffset())
+            && write_inline_expr(op->getLength()) && write_inline_expr(op->getNewValue());
+    }
+    if (auto* op = dynamic_cast<const QoreExtractOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::EXTRACT));
+        return write_inline_expr(op->getLValue()) && write_inline_expr(op->getOffset())
+            && write_inline_expr(op->getLength()) && write_inline_expr(op->getNewValue());
     }
 
     // Plus operator: used inside hash/list/constructor argument literals.
@@ -14092,9 +14178,20 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                 class_path = qore_aot_encode_class_ref(qc, mc->isPseudo());
             }
             writer.writeStringRef(class_path.c_str());
-            // the method name and the explicit type arguments of the call (obj.method<T>()), which a reader that
-            // does not know them ignores with any other suffix of the name (qore#5865)
+            // the method name, followed by the variant resolved at parse time ("\n<variant class>\n<signature>"),
+            // so that the node read back is the node parsed: the messages of a call on an object that has been
+            // deleted name the variant (issue #5823), and the explicit type arguments of the call (obj.method<T>()),
+            // which come last (qore#5865)
             std::string method_ref = mc->getName() ? mc->getName() : "";
+            if (const AbstractQoreFunctionVariant* variant = mc->getVariant()) {
+                if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(variant)
+                        ->getSignature()) {
+                    method_ref += "\n";
+                    method_ref += qore_aot_encode_class_ref(variant->getClass(), mc->isPseudo());
+                    method_ref += "\n";
+                    method_ref += sig->getSignatureText();
+                }
+            }
             qore_aot_append_call_type_args(method_ref, mc->getExplicitTypeParamInstantiation());
             writer.writeStringRef(method_ref.c_str());
             writer.writeU8(mc->isPseudo() ? 1 : 0);
@@ -15879,6 +15976,8 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
 }
 
 bool QoreAOTBinaryDeserializer::deserializeShellsFromOpenReader(std::string& error) {
+    // Native images have canonical semantics, including AST metadata reconstructed during a legacy parse.
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     if (!checkAOTFeatureCompatibility(reader, error)) {
         return false;
     }
@@ -16200,6 +16299,7 @@ const QoreProgramLocation* QoreAOTBinaryDeserializer::getBlobLocation(int32_t st
 }
 
 bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Install pending-static-method-default context for the function/method
     // deserialization phase. Param defaults like
     // `string b = MultiPartMessage::getBoundary()` inside MultiPartMessage's
@@ -16325,6 +16425,7 @@ bool QoreAOTBinaryDeserializer::commitClasses(std::string& error) {
 // embedded source metadata, rebuilds root-namespace indexes, and
 // resolves the BCA (base-class constructor argument) expression blobs.
 bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     {
         for (const auto& pd : pending_smd) {
             const QoreClass* qc = !pd.class_path.empty()
@@ -16365,6 +16466,7 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::finalizePostIndex(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Resolve deferred BCA (base class constructor argument) blobs.
     // Must run after commitDeserializedClasses + rebuildAllIndexes so all
     // methods and classes are findable by the native/legacy expression handlers.
@@ -16441,6 +16543,8 @@ bool QoreAOTBinaryDeserializer::resolveNativeExprDefaults(std::string& error) {
         {
             // a closure in a default argument names the type parameters of the function (qore#5733)
             QoreAOTTypeParamOwnerHelper type_param_owner_helper(pd.uvb->getUserSignature()->getTypeParamOwner());
+            // the type paths of the default value can use the type parameters of its callable (qore#5928)
+            QoreAOTDefaultTypeParamSignatureHelper type_param_signature(pd.uvb->getUserSignature());
             v = readOneExpr(reader, p, pend, expr_error, pgm, nullptr, 0, nullptr, 0);
         }
         if (!expr_error.empty() || p != pend) {
@@ -16956,7 +17060,12 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             const char* cname = reader.readStringRef(ptr);
             const char* ctype_path = reader.readStringRef(ptr);
             uint8_t caccess = QoreAOTBinaryReader::readU8(ptr);
-            uint8_t cpending = has_const_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
+            uint8_t cflags = has_const_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
+            // the flags of a v9-v28 constant are its pending flag; it is taken to have an explicit type (#5925)
+            uint8_t cpending = reader.getHeader().version >= QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
+                ? (cflags & QORE_AOT_CONST_FLAG_PENDING) : cflags;
+            bool cexplicit_type = reader.getHeader().version < QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
+                || (cflags & QORE_AOT_CONST_FLAG_EXPLICIT_TYPE);
             QoreAOTDeferredValueBlob value_blob;
             if (!readDeferredValueBlob(ptr, end, error, value_blob)) {
                 error = "class constant '" + std::string(cname ? cname : "(null)") + "': " + error;
@@ -16983,6 +17092,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 pcc.type_path = makeDeferredStringRef(ctype_path);
                 pcc.access = caccess;
                 pcc.pending_init = (cpending != 0);
+                pcc.explicit_type = cexplicit_type;
                 pcc.value_blob = std::move(value_blob);
                 if (preload_parse_constant_values) {
                     pcc.parse_value_blob = std::move(parse_value_blob);
@@ -17159,6 +17269,7 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Second pass: create instance members now that types are resolved
     // NOTE: hashdecls and enums must be deserialized before calling this method
     // so that type references to them can be resolved
@@ -17218,7 +17329,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             // reference enum values are deferred until here.
             if (!pim.pending_enum_path.empty()) {
                 const QoreNamespace* pns = nullptr;
-                const QoreEnumDecl* ed = getProgram()->findEnum(
+                const QoreEnumDecl* ed = qore_program_private::get(*getProgram())->findEnumCanonical(
                     pim.pending_enum_path.c_str(), pns);
                 if (ed) {
                     const QoreEnumMember* member = ed->findMember(
@@ -17369,6 +17480,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Second pass: create static members now that types are resolved
     // NOTE: hashdecls and enums must be deserialized before calling this method
     // so that type references to them can be resolved
@@ -17428,7 +17540,7 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             // that reference enum values are deferred until here.
             if (!psm.pending_enum_path.empty()) {
                 const QoreNamespace* pns = nullptr;
-                const QoreEnumDecl* ed = getProgram()->findEnum(
+                const QoreEnumDecl* ed = qore_program_private::get(*getProgram())->findEnumCanonical(
                     psm.pending_enum_path.c_str(), pns);
                 if (ed) {
                     const QoreEnumMember* member = ed->findMember(
@@ -17607,6 +17719,7 @@ bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error) 
             ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
             if (ce) {
                 ce->loc = getBlobLocation();
+                ce->explicit_type = pcc.explicit_type;
                 // Every class constant shell starts without its serialized value.
                 // Keep it pending so sibling constants that refer forward do not
                 // resolve to the placeholder value installed by addUserConstant().
@@ -17861,6 +17974,7 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Preserve constant references as lazy expressions while their values are
     // still pending. All constant names now exist, including sibling fragments.
     struct RcrWrapGuard {
@@ -17895,7 +18009,7 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             // has run, look up the enum member and materialise the value.
             if (!phm.pending_enum_path.empty()) {
                 const QoreNamespace* pns = nullptr;
-                const QoreEnumDecl* ed = getProgram()->findEnum(
+                const QoreEnumDecl* ed = qore_program_private::get(*getProgram())->findEnumCanonical(
                     phm.pending_enum_path.c_str(), pns);
                 if (ed) {
                     const QoreEnumMember* member = ed->findMember(
@@ -18352,7 +18466,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
                 qore_ns_private::get(*pp->RootNS));
             const qore_ns_private* found_ns = nullptr;
             const TypedHashDecl* parent = qore_root_ns_private::runtimeFindHashDecl(
-                *rpriv->rns, hdi.parent_path.c_str(), found_ns);
+                *rpriv->rns, hdi.parent_path.c_str(), found_ns, LexicalSemanticPolicy{});
             if (parent) {
                 typed_hash_decl_private::get(*hdi.hd)->setParentHashDecl(parent);
             }
@@ -18579,7 +18693,12 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint8_t access = QoreAOTBinaryReader::readU8(ptr);
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
-        uint8_t pending = has_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
+        uint8_t flags = has_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
+        // the flags of a v9-v28 constant are its pending flag; it is taken to have an explicit type (#5925)
+        uint8_t pending = reader.getHeader().version >= QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
+            ? (flags & QORE_AOT_CONST_FLAG_PENDING) : flags;
+        bool explicit_type = reader.getHeader().version < QORE_AOT_CONST_EXPLICIT_TYPE_VERSION
+            || (flags & QORE_AOT_CONST_FLAG_EXPLICIT_TYPE);
 
         QoreAOTDeferredValueBlob value_blob;
         if (!readDeferredValueBlob(ptr, end, error, value_blob)) {
@@ -18633,6 +18752,7 @@ bool QoreAOTBinaryDeserializer::registerNamespaceConstantShells(std::string& err
         ConstantEntry* ce = new ConstantEntry(getBlobLocation(), name, QoreValue(),
             autoTypeInfo, is_pub != 0, true, false, static_cast<ClassAccess>(access));
         ns_list[ns_idx]->constant.addEntry(name, ce);
+        ce->explicit_type = explicit_type;
 
         ce->aot_shell_pending = true;
         if (pending) {
@@ -18903,6 +19023,9 @@ static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
         QoreAOTBinaryReader::readI64(ptr);
         QoreAOTBinaryReader::readI64(ptr);
     }
+    if (reader.getHeader().version >= QORE_AOT_DECLARED_DOMAIN_VERSION && (sig_flags & 0x0010)) {
+        QoreAOTBinaryReader::readI64(ptr);
+    }
 
     if (reader.getHeader().version >= 10 && (sig_flags & 0x0008)) {
         uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
@@ -19030,6 +19153,15 @@ static bool readAndSetupVariantSignature(
         variant_parse_options = QoreParseOptions(po_lo, po_hi);
     } else {
         variant_parse_options = pgm ? pgm->getParseOptions() : QoreParseOptions();
+    }
+    // the functional domains declared on the variant in Qore source
+    if (reader.getHeader().version >= QORE_AOT_DECLARED_DOMAIN_VERSION && (sig_flags & 0x0010)) {
+        int64 declared_domain = QoreAOTBinaryReader::readI64(ptr);
+        if (declared_domain & ~QDOM_ALL) {
+            error = "invalid declared functional domain: " + std::to_string(declared_domain);
+            return false;
+        }
+        uvb->setDeclaredDomain(declared_domain);
     }
 
     UserSignature* sig = uvb->getUserSignature();
@@ -21401,6 +21533,34 @@ bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& d
     uint64_t lo = QoreAOTBinaryReader::readU64(ptr);
     uint64_t hi = QoreAOTBinaryReader::readU64(ptr);
     dom = QoreParseOptions(static_cast<int64_t>(lo), static_cast<int64_t>(hi));
+    return true;
+}
+
+void serializeModuleDomains(QoreAOTBinaryWriter& writer, int64 dom) {
+    if (!dom) {
+        return;
+    }
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::MODULE_DOMAINS);
+    writer.writeU64(static_cast<uint64_t>(dom));
+    writer.endSection(sec_idx);
+}
+
+bool readModuleDomains(const QoreAOTBinaryReader& reader, int64& dom, std::string& error) {
+    dom = QDOM_DEFAULT;
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::MODULE_DOMAINS);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr || sec->size < 8) {
+        error = "invalid MODULE_DOMAINS section";
+        return false;
+    }
+    dom = static_cast<int64>(QoreAOTBinaryReader::readU64(ptr));
+    if (dom & ~QDOM_ALL) {
+        error = "invalid MODULE_DOMAINS section: unknown functional domain bits";
+        return false;
+    }
     return true;
 }
 
