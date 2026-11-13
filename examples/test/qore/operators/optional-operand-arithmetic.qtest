@@ -77,8 +77,13 @@ class OptionalOperandArithmeticTest inherits QUnit::Test {
                 string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
                 int rc;
                 string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
-                if (rc || !is_file(exe)) {
-                    testSkip("qcc is not available or cannot compile " + name + ": " + out);
+                if (!is_file(exe)) {
+                    # only a missing qcc skips the test: a program that qcc cannot compile is a failure
+                    if (!is_file(qcc_bin) && rc == 127) {
+                        testSkip("qcc is not available");
+                    }
+                    assertTrue(False, sprintf("%s -O%s: qcc cannot compile the program (rc %d): %s", name, opt, rc, out));
+                    continue;
                 }
                 # -b must be the first argument of a compiled program
                 string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
