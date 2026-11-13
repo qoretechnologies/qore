@@ -542,6 +542,9 @@ public:
     LocalVar* argvid;
     LocalVar* selfid;
     bool resolved;
+    //! the types have been resolved (resolveTypes()), with the result in types_err
+    bool types_resolved = false;
+    int types_err = 0;
     //! true for the signature of a closure, which names the type parameters of the code that it is in (qore#5733)
     bool closure = false;
     //! for the signature of a closure: the signature whose type parameters the closure names, if any (qore#5733)
@@ -676,6 +679,15 @@ public:
 
     // resolves all parse types to the final types
     DLLLOCAL virtual int resolve();
+
+    //! resolves the parameter and return types (and type parameters) but not the default values
+    /** Called by resolve(); a closure of a constant expression, whose parse initialization is deferred because its
+        code and default values can refer to constants (#4903), resolves its types when it is parsed, so that it has
+        the code type of its signature in the expression (qore#6046)
+
+        @return 0 for OK, -1 if an exception was raised; the result is the same on later calls
+    */
+    DLLLOCAL int resolveTypes();
 
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
         if (resolved) {
