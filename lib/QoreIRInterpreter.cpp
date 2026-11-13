@@ -21236,6 +21236,33 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
         }
     }
 
+    if (vtype == NT_CHAR) {
+        // a char is added to as a one-character string, as a string lvalue is: the lvalue is assigned the
+        // concatenation, made in full before it is assigned, so that an lvalue type that converts a string (softchar)
+        // converts the result; the char takes the encoding of a string added to it, else it gives a UTF-8 string
+        const QoreEncoding* enc = right.getType() == NT_STRING && right.hasNode()
+            ? right.get<const QoreStringNode>()->getEncoding()
+            : QCS_UTF8;
+        QoreStringNodeHolder str(QoreValue::makeCharString(v.getValue().getChar(), enc, xsink));
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (!right.isNullOrNothing()) {
+            QoreStringValueHelper rstr(right, enc, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            str->concat(*rstr, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        if (assign(str.release(), "<lvalue for += operator>")) {
+            return QoreValue();
+        }
+        return v.getReferencedValue();
+    }
+
     if (vtype == NT_LIST) {
         v.ensureUnique();
         QoreListNode* l = v.getValue().get<QoreListNode>();

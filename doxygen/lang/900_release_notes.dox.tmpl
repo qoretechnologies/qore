@@ -614,7 +614,8 @@
 
     @par Indexing a String Gives a char
     <tt>s[i]</tt> on a string returns a @ref char "char" instead of a one-character string; it converts to a string
-    wherever one is expected, but code that checks the type of the value sees \c char; see @ref char.
+    wherever one is expected and @ref plus_operator "+" concatenates it as one (see @ref char_plus), but code that
+    checks the type of the value sees \c char, and the other arithmetic operators use its codepoint; see @ref char.
 
     @par cast<> to a Container of auto Is a Parse Error
     <tt>cast&lt;hash&lt;auto&gt;&gt;(...)</tt>, <tt>cast&lt;hash&lt;string, auto&gt;&gt;(...)</tt> and

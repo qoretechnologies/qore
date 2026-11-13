@@ -7496,7 +7496,8 @@ qore_type_t qore_arith_runtime_result(QoreArithParseOp op, qore_type_t lt, qore_
             if (lt == NT_LIST || rt == NT_LIST) {
                 return NT_LIST;
             }
-            if (lt == NT_STRING || rt == NT_STRING) {
+            // a char is added as a one-character string
+            if (lt == NT_STRING || rt == NT_STRING || lt == NT_CHAR || rt == NT_CHAR) {
                 return NT_STRING;
             }
             if (lt == NT_DATE || rt == NT_DATE) {
@@ -7508,7 +7509,7 @@ qore_type_t qore_arith_runtime_result(QoreArithParseOp op, qore_type_t lt, qore_
             if (lt == NT_FLOAT || rt == NT_FLOAT) {
                 return NT_FLOAT;
             }
-            if (qore_arith_is_int(lt) || qore_arith_is_int(rt)) {
+            if (lt == NT_INT || rt == NT_INT) {
                 return NT_INT;
             }
             if (lt == NT_HASH) {

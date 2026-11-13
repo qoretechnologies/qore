@@ -252,6 +252,20 @@ char first = "café"[0];                         # c'c'
 list<int> cps = map $1.ord(), iterate "café";   # (99, 97, 102, 233)
     @endcode
 
+    @anchor char_plus
+    The @ref plus_operator "+ operator" adds a @ref char value as a one-character string with any other operand
+    (except a list, which it is added to as an element), and the result is a @ref string "string", also as its
+    parse-time type; \c += on an lvalue that holds a char does the same.  A char added to a string takes the
+    string's @ref character_encoding "encoding"; otherwise the result is a UTF-8 string.  Code-point arithmetic
+    takes \c int(); the other arithmetic, bitwise and comparison operators use a char's codepoint:
+    @code{.py}
+string rtf = "\\'e9";
+string hex = rtf[2] + rtf[3];   # "e9"
+string s = c'a' + 1;            # "a1"
+int next = int(c'a') + 1;       # 98
+int diff = c'b' - c'a';         # 1
+    @endcode
+
     @par Pseudo Class for Type Char:
     @ref Qore::zzz8charzzz9
 

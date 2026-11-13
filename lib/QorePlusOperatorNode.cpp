@@ -166,7 +166,10 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return qore_list_private::get(*rh->get<const QoreListNode>())->prependElement(lh.takeReferencedValue(), xsink);
     }
 
-    if (lt == NT_STRING) {
+    // a char is added as a one-character string: the operator concatenates it with the other operand converted to a
+    // string, as for a string; a char added to a string takes the encoding of the string, and a char added to any
+    // other value gives a UTF-8 string
+    if (lt == NT_STRING || (lt == NT_CHAR && rt != NT_STRING)) {
         QoreStringNodeValueHelper lstr(*lh);
         QoreStringNodeHolder str(new QoreStringNode(**lstr));
 
@@ -182,7 +185,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return str.release();
     }
 
-    if (rt == NT_STRING) {
+    if (rt == NT_STRING || rt == NT_CHAR) {
         QoreStringNodeValueHelper r(*rh);
         QoreStringNodeValueHelper strval(*lh, r->getEncoding(), xsink);
         if (*xsink)
@@ -233,7 +236,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return lh->getAsFloat() + rh->getAsFloat();
     }
 
-    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
+    if (lt == NT_INT || rt == NT_INT) {
         return lh->getAsBigInt() + rh->getAsBigInt();
     }
 
@@ -394,7 +397,9 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     else if (QoreTypeInfo::hasType(leftTypeInfo) && QoreTypeInfo::hasType(rightTypeInfo)
         && !QoreTypeInfo::parseReturns(leftTypeInfo, NT_LIST)
         && !QoreTypeInfo::parseReturns(rightTypeInfo, NT_LIST)) {
-        if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)) {
+        // a char is added as a one-character string
+        if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)
+            || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR) || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR)) {
             if (!QoreTypeInfo::canConvertToScalar(leftTypeInfo) || !QoreTypeInfo::canConvertToScalar(rightTypeInfo)) {
                 QoreStringMaker desc("cannot mix %s and %s types with the + operator",
                     QoreTypeInfo::getName(leftTypeInfo), QoreTypeInfo::getName(rightTypeInfo));
@@ -408,8 +413,7 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             returnTypeInfo = numberTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_FLOAT) || QoreTypeInfo::isType(rightTypeInfo, NT_FLOAT)) {
             returnTypeInfo = floatTypeInfo;
-        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)
-            || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR) || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR)) {
+        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)) {
             returnTypeInfo = bigIntTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_HASH)) {
             if (QoreTypeInfo::isType(rightTypeInfo, NT_HASH)

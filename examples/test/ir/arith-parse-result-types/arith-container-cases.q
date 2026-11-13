@@ -199,7 +199,8 @@ sub others() {
     show("binary + binary", list<auto> sub () { return map $1 + <ff>, lbin; });
     show("binary + string", list<auto> sub () { return map $1 + "a", lbin; });
 
-    # a string index gives a char value, which is an int in arithmetic
+    # a string index gives a char value, which + adds as a one-character string and the other arithmetic operators
+    # as its codepoint
     string s = "ab";
     show("char + int", list<auto> sub () { return map s[$1] + 1, (0, 1); });
     show("char * float", list<auto> sub () { return map s[$1] * 0.5, (0, 1); });

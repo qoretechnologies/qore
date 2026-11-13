@@ -3864,6 +3864,20 @@ int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeIn
     return 0;
 }
 
+int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
+    // make sure the lvalue can be assigned a string value (a softchar lvalue converts a one-character string)
+    // raise a parse exception only if parse exceptions are not suppressed
+    if (!QoreTypeInfo::parseAccepts(typeInfo, stringTypeInfo)) {
+        if (getProgram()->getParseExceptionSink()) {
+            QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
+                "assign it a string value", QoreTypeInfo::getName(typeInfo), name);
+            qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+        }
+        return -1;
+    }
+    return 0;
+}
+
 int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
     // make sure the lvalue can be assigned a floating-point value
     // raise a parse exception only if parse exceptions are not suppressed
