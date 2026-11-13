@@ -5076,6 +5076,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_push_implicit_arg(uint64_t value_bits, Exc
     const QoreListNode* old_argv = thread_get_implicit_args();
     QoreValue old_context = old_argv ? const_cast<QoreListNode*>(old_argv)->refSelf() : QoreValue();
 
+    // a value of NOTHING gives no list, as the AST interpreter's SingleArgvContextHelper and the IR interpreter do, so
+    // that $$ is NOTHING (qore#5804); NULL is a value
+    if (value.isNothing()) {
+        thread_set_implicit_args(nullptr);
+        return toBits(old_context);
+    }
+
     // Create new single-element list with the value
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     ReferenceHolder<QoreListNode> new_argv(new QoreListNode(autoTypeInfo), xsink);
