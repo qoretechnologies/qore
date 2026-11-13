@@ -1,0 +1,12 @@
+f("a
+argnames:1
+x")
+g(1, "l", "b
+argmap:2:1,0")
+g(1, "l", "b
+argmap:2:1,0")
+h(3, "l", "c
+argnames:2
+a
+b")
+h2("l", 1.5)

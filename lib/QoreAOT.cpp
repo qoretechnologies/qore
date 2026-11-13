@@ -915,6 +915,14 @@ std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo) {
     return rv;
 }
 
+const char* qore_aot_find_class_ref_end(const char* ref) {
+    const char* nl = strchr(ref, '\n');
+    if (nl && !strncmp(ref, AOT_CLASS_REF_MODULE_PREFIX, strlen(AOT_CLASS_REF_MODULE_PREFIX))) {
+        nl = strchr(nl + 1, '\n');
+    }
+    return nl;
+}
+
 //! Returns true for an instruction of the step events of a debugger, which native AOT code ignores
 /** The IR of a Program that can be debugged has them (QoreIRFunction::emit_debug_statements), as it is also
     serialized as the debug IR of the function; the analyses of the native code skip them (#5558)
@@ -2883,7 +2891,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu\n",
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu constant-loads=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -2906,7 +2914,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
             optimization_stats.pure_calls_folded,
             optimization_stats.pure_calls_commoned,
             optimization_stats.redundant_phis_eliminated,
-            optimization_stats.return_checks_elided);
+            optimization_stats.return_checks_elided,
+            optimization_stats.constant_containers_loaded);
     }
 
     return 0;
@@ -34346,12 +34355,13 @@ class ExprTreeSerializer {
             // `OMQ::substitute_env_vars` (the wrapper itself),
             // infinite-recursing).
             const FunctionEntry* fe = fc->getFunctionEntry();
-            if (fe && fe->getNamespace()) {
-                std::string qualified = qore_aot_get_function_identity_name(fe);
-                writeStr(qualified.c_str());
-            } else {
-                writeStr(fc->getName());
-            }
+            std::string qualified = fe && fe->getNamespace() ? qore_aot_get_function_identity_name(fe)
+                : std::string(fc->getName());
+            // the arguments are written in source order (the order of their evaluation): a named call keeps the
+            // positions of their parameters (bound at parse time) or their names (resolved at run time) before
+            // the name
+            qualified.insert(0, qore_aot_named_call_arg_prefix(fc));
+            writeStr(qualified.c_str());
             // Count and serialize args
             size_t count_pos = buf.size();
             writeU16(0); // placeholder for num_children
@@ -34377,6 +34387,9 @@ class ExprTreeSerializer {
             const AbstractQoreFunctionVariant* variant = sfc->getVariant();
             std::string method_ref = qore_aot_encode_static_method_ref(sfc->getName(), variant,
                 variant ? nullptr : &sfc->getParsedArgTypeInfo());
+            // the arguments are written in source order: a named call keeps the positions of their parameters or
+            // their names before the method reference (read by read_node_EN_SELF_CALL())
+            method_ref.insert(0, qore_aot_named_call_arg_prefix(sfc));
             writeStr(method_ref.c_str());
             // Args
             size_t count_pos = buf.size();
@@ -34400,7 +34413,9 @@ class ExprTreeSerializer {
             } else {
                 writeStr("");
             }
-            writeStr(smc->getName());
+            // the arguments are written in source order: a named call keeps the positions of their parameters or
+            // their names before the name of the method (read by read_node_EN_STATIC_CALL())
+            writeStr(qore_aot_named_call_arg_prefix(smc) + smc->getName());
             // Args
             size_t count_pos = buf.size();
             writeU16(0);
@@ -34417,7 +34432,9 @@ class ExprTreeSerializer {
         if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_DOT_EVAL));
             MethodCallNode* mc = de->getMethodCall();
-            writeStr(mc ? mc->getName() : "");
+            // the arguments are written in source order: a named call keeps the positions of their parameters or
+            // their names before the name of the method (read by read_node_EN_DOT_EVAL())
+            writeStr(mc ? qore_aot_named_call_arg_prefix(mc) + mc->getName() : std::string());
             // Serialize class path for method resolution at deserialization time
             const QoreClass* dot_qc = mc ? mc->getClass() : nullptr;
             writeStr(qore_aot_encode_class_ref(dot_qc, mc && mc->isPseudo()));
@@ -35313,6 +35330,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.reloc_qore_path = getVariantKey(aotRelocStripLeadingColons(id.ref1.c_str()).c_str(), v);
         }
         qore_aot_append_call_type_args(id.ref2, call->getExplicitTypeParamInstantiation());
+        // a named call resolved at run time by parameter name: the names of its arguments in source order, first; the
+        // compiled arguments of any other call are passed at the positions of their parameters
+        id.ref2.insert(0, qore_aot_named_call_arg_prefix(call, false));
         return id;
     }
 
@@ -35334,6 +35354,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // with the explicit type arguments of the call (qore#5818)
         id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
             call_variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        // a named call resolved at run time by parameter name: the names of its arguments in source order, first (read
+        // by resolveExprSlot())
+        id.ref2.insert(0, qore_aot_named_call_arg_prefix(call, false));
         if (method && call->getVariant()) {
             id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), call->getVariant());
         }
@@ -35364,6 +35387,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
             call_variant ? nullptr : &call->getParsedArgTypeInfo(),
             call->getExplicitTypeParamInstantiation());
+        // a named call resolved at run time by parameter name: the names of its arguments in source order, first (read
+        // by resolveExprSlot())
+        id.ref2.insert(0, qore_aot_named_call_arg_prefix(call, false));
         id.ref3 = qore_get_aot_serializable_type_path(call->getReceiverTypeInfo());
         if (const AbstractQoreFunctionVariant* v = call_variant) {
             if (method) {

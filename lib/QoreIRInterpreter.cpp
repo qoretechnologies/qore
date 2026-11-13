@@ -1950,7 +1950,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         size_t actual_nargs = pargs ? pargs->size() : (fargs ? fargs->size() : 0);
         QoreListNode* arg_list =
             buildArgListFromIROperands(operands, 0, actual_nargs, values);
-        FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
+        FunctionCallNode* call_node = fcn->copyWithArgs(arg_list);
         QoreValue result = do_op_background(QoreValue(call_node), xsink);
         QoreValue(call_node).discard(xsink);
         return {true, result};
@@ -3493,24 +3493,9 @@ static bool ensureInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink*
         && refineInterpreterEffectSummary(func, xsink);
 }
 
-static LocalVar* findIRSelfLocalForInterpreter(const QoreIRFunction* ir) {
-    if (!ir) {
-        return nullptr;
-    }
-    LocalVar* named_self = nullptr;
-    for (const auto& [lv, slot_id] : ir->local_var_slots) {
-        (void)slot_id;
-        if (!lv || !lv->getName()) {
-            continue;
-        }
-        if (lv->isSelf()) {
-            return const_cast<LocalVar*>(lv);
-        }
-        if (!named_self && !strcmp(lv->getName(), "self")) {
-            named_self = const_cast<LocalVar*>(lv);
-        }
-    }
-    return named_self;
+// Keep the fallback out of the common method path, which already has a signature self local.
+static QORE_INTERN_NOINLINE LocalVar* findIRSelfLocalForInterpreter(const QoreIRFunction* ir) {
+    return ir ? ir->self_local : nullptr;
 }
 
 //! Returns true if the interpreter can run a call of a method variant inline
@@ -6724,8 +6709,14 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (auto* call = dynamic_cast<const FunctionCallNode*>(
                         inv->expr.getInternalNode())) {
                     // Direct evalImpl() — avoids evalExprNode() overhead
-                    FunctionCallNode clone(*call, arg_list);
-                    res = evalTmpCallAndRef(&clone, xsink);
+                    if (call->getRuntimeArgNames()) {
+                        // a named call resolved at run time by parameter name keeps its class
+                        RuntimeNamedFunctionCallNode clone(*call, arg_list);
+                        res = evalTmpCallAndRef(&clone, xsink);
+                    } else {
+                        FunctionCallNode clone(*call, arg_list);
+                        res = evalTmpCallAndRef(&clone, xsink);
+                    }
                     used_operands = true;
                 }
             } else if (op == QoreIROpcode::CallMethod) {
@@ -6734,6 +6725,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     // Direct evalImpl() — avoids evalExprNode() overhead
                     SelfFunctionCallNode clone(*call, arg_list);
                     res = evalTmpCallAndRef(&clone, xsink);
+                    used_operands = true;
+                } else if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                        inv->expr.getInternalNode()); dot && dot->getMethodCall()
+                        && dot->getMethodCall()->getRuntimeArgNames()) {
+                    // a named call of a method of an object resolved at run time by parameter name: the receiver is
+                    // the first operand
+                    res = dot->evalRuntimeNamedWithArgs(arg_list, xsink);
                     used_operands = true;
                 }
             } else if (op == QoreIROpcode::CallStatic || op == QoreIROpcode::CallStaticDirect) {
@@ -7244,22 +7242,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             if (!inv->operands.empty()) {
                 auto* io_node = static_cast<const QoreInstanceOfOperatorNode*>(
                     inv->expr.getInternalNode());
-                const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                // the type parameters of a specialized function are bound statically; any others are those of the
+                // code that runs (qore#6016)
+                const QoreTypeInfo* ti = func->specializeType(io_node->getInstanceTypeInfo());
                 QoreValue val = getIRValue(values, inv->operands[0]);
-                qore_type_t t = val.getType();
-                switch (t) {
-                    case NT_WEAKREF:
-                        return QoreTypeInfo::runtimeAcceptsValue(ti,
-                            **val.get<const WeakReferenceNode>()) ? true : false;
-                    case NT_WEAKREF_HASH:
-                        return QoreTypeInfo::runtimeAcceptsValue(ti,
-                            **val.get<const WeakHashReferenceNode>()) ? true : false;
-                    case NT_WEAKREF_LIST:
-                        return QoreTypeInfo::runtimeAcceptsValue(ti,
-                            **val.get<const WeakListReferenceNode>()) ? true : false;
-                    default:
-                        return QoreTypeInfo::runtimeAcceptsValue(ti, val) ? true : false;
-                }
+                return QoreInstanceOfOperatorNode::runtimeInstanceOf(ti, val);
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
@@ -9108,6 +9095,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // design/ir-exception-branch-temp-scope.md).  The computation is out of line, as only exceptions need it
     // (qore_ir_exception_branch_temp_scope()).
     auto exceptionBranchTempScope = [&](const QoreIRInstruction* raising) -> uint32_t {
+        // the value of a return that the exception interrupts is kept, as the frame's exit keeps it
+        // (unwindForException(), #5920): the temps that the branch releases hold it, and the exception can leave the
+        // frame through the handlers and cleanup blocks of the frame; a try statement of the frame that catches the
+        // exception releases it before its catch block (CatchException), as the AST interpreter releases it when the
+        // exception leaves the statements of the try block, and the frame's exit after its locals (#6031)
+        for (size_t id = 0, e = std::min(frame.cleanup.slotTableSize(), values.size()); id < e; ++id) {
+            if (frame.cleanup.isReturnSlot(static_cast<uint32_t>(id)) && values[id].hasNode()) {
+                frame.locals_slot_cache.holdReturn(values[id].refSelf());
+            }
+        }
         return qore_ir_exception_branch_temp_scope(raising, temp_cleanup_marks);
     };
 
@@ -10721,6 +10718,13 @@ next_instruction:
                 // A thread_exit is not an exception: the catch block is not entered, and the unwind continues
                 // through the propagation block; an exception pending with it is deleted, as
                 // TryStatement::execImpl() does (qore_catch_thread_exit())
+                // the values of the returns that the exception (or thread_exit) interrupted, which the branches to
+                // the handlers of the frame kept (see exceptionBranchTempScope()), are released at the try statement,
+                // before its catch block, as the AST interpreter releases them while the exception or thread_exit is
+                // pending (#6031)
+                if (xsink && *xsink) {
+                    frame.locals_slot_cache.releaseHeldReturns(xsink);
+                }
                 if (inst->exception_target && qore_catch_thread_exit(xsink)) {
                     // the pending exception, if any, was deleted: an exception raised later is another one
                     dbg_state.exc_reported = nullptr;
@@ -18043,8 +18047,14 @@ load_local_done:
                     if (effective_opcode == QoreIROpcode::Call) {
                         if (auto* call = dynamic_cast<const FunctionCallNode*>(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
-                            FunctionCallNode clone(*call, arg_list);
-                            res = evalTmpCallAndRef(&clone, xsink);
+                            if (call->getRuntimeArgNames()) {
+                                // a named call resolved at run time by parameter name keeps its class
+                                RuntimeNamedFunctionCallNode clone(*call, arg_list);
+                                res = evalTmpCallAndRef(&clone, xsink);
+                            } else {
+                                FunctionCallNode clone(*call, arg_list);
+                                res = evalTmpCallAndRef(&clone, xsink);
+                            }
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallMethod) {
@@ -18052,6 +18062,13 @@ load_local_done:
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             SelfFunctionCallNode clone(*call, arg_list);
                             res = evalTmpCallAndRef(&clone, xsink);
+                            used_operands = true;
+                        } else if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                                call_expr.getInternalNode()); dot && dot->getMethodCall()
+                                && dot->getMethodCall()->getRuntimeArgNames()) {
+                            // a named call of a method of an object resolved at run time by parameter name: the
+                            // receiver is the first operand
+                            res = dot->evalRuntimeNamedWithArgs(arg_list, xsink);
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallStatic) {
@@ -18074,8 +18091,14 @@ load_local_done:
                                 call_expr.getInternalNode())) {
                             // AOT can load parser-equivalent namespace function fallbacks
                             // from Class::name() syntax through CallStatic slots.
-                            FunctionCallNode clone(*call, arg_list);
-                            res = evalTmpCallAndRef(&clone, xsink);
+                            if (call->getRuntimeArgNames()) {
+                                // a named call resolved at run time by parameter name keeps its class
+                                RuntimeNamedFunctionCallNode clone(*call, arg_list);
+                                res = evalTmpCallAndRef(&clone, xsink);
+                            } else {
+                                FunctionCallNode clone(*call, arg_list);
+                                res = evalTmpCallAndRef(&clone, xsink);
+                            }
                             used_operands = true;
                         }
                     }
@@ -18936,27 +18959,12 @@ load_local_done:
                 if (!expr_inst->operands.empty()) {
                     auto* io_node = static_cast<const QoreInstanceOfOperatorNode*>(
                         expr_inst->expr.getInternalNode());
-                    const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                    // the type parameters of a specialized function are bound statically; any others are those of
+                    // the code that runs (qore#6016)
+                    const QoreTypeInfo* ti = func.specializeType(io_node->getInstanceTypeInfo());
                     QoreValue val = getIRValue(values, expr_inst->operands[0]);
-                    // Handle weak reference types like AST evalImpl
-                    qore_type_t t = val.getType();
-                    switch (t) {
-                        case NT_WEAKREF:
-                            res = QoreTypeInfo::runtimeAcceptsValue(ti,
-                                **val.get<const WeakReferenceNode>()) ? true : false;
-                            break;
-                        case NT_WEAKREF_HASH:
-                            res = QoreTypeInfo::runtimeAcceptsValue(ti,
-                                **val.get<const WeakHashReferenceNode>()) ? true : false;
-                            break;
-                        case NT_WEAKREF_LIST:
-                            res = QoreTypeInfo::runtimeAcceptsValue(ti,
-                                **val.get<const WeakListReferenceNode>()) ? true : false;
-                            break;
-                        default:
-                            res = QoreTypeInfo::runtimeAcceptsValue(ti, val) ? true : false;
-                            break;
-                    }
+                    // weak references are checked as their targets, as in the AST interpreter
+                    res = QoreInstanceOfOperatorNode::runtimeInstanceOf(ti, val);
                 } else {
                     res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
                         expr_inst->expr);

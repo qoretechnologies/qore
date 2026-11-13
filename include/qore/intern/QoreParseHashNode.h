@@ -43,6 +43,8 @@
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
 
 class QoreParseHashNode : public ParseNode {
+    template <bool Lexical>
+    friend class QoreGenericParseHashNode;
 public:
     DLLLOCAL static QoreParseHashNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
         bool curly = false);
@@ -162,8 +164,20 @@ public:
     }
 
 protected:
-    template <bool Lexical>
+    //! Creates the hash; \a Generic is true if the value type has a type parameter (issue #5872)
+    template <bool Lexical, bool Generic = false>
     DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! Returns a copy of the literal for a background expression, with its local variable references resolved
+    /** Only called by copyBackground() for a literal whose value type has a type parameter (isGeneric())
+    */
+    DLLLOCAL virtual QoreParseHashNode* copyGenericBackground(ExceptionSink* xsink) const {
+        assert(false);
+        return nullptr;
+    }
+
+    //! true for a QoreGenericParseHashNode
+    bool generic = false;
     //! Releases the keys and values with the given exception sink; see derefImpl()
     DLLLOCAL void releaseEntries(ExceptionSink* xsink) {
         // a background copy that fails can hold fewer values than keys, as the keys are copied first
@@ -222,6 +236,37 @@ protected:
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+};
+
+//! A hash literal whose value type has a type parameter
+/** The hash that it creates has the type argument of the call in place of the type parameter; a literal is replaced
+    by this class when it is parsed, so the other literals keep their code path (issue #5872).  \a Lexical is the
+    lexical semantic policy of the literal, as for the other literals.
+*/
+template <bool Lexical>
+class QoreGenericParseHashNode : public QoreParseHashNode {
+public:
+    //! Takes over the keys, values and parse state of the given literal
+    DLLLOCAL QoreGenericParseHashNode(QoreParseHashNode& old) : QoreParseHashNode(old) {
+        // the keys and values belong to this literal now
+        old.keys.clear();
+        old.values.clear();
+        generic = true;
+    }
+
+    DLLLOCAL QoreGenericParseHashNode(const QoreGenericParseHashNode& old, ExceptionSink* xsink)
+            : QoreParseHashNode(old, xsink) {
+        generic = true;
+    }
+
+protected:
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+        return evalCommon<Lexical, true>(needs_deref, xsink);
+    }
+
+    DLLLOCAL virtual QoreParseHashNode* copyGenericBackground(ExceptionSink* xsink) const {
+        return new QoreGenericParseHashNode(*this, xsink);
+    }
 };
 
 #endif

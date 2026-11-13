@@ -514,6 +514,8 @@ static QoreListNode* crlr_list_copy(RuntimeConfig& rc, const QoreListNode* n, Ex
             return nullptr;
         }
     }
+    // the arguments of a named call bound at parse time keep their parameter positions
+    qore_list_private::get(**l)->copyCallArgEvalMap(*qore_list_private::get(*n));
     return l.release();
 }
 
@@ -559,6 +561,9 @@ static AbstractQoreNode* crlr_selfcall_copy(RuntimeConfig& rc, const SelfFunctio
     QoreListNode* na = const_cast<QoreListNode*>(n->getArgs());
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
     return crlr_call_copy_done(qore_make_function_call<SetSelfFunctionCallNode>(n->getSemanticPolicy(), *n, na));
 }
@@ -567,8 +572,11 @@ static AbstractQoreNode* crlr_fcall_copy(RuntimeConfig& rc, const FunctionCallNo
     QoreListNode* na = const_cast<QoreListNode*>(n->getArgs());
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
-    return crlr_call_copy_done(qore_make_function_call(n->getSemanticPolicy(), *n, na));
+    return crlr_call_copy_done(n->copyWithArgs(na));
 }
 
 static AbstractQoreNode* crlr_mcall_copy(RuntimeConfig& rc, const MethodCallNode* m, ExceptionSink* xsink) {
