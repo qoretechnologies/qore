@@ -6789,6 +6789,11 @@ bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::
         }
         auto ref_read_it = reference_read_slots.find(id);
         bool reference_read = ref_read_it != reference_read_slots.end() && ref_read_it->second;
+        // a Phi that owns its value without being a Phi of temporaries, or that keeps its value on an edge back to its
+        // loop header, is not consumed (see owning_phis)
+        if (owning_phis.count(id)) {
+            continue;
+        }
         if (!reference_read && ((!value_defined_by_call.count(id) && !consumable_phis.count(id)
                     && !value_defined_by_variable_read.count(id)
                     && !(id < observable_temp_call_args.size() && observable_temp_call_args[id]))
@@ -13317,6 +13322,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     weak_load_result_ids.clear();
     native_boolean_result_values.clear();
     consumable_phis.clear();
+    owning_phis.clear();
+    emptied_phi_slots.clear();
+    single_use_phi_incoming.clear();
     // the values read from a local that a write to the local can release before their last use take a reference of
     // their own
     if (!qore_ir_find_local_reads_overwritten_before_use(func, overwritten_local_reads)) {
@@ -13916,6 +13924,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Phi's as an operand that the statement holds (qore#5830)
     {
         std::unordered_map<uint32_t, uint32_t> phi_uses;
+        // the Phi that uses a value (the last one, which is the only one for a value with one Phi use)
+        std::unordered_map<uint32_t, uint32_t> phi_users;
         std::unordered_set<uint32_t> used_elsewhere;
         std::vector<const QoreIRPhiInstruction*> phis;
         // the normal continuation of an IR invoke (in a try block), which ends its block: the code after the call,
@@ -13960,7 +13970,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
                 qore_ir_visit_value_operands(*inst_ptr, [&](QoreIRValue operand) {
                     if (phi_inst) {
-                        ++phi_uses[operand.id];
+                        // a loop header's Phi that keeps its value on a path (the accumulator of a fold over a
+                        // pipeline with a select stage, whose skip path gives the accumulator again) does not use
+                        // it: the value stays in the Phi's slot on that edge (see the Phi fixup)
+                        if (operand.id != inst_ptr->result.id) {
+                            ++phi_uses[operand.id];
+                            phi_users[operand.id] = inst_ptr->result.id;
+                        }
                         return;
                     }
                     auto def_it = value_def_block.find(operand.id);
@@ -13974,20 +13990,125 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 });
             }
         }
+        // returns false for a Phi whose values are all constants, and true for a Phi whose value can be any other
+        // value: an iterator's element, which the next IteratorNext releases, the value of a call or an operator (a
+        // string concatenation, a list), which the next execution of the instruction replaces in its slot, or a value
+        // read from a variable, which code in the loop can assign (a select stage's predicate, a called function or a
+        // closure), releasing the value that it held (qore#5883)
+        auto phi_may_hold_temporary = [&](const QoreIRPhiInstruction* phi) {
+            std::unordered_set<uint32_t> seen{phi->result.id};
+            std::vector<const QoreIRPhiInstruction*> todo{phi};
+            while (!todo.empty()) {
+                const QoreIRPhiInstruction* cur = todo.back();
+                todo.pop_back();
+                for (const auto& inc : cur->incoming) {
+                    if (!seen.insert(inc.value.id).second) {
+                        continue;
+                    }
+                    auto def_it = value_definitions.find(inc.value.id);
+                    if (def_it == value_definitions.end() || !def_it->second) {
+                        return true;
+                    }
+                    const QoreIRInstruction* def = def_it->second;
+                    switch (def->opcode) {
+                        case QoreIROpcode::ConstBool:
+                        case QoreIROpcode::ConstDate:
+                        case QoreIROpcode::ConstEnum:
+                        case QoreIROpcode::ConstFloat:
+                        case QoreIROpcode::ConstInt:
+                        case QoreIROpcode::ConstNothing:
+                        case QoreIROpcode::ConstNull:
+                        case QoreIROpcode::ConstString:
+                        case QoreIROpcode::LoadConstant:
+                            continue;
+                        case QoreIROpcode::Phi:
+                            if (static_cast<const QoreIRPhiInstruction*>(def)->value_kind
+                                    != QoreIRPhiValueKind::QoreValue) {
+                                continue;
+                            }
+                            todo.push_back(static_cast<const QoreIRPhiInstruction*>(def));
+                            continue;
+                        default:
+                            return true;
+                    }
+                }
+            }
+            return false;
+        };
         for (const QoreIRPhiInstruction* phi : phis) {
             if (phi->value_kind != QoreIRPhiValueKind::QoreValue || phi->incoming.empty()) {
                 continue;
             }
             bool temps = true;
+            bool self_incoming = false;
             for (const auto& inc : phi->incoming) {
+                if (inc.value.id == phi->result.id) {
+                    self_incoming = true;
+                    continue;
+                }
                 auto uses_it = phi_uses.find(inc.value.id);
                 if (uses_it == phi_uses.end() || uses_it->second != 1 || used_elsewhere.count(inc.value.id)) {
                     temps = false;
-                    break;
+                } else {
+                    single_use_phi_incoming.insert(inc.value.id);
                 }
             }
-            if (temps) {
-                consumable_phis.insert(phi->result.id);
+            if (!self_incoming) {
+                if (temps) {
+                    consumable_phis.insert(phi->result.id);
+                    continue;
+                }
+                // a loop header's Phi that can hold a temporary owns its value, which the loop otherwise released
+                // under it: the accumulator of a fold over a fused pipeline, whose value can be the value of a map
+                // stage or of the fold's expression in a slot that the next element replaces (qore#5883)
+                auto def_it = value_def_block.find(phi->result.id);
+                if (def_it != value_def_block.end() && def_it->second && def_it->second->is_loop_header
+                        && phi_may_hold_temporary(phi)) {
+                    owning_phis.insert(phi->result.id);
+                }
+                continue;
+            }
+            // a Phi among its own incoming values that holds no temporary borrows its value, as it always did
+            if (phi_may_hold_temporary(phi)) {
+                owning_phis.insert(phi->result.id);
+                if (temps) {
+                    consumable_phis.insert(phi->result.id);
+                }
+            }
+        }
+        // a Phi whose only use is an incoming value of a Phi with a slot of its own and that has an incoming
+        // temporary that it is the only user of takes that temporary over in a slot of its own, and takes a reference
+        // of its own to its other incoming values, which the Phi that uses it took otherwise: a fold's value on the
+        // edge that gives the accumulator, the first element or the value of the fold's expression (qore#5883)
+        for (const QoreIRPhiInstruction* phi : phis) {
+            if (phi->value_kind != QoreIRPhiValueKind::QoreValue || phi->incoming.empty()
+                    || consumable_phis.count(phi->result.id) || owning_phis.count(phi->result.id)
+                    || !single_use_phi_incoming.count(phi->result.id)) {
+                continue;
+            }
+            auto user_it = phi_users.find(phi->result.id);
+            if (user_it == phi_users.end() || (!consumable_phis.count(user_it->second)
+                    && !owning_phis.count(user_it->second))) {
+                continue;
+            }
+            for (const auto& inc : phi->incoming) {
+                if (inc.value.id != phi->result.id && single_use_phi_incoming.count(inc.value.id)) {
+                    owning_phis.insert(phi->result.id);
+                    // when its block goes on to the block of the Phi that uses it, that Phi takes its slot over on
+                    // every path before it gets its next value: its slot is empty then, and nothing is released
+                    auto def_it = value_def_block.find(phi->result.id);
+                    auto user_def_it = value_def_block.find(user_it->second);
+                    if (def_it != value_def_block.end() && user_def_it != value_def_block.end()
+                            && def_it->second && !def_it->second->instructions.empty()) {
+                        const QoreIRInstruction* term = def_it->second->instructions.back().get();
+                        if (term->opcode == QoreIROpcode::Br
+                                && static_cast<const QoreIRBranchInstruction*>(term)->target
+                                    == user_def_it->second) {
+                            emptied_phi_slots.emplace(phi->result.id, user_it->second);
+                        }
+                    }
+                    break;
+                }
             }
         }
     }
@@ -14960,7 +15081,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // (the header of a loop, whose exit block has the Phi of the loop's value) gets a block of its own on the
             // edge, or the reference moved on every edge, and the loop's accumulator left its slot for the exit Phi's
             // at each element, which released it after the exception cleanup of the loop (qore#5830)
-            if (phi_temp_cleanup) {
+            // the Phi's own value on an edge that keeps it stays in its slot (see owning_phis)
+            bool phi_self_incoming = inc.value.id == phi_inst->result.id;
+            if (phi_temp_cleanup && !phi_self_incoming) {
                 llvm::Instruction* pred_term = qoreGetTerminator(bb);
                 if (pred_term && pred_term->getNumSuccessors() > 1) {
                     llvm::BasicBlock* edge = llvm::BasicBlock::Create(ctx, "phi_takeover_edge", llvm_func);
@@ -15042,17 +15165,33 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     val = boxValue(val, inc.value.id, false);
                     break;
             }
-            if (phi_temp_cleanup) {
+            if (phi_temp_cleanup && !phi_self_incoming) {
+                // the slot of a Phi whose value is an incoming Phi that gives it its slot every time (see
+                // emptied_phi_slots) is taken over at the start of the predecessor, which is the incoming Phi's block
+                // and goes on to this block only, before the code of its branch: the release of the Phi's previous
+                // value then comes where the incoming Phi's slot released it before the incoming Phi had none
+                // (qore#5883)
+                llvm::IRBuilderBase::InsertPointGuard insert_guard(*builder);
+                if (emptied_phi_slots.count(inc.value.id) && bb->getSingleSuccessor() == phi_bb
+                        && llvm::isa<llvm::PHINode>(val)
+                        && llvm::cast<llvm::PHINode>(val)->getParent() == bb) {
+                    builder->SetInsertPoint(bb, bb->getFirstNonPHIIt());
+                }
                 // the Phi's cleanup slot takes the incoming temporary's reference over when the temporary owns it in a
                 // cleanup slot of its own; an incoming value that does not (a temporary whose cleanup is SSA-direct)
                 // gives the slot a reference of its own, and a native scalar none; a value that a jump past the end
                 // of its statement left in the slot is released first
                 llvm::Value* owned;
-                auto alloca_it = invoke_alloca_map.find(inc.value.id);
+                // a Phi that owns its value without being a Phi of temporaries takes over only the incoming
+                // temporaries that it is the only user of (see owning_phis)
+                bool takes_over = consumable_phis.count(phi_inst->result.id)
+                    || single_use_phi_incoming.count(inc.value.id);
+                auto alloca_it = takes_over ? invoke_alloca_map.find(inc.value.id) : invoke_alloca_map.end();
                 // the element that an iterator gives owns its output slot, which the Phi takes over too: the first
                 // element of a fold over an iterator, its initial accumulator, is then released when the accumulator
                 // is replaced, as the AST interpreter's fold releases it, and not when the frame ends (qore#5830)
-                auto element_it = iterator_element_allocas.find(inc.value.id);
+                auto element_it = takes_over ? iterator_element_allocas.find(inc.value.id)
+                    : iterator_element_allocas.end();
                 if (alloca_it != invoke_alloca_map.end() && alloca_it->second
                         && llvm::isa<llvm::AllocaInst>(alloca_it->second)
                         && nanboxed_values.count(inc.value.id) && !weak_load_result_ids.count(inc.value.id)) {
@@ -15064,13 +15203,40 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), element_it->second);
                 } else if (nanboxed_values.count(inc.value.id)) {
                     owned = emitHelperRef(module, val);
+                    // the value with the reference that the slot takes is the incoming value: the Phi of a slot
+                    // that owns its value gives it as its value too, so that the code generator can see that the
+                    // Phi's value and its slot's are the same, and keeps one of them in a loop (qore#5883)
+                    if (owning_phis.count(phi_inst->result.id)) {
+                        val = owned;
+                    }
                 } else {
                     owned = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
                 }
-                llvm::Value* old_val = builder->CreateLoad(i64_type, phi_temp_cleanup);
-                builder->CreateStore(owned, phi_temp_cleanup);
-                builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
-                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {old_val, xsink_arg});
+                if (emptied_phi_slots.count(phi_inst->result.id)) {
+                    // the Phi that uses this one took the slot's value over (see emptied_phi_slots): it has a slot of
+                    // its own, and it takes this Phi's slot over in its fixup, as this Phi is its only user's incoming
+                    // value with a cleanup slot of its own (an incoming value that is not one would be referenced
+                    // again there, and the slot's value would leak here)
+#ifndef NDEBUG
+                    {
+                        uint32_t user_id = emptied_phi_slots.find(phi_inst->result.id)->second;
+                        assert(single_use_phi_incoming.count(phi_inst->result.id));
+                        assert(consumable_phis.count(user_id) || owning_phis.count(user_id));
+                        auto slot_it = invoke_alloca_map.find(phi_inst->result.id);
+                        assert(slot_it != invoke_alloca_map.end() && slot_it->second == phi_temp_cleanup);
+                        assert(nanboxed_values.count(phi_inst->result.id)
+                            && !weak_load_result_ids.count(phi_inst->result.id));
+                        (void)user_id;
+                        (void)slot_it;
+                    }
+#endif
+                    builder->CreateStore(owned, phi_temp_cleanup);
+                } else {
+                    llvm::Value* old_val = builder->CreateLoad(i64_type, phi_temp_cleanup);
+                    builder->CreateStore(owned, phi_temp_cleanup);
+                    builder->CreateCall(module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false)), {old_val, xsink_arg});
+                }
             }
             phi_node->addIncoming(val, bb);
         }
@@ -18631,7 +18797,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // it consumes any temporary argument (see consumable_phis).  The slot is created here, before the
             // statement's DiscardTemps is lowered, so that the statement releases it
             llvm::AllocaInst* temp_cleanup = nullptr;
-            if (phi_value_kind == QoreIRPhiValueKind::QoreValue && consumable_phis.count(inst->result.id)) {
+            if (phi_value_kind == QoreIRPhiValueKind::QoreValue && (consumable_phis.count(inst->result.id)
+                    || owning_phis.count(inst->result.id))) {
                 llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(),
                     llvm_func->getEntryBlock().begin());
                 temp_cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "phi_temp_cleanup");

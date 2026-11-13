@@ -14,6 +14,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/qore_encoding_private.h"
 #include <qore/intern/QoreIRLowering.h>
+#include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/QoreOpcodeRegistry.h>
 #include <qore/intern/QorePluginRegistry.h>
 
@@ -21255,6 +21256,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     if (!pipeline_cleanup.init("pipeline.fused.exception.cleanup", error)) {
         return QoreIRValue();
     }
+    // the exception target of a fold's expression, if the pipeline has an exception cleanup, and the fold's argument
+    // list, which it releases before the pipeline's cleanup (qore#5883)
+    QoreIRBasicBlock* fold_expr_exception_block = nullptr;
+    std::vector<QoreIRValue> fold_expr_exception_values;
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
@@ -21606,13 +21611,62 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // the code of the stages and of the root releases nothing on an exception before the pipeline's cleanup does (see
     // UnmarkedExceptionTempScope)
     UnmarkedExceptionTempScope body_scope(builder, pipeline_cleanup.get() != nullptr);
+    // a fold releases the values of the map stages before the last stage that can skip an element or stop the
+    // pipeline (see stage_value())
+    size_t fold_release_stages = 0;
+    // the values of a fold's map stages after the last stage that can skip an element or stop the pipeline: the fold
+    // gets them, and its expression or its accumulator's Phi takes them over, or the next element's value replaces
+    // them; the values of the last element are released when the pipeline ends, as the AST interpreter's functional
+    // map iterator releases its value when the fold takes the next one and there is none (qore#5883)
+    std::vector<QoreIRValue> fold_last_values;
+    // the values of a fold's map stages read from a local of the function, and the local
+    std::unordered_map<uint32_t, const LocalVar*> fold_local_reads;
+    if (root_accumulator) {
+        for (size_t i = 0; i < stages.size(); ++i) {
+            if (stages[i].kind != LazyPipelineStage::Map) {
+                fold_release_stages = i;
+            }
+        }
+    }
     // records the value of a map stage for its release (see stage_values), unless it is the element or a value of
-    // an earlier stage, or a fold uses the values (its accumulator can be one of them), or it cannot hold an object,
-    // whose release cannot be observed
-    auto stage_value = [&](QoreIRValue v, const QoreValue& stage_expr) {
-        if (root_accumulator || v.id == iter_element.id
-                || !qore_ir_type_may_hold_object(getExprTypeInfo(stage_expr))) {
+    // an earlier stage, or it cannot hold an object, whose release cannot be observed.  A fold uses the values of its
+    // last map stages, which its accumulator can be: they are released by the code that uses them, or replaced by
+    // their next value.  A value of a stage before one that can skip an element (select) or stop the pipeline may not
+    // reach the fold: it is released before the next element, as the AST interpreter releases it, and not when the
+    // statement ends; the accumulator's Phi owns its value, which it takes over from the slot or takes a reference of
+    // its own to (qore#5883)
+    auto stage_value = [&](QoreIRValue v, const QoreValue& stage_expr, size_t stage_index) {
+        if (v.id == iter_element.id || !qore_ir_type_may_hold_object(getExprTypeInfo(stage_expr))) {
             return;
+        }
+        // the values of a fold's last map stages, which the fold gets, are released when the pipeline ends (see
+        // fold_last_values)
+        if (root_accumulator && stage_index >= fold_release_stages) {
+            for (const QoreIRValue& lv : fold_last_values) {
+                if (lv.id == v.id) {
+                    return;
+                }
+            }
+            fold_last_values.push_back(v);
+            return;
+        }
+        // a fold's stage value read from a local of the function (not a top-level local) is checked once the body is
+        // lowered (see fold_local_reads)
+        if (root_accumulator) {
+            const auto& insts = builder.getBlock()->instructions;
+            for (auto it = insts.rbegin(); it != insts.rend(); ++it) {
+                if ((*it)->result.id != v.id) {
+                    continue;
+                }
+                if ((*it)->opcode == QoreIROpcode::LoadLocal || (*it)->opcode == QoreIROpcode::LoadArg
+                        || (*it)->opcode == QoreIROpcode::LoadClosure) {
+                    const auto* load = static_cast<const QoreIRLocalInstruction*>(it->get());
+                    if (load->local && !load->local->isTopLevel()) {
+                        fold_local_reads.emplace(v.id, load->local);
+                    }
+                }
+                break;
+            }
         }
         for (const QoreIRValue& sv : stage_values) {
             if (sv.id == v.id) {
@@ -21756,7 +21810,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 if (!map_result.isValid()) {
                     return QoreIRValue();
                 }
-                stage_value(map_result, *stage.primary);
+                stage_value(map_result, *stage.primary, i);
                 release_stage_input(element_val, map_result, element_value_type, stage.loc);
                 element_val = map_result;
                 element_value_type = getExprTypeInfo(*stage.primary);
@@ -21794,7 +21848,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 if (!map_result.isValid()) {
                     return QoreIRValue();
                 }
-                stage_value(map_result, *stage.primary);
+                stage_value(map_result, *stage.primary, i);
                 release_stage_input(element_val, map_result, element_value_type, stage.loc);
                 element_val = map_result;
                 element_value_type = getExprTypeInfo(*stage.primary);
@@ -21855,7 +21909,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 return QoreIRValue();
             }
         } else {
-            init_accum_val = builder.createRefSelf(element_val, loc)->result;
+            // the accumulator's Phi takes the first element over or takes a reference of its own, as for the value of
+            // the fold's expression, so that it is released when the accumulator is replaced, as in the AST
+            // interpreter: a reference of its own (RefSelf) kept it in a slot until the statement ended (qore#5883)
+            init_accum_val = element_val;
         }
         QoreIRBasicBlock* init_accum_exit_block = builder.getBlock();
         builder.createBranch(fold_cont_block, loc);
@@ -21903,7 +21960,24 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 {{start_result, join_start_exit}, {append_result, join_append_exit}}, loc)->result;
             fold_exit_block = join_cont_block;
         } else {
+            // an exception that the fold's expression raises releases the fold's argument list, the accumulator and
+            // then the element, first, as the AST interpreter's fold does, and then the pipeline's values (see
+            // fold_expr_exception_block)
+            if (pipeline_cleanup.get() && !fold_expr_exception_block) {
+                fold_expr_exception_block = createBlock("stream.fused.fold.expr.exception");
+                if (!fold_expr_exception_block) {
+                    error = "IR builder failed to create the fused fold expression exception block";
+                    return QoreIRValue();
+                }
+                fold_expr_exception_values = {state.fold_accum, element_val};
+            }
+            if (fold_expr_exception_block) {
+                exception_stack.push_back(fold_expr_exception_block);
+            }
             fold_result = lower_fold_expr(state.fold_accum, element_val);
+            if (fold_expr_exception_block) {
+                exception_stack.pop_back();
+            }
             if (!fold_result.isValid()) {
                 return QoreIRValue();
             }
@@ -21999,6 +22073,32 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     body_scope.end();
     // the next element is taken once the previous one and the values that the stages gave from it are released
+    // a fold's stage value read from a local of the function that no code in the loop assigns is not released: the local holds
+    // the value, so its release cannot be observed, and the IR interpreter, whose read takes a reference of its own,
+    // keeps the one that it has when the next element's read gives the same value; one that the loop's code assigns
+    // (a select stage's predicate) can hold the last reference, which the AST interpreter releases with the element.
+    // A write through a reference (\x) or by a closure is not one: the AST interpreter keeps the value read then
+    // until the next element (qore#5883)
+    if (!fold_local_reads.empty()) {
+        std::unordered_set<const LocalVar*> written;
+        const auto& blocks = builder.getFunction()->blocks;
+        // the loop's body: its first block and the blocks that the stages and the root created
+        auto scan_writes = [&](const QoreIRBasicBlock* b) {
+            for (const auto& inst : b->instructions) {
+                if (const LocalVar* lv = qore_ir_get_written_local(inst.get())) {
+                    written.insert(lv);
+                }
+            }
+        };
+        scan_writes(body_block);
+        for (size_t bi = body_block_count; bi < blocks.size(); ++bi) {
+            scan_writes(blocks[bi].get());
+        }
+        stage_values.erase(std::remove_if(stage_values.begin(), stage_values.end(), [&](const QoreIRValue& v) {
+            auto it = fold_local_reads.find(v.id);
+            return it != fold_local_reads.end() && !written.count(it->second);
+        }), stage_values.end());
+    }
     next_inst->release_values = stage_values;
 
     for (size_t i = 0; i < stage_phis.size(); ++i) {
@@ -22234,12 +22334,31 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         ? qore_ir_observable_release(iter_element, base_source_element_type) : iter_element;
     std::vector<QoreIRValue> partial_values;
     if (fold_accum_phi) {
-        // the AST interpreter's fold releases its argument list, which holds the accumulator and then the element
-        // (see lowerFoldlNative()), and releases its accumulator after its functional iterator when next() raises
+        // an exception that a stage raises releases the element and the values that the stages gave from it, as the
+        // AST interpreter's functional iterators do, and then the fold's accumulator (qore#5883); one that the fold's
+        // expression raises releases the fold's argument list, which holds the accumulator and then the element (see
+        // lowerFoldlNative()), first, in a block of its own, which goes on to the pipeline's cleanup; and the fold
+        // releases its accumulator after its functional iterator when next() raises
         cleanup_values.insert(cleanup_values.begin(), cleanup_element);
-        cleanup_values.insert(cleanup_values.begin(), fold_accum_phi->result);
+        cleanup_values.push_back(fold_accum_phi->result);
         cleanup_element = QoreIRValue();
         partial_values.push_back(fold_accum_phi->result);
+        if (fold_expr_exception_block) {
+            QoreIRBasicBlock* after_block = builder.getBlock();
+            builder.getFunction()->moveBlockToEnd(fold_expr_exception_block);
+            builder.setBlock(fold_expr_exception_block);
+            qore_ir_create_value_releases(builder, fold_expr_exception_values, QoreIRValue(), loc);
+            for (const auto& inst : fold_expr_exception_block->instructions) {
+                if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    inst->exception_cleanup_release = true;
+                }
+            }
+            QoreIRBasicBlock* cleanup_block = pipeline_cleanup.get();
+            auto* check_inst = builder.createCheckException(loc);
+            check_inst->exception_target = cleanup_block;
+            builder.createBranch(cleanup_block, loc);
+            builder.setBlock(after_block);
+        }
     }
     pipeline_cleanup.finish(iter_val, source, cleanup_element, result_list, loc, cleanup_values, partial_values);
     builder.setBlock(final_block);
@@ -22247,10 +22366,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // a pipeline that stops before its iterator is exhausted (a take, takewhile or takeuntil stage, or first, any and
     // all at the root) releases the element that the iterator gave last and then the iterator, which holds the base
     // source, when it returns, as the AST interpreter releases the operators' functional iterators; an exhausted
-    // iterator has released both already (qore#5670).  The element is not released when it can be the pipeline's
-    // value: the accumulator of a fold; the value of first, which can be the element or a value that a map stage
-    // gives from it ($1), gets a reference of its own first.  The values that map stages gave from the element last
-    // are released after it, before the iterator (see stage_values)
+    // iterator has released both already (qore#5670).  The value of first, which can be the element or a value that
+    // a map stage gives from it ($1), gets a reference of its own first; the accumulator of a fold, which can be them
+    // too, has its own in its Phi (qore#5883).  The values that map stages gave from the element last are released
+    // after it, before the iterator (see stage_values)
     QoreIRValue result = result_phi->result;
     if (root_streaming && op->getKind() == QoreStreamingOperatorNode::First) {
         // the AST interpreter's first operator returns its value when its functional iterators are released, so
@@ -22302,11 +22421,15 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         }
         return owned;
     }
-    if (!root_accumulator) {
-        builder.createReleaseOwnedTemp(iter_element, loc);
-        for (const QoreIRValue& v : stage_values) {
-            builder.createReleaseOwnedTemp(v, loc);
-        }
+    builder.createReleaseOwnedTemp(iter_element, loc);
+    for (const QoreIRValue& v : stage_values) {
+        builder.createReleaseOwnedTemp(v, loc);
+    }
+    // the values of a fold's last map stages that the last element gave (see fold_last_values); the releases run once
+    // the loop has ended, so they are not uses that keep the accumulator's Phi or a call from taking the values over
+    // (see qore_ir_is_exception_only_release()): the value that the accumulator took over is not released here
+    for (const QoreIRValue& v : fold_last_values) {
+        builder.createReleaseOwnedTemp(v, loc)->exception_cleanup_release = true;
     }
     builder.createIteratorRelease(iter_val, loc);
     return result;
