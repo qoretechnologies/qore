@@ -120,8 +120,9 @@ class PubChild inherits Base {
         return Base::base();
     }
 
-    float pubtest(float f) {
-        return f + 1.0;
+    # accepts the arguments of Base::pubtest(int), so it returns its type (#5838)
+    int pubtest(float f) {
+        return f.toInt() + 1;
     }
 
     int getStatPub() {
@@ -548,10 +549,11 @@ class TestInheritB {
         assertEq(3, c1.getConInt());
         assertEq(1, c1.pubint());
         assertEq(1, call_object_method(c1, "pubint"));
-        assertEq(2.0, c1.pubtest(1));
-        assertEq(2.0, call_object_method(c1, "pubtest", 1));
-        assertEq(2.0, c1.pubtest(1.0));
-        assertEq(2.0, call_object_method(c1, "pubtest", 1.0));
+        # the child class's variant (Base::pubtest(int) returns 1)
+        assertEq(2, c1.pubtest(1));
+        assertEq(2, call_object_method(c1, "pubtest", 1));
+        assertEq(2, c1.pubtest(1.0));
+        assertEq(2, call_object_method(c1, "pubtest", 1.0));
 
         {
             Program p(PO_NEW_STYLE);
