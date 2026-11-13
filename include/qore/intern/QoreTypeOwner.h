@@ -40,6 +40,7 @@
 class QoreTypeInfo;
 
 class qore_ns_private;
+struct QoreTypeOwnerGroup;
 
 //! A class, hashdecl or enum declaration, whose types can be named after it is destroyed (issue #5790)
 /** A value or an object refers to the declaration of its own type with a reference, but its types are also named
@@ -52,9 +53,16 @@ class qore_ns_private;
       members, holds a reference to each declaration that it names directly, released when it is destroyed (or
       retired, for a class): a declaration named so is never released before what names it.  The declarations of a
       Program destroyed together do not keep each other.
+    - The declarations of a Program that survive its deletion together and name each other form a group
+      (QoreTypeOwnerGroup), in which they name each other without references, so that they do not keep each other
+      alive: a member whose last reference is released holds a reference to itself for the group while a live (not
+      yet released) or referenced member names it, directly or through other members, and the members that no such
+      member reaches anymore are released; when the last live member is released, the group is collected, unless a
+      member is referenced again (ex: by the reflection API): it is then live again.
     - When the last reference to a declaration is released (qore_type_owner_released()) and a derived type or a
       generic cache entry names its types, it is retired and kept until library cleanup (derived types are never
-      freed before that); otherwise it is freed.
+      freed before that), and so is a declaration that a retired one names (a retired hashdecl keeps its members);
+      otherwise it is freed.
 
     A retired declaration releases what the type checks do not read (a class its methods, members and static
     variables; a hashdecl and an enum keep their members, as the checks compare them), and its types match no value
@@ -128,10 +136,20 @@ public:
         types that a declaration names can be freed afterwards, when nothing references them
     */
     bool type_owner_names_known = false;
-    //! true if the declaration holds a reference to each declaration in type_owner_names
+    //! true if the names of the declaration are counted: it references the ones in type_owner_refs
     bool type_owner_names_counted = false;
     //! the declarations that this one names directly
     std::vector<QoreTypeOwner*> type_owner_names;
+    //! the declarations that this one holds a reference to for its names
+    std::vector<QoreTypeOwner*> type_owner_refs;
+    //! the group of survivors of a Program that the declaration is a member of, if any
+    QoreTypeOwnerGroup* type_owner_group = nullptr;
+    //! true while the declaration is a live member of its group: its last reference has not been released
+    bool type_owner_group_live = false;
+    //! true if the declaration holds a reference to itself for its group
+    bool type_owner_group_hold = false;
+    //! true if a declaration kept until library cleanup (a retired hashdecl) names it: it is retired, not freed
+    bool type_owner_forever_named = false;
 };
 
 //! The QoreTypeOwner of a class, hashdecl or enum declaration's private data \a T
@@ -225,5 +243,8 @@ private:
 
 //! Returns the number of declarations retired and not freed yet (see QoreTypeOwner)
 DLLLOCAL size_t qore_retired_type_owner_count();
+
+//! Returns the number of groups of declarations that survived their Program and are not collected yet
+DLLLOCAL size_t qore_type_owner_group_count();
 
 #endif

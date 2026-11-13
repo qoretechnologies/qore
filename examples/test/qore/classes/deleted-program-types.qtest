@@ -27,8 +27,9 @@
     a child process, at the IR tier and promoted to native code with tiered execution, and as qcc-compiled executables
     (-O0, -O3); deleted-program-types/reflection.q runs in each execution mode.  deleted-program-types/bounded.qr
     (debug builds) checks that the declarations kept are bounded per destroyed declaration over repeated Program
-    generations, that declarations naming each other are freed with their Program, and that a declaration named only
-    by a surviving value is freed with the value.
+    generations, that declarations naming each other are freed with their Program, that a declaration named only by a
+    surviving value is freed with the value, and that declarations naming each other whose values survive their
+    Program are freed with the values.
 */
 class DeletedProgramTypesTest inherits QUnit::Test {
     public {
@@ -151,7 +152,7 @@ class DeletedProgramTypesTest inherits QUnit::Test {
             \status);
         assertEq(0, status, out);
         list<string> lines = (map $1, out.split("\n"), $1 =~ /: /);
-        assertEq(5, lines.size(), out);
+        assertEq(6, lines.size(), out);
         foreach string line in (lines) {
             assertRegex(": ok$", line, line);
         }
