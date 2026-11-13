@@ -1451,7 +1451,7 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
         QoreProgram* pgm, const UserSignature* containing_signature);
 
 //! resolves an expression slot; the names of the arguments of a named call of a method or a static method resolved
-//! at run time by parameter name are written after its reference (see qore_aot_named_call_arg_suffix()) and set on
+//! at run time by parameter name are written before its reference (see qore_aot_named_call_arg_prefix()) and set on
 //! the call node, which binds the arguments by name (see qore_rt_call_with_args_impl())
 static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* ref2,
         QoreProgram* pgm, const UserSignature* containing_signature = nullptr) {
@@ -1462,7 +1462,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
     QoreAOTNamedCallArgs named;
     // the compiled arguments of a call bound at parse time are passed at the positions of their parameters, so
     // only the names of a call resolved at run time are written
-    if (qore_aot_parse_named_call_arg_suffix(encoded_ref, named) || named.has_map) {
+    if (qore_aot_parse_named_call_arg_prefix(encoded_ref, named) || named.has_map) {
         return 0;
     }
     uint64_t bits = resolveExprSlotIntern(kind, ref1, encoded_ref.c_str(), pgm, containing_signature);
@@ -1516,10 +1516,10 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
             FunctionCallNode* fcn = new FunctionCallNode(
                 &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
             std::string encoded_ref = ref2 ? ref2 : "";
-            // a named call resolved at run time by parameter name: the names of its arguments, written last, after the
+            // a named call resolved at run time by parameter name: the names of its arguments, written first, before the
             // explicit type arguments
             QoreAOTNamedCallArgs named;
-            if (qore_aot_parse_named_call_arg_suffix(encoded_ref, named) || named.has_map) {
+            if (qore_aot_parse_named_call_arg_prefix(encoded_ref, named) || named.has_map) {
                 delete fcn;
                 return 0;
             }
@@ -4504,12 +4504,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
                     ref3 = reader.readStringRef(ptr);
                 }
-                // a named call resolved at run time by parameter name: the names of its arguments follow the
+                // a named call resolved at run time by parameter name: the names of its arguments precede the
                 // reference (see resolveExprSlot()); a call bound at parse time has its arguments at the positions of
                 // their parameters
                 std::string static_ref2 = ref2 ? ref2 : "";
                 QoreAOTNamedCallArgs static_named;
-                bool static_named_invalid = qore_aot_parse_named_call_arg_suffix(static_ref2, static_named)
+                bool static_named_invalid = qore_aot_parse_named_call_arg_prefix(static_ref2, static_named)
                     || static_named.has_map;
                 if (ref2) {
                     ref2 = static_ref2.c_str();

@@ -357,9 +357,9 @@ static QoreValue read_node_EN_COMPLEX_CONTEXT_REF(AOTExprNodeReadCtx& ctx) {
 
 static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     std::string name = readStr(ctx.ptr, ctx.end);
-    // the binding of the arguments of a named call follows the name
+    // the binding of the arguments of a named call precedes the name
     QoreAOTNamedCallArgs named;
-    if (qore_aot_parse_named_call_arg_suffix(name, named)) {
+    if (qore_aot_parse_named_call_arg_prefix(name, named)) {
         printd(0, "AOT EXPR_TREE: invalid named call arguments for function '%s'\n", name.c_str());
         ctx.failed = true;
         return QoreValue();
@@ -415,7 +415,7 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
 static QoreValue read_node_EN_SELF_CALL_body(AOTExprNodeReadCtx& ctx, QoreAOTNamedCallArgs& named) {
     std::string class_name = readStr(ctx.ptr, ctx.end);
     std::string method_ref_str = readStr(ctx.ptr, ctx.end);
-    if (qore_aot_parse_named_call_arg_suffix(method_ref_str, named)) {
+    if (qore_aot_parse_named_call_arg_prefix(method_ref_str, named)) {
         printd(0, "AOT EXPR_TREE: invalid named call arguments\n");
         ctx.failed = true;
         return QoreValue();
@@ -545,8 +545,8 @@ static QoreValue read_node_EN_SELF_CALL_body(AOTExprNodeReadCtx& ctx, QoreAOTNam
 }
 
 
-// the binding of the arguments of a named call follows the name of the method (see
-// qore_aot_named_call_arg_suffix())
+// the binding of the arguments of a named call precedes the name of the method (see
+// qore_aot_named_call_arg_prefix())
 static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
     QoreAOTNamedCallArgs named;
     QoreValue rv = read_node_EN_SELF_CALL_body(ctx, named);
@@ -566,7 +566,7 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
 static QoreValue read_node_EN_STATIC_CALL_body(AOTExprNodeReadCtx& ctx, QoreAOTNamedCallArgs& named) {
     std::string class_name = readStr(ctx.ptr, ctx.end);
     std::string method_name = readStr(ctx.ptr, ctx.end);
-    if (qore_aot_parse_named_call_arg_suffix(method_name, named)) {
+    if (qore_aot_parse_named_call_arg_prefix(method_name, named)) {
         printd(0, "AOT EXPR_TREE: invalid named call arguments\n");
         ctx.failed = true;
         return QoreValue();
@@ -619,8 +619,8 @@ static QoreValue read_node_EN_STATIC_CALL_body(AOTExprNodeReadCtx& ctx, QoreAOTN
 }
 
 
-// the binding of the arguments of a named call follows the name of the method (see
-// qore_aot_named_call_arg_suffix())
+// the binding of the arguments of a named call precedes the name of the method (see
+// qore_aot_named_call_arg_prefix())
 static QoreValue read_node_EN_STATIC_CALL(AOTExprNodeReadCtx& ctx) {
     QoreAOTNamedCallArgs named;
     QoreValue rv = read_node_EN_STATIC_CALL_body(ctx, named);
@@ -639,7 +639,7 @@ static QoreValue read_node_EN_STATIC_CALL(AOTExprNodeReadCtx& ctx) {
 
 static QoreValue read_node_EN_DOT_EVAL_body(AOTExprNodeReadCtx& ctx, QoreAOTNamedCallArgs& named) {
     std::string method_name = readStr(ctx.ptr, ctx.end);
-    if (qore_aot_parse_named_call_arg_suffix(method_name, named)) {
+    if (qore_aot_parse_named_call_arg_prefix(method_name, named)) {
         printd(0, "AOT EXPR_TREE: invalid named call arguments\n");
         ctx.failed = true;
         return QoreValue();
@@ -705,8 +705,8 @@ static bool en_splitObjectClassRef(AOTExprNodeReadCtx& ctx, std::string& class_n
     return true;
 }
 
-// the binding of the arguments of a named call follows the name of the method (see
-// qore_aot_named_call_arg_suffix())
+// the binding of the arguments of a named call precedes the name of the method (see
+// qore_aot_named_call_arg_prefix())
 static QoreValue read_node_EN_DOT_EVAL(AOTExprNodeReadCtx& ctx) {
     QoreAOTNamedCallArgs named;
     QoreValue rv = read_node_EN_DOT_EVAL_body(ctx, named);

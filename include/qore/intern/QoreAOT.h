@@ -268,9 +268,11 @@ struct QoreAOTMethodDispatchCache {
 };
 
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
-//! the binding of the arguments of a named function call, serialized after the signature of its variant
-/** "\nargmap:<result size>:<parameter position of each argument, comma-separated>" for a call bound at parse time,
-    "\nargnames:<count>" followed by one line per argument with its name ("" for a positional argument) for a call
+//! the binding of the arguments of a named function call, serialized before the reference to the call's target
+/** written between two 0x01 bytes, which no reference starts with (so the text of the
+    reference, such as the default values of a signature, is never taken for a binding):
+    "argmap:<result size>:<parameter position of each argument, comma-separated>" for a call bound at parse time,
+    "argnames:<count>" followed by one line per argument with its name ("" for a positional argument) for a call
     resolved at run time by parameter name; names are identifiers and contain no newline
 */
 struct QoreAOTNamedCallArgs {
@@ -287,17 +289,18 @@ class FunctionCallBase;
 /** @param with_map true to include the parameter positions of a call bound at parse time (an expression tree, whose
     arguments are written in source order); the arguments of a compiled call are passed at their positions
 */
-DLLLOCAL std::string qore_aot_named_call_arg_suffix(const FunctionCallBase* call, bool with_map = true);
+DLLLOCAL std::string qore_aot_named_call_arg_prefix(const FunctionCallBase* call, bool with_map = true);
 
-//! sets the binding of the arguments of a named call read with qore_aot_parse_named_call_arg_suffix() on the call
+//! sets the binding of the arguments of a named call read with qore_aot_parse_named_call_arg_prefix() on the call
 /** a function call resolved at run time by parameter name is replaced with a RuntimeNamedFunctionCallNode
 
     @return -1 if the value is not a call or the binding does not match its arguments, with the reason in \a error
 */
 DLLLOCAL int qore_aot_apply_named_call_args(QoreValue& call, QoreAOTNamedCallArgs& named, std::string& error);
 
-//! removes the serialized binding of the arguments of a named function call from the reference; returns -1 if invalid
-DLLLOCAL int qore_aot_parse_named_call_arg_suffix(std::string& ref, QoreAOTNamedCallArgs& named);
+//! removes the serialized binding of the arguments of a named function call from the start of the reference; returns
+//! -1 if invalid
+DLLLOCAL int qore_aot_parse_named_call_arg_prefix(std::string& ref, QoreAOTNamedCallArgs& named);
 
 struct QoreAOTCallTarget {
     const QoreFunction* func = nullptr;
