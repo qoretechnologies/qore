@@ -52,6 +52,48 @@ class Q inherits P {
     string m(int n) { return "Q::m(int n)"; }
 }
 
+# a single variant called by an unqualified named call bound at parse time, on an object of a subclass, and arguments
+# of the same type in another order
+class SV {
+    string r(int x, int y) { return sprintf("SV::r x=%y y=%y", x, y); }
+    string one(int x) { return sprintf("SV::one x=%y", x); }
+    string self1() { return r(y: 2, x: 1); }
+    string self2() { return one(x: 3); }
+}
+class SVC inherits SV {}
+
+# the return type of a named call of a generic method
+class GM {
+    U id<U>(U x) { return x; }
+    string id(string s, int k) { return s + k; }
+}
+class GMC inherits GM {}
+
+# a named call in a const method
+class KC {
+    string cm(int x) const { return sprintf("KC::cm(int x) const x=%y", x); }
+    string cm(string s) { return sprintf("KC::cm(string s) s=%y", s); }
+    string callConst() const { return cm(x: 1) + " / " + self.cm(x: 2); }
+}
+
+# static methods called through an object
+class SA {
+    static string sm(int x) { return "SA::sm(int x)"; }
+    static string sm(float f) { return "SA::sm(float f)"; }
+}
+class SB inherits SA {
+    static string sm(int x) { return "SB::sm(int x)"; }
+    static string sm(float g) { return "SB::sm(float g)"; }
+}
+
+# a variant of a specialization of a generic class and its override
+class GB<T> {
+    string m(T x) { return "GB::m(T x)"; }
+}
+class GC inherits GB<int> {
+    string m(int x) { return "GC::m(int x)"; }
+}
+
 auto i = 1;
 auto s = "x";
 
@@ -115,6 +157,31 @@ printf("names select child literal: %s\n", qq.m(x: 1));
 printf("names select child runtime: %s\n", qq.m(x: i));
 printf("names select other: %s\n", pq.m(n: i));
 printf("positional: %s\n", pq.m(i));
+
+# a single variant by an unqualified named call (bound at parse time) on an object of a subclass
+SVC svc();
+printf("single variant swapped: %s\n", svc.self1());
+printf("single variant: %s\n", svc.self2());
+
+# the return type of a named call of a generic method is that of the variant with its type arguments
+GM gm = new GMC();
+int gi = gm.id(x: 2);
+string gs = gm.id(x: "g");
+printf("generic method: %y %y\n", gi, gs);
+
+# a named call in a const method calls the const variant that the names select
+printf("const method: %s\n", (new KC()).callConst());
+
+# a static method called through an object: the override of the variant that the names select
+SA sa = new SB();
+printf("static through object literal: %s\n", sa.sm(f: 1));
+printf("static through object runtime: %s\n", sa.sm(f: i));
+printf("static scoped: %s\n", SA::sm(f: i));
+
+# the override of a variant of a specialization of a generic class
+GB<int> gb = new GC();
+printf("generic override literal: %s\n", gb.m(x: 1));
+printf("generic override runtime: %s\n", gb.m(x: i));
 
 # a call made in a background thread
 Queue q();

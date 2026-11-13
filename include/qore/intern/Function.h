@@ -2664,8 +2664,11 @@ public:
     /** for a named call, which binds its names to the variant \a v of the receiver's static type and calls its override
         in the class of the object (qore#5990)
     */
+    /** @param receiver_type_info the type of the object, whose parameterized base classes give the type arguments of
+        the type parameters in the signatures
+    */
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindOverride(const AbstractQoreFunctionVariant* v,
-            const qore_class_private* class_ctx) const;
+            const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info) const;
 
     //! checks the functional domains of a variant that a call selected at run time without runtimeFindVariant(),
     //! against the options of the code making the call, as runtimeFindVariant() checks the variant that it selects

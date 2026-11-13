@@ -2481,12 +2481,23 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
 
 //! returns true if a variant with signature \a a overrides one with signature \a b: the same parameter types (as
 //! the variant of a class with the parameter types of a variant of a parent class is called instead of it)
-static bool qore_signature_overrides(const AbstractFunctionSignature& a, const AbstractFunctionSignature& b) {
+/** @param receiver the type whose parameterized base classes give the type arguments of the type parameters in the
+    signatures (a variant of a specialization of a generic class is overridden by a variant with the type arguments),
+    if any
+*/
+static bool qore_signature_overrides(const AbstractFunctionSignature& a, const AbstractFunctionSignature& b,
+        const QoreTypeInfo* receiver) {
     if (a.numParams() != b.numParams() || a.hasVarargs() != b.hasVarargs()) {
         return false;
     }
     for (unsigned i = 0, e = a.numParams(); i < e; ++i) {
-        if (!QoreTypeInfo::equal(a.getParamTypeInfo(i), b.getParamTypeInfo(i))) {
+        const QoreTypeInfo* at = a.getParamTypeInfo(i);
+        const QoreTypeInfo* bt = b.getParamTypeInfo(i);
+        if (receiver) {
+            at = qore_substitute_type_params_if_needed(at, receiver);
+            bt = qore_substitute_type_params_if_needed(bt, receiver);
+        }
+        if (!QoreTypeInfo::equal(at, bt)) {
             return false;
         }
     }
@@ -2513,14 +2524,14 @@ public:
         }
     }
 
-    //! returns true if a variant that was added overrides \a v
-    DLLLOCAL bool overridden(const AbstractQoreFunctionVariant* v) const {
+    //! returns true if a variant that was added overrides \a v (see qore_signature_overrides() for \a receiver)
+    DLLLOCAL bool overridden(const AbstractQoreFunctionVariant* v, const QoreTypeInfo* receiver) const {
         const AbstractFunctionSignature* sig = v->getSignature();
         if (!sig) {
             return false;
         }
         for (const AbstractFunctionSignature* s : sigs) {
-            if (qore_signature_overrides(*s, *sig)) {
+            if (qore_signature_overrides(*s, *sig, receiver)) {
                 return true;
             }
         }
@@ -3704,7 +3715,7 @@ static void raise_invalid_function_access(ExceptionSink* xsink, const QoreFuncti
 }
 
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindOverride(const AbstractQoreFunctionVariant* v,
-        const qore_class_private* class_ctx) const {
+        const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info) const {
     const AbstractFunctionSignature* vsig = v->getSignature();
     assert(vsig);
     const qore_class_private* last_class = nullptr;
@@ -3724,7 +3735,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindOverride(const Abstr
                 continue;
             }
             const AbstractFunctionSignature* sig = (*i)->getSignature();
-            if (sig && qore_signature_overrides(*sig, *vsig)) {
+            if (sig && qore_signature_overrides(*sig, *vsig, receiver_type_info)) {
                 return *i;
             }
         }
@@ -3864,7 +3875,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantIntern(Except
             // a named call binds the names to the variants of the receiver's static type, of which a variant of a
             // parent class that a class overrides is not one (qore#5990)
             if constexpr (NAMED) {
-                if (last_class && override_filter.overridden(*i)) {
+                if (last_class && override_filter.overridden(*i, receiver_type_info)) {
                     continue;
                 }
             }
@@ -4525,7 +4536,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             if (last_class && (skip_method_variant(*i, class_ctx, internal_access)
-                    || override_filter.overridden(*i))) {
+                    || override_filter.overridden(*i, receiver_type_info))) {
                 continue;
             }
 

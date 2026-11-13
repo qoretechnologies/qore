@@ -604,7 +604,7 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Qore
             obj_ctx = nullptr;
         }
         call_variant = qore_method_private::get(*dispatch_m)->getFunction()->runtimeFindOverride(bound_variant,
-            obj_ctx);
+            obj_ctx, qore_get_object_receiver_type_info(o));
     } else if (static_cast<const MethodVariantBase*>(bound_variant)->isAbstract()) {
         call_variant = nullptr;
     }
@@ -769,8 +769,9 @@ static bool named_call_may_call_override(const QoreFunction* func, const Abstrac
     if (!v) {
         return false;
     }
+    // a static method called through an object is dispatched on the class of the object too
     const MethodFunctionBase* mf = dynamic_cast<const MethodFunctionBase*>(func);
-    if (!mf || mf->isStatic()) {
+    if (!mf) {
         return false;
     }
     const QoreClass* cls = mf->getClass();
@@ -778,6 +779,16 @@ static bool named_call_may_call_override(const QoreFunction* func, const Abstrac
         return false;
     }
     return !static_cast<const MethodVariantBase*>(v)->isFinal();
+}
+
+int FunctionCallBase::parseCommitVirtualNamedCall() {
+    if (!named_bound_variant || runtime_arg_names) {
+        return 0;
+    }
+    runtime_arg_names = qore_intern_call_arg_names(std::move(virtual_named_names));
+    virtual_named_names.clear();
+    type_param_instantiation.clear();
+    return 1;
 }
 
 int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
@@ -903,15 +914,13 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             // receiver's static type and calls its override in the class of the object, which the call resolves at
             // run time (AbstractMethodCallNode::execNamed()); its return type is that of the variant, which the
             // return type of an override must be accepted by (#5838)
+            // the checks of the variant below are made, and the call is made resolved at run time after them (see
+            // virtual_named_names)
             if (!named_binding.runtime_names && virtual_named_dispatch && allow_runtime_arg_names
                     && named_call_may_call_override(func, variant ? variant : named_binding.variant)) {
-                if (variant) {
-                    deferred_rt = variant->parseGetReturnTypeInfo();
-                }
-                variant = nullptr;
-                named_binding.runtime_names = true;
-            }
-            if (named_binding.runtime_names) {
+                named_bound_variant = variant ? variant : named_binding.variant;
+                virtual_named_names = std::move(arg_names);
+            } else if (named_binding.runtime_names) {
                 // the variant is resolved at run time by binding the arguments by name to each candidate variant
                 // (see QoreFunction::runtimeFindVariant()): the arguments are kept in source order with their names;
                 // the return type is that of the variants that the names can be bound to (deferred_rt)
@@ -961,6 +970,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                         receiver_type_info, &type_param_instantiation);
                     variant = nullptr;
                     func = nullptr;
+                    parseCommitVirtualNamedCall();
                     return err;
                 } else if (mv->isPrivate() && !qore_class_private::parseCheckPrivateClassAccess(*qc)) {
                     parse_error(*loc, "illegal call to private method variant %s::%s(%s)", qc->getName(),
@@ -1010,6 +1020,11 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             variant ? variant->parseGetReturnTypeInfo()
                 : (deferred_rt ? deferred_rt : func->parseGetUniqueReturnTypeInfo()),
             receiver_type_info, &type_param_instantiation);
+        // a named call of a method that a class can override is resolved at run time, after the checks of its variant
+        // and with its type (qore#5990)
+        if (parseCommitVirtualNamedCall()) {
+            variant = nullptr;
+        }
 
         //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p pflag: %d pe: %d\n", this,
         //    func ? func->getName() : "n/a", variant, pflag, func ? func->empty() : -1);
@@ -1179,7 +1194,7 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
     // differently (see AbstractMethodCallNode::execNamed())
     allow_runtime_arg_names = true;
     // an unqualified call of a method of the object is dispatched on the class of the object (qore#5990)
-    if (ns.size() == 1 && !is_copy && method && !method->isStatic()) {
+    if (ns.size() == 1 && !is_copy && method) {
         virtual_named_dispatch = true;
     }
     // issue #3637: qc might be non-null while method is null in case of calls to implicit copy() methods, for example
@@ -1190,11 +1205,12 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
             if (!err) {
                 err = -1;
             }
-        } else if (variant
-            && check_readonly_receiver_method_call(loc, getName(), static_cast<const MethodVariantBase*>(variant))
+        } else if (getParseCheckVariant()
+            && check_readonly_receiver_method_call(loc, getName(),
+                static_cast<const MethodVariantBase*>(getParseCheckVariant()))
             && !err) {
             err = -1;
-        } else if (!variant && method
+        } else if (!getParseCheckVariant() && method
             && check_readonly_receiver_method_call(loc, getName(), nullptr,
                 qore_method_private::get(*method)->getFunction())
             && !err) {

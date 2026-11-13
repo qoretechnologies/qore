@@ -68,6 +68,15 @@ protected:
     //! unqualified call in the class), whose named arguments are bound with the variants of the receiver's static
     //! type and passed to the override of the variant that they select (qore#5990)
     bool virtual_named_dispatch = false;
+    //! the variant of a named call of a method that a class can override that its names select at parse time, whose
+    //! checks are made at parse time (the call is resolved at run time; see parseCommitVirtualNamedCall())
+    const AbstractQoreFunctionVariant* named_bound_variant = nullptr;
+    //! the names of the arguments of such a call until the call is made resolved at run time
+    name_vec_t virtual_named_names;
+
+    //! makes a named call of a method that a class can override resolved at run time by parameter name after the
+    //! checks of its variant (qore#5990); returns 1 if it did
+    DLLLOCAL int parseCommitVirtualNamedCall();
 
 public:
     DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args),
@@ -134,14 +143,25 @@ public:
         allow_runtime_arg_names = true;
     }
 
+    //! returns the variant of the call for the checks that a call node makes after parseArgsVariant(): the variant
+    //! of the call, or the variant that the names of a named call resolved at run time select (qore#5990)
+    DLLLOCAL const AbstractQoreFunctionVariant* getParseCheckVariant() const {
+        return variant ? variant : named_bound_variant;
+    }
+
     //! marks a call of a method dispatched on the class of the object; set before parseArgsVariant()
     DLLLOCAL void setVirtualNamedDispatch() {
         virtual_named_dispatch = true;
     }
 
     //! sets the names of the arguments in source order of a named call resolved at run time (AOT deserialization)
+    /** a call resolved at run time by parameter name has no variant: a variant that the reader resolved from the types
+        of the arguments is cleared (qore#5990)
+    */
     DLLLOCAL void setRuntimeArgNames(name_vec_t&& names) {
         runtime_arg_names = qore_intern_call_arg_names(std::move(names));
+        variant = nullptr;
+        type_param_instantiation.clear();
     }
 
     //! sets the positions of the parameters of the arguments of a named call bound at parse time (AOT

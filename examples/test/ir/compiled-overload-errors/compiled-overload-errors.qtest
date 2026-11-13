@@ -220,6 +220,23 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
             assertEq("C1", p2.callFunction("t", 1, "x"));
         }
         {
+            # the functional domain of the variant that the names select is checked at parse time, as for positional
+            # arguments
+            string dom = "class DB { string m(int x) [dom=PROCESS_CONTROL] { return \"m1\"; } "
+                "string m(string s) { return \"m2\"; } }\n";
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_NO_PROCESS_CONTROL);
+            assertThrows("PARSE-EXCEPTION", "PROCESS_CONTROL", \p.parse(), (dom + "string sub t() { DB b(); "
+                "return b.m(x: 1); }\n", "named-virtual-domain"));
+        }
+        {
+            # a named call of a deprecated variant raises the warning of the positional call
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            *hash<auto> w = p.parse("class DP { deprecated string m(int x) { return \"m1\"; } "
+                "string m(string s) { return \"m2\"; } }\n"
+                "string sub t() { DP d(); return d.m(x: 1); }\n", "named-virtual-deprecated", WARN_ALL);
+            assertEq("DEPRECATED", w.err, "the named call raises the deprecation warning");
+        }
+        {
             # arguments that match two variants exactly as well are still ambiguous
             Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
             assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous", \p.parse(),

@@ -224,9 +224,8 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 // the arguments are bound by name at run time when the variants that could be selected name their
                 // parameters differently (see AbstractMethodCallNode::execNamed())
                 m->setAllowRuntimeArgNames();
-                if (!meth->isStatic()) {
-                    m->setVirtualNamedDispatch();
-                }
+                // also a static method called through an object, which is dispatched on the class of the object
+                m->setVirtualNamedDispatch();
                 if (m->parseArgs(parse_context, func, nullptr) && !err) {
                     err = -1;
                 }
@@ -238,7 +237,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 }
                 if (readonly_receiver
                     && check_readonly_receiver_method_call(loc, mname,
-                        static_cast<const MethodVariantBase*>(m->getVariant()), func)
+                        static_cast<const MethodVariantBase*>(m->getParseCheckVariant()), func)
                     && !err) {
                     err = -1;
                 }
@@ -269,7 +268,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 }
                 if (readonly_receiver
                     && check_readonly_receiver_method_call(loc, mname,
-                        static_cast<const MethodVariantBase*>(m->getVariant()), func)
+                        static_cast<const MethodVariantBase*>(m->getParseCheckVariant()), func)
                     && !err) {
                     err = -1;
                 }
@@ -414,9 +413,8 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     // selected name their parameters differently (see AbstractMethodCallNode::execNamed())
     if (!m->isPseudo()) {
         m->setAllowRuntimeArgNames();
-        if (!meth->isStatic()) {
-            m->setVirtualNamedDispatch();
-        }
+        // also a static method called through an object, which is dispatched on the class of the object
+        m->setVirtualNamedDispatch();
     }
     if (m->parseArgs(parse_context, func, nullptr) && !err) {
         err = -1;
@@ -428,7 +426,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         m->parseSetClassAndMethod(qc, meth);
     }
     if (readonly_receiver
-        && check_readonly_receiver_method_call(loc, mname, static_cast<const MethodVariantBase*>(m->getVariant()),
+        && check_readonly_receiver_method_call(loc, mname, static_cast<const MethodVariantBase*>(m->getParseCheckVariant()),
             func)
         && !err) {
         err = -1;

@@ -27,4 +27,13 @@ names select child literal: Q::m(float x)
 names select child runtime: Q::m(float x)
 names select other: Q::m(int n)
 positional: Q::m(int n)
+single variant swapped: SV::r x=1 y=2
+single variant: SV::one x=3
+generic method: 2 "g"
+const method: KC::cm(int x) const x=1 / KC::cm(int x) const x=2
+static through object literal: SB::sm(float g)
+static through object runtime: SB::sm(float g)
+static scoped: SA::sm(float f)
+generic override literal: GC::m(int x)
+generic override runtime: GC::m(int x)
 background: C::sw(int n, string l) n=1 l="x"
