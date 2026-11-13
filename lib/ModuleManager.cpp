@@ -3528,7 +3528,12 @@ bool QoreModuleManager::isTrustedModulePath(const char* path, std::string* load_
             }
         }
     }
-    // the file it is, under a directory's canonical path
+    // the file it is, under a directory's canonical path; a relative path is resolved against the current
+    // directory, which is safe: it is resolved exactly as open() or dlopen() will resolve it, and a trusted load
+    // uses the resolved canonical path (load_path), so the file loaded is always the file judged here.  Relative
+    // paths are legitimate here: a binary or AOT module found by name in a relative module directory (a relative
+    // QORE_MODULE_DIR entry, for example) keeps a relative path, while explicit paths from a Program are made
+    // absolute before they reach this check
     std::unique_ptr<char, decltype(&free)> real(realpath(path, nullptr), &free);
     if (!real) {
         return false;
