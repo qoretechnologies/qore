@@ -3493,24 +3493,9 @@ static bool ensureInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink*
         && refineInterpreterEffectSummary(func, xsink);
 }
 
-static LocalVar* findIRSelfLocalForInterpreter(const QoreIRFunction* ir) {
-    if (!ir) {
-        return nullptr;
-    }
-    LocalVar* named_self = nullptr;
-    for (const auto& [lv, slot_id] : ir->local_var_slots) {
-        (void)slot_id;
-        if (!lv || !lv->getName()) {
-            continue;
-        }
-        if (lv->isSelf()) {
-            return const_cast<LocalVar*>(lv);
-        }
-        if (!named_self && !strcmp(lv->getName(), "self")) {
-            named_self = const_cast<LocalVar*>(lv);
-        }
-    }
-    return named_self;
+// Keep the fallback out of the common method path, which already has a signature self local.
+static QORE_INTERN_NOINLINE LocalVar* findIRSelfLocalForInterpreter(const QoreIRFunction* ir) {
+    return ir ? ir->self_local : nullptr;
 }
 
 //! Returns true if the interpreter can run a call of a method variant inline
