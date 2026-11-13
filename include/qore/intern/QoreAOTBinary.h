@@ -2303,7 +2303,9 @@ enum class AOTExprKind : uint8_t {
     SHIFT_LEFT         = 100, //!< Left shift operator: left(AOTExprKind) + right(AOTExprKind)
     SHIFT_RIGHT        = 101, //!< Right shift operator: left(AOTExprKind) + right(AOTExprKind)
     SQUARE_BRACKET_RANGE = 102, //!< Range subscript operator: source + start + stop
-    DOT_EVAL_EXPR      = 103, //!< Slot wrapper for a full dot-eval expression payload
+    AST_EXPR           = 103, //!< Slot wrapper for a full inline expression that the runtime evaluates as an AST
+                              //!< (a dot-eval expression; the expressions of find and context): the expression
+                              //!< (AOTExprKind), with the arguments of a call at its root
     UNARY_MINUS        = 104, //!< Unary minus operator: operand(AOTExprKind)
     LOG_AEQ            = 105, //!< Logical absolute equality operator: left(AOTExprKind) + right(AOTExprKind)
     LOG_ANE            = 106, //!< Logical absolute not-equals operator: left(AOTExprKind) + right(AOTExprKind)

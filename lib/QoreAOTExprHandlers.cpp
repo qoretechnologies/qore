@@ -3523,16 +3523,16 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
 }
 
 // ============================================================================
-// DOT_EVAL_EXPR (103)
+// AST_EXPR (103)
 // ============================================================================
 
-static bool write_expr_dot_eval_expr(AOTExprWriteCtx& ctx) {
-    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_EXPR));
+static bool write_expr_ast_expr(AOTExprWriteCtx& ctx) {
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::AST_EXPR));
     return classifyAndWriteExpr(ctx.writer, ctx.expr, ctx.parent_locals,
         ctx.parent_globals, ctx.const_reverse_map);
 }
 
-static QoreValue read_expr_dot_eval_expr(AOTExprReadCtx& ctx) {
+static QoreValue read_expr_ast_expr(AOTExprReadCtx& ctx) {
     return readOneExpr(ctx.reader, ctx.ptr, ctx.end, ctx.error, ctx.pgm,
         ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
 }

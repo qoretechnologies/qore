@@ -244,8 +244,9 @@ static bool write_slot_DOT_EVAL_TARGET(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
-//! DOT_EVAL_EXPR: full inline dot-eval expression payload for AST consumers such as Context
-static bool write_slot_DOT_EVAL_EXPR(AOTExprSlotWriteCtx& ctx) {
+//! AST_EXPR: a full inline expression that the runtime evaluates as an AST (a dot-eval expression; the expressions
+//! of find and context, see AOTSlotMap::ast_expr_bits)
+static bool write_slot_AST_EXPR(AOTExprSlotWriteCtx& ctx) {
     return write_slot_inline_expr(ctx, ctx.expr.child_expr);
 }
 

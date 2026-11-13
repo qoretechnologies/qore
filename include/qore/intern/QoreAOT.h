@@ -455,6 +455,12 @@ struct AOTSlotMap {
     std::unordered_map<uint64_t, DotEvalDirectTarget> dot_eval_direct_targets; //!< expr bits -> IR-selected target
     std::unordered_set<uint64_t> static_call_pre_evaluated_bits;  //!< CallStatic* expr bits whose args are IR operands
     std::unordered_map<uint64_t, QoreAOTCallRelocationTargetKind> call_relocation_kinds; //!< expr bits -> direct call relocation target kind
+    //! expr bits that the runtime evaluates whole as an AST: the expressions of find and context
+    /** classified as AOTExprKind::AST_EXPR, which writes them in full as their sub-expressions are written; the
+        identity of a call at their root (AOTExprKind::FUNC_CALL, for example) would lose its arguments, which no IR
+        instruction evaluates for them (qore#5939)
+    */
+    std::unordered_set<uint64_t> ast_expr_bits;
 
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {

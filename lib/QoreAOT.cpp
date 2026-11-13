@@ -32485,8 +32485,18 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
         slots.call_relocation_kinds.emplace(bits, kind);
     };
 
-    auto recordContextExprSlots = [&recordExprSlot](const QoreIRContextInstruction* ci) {
-        auto record = [&recordExprSlot](const QoreValue& expr) {
+    // the runtime evaluates the expressions of find and context whole as ASTs, so they are written in full
+    // (AOTSlotMap::ast_expr_bits)
+    auto markASTExpr = [&slots](const QoreValue& expr) {
+        if (expr.hasNode()) {
+            uint64_t bits;
+            memcpy(&bits, &expr, sizeof(bits));
+            slots.ast_expr_bits.insert(bits);
+        }
+    };
+
+    auto recordContextExprSlots = [&recordExprSlot, &markASTExpr](const QoreIRContextInstruction* ci) {
+        auto record = [&recordExprSlot, &markASTExpr](const QoreValue& expr) {
             if (!expr) {
                 return;
             }
@@ -32494,6 +32504,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
             uint64_t bits;
             memcpy(&bits, &expr, sizeof(bits));
             recordExprSlot(bits, QoreIROpcode::Context);
+            markASTExpr(expr);
         };
 
         record(ci->exp);
@@ -32906,6 +32917,14 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                 case QoreIROpcode::Context: {
                     auto* ci = static_cast<QoreIRContextInstruction*>(inst.get());
                     recordContextExprSlots(ci);
+                    break;
+                }
+                case QoreIROpcode::Find: {
+                    // the slots themselves are assigned when the instruction is lowered to LLVM
+                    auto* fi = static_cast<QoreIRFindInstruction*>(inst.get());
+                    markASTExpr(fi->exp);
+                    markASTExpr(fi->find_exp);
+                    markASTExpr(fi->where);
                     break;
                 }
                 case QoreIROpcode::OnBlockExit: {
@@ -35231,6 +35250,14 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         return id;
     }
 
+    // an expression that the runtime evaluates whole as an AST (find, context) is written in full: the identity of a
+    // call at its root would lose the call's arguments (qore#5939)
+    if (slots.ast_expr_bits.count(bits)) {
+        id.kind = AOTExprKind::AST_EXPR;
+        id.child_expr = v;
+        return id;
+    }
+
     // FunctionCallNode: regular function call
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         id.kind = AOTExprKind::FUNC_CALL;
@@ -36124,7 +36151,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     if (dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-        id.kind = AOTExprKind::DOT_EVAL_EXPR;
+        id.kind = AOTExprKind::AST_EXPR;
         id.child_expr = v;
         return id;
     }
