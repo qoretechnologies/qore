@@ -6500,19 +6500,53 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof(uint64_t val_bits, const QoreTy
 // AOT mode: instanceof check with type path string instead of QoreTypeInfo pointer.
 // Resolves the type path to QoreTypeInfo* using the program's type resolver, then
 // delegates to qore_rt_instanceof.
+//
+// The type is resolved once per thread, type path and Program, not on every evaluation (#5976):
+// - the type path is a constant of the compiled code (a qmod or an executable, which is not unloaded), so one address
+//   always holds the same path;
+// - the id of a Program is never reused, so the entry of a deleted Program is never used again;
+// - a type resolved in a Program is owned by that Program (its namespaces or the global registries of complex types,
+//   which are not freed) or, for a path with a module reference, by the module's Program, which lives until the
+//   process exits, so it is valid as long as the Program is.
+// A path that cannot be resolved is not cached and is not an error for instanceof: no value is an instance of it (a
+// deferred placeholder that the resolver returns for an unknown class or hashdecl in a complex type is cached as any
+// other type).  QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE turns the cache off.
 extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
         const char* type_path, ExceptionSink* xsink) {
     QoreProgram* pgm = getProgram();
     if (!pgm || !type_path || !*type_path) {
         return toBits(QoreValue(false));
     }
-    std::string error;
-    QoreAOTTypeResolver resolver(pgm);
-    const QoreTypeInfo* ti = resolver.resolve(type_path, error);
-    if (!ti) {
-        return toBits(QoreValue(false));
+    static constinit QoreEnvFlag cache_disabled_env("QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE");
+    if (cache_disabled_env.get()) {
+        std::string error;
+        QoreAOTTypeResolver resolver(pgm);
+        const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+        return ti ? qore_rt_instanceof(val_bits, ti) : toBits(QoreValue(false));
     }
-    return qore_rt_instanceof(val_bits, ti);
+    struct InstanceOfTypeCacheEntry {
+        const char* type_path = nullptr;
+        qore_program_id_t pgm_id = 0;
+        const QoreTypeInfo* ti = nullptr;
+    };
+    static constexpr unsigned INSTANCEOF_TYPE_CACHE_BITS = 6;
+    thread_local InstanceOfTypeCacheEntry cache[1u << INSTANCEOF_TYPE_CACHE_BITS];
+    const qore_program_id_t pgm_id = pgm->getProgramId();
+    // the paths of related types are adjacent in the image (the path of T can be the end of the path of *T, one byte
+    // after it), so the slot is taken from the high bits of a multiplicative mix of the whole address and the id
+    const uint64_t hash = (static_cast<uint64_t>(reinterpret_cast<uintptr_t>(type_path))
+        ^ (static_cast<uint64_t>(pgm_id) * 0x9e3779b97f4a7c15ull)) * 0x9e3779b97f4a7c15ull;
+    InstanceOfTypeCacheEntry& entry = cache[hash >> (64 - INSTANCEOF_TYPE_CACHE_BITS)];
+    if (entry.type_path != type_path || entry.pgm_id != pgm_id) {
+        std::string error;
+        QoreAOTTypeResolver resolver(pgm);
+        const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+        if (!ti) {
+            return toBits(QoreValue(false));
+        }
+        entry = {type_path, pgm_id, ti};
+    }
+    return qore_rt_instanceof(val_bits, entry.ti);
 }
 
 // --- Date construction helper ---
