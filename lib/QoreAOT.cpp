@@ -26486,6 +26486,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // Capture the module init closure value here so it survives past mod_ctx
     // scope end (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     QoreParseOptions parsed_po;
     {
         // the module is parsed only to be compiled and is never registered: closing its context
@@ -26508,6 +26511,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             init_c_holder = mod_ctx.init_c.refSelf();
         }
 
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
     }
 
@@ -26909,6 +26915,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     // Capture the module init closure value so it survives past mod_ctx scope end
     // (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -27012,6 +27021,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             init_c_holder = mod_ctx.init_c.refSelf();
         }
 
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
 
         // Handle warnings
@@ -30768,6 +30780,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -30907,6 +30922,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             if (is_primary) {
                 init_c_holder = mod_ctx.init_c.refSelf();
             }
+        }
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
         }
         mod_ctx.close();
 
@@ -31338,6 +31356,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -31423,6 +31444,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
 
         if (mod_ctx.hasInit()) {
             init_c_holder = mod_ctx.init_c.refSelf();
+        }
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
         }
         mod_ctx.close();
 
@@ -31892,6 +31916,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -31977,6 +32004,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
 
         if (mod_ctx.hasInit()) {
             init_c_holder = mod_ctx.init_c.refSelf();
+        }
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
         }
         mod_ctx.close();
 

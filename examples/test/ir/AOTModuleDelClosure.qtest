@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks compile modules with qcc and run the interpreter in child processes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTModuleDelClosureTest
+
+#! qore#6015: qcc --module compiled a module whose header has a del closure into a crash
+/** The closure object is released with the module definition context, before the AOT compile has collected the
+    locations of the statements that the Program registered, which the released statements left dangling.
+*/
+class AOTModuleDelClosureTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTModuleDelClosureTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a module with a del closure", \testDelClosure());
+        addTestCase("a module with an empty del closure", \testEmptyDelClosure());
+        addTestCase("a module with init and del closures", \testInitAndDelClosures());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+    }
+
+    private string moduleSource(string name, string closures) {
+        return sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"del closure probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+%s}
+public namespace %s {
+public int sub value() { return 42; }
+}
+", name, closures, name);
+    }
+
+    #! compiles the module with qcc at each optimization level and loads it into a program of its own
+    private checkModule(string name, string closures) {
+        foreach string opt in ("-O0", "-O3") {
+            TmpDir tmp("qore-aot-del-closure-");
+            string mod_dir = tmp.path + "/mods";
+            mkdir(mod_dir);
+            string src = tmp.path + "/" + name + ".qm";
+            write(src, moduleSource(name, closures));
+
+            string qmod = mod_dir + "/" + name + ".qmod";
+            string out = run(sprintf("%s %s --module %s --output %s %s", env(), qcc_bin, opt, qmod, src));
+            assertTrue(is_file(qmod), name + " compiled with " + opt + ": " + out);
+            assertTrue(out.find("module compilation") != -1, name + " " + opt + " reports the compilation: " + out);
+
+            string probe = tmp.path + "/probe.qr";
+            write(probe, sprintf("%%modern
+%%append-module-path %s
+%%requires %s
+printf(\"value=%%d\\n\", %s::value());
+", mod_dir, name, name));
+            assertEq("value=42\n", run(sprintf("%s %s -b %s", env(), qore_bin, probe)),
+                name + " " + opt + " loads and runs");
+        }
+    }
+
+    testDelClosure() {
+        checkModule("AotDelProbe", "    del = sub () { int i = 1; };\n");
+    }
+
+    testEmptyDelClosure() {
+        checkModule("AotEmptyDelProbe", "    del = sub () { };\n");
+    }
+
+    testInitAndDelClosures() {
+        checkModule("AotInitDelProbe", "    init = sub () { int j = 2; };\n    del = sub () { int i = 1; };\n");
+    }
+}
