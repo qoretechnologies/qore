@@ -165,6 +165,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # the tests that run their checks in default-mode child processes without the harness:
         # - AOTConstantImportStale (#5798) and AOTDumpInfoPendingConstants (#5799): their checks run qcc and the
         #   programs and modules it compiles in child processes
+        # - AOTInstanceOfTypePath (#5976): its checks run an AOT-compiled module and the same module's source in the
+        #   AST interpreter in child processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
         # - nested-callable-types (#6022): its script runs in child processes that set their own --exec-mode, and
         #   compiled with qcc
@@ -178,6 +180,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - callref-object-method-program and reflection-typed-hash-visibility (#5692): their probes run in child
         #   processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
