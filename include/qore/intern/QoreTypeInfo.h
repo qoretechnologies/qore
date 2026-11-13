@@ -4619,6 +4619,17 @@ DLLLOCAL bool qore_type_contains_wildcard(const QoreTypeInfo* ti);
 //! Returns true if the type info or any nested generic argument contains a symbolic type parameter
 DLLLOCAL bool qore_type_contains_type_parameter(const QoreTypeInfo* ti);
 
+//! Returns true if the type is or contains (as the value type of a list or hash) the generic closure type that a
+//! closure of a constant expression has at parse time, before its deferred initialization gives it its type
+/** A container literal is then typed from its values at run time, as the same literal outside a constant expression
+    is (qore#5972)
+*/
+DLLLOCAL bool qore_type_contains_deferred_closure(const QoreTypeInfo* ti);
+
+//! Returns true if a parse-initialized value of a container literal holds a closure of a constant expression: its
+//! type contains the generic closure type, or it is a list or hash literal that holds one (qore#5972)
+DLLLOCAL bool qore_parse_value_has_deferred_closure(const QoreValue& v, const QoreTypeInfo* vt);
+
 //! Substitutes symbolic type parameters in the given type only if the type can contain symbolic parameters
 DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti);
 

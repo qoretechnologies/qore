@@ -113,6 +113,11 @@ int QoreParseListNode::parseInitIntern(bool& needs_eval, QoreParseContext& parse
         // For list literals, clear variable-ref type info to avoid baking
         // declared or narrowed types into the constructed container. Function
         // call argument lists must keep declared types for overload resolution.
+        // a value with a closure of a constant expression: a hash literal that holds this list is typed from its values
+        // at run time (qore#5972); the list itself is typed from its values in any case
+        if (!has_deferred_closure && qore_parse_value_has_deferred_closure(values[i], vtypes[i])) {
+            has_deferred_closure = true;
+        }
         if (!preserve_varref_types && vtypes[i] && typed_varref_may_be_nothing) {
             vtypes[i] = nullptr;
         }

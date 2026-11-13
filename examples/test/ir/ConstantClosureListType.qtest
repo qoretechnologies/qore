@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class ConstantClosureListTypeTest
+
+#! lists of closures nested in constant expressions have the type of their closures in every mode and in AOT (qore#5972)
+/** A closure of a constant expression has the generic closure type at parse time, until its deferred initialization;
+    a hash literal kept it as its value type (list<closure>), and qcc gave list<code>.
+*/
+class ConstantClosureListTypeTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/ConstantClosureListType/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("constant closure list types", "1.0", \ARGV) {
+        addTestCase("AST gives the type of the closures", \astReference());
+        addTestCase("a type error of a hashdecl literal is a parse error", \parseError());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        string out = getAst();
+        # each constant has the type of the same expression in a function
+        hash<string, string> types;
+        hash<string, string> ftypes;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^(const|f) (.*): (.*)$/);
+            if (m) {
+                if (m[0] == "const") {
+                    types{m[1]} = m[2];
+                } else {
+                    ftypes{m[1]} = m[2];
+                }
+            }
+        }
+        list<string> labels = ("hash of list", "list of hash of list", "list", "hash of hash of list",
+            "hash of list with signature", "hash of list and int", "hash of list of hash of list", "hashdecl");
+        foreach string label in (labels) {
+            assertTrue(exists types{label}, label);
+            assertEq(ftypes{label}, types{label}, label);
+        }
+        assertRegex("(?m)^const hash of list: hash<string, list<code<nothing\\(\\)>>>$", out, out);
+        assertRegex("(?m)^const hash of list with signature: hash<string, list<code<int\\(int\\)>>>$", out, out);
+        # a constant with a declared type has that type
+        assertRegex("(?m)^const typed: hash<string, list<code>>$", out, out);
+        assertRegex("(?m)^call: 2$", out, out);
+    }
+
+    #! a hashdecl literal or a cast of a constant whose value type does not accept the closures is still a parse error
+    parseError() {
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "incompatible type", \p.parse(),
+            ("hashdecl E { list<int> l; } const X = <E>{\"l\": (sub () {},)};", "parse-error"));
+        # and so is a cast of such a hash to a hash with an incompatible value type
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "incompatible", \p2.parse(),
+            ("const X = cast<hash<string, list<int>>>({\"l\": (sub () {},)});", "parse-error-cast"));
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-constant-closure-list-type-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}
