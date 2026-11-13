@@ -1204,6 +1204,21 @@ QoreValue FunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) co
     return evalImpl(rc, needs_deref, xsink);
 }
 
+// Keep the owned copy and its exception cleanup on the reusable background-call path only.
+template <bool LexicalInvocation>
+QORE_INTERN_NOINLINE QoreValue FunctionCallNode::evalReusableTmpArgs(QoreFunction* func, QoreProgram* call_pgm,
+        unsigned call_flags, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    assert(tmp_args && reusable_tmp_args && args);
+    ReferenceHolder<QoreListNode> args_copy(args->copy(), xsink);
+    if constexpr (LexicalInvocation) {
+        return func->evalFunctionTmpArgs(variant, *args_copy, call_pgm, rc, xsink,
+            getExplicitTypeParamInstantiation(), call_flags, getSemanticPolicy());
+    } else {
+        return func->evalFunctionTmpArgs(variant, *args_copy, call_pgm, rc, xsink,
+            getExplicitTypeParamInstantiation(), call_flags);
+    }
+}
+
 template <bool LexicalInvocation>
 QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallNode::evalImplInternal(RuntimeConfig& rc, bool& needs_deref,
         ExceptionSink* xsink) const {
@@ -1232,12 +1247,14 @@ QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallNode::evalImplInternal(RuntimeCo
     // dom check is evaluated against the function's own Program.
     const unsigned call_flags = pgm ? QCEF_DEFER_DOMAIN_PO : 0;
     if (tmp_args) {
-        ReferenceHolder<QoreListNode> args_copy(xsink);
+        if (reusable_tmp_args && args) {
+            return evalReusableTmpArgs<LexicalInvocation>(func, call_pgm, call_flags, rc, xsink);
+        }
         if constexpr (LexicalInvocation) {
-            return func->evalFunctionTmpArgs(variant, getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
+            return func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink,
                 getExplicitTypeParamInstantiation(), call_flags, getSemanticPolicy());
         } else {
-            return func->evalFunctionTmpArgs(variant, getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
+            return func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink,
                 getExplicitTypeParamInstantiation(), call_flags);
         }
     }
@@ -1738,7 +1755,11 @@ QORE_INTERN_ALWAYS_INLINE QoreValue MethodCallNode::execImpl(LexicalSemanticPoli
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
-    return AbstractMethodCallNode::execImpl<Lexical>(policy, o, c_str, class_ctx, xsink);
+    if constexpr (Lexical) {
+        return AbstractMethodCallNode::exec(policy, o, c_str, class_ctx, xsink);
+    } else {
+        return AbstractMethodCallNode::exec(o, c_str, class_ctx, xsink);
+    }
 }
 
 void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
