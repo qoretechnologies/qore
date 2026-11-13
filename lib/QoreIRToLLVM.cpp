@@ -13316,6 +13316,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     collectLocals(func);
     obe_saved_count = nullptr;
     scope_obe_counts.clear();
+    scope_catch_counts.clear();
     if (!func.blocks.empty()) {
         builder->SetInsertPoint(block_map[func.blocks.front().get()]);
         emitLocalInstantiation(module);
@@ -22207,6 +22208,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // value and stores the result in the runtime variable), so the catch block must reload it
                     // (examples/test/qore/misc/member-notification); invalidating costs only an increment
                     reloadAllLocalsFromRuntime(module, llvm_func);
+                }
+                // the catch blocks opened in the try block that the exception left (a call in a catch block raised
+                // it, or a thread_exit) are left, after their handlers ran, as the AST interpreter leaves them: the
+                // code after the try statement and the handlers of the enclosing blocks see the exception that the
+                // enclosing catch block caught (#5969)
+                auto cc = scope_catch_counts.find(lp_inst->try_scope_id);
+                if (cc != scope_catch_counts.end()) {
+                    auto unwind_fn = module.getOrInsertFunction("qore_rt_catch_unwind",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    if (catch_scope_count) {
+                        // the frame's catch scopes are counted from the depth of the catch stack at its first one
+                        llvm::Value* base = builder->CreateLoad(i64_type, catch_depth_saved);
+                        llvm::Value* active = builder->CreateLoad(i64_type, catch_scope_count);
+                        llvm::Value* left = builder->CreateICmpUGT(active, cc->second);
+                        // without a catch scope opened in the try block, the base is not set: nothing is left
+                        llvm::Value* target = builder->CreateSelect(left, builder->CreateAdd(base, cc->second),
+                            llvm::ConstantInt::get(i64_type, UINT64_MAX));
+                        builder->CreateCall(unwind_fn, {target, xsink_arg});
+                        builder->CreateStore(builder->CreateSelect(left, cc->second, active), catch_scope_count);
+                    } else {
+                        builder->CreateCall(unwind_fn, {cc->second, xsink_arg});
+                    }
                 }
             }
             return true;
@@ -35304,6 +35327,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i64_type, {}, false));
             llvm::Value* count = builder->CreateCall(obe_count_fn, {});
             scope_obe_counts[sinst->scope_id] = count;
+            // the catch scopes of the frame open at the start of the scope (#5969)
+            if (catch_scope_count) {
+                scope_catch_counts[sinst->scope_id] = builder->CreateLoad(i64_type, catch_scope_count,
+                    "scope_catch_count");
+            } else if (catch_depth_saved) {
+                auto depth_fn = module.getOrInsertFunction("qore_rt_catch_depth",
+                    llvm::FunctionType::get(i64_type, {}, false));
+                scope_catch_counts[sinst->scope_id] = builder->CreateCall(depth_fn, {});
+            }
             // ScopeEnter produces NOTHING as its result
             if (inst->result.isValid()) {
                 values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);

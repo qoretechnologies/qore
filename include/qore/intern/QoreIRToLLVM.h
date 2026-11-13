@@ -543,6 +543,9 @@ private:
     // Per-scope saved on_block_exit counts (scope_id -> saved count value)
     // Used by ScopeEnter/ScopeExit for nested on_exit handler execution
     std::unordered_map<uint32_t, llvm::Value*> scope_obe_counts;
+    //! the number of catch scopes of the frame open at each ScopeEnter (catch_scope_count, or the depth of the catch
+    //! stack without it): the landing pad of a try statement leaves the catch scopes opened in its try block (#5969)
+    std::unordered_map<uint32_t, llvm::Value*> scope_catch_counts;
 
     // Entry-block load values for native pre-instantiated locals (tiered
     // compilation). qore_rt_load_local creates +1 ref at entry; these must be
