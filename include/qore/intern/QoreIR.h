@@ -4222,6 +4222,14 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+
+    //! Collects the locals that the on_exit, on_error and on_success handlers of the function reference
+    /** as computeIROnlyLocals() does to keep them on the runtime stack: the handlers' statements and their IR
+
+        @return false if a handler has code whose locals cannot be collected, in which case any local can be
+        referenced
+    */
+    bool collectHandlerLocals(std::unordered_set<const void*>& locals) const;
     //! Releases a read of a plain local after its last use when the statement writes the local later
     /** A read of a plain local (qore_ir_is_plain_local_read(), in a function that creates no reference; its storage
         can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the

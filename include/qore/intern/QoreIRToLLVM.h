@@ -516,8 +516,6 @@ private:
     llvm::AllocaInst* local_reload_epoch = nullptr;
     llvm::MapVector<const void*, llvm::AllocaInst*> local_valid_epochs;
     bool local_reload_boundary_cleanup_pending = false;
-    // Propagate cancellation from native handler cache emission to lowerFunction().
-    bool native_handler_cache_cancelled = false;
 
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
@@ -1638,10 +1636,28 @@ private:
     // deferred handlers execute through AST/IR and read parent locals.
     void syncLocalsToRuntimeForHandlers(llvm::Module& module);
 
-    // Install an exact parent slot cache for deferred handler IR executed by a
-    // native/JIT/AOT parent.  This avoids name-based TLS lookup collisions.
-    llvm::Value* beginNativeHandlerSlotCache(llvm::Module& module);
-    void endNativeHandlerSlotCache(llvm::Module& module, llvm::Value* guard);
+    //! Publishes the locals to the runtime local stack and releases the native code's own references to them before
+    //! handlers run out of line (see the definition); the caller reloads the local caches eagerly afterwards
+    void publishLocalsForHandlers(llvm::Module& module);
+
+    //! Releases the reload trackers and deferred slots of the locals that handlers can assign, last declared first
+    //! (see publishLocalsForHandlers())
+    void releaseLocalReloadStorage(llvm::Module& module);
+
+    //! Reloads the caches of the locals whose reload storage releaseLocalReloadStorage() released, after the handlers
+    void reloadHandlerLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func);
+
+    //! true if the reload storage of the local is released for handlers run out of line (see handler_locals)
+    bool releasesReloadStorageForHandlers(const void* key) const;
+
+    //! the locals that the function's handlers reference (QoreIRFunction::collectHandlerLocals()), whose reload
+    //! storage is released for handlers run out of line; when handler_locals_known is false, every local's
+    std::unordered_set<const void*> handler_locals;
+    bool handler_locals_known = false;
+
+    //! Returns the keys of a map of locals in reverse declaration order (their IR slot ids, highest first)
+    template <typename Map>
+    std::vector<const void*> getLocalsInReverseDeclarationOrder(const Map& map) const;
 
     // Emit qore_rt_decref calls for pre-instantiated local entry loads
     //! @param exception_exit true for an exit by an exception, which releases the body locals on the runtime stack

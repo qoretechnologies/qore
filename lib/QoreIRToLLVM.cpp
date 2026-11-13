@@ -3868,7 +3868,13 @@ void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
     auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
             llvm::FunctionType::get(void_type, {i64_type}, false));
 
-    for (auto& [key, slot] : local_allocas) {
+    // publishing a value can release the value that the variable holds: in reverse declaration order
+    size_t count = 0;
+    for (const void* key : getLocalsInReverseDeclarationOrder(local_allocas)) {
+        if (!(++count % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM handler local publication");
+        }
+        LocalCacheSlot& slot = local_allocas.find(key)->second;
         if (ir_only_locals_set && ir_only_locals_set->count(key)) {
             continue;
         }
@@ -3931,110 +3937,114 @@ void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
     }
 }
 
-llvm::Value* QoreIRToLLVM::beginNativeHandlerSlotCache(llvm::Module& module) {
-    if (!has_on_block_exit_handlers || !current_ir_func) {
-        return nullptr;
+template <typename Map>
+std::vector<const void*> QoreIRToLLVM::getLocalsInReverseDeclarationOrder(const Map& map) const {
+    // a local's IR slot is assigned where it first appears, after those of the locals declared before it; a local
+    // without a slot follows those with one, in the order of the map
+    std::vector<std::pair<uint64_t, const void*>> ranked;
+    ranked.reserve(map.size());
+    for (const auto& entry : map) {
+        uint64_t rank = (static_cast<uint64_t>(1) << 32) + ranked.size();
+        if (current_ir_func) {
+            auto slot_it = current_ir_func->local_var_slots.find(reinterpret_cast<const LocalVar*>(entry.first));
+            if (slot_it != current_ir_func->local_var_slots.end()) {
+                rank = slot_it->second;
+            }
+        }
+        ranked.emplace_back(rank, entry.first);
     }
-
-    int32_t slot_count = current_ir_func->local_var_slots.empty()
-        ? 0 : static_cast<int32_t>(current_ir_func->max_local_slot_id) + 1;
-    auto begin_helper = module.getOrInsertFunction("qore_rt_begin_native_ir_slot_cache",
-            llvm::FunctionType::get(ptr_type, {i32_type}, false));
-    llvm::Value* guard = builder->CreateCall(begin_helper,
-            {llvm::ConstantInt::get(i32_type, slot_count)});
-
-    if (slot_count == 0 || local_allocas.empty()) {
-        return guard;
+    std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
+        return a.first > b.first;
+    });
+    std::vector<const void*> keys;
+    keys.reserve(ranked.size());
+    for (const auto& entry : ranked) {
+        keys.push_back(entry.second);
     }
-
-    auto set_jit = module.getOrInsertFunction("qore_rt_set_native_ir_slot_cache_value",
-            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type, i64_type}, false));
-    auto set_aot = module.getOrInsertFunction("qore_rt_set_native_ir_slot_cache_value_aot",
-            llvm::FunctionType::get(void_type,
-                {ptr_type, ptr_type, i32_type, i32_type, i64_type}, false));
-    auto decref_nothrow = module.getOrInsertFunction("qore_rt_decref_nothrow",
-            llvm::FunctionType::get(void_type, {i64_type}, false));
-
-    // Emit in the same stable registration order as ordinary local-cache maintenance.
-    // local_var_slots is pointer-keyed and is only a lookup table, not an emission order.
-    size_t checked = 0;
-    for (const auto& [key, cache_slot] : local_allocas) {
-        // raw local cache: the value is published to the handlers' slot cache as it is stored
-        llvm::Value* alloca = cache_slot.storage();
-        if (++checked % 10 == 0
-                && qore_check_cancel(nullptr, "LLVM native handler slot cache setup")) {
-            native_handler_cache_cancelled = true;
-            return guard;
-        }
-        const auto* local = static_cast<const LocalVar*>(key);
-        auto slot = current_ir_func->local_var_slots.find(local);
-        if (!local || slot == current_ir_func->local_var_slots.end()
-                || slot->second >= static_cast<uint32_t>(slot_count)) {
-            continue;
-        }
-        uint32_t ir_slot = slot->second;
-        if (local->closureUse()) {
-            // Closure-use locals live on the cvstack / closure environment. Their
-            // LLVM allocas are not authoritative, so publishing them through the
-            // native handler slot cache can overwrite the real CVV value.
-            continue;
-        }
-
-        if (weak_assigned_locals.count(key) && !(ir_only_locals_set && ir_only_locals_set->count(key))) {
-            // Like a closure-use local, a weak-assigned local that is not IR-only lives on the runtime stack, and
-            // its alloca can be stale (see syncLocalsToRuntimeForHandlers()), so it is not seeded from the alloca;
-            // handlers read it from the runtime stack.
-            continue;
-        }
-        if (readsThroughReference(local)) {
-            // a local declared with a reference type lives on the runtime stack, and its alloca is never read (see
-            // syncLocalsToRuntimeForHandlers()): handlers read it from the runtime stack
-            continue;
-        }
-
-        ensureLocalCacheFresh(key, module, builder->GetInsertBlock()->getParent());
-
-        llvm::Value* val;
-        bool boxed_temp = false;
-        if (native_int_locals.count(key)) {
-            val = boxInt(builder->CreateLoad(i64_type, alloca));
-            boxed_temp = true;
-        } else if (native_float_locals.count(key)) {
-            val = boxFloat(builder->CreateLoad(double_type, alloca));
-            boxed_temp = true;
-        } else if (native_bool_locals.count(key)) {
-            val = boxBool(builder->CreateLoad(i1_type, alloca));
-        } else {
-            val = builder->CreateLoad(i64_type, alloca);
-        }
-
-        if (aot_mode) {
-            int32_t local_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-            builder->CreateCall(set_aot, {aot_ctx_arg, guard,
-                    llvm::ConstantInt::get(i32_type, ir_slot),
-                    llvm::ConstantInt::get(i32_type, local_slot), val});
-        } else {
-            llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(local));
-            llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
-            builder->CreateCall(set_jit, {guard, llvm::ConstantInt::get(i32_type, ir_slot), var_as_ptr, val});
-        }
-
-        if (boxed_temp) {
-            builder->CreateCall(decref_nothrow, {val});
-        }
-    }
-
-    return guard;
+    return keys;
 }
 
-void QoreIRToLLVM::endNativeHandlerSlotCache(llvm::Module& module, llvm::Value* guard) {
-    if (!guard) {
+void QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module) {
+    if (local_reload_trackers.empty() && local_reload_deferred.empty()) {
         return;
     }
+    // A local's reload tracker holds a reference to the value of its native cache, and its deferred slot one to the
+    // value that the cache held before (see ensureLocalCacheFresh()); either can be the last reference to its value,
+    // so the locals are released in reverse declaration order, a local's deferred value, the older one, first.  The
+    // allocas are left NOTHING, which the next reload and the exit cleanup of the function release as nothing.
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    auto release = [&](llvm::Value* alloca) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+        builder->CreateCall(helper, {val, xsink_arg});
+    };
+    llvm::MapVector<const void*, bool> keys;
+    for (const auto& entry : local_reload_deferred) {
+        if (releasesReloadStorageForHandlers(entry.first)) {
+            keys.insert({entry.first, true});
+        }
+    }
+    for (const auto& entry : local_reload_trackers) {
+        if (releasesReloadStorageForHandlers(entry.first)) {
+            keys.insert({entry.first, true});
+        }
+    }
+    size_t count = 0;
+    for (const void* key : getLocalsInReverseDeclarationOrder(keys)) {
+        if (!(++count % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM handler local reload storage release");
+        }
+        auto deferred_it = local_reload_deferred.find(key);
+        if (deferred_it != local_reload_deferred.end()) {
+            release(deferred_it->second);
+        }
+        auto tracker_it = local_reload_trackers.find(key);
+        if (tracker_it != local_reload_trackers.end()) {
+            release(tracker_it->second);
+        }
+    }
+}
 
-    auto end_helper = module.getOrInsertFunction("qore_rt_end_native_ir_slot_cache",
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
-    builder->CreateCall(end_helper, {guard, xsink_arg});
+bool QoreIRToLLVM::releasesReloadStorageForHandlers(const void* key) const {
+    // Only a local that a handler references can be assigned or removed by it: the others keep their reload storage,
+    // and their caches are only invalidated after the handlers, as for any call that can change locals through the
+    // runtime stack.  Only the storage of a local that the reload after the handlers reloads (with the reload
+    // exemption honored) is released: an exempt (IR-only) local, which can have reload storage in AOT code, is never
+    // referenced by a handler, and its cache keeps the reference that backs it.
+    if (handler_locals_known && !handler_locals.count(key)) {
+        return false;
+    }
+    return canReloadLocalFromRuntime(key, true);
+}
+
+void QoreIRToLLVM::reloadHandlerLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func) {
+    if (!handler_locals_known) {
+        reloadAllLocalsFromRuntime(module, llvm_func, true, true);
+        return;
+    }
+    // eagerly: code can read a local's native cache without the stale check (fused local operations), and the
+    // reference that backed the cache was released
+    for (const void* key : getLocalsInReverseDeclarationOrder(local_allocas)) {
+        if (releasesReloadStorageForHandlers(key)) {
+            reloadLocalFromRuntime(key, module, llvm_func, true);
+        }
+    }
+}
+
+void QoreIRToLLVM::publishLocalsForHandlers(llvm::Module& module) {
+    if (!has_on_block_exit_handlers) {
+        return;
+    }
+    // Handlers run out of line read and assign the locals that they reference on the runtime local stack (a local
+    // that a handler references is never IR-only, see QoreIRFunction::computeIROnlyLocals()), and find them there by
+    // their LocalVar, innermost frame first: the stack gets the current values, and the references that the native
+    // code holds to the locals that the handlers reference (their reload storage) are released, so that the variable
+    // holds the only reference that the frame has, and a handler that assigns or removes a local releases the value
+    // it replaces right away, as the AST and IR interpreters do (qore#5942).  The caller reloads those locals' caches
+    // eagerly after the handlers (reloadHandlerLocalsFromRuntime()), before any code reads them.
+    syncLocalsToRuntimeForHandlers(module);
+    releaseLocalReloadStorage(module);
 }
 
 llvm::BasicBlock* QoreIRToLLVM::beginPendingHandlerRun(llvm::Module& module, llvm::Value* saved_count) {
@@ -4064,15 +4074,13 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
     // the handlers still registered at an exit of the function are those of the scopes that an exception (or a
     // thread_exit, or a return from a handler) leaves; a normal exit has run its handlers inline and left their
-    // scopes, so the protocol below (which publishes every local and copies it into a slot cache allocated for the
-    // handlers, and reloads every local afterwards) runs only when a handler is pending (qore#5927)
+    // scopes, so the protocol below (which publishes every local to the runtime stack for the handlers, and reloads
+    // every local afterwards) runs only when a handler is pending (qore#5927)
     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, obe_saved_count);
-    syncLocalsToRuntimeForHandlers(module);
-    llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
+    publishLocalsForHandlers(module);
     auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     builder->CreateCall(helper, {obe_saved_count, xsink_arg});
-    endNativeHandlerSlotCache(module, native_slot_cache);
     // On-block-exit handlers execute user code and can mutate AST-visible/AOT
     // body locals through the runtime local stack.  Refresh eagerly here:
     // fused local ops can read allocas directly, so a lazy epoch alone is not
@@ -12472,7 +12480,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // the parse-time type checks of the lowering are made in the class context of the function's code, in a
     // background compilation thread as in any other (qore#5750)
     QoreIRClassContextHelper class_ctx(func);
-    native_handler_cache_cancelled = false;
     native_call_frame_storage = nullptr;
     native_function_context_storage = nullptr;
     native_call_thread_data = nullptr;
@@ -13271,6 +13278,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             track_on_block_exit_scope = has_on_block_exit_handlers;
         }
     }
+    // the locals whose native references are released when handlers run out of line (see
+    // publishLocalsForHandlers())
+    handler_locals.clear();
+    handler_locals_known = has_on_block_exit_handlers && func.collectHandlerLocals(handler_locals);
     catch_depth_saved = nullptr;
     catch_scope_count = nullptr;
     catch_entry_blocks.clear();
@@ -14910,10 +14921,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
 
         for (const auto& inst_ptr : block->instructions) {
-            if (native_handler_cache_cancelled) {
-                error = "cancelled during LLVM native handler slot cache setup";
-                return false;
-            }
             const QoreIRInstruction* inst = inst_ptr.get();
             if (!inst) {
                 continue;
@@ -15610,11 +15617,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         if (saved_insert) {
             builder->SetInsertPoint(saved_insert, saved_ip);
         }
-    }
-
-    if (native_handler_cache_cancelled) {
-        error = "cancelled during LLVM native handler slot cache setup";
-        return false;
     }
 
     finalizeIteratorReleases(module, llvm_func);
@@ -22195,10 +22197,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // the blocks left by the exception have usually run their handlers already; the handlers run
                     // through the runtime only if one is still registered (see emitOnBlockExitExec())
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
-                    syncLocalsToRuntimeForHandlers(module);
-                    llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
+                    publishLocalsForHandlers(module);
                     builder->CreateCall(helper, {saved_count, xsink_arg});
-                    endNativeHandlerSlotCache(module, native_slot_cache);
+                    // the locals whose reload storage was released before the handlers ran are reloaded at once
+                    reloadHandlerLocalsFromRuntime(module, llvm_func);
                     endPendingHandlerRun(done_bb);
                     // On-block-exit handlers execute through the AST path and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths: the instruction that
@@ -35340,10 +35342,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // the handlers run through the runtime only if one of the scope is registered (see
                     // emitOnBlockExitExec())
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
-                    syncLocalsToRuntimeForHandlers(module);
-                    llvm::Value* native_slot_cache = beginNativeHandlerSlotCache(module);
+                    publishLocalsForHandlers(module);
                     builder->CreateCall(helper, {saved_count, xsink_arg, builder->getInt1(false)});
-                    endNativeHandlerSlotCache(module, native_slot_cache);
+                    // the locals whose reload storage was released before the handlers ran are reloaded at once
+                    reloadHandlerLocalsFromRuntime(module, llvm_func);
                     endPendingHandlerRun(done_bb);
                     // On-block-exit handlers execute user code and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths, as at a landing pad: this

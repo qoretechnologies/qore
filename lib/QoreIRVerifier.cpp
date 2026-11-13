@@ -2148,6 +2148,25 @@ bool QoreIRFunction::localMayHoldReference(const LocalVar* lv, bool creates_refe
     return !body_local_keys.count(reinterpret_cast<const void*>(lv));
 }
 
+bool QoreIRFunction::collectHandlerLocals(std::unordered_set<const void*>& locals) const {
+    bool unknown_node_found = false;
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (!inst || inst->opcode != QoreIROpcode::OnBlockExit) {
+                continue;
+            }
+            auto* obe_inst = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+            if (obe_inst->stmt) {
+                collectLocalsFromStatementBlock(obe_inst->stmt->getCode(), locals, unknown_node_found);
+            }
+            if (obe_inst->handler_ir) {
+                collectLocalsFromIRFunction(*obe_inst->handler_ir, locals, unknown_node_found);
+            }
+        }
+    }
+    return !unknown_node_found;
+}
+
 void QoreIRFunction::computeIROnlyLocals() {
     // the locals that a reference can reach other than from \var in this function: they are reference-capable
     // (localMayHoldReference()), and those that would otherwise be IR-only keep the reference in their own storage
