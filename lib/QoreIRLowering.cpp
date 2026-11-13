@@ -1630,6 +1630,16 @@ static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth) {
 }
 
 // documented in QoreIRLowering.h
+bool QoreIRLowering::returnRunsHandlers() const {
+    for (const InlineHandler& handler : block_handlers) {
+        if (handler.type != OBE_Error) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// documented in QoreIRLowering.h
 bool QoreIRLowering::returnCleanupObservesError(const LocalVar* returned_local) const {
     if (getCurrentExceptionTarget() || catch_cleanup_depth > 0) {
         return true;
@@ -1723,9 +1733,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // A variable that can hold a weak reference - the variable of a foreach loop, or one assigned with := or @= -
         // is read with a strong reference of its own, which is a temporary of the statement as well: it is released
         // with the others, before the variable is destroyed when the statement leaves its block.
+        // A value read from a variable or a member is a temporary too, whose release a handler that runs before the
+        // Return observes when it changes what the value was read from: the temporary would keep the value that
+        // the handler replaces until the Return (qore#6003).
         bool ret_temp_scope = builder.getExceptionTempScopeId()
-            && (expressionMayCreateIntermediateCallTemp(expr) || expressionReadsWeakCapableLocal(expr))
-            && returnCleanupObservesError(qore_ir_get_returned_local(expr));
+            && ((((expressionMayCreateIntermediateCallTemp(expr) || expressionReadsWeakCapableLocal(expr))
+                    && returnCleanupObservesError(qore_ir_get_returned_local(expr)))
+                || (expressionMayCreateIntermediateContainerTemp(expr) && returnRunsHandlers())));
         if (ret_temp_scope) {
             builder.createPushTempMark(nullptr);
         }

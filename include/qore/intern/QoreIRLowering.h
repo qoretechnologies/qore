@@ -758,6 +758,10 @@ private:
     */
     DLLLOCAL bool returnCleanupObservesError(const LocalVar* returned_local) const;
 
+    //! Returns true if a return statement here runs a handler before it returns: an on_exit or on_success handler
+    //! of a block that it leaves
+    DLLLOCAL bool returnRunsHandlers() const;
+
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:
      *  - OBE_Unconditional: always executes
