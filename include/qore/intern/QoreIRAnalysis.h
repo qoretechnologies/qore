@@ -169,6 +169,8 @@ struct QoreIROptimizationStats {
     size_t redundant_phis_eliminated = 0;
     //! the checks of return values (CheckReturnValue) removed because the value facts prove them
     size_t return_checks_elided = 0;
+    //! the rebuilt constant containers loaded by reference because they are only read (qore#5977)
+    size_t constant_containers_loaded = 0;
 };
 
 //! Where the values produced by compile-time folding are consumed.

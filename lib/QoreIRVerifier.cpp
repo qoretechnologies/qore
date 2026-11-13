@@ -2907,6 +2907,23 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     }
     max_value_id = max_vid;
     local_var_slots = slot_map;
+    // Resolve this once before the IR is published, for native and interpreted calls alike.  Prefer the
+    // synthetic self local; older/deserialized IR can identify it only by name.  Iterate the final map to retain
+    // the same fallback ordering as the former per-invocation lookup.
+    self_local = nullptr;
+    for (const auto& [lv, slot_id] : local_var_slots) {
+        (void)slot_id;
+        if (!lv || !lv->getName()) {
+            continue;
+        }
+        if (lv->isSelf()) {
+            self_local = const_cast<LocalVar*>(lv);
+            break;
+        }
+        if (!self_local && !strcmp(lv->getName(), "self")) {
+            self_local = const_cast<LocalVar*>(lv);
+        }
+    }
     max_local_slot_id = next_local_slot > 0 ? next_local_slot - 1 : 0;
 
     // Pass 1.5: Set metadata flags on blocks and cache line numbers in instructions

@@ -153,6 +153,16 @@ int QoreHashMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
         && select_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
         parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
+    if (qore_type_contains_type_parameter(returnTypeInfo)) {
+        // the result of a hash map in a generic callable has the type argument of the call in place of the type
+        // parameter; other hash maps keep their code path (issue #5988)
+        ReferenceHolder<> holder(this, nullptr);
+        QoreHashMapSelectOperatorNode* generic_map = getSemanticPolicy().needsFilter()
+            ? static_cast<QoreHashMapSelectOperatorNode*>(new QoreGenericHashMapSelectOperatorNode<true>(*this))
+            : new QoreGenericHashMapSelectOperatorNode<false>(*this);
+        generic_map->setParseAnalysis(parse_context.analysis);
+        val = generic_map;
+    }
     return err;
 }
 
@@ -161,11 +171,17 @@ QoreHashNode* QoreHashMapSelectOperatorNode::getNewHash() const {
     return new QoreHashNode(typeInfo ? typeInfo : autoTypeInfo);
 }
 
+QoreHashNode* QoreHashMapSelectOperatorNode::getNewGenericHash() const {
+    const QoreTypeInfo* typeInfo = QoreTypeInfo::getUniqueReturnComplexHash(
+        qore_substitute_type_params_if_needed(returnTypeInfo));
+    return new QoreHashNode(typeInfo ? typeInfo : autoTypeInfo);
+}
+
 QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     return evalCommon<false>(needs_deref, xsink);
 }
 
-template <bool Lexical>
+template <bool Lexical, bool Generic>
 QoreValue QoreHashMapSelectOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder arg_lst(e[2], xsink);
     if (*xsink || arg_lst->isNothing())
@@ -177,7 +193,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalCommon(bool& needs_deref, Exception
 
     qore_type_t arglst_type = arg_lst->getType();
     assert(arglst_type != NT_NOTHING);
-    ReferenceHolder<QoreHashNode> ret_val(ref_rv ? getNewHash() : nullptr, xsink);
+    ReferenceHolder<QoreHashNode> ret_val(ref_rv ? (Generic ? getNewGenericHash() : getNewHash()) : nullptr, xsink);
     if (NT_LIST != arglst_type) { // Single value
         // check if it's an AbstractIterator object
         if (NT_OBJECT == arglst_type) {
@@ -187,7 +203,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalCommon(bool& needs_deref, Exception
                 return QoreValue();
 
             if (h)
-                return mapIterator<Lexical>(h, xsink); // TODO!!
+                return mapIterator<Lexical, Generic>(h, xsink); // TODO!!
             // passed iterator
         }
 
@@ -297,9 +313,9 @@ QoreValue QoreHashMapSelectOperatorNode::evalCommon(bool& needs_deref, Exception
     return ret_val.release();
 }
 
-template <bool Lexical>
+template <bool Lexical, bool Generic>
 QoreValue QoreHashMapSelectOperatorNode::mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreHashNode> rv(ref_rv ? getNewHash() : nullptr, xsink);
+    ReferenceHolder<QoreHashNode> rv(ref_rv ? (Generic ? getNewGenericHash() : getNewHash()) : nullptr, xsink);
 
     // try to find a common value type, if any
     bool vcommon = false;
@@ -379,3 +395,36 @@ QoreValue QoreHashMapSelectOperatorNode::mapIterator(AbstractIteratorHelper& h, 
 
     return rv.release();
 }
+
+template <bool Lexical>
+QoreGenericHashMapSelectOperatorNode<Lexical>::QoreGenericHashMapSelectOperatorNode(QoreHashMapSelectOperatorNode& old)
+        : QoreHashMapSelectOperatorNode(old) {
+    // the operands belong to this operator now
+    old.e[0] = QoreValue();
+    old.e[1] = QoreValue();
+    old.e[2] = QoreValue();
+    old.e[3] = QoreValue();
+}
+
+template <bool Lexical>
+QoreGenericHashMapSelectOperatorNode<Lexical>::QoreGenericHashMapSelectOperatorNode(const QoreProgramLocation* loc,
+        QoreValue p0, QoreValue p1, QoreValue p2, QoreValue p3)
+        : QoreHashMapSelectOperatorNode(loc, p0, p1, p2, p3) {
+}
+
+template <bool Lexical>
+QoreValue QoreGenericHashMapSelectOperatorNode<Lexical>::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<Lexical, true>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreHashMapSelectOperatorNode* QoreGenericHashMapSelectOperatorNode<Lexical>::createBackgroundCopy(QoreValue p0,
+        QoreValue p1, QoreValue p2, QoreValue p3) const {
+    // a background expression keeps the class of the operator, generic and lexical
+    QoreGenericHashMapSelectOperatorNode* node = new QoreGenericHashMapSelectOperatorNode(loc, p0, p1, p2, p3);
+    ParseNode::bindSemanticPolicy(QoreValue(node), getSemanticPolicy());
+    return node;
+}
+
+template class QoreGenericHashMapSelectOperatorNode<false>;
+template class QoreGenericHashMapSelectOperatorNode<true>;

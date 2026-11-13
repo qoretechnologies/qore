@@ -605,7 +605,8 @@ QoreNumberNode::QoreNumberNode(const QoreValue n) : SimpleValueQoreNode(NT_NUMBE
         return;
     }
 
-    if (t == NT_INT) {
+    // a char converts to its code point (qore#6020)
+    if (t == NT_INT || t == NT_CHAR) {
         priv = new qore_number_private(n.getAsBigInt());
         return;
     }
@@ -885,8 +886,10 @@ QoreNumberNode* QoreNumberNode::toNumber(const QoreValue n) {
         return new QoreNumberNode(text.c_str());
     }
 
-    if (t == NT_INT)
+    // a char converts to its code point (qore#6020)
+    if (t == NT_INT || t == NT_CHAR) {
         return new QoreNumberNode(n.getAsBigInt());
+    }
 
     return new QoreNumberNode(n.getAsFloat());
 }

@@ -133,6 +133,12 @@ public:
         return method;
     }
 
+    //! Returns the declared class of the receiver if the method is a static method of it, to which a reference
+    //! through an object is bound (qore#5990), otherwise nullptr
+    DLLLOCAL const QoreClass* getStaticBoundClass() const {
+        return qc && m && m->isStatic() ? qc : nullptr;
+    }
+
     //! Returns a reference to the method of the object that the object expression gave
     /** The IR interpreter and native code evaluate the object expression themselves and use this to create the
         reference, so the expression is evaluated once, as in the AST interpreter

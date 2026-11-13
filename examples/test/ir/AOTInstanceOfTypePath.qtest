@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run an AOT-compiled module in child processes of its own binary
+# test-platform: macos - AOT code generation and linking of instanceof with type paths
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The instanceof operator in AOT-compiled code, whose type is given by its path and resolved once per AOT context
+    and path (#5976): the results are those of the AST interpreter for classes of the module, of Qore and of the
+    script, hashdecls, complex types, NOTHING and the type parameter of a generic class (compared with the AST
+    interpreter's results only), also when the same expression is evaluated many times (cached), for a type and its
+    or-nothing type in the same function (whose paths are adjacent in the compiled module), and when a second Program
+    that loads the module calls it (the module's code runs in the module's Program).
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTInstanceOfTypePathTest
+
+class AOTInstanceOfTypePathTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        #! The module: instanceof checks of every kind of type
+        const ModuleSource = "%modern
+module AOTInstanceOfTypePath {
+    version = \"1.0\";
+    desc = \"instanceof with type paths in AOT code\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTInstanceOfTypePath {
+    public class Base {
+    }
+
+    public class Derived inherits Base {
+    }
+
+    public hashdecl Info {
+        int x = 1;
+    }
+
+    #! the instanceof checks of a value, as a string
+    public string sub check(auto v) {
+        list<string> l = ();
+        if (v instanceof Base) {
+            l += \"Base\";
+        }
+        if (v instanceof Derived) {
+            l += \"Derived\";
+        }
+        if (v instanceof AOTInstanceOfTypePath::Base) {
+            l += \"QualifiedBase\";
+        }
+        if (v instanceof hash<Info>) {
+            l += \"Info\";
+        }
+        if (v instanceof Qore::Thread::Mutex) {
+            l += \"Mutex\";
+        }
+        if (v instanceof list<int>) {
+            l += \"list<int>\";
+        }
+        if (v instanceof hash<string, int>) {
+            l += \"hash<string, int>\";
+        }
+        if (v instanceof *Base) {
+            l += \"*Base\";
+        }
+        return l ? l.join(\",\") : \"-\";
+    }
+
+    #! the same check evaluated many times: the cached type gives the same result each time
+    public int sub count(auto v, int n) {
+        int c = 0;
+        for (int i = 0; i < n; ++i) {
+            if (v instanceof Base) {
+                ++c;
+            }
+            if (v instanceof hash<Info>) {
+                ++c;
+            }
+        }
+        return c;
+    }
+
+    #! instanceof with the type parameter of a generic class: the type depends on the instantiation
+    public class Holder<T> {
+        bool isT(auto v) {
+            return v instanceof T;
+        }
+    }
+
+    public string sub generic(auto v) {
+        Holder<Base> hb();
+        Holder<hash<Info>> hi();
+        Holder<int> hn();
+        return sprintf(\"%y,%y,%y\", hb.isT(v), hi.isT(v), hn.isT(v));
+    }
+}
+";
+
+        #! The script: the checks of values of every kind, and the module in a second Program
+        const ScriptSource = "%modern
+%requires AOTInstanceOfTypePath
+
+class ScriptClass inherits AOTInstanceOfTypePath::Derived {
+}
+
+list<auto> values = (
+    new AOTInstanceOfTypePath::Base(),
+    new AOTInstanceOfTypePath::Derived(),
+    new ScriptClass(),
+    <AOTInstanceOfTypePath::Info>{},
+    {\"x\": 1},
+    new Mutex(),
+    (1, 2),
+    (\"a\",),
+    1,
+    NOTHING,
+);
+foreach auto v in (values) {
+    printf(\"check %d: %s\\n\", $#, AOTInstanceOfTypePath::check(v));
+    printf(\"generic %d: %s\\n\", $#, AOTInstanceOfTypePath::generic(v));
+}
+printf(\"count: %d %d %d\\n\", AOTInstanceOfTypePath::count(new AOTInstanceOfTypePath::Derived(), 1000),
+    AOTInstanceOfTypePath::count(<AOTInstanceOfTypePath::Info>{}, 1000), AOTInstanceOfTypePath::count(1, 1000));
+
+# a second Program that loads the module
+Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+p.parse(\"%requires AOTInstanceOfTypePath
+string sub run() {
+    return AOTInstanceOfTypePath::check(new AOTInstanceOfTypePath::Derived()) + \\\";\\\"
+        + AOTInstanceOfTypePath::check(<AOTInstanceOfTypePath::Info>{});
+}\", \"second\");
+printf(\"second Program: %s\\n\", p.callFunction(\"run\"));
+";
+    }
+
+    constructor() : QUnit::Test("AOTInstanceOfTypePathTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT instanceof gives the results of the AST interpreter", \sameAsAstTest());
+
+        set_return_value(main());
+    }
+
+    #! Writes a file
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+
+    #! Runs the script with the module from the given directory and returns its output
+    private string runScript(string module_dir, string script_path, *string exec_mode) {
+        return backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s%s 2>&1",
+            libqore_dir, libqore_dir, module_dir, qore_bin, exec_mode ? "--exec-mode=" + exec_mode + " " : "",
+            script_path));
+    }
+
+    sameAsAstTest() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        # the source module, run by the AST interpreter, and the AOT-compiled module, each in a directory of its own
+        string src_dir = tmp_dir + "/src";
+        string aot_dir = tmp_dir + "/aot";
+        mkdir(src_dir);
+        mkdir(aot_dir);
+        writeFile(src_dir + "/AOTInstanceOfTypePath.qm", ModuleSource);
+        writeFile(aot_dir + "/AOTInstanceOfTypePath.qm", ModuleSource);
+        string qmod_path = aot_dir + "/AOTInstanceOfTypePath.qmod";
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, qmod_path, aot_dir + "/AOTInstanceOfTypePath.qm"));
+        assertTrue(is_file(qmod_path), "compiled AOT module: " + compile_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        writeFile(script_path, ScriptSource);
+
+        string ast_out = runScript(src_dir, script_path, "ast");
+        # the expected results, so that the comparison below does not pass for an AST interpreter that is wrong too
+        list<string> lines = ast_out.split("\n");
+        foreach list<string> e in ((
+                ("check 0: Base,QualifiedBase,*Base", "a Base"),
+                ("check 1: Base,Derived,QualifiedBase,*Base", "a Derived"),
+                ("check 2: Base,Derived,QualifiedBase,*Base", "a subclass in the script"),
+                ("check 3: Info", "a hash<Info>"),
+                ("check 4: hash<string, int>", "an untyped hash with an int value"),
+                ("check 5: Mutex", "a Mutex"),
+                ("check 6: list<int>", "a list of ints"),
+                ("check 7: -", "a list of strings"),
+                ("check 8: -", "an int"),
+                ("check 9: *Base", "NOTHING"),
+                ("count: 1000 1000 0", "repeated checks"),
+                ("second Program: Base,Derived,QualifiedBase,*Base;Info", "a second Program"),
+            )) {
+            assertTrue(inlist(e[0], lines), sprintf("AST: %s: %y in %y", e[1], e[0], ast_out));
+        }
+
+        # the module is loaded from its qmod (no source fallback), and gives the same output
+        string aot_out = runScript(aot_dir, script_path);
+        assertFalse(aot_out =~ /FALLBACK/, "the AOT module is used: " + aot_out);
+        assertEq(ast_out, aot_out, "the AOT module gives the results of the AST interpreter");
+    }
+}

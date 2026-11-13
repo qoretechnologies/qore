@@ -2724,6 +2724,9 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
         if (pending_class_path[0] == ':' && pending_class_path[1] == ':') {
             pending_class_path += 2;
         }
+        // the parse lookup reads the parse options of the current Program, which is not set on a thread that loads a
+        // compiled program; the options of the target Program apply (qore#6026)
+        QoreProgramContextHelper pch(pgm);
         qc = qore_root_ns_private::parseFindClass(
             *pp->RootNS, &loc_builtin, pending_class_path);
     }
@@ -3206,7 +3209,10 @@ QoreAOTStaticMethodRef::QoreAOTStaticMethodRef(const char* encoded) : method_nam
         return;
     }
 
-    const char* second_sep = strrchr(payload, '\n');
+    // the variant's class reference ends the payload's first line, or its second one for a class of a module; the
+    // signature text that follows has the default values of the parameters, whose strings can have newlines
+    // (qore#6026)
+    const char* second_sep = qore_aot_find_class_ref_end(payload);
     if (!second_sep) {
         sig_text = payload;
         return;
@@ -12857,7 +12863,11 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
             writer.writeStringRef(call->getName());
         }
         if (!deferred_source_function) {
-            writer.writeStringRef(qore_aot_get_function_call_signature_ref(call).c_str());
+            // the arguments of a named call are written in source order (the order of their evaluation); the call
+            // keeps the positions of their parameters (bound at parse time) or their names (resolved at run time by
+            // parameter name) before the signature and the explicit type arguments (read by read_expr_func_call())
+            writer.writeStringRef((qore_aot_named_call_arg_prefix(call)
+                + qore_aot_get_function_call_signature_ref(call)).c_str());
         } else {
             writer.writeStringRef(QORE_AOT_DEFERRED_SOURCE_CALL_SLOT);
         }
@@ -12892,6 +12902,10 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
             variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        // the arguments are written in source order (the order of their evaluation): a named call keeps the
+        // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
+        // name) first (read by read_expr_self_method_call())
+        method_ref.insert(0, qore_aot_named_call_arg_prefix(call));
         writer.writeStringRef(method_ref.c_str());
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -12926,6 +12940,10 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
             variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        // the arguments are written in source order (the order of their evaluation): a named call keeps the
+        // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
+        // name) first (read by read_expr_static_method_call())
+        method_ref.insert(0, qore_aot_named_call_arg_prefix(call));
         writer.writeStringRef(method_ref.c_str());
         if ((writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
             writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
@@ -14193,6 +14211,10 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                 }
             }
             qore_aot_append_call_type_args(method_ref, mc->getExplicitTypeParamInstantiation());
+            // the arguments are written in source order (the order of their evaluation): a named call keeps the
+            // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
+            // name) first (read by read_expr_dot_eval_target())
+            method_ref.insert(0, qore_aot_named_call_arg_prefix(mc));
             writer.writeStringRef(method_ref.c_str());
             writer.writeU8(mc->isPseudo() ? 1 : 0);
             // Target expression (left-hand side of the dot)
@@ -15450,9 +15472,10 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         writer.writeU32(binding_index);
     }
 
-    // 2b. The handler-own local slots (QORE_AOT_HANDLER_OWN_LOCALS_VERSION): the closure-bound locals that a handler
-    // declares itself, which its lowering does not mark pre-instantiated; every one has a parent slot, as the lowering
-    // reserves slots in the function for the locals of a handler (see qore_ir_reserve_handler_local_slots())
+    // 2b. The handler-own local slots (QORE_AOT_HANDLER_OWN_LOCALS_VERSION): the locals that a handler declares itself
+    // (closure-bound ones; since #6002 all of them), which its lowering does not mark pre-instantiated; every one has
+    // a parent slot, as the lowering reserves slots in the function for the locals of a handler (see
+    // qore_ir_reserve_handler_local_slots())
     {
         std::vector<uint32_t> own_slots;
         own_slots.reserve(func.handler_own_locals.size());

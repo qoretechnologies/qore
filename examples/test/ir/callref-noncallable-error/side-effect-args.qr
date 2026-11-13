@@ -1,0 +1,78 @@
+# calls values that are not call references or closures with arguments that can have side effects, which the
+# optimized execution modes check before the arguments (issue #5784), and prints each exception with its location and
+# how many times an argument function ran; run by ../CallRefNonCallableSideEffectArgs.qtest in each execution mode
+# and as an AOT executable, whose output must be that of the AST interpreter (issue #5835)
+
+class Plain {
+}
+
+# the number of times that arg() ran
+int arg_count = 0;
+
+# an argument with a side effect
+int sub arg() {
+    ++arg_count;
+    return 1;
+}
+
+# a call whose argument is an untyped local
+auto sub callAutoLocal(auto v) {
+    auto a = 1;
+    return v(a);
+}
+
+# a call whose argument is a call
+auto sub callCallArg(auto v) {
+    return v(arg());
+}
+
+# a call whose argument is a post-increment
+auto sub callPostIncrement(auto v) {
+    int i = 1;
+    return v(i++);
+}
+
+# a call whose expression spans more than one line, with a call as an argument
+auto sub callMultiLineCallArg(auto v) {
+    return v(
+        1,
+        arg()
+    );
+}
+
+const Calls = {
+    "callAutoLocal": \callAutoLocal(),
+    "callCallArg": \callCallArg(),
+    "callPostIncrement": \callPostIncrement(),
+    "callMultiLineCallArg": \callMultiLineCallArg(),
+};
+
+list<auto> values = (NOTHING, 1, 1.5, "str", {"a": 1}, (1, 2), new Plain(), True);
+
+# a closure is still called with its arguments in each form of call
+code cl = auto sub (*auto a, *auto b) { return sprintf("closure %y %y", a, b); };
+
+# enough rounds for tiered execution to compile the functions to native code and run the native code
+for (int round = 0; round < 3; ++round) {
+    foreach auto v in (values) {
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            int before = arg_count;
+            string res;
+            try {
+                auto r = i.value(v);
+                res = sprintf("returned %y", r);
+            } catch (hash<ExceptionInfo> ex) {
+                res = sprintf("%s: %s @ %s:%d-%d", ex.err, ex.desc, basename(ex.file), ex.line, ex.endline);
+            }
+            if (!round) {
+                printf("%s %s: %s (arguments run: %d)\n", i.key, v.fullType(), res, arg_count - before);
+            }
+        }
+    }
+    int before = arg_count;
+    string out = sprintf("%y %y %y %y", callAutoLocal(cl), callCallArg(cl), callPostIncrement(cl),
+        callMultiLineCallArg(cl));
+    if (!round) {
+        printf("closure: %s (arguments run: %d)\n", out, arg_count - before);
+    }
+}

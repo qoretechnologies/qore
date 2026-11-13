@@ -2370,6 +2370,50 @@ public:
     std::string key2;  //!< secondary key (HashMapTwoKeys only)
 };
 
+//! The constant container that a MakeList or MakeHash rebuilds from its entries (qore#5977)
+/** QoreIRLowering::lowerConstant() rebuilds a small constant container from one operand per entry, so that the
+    fixed-aggregate scalar replacement can remove it; it records the constant here when the container could be loaded
+    by reference instead (QoreIRLowering::constantContainerLoadsByReference()).  An instruction that the scalar
+    replacement leaves in place is then turned into a LoadConstant of the value when all its uses only read it
+    (qore_ir_optimize()).  The holder owns a reference to the value; a fully concrete constant holds no object, so
+    releasing it runs no code.
+*/
+class QoreIRRebuiltConstant {
+public:
+    DLLLOCAL QoreIRRebuiltConstant() = default;
+    QoreIRRebuiltConstant(const QoreIRRebuiltConstant&) = delete;
+    QoreIRRebuiltConstant& operator=(const QoreIRRebuiltConstant&) = delete;
+
+    DLLLOCAL ~QoreIRRebuiltConstant() {
+        clear();
+    }
+
+    //! Records \a value, which must be a concrete list or hash
+    DLLLOCAL void set(const QoreValue& value) {
+        clear();
+        value_ = value.refSelf();
+    }
+
+    DLLLOCAL void clear() {
+        if (value_.hasNode()) {
+            ExceptionSink xsink;
+            value_.discard(&xsink);
+            value_ = QoreValue();
+        }
+    }
+
+    DLLLOCAL bool isSet() const {
+        return value_.hasNode();
+    }
+
+    DLLLOCAL const QoreValue& get() const {
+        return value_;
+    }
+
+private:
+    QoreValue value_;
+};
+
 //! Make list instruction with optional parse-time type info
 class QoreIRMakeListInstruction : public QoreIRInstruction {
 public:
@@ -2377,6 +2421,7 @@ public:
     }
 
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+    QoreIRRebuiltConstant rebuilt_constant;  //!< the constant this instruction rebuilds, if any
 };
 
 //! Make hash instruction with optional parse-time type info.
@@ -2388,6 +2433,7 @@ public:
     }
 
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+    QoreIRRebuiltConstant rebuilt_constant;  //!< the constant this instruction rebuilds, if any
 };
 
 //! Make hash with constant string keys - operands are values only, keys are pre-stored
@@ -3905,6 +3951,10 @@ public:
     //! the ID of \a pgm, taken when it is set: a background compile checks that the Program with this ID is still
     //! the one at \a pgm, as a deleted Program's address can be reused (see QoreJIT::enqueueBgCompile())
     qore_program_id_t pgm_id = 0;
+    //! the owner of the native code compiled from this function when it is not \a pgm: the generic specialization
+    //! (QoreSpecializedIR) whose code is removed when the specialization is freed; the code of a function with
+    //! neither stays in the JIT for the life of the process (see QoreJIT::releaseCodeOwner())
+    const void* jit_owner = nullptr;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
 
     //! Transient SSA facts used by IR optimization and native lowering.
@@ -3934,11 +3984,11 @@ public:
     // At runtime, parent's local values are copied into these inherited slots
     uint32_t parent_slot_count = 0;
 
-    //! For handler IR functions: the closure-bound parent-slot locals that the handler declares itself
-    /** The lowering of a handler records the closure-bound locals of the handler code (including those of its
-        nested handlers), which it does not mark pre-instantiated, and the IR serialization writes their slots
-        (from QORE_AOT_HANDLER_OWN_LOCALS_VERSION), so that a handler read from serialized IR gets the same
-        pre-instantiated locals (see restoreHandlerPreInstantiatedLocals()).
+    //! For handler IR functions: the parent-slot locals that the handler declares itself
+    /** The lowering of a handler records the locals of the handler code (including those of its nested handlers),
+        which it does not mark pre-instantiated (closure-bound ones since qore#5653, the others since #6002), and the
+        IR serialization writes their slots (from QORE_AOT_HANDLER_OWN_LOCALS_VERSION), so that a handler read from
+        serialized IR gets the same pre-instantiated locals (see restoreHandlerPreInstantiatedLocals()).
     */
     std::unordered_set<const LocalVar*> handler_own_locals;
 
@@ -3949,6 +3999,11 @@ public:
     // Mapping of LocalVar* pointers to their slot IDs (computed during IR analysis)
     // Used by the IR interpreter to convert unordered_map lookups to direct array access
     std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
+
+    //! The self local resolved by computeSlotIdsAndEmbed(), including the name fallback of deserialized IR.
+    /** Immutable with the published slot map; nullptr also caches the absence of self, so calls of ordinary
+        closures do not scan every local name on every invocation.  Recomputed when slot IDs are rebuilt. */
+    LocalVar* self_local = nullptr;
 
     //! Reserve a stable local slot before full IR lowering is complete.
     /** Block-level on_exit handler compilation can compute and inherit parent
@@ -4257,9 +4312,9 @@ public:
     std::unordered_set<const LocalVar*> deriveHandlerOwnClosureLocalsFromIR() const;
 
     //! Marks the parent-slot locals of an on_block_exit handler read from serialized IR pre-instantiated
-    /** The lowering of a handler marks every parent slot pre-instantiated except the closure-bound locals that the
-        handler declares (handler_own_locals), and the IR interpreter reads and writes back the values of the parent's
-        variables only for the pre-instantiated ones.  Serialized IR has no pre-instantiated locals, so a handler read
+    /** The lowering of a handler marks every parent slot pre-instantiated except the locals that the handler declares
+        (handler_own_locals), and the IR interpreter reads and writes back the values of the parent's variables only
+        for the pre-instantiated ones.  Serialized IR has no pre-instantiated locals, so a handler read
         from it (an AOT closure run from its IR, or lazy debugger IR) has to restore them from the handler's own locals
         that the artifact records (or, for an older artifact, that its IR gives; see
         deriveHandlerOwnClosureLocalsFromIR()): without them, the handler took every closure-bound variable of the

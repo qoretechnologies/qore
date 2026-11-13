@@ -464,6 +464,9 @@ private:
     // Set of LocalVar* (as void*) that are pre-instantiated by the caller (tiered
     // compilation); skip qore_rt_instantiate_local / qore_rt_uninstantiate_local for these.
     const std::unordered_set<const void*>* pre_instantiated_locals = nullptr;
+    //! the pre-instantiated locals of a handler function in native code: those of its IR function and the locals that
+    //! it declares other than closure-bound ones (see lowerFunction(), #6002)
+    std::unordered_set<const void*> handler_pre_instantiated_locals;
 
     // Set of LocalVar* (as void*) that are only accessed by LoadLocal/StoreLocal
     // in fully-lowered IR code.  For these locals, skip qore_rt_assign_local

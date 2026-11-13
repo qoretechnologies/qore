@@ -403,8 +403,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      when parsed.  A v9-v21 record has no such byte: the class gets the flag only from its public members, as
 //!      before.
 //! v23: a serialized IR function has, after its local slot table, the number of its handler-own local slots and
-//!      their slot ids (u32 each): the closure-bound locals that an on_block_exit handler declares itself, which the
-//!      lowering does not mark pre-instantiated in the handler (zero for a function that is not a handler).  A handler
+//!      their slot ids (u32 each): the locals that an on_block_exit handler declares itself (closure-bound ones;
+//!      since #6002 all of them), which the lowering does not mark pre-instantiated in the handler (zero for a
+//!      function that is not a handler).  A handler
 //!      read from serialized IR marks its other parent slots pre-instantiated, as its lowering does.  A v9-v22 IR
 //!      function has no such list; its handler-own locals are derived from its IR (an approximation: see
 //!      QoreIRFunction::deriveHandlerOwnClosureLocalsFromIR()).

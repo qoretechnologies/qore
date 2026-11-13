@@ -31,6 +31,13 @@
     expression that computes it, so naming it would make that expression read the constant it is
     computing.  That case is asserted in both directions - the IR shape stays a rebuild, and the
     module still runs with initialization deferred to the first read.
+
+    A constant of at most eight entries is still rebuilt, so that the fixed-aggregate scalar
+    replacement can remove it - a read with a literal key folds to the entry - but one that the scalar
+    replacement leaves in place because it is read through a run-time key (qore#5977:
+    <tt>Labels{enc}</tt>) is loaded instead (qore_ir_optimize()), and its entries are not built
+    either.  Any other use of the rebuilt container, such as returning it, keeps the rebuild.  The
+    same shape, count and value assertions are made for such small constants.
 */
 class IRConstantContainerMaterializationTest inherits QUnit::Test {
     private {
@@ -44,6 +51,9 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
 
         #! the number of reads counted
         const CountedReads = 1000;
+
+        #! entries in the small constants, which are rebuilt unless only read (qore#5977)
+        const SmallEntries = 4;
     }
 
     constructor() : QUnit::Test("IRConstantContainerMaterializationTest", "1.0", \ARGV) {
@@ -61,6 +71,12 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
         addTestCase("an AOT read of a constant creates no container", \testAotReadsCreateNoContainer());
         addTestCase("an AOT qmod reads the same values as its source", \testAotValuesMatchSource());
         addTestCase("a deferred AOT constant is still rebuilt", \testAotDeferredConstantIsRebuilt());
+        addTestCase("a small AOT constant read through a run-time key is loaded", \testSmallAotShape());
+        addTestCase("a small constant read through a run-time key is loaded", \testSmallIrStats());
+        addTestCase("reading a small constant creates no container", \testSmallReadsCreateNoContainer());
+        addTestCase("an AOT read of a small constant creates no container",
+            \testSmallAotReadsCreateNoContainer());
+        addTestCase("every tier reads the same small constant values", \testSmallTiersAgree());
 
         set_return_value(main());
     }
@@ -160,13 +176,13 @@ printf(\"%%d:%%d:%%d\\n\", hashes, lists, built);
     }
 
     #! checks the counts printed by countingCode()
-    private checkCounts(string label, string out) {
+    private checkCounts(string label, string out, int entries = LargeEntries) {
         list<string> parts = (trim out).split(":");
         assertEq(3, parts.size(), sprintf("%s: the counting script printed three counts: %s", label, out));
         assertEq(0, parts[0].toInt(), sprintf("%s: %d reads of a %d-entry constant hash create no hash", label,
-            CountedReads, LargeEntries));
+            CountedReads, entries));
         assertEq(0, parts[1].toInt(), sprintf("%s: %d reads of a %d-entry constant list create no list", label,
-            CountedReads, LargeEntries));
+            CountedReads, entries));
         assertEq(CountedReads, parts[2].toInt(), sprintf("%s: building a hash %d times creates %d hashes", label,
             CountedReads, CountedReads));
     }
@@ -388,5 +404,161 @@ printf(\"%y:%y\\n\", AOTConstDeferredMod::readBase(\"k7\"), AOTConstDeferredMod:
         assertEq("7:7\n", deferred, "AOT qmod reads its computed constant with init deferred");
         assertEq(-1, deferred.find("AOT-PENDING-CONSTANT"),
             "reading a computed constant does not report it as unpopulated");
+    }
+
+    #! the small constants: an untyped and a typed hash, a list and a hash holding containers
+    private string smallDecls(string visibility) {
+        return sprintf("%sconst S = {%s};
+%sconst hash<string, int> TS = {%s};
+%sconst SL = (%s);
+%sconst N = {\"h\": {\"x\": 1}, \"l\": (1, 2)};", visibility, hashEntries(SmallEntries), visibility,
+            hashEntries(SmallEntries), visibility, listEntries(SmallEntries), visibility);
+    }
+
+    #! the functions that read the small constants, and the ones whose use of a constant keeps the rebuild
+    private string smallFunctions(string visibility) {
+        return sprintf("%s*int sub readS(string k) {
+    return S{k};
+}
+%s*int sub readTS(string k) {
+    return TS{k};
+}
+%s*int sub readSL(int idx) {
+    return SL[idx];
+}
+%sauto sub readN(string k) {
+    return N{k};
+}
+%sint sub readLiteralKey() {
+    return S.k1;
+}
+%shash<auto> sub returnS() {
+    return S;
+}", visibility, visibility, visibility, visibility, visibility, visibility);
+    }
+
+    testSmallAotShape() {
+        TmpDir tmp("qore-ir-const-materialization-small-aot-shape-");
+        string dump = dumpAotIr(tmp, "AOTSmallShapeMod", moduleSource("AOTSmallShapeMod", smallDecls("public "),
+            smallFunctions("public ")));
+
+        foreach string read in ("readS(string)", "readTS(string)", "readN(string)") {
+            string ir = irFor(dump, sprintf("=== IR for AOTSmallShapeMod::%s ===", read));
+            assertTrue(ir =~ /load\.constant/, sprintf("%s: the constant hash is loaded by reference", read));
+            assertFalse(ir =~ /make\.hash/, sprintf("%s: the constant hash is not rebuilt per read", read));
+            assertFalse(ir =~ /const\.string/, sprintf("%s: the keys of the constant are not built", read));
+        }
+        string list_ir = irFor(dump, "=== IR for AOTSmallShapeMod::readSL(int) ===");
+        assertTrue(list_ir =~ /load\.constant/, "readSL(int): the constant list is loaded by reference");
+        assertFalse(list_ir =~ /make\.list/, "readSL(int): the constant list is not rebuilt per read");
+        assertFalse(list_ir =~ /const\.int/, "readSL(int): the entries of the constant are not built");
+
+        # the scalar replacement still removes a container read with a literal key
+        string literal_ir = irFor(dump, "=== IR for AOTSmallShapeMod::readLiteralKey() ===");
+        assertFalse(literal_ir =~ /make\.hash/, "a read with a literal key builds no hash");
+        assertFalse(literal_ir =~ /load\.constant/, "a read with a literal key loads no constant");
+        assertTrue(literal_ir =~ /const\.int -> %[0-9]+ = 1/, "a read with a literal key is the entry");
+
+        # a use that is not a read keeps the rebuild
+        string return_ir = irFor(dump, "=== IR for AOTSmallShapeMod::returnS() ===");
+        assertTrue(return_ir =~ /make\.hash/, "a returned constant is still rebuilt");
+        assertFalse(return_ir =~ /load\.constant/, "a returned constant is not loaded");
+    }
+
+    testSmallIrStats() {
+        TmpDir tmp("qore-ir-const-materialization-small-stats-");
+        string path = tmp.path + "/stats.qr";
+        write(path, sprintf("%%modern
+%s
+%s
+printf(\"%%y:%%y:%%y:%%y:%%y:%%y\\n\", readS(\"k1\"), readTS(\"k2\"), readSL(3), readN(\"h\"), readLiteralKey(),
+    returnS().size());
+", smallDecls(""), smallFunctions("")));
+        string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -b --exec-mode=ir %s "
+            "2>&1", libqore_dir, qore_bin, path));
+        assertNeq(-1, out.find(sprintf("1:2:3:{x: 1}:1:%d\n", SmallEntries)), "the values read: " + out);
+        hash<string, int> loads;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = (line =~ x/^IR-OPT: ([A-Za-z]+): .* constant-loads=([0-9]+)/);
+            if (m) {
+                loads{m[0]} = m[1].toInt();
+            }
+        }
+        foreach string read in ("readS", "readTS", "readSL", "readN") {
+            assertEq(1, loads{read}, sprintf("%s loads the constant it reads: %s", read, out));
+        }
+        assertEq(0, loads.readLiteralKey, "a read with a literal key loads no constant: " + out);
+        assertEq(0, loads.returnS, "a returned constant is not loaded: " + out);
+    }
+
+    testSmallReadsCreateNoContainer() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the containers created are counted in debug builds only");
+        }
+        TmpDir tmp("qore-ir-const-materialization-small-count-");
+        string path = tmp.path + "/count.qr";
+        # T is typed, as a typed constant hash is rebuilt with its type (qore#5977)
+        write(path, sprintf("%%modern
+const hash<string, int> T = {%s};
+const L = (%s);
+%s
+%s", hashEntries(SmallEntries), listEntries(SmallEntries), readFunctions(""), countingCode("")));
+        foreach string mode in (Modes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir,
+                qore_bin, mode, path));
+            checkCounts("exec-mode=" + mode, out, SmallEntries);
+        }
+    }
+
+    testSmallAotReadsCreateNoContainer() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the containers created are counted in debug builds only");
+        }
+        TmpDir tmp("qore-ir-const-materialization-small-aot-count-");
+        hash<auto> m = buildModule(tmp, "AOTSmallCountMod", moduleSource("AOTSmallCountMod",
+            sprintf("public const hash<string, int> T = {%s};\npublic const L = (%s);", hashEntries(SmallEntries),
+                listEntries(SmallEntries)), readFunctions("public ")));
+
+        string script = tmp.path + "/count.qr";
+        write(script, "%modern\n%requires AOTSmallCountMod\n" + countingCode("AOTSmallCountMod::"));
+        checkCounts("AOT qmod", runWithModule(m.qmod_dir, script), SmallEntries);
+        checkCounts("source module", runWithModule(m.src_dir, script), SmallEntries);
+    }
+
+    testSmallTiersAgree() {
+        TmpDir tmp("qore-ir-const-materialization-small-values-");
+        string path = tmp.path + "/values.qr";
+        # the reads run in functions, which the runtime tiers optimize; a missing key reads NOTHING, and a value
+        # read or a copy that is changed must not change the constant
+        write(path, sprintf("%%modern
+%s
+%s
+list<auto> acc = ();
+foreach string k in (\"k0\", \"k3\", \"none\") {
+    acc += (readS(k), readTS(k));
+}
+foreach int i in (0, 3, 9) {
+    acc += readSL(i);
+}
+auto inner = readN(\"h\");
+inner.x = -1;
+list<auto> l = readN(\"l\");
+l += 3;
+hash<auto> copy = returnS();
+copy.k0 = -1;
+printf(\"%%y:%%y:%%y:%%y:%%y:%%y:%%y\\n\", acc, readLiteralKey(), inner, l, N, copy.k0, S.k0);
+", smallDecls(""), smallFunctions("")));
+        string expected;
+        foreach string mode in (Modes) {
+            string actual = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, path));
+            if (!expected.val()) {
+                expected = actual;
+                assertEq("[0, 0, 3, 3, null, null, 0, 3, null]:1:{x: -1}:[1, 2, 3]:{h: {x: 1}, l: [1, 2]}:-1:0\n",
+                    actual, "AST-tier values");
+            } else {
+                assertEq(expected, actual, sprintf("exec-mode=%s values", mode));
+            }
+        }
     }
 }

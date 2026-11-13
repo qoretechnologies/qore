@@ -23,6 +23,7 @@ class LexicalPolicyCaptureTest inherits QUnit::Test {
         addTestCase("pending default expressions", \defaults());
         addTestCase("background expression copies", \backgroundCopy());
         addTestCase("reusable background method arguments", \backgroundMethods());
+        addTestCase("reusable background static method arguments", \backgroundStaticMethods());
         addTestCase("background assignment copies", \backgroundAssignment());
         addTestCase("background cast copies", \backgroundCasts());
         addTestCase("background construction copies", \backgroundConstruction());
@@ -134,6 +135,39 @@ class LexicalPolicyCaptureTest inherits QUnit::Test {
                     p.callFunction("sample", destination),
                     "reused arguments retain declaration policy and native methods forward invocation policy");
             }
+        }
+    }
+
+    private backgroundStaticMethods() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('class Target {
+                    static list<auto> take(int i, softbool value) { return (i, value); }
+                    static nothing fail(int i) { throw "STATIC-BACKGROUND-ERROR", "static background", i; }
+                }
+                auto sub sample() {
+                    Queue q();
+                    thread_join(background q.push(map Target::take(value: "text", i: 7), (1, 2)));
+                    return q.get(-1);
+                }
+                int sub fail() { return background map Target::fail(9), (1, 2); }
+                ', "reusable-background-static-policy");
+            if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            assertEq(((7, !strict), (7, !strict)), p.callFunction("sample"),
+                "static copies keep named positions and policy");
+            Queue events();
+            auto subscription = p.subscribeThreadEvents(events, <ProgramThreadEventOptions>{"events": PTE_FINISHED});
+            on_exit p.unsubscribeThreadEvents(subscription.id);
+            thread_join(p.callFunction("fail"));
+            hash<ProgramThreadEvent> finished = events.get(30s);
+            assertEq("EXCEPTION", finished.outcome);
+            assertEq("STATIC-BACKGROUND-ERROR", finished.error.err);
+            assertEq(9, finished.error.arg);
+            assertNothing(finished.cleanup_error, "no secondary exception while releasing the copied arguments");
+            assertEq(((7, !strict), (7, !strict)), p.callFunction("sample"),
+                "calls still use their parsed policy after the failure");
         }
     }
 

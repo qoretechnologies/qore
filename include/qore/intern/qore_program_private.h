@@ -966,7 +966,7 @@ public:
     //! qore_program_private::parseDeniedDomains())
     int64 mod_header_dom = QDOM_DEFAULT;
     //! true while the init and del closures of the module header are parse-initialized (see
-    //! qore_program_private::parseDeniedDomains())
+    //! qore_program_private::parseAddDomain())
     bool mod_header_closure_init = false;
 
     //! the restrictions that an AOT module Program inherited from the Program that loaded it
@@ -3813,6 +3813,19 @@ public:
             }
         }
         QoreParseOptions neg = (n_dom & ~QoreParseOptions::POSITIVE_OPTIONS);
+        // a closure of a module header is parse-initialized after the header with the options in effect where it was
+        // written: one written before the domains key still has the restrictions that the declaration removed for the
+        // rest of the module, the one inherited from the Program loading a module from the process-wide module path
+        // (setModuleOwnDomainsIntern()) and the header's own one (QoreUserModuleDefContextHelper), so they do not apply
+        // to it, whatever the order of the keys of the header, for functions, methods and classes (qore#5803)
+        // module_trusted_dom, module_own_dom and mod_header_dom are per Program and are not reset when its module is
+        // loaded: a container that the API provides for a module (loadApplyToUserModule()) and that is used for a
+        // second module, after a restriction has been added back to it, would give the second module's header closures
+        // the first module's relief; the API does not reuse a container so, and without restrictions added back the
+        // first declaration has removed these restrictions from the container's options for good
+        if (neg && mod_header_closure_init) {
+            neg &= ~QoreParseOptions(module_trusted_dom | (module_own_dom & mod_header_dom));
+        }
         if (neg && (neg & pwo.parse_options)) {
             rv |= (neg & pwo.parse_options);
             pend_dom |= neg;
@@ -4751,28 +4764,22 @@ public:
     /** as parseAddDomain(); the restrictions that a module header adds for its own code do not apply to the domains
         declared on user code (\a user_declared): the header's \c init and \c del closures may call user code that
         declares a domain, which the code loading the module is checked for when it calls the module; a header closure
-        has the domains that the header declares, also when it is written before the domains key
+        has the domains that the header declares, also when it is written before the domains key (see parseAddDomain())
     */
     DLLLOCAL static QoreParseOptions parseDeniedDomains(QoreProgram* pgm, int64 dom, int64 user_declared) {
         QoreParseOptions denied = parseAddDomain(pgm, dom);
         if (denied && user_declared && pgm->priv->mod_header_dom) {
             denied &= ~QoreParseOptions(user_declared & pgm->priv->mod_header_dom & ~(dom & ~user_declared));
         }
-        // a closure of the module header is parse-initialized after the header with the options in effect where it
-        // was written: one written before the domains key still has the restrictions that the declaration removed
-        // for the rest of the module, the one inherited from the Program loading a module from the process-wide
-        // module path (setModuleOwnDomainsIntern()) and the header's own one (QoreUserModuleDefContextHelper), so
-        // they do not apply to it, whatever the order of the keys of the header
-        if (denied && pgm->priv->mod_header_closure_init) {
-            denied &= ~QoreParseOptions(pgm->priv->module_trusted_dom
-                | (pgm->priv->module_own_dom & pgm->priv->mod_header_dom));
-        }
         return denied;
     }
 
-    //! Marks the parse initialization of the init and del closures of a module header (see parseDeniedDomains())
-    DLLLOCAL static void setModuleHeaderClosureInit(QoreProgram& pgm, bool on) {
+    //! Marks the parse initialization of the init and del closures of a module header (see parseAddDomain())
+    //! \return the previous value
+    DLLLOCAL static bool setModuleHeaderClosureInit(QoreProgram& pgm, bool on) {
+        bool prev = pgm.priv->mod_header_closure_init;
         pgm.priv->mod_header_closure_init = on;
+        return prev;
     }
 
     //! Sets the restrictions that a user module header adds to the module's Program while its header is parsed

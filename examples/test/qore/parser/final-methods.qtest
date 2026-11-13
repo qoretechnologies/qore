@@ -49,6 +49,8 @@ class Derived inherits Base {
         addTestCase("parent class listed before the final method's class", \testMultipleInheritance());
         addTestCase("overloads accepting the final method's arguments", \testOverloads());
         addTestCase("static methods", \testStatic());
+        addTestCase("circular hierarchy", \testCircular());
+        addTestCase("a child of a class that lists the final method's class first", \testGrandchild());
         addTestCase("accepted hierarchies select the final method", \testAccepted());
         addTestCase("sandboxed subclasses of a trusted class", \testSandboxedSubclass());
         set_return_value(main());
@@ -115,6 +117,23 @@ class Derived inherits Base {
         # fewer parameters, the final method's being optional
         assertRejected("class C inherits Base { string k(object a) { return \"c\"; } }",
             "cannot overload parent class method final Base::k", "fewer parameters");
+        # qore#5990: the names of the final variant's parameters in another order, which a named call resolved on the
+        # class of the object selects
+        assertRejected("class NB { final string m(int a, string b) { return \"b\"; } } "
+            "class NC inherits NB { string m(string b, int a) { return \"c\"; } }",
+            "child class method NC::m\\(string b, int a\\) cannot overload parent class method final "
+            "NB::m\\(int a, string b\\): it accepts the names of the parameters of the final method", "named");
+        # a positional argument and a named one
+        assertRejected("class MP { final int m(int a, string b) { return 1; } } "
+            "class MC inherits MP { string m(int x, int y = 0, string b) { return \"c\"; } }",
+            "child class method MC::m\\(int x, int y = 0, string b\\) cannot overload parent class method final "
+            "MP::m\\(int a, string b\\)", "named with a positional argument");
+        # other names: no named call of the final variant can select it
+        Program p = parseAccepted("class NB { final string m(int a, string b) { return \"b\"; } } "
+            "class NC inherits NB { string m(string c, int d) { return \"c\"; } }\n"
+            "string sub t() { NB o = new NC(); return o.m(a: 1, b: \"x\") + o.m(1, \"x\") "
+            "+ (new NC()).m(c: \"x\", d: 1); }", "named other names");
+        assertEq("bbc", p.callFunction("t"));
         # a grandchild
         assertRejected("class C inherits Derived { string h(*string s) { return \"c\"; } }",
             "child class method C::h\\(\\*string s\\) cannot overload parent class method final Base::h",
@@ -130,6 +149,65 @@ string sub test(auto v) { return C::s(v); }", "static disjoint");
         p.run();
         assertEq("c", p.callFunction("test", "x"));
         assertEq("final", p.callFunction("test", 1));
+    }
+
+    #! a class with two parent classes (the final method's class first) and a child that overrides the method with
+    #! another signature (qore#5994: the shape of Qorus's AbstractServiceSoapHandler and its subclasses)
+    testGrandchild() {
+        Program p = parseAccepted("
+class SoapLike {
+    final string hr(hash<auto> cx, hash<auto> hdr, *data body) { return \"soap final\"; }
+}
+class HttpLike {
+    string hr(string listener, hash<auto> cx, hash<auto> hdr, *data body) { return \"http\"; }
+    string other(int i) { return \"other\"; }
+}
+class Service inherits SoapLike, HttpLike {
+    string hr(string listener, hash<auto> cx, hash<auto> hdr, *data body) { return \"service \" + listener; }
+}
+class ServiceChild inherits Service {
+    string hr(int n, string listener, hash<auto> cx, hash<auto> hdr, *data body) { return \"child \" + n; }
+}
+class ServiceGrandchild inherits ServiceChild {
+}
+list<string> sub test() {
+    auto c = new ServiceChild();
+    auto g = new ServiceGrandchild();
+    return (c.hr({}, {}), c.hr(\"L\", {}, {}), c.hr(1, \"L\", {}, {}), g.hr({}, {}), g.hr(2, \"L\", {}, {}));
+}", "grandchild accepted");
+        p.run();
+        assertEq(("soap final", "service L", "child 1", "soap final", "child 2"), p.callFunction("test"));
+
+        # the class that lists the sibling first does not reach the final method, also through children
+        assertRejected("
+class SoapLike2 {
+    final string hr(hash<auto> cx, hash<auto> hdr, *data body) { return \"soap final\"; }
+}
+class HttpLike2 {
+    string hr(hash<auto> cx, hash<auto> hdr, *data body) { return \"http\"; }
+}
+class BadService inherits HttpLike2, SoapLike2 {
+}
+class BadChild inherits BadService {
+    string hr(string x, hash<auto> cx, hash<auto> hdr, *data body) { return \"child\"; }
+}", "does not reach parent class method final SoapLike2::hr", "grandchild sibling first");
+    }
+
+    #! a circular hierarchy with a final method is rejected as such, not walked forever
+    testCircular() {
+        assertRejected("
+class CycA inherits CycB {
+    final string m() { return \"a\"; }
+}
+class CycB inherits CycA {
+}", "circular reference in class hierarchy", "circular with a final method");
+        assertRejected("
+class CycC inherits CycD {
+    final string m() { return \"c\"; }
+}
+class CycD inherits CycC {
+    string m(int i) { return \"d\"; }
+}", "circular reference in class hierarchy", "circular with an override");
     }
 
     testAccepted() {

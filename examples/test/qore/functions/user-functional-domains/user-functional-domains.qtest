@@ -129,8 +129,10 @@ public class Abstract {
         TmpDir tmp("qore-header-closure-order-");
         foreach bool before in ((True, False)) {
             string name = before ? "HdrBefore" : "HdrAfter";
-            string init = "    init = sub () { *object logger = get_async_io_logger(); };\n";
-            string dom = "    domains = \"PROCESS\";\n";
+            # a builtin function, a builtin class and a static method of a builtin class of the declared domains
+            string init = "    init = sub () { *object logger = get_async_io_logger(); "
+                "FileLineIterator i(\"/dev/null\"); string str = ReadOnlyFile::readTextFile(\"/dev/null\"); };\n";
+            string dom = "    domains = \"PROCESS,FILESYSTEM\";\n";
             string path = tmp.path + "/" + name + ".qm";
             File f();
             f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);

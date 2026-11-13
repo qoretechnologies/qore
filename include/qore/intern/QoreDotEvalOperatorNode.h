@@ -116,6 +116,13 @@ public:
         return m;
     }
 
+    //! evaluates the call of a method of an object resolved at run time by parameter name with evaluated values
+    /** used by compiled code (IR, JIT, AOT), which evaluates the receiver and the arguments itself
+
+        @param args the receiver followed by the arguments of the call in source order; the list is taken over
+    */
+    DLLLOCAL QoreValue evalRuntimeNamedWithArgs(QoreListNode* args, ExceptionSink* xsink) const;
+
     DLLLOCAL void replaceExpression(QoreValue n_left) {
         left.discard(nullptr);
         left = n_left;
