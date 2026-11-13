@@ -5903,8 +5903,9 @@ namespace {
 //! appends the functions of the given name that a call resolved in the class \a qc can select after its own, in the
 //! order of an inheritance list: for each parent class in the order they are listed, the parent's own method, then
 //! the methods of the parent's parents (as BCList::parseAddAncestors() builds the list)
-void collect_hierarchy_functions(const qore_class_private& qc, const std::string& name, bool is_static, ilist_t& out) {
-    if (!qc.scl) {
+void collect_hierarchy_functions(const qore_class_private& qc, const std::string& name, bool is_static, ilist_t& out,
+        std::unordered_set<const qore_class_private*>& visited) {
+    if (!qc.scl || !qc.scl->valid) {
         return;
     }
     for (auto& i : *qc.scl) {
@@ -5913,19 +5914,25 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
             continue;
         }
         qore_class_private* pcp = qore_class_private::get(*pc);
+        // a class that the walk has seen again (a diamond, or a cycle that was not rejected yet) adds nothing: its
+        // methods come first where it was seen first
+        if (!visited.insert(pcp).second) {
+            continue;
+        }
         const QoreMethod* w = is_static ? pcp->parseFindLocalStaticMethod(name.c_str())
             : pcp->parseFindLocalMethod(name.c_str());
         if (w) {
             out.push_back(INode(qore_method_private::get(*w)->getFunction(), i->access));
         }
-        collect_hierarchy_functions(*pcp, name, is_static, out);
+        collect_hierarchy_functions(*pcp, name, is_static, out, visited);
     }
 }
 
 } // namespace
 
 int qore_class_private::parseCheckFinalHierarchy() const {
-    if (!scl) {
+    // a hierarchy that was rejected (a class that is its own ancestor) has its parse error already
+    if (!scl || !scl->valid) {
         return 0;
     }
     for (bool is_static : {false, true}) {
@@ -5949,9 +5956,11 @@ int qore_class_private::parseCheckFinalHierarchy() const {
             // if the parent had not resolved its own parent classes then (qore#5994)
             ilist_t hierarchy;
             hierarchy.push_back(INode(const_cast<MethodFunctionBase*>(start), Public));
-            collect_hierarchy_functions(local ? *this : *qore_class_private::get(*const_cast<QoreClass*>(start->getClass())),
-                i.first, is_static,
-                hierarchy);
+            const qore_class_private& start_class = local ? *this
+                : *qore_class_private::get(*const_cast<QoreClass*>(start->getClass()));
+            std::unordered_set<const qore_class_private*> walked;
+            walked.insert(&start_class);
+            collect_hierarchy_functions(start_class, i.first, is_static, hierarchy, walked);
             if (start->checkFinalResolution(*this, *i.second, local, &hierarchy)) {
                 return -1;
             }
