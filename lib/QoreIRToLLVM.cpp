@@ -527,6 +527,15 @@ static void qoreForEachSuccessor(const llvm::BasicBlock* block, F&& f) {
     }
 }
 
+//! Returns the only successor of \a block, or nullptr if it has none (it has no terminator yet) or more than one
+/** The form of llvm::BasicBlock::getSingleSuccessor() that a block without a terminator allows (see
+    qoreForEachSuccessor())
+*/
+static const llvm::BasicBlock* qoreGetSingleSuccessor(const llvm::BasicBlock* block) {
+    const llvm::Instruction* term = qoreGetTerminator(block);
+    return term && term->getNumSuccessors() == 1 ? term->getSuccessor(0) : nullptr;
+}
+
 //! Gives each block that is reachable from the entry of \a func and in a cycle of its control flow graph the number
 //! (from 1) of its strongly connected component in \a cycle_of
 /** An iterative form of Tarjan's algorithm over the terminators of the blocks, which a function whose lowering is not
@@ -15210,7 +15219,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 // value then comes where the incoming Phi's slot released it before the incoming Phi had none
                 // (qore#5883)
                 llvm::IRBuilderBase::InsertPointGuard insert_guard(*builder);
-                if (emptied_phi_slots.count(inc.value.id) && bb->getSingleSuccessor() == phi_bb
+                if (emptied_phi_slots.count(inc.value.id) && qoreGetSingleSuccessor(bb) == phi_bb
                         && llvm::isa<llvm::PHINode>(val)
                         && llvm::cast<llvm::PHINode>(val)->getParent() == bb) {
                     builder->SetInsertPoint(bb, bb->getFirstNonPHIIt());
