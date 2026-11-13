@@ -3731,11 +3731,15 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
     // the locals that an on_block_exit handler declares are released by the handler (#6002): they are no body locals
     // of its IR function, as their variables on the runtime stack are those that the function the handler belongs to
     // instantiated, so the handler releases their values, in the order of their slots, which the function reserved
-    // in declaration order (see QoreIRLowering::compileBlockHandlerIRs()); the function removes the variables
+    // in declaration order (see QoreIRLowering::compileBlockHandlerIRs()); the function removes the variables.  A
+    // closure-bound local of the handler is popped from the closure stack, as the IR interpreter and the AST
+    // interpreter give it up at the end of its block (#6012): the pop finds the variable in the current frame by its
+    // LocalVar (the name pointer of the variable, which no other variable shares), so it pops nothing if the handler
+    // raised before the declaration, and never a variable of the function with the same name
     if (current_ir_func->parent_slot_count && !current_ir_func->handler_own_locals.empty()) {
         std::vector<std::pair<uint32_t, const LocalVar*>> own;
         for (const LocalVar* var : current_ir_func->handler_own_locals) {
-            if (!var || var->closureUse()) {
+            if (!var) {
                 continue;
             }
             auto slot_it = current_ir_func->local_var_slots.find(var);
@@ -3753,6 +3757,7 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
                 }
                 entry.aot_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
             }
+            entry.pop_closure = var->closureUse();
             push_body(var, entry);
         }
     }
