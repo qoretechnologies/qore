@@ -4415,6 +4415,12 @@ public:
         IRCleanupSlots in QoreIRInterpreter.cpp). */
     mutable std::vector<uint8_t> interpreter_slot_owned_values;
     mutable std::vector<uint32_t> interpreter_return_value_slot_ids;
+    //! the values of the Return instructions in the try block of each try statement, by its CatchException
+    /** Set by the lowering and read by the LLVM lowering, which releases them when the try statement catches the
+        exception that interrupted such a return, as the AST interpreter does (TryStatement::execImpl()); not
+        serialized: IR read back keeps them until the end of the try statement (qore#5941)
+    */
+    std::unordered_map<const QoreIRInstruction*, std::vector<uint32_t>> catch_interrupted_returns;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
     mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;
     mutable bool interpreter_needs_slot_cache_tls = false;

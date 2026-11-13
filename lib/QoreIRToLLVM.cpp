@@ -3262,7 +3262,85 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
     }
 }
 
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::finalizeCatchReturnReleases(llvm::Module& module) {
+    if (catch_return_release_blocks.empty()) {
+        return;
+    }
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (auto& [block, ids] : catch_return_release_blocks) {
+        builder->SetInsertPoint(block, block->getFirstInsertionPt());
+        // the values of the returns, and those that they hold a reference of their own to
+        std::vector<uint32_t> release;
+        for (uint32_t rid : *ids) {
+            auto f = return_value_family.find(rid);
+            if (f == return_value_family.end()) {
+                release.push_back(rid);
+            } else {
+                release.insert(release.end(), f->second.begin(), f->second.end());
+            }
+        }
+        for (uint32_t id : release) {
+            auto i = invoke_alloca_map.find(id);
+            // an SSA-direct value has no alloca (nullptr)
+            if (i == invoke_alloca_map.end() || !i->second) {
+                continue;
+            }
+            llvm::Value* val = builder->CreateLoad(i64_type, i->second);
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), i->second);
+            builder->CreateCall(helper, {val, xsink_arg});
+        }
+    }
+    catch_return_release_blocks.clear();
+    if (saved_insert) {
+        builder->SetInsertPoint(saved_insert, saved_ip);
+    }
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::isReturnValueAlloca(llvm::Value* alloca_ptr) const {
+    if (!alloca_ptr) {
+        return false;
+    }
+    for (uint32_t id : return_value_ids) {
+        auto i = invoke_alloca_map.find(id);
+        if (i != invoke_alloca_map.end() && i->second == alloca_ptr) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitHeldReturnValueRelease(llvm::Module& module) {
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (uint32_t id : return_value_ids) {
+        auto i = invoke_alloca_map.find(id);
+        // an SSA-direct value has no alloca (nullptr)
+        if (i == invoke_alloca_map.end() || !i->second) {
+            continue;
+        }
+        llvm::Value* val = builder->CreateLoad(i64_type, i->second);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), i->second);
+        builder->CreateCall(helper, {val, xsink_arg});
+    }
+}
+
 void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
+    emitLocalUninstantiationIntern(module);
+    // the value of a return that an exception interrupted is released after the locals, as the AST interpreter
+    // keeps it until the function ends (qore#5941)
+    if (holding_return_values) {
+        holding_return_values = false;
+        emitHeldReturnValueRelease(module);
+    }
+}
+
+void QoreIRToLLVM::emitLocalUninstantiationIntern(llvm::Module& module) {
     // Uninstantiate entry-block locals at function exit.
     // Non-entry-block locals have their own UninstantiateLocal instructions
     // in the IR that handle their lifecycle.
@@ -4301,6 +4379,18 @@ void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIR
 }
 
 void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit) {
+    // an exit on an exception keeps the values of the returns that it interrupts until after the locals (qore#5941)
+    bool hold_returns = false;
+    if (exception_exit) {
+        for (uint32_t id : return_value_ids) {
+            auto i = invoke_alloca_map.find(id);
+            if (i != invoke_alloca_map.end() && i->second) {
+                hold_returns = true;
+                break;
+            }
+        }
+        holding_return_values = hold_returns;
+    }
     if (exception_exit) {
         // the iterators of the functional operators that the exception leaves are released before the statement's
         // temporaries, as the AST interpreter unwinds the operators and as the IR interpreter's frame exit releases
@@ -4308,7 +4398,7 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
         // values that it holds, alive after the temporaries (qore#5884)
         emitIteratorCleanup(module, positionIterators());
     }
-    if (exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow
+    if (!hold_returns && exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow
             && exit_temp_cleanup_array_count == exit_temp_cleanup_count
             && exit_temp_cleanup_array_count >= 32) {
         // the same releases as the inline sequence below, in the same (reverse registration) order, in one call
@@ -4325,7 +4415,7 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
                 (void)qore_check_cancel(nullptr, "LLVM function exit temp release");
             }
             llvm::Value* alloca_ptr = *it;
-            if (persistent_cleanup_allocas.count(alloca_ptr)) {
+            if (persistent_cleanup_allocas.count(alloca_ptr) || (hold_returns && isReturnValueAlloca(alloca_ptr))) {
                 continue;
             }
             llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
@@ -4399,6 +4489,26 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     std::vector<llvm::Value*> temps;
     size_t receivers = 0;
     orderExceptionTemps(mark->invoke_alloca_count, false, temps, &receivers);
+    // the value of a return that the exception interrupts is kept: the try statement that catches the exception
+    // releases it, or the exit of the function after its locals, as the AST interpreter keeps it (qore#5941); it is
+    // left out before the release code is shared (ExceptionEdges) or emitted with a table of slots
+    if (!return_value_ids.empty()) {
+        size_t lists = temps.size() - receivers;
+        std::vector<llvm::Value*> kept;
+        kept.reserve(temps.size());
+        size_t kept_receivers = 0;
+        for (size_t i = 0; i < temps.size(); ++i) {
+            if (isReturnValueAlloca(temps[i])) {
+                continue;
+            }
+            kept.push_back(temps[i]);
+            if (i >= lists) {
+                ++kept_receivers;
+            }
+        }
+        temps.swap(kept);
+        receivers = kept_receivers;
+    }
     if (temps.empty()) {
         return handler;
     }
@@ -4761,7 +4871,7 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     if (invoke_result_allocas.empty()) {
         return;
     }
-    if (invoke_cleanup_array && !invoke_cleanup_array_overflow
+    if (!holding_return_values && invoke_cleanup_array && !invoke_cleanup_array_overflow
             && invoke_cleanup_array_count == invoke_result_allocas.size()
             && invoke_cleanup_array_count >= 32) {
         auto helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
@@ -4776,6 +4886,10 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     // registered in construction order, so destroy them in LIFO order.
     for (auto it = invoke_result_allocas.rbegin(); it != invoke_result_allocas.rend(); ++it) {
         llvm::Value* alloca_ptr = *it;
+        // the value of an interrupted return is released after the locals (see holding_return_values)
+        if (holding_return_values && isReturnValueAlloca(alloca_ptr)) {
+            continue;
+        }
         llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
         builder->CreateCall(helper, {val, xsink_arg});
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
@@ -12361,6 +12475,44 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     current_module = &module;
     initTypes();
     declareRuntimeHelpers(module);
+    // the values that the function returns (see return_value_ids): the operands of its Return instructions and the
+    // values that they hold a reference of their own to (RefSelf, DiscardTempsKeep), which hold the same value
+    return_value_ids.clear();
+    return_value_family.clear();
+    holding_return_values = false;
+    catch_return_release_blocks.clear();
+    {
+        std::unordered_map<uint32_t, const QoreIRInstruction*> defs;
+        std::vector<uint32_t> returned;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (inst->result.isValid()) {
+                    defs[inst->result.id] = inst.get();
+                }
+                if (inst->opcode == QoreIROpcode::Return) {
+                    const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst.get());
+                    if (ret->has_value) {
+                        returned.push_back(ret->value.id);
+                    }
+                }
+            }
+        }
+        for (uint32_t id : returned) {
+            std::vector<uint32_t>& family = return_value_family[id];
+            std::unordered_set<uint32_t> seen;
+            for (uint32_t cur = id; seen.insert(cur).second;) {
+                return_value_ids.insert(cur);
+                family.push_back(cur);
+                auto d = defs.find(cur);
+                if (d == defs.end() || d->second->operands.empty()
+                        || (d->second->opcode != QoreIROpcode::RefSelf
+                            && d->second->opcode != QoreIROpcode::DiscardTempsKeep)) {
+                    break;
+                }
+                cur = d->second->operands[0].id;
+            }
+        }
+    }
 
     // Clear COW tracking for new function
     cow_modified_locals.clear();
@@ -15317,6 +15469,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // of NOTHING at IteratorNext they do not see, so an edge can include a slot that is already empty when it runs
     // (harmless: the release of an empty slot does nothing)
     finalizeOrderedErrorReturnEdges(module, llvm_func);
+    finalizeCatchReturnReleases(module);
 
     if (error_return_block) {
         // Choose how boxed exit cleanup is emitted before writing any of it:
@@ -22052,6 +22205,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Catch exception ===
         case QoreIROpcode::CatchException: {
+            // the value of a return of the try block that the exception (or a thread_exit) interrupted is released
+            // first, as TryStatement::execImpl() does (qore#5941); the block is filled once the try block is lowered
+            if (current_ir_func) {
+                auto i = current_ir_func->catch_interrupted_returns.find(inst);
+                if (i != current_ir_func->catch_interrupted_returns.end()) {
+                    llvm::BasicBlock* release = llvm::BasicBlock::Create(ctx, "catch_interrupted_returns", llvm_func);
+                    builder->CreateBr(release);
+                    builder->SetInsertPoint(release);
+                    catch_return_release_blocks.emplace_back(release, &i->second);
+                }
+            }
             // A thread_exit is not an exception: the catch block is not entered, and the unwind continues
             // through the instruction's exception target, the try statement's propagation block; an exception
             // pending with it is deleted, as TryStatement::execImpl() does (qore_catch_thread_exit())
