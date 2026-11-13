@@ -354,6 +354,30 @@ class LifecycleWsClient inherits WebSocketClient {
         hcio_stream.getConnection().getPollOperation().abort();
     }
 
+    #! Returns @ref True if the poll operation of the HttpClientIo connection reports the protocol switched
+    /** Visible to the caller once connect() returned: its cancel of the HttpClientIo operation on the socket waits for
+        the I/O thread, which set it with the 101 response
+    */
+    bool isHttpClientIoProtocolSwitched() {
+        AutoLock al(m);
+        return cast<HttpClientIo::Http1ClientPollOperation>(hcio_stream.getConnection().getPollOperation())
+            .isProtocolSwitched();
+    }
+
+    #! delivers the completion of the poll operation of the HttpClientIo connection that the WebSocket was upgraded on
+    /** As the async I/O controller does when the operation reached its goal (the 101 response); a worker delivers it
+        at any time after the upgrade, also after the operation was aborted or closed (issue #5985)
+    */
+    completeHttpClientIoOperation() {
+        HttpClientIo::HttpClientConnection conn;
+        {
+            AutoLock al(m);
+            conn = hcio_stream.getConnection();
+        }
+        HttpClientIo::HttpClientPollOperation op = conn.getPollOperation();
+        op.onComplete(<SocketPollResultInfo>{"sock": conn.getSocket(), "spop": op});
+    }
+
     #! holds the next \a n delivery tasks when they start; each is released with release_task
     holdDeliveryTasks(int n) {
         release_task = map new Counter(1), xrange(n);
@@ -1108,6 +1132,8 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
                 \rawCallbackInitialDrainErrorTest(), proto);
         }
         addTestCase("HTTP/1.1 connection whose HttpClientIo operation ended", \endedHttpClientIoOperationTest());
+        addTestCase("HTTP/1.1 connection whose HttpClientIo operation completes after the upgrade",
+            \completedHttpClientIoOperationTest());
         addTestCase("disconnect from the raw frame callback", \rawCallbackDisconnectTest());
         addTestCase("startPollConnect lifecycle", \startPollConnectTest());
         addTestCase("startPollConnect closed before its event loop", \startPollConnectClosedTest());
@@ -2047,10 +2073,27 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     }
 
     #! An HTTP/1.1 WebSocket stays open when the HttpClientIo connection it was upgraded on is marked closed
+    /** The completion of the operation, which the async I/O controller delivers on a worker at any time after the
+        upgrade, comes after the abort here: it must not close the connection, whose socket belongs to the WebSocket
+        (issue #5985: the abort made the operation report the protocol not switched, and the completion closed the
+        socket, so the WebSocket's operation was canceled and its next message was never received)
+    */
     endedHttpClientIoOperationTest() {
         LifecycleCtx ctx = makeCtx();
         connectChecked(ctx);
         ctx.wsc.abortHttpClientIoOperation();
+        assertTrue(ctx.wsc.isHttpClientIoProtocolSwitched(), "the operation still reports the protocol switched");
+        ctx.wsc.completeHttpClientIoOperation();
+        assertTrue(ctx.wsc.isOpen(), "the WebSocket is open");
+        checkCurrentConnection(ctx, 0);
+    }
+
+    #! An HTTP/1.1 WebSocket stays open when the completion of its HttpClientIo operation is delivered after the upgrade
+    completedHttpClientIoOperationTest() {
+        LifecycleCtx ctx = makeCtx();
+        connectChecked(ctx);
+        assertTrue(ctx.wsc.isHttpClientIoProtocolSwitched(), "the operation reports the protocol switched");
+        ctx.wsc.completeHttpClientIoOperation();
         assertTrue(ctx.wsc.isOpen(), "the WebSocket is open");
         checkCurrentConnection(ctx, 0);
     }
