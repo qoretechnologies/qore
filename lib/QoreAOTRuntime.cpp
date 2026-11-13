@@ -1284,7 +1284,7 @@ static QoreValue makeDeferredObjectSlotCall(QoreProgram* pgm, const char* class_
     @param pgm the QoreProgram for namespace lookups
     @return NaN-boxed bits, or 0 if unresolvable
 */
-static bool applyAOTExplicitTypeArgs(FunctionCallBase& call,
+bool qore_aot_apply_explicit_type_args(FunctionCallBase& call,
         const QoreAOTStaticMethodRef& method_ref, QoreProgram* pgm,
         const UserSignature* containing_signature) {
     if (!method_ref.explicit_type_args_present) {
@@ -1458,8 +1458,8 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             FunctionCallNode* fcn = new FunctionCallNode(
                 &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
             std::string encoded_ref = ref2 ? ref2 : "";
-            static constexpr const char* type_arg_marker = "\ntypeargs:";
-            size_t type_arg_pos = encoded_ref.find(type_arg_marker);
+            // the last marker: a default value in the signature text can have the marker too
+            size_t type_arg_pos = encoded_ref.rfind(QORE_AOT_CALL_TYPE_ARGS_MARKER);
             std::string variant_ref = type_arg_pos == std::string::npos
                 ? encoded_ref : encoded_ref.substr(0, type_arg_pos);
             const AbstractQoreFunctionVariant* variant = nullptr;
@@ -1472,51 +1472,17 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 }
             }
             if (type_arg_pos != std::string::npos) {
-                size_t count_start = type_arg_pos + strlen(type_arg_marker);
-                size_t count_end = encoded_ref.find('\n', count_start);
-                std::string count_text = encoded_ref.substr(count_start,
-                    count_end == std::string::npos
-                        ? std::string::npos : count_end - count_start);
-                char* count_tail = nullptr;
-                unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
                 const UserVariantBase* uvb = variant
                     ? variant->getUserVariantBase() : nullptr;
-                const UserSignature* callee_signature = uvb
-                    ? uvb->getUserSignature() : nullptr;
-                // a call whose variant is chosen at run time has no signature here; its type arguments are checked
-                // against the variant chosen then, as for the parsed call, which has no owner either (qore#5791)
-                if (!count_tail || *count_tail || (callee_signature
-                        && count != callee_signature->getTypeParameterCount())) {
+                QoreTypeParamInstantiation inst;
+                if (!qore_aot_decode_call_type_args(pgm, encoded_ref.c_str() + type_arg_pos,
+                        uvb ? uvb->getUserSignature() : nullptr, containing_signature, inst)) {
                     delete fcn;
                     return 0;
                 }
-                QoreTypeParamInstantiation inst;
-                inst.owner = callee_signature;
-                QoreAOTTypeResolver type_resolver(pgm);
-                size_t path_start = count_end;
-                for (unsigned long i = 0; i < count; ++i) {
-                    if (path_start == std::string::npos) {
-                        delete fcn;
-                        return 0;
-                    }
-                    ++path_start;
-                    size_t path_end = encoded_ref.find('\n', path_start);
-                    std::string path = encoded_ref.substr(path_start,
-                        path_end == std::string::npos
-                            ? std::string::npos : path_end - path_start);
-                    std::string type_error;
-                    const QoreTypeInfo* type_arg = containing_signature
-                        ? type_resolver.resolveForSignature(path.c_str(),
-                            type_error, containing_signature)
-                        : type_resolver.resolve(path.c_str(), type_error);
-                    if (!type_arg || !type_error.empty()) {
-                        delete fcn;
-                        return 0;
-                    }
-                    inst.type_args.push_back(type_arg);
-                    path_start = path_end;
+                if (!inst.type_args.empty()) {
+                    fcn->setExplicitTypeParamInstantiation(std::move(inst));
                 }
-                fcn->setExplicitTypeParamInstantiation(std::move(inst));
             }
             return toBitsNB(QoreValue(fcn));
         }
@@ -1549,7 +1515,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                         fcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                     }
                 }
-                if (!applyAOTExplicitTypeArgs(*fcn, method_ref, pgm,
+                if (!qore_aot_apply_explicit_type_args(*fcn, method_ref, pgm,
                         containing_signature)) {
                     delete fcn;
                     return 0;
@@ -1604,7 +1570,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                         sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                     }
                 }
-                if (!applyAOTExplicitTypeArgs(*sfcn, method_ref, pgm,
+                if (!qore_aot_apply_explicit_type_args(*sfcn, method_ref, pgm,
                         containing_signature)) {
                     delete sfcn;
                     return 0;
@@ -1626,7 +1592,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     smcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                 }
             }
-            if (!applyAOTExplicitTypeArgs(*smcn, method_ref, pgm,
+            if (!qore_aot_apply_explicit_type_args(*smcn, method_ref, pgm,
                     containing_signature)) {
                 delete smcn;
                 return 0;
@@ -1674,7 +1640,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 SelfFunctionCallNode* deferred = new SelfFunctionCallNode(&loc_builtin, strdup(method_full_name),
                     nullptr, qc, qcp);
                 // the explicit type arguments of the call (qore#5818)
-                if (!applyAOTExplicitTypeArgs(*deferred, method_ref, pgm, containing_signature)) {
+                if (!qore_aot_apply_explicit_type_args(*deferred, method_ref, pgm, containing_signature)) {
                     deferred->deref(nullptr);
                     return 0;
                 }
@@ -1702,7 +1668,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     }
                 }
                 // the explicit type arguments of the call (qore#5818)
-                if (!applyAOTExplicitTypeArgs(*smcn, method_ref, pgm, containing_signature)) {
+                if (!qore_aot_apply_explicit_type_args(*smcn, method_ref, pgm, containing_signature)) {
                     delete smcn;
                     return 0;
                 }
@@ -1720,7 +1686,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 }
             }
             // the explicit type arguments of the call (qore#5818)
-            if (!applyAOTExplicitTypeArgs(*sfcn, method_ref, pgm, containing_signature)) {
+            if (!qore_aot_apply_explicit_type_args(*sfcn, method_ref, pgm, containing_signature)) {
                 sfcn->deref(nullptr);
                 return 0;
             }
@@ -4122,10 +4088,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Dot-eval method target: resolve class/method from strings
                 // and populate call_targets directly — no AST node needed
                 ref1 = reader.readStringRef(ptr);    // class_path
-                // method_name[\nvariant_class\nvariant_signature][\ntypeargs:N\npath...]
+                // method_name[\nvariant_class\nvariant_signature][QORE_AOT_CALL_TYPE_ARGS_MARKER N\npath...]
                 const std::string encoded_target = reader.readStringRef(ptr);
-                static constexpr const char* target_type_arg_marker = "\ntypeargs:";
-                const size_t target_type_arg_pos = encoded_target.find(target_type_arg_marker);
+                const size_t target_type_arg_pos = encoded_target.rfind(QORE_AOT_CALL_TYPE_ARGS_MARKER);
                 const std::string target_method_text = target_type_arg_pos == std::string::npos
                     ? encoded_target : encoded_target.substr(0, target_type_arg_pos);
                 AOTEncodedMethodRef method_ref(target_method_text.c_str());
@@ -4147,47 +4112,20 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // the explicit type arguments of the call; the owner is not known before the call chooses its
                 // variant, and an instantiation without an owner applies to the variant that is called
                 if (target_type_arg_pos != std::string::npos) {
-                    const size_t count_start = target_type_arg_pos + strlen(target_type_arg_marker);
-                    size_t count_end = encoded_target.find('\n', count_start);
-                    // a named string: count_tail points into it and is read after strtoul() returns (a pointer into a
-                    // temporary is dangling then, which clang's stack reuse made fail on macOS)
-                    const std::string count_text = encoded_target.substr(count_start,
-                        count_end == std::string::npos ? std::string::npos : count_end - count_start);
-                    char* count_tail = nullptr;
-                    const unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
                     auto inst = std::make_shared<QoreTypeParamInstantiation>();
-                    QoreAOTTypeResolver type_resolver(pgm);
                     const UserSignature* target_signature = uvb ? uvb->getUserSignature() : nullptr;
-                    bool type_args_ok = count_tail && !*count_tail;
-                    size_t path_start = count_end;
-                    for (unsigned long a = 0; type_args_ok && a < count; ++a) {
-                        if (path_start == std::string::npos) {
-                            type_args_ok = false;
-                            break;
-                        }
-                        ++path_start;
-                        const size_t path_end = encoded_target.find('\n', path_start);
-                        const std::string path = encoded_target.substr(path_start,
-                            path_end == std::string::npos ? std::string::npos : path_end - path_start);
-                        std::string type_error;
-                        const QoreTypeInfo* type_arg = target_signature
-                            ? type_resolver.resolveForSignature(path.c_str(), type_error, target_signature)
-                            : type_resolver.resolve(path.c_str(), type_error);
-                        if (!type_arg || !type_error.empty()) {
-                            type_args_ok = false;
-                            break;
-                        }
-                        inst->type_args.push_back(type_arg);
-                        path_start = path_end;
-                    }
+                    bool type_args_ok = qore_aot_decode_call_type_args(pgm,
+                        encoded_target.c_str() + target_type_arg_pos, nullptr, target_signature, *inst);
                     if (!type_args_ok) {
                         printd(0, "AOT v2: cannot resolve the explicit type arguments of method call '%s'\n",
                             method_ref.method_name ? method_ref.method_name : "(null)");
                         has_unsupported = true;
                         continue;
                     }
-                    ctx->owned_explicit_type_param_insts.push_back(inst);
-                    ctx->call_targets[i].explicit_type_param_instantiation = inst.get();
+                    if (!inst->type_args.empty()) {
+                        ctx->owned_explicit_type_param_insts.push_back(inst);
+                        ctx->call_targets[i].explicit_type_param_instantiation = inst.get();
+                    }
                 }
                 if (variant) {
                     ctx->call_targets[i].variant = variant;
@@ -4579,7 +4517,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                                     "serialized variant signature or arg types for '%s::%s'\n",
                                     name, i, ref1 ? ref1 : "", method_name ? method_name : "");
                             }
-                            if (!applyAOTExplicitTypeArgs(*call_node, method_ref,
+                            if (!qore_aot_apply_explicit_type_args(*call_node, method_ref,
                                     pgm, uvb ? uvb->getUserSignature() : nullptr)) {
                                 setAOTExprSlotResolveError(i, expr_kind_name,
                                     "cannot apply the explicit type arguments recorded for the call to '"
@@ -5967,7 +5905,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::CONST_VALUE: {
                 std::string value_error;
-                QoreValue value = reader.readValue(ptr, end, value_error);
+                // the Program resolves the hashdecls and types of typed container values (#5895)
+                QoreValue value;
+                {
+                    QoreProgramContextHelper value_pch(pgm);
+                    value = reader.readValue(ptr, end, value_error);
+                }
                 if (!value_error.empty() && (ptr >= end || (entry_end && ptr >= entry_end))) {
                     // a malformed value: the read pointer is at the end of the data, and the rest of the entry
                     // cannot be read (qore#5848)

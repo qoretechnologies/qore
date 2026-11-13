@@ -87,12 +87,9 @@ class QoreClosureParseNode : public ParseNode, public DeferredCodeObject {
 public:
     DLLLOCAL QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf, bool n_lambda = false);
 
-    //! AOT constructor: creates a closure parse node from pre-built function
+    //! AOT constructor: creates a closure parse node from pre-built function, whose class type is set
     DLLLOCAL QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf,
-            bool n_lambda, bool n_in_method)
-        : ParseNode(loc, NT_CLOSURE), uf(n_uf), lambda(n_lambda), in_method(n_in_method) {
-        set_effect_as_root(false);
-    }
+            bool n_lambda, bool n_in_method);
 
     DLLLOCAL ~QoreClosureParseNode();
 
@@ -117,6 +114,9 @@ public:
 
     //! sets the flag of needsTypeContext() for a closure read from compiled code
     DLLLOCAL void setNeedsTypeContext(bool n) { needs_type_context = n; }
+
+    //! returns the class of the method that the closure is in, or nullptr
+    DLLLOCAL const qore_class_private* getMethodClass() const { return method_class; }
 
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
@@ -143,6 +143,8 @@ public:
 
 private:
     UserClosureFunction* uf;
+    //! the class of the method that the closure is in, whose class context the closure runs in (issue #5898)
+    const qore_class_private* method_class = nullptr;
     qore_class_private* parse_qc = nullptr;
     qore_ns_private* parse_ns = nullptr;
     bool lambda, in_method,

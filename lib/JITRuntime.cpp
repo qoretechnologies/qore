@@ -13518,7 +13518,7 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                 if (type == OBE_Error) {
                     if (qore_es_private::get(obe_xsink)->rethrown) {
                         if (xsink) {
-                            xsink->clear();
+                            qore_es_private::clearForRethrow(*xsink);
                         }
                     }
                 }
@@ -13528,7 +13528,8 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                     } else {
                         obe_xsink.clear();
                     }
-                    if (!error) {
+                    // a thread_exit is not an exception: the scope's on_error handlers do not run after it (#5893)
+                    if (!error && xsink && xsink->isException()) {
                         error = true;
                     }
                 }

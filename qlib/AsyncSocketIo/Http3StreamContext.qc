@@ -216,6 +216,10 @@ public class Http3StreamContext inherits AbstractStreamContext {
             }
             sock.waitForQuicStreamDrain(session_id, stream_id, wait_ms);
         }
+        # the stream was ended with the data: it is not ended again
+        if (end_stream) {
+            ended = True;
+        }
     }
 
     #! Flush pending HTTP/3 writes for this session through the async I/O controller
