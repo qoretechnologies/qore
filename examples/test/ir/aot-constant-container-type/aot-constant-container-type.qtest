@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of constant init functions
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AOTConstantContainerTypeTest
+
+#! The value types of constants whose values hold lists of closures (#5925)
+/** A constant compiled with qcc gets its value from its init function, and a constant with no declared type was
+    retyped to the type of its value at parse time, which changed the types of the containers that it holds; and the
+    list of the closures of a constant expression got the parse type of its closures, which is the generic closure
+    type, as they are initialized after the expression.  AOTConstantContainerType.q gives the output of the AST
+    interpreter in every execution mode and compiled with qcc.
+*/
+class AOTConstantContainerTypeTest inherits QUnit::Test {
+    public {
+        #! the output of AOTConstantContainerType.q with the AST interpreter
+        const Expected = "C1 hash<string, list<code>> list<code<nothing()>>
+C2 list<code<nothing()>>
+C3 hash<string, list<code>> list<code<nothing()>>
+C4 list<code<nothing(int)>>
+X1 hash<string, list<code>> list<code>
+X2 hash<string, list<code<nothing()>>> list<code<nothing()>>
+X3 hash<string, list<auto>> list<code<nothing()>>
+X4 list<code<nothing()>>
+X5 list<code>
+P1 hash<auto> list<int>
+P2 hash<HD> {a: 2}
+P3 list<int>
+F1 list<object<Bar>>
+F2 list<object<Mutex>>
+F3 list<code<nothing(int)>>
+F4 list<code<nothing(int)>>
+F5 list<int>
+F6 list<int>
+F7 list<list<int>>
+F8 list<list<code<nothing()>>>
+F1 call: Bar variant
+KC hash<string, list<code>> list<code<nothing()>>
+KX hash<string, list<code>> list<code>
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AOTConstantContainerTypeTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/AOTConstantContainerType.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the value types of constants", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the value types of constants", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-aot-constant-container-type-");
+        string exe = tmp.path + DirSep + "aot-constant-container-type";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

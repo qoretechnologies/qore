@@ -424,6 +424,11 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v28: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
 //!      values that the instruction releases after the previous element (QoreIRIteratorNextInstruction::
 //!      release_values).  A v9-v27 record has none.
+//! v29: the pending flag byte of a namespace or class constant (QORE_AOT_FEAT_CONST_PENDING) has the bit
+//!      QORE_AOT_CONST_FLAG_EXPLICIT_TYPE (0x02) if the constant has an explicit declared type
+//!      (ConstantEntry::explicit_type); the pending flag is bit 0x01.  The value of a constant that its init function
+//!      computes is retyped to the declared type only when the constant has one, as with the AST interpreter
+//!      (#5925); a v9-v28 constant is taken to have one, as before.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -439,7 +444,13 @@ constexpr uint16_t QORE_AOT_SLICE_RANGES_VERSION = 27;
 constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 28;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_ITERATOR_RELEASES_VERSION;
+//! First format version whose constant flag bytes record an explicit declared type (see v29 above).
+constexpr uint16_t QORE_AOT_CONST_EXPLICIT_TYPE_VERSION = 29;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CONST_EXPLICIT_TYPE_VERSION;
+//! Bit of the pending flag byte of a constant: the constant has an init expression (QORE_AOT_FEAT_CONST_PENDING)
+constexpr uint8_t QORE_AOT_CONST_FLAG_PENDING = 0x01;
+//! Bit of the pending flag byte of a constant: the constant has an explicit declared type (see v29 above)
+constexpr uint8_t QORE_AOT_CONST_FLAG_EXPLICIT_TYPE = 0x02;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -3082,6 +3093,7 @@ class QoreAOTBinaryDeserializer {
         QoreAOTStringRef type_path;
         uint8_t access;
         bool pending_init = false;  //!< init-func has not yet populated the value
+        bool explicit_type = true;  //!< the constant has an explicit declared type (format v29, #5925)
         //! Serialized value payload. Class constants are registered as shells
         //! before this blob is deserialized so nested VT_CONST_REF entries can
         //! resolve against same-class or same-module constants.
