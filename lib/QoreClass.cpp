@@ -7754,6 +7754,13 @@ void UserCopyVariant::evalCopyImpl(const QoreClass& thisclass, QoreObject* self,
     evalIntern("copy", uveh.getArgv(), self, xsink).discard(xsink);
 }
 
+// the variant of a lexical copy method is instantiated from the header (LexicalUserVariant::evalCopy()), and the
+// file is compiled on its own without the single compilation unit
+template void UserCopyVariant::evalCopyImpl<true>(const QoreClass& thisclass, QoreObject* self, QoreObject* old,
+        CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const;
+template void UserCopyVariant::evalCopyImpl<false>(const QoreClass& thisclass, QoreObject* self, QoreObject* old,
+        CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const;
+
 int UserCopyVariant::parseInit(QoreFunction* f) {
     source_qf = f;
     MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);

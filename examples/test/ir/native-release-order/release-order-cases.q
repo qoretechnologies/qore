@@ -436,6 +436,27 @@ sub foldr_raises() {
     out("foldr raises", log);
 }
 
+# the elements of a fold's source list joined with + are released in the order of the AST interpreter, last list
+# first, when the fold raises and the exception leaves the function (#5945)
+sub foldl_concat_source_thrower() {
+    throw "THR";
+}
+
+sub foldl_concat_source_raises_frame(Log log) {
+    Holder z(log, "z");
+    auto v = foldl ($1 ? (foldl_concat_source_thrower() ?? $1) : $2), (holders(log, 3, "l") + holders(log, 3, "m"));
+}
+
+sub foldl_concat_source_raises() {
+    Log log();
+    try {
+        foldl_concat_source_raises_frame(log);
+    } catch (hash<ExceptionInfo> ex) {
+        log.add("catch " + ex.err);
+    }
+    out("foldl concat source raises", log);
+}
+
 # a hash map and a hash map-select over an iterator release the iterator before the handler
 sub hash_map_iterator() {
     Log log();
@@ -810,6 +831,7 @@ sub main() {
     map_iterator_temp_local();
     foldl_raises();
     foldr_raises();
+    foldl_concat_source_raises();
     hash_map_iterator();
     hash_map_select_iterator();
     foldl_pipeline_raises();

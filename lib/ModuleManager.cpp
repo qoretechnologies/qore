@@ -1692,6 +1692,22 @@ int QoreModuleDefContext::parseInit() {
 }
 
 int QoreModuleDefContext::initClosure(const QoreProgramLocation* loc, QoreValue& c, const char* n) {
+    // the closure has the domains that the header declares, also if it was written before the domains key
+    class HeaderClosureInitHelper {
+    public:
+        DLLLOCAL HeaderClosureInitHelper(QoreProgram* pgm) : pgm(pgm) {
+            if (pgm) {
+                qore_program_private::setModuleHeaderClosureInit(*pgm, true);
+            }
+        }
+        DLLLOCAL ~HeaderClosureInitHelper() {
+            if (pgm) {
+                qore_program_private::setModuleHeaderClosureInit(*pgm, false);
+            }
+        }
+    private:
+        QoreProgram* pgm;
+    } closure_init_helper(::getProgram());
     // initialize closure
     QoreParseContext parse_context;
     // check for local variables at the top level - this can only happen if the expresion is not a closure
@@ -2562,13 +2578,50 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
 
     OptLocker ol(&mutex);
 
-    // tag any namespaces created by the module's init callback with the module name
-    QoreModuleNameContextHelper mnch(feature);
-
     // see if the module is already registered with QMM; if so skip the init path
     // and just stitch it into the target program
     QoreAbstractModule* mi = findModuleUnlocked(feature);
+    // as for a file load (see loadModuleIntern()): a module that code that is not trusted chose is used only by code
+    // with the same sandbox, and not by other code (issue #5986)
+    if (mi && mi->isTenantChosen() && !mayUseTenantModule(*mi, tpgm)) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(feature), "cannot use module '%s' (%s): it "
+            "was loaded from outside the module path by code that a sandbox governs or whose functional domains are "
+            "restricted, and cannot be used by other code, nor by code with another sandbox", feature,
+            mi->getFileName());
+        return -1;
+    }
     if (!mi) {
+        // a statically linked module is not library code: its code is linked into the program, not loaded from the
+        // process-wide module path, whatever path label it was given.  It is checked as a file load of the module
+        // from outside the module path (see loadBinaryModuleFromPath()), for the code that calls the registration
+        // (the code running in this thread; QoreCallerSandboxHelper keeps it the caller when the module is
+        // registered into another Program): when that code is not trusted, the module cannot have the name of a
+        // library module, and it is recorded as chosen by that code otherwise (issue #5986)
+        bool tenant_chosen;
+        QoreSandboxManager* owner;
+        qore_program_id_t owner_pgm_id;
+        if (checkShadowingLoad(xsink, path, feature, false, tenant_chosen, owner, owner_pgm_id)) {
+            return -1;
+        }
+        // what was decided for the module, until it is registered: the frame lasts through loadBinaryModuleFromDesc(),
+        // so the one decision that it is not library code is what addModule() records on the module and what its
+        // initialization (qore_aot_module_init_v3()) gives its Program the sandbox by (inheritAOTModuleSandbox())
+        // (issues #5913, #5986); takes over the reference of owner
+        QoreModuleLoadFrameHelper load_frame(feature, false, tenant_chosen, owner, owner_pgm_id);
+        // as for a file load (see loadBinaryModuleFromPath()): registered while library code that code that is not
+        // trusted loaded is initialized, the module is governed by the sandbox of that code, not initialized as
+        // library code
+        QoreModuleInitSandboxBarrierHelper init_barrier(false);
+        if (init_barrier.failed()) {
+            xsink.outOfMemory();
+            return -1;
+        }
+        // tag any namespaces created by the module's init callback with the module name; only while the module is
+        // loaded, as in loadBinaryModuleFromPath(): a module that is already registered is attached to tpgm in the
+        // context of the caller, as by a load of a loaded feature (loadModuleIntern()); in its own context, a source
+        // module would be recorded as requiring itself (issue #5986)
+        QoreModuleNameContextHelper mnch(feature);
+
         // the metadata record linked with the module: as for a .qmod (see loadBinaryModuleFromPath()), the module
         // must be the one it describes, an optional module it was compiled without must not be available now, and its
         // dependencies are found with its own module path directives
@@ -2606,10 +2659,6 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         }
         // restore info hash for the descriptor handoff
         mod_info.info = info_holder.release();
-        // whether the module is library code is decided by its file name, once: addModule() records it on the
-        // module, and the module's initialization gives its Program the sandbox that it decides
-        // (inheritAOTModuleSandbox()) (issue #5913)
-        QoreModuleLoadFrameHelper load_frame(feature, isTrustedModulePath(path));
         mi = loadBinaryModuleFromDesc(xsink, nullptr, mod_info, path, feature, false,
             nullptr, tpgm, QMLO_NONE);
         if (!mi || xsink) {

@@ -965,6 +965,9 @@ public:
     //! (MOD_HEADER_PO), which do not apply to the functional domains declared on user code (see
     //! qore_program_private::parseDeniedDomains())
     int64 mod_header_dom = QDOM_DEFAULT;
+    //! true while the init and del closures of the module header are parse-initialized (see
+    //! qore_program_private::parseDeniedDomains())
+    bool mod_header_closure_init = false;
 
     //! the restrictions that an AOT module Program inherited from the Program that loaded it
     /** source modules are parsed with these restrictions; AOT module code runs with them (see
@@ -4747,14 +4750,29 @@ public:
     //! Returns the functional domain bits of \a dom that the parse options of \a pgm do not allow, and records them
     /** as parseAddDomain(); the restrictions that a module header adds for its own code do not apply to the domains
         declared on user code (\a user_declared): the header's \c init and \c del closures may call user code that
-        declares a domain, which the code loading the module is checked for when it calls the module
+        declares a domain, which the code loading the module is checked for when it calls the module; a header closure
+        has the domains that the header declares, also when it is written before the domains key
     */
     DLLLOCAL static QoreParseOptions parseDeniedDomains(QoreProgram* pgm, int64 dom, int64 user_declared) {
         QoreParseOptions denied = parseAddDomain(pgm, dom);
         if (denied && user_declared && pgm->priv->mod_header_dom) {
             denied &= ~QoreParseOptions(user_declared & pgm->priv->mod_header_dom & ~(dom & ~user_declared));
         }
+        // a closure of the module header is parse-initialized after the header with the options in effect where it
+        // was written: one written before the domains key still has the restrictions that the declaration removed
+        // for the rest of the module, the one inherited from the Program loading a module from the process-wide
+        // module path (setModuleOwnDomainsIntern()) and the header's own one (QoreUserModuleDefContextHelper), so
+        // they do not apply to it, whatever the order of the keys of the header
+        if (denied && pgm->priv->mod_header_closure_init) {
+            denied &= ~QoreParseOptions(pgm->priv->module_trusted_dom
+                | (pgm->priv->module_own_dom & pgm->priv->mod_header_dom));
+        }
         return denied;
+    }
+
+    //! Marks the parse initialization of the init and del closures of a module header (see parseDeniedDomains())
+    DLLLOCAL static void setModuleHeaderClosureInit(QoreProgram& pgm, bool on) {
+        pgm.priv->mod_header_closure_init = on;
     }
 
     //! Sets the restrictions that a user module header adds to the module's Program while its header is parsed

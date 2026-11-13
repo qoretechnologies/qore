@@ -34,6 +34,9 @@ lastorder.numberofitems = lastorder.items.size();
     lvalue represented by the local variable will exist beyond its local scope; as long as the reference to the lvalue
     exists, the local variable's lvalue will exist and remain valid.
 
+    @note Releasing the last reference to a captured local also releases its value; if that destroys an object
+    whose destructor raises an exception, the exception propagates to the code releasing the reference.
+
     @note A reference can outlive the @ref Qore::Program "Program" whose lvalue it refers to, for example when a
     function of the Program returns a reference to one of its variables.  Using a reference to a lvalue of a Program
     that is being deleted, or has been, raises a \c PROGRAM-ERROR exception, as a call into a deleted Program does;

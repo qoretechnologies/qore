@@ -127,9 +127,11 @@ module DomMod {
     desc = \"user functional domain test module\";
     author = \"Qore\";
     license = \"MIT\";
+    # the init closure, written before the domains key, uses the declared domain, with user code and with a builtin:
+    # a closure of the header is checked with the options in effect where it was written (qore#5803 batch I: source
+    # modules)
+    init = sub () { DomMod::Api::register(\"registered\"); *object logger = get_async_io_logger(); };
     domains = \"PROCESS\";
-    # the init closure uses the declared domain
-    init = sub () { DomMod::Api::register(\"registered\"); };
 }
 
 %ifdef PO_NO_PROCESS_CONTROL

@@ -50,7 +50,7 @@ class TempReleasePointsTest inherits QUnit::Test {
     #! checks the output of the AST interpreter
     private astTest() {
         string out = astOutput();
-        assertEq(52, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
+        assertEq(56, (select out.split("\n"), $1 =~ /^[a-z][a-z ]*:$/).size(), "cases");
         assertTrue(out =~ /^list literal:\n  dtor lit\n  mark lit\n/, "list literal");
         assertTrue(out =~ /\nmember:\n  dtor mem\n  mark mem\n/, "member");
         assertTrue(out =~ /\nno write:\n  mark nw\n  dtor nw\n/, "no write");
@@ -77,6 +77,12 @@ class TempReleasePointsTest inherits QUnit::Test {
         assertTrue(out =~ /\nmap:\n  dtor map\n  mark map\n/, "map");
         assertTrue(out =~ /\nselect:\n  dtor sel\n  mark sel\n/, "select");
         assertTrue(out =~ /\nfoldl:\n  dtor fold1\n  dtor fold2\n  mark fold\n/, "foldl");
+        # a fold over a pipeline (a fused fold, qore#5883) given to a call
+        assertTrue(out =~ /\nfoldl pipeline:\n  dtor fp1\n  dtor fp2\n  mark fp\n/, "foldl over a pipeline");
+        assertTrue(out =~ /\nfoldl pipeline concat:\n  dtor fpc1\n  dtor fpc2\n  mark fpc\n/,
+            "foldl over a pipeline with an operator");
+        assertTrue(out =~ /\nfoldl pipeline single element:\n  dtor fps\n  mark fps\n/,
+            "foldl over a pipeline with one element");
     }
 
     #! runs the script in every execution mode and on the IR tier

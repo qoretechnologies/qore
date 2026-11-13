@@ -3644,6 +3644,17 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
     return closed_.load(std::memory_order_acquire) ? -1 : 1;
 }
 
+int QuicSession::streamSendFlushed(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streaming_body_data_.find(stream_id);
+    if (it == streaming_body_data_.end() || closed_.load(std::memory_order_acquire)) {
+        return 0;
+    }
+    // the data handed to nghttp3 stays in sent_bufs until the peer acknowledges it: data moved there can still be
+    // unsent when flow control blocks the stream
+    return (it->second.data.empty() && it->second.pending_pong.empty() && it->second.sent_bufs.empty()) ? 0 : 1;
+}
+
 void QuicSession::notifyStreamDrain() {
     wakeStreamDrainWaiters();
 }
@@ -6591,9 +6602,15 @@ int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t str
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
         sbd.front_acked += datalen;
+        bool released = false;
         while (!sbd.sent_bufs.empty() && sbd.front_acked >= sbd.sent_bufs.front().size()) {
             sbd.front_acked -= sbd.sent_bufs.front().size();
             sbd.sent_bufs.pop_front();
+            released = true;
+        }
+        // a waiter for the stream's data to be sent (streamSendFlushed()) waits for its acknowledgement
+        if (released && sbd.sent_bufs.empty()) {
+            session->notifyStreamDrain();
         }
         ASYNC_IO_TRACE("QuicSession::h3AckedStreamDataCallback session=%lld stream_id=%lld datalen=%llu remaining_bufs=%zu pending=%zu\n",
             (long long)session->getSessionId(), (long long)stream_id,

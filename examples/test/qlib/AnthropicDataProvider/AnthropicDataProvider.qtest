@@ -14,16 +14,19 @@
 
 %exec-class AnthropicDataProviderTest
 
-class FakeConnectionManager {
+#! a connection manager whose requests are answered by the test (RestClientIo::getConnectionManager() returns an
+#! HttpClientConnectionManager)
+class FakeConnectionManager inherits HttpClientIo::HttpClientConnectionManager {
     public {
         FakeAnthropicRestClientIo fake_rest;
     }
 
-    constructor(FakeAnthropicRestClientIo rest) {
+    constructor(FakeAnthropicRestClientIo rest) : HttpClientIo::HttpClientConnectionManager() {
         fake_rest = rest;
     }
 
-    hash<auto> request(string url, string method, string path, hash<auto> hdr, binary body) {
+    hash<auto> request(string url, string method, string path, *hash<auto> hdr, *data body, *timeout timeout_ms,
+            bool decode_text = True, *hash<HttpClientIo::HttpClientRequestOptions> options) {
         fake_rest.last_method = method;
         # strip /v1/ prefix from path for test assertions
         fake_rest.last_path = path;

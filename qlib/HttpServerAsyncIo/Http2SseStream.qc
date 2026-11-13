@@ -235,6 +235,9 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     close() {
+        # the end of the stream is reported however it ends (see setEndCallback()), and first: the teardown below
+        # can release the last reference to this object
+        notifyEnded();
         if (!markStreamClosed()) {
             return;
         }
@@ -253,6 +256,7 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     abort() {
+        notifyEnded();
         markStreamClosed();
         # abort() is a teardown path: same rationale as close().
         try {

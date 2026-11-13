@@ -1722,6 +1722,14 @@ QoreIRInstruction* QoreIRBuilder::createDebugStatementEnd(uint16_t depth, const 
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createDebugBlockUnwind(uint16_t depth, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRDebugStatementInstruction>(nullptr);
+    inst->nest_depth = depth;
+    inst->nest_flags = QORE_IR_DEBUG_NEST_VALID | QORE_IR_DEBUG_NEST_UNWIND;
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createCheckException(const QoreProgramLocation* loc) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckException);
     inst->loc = loc;

@@ -625,6 +625,28 @@ private:
     size_t exit_temp_cleanup_count = 0;
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
+    //! the values that the Return instructions of the function return (qore#5941)
+    /** When an exception interrupts a return (as one that a handler of a block that the return leaves raises), the
+        AST interpreter keeps the value of the return until the function ends, after its locals: an exit of the
+        function on an exception releases the cleanup allocas of these values after the locals
+        (see holding_return_values).
+    */
+    std::unordered_set<uint32_t> return_value_ids;
+    //! for each value of a Return instruction, the values of return_value_ids that hold it
+    std::unordered_map<uint32_t, std::vector<uint32_t>> return_value_family;
+    //! true between the release of the temporaries and that of the locals of an exit on an exception: the values of
+    //! return_value_ids are released after the locals (see emitLocalUninstantiation())
+    bool holding_return_values = false;
+    //! Returns true if \a alloca_ptr is the cleanup alloca of one of return_value_ids
+    bool isReturnValueAlloca(llvm::Value* alloca_ptr) const;
+    //! the blocks at the start of the catch paths of try statements that release the values of the returns of their
+    //! try blocks (QoreIRFunction::catch_interrupted_returns), filled once the function is lowered, as the catch
+    //! block is lowered before the try block (qore#5941)
+    std::vector<std::pair<llvm::BasicBlock*, const std::vector<uint32_t>*>> catch_return_release_blocks;
+    //! Fills the blocks of catch_return_release_blocks
+    void finalizeCatchReturnReleases(llvm::Module& module);
+    //! Releases the cleanup allocas of return_value_ids, after the locals of an exit on an exception
+    void emitHeldReturnValueRelease(llvm::Module& module);
     //! the value id of each cleanup alloca of invoke_alloca_map, for the order of the release of a statement's
     //! temporaries by an exception
     std::unordered_map<llvm::Value*, uint32_t> cleanup_alloca_value_ids;
@@ -1523,6 +1545,7 @@ private:
 
     // Emit qore_rt_uninstantiate_local calls for all function locals at current insert point
     void emitLocalUninstantiation(llvm::Module& module);
+    void emitLocalUninstantiationIntern(llvm::Module& module);
 
     //! The boxed slots emitPreinstantiatedCleanup() releases, in emission order.
     /** Pre-instantiated entry cleanup slots, then fast-entry parameter slots, then

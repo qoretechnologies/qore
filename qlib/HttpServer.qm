@@ -5464,6 +5464,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # (WebSocketHandler), which then runs ws_end when the stream ends: no thread of the handler pool
                     # waits for the stream (qore#5752)
                     Priv::DedicatedConnectionHolder holder(request_helper, external_connections);
+                    # reports the end of the stream to the request's async target if the handler takes it over
+                    HttpServerAsyncIo::HttpPersistentRequestEnd pend();
                     try {
                         int stream_id = cx."header-info".stream_id;
                         hash<auto> resp_hdr = rv.hdr ?? {};
@@ -5491,7 +5493,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                         hash<auto> sock_cx = cx + {"listener": listener, "id": sock_id};
                         sock_cx."header-info".ws_end = getAsyncWebSocketEnd(holder, listener, NOTHING, sock_id,
-                            cx.handler_name);
+                            cx.handler_name, pend);
                         sock_cx."header-info".ws_accept_end = sub () { holder.accept(); };
                         sock_cx."header-info".ws_submit = getHandlerPoolSubmitter();
                         if (sockhandler.start(listener.getID(), sock_cx, hdr, s)) {
@@ -5513,6 +5515,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # helper then counts the stream until this request ends, as before
                     if (!request_helper.isDedicatedExternal() || !holder.isAccepted()) {
                         holder.release();
+                    } else {
+                        # the stream stays open after the request returns
+                        request_helper.persistent_end = pend;
                     }
                     if (request_helper.isDedicatedExternal()) {
                         listener.log("cid %d: %s extended CONNECT handler %y managed externally",
@@ -5609,6 +5614,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                     # Pass poll_op and async I/O context to handler via header-info
                     hash<auto> ws_cx = cx + {"listener": listener};
+                    # reports the end of the connection to the request's async target if the handler takes it over
+                    *HttpServerAsyncIo::HttpPersistentRequestEnd pend;
                     if (ws_poll_op) {
                         ws_cx."header-info".ws_poll_op = ws_poll_op;
                         # the controller keeps this context in the connection's entry for the life of the
@@ -5621,8 +5628,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # runs when the connection ends; it holds the request helper, so the listener's count of
                         # dedicated connections (dThreads, which a stop of the listener waits for) includes the
                         # connection until then
+                        pend = new HttpServerAsyncIo::HttpPersistentRequestEnd();
                         ws_cx."header-info".ws_end = getAsyncWebSocketEnd(holder, listener, s, cx.id,
-                            cx.handler_name);
+                            cx.handler_name, pend);
                         # called by a handler that takes over the end of the connection (WebSocketHandler)
                         ws_cx."header-info".ws_accept_end = sub () { holder.accept(); };
                     }
@@ -5642,6 +5650,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # handler runs ws_end when it ends; no thread of the handler pool waits for it
                         externally_managed = sockhandler.start(listener.getID(), ws_cx, hdr, s)
                             && holder.isAccepted();
+                        if (externally_managed) {
+                            # the connection stays open after the request returns
+                            request_helper.persistent_end = pend;
+                        }
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "SOCKET-NOT-OPEN") {
                             listener.logError("cid %d: dedicated socket handler %y: socket closed by remote", cx.id,
@@ -5678,11 +5690,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         controller
         @param sock_id the ID of the dedicated socket
         @param handler_name the name of the handler
+        @param pend reports the end of the connection to the async target of the request, if the request leaves the
+        connection open (see HttpServerAsyncIo::HttpAsyncTarget::onPersistentRequestEnd())
 
         @return the code that ends the connection in the server
     */
     private code<nothing()> getAsyncWebSocketEnd(Priv::DedicatedConnectionHolder holder, HttpListener listener,
-            *Socket s, softstring sock_id, *string handler_name) {
+            *Socket s, softstring sock_id, *string handler_name, HttpServerAsyncIo::HttpPersistentRequestEnd pend) {
         # the controller and the handler keep this code for the life of the connection, so its references to the
         # controller and to the listener (which references the server) are weak, as the context's own reference to
         # the controller is (see the 101 path); the connection's context still references the listener, so the
@@ -5695,6 +5709,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             if (!holder.claim()) {
                 return;
             }
+            # the end is reported to the request's target once the server's end of the connection is complete
+            on_exit pend.setEnded();
             # the listener counts the connection until its end is complete
             on_exit holder.release();
             *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
@@ -5861,6 +5877,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler)
                         : NOTHING, cid, sse_run));
                     register_sse_close_notify(sse_conn);
+                    # the stream stays open after the request returns: its end is reported to the request's async
+                    # target, whichever side ends it
+                    HttpServerAsyncIo::HttpPersistentRequestEnd pend();
+                    sse_conn.setEndCallback(getPersistentEndCallback(pend));
+                    request_helper.persistent_end = pend;
                 } else if (sse_run) {
                     # an event source is stopped only when the end of its stream is reported: without the
                     # notification, the stream is not started and is reset
@@ -5945,11 +5966,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 async_response_out.stream_type =
                     HttpServerAsyncIo::HttpConnectionState::Sse;
                 async_response_out.stream_operation = poll_op;
+                # reports the end of the stream, which stays open after the request returns, to the request's async
+                # target
+                HttpServerAsyncIo::HttpPersistentRequestEnd pend();
                 # the controller calls it exactly once when the stream has ended, for any reason
                 poll_op.setCloseCallback(getSseStreamEndCallback(
                     (handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)
                     ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler)
-                    : NOTHING, cid, sse_run));
+                    : NOTHING, cid, sse_run, pend));
+                request_helper.persistent_end = pend;
                 # the event source pushes the events of the stream from now on; they are sent after the
                 # response headers
                 if (sse_run) {
@@ -6029,13 +6054,28 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         };
     }
 
-    #! Returns the code that is called when an SSE stream has ended: by the async I/O controller, or, for a client dropped for its bound, on the thread that queued the data
-    /** Deregisters a socket handler's connection, and ends the run of the stream's event source, if any.  Created
-        here so that the frame of sendReply() keeps no locals for it.
+    #! Returns the code that reports the end of a stream to the async target of its request
+    /** A closure, which keeps the object (a call reference to its method would not), made in a static method, so that
+        it does not refer to the server, which can be deleted before the stream ends
     */
-    private code<nothing()> getSseStreamEndCallback(*AbstractHttpSocketHandlerInterface sse_handler, string cid,
-            *Priv::SseEventSourceRun run) {
+    private static code<nothing()> getPersistentEndCallback(HttpServerAsyncIo::HttpPersistentRequestEnd pend) {
         return sub () {
+            pend.setEnded();
+        };
+    }
+
+    #! Returns the code that is called when an SSE stream has ended: by the async I/O controller, or, for a client dropped for its bound, on the thread that queued the data
+    /** Deregisters a socket handler's connection, ends the run of the stream's event source, if any, and reports the
+        end to the request's async target, if given.  Created here so that the frame of sendReply() keeps no locals
+        for it.
+    */
+    private static code<nothing()> getSseStreamEndCallback(*AbstractHttpSocketHandlerInterface sse_handler, string cid,
+            *Priv::SseEventSourceRun run, *HttpServerAsyncIo::HttpPersistentRequestEnd pend) {
+        return sub () {
+            # the end is reported to the request's target also if the code below raises an exception
+            on_exit if (pend) {
+                pend.setEnded();
+            }
             if (sse_handler) {
                 sse_handler.deregisterConnection(cid);
             }
@@ -7724,7 +7764,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # by a dedicated handler
         if (!async_response) {
             if (request_helper.isDedicated()) {
-                return <HttpServerAsyncIo::HttpRequestResultInfo>{"dedicated": True};
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                    "dedicated": True,
+                    "persistent_request_end": request_helper.persistent_end,
+                };
             }
             # Response was sent directly by the handler
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
@@ -7779,6 +7822,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "code": async_response.code,
                 "status_message": HttpServer::HttpCodes{async_response.code},
                 "hdr": async_response.hdr,
+                "persistent_request_end": request_helper.persistent_end,
             };
         }
 
@@ -7832,7 +7876,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         if (request_helper.isDedicated()) {
             # Connection was handed to a dedicated handler (WebSocket/SSE)
-            return <HttpServerAsyncIo::HttpRequestResultInfo>{"dedicated": True};
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                "dedicated": True,
+                "persistent_request_end": request_helper.persistent_end,
+            };
         }
 
         # No response captured - handler may have sent response directly or failed
@@ -9846,6 +9893,12 @@ class RequestHelper {
             of the log level applies from the next request
         */
         bool log_info = True;
+
+        #! Reports the end of the WebSocket connection or SSE stream that the request leaves open to the async target
+        /** Set when the request's connection or stream stays open after the request returns; returned in the
+            request's result (see HttpListener::processNativeRequest())
+        */
+        *HttpServerAsyncIo::HttpPersistentRequestEnd persistent_end;
     }
 
     private {

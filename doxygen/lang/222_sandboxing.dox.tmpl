@@ -352,6 +352,25 @@ authenticate();
       a later request for its name from other code, library code included, and a reload raise \c LOAD-MODULE-ERROR,
       naming the module and its file
 
+    @subsection sandbox_static_modules Statically Linked Modules
+
+    A module compiled by qcc to a <tt>.qo</tt> object and linked into a program is registered by native code (the
+    <tt>qore_</tt><em>name</em><tt>_register()</tt> function that qcc emits, or
+    \c ModuleManager::registerAOTStaticModule() in the embedding API), not loaded from a file.  It is never library
+    code, whatever path the registration names: its code is linked into the program, not loaded from a directory of
+    library code.  It is checked as a load of the same module by path from outside the directories of library code,
+    for the code that calls the registration:
+    - that is the %Qore code running in the calling thread, also when it registers the module into another %Program
+      (through a native function that it calls); an embedding application that registers a module with no %Qore code
+      running is trusted, unless the target %Program has a @ref Qore::SandboxManager "SandboxManager": the target's
+      code is then the caller;
+    - registered for code that is not trusted, the module cannot have the name of a module in a directory of library
+      code, and a module with a name of its own is given only to code with the same sandbox, as above;
+    - if a module with its name is already loaded, that module is used instead, as for a load of a module that is
+      already loaded;
+    - registered while a library module that code that is not trusted loaded is initialized, the module is governed by
+      the sandbox of that code, as a module that the library module loads by path.
+
     @section sandbox_filesystem Filesystem Security
 
     The filesystem security system controls which paths can be accessed by sandboxed code. It supports:

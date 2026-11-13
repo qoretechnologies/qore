@@ -758,6 +758,10 @@ private:
     */
     DLLLOCAL bool returnCleanupObservesError(const LocalVar* returned_local) const;
 
+    //! Returns true if a return statement here runs a handler before it returns: an on_exit or on_success handler
+    //! of a block that it leaves
+    DLLLOCAL bool returnRunsHandlers() const;
+
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:
      *  - OBE_Unconditional: always executes
@@ -1022,6 +1026,9 @@ private:
         stay active (see catchScopesLeftByThrow()).
     */
     std::vector<int> try_catch_cleanup_depth_stack;
+    //! the values of the Return instructions in the try block of each enclosing try statement, innermost last (see
+    //! QoreIRFunction::catch_interrupted_returns)
+    std::vector<std::vector<uint32_t>> try_return_value_stack;
     //! the depth of the statements lowered, for the nesting of DebugStatement instructions (#5816)
     uint16_t debug_nest_depth = 0;
     //! the depth of the statements of the catch block lowered, or -1 (QORE_IR_DEBUG_NEST_IN_CATCH)
