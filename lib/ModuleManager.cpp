@@ -1692,6 +1692,22 @@ int QoreModuleDefContext::parseInit() {
 }
 
 int QoreModuleDefContext::initClosure(const QoreProgramLocation* loc, QoreValue& c, const char* n) {
+    // the closure has the domains that the header declares, also if it was written before the domains key
+    class HeaderClosureInitHelper {
+    public:
+        DLLLOCAL HeaderClosureInitHelper(QoreProgram* pgm) : pgm(pgm) {
+            if (pgm) {
+                qore_program_private::setModuleHeaderClosureInit(*pgm, true);
+            }
+        }
+        DLLLOCAL ~HeaderClosureInitHelper() {
+            if (pgm) {
+                qore_program_private::setModuleHeaderClosureInit(*pgm, false);
+            }
+        }
+    private:
+        QoreProgram* pgm;
+    } closure_init_helper(::getProgram());
     // initialize closure
     QoreParseContext parse_context;
     // check for local variables at the top level - this can only happen if the expresion is not a closure
