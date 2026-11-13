@@ -9130,6 +9130,11 @@ bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {
     return qore_check_cancel(xsink, operation);
 }
 
+// documented in qore_thread_intern.h
+void qore_request_current_thread_cancel(const char* reason, qore_program_id_t scope_pgm_id) {
+    thread_list.cancelThread(q_gettid(), reason, scope_pgm_id);
+}
+
 int qore_cancel_thread(int tid, const char* reason) {
     return thread_list.cancelThread(tid, reason, get_cancel_scope_pgm_id());
 }

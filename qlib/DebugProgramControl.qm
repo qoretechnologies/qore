@@ -579,6 +579,10 @@ public namespace DebugProgramControl {
             code (\c exit) or where it leaves the program (\c detach) stays stopped: its end is reported to the clients,
             which resume it as any thread that ends.
 
+            A thread that ends runs no more statements of the program: the cleanup code of its frames, such as an
+            \c on_exit block, is ended at its first statement, so that a resource that such code releases, such as a
+            lock, is released only with the resources of the thread.
+
             @param pgm the program to end
 
             @since DebugProgramControl 0.1.3
@@ -592,31 +596,17 @@ public namespace DebugProgramControl {
             # the threads that end with the cancellation end without an error; this is set before any thread is resumed
             # or cancelled, as a thread that ended first would report its exception as unhandled
             setProgramTerminating(pgm);
-            {
-                # no thread is registered as stopped while the program is marked, so each thread that is stopped is
-                # resumed here and no other one stops (see handleInterrupt()); a thread that stops at its end (exit or
-                # detach) is not resumed here: it stops there also while the program is marked, as its end is reported
-                # to the clients, which resume it as any thread that ends; since the program is marked before this
-                # loop, such a thread can have registered after the mark, so that a client that got its interrupt event
-                # and resumed it would find it no longer stopped if it were resumed here
-                rwlThread.writeLock();
-                on_exit rwlThread.writeUnlock();
-                foreach hash<auto> i in (ctxThread.pairIterator()) {
-                    if (i.value.pgmId == pgm_id && !i.value.ends) {
-                        # it runs, so that it leaves the program as a thread that is debugged (the detach is
-                        # reported), also from the stop at the start of the program, where it was not yet debugged
-                        # the command itself tells the thread to end: the mark of the program is gone if debugging
-                        # ends before the thread continues (see handleInterrupt())
-                        i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}, "terminate": True});
-                    }
-                }
-            }
+            resumeStoppedThreads(pgm_id);
             # a thread that is stopped is cancelled too, so that its end is sticky: the debugger's callbacks run with
             # the cancellation deferred (qore#5794), so its stop is not ended by the cancellation but by the command
             # above, with THREAD-CANCELLED, and a try statement of the program that catches that exception, or the
             # exception that the thread was stopped at, does not keep the thread running: the next cancellation point
             # raises the cancellation again (qore#5797); the lock makes checking and cancelling a thread atomic against
             # a thread that ends its code (see threadEnds())
+            # a resumed thread that runs to the end of its code before it is cancelled here is not cancelled; a thread
+            # stopped at an exception, which cannot raise its THREAD-CANCELLED with the exception that it was stopped
+            # at, raises it at its next statement, as it steps, and it is cancelled when it is resumed (see the end of
+            # handleInterrupt(); qore#5987)
             {
                 AutoLock al(startedLock);
                 foreach int tid in (pgm.getThreadList()) {
@@ -635,6 +625,31 @@ public namespace DebugProgramControl {
                 }
             }
             breakProgram(pgm);
+        }
+
+        #! Resumes the threads of a program that the debugger ends that are stopped, except a thread stopped at its end
+        /** Called by terminateProgram() with the program marked, before it cancels the threads; see there
+
+            @param pgm_id the ID of the program
+        */
+        private resumeStoppedThreads(int pgm_id) {
+            # no thread is registered as stopped while the program is marked, so each thread that is stopped is
+            # resumed here and no other one stops (see handleInterrupt()); a thread that stops at its end (exit or
+            # detach) is not resumed here: it stops there also while the program is marked, as its end is reported
+            # to the clients, which resume it as any thread that ends; since the program is marked before this
+            # loop, such a thread can have registered after the mark, so that a client that got its interrupt event
+            # and resumed it would find it no longer stopped if it were resumed here
+            rwlThread.writeLock();
+            on_exit rwlThread.writeUnlock();
+            foreach hash<auto> i in (ctxThread.pairIterator()) {
+                if (i.value.pgmId == pgm_id && !i.value.ends) {
+                    # it runs, so that it leaves the program as a thread that is debugged (the detach is
+                    # reported), also from the stop at the start of the program, where it was not yet debugged
+                    # the command itself tells the thread to end: the mark of the program is gone if debugging
+                    # ends before the thread continues (see handleInterrupt())
+                    i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}, "terminate": True});
+                }
+            }
         }
 
         #! Returns True for the exception that ends the threads of a program that the debugger ends
@@ -2383,6 +2398,8 @@ public namespace DebugProgramControl {
                     if (func == "exception") {
                         return;
                     }
+                    # the thread steps, so that it raises the exception again at its next statement (see the end of this method)
+                    runState = DebugStep;
                     throw "THREAD-CANCELLED", TerminateReason;
                 }
             }
@@ -2582,6 +2599,8 @@ public namespace DebugProgramControl {
                 }
             });
             if (terminating) {
+                # the thread steps, so that it raises the exception again at its next statement (see below)
+                runState = DebugStep;
                 throw "THREAD-CANCELLED", TerminateReason;
             }
             if (unattended) {
@@ -2991,7 +3010,13 @@ public namespace DebugProgramControl {
             # a thread of a program that the debugger ends ends, unless it ends anyway, also if its program is no longer
             # debugged; terminateProgram() has cancelled it as well, so that a try statement of the program that catches
             # the exception does not keep it running (qore#5797)
+            # the thread also steps: a thread that raises another exception, the one that it was stopped at, cannot
+            # raise THREAD-CANCELLED with it, and a try statement can catch that exception; its next statement then
+            # raises THREAD-CANCELLED (see the start of this method), also when no cancellation point follows and the
+            # thread would otherwise reach the end of its code before it is cancelled (qore#5987)
             if (!ends && (terminated || isTerminating(ctx.pgmId))) {
+                # the thread steps, so that it raises the exception again at its next statement (see below)
+                runState = DebugStep;
                 throw "THREAD-CANCELLED", TerminateReason;
             }
         }
