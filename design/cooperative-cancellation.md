@@ -53,13 +53,22 @@ with no request pending must cost no more than a few loads: the thread's data, i
 (`QCR_THREAD_CANCEL`, `QCR_SANDBOX_LIMIT`) and `qore_sandbox_interrupt_count`, the number of sandbox managers whose
 interrupt is requested.  Resolving the sandbox manager that governs the thread walks its Program-context chain, its
 sandbox provenance and contexts and takes a reference to the manager (or creates a composition), which costs far more
-than the loop body of a tight loop; it is done only while the count is not 0.  `requestInterrupt()` increments the
-count when it sets a manager's `QSB_INTR_REQUESTED` bit, before it wakes the waiting threads, and `clearInterrupt()`
-and the destructor of a manager with the bit set decrement it, so a check sees an interrupt exactly as it did when it
-always looked up the manager, and a waiter that registers its wait and then reads 0 is woken by the wakeup that
-follows (the same seq_cst order as the bit).  Debug builds count the lookups (`dbg_get_cancel_sandbox_lookup_count()`):
-`loop-cancellation-points/fast-path.q` checks that a loop makes none without a requested interrupt, in every execution
-mode and with AOT, and that every kind of request still reaches the check.
+than the loop body of a tight loop; it is done only while the count is not 0.
+
+The count is never less than the number of managers with the `QSB_INTR_REQUESTED` bit set, so it is 0 only while no
+interrupt is requested and a check sees an interrupt exactly as it did when it always looked up the manager:
+`requestInterrupt()` increments it before it sets the bit (and decrements it again if the bit was already set), and
+`clearInterrupt()` and the destructor of a manager decrement it only after they have cleared a set bit.  The order
+matters: if a request set the bit first, a clear between its setting of the bit and its increment would decrement the
+count first, and a check in between would read 0 while the interrupt of another manager is pending, and miss it (a
+waiter would still be woken by the request's wakeup, but a check in a loop, or the only check of a short call, would
+not).  The count is changed before `requestInterrupt()` wakes the waiting threads, in the same seq_cst order as the
+bit, so a waiter that registers its wait and then reads 0 is woken by the wakeup that follows.
+
+Debug builds count the lookups (`dbg_get_cancel_sandbox_lookup_count()`): `loop-cancellation-points/fast-path.q`
+checks that a loop makes none without a requested interrupt, in every execution mode and with AOT, and that every kind
+of request still reaches the check; `dbg_sandbox_interrupt_request_window()` clears an interrupt in the middle of its
+request, so the script checks the order deterministically.
 
 **This replaces `qore_check_io_interrupt()`**.  The old function remains
 exported as a deprecated binary-compatibility wrapper that delegates to

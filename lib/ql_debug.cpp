@@ -19243,6 +19243,43 @@ static QoreValue f_dbg_get_cancel_sandbox_lookup_count(const QoreListNode* param
     return q_get_cancel_sandbox_lookup_count();
 }
 
+namespace {
+//! the count of requested sandbox interrupts that the hook of dbg_sandbox_interrupt_request_window() saw
+thread_local int sandbox_interrupt_window_count = -1;
+
+//! clears the interrupt of the manager whose request is in progress and records the count of requested interrupts
+void sandbox_interrupt_window_hook(QoreSandboxManager* sm) {
+    sm->clearInterrupt();
+    sandbox_interrupt_window_count = qore_sandbox_interrupt_count.load(std::memory_order_seq_cst);
+}
+}
+
+//! returns the count of requested sandbox interrupts seen in a request of a new manager, cleared during the request
+/** Requests the interrupt of a new sandbox manager and clears it in the middle of the request, between its change of
+    the count of requested interrupts (which cancellation checks read first) and its setting of the interrupt bit,
+    and returns the count that a cancellation check would read right after the clear: never less than the number of
+    other managers with an interrupt requested.  The manager is destroyed with its interrupt cleared.
+*/
+static QoreValue f_dbg_sandbox_interrupt_request_window(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreSandboxManager> sm(new QoreSandboxManager, nullptr);
+    struct HookHelper {
+        HookHelper() {
+            sandbox_interrupt_window_count = -1;
+            qore_sandbox_interrupt_request_hook = sandbox_interrupt_window_hook;
+        }
+        ~HookHelper() {
+            qore_sandbox_interrupt_request_hook = nullptr;
+        }
+    };
+    {
+        HookHelper hh;
+        sm->requestInterrupt();
+    }
+    sm->clearInterrupt();
+    return sandbox_interrupt_window_count;
+}
+
 //! returns the number of times a cancellation request woke a registered wait of a thread (default: the current one)
 /** A wait that a request wakes through the thread's registered condition or wakeup channel is counted once per
     request, so a test can verify which path ended a cancelled wait: a wait that only noticed the request at a
@@ -22428,6 +22465,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_cancel_check_count", f_dbg_get_cancel_check_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_cancel_sandbox_lookup_count", f_dbg_get_cancel_sandbox_lookup_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_sandbox_interrupt_request_window", f_dbg_sandbox_interrupt_request_window,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_cancel_wake_count", f_dbg_get_cancel_wake_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, bigIntOrNothingTypeInfo, QORE_PARAM_NO_ARG, "tid");

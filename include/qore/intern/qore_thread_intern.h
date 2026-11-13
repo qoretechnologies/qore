@@ -1402,13 +1402,25 @@ DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
 //! The number of sandbox managers whose interrupt is requested (QoreSandboxManager::requestInterrupt())
 /** A cancellation point resolves the sandbox manager that governs the thread only while it is not 0, so that a check
     with no request pending costs no lookup (see qore_check_cancel() and "Cost of a check" in
-    design/cooperative-cancellation.md).  Changed only when a manager's QSB_INTR_REQUESTED bit changes, in the same
-    seq_cst order as the bit, and before requestInterrupt() wakes the waiting threads: a waiter that registers its wait
-    and then reads 0 is woken by the wakeup that follows.  It can be negative for a moment, while a clear that
-    follows a request decrements it before the request increments it; a value other than 0 only makes the check look
-    up the manager.
+    design/cooperative-cancellation.md).
+
+    It is never less than the number of managers whose QSB_INTR_REQUESTED bit is set, so it is 0 only while no
+    interrupt is requested: requestInterrupt() increments it before it sets the bit (and decrements it again if the bit
+    was already set), and clearInterrupt() and the destructor of a manager decrement it only after they have cleared a
+    set bit.  A clear that runs between a request's increment and its setting of the bit finds no bit and leaves the
+    count alone.  If the request set the bit first, such a clear would decrement the count before the request
+    incremented it, and a check in between would read 0 while the interrupt of another manager is pending.  It can be
+    one higher than the number of set bits for a moment, which only makes a check look up the manager.  All changes are
+    seq_cst, as the bit, and made before requestInterrupt() wakes the waiting threads: a waiter that registers its
+    wait and then reads 0 is woken by the wakeup that follows.
 */
 DLLLOCAL extern std::atomic<int> qore_sandbox_interrupt_count;
+
+#ifdef DEBUG
+//! Test hook of the current thread called by QoreSandboxManager::requestInterrupt() between its increment of
+//! qore_sandbox_interrupt_count and its setting of the interrupt bit; see dbg_sandbox_interrupt_request_window()
+DLLLOCAL extern thread_local void (*qore_sandbox_interrupt_request_hook)(QoreSandboxManager* sm);
+#endif
 
 //! Gives the Program of a module (a registered user module, or an AOT module) module lifetime
 /** The Program stays allocated (with a dependency reference) until qore_release_module_program_pins(), which

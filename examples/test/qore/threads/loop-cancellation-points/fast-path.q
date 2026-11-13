@@ -16,6 +16,9 @@ const Iterations = 1000;
 #! True if the library counts the sandbox manager lookups of cancellation checks (debug builds)
 const Counted = Option::HAVE_LIBRARY_DEBUGGING;
 
+#! how long a loop that a request must stop may take to report it; a request reaches it at once
+const StopTimeout = 20s;
+
 #! the code of the sandboxed Program: it calls the loops of this script, which its sandbox governs then
 const SandboxCode = "%modern
 auto sub call(code c, softlist<auto> args) {
@@ -128,13 +131,27 @@ string sub run_stopped(code loop, code stop) {
     }();
     started.waitForZero();
     stop(tid);
-    string r = res.get(60s);
+    string r;
+    try {
+        r = res.get(StopTimeout);
+    } catch (hash<ExceptionInfo> ex) {
+        # the request did not reach the loop: it is stopped by cancelling its thread, which it reports instead, or
+        # the process ends if that does not reach it either
+        cancel_thread(tid, "not stopped");
+        try {
+            res.get(StopTimeout);
+        } catch (hash<ExceptionInfo> ex1) {
+            printf("not stopped, also not by a cancellation of its thread\n");
+            exit(1);
+        }
+        r = "not stopped";
+    }
     thread_join(tid);
     return r;
 }
 
 #! runs a loop that ends in the current thread and returns its result and whether its checks looked up the sandbox
-#! manager: each of them must have with an interrupt requested and none without
+#! manager: each check must look it up while an interrupt is requested, and none may while none is
 string sub run_counted(code loop, bool lookups) {
     int start = Counted ? call_function("dbg_get_cancel_sandbox_lookup_count") : 0;
     int rv = loop();
@@ -166,14 +183,14 @@ foreach string kind in (Kinds) {
     sm.clearInterrupt();
 
     # a cleared interrupt does not stop the loop, and no check looks up the sandbox manager
-    printf("cleared-%s -> %s\n", kind, run_counted(int sub () { return p.callFunction("call", \spin(), (kind, Iterations)); },
-        False));
+    printf("cleared-%s -> %s\n", kind,
+        run_counted(int sub () { return p.callFunction("call", \spin(), (kind, Iterations)); }, False));
 
     # an interrupt of another sandbox makes the checks look up the manager, which has no interrupt requested
     SandboxManager other();
     other.requestInterrupt();
-    printf("other-%s -> %s\n", kind, run_counted(int sub () { return p.callFunction("call", \spin(), (kind, Iterations)); },
-        True));
+    printf("other-%s -> %s\n", kind,
+        run_counted(int sub () { return p.callFunction("call", \spin(), (kind, Iterations)); }, True));
     other.clearInterrupt();
 
     # no request: no lookup, also outside a sandbox
@@ -202,3 +219,17 @@ foreach string kind in (Kinds) {
         printf("memory-%s -> %s\n", kind, ex.err);
     }
 }
+
+# a clear of an interrupt made in the middle of its request (debug builds: the hook of
+# dbg_sandbox_interrupt_request_window() clears it right before the request sets its bit): the count of requested
+# interrupts, which a check reads first, stays at least the number of other managers with a pending interrupt, so a
+# check right after the clear still sees the pending interrupt of another sandbox
+{
+    SandboxManager pending();
+    pending.requestInterrupt();
+    int count = Counted ? call_function("dbg_sandbox_interrupt_request_window") : 1;
+    printf("request-window -> %s\n", count >= 1 ? "ok" : sprintf("the count of requested interrupts was %d", count));
+    pending.clearInterrupt();
+}
+# and no interrupt is left requested afterwards
+printf("after-window -> %s\n", run_counted(int sub () { return spin("while", Iterations); }, False));

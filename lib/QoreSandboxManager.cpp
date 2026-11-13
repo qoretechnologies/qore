@@ -1317,12 +1317,25 @@ void QoreSandboxManager::releaseThreadSlotQuiet() {
 
 std::atomic<int> qore_sandbox_interrupt_count{0};
 
+#ifdef DEBUG
+thread_local void (*qore_sandbox_interrupt_request_hook)(QoreSandboxManager* sm) = nullptr;
+#endif
+
 void QoreSandboxManager::requestInterrupt() {
     // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check interrupt) to
     // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt; the count of requested interrupts, which
-    // cancellation points read first, is incremented before the waiters are woken as well
-    if (!(interrupt_flags.fetch_or(QSB_INTR_REQUESTED, std::memory_order_seq_cst) & QSB_INTR_REQUESTED)) {
-        qore_sandbox_interrupt_count.fetch_add(1, std::memory_order_seq_cst);
+    // cancellation points read first, is incremented before the waiters are woken as well.  It is incremented before
+    // the bit is set, so that it is never less than the number of set bits: a concurrent clearInterrupt() decrements
+    // it only after clearing a set bit (see qore_sandbox_interrupt_count)
+    qore_sandbox_interrupt_count.fetch_add(1, std::memory_order_seq_cst);
+#ifdef DEBUG
+    if (qore_sandbox_interrupt_request_hook) {
+        qore_sandbox_interrupt_request_hook(this);
+    }
+#endif
+    if (interrupt_flags.fetch_or(QSB_INTR_REQUESTED, std::memory_order_seq_cst) & QSB_INTR_REQUESTED) {
+        // the bit was already set and counted
+        qore_sandbox_interrupt_count.fetch_sub(1, std::memory_order_seq_cst);
     }
 
     // Wake any threads currently blocked in QoreCondition::waitWithInterrupt — they re-check their

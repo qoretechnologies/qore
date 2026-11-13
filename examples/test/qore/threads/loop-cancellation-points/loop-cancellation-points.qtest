@@ -276,6 +276,8 @@ req.push(NOTHING);
                 "destroyed-foreach -> ok 1000 no-lookup",
                 "timeout-foreach -> SANDBOX-TIMEOUT: foreach loop",
                 "memory-foreach -> SANDBOX-MEMORY-LIMIT",
+                "request-window -> ok",
+                "after-window -> ok 1000 no-lookup",
             ),
         };
 
