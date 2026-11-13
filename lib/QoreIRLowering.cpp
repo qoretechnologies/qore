@@ -4018,6 +4018,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // the index of the Scope entry of this block in cleanup_stack
     size_t scope_entry_index = SIZE_MAX;
 
+    QoreIRScopeEnterInstruction* scope_enter = nullptr;
     if (has_on_block_exit) {
         // Allocate a unique scope ID (for compatibility with Phase 2/3)
         scope_id = ++scope_counter;
@@ -4032,7 +4033,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             pushBlockCleanup(scope_entry);
         }
         // Phase 2a: Emit ScopeEnter so scope_stack has watermark for exception-path handler execution
-        builder.createScopeEnter(scope_id);
+        scope_enter = builder.createScopeEnter(scope_id);
     }
 
     QoreIRBasicBlock* lvar_exception_cleanup_block = nullptr;
@@ -4056,6 +4057,12 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // innermost runtime scope).  The handlers that are lowered inline at the exits of the block raise their
     // exceptions here too, while the handlers registered before them are still registered (see
     // lowerHandlersAtExit()).  The frame has exception edges already, so the AOT outliner loses nothing.
+    // a block without an exception path of its own: an exception leaves the frame through the unwind path of the
+    // interpreter, which releases the locals of the block that ScopeEnter records after its handlers, before the
+    // events of the statements that contain it (#5867)
+    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget())) {
+        scope_enter->locals = lvars->lv;
+    }
     if (needs_handler_anchor || ((lvars || has_on_block_exit) && getCurrentExceptionTarget())) {
         // Exceptions raised inside this lexical block must destroy its block-scoped
         // locals before control reaches the enclosing catch.  Normal fall-through
@@ -8081,21 +8088,34 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     // a weak reference to a variable designates the variable's own container: a container that the variable shares
     // with another owner (a literal, another variable) is made unique first, as the AST interpreter does, so that the
     // owner's later writes are seen through the weak reference (qore#5756)
-    if (assign_mode == AssignmentMode::Weak) {
-        auto* source_var = dynamic_cast<const VarRefNode*>(right_expr.getInternalNode());
-        if (source_var && source_var->getType() != VT_IMMEDIATE
-                && qore_weak_assignment_source_made_unique(source_var->getTypeInfo())) {
-            QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, right_expr, nullptr, assign->loc,
-                error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);
-            if (!unique.isValid()) {
-                if (error.empty()) {
-                    error = "unsupported variable for weak assignment IR lowering";
-                }
-                return QoreIRValue();
+    // The unique step of a variable that another thread can assign (a global, a class static variable, a variable that
+    // a closure captures) gives the value of the variable, taken under its lock, which is the value assigned: the
+    // variable is not read again, as it can have been assigned in between (qore#5847).  The step of an untyped local
+    // keeps the local in IR storage (see QoreIRFunction::computeIROnlyLocals()).
+    QoreIRValue unique_source;
+    if (assign_mode == AssignmentMode::Weak && qore_weak_assignment_source_made_unique(right_expr)) {
+        QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, right_expr, nullptr, assign->loc,
+            error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);
+        if (!unique.isValid()) {
+            if (error.empty()) {
+                error = "unsupported variable for weak assignment IR lowering";
             }
+            return QoreIRValue();
+        }
+        auto* source_var = dynamic_cast<const VarRefNode*>(right_expr.getInternalNode());
+        bool shared_source = !source_var;  // a class static variable
+        if (source_var) {
+            qore_var_t vt = source_var->getType();
+            shared_source = vt == VT_GLOBAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS
+                || ((vt == VT_LOCAL) && source_var->ref.id
+                    && (source_var->ref.id->closureUse() || source_var->ref.id->isTopLevel()));
+        }
+        if (shared_source) {
+            unique_source = unique;
         }
     }
-    QoreIRValue right = lowerMutationOperand(assign->getLeft(), right_expr, assign->loc, error, true);
+    QoreIRValue right = unique_source.isValid() ? unique_source
+        : lowerMutationOperand(assign->getLeft(), right_expr, assign->loc, error, true);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -13436,6 +13456,42 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     if (!base_val.isValid()) {
         return QoreIRValue();
     }
+    // the receiver is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
+    // (issue #5784); a pseudo-method resolved at parse time is checked only for a receiver with no value
+    // (qore_check_method_call_receiver()), so a receiver whose type excludes no value needs no check (and the call
+    // stays fused with the operation that gives its receiver, as value.lwr().contains(...))
+    // the declared type is not enough: a value of a type that excludes no value can still have none (an unassigned
+    // local or member declared "string"); the parse analysis of the receiver tells that it has one, as for the
+    // string case transform of a switch statement
+    bool pseudo_receiver_has_value = false;
+    if (m && m->isPseudo() && m->getMethod()) {
+        QoreParseAnalysis receiver_analysis;
+        if (getAnalysis(op->getExpression(), receiver_analysis)) {
+            const QoreTypeInfo* receiver_type = receiver_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                ? selectAnalysisType(receiver_analysis) : nullptr;
+            pseudo_receiver_has_value = receiver_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || (receiver_type && receiver_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+                    && QoreTypeInfo::hasType(receiver_type)
+                    && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING));
+        }
+        // the result of a call that cannot be overridden has the call's return type, which is enforced when the
+        // call returns: a return type that excludes no value gives a value (value.lwr().contains(...)); a pseudo-
+        // method, a function and a static method are not overridden, while a method of an object can be overridden
+        // in a subclass with a return type that accepts no value (*string m())
+        if (!pseudo_receiver_has_value) {
+            const AbstractQoreNode* receiver = op->getExpression().getInternalNode();
+            const QoreDotEvalOperatorNode* receiver_dot = dynamic_cast<const QoreDotEvalOperatorNode*>(receiver);
+            bool not_overridden = receiver_dot
+                ? receiver_dot->getMethodCall() && receiver_dot->getMethodCall()->isPseudo()
+                : receiver && (receiver->getType() == NT_FUNCTION_CALL || receiver->getType() == NT_STATIC_METHOD_CALL);
+            const QoreTypeInfo* receiver_type = m->getSourceType();
+            pseudo_receiver_has_value = not_overridden && QoreTypeInfo::hasType(receiver_type)
+                && !QoreTypeInfo::parseAcceptsReturns(receiver_type, NT_NOTHING);
+        }
+    }
+    if (m && !pseudo_receiver_has_value && callArgsMayHaveSideEffects(m->getParseArgs(), m->getArgs())) {
+        builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc);
+    }
 
     // Pre-evaluate args and use DotEvalMethodDirect to avoid AST round-trip at runtime.
     // This handles both resolved methods (class+method set) and abstract/unresolved methods
@@ -14805,6 +14861,48 @@ bool QoreIRLowering::markReferenceArgumentAssignmentsUnknown(
     return true;
 }
 
+//! Returns true if no value of the type can be a reference (issue #5784)
+/** A type without a type (auto, any) can hold one, and so can a reference type (reference, *reference,
+    reference<T>, *reference<T>): each of their values is returned as one of the type's return specs.
+*/
+static bool qore_ir_type_cannot_hold_reference(const QoreTypeInfo* type) {
+    if (!QoreTypeInfo::hasType(type) || type == autoTypeInfo || type == anyTypeInfo) {
+        return false;
+    }
+    for (const auto& ret : type->return_vec) {
+        qore_type_t t = ret.spec.getType();
+        if (t == NT_REFERENCE || t == NT_ALL || ret.spec.getComplexReference()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool QoreIRLowering::callArgsMayHaveSideEffects(const QoreParseListNode* parse_args, const QoreListNode* args) const {
+    // every argument, in any order: named and mapped arguments are evaluated all the same
+    size_t count = parse_args ? parse_args->size() : (args ? args->size() : 0);
+    for (size_t i = 0; i < count; ++i) {
+        QoreValue arg = parse_args ? parse_args->get(i) : args->retrieveEntry(i);
+        if (!arg.hasNode()) {
+            continue;
+        }
+        const AbstractQoreNode* node = arg.getInternalNode();
+        if (!node || !node->needs_eval()) {
+            continue;
+        }
+        // a local variable whose declared type is a concrete type that cannot hold a reference is read without any
+        // effect; the read of a reference (a parameter declared as a reference, or a local of a type that can hold
+        // one, such as auto) gives the referenced value, which can run code (memberGate())
+        if (LocalVar* local = getLocalVarFromValue(arg)) {
+            if (qore_ir_type_cannot_hold_reference(local->getTypeInfo())) {
+                continue;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const {
     if (arg.isNothing()) {
         return true;
@@ -15440,6 +15538,13 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     if (!callee.isValid()) {
         return QoreIRValue();
     }
+    // the callable is checked before the arguments are evaluated, as in the AST interpreter, when they can show it
+    // (issue #5784); a closure created by the call's own expression is always callable and has no object, so it is
+    // not checked (and stays an immediate closure whose only use is the call)
+    if (!dynamic_cast<const QoreClosureParseNode*>(call->getExp().getInternalNode())
+            && callArgsMayHaveSideEffects(call->getParseArgs(), call->getArgs())) {
+        builder.createCheckCallTarget(expr, callee, getCurrentExceptionTarget(), call->loc);
+    }
     std::vector<QoreIRValue> operands;
     operands.push_back(callee);
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
@@ -16018,7 +16123,11 @@ static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, std::str
                 constant_val = right;
                 return QoreIROpcode::MapHashKeyOffsetInt;
             }
-            if (!q_env_is_set("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY")) {
+            // the untyped variant builds a list<auto>, as the AST interpreter builds the result of a map whose
+            // expression has no parse type; a typed result (ex: union<int, float> for a *float key + 1, qore#5663)
+            // is built by the generic map lowering with the element type of the AST's result
+            if (!q_env_is_set("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY")
+                    && (!QoreTypeInfo::hasType(rtype) || rtype == autoTypeInfo)) {
                 key_name = k;
                 constant_val = right;
                 return QoreIROpcode::MapHashKeyOffsetAny;

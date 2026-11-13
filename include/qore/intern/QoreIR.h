@@ -1021,7 +1021,15 @@ enum class QoreIROpcode : uint16_t {
     //! list expression are released before the body runs (qore#5770).
     IteratorCreateSource = 430,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (431, 432, ...)
+    /** Checks the target of a call before its arguments are evaluated, as the AST interpreter does (issue #5784)
+        operands[0] = the receiver of a method call or the callable of a call through a call reference; the
+        instruction's expression is the call.  Raises the exception that the call raises for the target before it
+        evaluates its arguments (an object that has been deleted, a value without the method), if any; lowered only
+        when an argument can have side effects, so that the order cannot be seen otherwise.  No result.
+    */
+    CheckCallTarget = 431,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (432, 433, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1030,8 +1038,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::IteratorCreateSource);
-static_assert(QORE_IR_MAX_OPCODE == 430, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::CheckCallTarget);
+static_assert(QORE_IR_MAX_OPCODE == 431, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! The flags of QoreIROpcode::ListSelectorStep (operands[2])
@@ -1321,6 +1329,14 @@ inline const char* qore_ir_cancel_point_operation(int64_t point) {
 class QoreIRBasicBlock;
 struct QoreIRPhiIncoming;
 
+//! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
+enum class QoreIRFusedCallTargetCheck : uint8_t {
+    None,           //!< no check
+    MethodCall,     //!< the call is a method call: a valid object needs no other check
+    CallReference,  //!< the call is a call through a call reference: a closure needs no other check
+    Other,          //!< any other call: always the full check
+};
+
 class QoreIRInstruction {
 public:
     enum class AOTStringCaseComparisonKind : uint8_t {
@@ -1354,6 +1370,9 @@ public:
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
+    // Transient: LoadLocal directly followed by the CheckCallTarget of its value: the interpreter makes the check in
+    // the load and steps over it (qore_ir_fuse_call_target_checks(); issue #5784)
+    QoreIRFusedCallTargetCheck fused_call_target_check = QoreIRFusedCallTargetCheck::None;
     bool borrowed_local_load = false;  // Transient: LoadLocal solely feeding an in-place mutation; the interpreter
                                        // borrows the local's slot-cache reference so the node stays unique at the
                                        // mutation site (native code borrows via alloca loads already)
@@ -2129,6 +2148,30 @@ enum class LVTernaryOp : uint8_t {
 //! flag for the consuming lvalue assignment helpers (qore_rt_lv_path_assign_consume() and
 //! qore_rt_self_member_assign_consume()): the caller does not use the result of the assignment
 #define QORE_RT_ASSIGN_RESULT_UNUSED 1
+
+//! returns the container that a weak reference to a local with IR storage designates, as a unique value (qore#5847)
+/** The unique step of a weak assignment from an untyped local: a hash or a list that the local shares with another
+    owner (a literal of the program, another variable) is copied, so that the weak reference designates the local's
+    own container and sees its later changes, as for a variable on the runtime stack (LValueHelper::ensureUnique()).
+    A value of another type (an object, a scalar, NOTHING, a reference, a weak reference that the local holds) is not
+    touched.
+    @param value the value in the local's storage, which the caller still owns
+    @param copied set to true if the value returned is a new copy; the caller then releases the value it passed and
+    stores the copy in its place
+*/
+static inline QoreValue qore_ir_unique_container(const QoreValue& value, bool& copied) {
+    copied = false;
+    qore_type_t t = value.getType();
+    if (t != NT_HASH && t != NT_LIST) {
+        return value;
+    }
+    const AbstractQoreNode* node = value.getInternalNode();
+    if (!node || node->is_unique()) {
+        return value;
+    }
+    copied = true;
+    return QoreValue(node->realCopy());
+}
 
 class QoreIRLValuePathInstruction : public QoreIRInstruction {
 public:
@@ -3324,6 +3367,15 @@ public:
     }
 
     uint32_t scope_id = 0;  //!< unique scope ID within function
+    //! the locals of the block, which an exception that leaves the scope releases after the handlers of the block
+    //! and before the events of the statements that contain it, as the AST interpreter does (#5867)
+    /** only for a block without an exception path of its own, whose exception leaves the frame through
+        QoreIRInterpreter's unwind path; a block with one releases its locals in its own exception cleanup.  Read only
+        on the unwind path, so that the exit of a block costs nothing more.
+    */
+    std::vector<LocalVar*> locals;
+    //! the slots of the locals, embedded by QoreIRFunction::computeSlotIdsAndEmbed() (UINT32_MAX if a local has none)
+    std::vector<uint32_t> local_slots;
 };
 
 //! Marks the exit from a scope - triggers execution of on_exit handlers registered since matching ScopeEnter
@@ -3927,6 +3979,15 @@ public:
     // This is built once during IR lowering and reused on every call.
     // selfid is handled separately since it's conditional on (self && selfid).
     mutable std::unordered_set<const LocalVar*>* cached_pre_instantiated = nullptr;
+
+    //! The locals whose values the native code of the AOT-compiled function keeps in native storage, with their
+    //! QORE_AOT_LOCAL_SLOT_NATIVE_* flags (see QoreAOTBinary.h)
+    /** Set when the standard entry of the function is lowered in AOT mode (QoreIRToLLVM::lowerFunction()), from the
+        locals that the lowering keeps out of the stack of local variables, and written to the function's local slot
+        records (extractAOTSlotIdentities()), so that get_local_vars() and set_local_var_value() can refuse them
+        (issue #5890); empty otherwise.
+    */
+    mutable std::unordered_map<const void*, uint8_t> aot_native_local_flags;
 
     // Return type info for the function (populated in attemptIRLowering()).
     // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.

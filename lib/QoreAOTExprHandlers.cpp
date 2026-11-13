@@ -1479,11 +1479,13 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         closure_loc = qore_aot_read_source_location(ctx.reader, ctx.ptr, ctx.pgm);
     }
 
-    bool is_lambda = false, is_in_method = false, needs_type_context = false;
+    bool is_lambda = false, is_in_method = false, needs_type_context = false, defaults_need_object = false;
     if (flags_str) {
         is_lambda = (flags_str[0] == '1');
         is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
         needs_type_context = (strlen(flags_str) >= 5 && flags_str[4] == '1');
+        // the fourth flag: the default values use the closure's object (issue #5931)
+        defaults_need_object = (strlen(flags_str) >= 7 && flags_str[6] == '1');
     }
 
     // Read return type
@@ -1514,6 +1516,10 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             ? type_resolver.resolveForSignature(ptype, type_error, closure_type_param_owner) : nullptr;
         uint8_t has_default = QoreAOTBinaryReader::readU8(ctx.ptr);
         if (has_default) {
+            // a closure in the default value binds to the variables of this context, as the closure's own captures
+            // do (issue #5903)
+            QoreAOTValueLocalsHelper value_locals(ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals,
+                ctx.local_owner_pgm);
             std::string val_error;
             defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
             if (!val_error.empty() && default_error.empty()) {
@@ -1593,6 +1599,12 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     const QoreClass* closure_class = nullptr;
     if (class_type_path && *class_type_path) {
         closure_class = qore_aot_resolve_class_ref(ctx.pgm, class_type_path, false);
+    }
+    // the class of a closure that is not in a method is the class it runs in, not a class type with self (#5907)
+    const QoreClass* static_class = nullptr;
+    if (flags_str && !is_in_method && class_type_path && *class_type_path) {
+        static_class = QoreTypeInfo::getUniqueReturnClass(type_resolver.resolve(class_type_path, type_error));
+        closure_class = nullptr;
     }
 
     // Construct UserClosureFunction + UserClosureVariant
@@ -1715,6 +1727,11 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             if (!lv->closureUse()) {
                 lv->setClosureUse();
             }
+        } else if (lv) {
+            // a closure that uses the self of the method that it is in takes the object when it is created, as a
+            // closure of the method does (issue #5931): a closure in a default value of a method's closure, for one
+            is_in_method = true;
+            defaults_need_object = true;
         }
     }
 
@@ -1774,13 +1791,19 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_variant->setProgram(ctx.pgm);
 
     // Set class type if in a method context
-    if (class_type_path && *class_type_path) {
+    if (!static_class && class_type_path && *class_type_path) {
         ucf->setClassType(type_resolver.resolve(class_type_path, type_error));
     }
 
     // Create QoreClosureParseNode
     auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
     closure_node->setNeedsTypeContext(needs_type_context);
+    if (defaults_need_object) {
+        closure_node->setDefaultsNeedObject();
+    }
+    if (static_class) {
+        closure_node->setStaticClass(qore_class_private::get(*static_class));
+    }
     return QoreValue(closure_node);
 }
 

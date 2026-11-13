@@ -229,8 +229,7 @@ QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, 
 
     ResolvedCallReferenceNode* r = dynamic_cast<ResolvedCallReferenceNode*>(lv->getInternalNode());
     if (!r) {
-        xsink->raiseException(*loc, "REFERENCE-CALL-ERROR", QoreValue(), "expression does not evaluate to a call " \
-            "reference (evaluated to type '%s')", lv->getTypeName());
+        qore_raise_not_call_reference(xsink, loc, *lv);
         return QoreValue();
     }
     // the location of this call is the location of the call stack frame of the called code
@@ -638,9 +637,7 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args
     //printd(5, "RunTimeResolvedMethodReferenceNode::execValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
     // issue #2145: do not set the call reference class context before arguments are evaluted
     // NOTE: check this for race conditions
-    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
-        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
-            "deleted");
+    if (checkObject(xsink)) {
         return QoreValue();
     }
     RuntimeConfig& rc = rc_get_current_ref();
@@ -703,9 +700,7 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
 
 QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
-        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
-            "deleted");
+    if (checkObject(xsink)) {
         return QoreValue();
     }
     // issue #2145: set class context after evaluating arguments
@@ -728,6 +723,44 @@ QoreProgram* RunTimeObjectMethodReferenceNode::getProgram() const {
 
 const QoreMethod* RunTimeObjectMethodReferenceNode::findMethod() const {
     return obj ? obj->getClass()->findMethod(method.c_str()) : nullptr;
+}
+
+int RunTimeResolvedMethodReferenceNode::checkObject(ExceptionSink* xsink) const {
+    // the status is read inline, without the exported call of QoreObject::isValid() (#5692)
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
+        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been deleted");
+        return -1;
+    }
+    return 0;
+}
+
+int RunTimeObjectMethodReferenceNode::checkObject(ExceptionSink* xsink) const {
+    // the status is read inline, without the exported call of QoreObject::isValid() (#5692)
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
+        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been deleted");
+        return -1;
+    }
+    return 0;
+}
+
+void qore_raise_not_call_reference(ExceptionSink* xsink, const QoreProgramLocation* loc, const QoreValue& v) {
+    if (loc) {
+        xsink->raiseException(*loc, "REFERENCE-CALL-ERROR", QoreValue(), "expression does not evaluate to a call "
+            "reference (evaluated to type '%s')", v.getTypeName());
+    } else {
+        xsink->raiseException("REFERENCE-CALL-ERROR", "expression does not evaluate to a call reference (evaluated "
+            "to type '%s')", v.getTypeName());
+    }
+}
+
+int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink) {
+    if (const RunTimeResolvedMethodReferenceNode* r = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(rcr)) {
+        return r->checkObject(xsink);
+    }
+    if (const RunTimeObjectMethodReferenceNode* r = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(rcr)) {
+        return r->checkObject(xsink);
+    }
+    return 0;
 }
 
 const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {

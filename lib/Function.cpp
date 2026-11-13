@@ -72,6 +72,8 @@
 #include <cassert>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
+#include <functional>
 #include <cmath>
 #include <cstring>
 #include <map>
@@ -984,12 +986,13 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
+        const QoreClosureBase* n_closure)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()),
         tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
         explicit_receiver_type_info(n_explicit_receiver_type_info),
-        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation), closure(n_closure) {
     // Qore code must never be started on an async I/O thread answering a fast route
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
     if (self && !self->isValid()) {
@@ -1554,6 +1557,30 @@ int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVa
     return 0;
 }
 
+//! Evaluates a default value of a closure's parameter with the variables that the closure captured and its object
+/** They can be gone from the stack of the code that created the closure when it is called (issue #5923); the call's
+    Program is the closure's here, whose closure variables they are.  The self of a closure created in a method is its
+    object, which an AOT image does not capture as a variable, and which a closure created by the default value takes
+    as its object (issue #5931).  The value is evaluated by the callee, as a statement of its own (see
+    design/temporary-lifetime.md)
+*/
+static __attribute__((noinline, cold)) QoreValue qore_eval_closure_default_arg(const QoreClosureBase& closure,
+        const QoreValue& exp, ExceptionSink* xsink) {
+    CVecInstantiator closure_vars(closure.getCvec(), xsink);
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env(&closure);
+    // the closure's object and class context, as for the closure's code: a closure created by the default value takes
+    // the object of the closure and not that of the caller (issue #5931)
+    std::optional<ObjectSubstitutionHelper> closure_self;
+    if (QoreObject* obj = closure.getObject()) {
+        closure_self.emplace(obj, closure.getClassCtx());
+    }
+    QoreScopedEvalHolder dv(exp, true, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dv.takeReferencedValue();
+}
+
 int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
         AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type,
         std::unique_ptr<arg_restore_vec_t>* saved) {
@@ -1600,7 +1627,15 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     self_helper.set(self);
                 }
 
-                {
+                if (closure && ((closure->getCvec() && !closure->getCvec()->empty())
+                        || closure->getClosureParseNode()->defaultsNeedObject())) [[unlikely]] {
+                    // a default value of a closure that captured variables or uses a self that it did not capture is
+                    // evaluated with them (issues #5923, #5931)
+                    p = qore_eval_closure_default_arg(*closure, defaultArgList[i], xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                } else {
                     // the default value is evaluated by the callee, as a statement of its own: a value that it reads
                     // or creates is not a temporary of the caller's statement (see design/temporary-lifetime.md)
                     QoreScopedEvalHolder dv(defaultArgList[i], true, xsink);
@@ -2251,6 +2286,9 @@ int UserSignature::resolve() {
             // initialize default arguments
             if (defaultArgList[i]) {
                 QoreParseContext parse_context(selfid);
+                if (default_value_pflag) {
+                    parse_context.setFlags(default_value_pflag);
+                }
                 if (parse_init_value(defaultArgList[i], parse_context) && !err) {
                     err = -1;
                 }
@@ -6912,6 +6950,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         }
         return nullptr;
     }
+    // the final IR: the interpreter makes the check of a call's target in the load of the target (issue #5784)
+    qore_ir_fuse_call_target_checks(*func);
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu\n",
             name,
@@ -7170,31 +7210,160 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     return true;
 }
 
-//! Returns true if the code of \a variant can be compiled into a batch
-/** The code of a function whose Program's deletion has started (UserVariantBase::pgm_deleted, also set before the
-    tearing-down thread can run code of the Program) is not collected: its own calls refer to that Program's functions,
-    which are freed with its namespaces, and the function is called through the call path, which refuses the call
-    (qore#5822).  The variant and its Program stay allocated while code that calls it refers to it (see
-    UserVariantBase::setProgram()).  The functions of other live Programs (inherited from a parent, imported, or of a
-    module) are collected: a deletion that another thread starts while a batch is being collected is not excluded by
-    this check, a race that does not depend on this check and that is tracked separately.
-*/
-static bool qore_batch_callee_collectable(const AbstractQoreFunctionVariant* variant) {
+#ifdef DEBUG
+//! test hooks that hold a batch collection after it has taken the hold of another Program (qore#5874)
+static std::mutex qore_dbg_collect_mutex;
+static std::condition_variable qore_dbg_collect_cv;
+//! the name of the root function whose collection is held next; empty if none
+static std::string qore_dbg_collect_func;
+static bool qore_dbg_collect_held = false;
+static bool qore_dbg_collect_release = false;
+static int64 qore_dbg_teardown_compile_hold_waits = 0;
+//! the holds refused to the collections of the armed root function (see qore_dbg_hold_batch_collection())
+static std::string qore_dbg_refused_func;
+static int64 qore_dbg_refused_count = 0;
+
+void qore_program_dbg_teardown_waits_for_compile_hold() {
+    std::lock_guard<std::mutex> lock(qore_dbg_collect_mutex);
+    ++qore_dbg_teardown_compile_hold_waits;
+    qore_dbg_collect_cv.notify_all();
+}
+
+void qore_dbg_count_batch_collection_refusals(const char* func) {
+    std::lock_guard<std::mutex> lock(qore_dbg_collect_mutex);
+    qore_dbg_refused_func = func;
+    qore_dbg_refused_count = 0;
+}
+
+int64 qore_dbg_get_batch_collection_refusals() {
+    std::lock_guard<std::mutex> lock(qore_dbg_collect_mutex);
+    // disarms the counting
+    qore_dbg_refused_func.clear();
+    return qore_dbg_refused_count;
+}
+
+void qore_dbg_batch_collection_refused(const std::string& root) {
+    std::lock_guard<std::mutex> lock(qore_dbg_collect_mutex);
+    if (!qore_dbg_refused_func.empty() && !root.compare(0, root.find('@'), qore_dbg_refused_func)) {
+        ++qore_dbg_refused_count;
+    }
+}
+
+void qore_dbg_hold_batch_collection(const char* func) {
+    std::lock_guard<std::mutex> lock(qore_dbg_collect_mutex);
+    qore_dbg_collect_func = func;
+    qore_dbg_collect_held = false;
+    qore_dbg_collect_release = false;
+    qore_dbg_teardown_compile_hold_waits = 0;
+}
+
+bool qore_dbg_wait_batch_collection_held(int64 timeout_ms) {
+    std::unique_lock<std::mutex> lock(qore_dbg_collect_mutex);
+    return qore_dbg_collect_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+        [] { return qore_dbg_collect_held; });
+}
+
+bool qore_dbg_wait_teardown_compile_hold(int64 timeout_ms) {
+    std::unique_lock<std::mutex> lock(qore_dbg_collect_mutex);
+    return qore_dbg_collect_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+        [] { return qore_dbg_teardown_compile_hold_waits > 0; });
+}
+
+bool qore_dbg_continue_batch_collection(int64 timeout_ms) {
+    std::unique_lock<std::mutex> lock(qore_dbg_collect_mutex);
+    qore_dbg_collect_release = true;
+    qore_dbg_collect_cv.notify_all();
+    return qore_dbg_collect_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+        [] { return !qore_dbg_collect_held; });
+}
+
+//! holds the collection for \a root (a function name, without its unique suffix) if a test armed it
+static void qore_dbg_batch_collection_hold_point(const std::string& root) {
+    std::unique_lock<std::mutex> lock(qore_dbg_collect_mutex);
+    if (qore_dbg_collect_func.empty() || root.compare(0, root.find('@'), qore_dbg_collect_func)) {
+        return;
+    }
+    qore_dbg_collect_func.clear();
+    qore_dbg_collect_held = true;
+    qore_dbg_collect_cv.notify_all();
+    qore_dbg_collect_cv.wait(lock, [] { return qore_dbg_collect_release; });
+    qore_dbg_collect_held = false;
+    qore_dbg_collect_cv.notify_all();
+}
+#endif
+
+QoreProgramCodeHolds::~QoreProgramCodeHolds() {
+    release();
+}
+
+void QoreProgramCodeHolds::release() noexcept {
+    for (QoreProgram* p : held) {
+        qore_program_private::get(*p)->releaseCompileHold();
+    }
+    held.clear();
+}
+
+bool QoreProgramCodeHolds::holdIntern(QoreProgram* p, bool hook) {
+    if (!p || std::find(held.begin(), held.end(), p) != held.end()) {
+        return true;
+    }
+    qore_program_private* priv = qore_program_private::get(*p);
+    if (!priv->tryHoldForCompile()) {
+#ifdef DEBUG
+        if (hook_name) {
+            qore_dbg_batch_collection_refused(*hook_name);
+        }
+#endif
+        return false;
+    }
+    try {
+        held.push_back(p);
+    } catch (...) {
+        priv->releaseCompileHold();
+        throw;
+    }
+#ifdef DEBUG
+    if (hook && hook_name) {
+        qore_dbg_batch_collection_hold_point(*hook_name);
+    }
+#endif
+    return true;
+}
+
+bool QoreProgramCodeHolds::holdVariant(const AbstractQoreFunctionVariant* variant) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
-    return !uvb || !uvb->pgm_deleted.load(std::memory_order_acquire);
+    if (!uvb) {
+        return true;
+    }
+    if (uvb->pgm_deleted.load(std::memory_order_acquire)) {
+#ifdef DEBUG
+        if (hook_name) {
+            qore_dbg_batch_collection_refused(*hook_name);
+        }
+#endif
+        return false;
+    }
+    // the variant keeps its Program allocated (UserVariantBase::setProgram())
+    return hold(uvb->pgm);
 }
 
 // Collect direct and transitive callees from an IR function's direct calls and
 // eligible nonmethod closure definitions.
 // Returns a vector of BatchCallee entries for callees that have cached IR.
 static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunction& func,
-        QoreProgram* root_pgm) {
+        QoreProgram* root_pgm, QoreProgramCodeHolds& callee_pgms) {
     constexpr size_t MAX_TRANSITIVE_BATCH_CALLEES = 64;
     std::vector<QoreJIT::BatchCallee> callees;
     std::unordered_set<const AbstractQoreFunctionVariant*> seen;
     std::vector<const QoreIRFunction*> worklist{&func};
     bool collect_transitive = !q_env_is_set("QORE_DISABLE_JIT_TRANSITIVE_BATCH");
     size_t check_count = 0;
+
+    // the root's code is read as well; the compile can be started on a call path that has not entered its Program
+    // (qore_rt_call_fast()), so it is held too; a root whose teardown has marked its Program gets no callees
+    if (!callee_pgms.holdRoot(root_pgm)) {
+        return callees;
+    }
 
     for (size_t work_i = 0; work_i < worklist.size(); ++work_i) {
         const QoreIRFunction* current = worklist[work_i];
@@ -7212,7 +7381,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                 if (inst->opcode == QoreIROpcode::CallDirect) {
                     const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
                     variant = direct->variant;
-                    if (!qore_batch_callee_collectable(variant)) {
+                    if (!callee_pgms.holdVariant(variant)) {
                         continue;
                     }
                     if (direct->func) {
@@ -7225,7 +7394,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                                 inv->expr.getInternalNode());
                         if (call) {
                             variant = call->getVariant();
-                            if (!qore_batch_callee_collectable(variant)) {
+                            if (!callee_pgms.holdVariant(variant)) {
                                 continue;
                             }
                             if (call->getFunction()) {
@@ -7386,8 +7555,11 @@ void UserVariantBase::attemptJITCompilation() const {
 
     void* deopt_ptr = getDeoptCounterPtr();
 
-    // Collect direct callees that have cached IR for batch compilation
-    auto callees = collectBatchCallees(*ir, pgm);
+    // Collect direct callees that have cached IR for batch compilation; their Programs are held until the batch is
+    // queued (see QoreProgramCodeHolds)
+    QoreProgramCodeHolds callee_pgms(&ir->name);
+    auto callees = collectBatchCallees(*ir, pgm, callee_pgms);
+    std::function<void()> callees_queued = [&callee_pgms]() { callee_pgms.release(); };
 
     // A small root can still produce an oversized LLVM module when many direct callees are folded
     // into its batch.  In that case compile only the root, leaving its callees behind the normal
@@ -7426,9 +7598,11 @@ void UserVariantBase::attemptJITCompilation() const {
         printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch enqueued with %d callees\n",
             ir->name.c_str(), (int)callees.size());
         QoreJIT::instance().enqueueBgCompile(self_variant, ir,
-            deopt_ptr, &callees, std::move(compile_ir));
+            deopt_ptr, &callees, std::move(compile_ir), callees_queued);
     } else {
         // No eligible callees: single-function background compilation
+        // the root's own Program was held for its callees, which are not compiled with it
+        callee_pgms.release();
         QoreJIT::instance().enqueueBgCompile(self_variant, ir, deopt_ptr);
     }
 
@@ -8921,7 +9095,8 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
-        false, nullptr, pgm, closure_type_context ? closure_type_context->receiver_type_info : nullptr);
+        false, nullptr, pgm, closure_type_context ? closure_type_context->receiver_type_info : nullptr,
+        nullptr, 0, &closure_base);
     if (*xsink) {
         return QoreValue();
     }
@@ -8960,7 +9135,43 @@ int UserClosureVariant::parseInit(QoreFunction* f) {
     source_qf = f;
     UserClosureFunction* cf = static_cast<UserClosureFunction*>(f);
 
-    int err = signature.resolve();
+    int err;
+    {
+        // the default values of the closure's parameters are evaluated when the closure is called, possibly after the
+        // code that created it has returned: the variables of that code that they use are captured by the closure,
+        // as those that its code uses are (issue #5923)
+        ClosureParseEnvironment cenv(cf->getVList(), cf);
+        // self in a default value is the closure's own, as in its code, and not the captured self of the method that
+        // created the closure, which would keep the object alive; the default values are parsed in the closure's
+        // object context, as its code is, and one that is evaluated (and so can use the object, through self, a
+        // member or a method, or create a closure, which takes the current object) is evaluated with the closure's
+        // object (issue #5931)
+        const QoreTypeInfo* class_type = cf->getClassType();
+        if (class_type) {
+            if (signature.selfid) {
+                push_local_var(signature.selfid, signature.getParseLocation());
+            } else {
+                int self_err = 0;
+                signature.selfid = push_local_var("self", signature.getParseLocation(), class_type, self_err, true,
+                    1);
+                signature.selfid->setSelf();
+            }
+            // the default values of a closure in a const method cannot change the object, as its code cannot
+            if (cf->isConstMethodContext()) {
+                signature.default_value_pflag = PF_CONST_METHOD;
+            }
+        }
+        err = signature.resolve();
+        if (class_type) {
+            pop_local_var();
+            for (const QoreValue& v : signature.getDefaultArgList()) {
+                if (v.needsEval()) {
+                    cf->setDefaultsNeedObject();
+                    break;
+                }
+            }
+        }
+    }
 
     // resolve and push current return type on stack
     ParseCodeInfoHelper rtih(f->getName(), signature.getReturnTypeInfo());

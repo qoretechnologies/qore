@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 connections over TLS and their flow control
+
+/*  Http2ConnectionWindow.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    An HTTP/2 session never raised the connection's receive window from the RFC 9113 default of 65535 bytes, so every
+    64 KiB received needed a WINDOW_UPDATE round trip for the connection, whatever the 1 MiB stream windows: under CPU
+    load (a round trip waits for thread scheduling), throughput collapsed to a few hundred KB/s.  The connection
+    window is now 16 stream windows.  The WINDOW_UPDATE frames that the client and the server send for the connection
+    are counted (a debug hook) while 4 MiB are downloaded and uploaded: with the 64 KiB window there were dozens.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class Http2ConnectionWindowTest
+
+#! the size of the data transferred: 64 times the RFC 9113 default connection window
+const Size = 4 * 1024 * 1024;
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Answers a GET with the bytes given, and a POST with the size of the body received
+class SizeHandler inherits AbstractHttpRequestHandler {
+    private {
+        int size;
+    }
+
+    constructor(int size) {
+        self.size = size;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "POST") {
+            return makeResponse(200, string(body.size()));
+        }
+        return makeResponse(200, binary(strmul("d", size)), {"Content-Type": "application/octet-stream"});
+    }
+}
+
+class Http2ConnectionWindowTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Http2ConnectionWindow", "1.0") {
+        addTestCase("HTTP/2: a large transfer needs no WINDOW_UPDATE round trips for the connection", \testWindow());
+        addTestCase("HTTP/2: the debug hook keeps the default connection window", \testDefaultWindow());
+        set_return_value(main());
+    }
+
+    testWindow() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        hash<auto> counts = transfer(Size);
+        # the WINDOW_UPDATE that raises the window when the connection starts (each side receives 4 MiB, under half of
+        # the larger window, which nghttp2 would credit then): with the default window, 4 MiB needed one for every
+        # ~32 KiB; 2 allows a second connection
+        assertLe(2, counts.client, "the client sends (almost) no WINDOW_UPDATE for the connection");
+        assertLe(2, counts.server, "the server sends (almost) no WINDOW_UPDATE for the connection");
+    }
+
+    #! The tests that see lost connection credit as the default window shrinking keep it with a debug hook
+    testDefaultWindow() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        call_function("dbg_http2_default_connection_window", True);
+        on_exit call_function("dbg_http2_default_connection_window", False);
+        # a transfer smaller than half of the default window needs no WINDOW_UPDATE: none raises the window
+        hash<auto> counts = transfer(1000);
+        assertEq(0, counts.client, "the client keeps the default connection window");
+        assertEq(0, counts.server, "the server keeps the default connection window");
+    }
+
+    #! Downloads and uploads \a size bytes on a new HTTP/2 connection; returns the WINDOW_UPDATE frames for the
+    #! connection that the client and the server sent meanwhile
+    private hash<auto> transfer(int size) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        on_exit server.stop();
+        server.setDefaultHandler("size", new SizeHandler(size));
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d/", port);
+        hash<auto> before = call_function("dbg_http2_connection_window_updates");
+        hash<auto> resp = mgr.request(url, "GET", "/", NOTHING, NOTHING, HangGuard, False);
+        assertEq(size, resp.body.size(), "the download arrives whole");
+        resp = mgr.request(url, "POST", "/", NOTHING, binary(strmul("u", size)), HangGuard, False);
+        assertEq(string(size), resp.body.toString(), "the upload arrives whole");
+        hash<auto> after = call_function("dbg_http2_connection_window_updates");
+        return {"client": after.client - before.client, "server": after.server - before.server};
+    }
+}

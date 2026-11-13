@@ -133,6 +133,9 @@ module DebugProgramControl {
       \c pause as @ref True, so that clients can tell the pause from the end of a step
     - the \c thread/local/&lt;name&gt;/get and \c thread/variable/get commands give the declared type of a local
       variable in \c declaredType, and \c unassigned is @ref True for a variable that was declared but not assigned;
+      a local variable whose value is not available, as AOT-compiled code keeps it in native code (\c unavailable,
+      see @ref Qore::get_local_vars() "get_local_vars()"), is given without a value and with \c unavailable, and an
+      expression or a variable path that uses it raises an error instead of giving it a value;
       exception events give the hint of an exception that matches a common pitfall of %Qore in its \c arg (see
       @ref DebugUtil::AbstractDebugControl::formatRuntimeDiagnostic() "AbstractDebugControl::formatRuntimeDiagnostic()")
     - a program created with the \c program//create command is removed from debugging also when it ends with an
@@ -2035,16 +2038,43 @@ public namespace DebugProgramControl {
             return rv;
         }
 
+        #! serializes a local variable as given by get_local_vars()
+        /** a variable whose value is not available (\c unavailable, see @ref Qore::get_local_vars() "get_local_vars()")
+            is passed on without a value
+        */
         private *hash<auto> serializeLocal(string name, hash<auto> val) {
-            val.value = AbstractDebugControl::serialize(val.value);
+            if (!val.unavailable) {
+                val.value = AbstractDebugControl::serialize(val.value);
+            }
             return ('name': name) + val;
         }
 
+        #! serializes the local variables of a frame as given by get_local_vars(); see serializeLocal()
         private *hash<auto> serializeLocals(*hash<auto> vals) {
             foreach string k in (keys vals) {
-                vals{k}.value = AbstractDebugControl::serialize(vals{k}.value);
+                if (!vals{k}.unavailable) {
+                    vals{k}.value = AbstractDebugControl::serialize(vals{k}.value);
+                }
             }
             return vals;
+        }
+
+        #! raises an exception if an expression refers to a local variable whose value is not available
+        /** the value of a local variable that @ref exec_mode_aot "AOT-compiled" code keeps in native code cannot be
+            read (\c unavailable, see @ref Qore::get_local_vars() "get_local_vars()"); the expression is checked for
+            the name of such a variable outside of string literals and not after a \c "."
+
+            @throw DEBUG-EVALUATE-ERROR the expression refers to a local variable whose value is not available
+        */
+        private static checkUnavailableLocals(string expr, list<string> unavailable) {
+            expr =~ s/"(\\.|[^"\\])*"//g;
+            expr =~ s/'(\\.|[^'\\])*'//g;
+            foreach string name in (unavailable) {
+                if (regex(expr, "(^|[^.\\w$])" + name + "\\b")) {
+                    throw "DEBUG-EVALUATE-ERROR", sprintf("the value of local variable %y is not available: the "
+                        "AOT-compiled code of the frame keeps it in native code", name);
+                }
+            }
         }
 
         #! returns the call stack as untyped frame hashes with the debugged statement's frame adjusted
@@ -2142,6 +2172,10 @@ public namespace DebugProgramControl {
                 if (!lv.hasKey(root.local)) {
                     throw "DEBUG-ERROR", sprintf("the frame has no local variable %y", root.local);
                 }
+                if (lv{root.local}.unavailable) {
+                    throw "DEBUG-ERROR", sprintf("the value of local variable %y is not available: the AOT-compiled "
+                        "code of the frame keeps it in native code", root.local);
+                }
                 return lv{root.local}.value;
             }
             if (exists root.global) {
@@ -2225,10 +2259,20 @@ public namespace DebugProgramControl {
                     vars{i.key} = i.value.value;
                 }
             }
+            # a local variable whose value is not available cannot be used in the expression
+            list<string> unavailable = ();
             foreach hash<auto> i in (lv.pairIterator()) {
                 if (i.key =~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
-                    vars{i.key} = i.value.value;
+                    if (i.value.unavailable) {
+                        remove vars{i.key};
+                        unavailable += i.key;
+                    } else {
+                        vars{i.key} = i.value.value;
+                    }
                 }
+            }
+            if (unavailable) {
+                DebugProgramControl::checkUnavailableLocals(expr, unavailable);
             }
             hash<auto> f = prepareEvalFunction(pgm, expr, sort(keys vars), True);
             Counter calls = f.calls;

@@ -141,7 +141,7 @@ QoreClosureBase* QoreClosureParseNode::evalClosure() const {
         }
     }
 
-    return new QoreClosureNode(this, cvec, runtime_get_class());
+    return new QoreClosureNode(this, cvec, static_class ? static_class : runtime_get_class());
 }
 
 QoreClosureBase* QoreClosureParseNode::evalObjectClosure() const {
@@ -150,7 +150,7 @@ QoreClosureBase* QoreClosureParseNode::evalObjectClosure() const {
         return rv;
     }
 
-    return new QoreClosureNode(this, cvec, runtime_get_class());
+    return new QoreClosureNode(this, cvec, static_class ? static_class : runtime_get_class());
 }
 
 QoreValue QoreClosureParseNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -170,6 +170,12 @@ QoreString* QoreClosureParseNode::getAsString(bool& del, int foff, ExceptionSink
 }
 
 int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    if (!parse_context.oflag) {
+        // a closure parsed in a class without an object context runs in the class context of its class, as the code
+        // of a static method does, also when it is created by a call's default value in the caller's context
+        // (issue #5907)
+        static_class = parse_get_class_priv();
+    }
     if (parse_context.oflag) {
         in_method = true;
         uf->setClassType(parse_context.oflag->getTypeInfo());
@@ -197,6 +203,9 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         }
         err = uf->parseInitClosure();
         uf->parseCommit();
+        if (uf->defaultsNeedObject()) {
+            defaults_need_object = true;
+        }
 
         // After parseCommit, the signature is available - create a typed callable type
         AbstractFunctionSignature* sig = uf->getUniqueSignature();
@@ -227,6 +236,9 @@ int QoreClosureParseNode::parseInitDeferred() {
         qore_ns_private* old_ns;
         thread_set_class_and_ns(parse_qc, parse_ns, old_qc, old_ns);
         rc = uf->parseInitClosure();
+        if (uf->defaultsNeedObject()) {
+            defaults_need_object = true;
+        }
         thread_set_class_and_ns(old_qc, old_ns);
     }
     uf->parseCommit();
@@ -276,5 +288,5 @@ QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) cons
         return new QoreObjectClosureNode(o, c_ctx, this, cvv);
     }
 
-    return new QoreClosureNode(this, cvv, runtime_get_class());
+    return new QoreClosureNode(this, cvv, static_class ? static_class : runtime_get_class());
 }

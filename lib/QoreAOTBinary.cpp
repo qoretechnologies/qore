@@ -3648,7 +3648,11 @@ static bool qoreAOTContainerValueTypeResolvable(const QoreAOTBinaryWriter& write
     QoreAOTTypeResolver resolver(pgm);
     std::string type_error;
     const QoreTypeInfo* rti = resolver.resolve(type_path, type_error);
-    return rti && QoreTypeInfo::equal(rti, ti);
+    // the type itself: QoreTypeInfo::equal() takes a deferred type of a hashdecl that the Program does not have as equal
+    // to the value's type of the same name, and a class of a module that failed to load as equal to the Program's own
+    // class of the same name, while a type that the Program has resolves to the same type object, as the complex types
+    // are kept for their element types and the class and hashdecl types are unique
+    return rti && rti == ti;
 }
 
 static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
@@ -4740,6 +4744,32 @@ static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,
     return false;
 }
 
+//! the variables that the expressions in values read on this thread bind to (see QoreAOTValueLocalsHelper)
+static thread_local LocalVar** aot_value_locals = nullptr;
+static thread_local int aot_value_num_locals = 0;
+static thread_local Var** aot_value_globals = nullptr;
+static thread_local int aot_value_num_globals = 0;
+static thread_local QoreProgram* aot_value_local_owner_pgm = nullptr;
+
+QoreAOTValueLocalsHelper::QoreAOTValueLocalsHelper(LocalVar** locals, int num_locals, Var** globals,
+        int num_globals, QoreProgram* local_owner_pgm) : old_locals(aot_value_locals),
+        old_num_locals(aot_value_num_locals), old_globals(aot_value_globals),
+        old_num_globals(aot_value_num_globals), old_local_owner_pgm(aot_value_local_owner_pgm) {
+    aot_value_locals = locals;
+    aot_value_num_locals = num_locals;
+    aot_value_globals = globals;
+    aot_value_num_globals = num_globals;
+    aot_value_local_owner_pgm = local_owner_pgm;
+}
+
+QoreAOTValueLocalsHelper::~QoreAOTValueLocalsHelper() {
+    aot_value_locals = old_locals;
+    aot_value_num_locals = old_num_locals;
+    aot_value_globals = old_globals;
+    aot_value_num_globals = old_num_globals;
+    aot_value_local_owner_pgm = old_local_owner_pgm;
+}
+
 QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end,
         std::string& error) const {
     const uint8_t* start = ptr;
@@ -5428,8 +5458,10 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 return QoreValue();
             }
             const uint8_t* ep = blob;
+            // the variables of the context that the value is read in, if any (see QoreAOTValueLocalsHelper)
             QoreValue rv = readOneExpr(*this, ep, blob_end, error, getProgram(),
-                nullptr, 0, nullptr, 0);
+                aot_value_locals, aot_value_num_locals, aot_value_globals, aot_value_num_globals,
+                aot_value_local_owner_pgm);
             if (!error.empty()) {
                 rv.discard(nullptr);
                 return QoreValue();
@@ -13798,10 +13830,18 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                 // Write flags: "lambda,in_method,type_context" (matches write_slot_CLOSURE_CREATE ref1 format)
                 std::string flags = std::string(closure->isLambda() ? "1" : "0") + ","
                     + (closure->isInMethod() ? "1" : "0") + "," + (closure->needsTypeContext() ? "1" : "0");
+                // ",1" after them: the default values use the closure's object (issue #5931); left out otherwise
+                if (closure->defaultsNeedObject()) {
+                    flags += ",1";
+                }
                 writer.writeStringRef(flags.c_str());
 
-                // Write class type path (ref2)
+                // Write class type path (ref2); for a closure that is not in a method, the class that it runs in
+                // (issue #5907)
                 const QoreTypeInfo* cti = ucf->getClassType();
+                if (!cti && !closure->isInMethod() && closure->getStaticClass()) {
+                    cti = closure->getStaticClass()->getTypeInfo();
+                }
                 writeTypePathRef(writer, cti);
 
                 if ((writer.feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
@@ -13828,8 +13868,10 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                     writer.writeU8(has_default ? 1 : 0);
                     if (has_default) {
                         std::string default_error;
+                        // in the slot domain of the closure's parent, so that a closure in the default value binds
+                        // the variables that it captures by their slots, as the closure's own captures do (#5903)
                         if (!qoreAOTWriteDefaultArgValuePayload(writer, sig->getDefaultArgList()[p],
-                                "closure", ucf->getName(), pname, &default_error)) {
+                                "closure", ucf->getName(), pname, &default_error, &parent_locals)) {
                             qoreAOTSetExprSerializationError(std::move(default_error));
                             return false;
                         }

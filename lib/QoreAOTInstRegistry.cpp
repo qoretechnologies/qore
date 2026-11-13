@@ -41,6 +41,8 @@
 #include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/VarRefNode.h"
 #include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/CallReferenceCallNode.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/QoreTimeZoneManager.h"
@@ -527,6 +529,7 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::ToIntChecked, {G::Base, G::Expr}, true},
     {O::ToFloatChecked, {G::Base, G::Expr}, true},
     {O::IteratorCreateSource, {G::IteratorCreate}},
+    {O::CheckCallTarget, {G::Expr}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {
@@ -1551,9 +1554,53 @@ static std::unique_ptr<QoreIRInstruction> readLValue(
 // Group 9: Expr - General expression instruction
 // ============================================================================
 
+//! Writes the call of a check of its target (QoreIROpcode::CheckCallTarget, issue #5784) without its arguments
+/** The check needs only what identifies the call: the method of a method call (whose receiver is the check's operand),
+    and the kind of a call through a call reference (whose callable is the operand); the arguments, which the call
+    evaluates after the check, can hold expressions that have no serialized form of their own.
+*/
+static bool instRegistryWriteCheckCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        if (const MethodCallNode* mc = dot->getMethodCall()) {
+            // the inline form of a method call (AOTExprKind::DOT_EVAL_TARGET): class, method (with its variant),
+            // pseudo flag, receiver (none: it is the operand) and no arguments
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_TARGET));
+            std::string class_path = instRegistryGetClassPath(mc->getClass(), mc->isPseudo());
+            ctx.writer.writeStringRef(class_path.c_str());
+            std::string method_ref = mc->getName() ? mc->getName() : "";
+            instRegistryAppendMethodVariantRef(method_ref, mc->getVariant(), mc->isPseudo());
+            ctx.writer.writeStringRef(method_ref.c_str());
+            ctx.writer.writeU8(mc->isPseudo() ? 1 : 0);
+            if (!ctx.writeExpr(ctx.writer, QoreValue())) {
+                return false;
+            }
+            ctx.writer.writeU8(0);
+            return true;
+        }
+    }
+    if (dynamic_cast<const CallReferenceCallNode*>(node)) {
+        // a call through a call reference (AOTExprKind::CALLREF_CALL): no callable (it is the operand) and no
+        // arguments
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CALLREF_CALL));
+        if (!ctx.writeExpr(ctx.writer, QoreValue())) {
+            return false;
+        }
+        ctx.writer.writeU8(0);
+        return true;
+    }
+    return instRegistryWriteCallTargetExpr(ctx, expr);
+}
+
 static bool writeExpr(AOTInstWriteCtx& ctx) {
     auto* ei = static_cast<const QoreIRExprInstruction*>(ctx.inst);
     bool expr_written = false;
+    if (ei->opcode == QoreIROpcode::CheckCallTarget) {
+        if (!instRegistryWriteCheckCallTargetExpr(ctx, ei->expr)) {
+            return false;
+        }
+        expr_written = true;
+    }
     if ((ei->opcode == QoreIROpcode::Call
             || ei->opcode == QoreIROpcode::CallMethod
             || ei->opcode == QoreIROpcode::CallStatic)
@@ -1926,6 +1973,47 @@ static std::unique_ptr<QoreIRInstruction> readCallDirect(
     return std::unique_ptr<QoreIRInstruction>(ci);
 }
 
+//! Returns a normal or static method of a class or of one of its base classes that is not committed yet, or nullptr
+static const QoreMethod* instRegistryFindPendingMethod(const qore_class_private& qcp, const char* method_name,
+        bool is_static) {
+    if (const QoreMethod* method = is_static ? qcp.parseFindLocalStaticMethod(method_name)
+            : qcp.parseFindLocalMethod(method_name)) {
+        return method;
+    }
+    if (qcp.scl) {
+        for (const BCNode* bc : *qcp.scl) {
+            if (bc && bc->sclass) {
+                if (const QoreMethod* method = instRegistryFindPendingMethod(*qore_class_private::get(*bc->sclass),
+                        method_name, is_static)) {
+                    return method;
+                }
+            }
+        }
+    }
+    return nullptr;
+}
+
+//! Returns the method of a direct method call, or nullptr if the class and its base classes have no such method
+/** A closure in a member initializer is read before the classes' methods are committed (see
+    QoreAOTBinaryDeserializer::resolveTypesAndMembers()), and a method that is not committed yet is not found by name
+    at run time: it is the method object of the class (or of a base class) that its variants are committed to (issue
+    #5901)
+*/
+static const QoreMethod* instRegistryFindDirectMethod(const QoreClass& qc, const char* method_name) {
+    if (const QoreMethod* method = qc.findMethod(method_name)) {
+        return method;
+    }
+    if (const QoreMethod* method = qc.findStaticMethod(method_name)) {
+        return method;
+    }
+    // normal methods of the hierarchy before static ones, as the calls are resolved when the code is parsed
+    const qore_class_private& qcp = *qore_class_private::get(qc);
+    if (const QoreMethod* method = instRegistryFindPendingMethod(qcp, method_name, false)) {
+        return method;
+    }
+    return instRegistryFindPendingMethod(qcp, method_name, true);
+}
+
 // ============================================================================
 // Group 11: CallMethodDirect - Direct method call
 // ============================================================================
@@ -1966,10 +2054,7 @@ static std::unique_ptr<QoreIRInstruction> readCallMethodDirect(
     if (class_path && *class_path) {
         qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && method_name && *method_name) {
-            method = qc->findMethod(method_name);
-            if (!method) {
-                method = qc->findStaticMethod(method_name);
-            }
+            method = instRegistryFindDirectMethod(*qc, method_name);
         }
     }
     if (!qc || !method) {
@@ -2035,10 +2120,7 @@ static std::unique_ptr<QoreIRInstruction> readInvokeMethodDirect(
     if (class_path && *class_path) {
         qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && method_name && *method_name) {
-            method = qc->findMethod(method_name);
-            if (!method) {
-                method = qc->findStaticMethod(method_name);
-            }
+            method = instRegistryFindDirectMethod(*qc, method_name);
         }
     }
     if (!qc || !method) {
@@ -2390,6 +2472,13 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
 static bool writeScopeEnter(AOTInstWriteCtx& ctx) {
     auto* si = static_cast<const QoreIRScopeEnterInstruction*>(ctx.inst);
     ctx.writer.writeU32(si->scope_id);
+    // the locals of the block, by name and slot, as a local instruction gives its local (#5867)
+    ctx.writer.writeU32(static_cast<uint32_t>(si->locals.size()));
+    for (size_t i = 0; i < si->locals.size(); ++i) {
+        const LocalVar* lv = si->locals[i];
+        ctx.writer.writeStringRef(lv ? lv->getName() : "");
+        ctx.writer.writeU32(i < si->local_slots.size() ? si->local_slots[i] : UINT32_MAX);
+    }
     return true;
 }
 
@@ -2399,6 +2488,22 @@ static std::unique_ptr<QoreIRInstruction> readScopeEnter(
         AOTInstReadCtx& ctx) {
     uint32_t scope_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     auto inst = std::make_unique<QoreIRScopeEnterInstruction>(scope_id);
+    if (ctx.reader.getHeader().version >= QORE_AOT_SCOPE_LOCALS_VERSION) {
+        uint32_t count = QoreAOTBinaryReader::readU32(ctx.ptr);
+        for (uint32_t i = 0; i < count; ++i) {
+            const char* lname = ctx.reader.readStringRef(ctx.ptr);
+            uint32_t slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+            // a local that the function does not have is not released
+            LocalVar* lv = ctx.resolveLocalBySlot(slot_id);
+            if (!lv) {
+                lv = ctx.resolveLocal(lname);
+            }
+            if (lv) {
+                inst->locals.push_back(lv);
+                inst->local_slots.push_back(slot_id);
+            }
+        }
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;

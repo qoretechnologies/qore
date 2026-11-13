@@ -80,6 +80,11 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Adding a Value in Front of a Typed List Keeps Its Type
+    The @ref plus_operator "+" operator gives a list of the type of a typed list when it adds a value in front of it,
+    as it does when it adds the value at the end (ex: \c list&lt;int&gt; for <tt>1 + l</tt> for a \c list&lt;int&gt;
+    \c l); it gave a \c list&lt;auto&gt;, so a value of another type could be assigned to an element of the result.
+
     @par Plain Function Bodies No Longer Inherit a Caller's Class Context
     A plain function's body could be parse-initialized in the class context of the method that first called it, which
     gave it access to that class's private and static members depending on the parse order; such code now raises a
@@ -351,6 +356,12 @@
     or loaded at runtime are no longer exported to the importing @ref Qore::Program "Program"; a program using such
     a constant must require the module declaring it, unless a module it requires reexports it; see
     @ref user_module_exports.
+
+    @par HttpServer::stop() Lets the Requests in Progress Finish
+    @ref HttpServer::HttpServer::stop() "HttpServer::stop()" and
+    @ref HttpServer::HttpServer::stopNoWait() "stopNoWait()" now drain the connections first, waiting at most the
+    new \c drain_timeout option, and @ref HttpServer::HttpServer::stopImmediate() "stopImmediate()" stops at once as
+    \c stop() did before.
 
     @par HttpServer Labels Responses by Their Data and With Registered Charset Names
     @ref httpserverintro "HttpServer" sends a binary response body without a \c Content-Type as
@@ -1654,6 +1665,42 @@
     - a @ref closure "closure" in a member initializer or in the default value of a method's parameter ran in the class
       context of the caller or of the object's class instead of the class that declares it, so it read a subclass's
       \c private:internal member with the same name or raised \c PRIVATE-MEMBER for a member read at run time
+    - in the IR, JIT and AOT @ref execution_modes "execution modes", a method call or a call through a method call
+      reference evaluated its arguments before it raised \c OBJECT-ALREADY-DELETED for an object that had been
+      deleted, or \c PSEUDO-METHOD-DOES-NOT-EXIST for a value without the method; as in the AST interpreter, no
+      argument is evaluated then
+    - a @ref closure "closure" whose parameter's default value used a local variable of the code that created it
+      (for example in a closure as the default value) crashed when it was called after that variable's scope was left;
+      the closure now captures the variables that its default values use
+    - the @ref logical_less_than_operator "<", @ref logical_less_than_or_equals_operator "<=",
+      @ref logical_greater_than_operator ">" and @ref logical_greater_than_or_equals_operator ">=" operators compared a
+      \c float with an or-nothing \c number (\c *number, \c *softnumber) as floats, losing the precision of the number
+      (issue #5875)
+    - the @ref logical_equality_operator "==" and @ref logical_inequality_operator "!=" operators compared an \c int or a
+      \c bool with an or-nothing \c float or \c int (ex: \c *float) as an \c int or \c bool (ex: \c 2 \c == \c 2.5
+      was @ref True; issue #5875)
+    - a weak assignment from a variable that holds a hash or a list shared with another owner (a literal of the
+      program, another variable) now gives the variable a copy of its own first, so that later changes made through
+      the variable are seen through the weak reference in every execution mode; previous releases shared the value,
+      and the weak reference then kept the old one; see the @ref weak_assignment_operator "weak assignment operator"
+
+    - a \c copy() call run by the @ref background "background operator" (ex: <tt>background obj.copy()</tt>, or
+      <tt>background copy()</tt> in a method) crashed the process; it now copies the object in every execution mode
+      and in programs compiled with \c qcc (issue #5917)
+    - a qualified call of a method of the object (<tt>Base::method()</tt>) raised \c BACKGROUND-ERROR in the
+      background in programs compiled with \c qcc, and \c METHOD-DOES-NOT-EXIST for an abstract method; it calls the
+      method of the class that it names, or that the object's class implements for an abstract method; programs
+      compiled with \c qcc before must be recompiled (issue #5933)
+    - a background call of a method of the object that compiled code dispatches by name (a call that the AOT runtime
+      could not resolve when it loaded the code) aborted a debug build when the thread was started, and a qualified
+      such call crashed when it was made; the thread now holds the object unless the name resolves only to a static
+      method, and a qualified call calls the method of the class that it names (issue #5917)
+    - the default values of a @ref closure "closure" created in a method did not see the closure's object in qcc code
+      or in a closure that they created; they are now in the object's context, as the closure's code is (see
+      @ref closure_default_values "closure default values")
+    - a @ref closure "closure" in the default value of a static method's parameter ran in the class context of the
+      caller, so it could not access the private members and methods of the class that declares it, as a closure in the
+      static method's code can
     - an object collected with a reference cycle could be freed while it was still in use, which could crash the
       process, when another thread released the last reference to it through a weak reference (or C++ code through
       an internal one, such as an HTTP/2 client connection's poll operation) while the object was being collected
@@ -1683,6 +1730,10 @@
     - @ref WebSocketUtil::ws_read_message() "ws_read_message()" read a 64-bit WebSocket frame length with its most
       significant bit set as a negative length, and then read the socket until the peer closed it, buffering without
       limit; such a frame is now an error (issue #5878)
+    - the parse result types of the @ref plus_operator "+", @ref minus_operator "-", @ref multiplication_operator "*"
+      and @ref division_operator "/" operators did not allow every value the operator gives at runtime (ex: \c float
+      for <tt>number * float</tt>), so a typed container built from the result raised \c RUNTIME-TYPE-ERROR, and the
+      AST interpreter gave a \c float instead of a \c number for \c / of a \c float and a \c *number (issue #5663)
     - an HTTP response without a message body whose \c Content-Type was an event stream with a parameter or in
       another case (e.g. \c text/event-stream;charset=utf-8) was sent with \c Content-Length: 0, which ended the
       stream for the client; see @ref Qore::Socket::sendHTTPResponse() "Socket::sendHTTPResponse()" (issue #5758)

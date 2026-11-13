@@ -67,6 +67,10 @@
 #include <set>
 #include <string>
 #include <typeinfo>
+#if defined(__linux__) || defined(__APPLE__)
+// dladdr() of the location of a frame; see qore_is_aot_code_location()
+#include <dlfcn.h>
+#endif
 
 #include <qore/ExceptionSink.h>
 #include <qore/QoreValue.h>
@@ -145,6 +149,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_to_bool", reinterpret_cast<void*>(&qore_rt_to_bool) },
     { "qore_rt_is_null_or_nothing", reinterpret_cast<void*>(&qore_rt_is_null_or_nothing) },
     { "qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref) },
+    { "qore_rt_unique_container", reinterpret_cast<void*>(&qore_rt_unique_container) },
+    { "qore_rt_unique_local_aot", reinterpret_cast<void*>(&qore_rt_unique_local_aot) },
     { "qore_rt_decref", reinterpret_cast<void*>(&qore_rt_decref) },
     { "qore_rt_decref_nothrow", reinterpret_cast<void*>(&qore_rt_decref_nothrow) },
     { "qore_rt_throw", reinterpret_cast<void*>(&qore_rt_throw) },
@@ -186,6 +192,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
     { "qore_rt_coerce_return", reinterpret_cast<void*>(&qore_rt_coerce_return) },
     { "qore_rt_coerce_nothing_return", reinterpret_cast<void*>(&qore_rt_coerce_nothing_return) },
+    { "qore_rt_call_target_is_valid_object", reinterpret_cast<void*>(&qore_rt_call_target_is_valid_object) },
+    { "qore_rt_call_target_needs_no_check", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check) },
+    { "qore_rt_call_target_needs_no_check_aot", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check_aot) },
+    { "qore_rt_check_call_target", reinterpret_cast<void*>(&qore_rt_check_call_target) },
+    { "qore_rt_check_call_target_aot", reinterpret_cast<void*>(&qore_rt_check_call_target_aot) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
     { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
     { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
@@ -1010,6 +1021,12 @@ extern "C" DLLEXPORT int64_t qore_rt_is_null_or_nothing(uint64_t val) {
 
 // --- Refcount helpers ---
 
+extern "C" DLLEXPORT uint64_t qore_rt_unique_container(uint64_t val) {
+    bool copied = false;
+    QoreValue unique = qore_ir_unique_container(fromBits(val), copied);
+    return copied ? toBits(unique) : val;
+}
+
 extern "C" DLLEXPORT void qore_rt_incref(uint64_t val) {
     QoreValue v = fromBits(val);
     if (v.needsRef()) {
@@ -1643,6 +1660,175 @@ static QoreValue qore_rt_accept_return_statement_nothing(const QoreTypeInfo* ti,
 */
 extern "C" DLLEXPORT void qore_rt_raise_return_statement_nothing(const QoreTypeInfo* ti, ExceptionSink* xsink) {
     qore_rt_accept_return_statement_nothing(ti, xsink).discard(xsink);
+}
+
+//! Returns true if @a target is an object that has not been deleted (issue #5784)
+static inline bool qore_call_target_is_valid_object(const QoreValue& target) {
+    if (!target.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = target.getPtr();
+    return n && n->getType() == NT_OBJECT && static_cast<const QoreObject*>(n)->isValid();
+}
+
+extern "C" DLLEXPORT bool qore_rt_call_target_is_valid_object(uint64_t target_bits) {
+    QoreValue target = fromBits(target_bits);
+    if (!target.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = target.getPtr();
+    return n && n->getType() == NT_OBJECT && qore_object_private::isValidInline(static_cast<const QoreObject*>(n));
+}
+
+// the fields read by the JIT's inline test for a valid object (QoreJITObjectLayout): a plain 32-bit load of the
+// status must see what QoreObject::isValid() sees, and a deleted object's type must fit the 11-bit field
+static_assert(std::is_same<decltype(qore_object_private::status), std::atomic<int>>::value,
+    "the JIT's inline test of an object's status reads a std::atomic<int>");
+static_assert(sizeof(std::atomic<int>) == sizeof(int32_t) && std::atomic<int>::is_always_lock_free,
+    "the JIT's inline test of an object's status reads it as a lock-free 32-bit int");
+static_assert(NT_OBJECT > 0 && NT_OBJECT < (1 << 10), "the JIT's inline test reads the type as an 11-bit field");
+
+//! Finds the position of the type bitfield of an AbstractQoreNode in its storage (see qore_jit_object_layout())
+/** Returns true if exactly one bit position gives the type of every node given.
+*/
+static bool qore_jit_find_type_bits(const std::vector<const AbstractQoreNode*>& nodes, uint32_t& byte_offset,
+        uint32_t& shift) {
+    constexpr size_t size = sizeof(AbstractQoreNode);
+    constexpr uint32_t mask = (1u << 11) - 1;
+    int found = -1;
+    for (size_t bit = 0; bit + 11 <= size * 8; ++bit) {
+        size_t byte = bit / 8;
+        if (byte + sizeof(uint32_t) > size) {
+            break;
+        }
+        bool match = true;
+        for (const AbstractQoreNode* n : nodes) {
+            uint8_t bytes[sizeof(uint32_t)];
+            std::memcpy(bytes, reinterpret_cast<const unsigned char*>(n) + byte, sizeof(bytes));
+            // little-endian, as the JIT code loads it
+            uint32_t word = static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8)
+                | (static_cast<uint32_t>(bytes[2]) << 16) | (static_cast<uint32_t>(bytes[3]) << 24);
+            if (((word >> (bit % 8)) & mask) != static_cast<uint32_t>(n->getType())) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            if (found >= 0) {
+                // more than one position: not known
+                return false;
+            }
+            found = static_cast<int>(bit);
+        }
+    }
+    if (found < 0) {
+        return false;
+    }
+    byte_offset = static_cast<uint32_t>(found / 8);
+    shift = static_cast<uint32_t>(found % 8);
+    return true;
+}
+
+//! Returns the layout read by JIT code, computed once (see qore_jit_object_layout())
+static std::unique_ptr<QoreJITObjectLayout> qore_jit_compute_object_layout() {
+    // the JIT code loads the type's word as little-endian
+    uint16_t endian_probe = 1;
+    uint8_t endian_byte;
+    std::memcpy(&endian_byte, &endian_probe, 1);
+    if (endian_byte != 1) {
+        return nullptr;
+    }
+    // nodes of several types whose values tell every position apart: 3 (string), 4 (date), 7 (binary), 8 (list),
+    // 9 (hash), 11 (number)
+    ExceptionSink xsink;
+    ReferenceHolder<QoreStringNode> str(new QoreStringNode, &xsink);
+    ReferenceHolder<DateTimeNode> date(DateTimeNode::makeAbsolute(nullptr, (int64)0), &xsink);
+    ReferenceHolder<BinaryNode> bin(new BinaryNode, &xsink);
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreNumberNode> num(new QoreNumberNode, &xsink);
+    std::vector<const AbstractQoreNode*> nodes = {*str, *date, *bin, *list, *hash, *num};
+    std::unique_ptr<QoreJITObjectLayout> layout(new QoreJITObjectLayout);
+    if (!qore_jit_find_type_bits(nodes, layout->type_byte_offset, layout->type_shift)) {
+        return nullptr;
+    }
+    layout->priv_offset = qore_object_private::getPrivOffset();
+    layout->status_offset = qore_object_private::getStatusOffset();
+    layout->deleted_status = OS_DELETED;
+    return layout;
+}
+
+const QoreJITObjectLayout* qore_jit_object_layout() {
+    static std::unique_ptr<QoreJITObjectLayout> layout = qore_jit_compute_object_layout();
+    return layout.get();
+}
+
+extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits) {
+    return qore_call_target_needs_no_check(fromBits(call_bits), fromBits(target_bits));
+}
+
+extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t target_bits) {
+    // a slot without an expression is a direct method call (AOTExprKind::DOT_EVAL_TARGET)
+    if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
+        return qore_call_target_is_valid_object(fromBits(target_bits));
+    }
+    return qore_call_target_needs_no_check(fromBits(ctx->exprs[slot]), fromBits(target_bits));
+}
+
+int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
+    const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr;
+    // the common case first: see qore_call_target_needs_no_check()
+    if (qore_call_target_needs_no_check(call, target)) {
+        return 0;
+    }
+    // dispatched on the node types, without RTTI: the check is made for every call that it is emitted for
+    if (node && node->getType() == NT_FUNCREFCALL) {
+        // as CallReferenceCallNode::evalImpl(): a value that is not a call reference raises its error before the
+        // arguments are evaluated
+        const AbstractQoreNode* target_node = target.hasNode() ? target.getInternalNode() : nullptr;
+        qore_type_t target_type = target_node ? target_node->getType() : NT_NOTHING;
+        if (target_type == NT_RUNTIME_CLOSURE) {
+            // a closure is always callable, and is not a reference to a method of an object
+            return 0;
+        }
+        if (target_type != NT_FUNCREF) {
+            qore_raise_not_call_reference(xsink, static_cast<const CallReferenceCallNode*>(node)->loc, target);
+            return -1;
+        }
+        // a resolved call reference (as qore_rt_call_closure_fast_impl() dispatches it): an unresolved one is a parse
+        // node that needs evaluation, never a value
+        assert(dynamic_cast<const ResolvedCallReferenceNode*>(target_node));
+        return qore_call_reference_check_target(static_cast<const ResolvedCallReferenceNode*>(target_node), xsink);
+    }
+    if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        return dot->checkReceiver(target, xsink);
+    }
+    return 0;
+}
+
+extern "C" DLLEXPORT void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink) {
+    qore_check_call_target(fromBits(call_bits), fromBits(target_bits), xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits,
+        ExceptionSink* xsink) {
+    // a direct method call keeps the target of the call in its slot (AOTExprKind::DOT_EVAL_TARGET), not its
+    // expression: the check is made from the target
+    if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
+        // the common case first: a method call on an object that has not been deleted has nothing to check
+        if (qore_call_target_is_valid_object(fromBits(target_bits))) {
+            return;
+        }
+        const QoreAOTCallTarget& target = ctx->call_targets[slot];
+        const char* name = target.method ? target.method->getName() : target.method_name;
+        if (name) {
+            qore_check_method_call_receiver(fromBits(target_bits), name, target.qc, target.method, target.variant,
+                target.is_pseudo, xsink);
+        }
+        return;
+    }
+    qore_rt_check_call_target(ctx->exprs[slot], target_bits, xsink);
 }
 
 //! Checks the value of a return statement against the declared return type, as the AST interpreter checks it in the
@@ -8544,7 +8730,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
     }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8588,7 +8775,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         return toBits(result);
     }
 
-    xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+    // as the AST interpreter raises it (issue #5784)
+    qore_raise_not_call_reference(xsink, nullptr, ref_val);
     return toBits(QoreValue());
 }
 
@@ -8599,7 +8787,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8637,7 +8826,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     if (ntype == NT_RUNTIME_CLOSURE || ntype == NT_FUNCREF) {
         callref = static_cast<ResolvedCallReferenceNode*>(const_cast<AbstractQoreNode*>(node));
     } else {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8661,7 +8851,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
     }
     QoreValue ref_val = fromBits(ref_bits);
     if (!ref_val.hasNode()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot call a NOTHING value as a closure/call reference");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8700,7 +8891,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
     if (ntype == NT_RUNTIME_CLOSURE || ntype == NT_FUNCREF) {
         callref = static_cast<ResolvedCallReferenceNode*>(const_cast<AbstractQoreNode*>(node));
     } else {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "value is not a call reference or closure");
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_not_call_reference(xsink, nullptr, ref_val);
         return toBits(QoreValue());
     }
 
@@ -8721,8 +8913,21 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         return toBits(QoreValue());
     }
 
-    QoreValue result = callref->invoke(*arg_list, xsink);
-    return toBits(result);
+    if (nargs < 2) {
+        // a single argument has no order
+        return toBits(callref->invoke(*arg_list, xsink));
+    }
+    ValueHolder result(callref->invoke(*arg_list, xsink), xsink);
+    // the list holds the only references of the arguments that the frame gave over: they are released last argument
+    // first, as the AST interpreter releases the parameters that took them over when the callee returns (the list
+    // releases its elements first to last); a list that the callee kept is left as it is
+    if (arg_list->is_unique()) {
+        qore_list_private* priv = qore_list_private::get(**arg_list);
+        for (size_t i = priv->length; i > 0; --i) {
+            ValueHolder arg(priv->takeExists(i - 1), xsink);
+        }
+    }
+    return toBits(result.release());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs,
@@ -11457,8 +11662,7 @@ public:
             const StatementBlock* statements, const QoreProgramLocation* call_loc = nullptr,
             const QoreProgramLocation* callee_loc = nullptr)
             : thread_data(thread_data), call_name(call_name), statements(statements) {
-        prev = push_native_call_stack_location(thread_data, this, call_loc, loc, saved_stmt, saved_pgm, runtime_loc,
-            callee_loc);
+        push(call_loc, callee_loc);
     }
 
     //! Pops the frame and restores the caller's runtime location, which the callee changed
@@ -11487,6 +11691,22 @@ public:
         return saved_stmt;
     }
 
+protected:
+    //! Creates the frame without pushing it, for a derived class that pushes it once it is constructed
+    /** The frame is pushed by the most derived class, so that other threads, which can read it from then on, find it
+        fully constructed with its final type
+    */
+    DLLLOCAL QoreNativeCallStackLocation(void* thread_data, const std::string& call_name,
+            const StatementBlock* statements, std::nullptr_t)
+            : thread_data(thread_data), call_name(call_name), statements(statements) {
+    }
+
+    //! Pushes the frame; see the public constructor
+    DLLLOCAL void push(const QoreProgramLocation* call_loc, const QoreProgramLocation* callee_loc) {
+        prev = push_native_call_stack_location(thread_data, this, call_loc, loc, saved_stmt, saved_pgm, runtime_loc,
+            callee_loc);
+    }
+
 private:
     //! the data of the thread, which the caller got once (QoreNativeEntrySlots::thread_data)
     void* thread_data;
@@ -11504,12 +11724,59 @@ private:
     const QoreStackLocation* prev;
 };
 
+//! The call stack frame of a call that AOT-compiled code makes directly to native code of user code
+/** The callee has no frame on the stack of local variables (and, run inline, no native frame either): AOT-compiled
+    code keeps its local variables in native code and pushes no frame boundary for a direct call, so that the call
+    costs nothing for get_local_vars() and set_local_var_value(); these find the frame by its type
+    (qore_is_aot_native_call_frame()) and raise an exception instead of giving the variables of another frame
+    (issue #5890).  The type is the only difference: it is set when the frame is constructed, as the type of a
+    QoreNativeCallStackLocation is, so that the call does the same work as before.
+*/
+class QoreAOTNativeCallStackLocation final : public QoreNativeCallStackLocation {
+public:
+    //! Pushes the frame; see QoreNativeCallStackLocation
+    DLLLOCAL QoreAOTNativeCallStackLocation(void* thread_data, const std::string& call_name,
+            const StatementBlock* statements, const QoreProgramLocation* call_loc = nullptr,
+            const QoreProgramLocation* callee_loc = nullptr)
+            : QoreNativeCallStackLocation(thread_data, call_name, statements, nullptr) {
+        push(call_loc, callee_loc);
+    }
+};
+
+// AOT-compiled code allocates the storage of either frame with the size and alignment that it got when it was
+// compiled
+static_assert(sizeof(QoreAOTNativeCallStackLocation) == sizeof(QoreNativeCallStackLocation));
+static_assert(alignof(QoreAOTNativeCallStackLocation) == alignof(QoreNativeCallStackLocation));
+
 size_t qore_rt_native_call_frame_size() {
     return sizeof(QoreNativeCallStackLocation);
 }
 
 size_t qore_rt_native_call_frame_align() {
     return alignof(QoreNativeCallStackLocation);
+}
+
+bool qore_is_aot_native_call_frame(const QoreStackLocation* loc) {
+    return dynamic_cast<const QoreAOTNativeCallStackLocation*>(loc) != nullptr;
+}
+
+bool qore_is_aot_code_location(const QoreProgramLocation* loc) {
+    // a location that is not known is taken to be one of AOT-compiled code
+    if (!loc) {
+        return true;
+    }
+    // the constant locations of AOT-compiled code have a line and no columns (QoreIRToLLVM::getAotLocationConstant())
+    if (loc->start_line <= 0 || loc->start_column >= 0 || loc->end_column >= 0) {
+        return false;
+    }
+#if defined(__linux__) || defined(__APPLE__)
+    // and are held by the image of the code; the locations that the runtime creates, also without columns (from the
+    // location tables of source-stripped AOT metadata, for the debug IR of AOT-compiled code), are allocated
+    Dl_info info;
+    return dladdr(loc, &info) != 0;
+#else
+    return true;
+#endif
 }
 
 extern "C" DLLEXPORT void qore_rt_push_native_call_frame(void* storage, void* thread_data,
@@ -11530,7 +11797,7 @@ static void qore_rt_push_native_call_frame_aot_impl(void* storage, void* thread_
     const UserVariantBase* callee = target.uvb ? target.uvb
         : (target.variant ? target.variant->getUserVariantBase() : nullptr);
     static const std::string unknown_call_name;
-    new (storage) QoreNativeCallStackLocation(thread_data, callee ? callee->getCallName() : unknown_call_name,
+    new (storage) QoreAOTNativeCallStackLocation(thread_data, callee ? callee->getCallName() : unknown_call_name,
         callee ? callee->getStatementBlock() : nullptr, call_loc,
         inline_body && callee ? callee->getAOTBodyLocation() : nullptr);
 }
@@ -11567,14 +11834,14 @@ extern "C" DLLEXPORT void qore_rt_push_native_call_frame_aot_named(void* storage
         name = qore_rt_intern_native_call_name(call_name);
         call_name_cache->store(name, std::memory_order_release);
     }
-    new (storage) QoreNativeCallStackLocation(thread_data, *name, nullptr, call_loc, callee_loc);
+    new (storage) QoreAOTNativeCallStackLocation(thread_data, *name, nullptr, call_loc, callee_loc);
 }
 
 extern "C" DLLEXPORT void qore_rt_push_native_closure_call_frame(void* storage) {
     assert(storage);
     // the name of the frame of a closure call, as an AST call of a closure names it
     static const std::string closure_call_name("<anonymous closure>");
-    new (storage) QoreNativeCallStackLocation(get_thread_data_for_native_calls(), closure_call_name, nullptr);
+    new (storage) QoreAOTNativeCallStackLocation(get_thread_data_for_native_calls(), closure_call_name, nullptr);
 }
 
 extern "C" DLLEXPORT void qore_rt_pop_native_call_frame(void* storage) {
@@ -13417,6 +13684,12 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
     if (jit_obe_handlers.size() <= start) {
         return;
     }
+    // handlers lowered inline (or discarded by a deopt) are only dropped: nothing runs, so no sink and no slot cache
+    // state are needed (qore#5927)
+    if (inline_lowered) {
+        jit_obe_handlers.resize(start);
+        return;
+    }
 
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
@@ -13460,8 +13733,9 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
         current_native_ir_slot_cache_active, saved_native_slot_cache_active,
         clear_stale_outer_slot_cache};
 
-    // Skip handler execution if handlers were already inlined; just clean up the vector
-    if (!inline_lowered) {
+    // run the handlers registered since saved_count (handlers lowered inline returned above)
+    assert(!inline_lowered);
+    {
         // Execute in reverse order (LIFO) — matching the AST's
         // StatementBlock::execIntern() semantics.
         for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
@@ -13708,6 +13982,30 @@ extern "C" DLLEXPORT void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int
 extern "C" DLLEXPORT LocalVar* qore_rt_aot_local_var(QoreAOTContext* ctx, int32_t idx) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return ctx->locals[idx];
+}
+
+extern "C" DLLEXPORT void qore_rt_unique_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    LocalVar* var = ctx->locals[idx];
+    if (!var || var->closureUse()) {
+        return;
+    }
+    // the variable of the frame: a local that is not a closure variable belongs to one thread, so no lock is needed
+    LocalVarValue* lvar = thread_try_find_lvar(var);
+    if (!lvar) {
+        return;
+    }
+    bool copied = false;
+    QoreValue unique = qore_ir_unique_container(lvar->val.getValue(), copied);
+    if (!copied) {
+        return;
+    }
+    // the variable takes the copy; the container it held is shared, so releasing the variable's reference cannot
+    // destroy it
+    AbstractQoreNode* old = lvar->val.assign(unique);
+    if (old) {
+        old->deref(xsink);
+    }
 }
 
 extern "C" DLLEXPORT void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
@@ -16000,6 +16298,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 // the container of a variable that a weak reference is taken of (qore#5756)
                 if (lvh.getType() == NT_HASH || lvh.getType() == NT_LIST) {
                     lvh.ensureUnique();
+                }
+                // the value of the variable as it is read, taken under the lock of the variable (qore#5847); a weak
+                // reference that the variable holds reads as its target
+                res = lvh.getReferencedValue();
+                switch (res.getType()) {
+                    case NT_WEAKREF:
+                    case NT_WEAKREF_HASH:
+                    case NT_WEAKREF_LIST: {
+                        ValueHolder weak_holder(res, xsink);
+                        res = (res.getType() == NT_WEAKREF
+                            ? QoreValue(weak_holder->get<const WeakReferenceNode>()->get())
+                            : res.getType() == NT_WEAKREF_HASH
+                            ? QoreValue(weak_holder->get<const WeakHashReferenceNode>()->get())
+                            : QoreValue(weak_holder->get<const WeakListReferenceNode>()->get())).refSelf();
+                        break;
+                    }
+                    default:
+                        break;
                 }
                 break;
             case LVUnaryOp::Shift:
@@ -18780,8 +19096,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return false;
     }
     if (!o->isValid()) {
-        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
-            "already been deleted", qc->getName(), method->getName());
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
         result = toBits(QoreValue());
         return true;
     }
@@ -18983,8 +19299,8 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     }
     if (qore_rt_same_class(o->getClass(), qc) || qore_rt_same_class(o->getClass(), method->getClass())) {
         if (!o->isValid()) {
-            qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
-                "already been deleted", qc->getName(), method->getName());
+            // as the AST interpreter raises it (issue #5784)
+            qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
             return toBits(QoreValue());
         }
         // Use evalTmpArgs to preserve ReferenceNode values in the pre-evaluated arg list while still honoring the
@@ -21329,8 +21645,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
 }
 
 //! Background self-method call (AOT mode): takes method name string for runtime resolution
-extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
+/** @param class_ref for a qualified call (Class::method()), the class that the call was resolved on when it was
+    compiled (encoded with qore_aot_encode_class_ref()), otherwise an empty string
+    @param method_name the name of the method as written in the call (qualified for a qualified call)
+
+    issue #5933: a qualified call is not virtual: it calls the method of the class that it was resolved on when it
+    was compiled, which must be the class of the object or a class that it inherits; resolving the qualified name at
+    run time from the root namespace could find another class with the same name
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot_v2(const char* class_ref,
         const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(class_ref);
     assert(method_name);
 
     // Get current self + class context
@@ -21347,19 +21672,39 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
     if (!cls) {
         cls = qore_class_private::get(*self->getClass());
     }
+    const qore_class_private* method_cls = cls;
+    const char* name = method_name;
+    NamedScope scope(method_name);
+    if (*class_ref) {
+        assert(scope.size() > 1);
+        const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), class_ref, false);
+        if (!qc) {
+            xsink->raiseException("BACKGROUND-ERROR", "cannot resolve the class of background method call '%s'",
+                method_name);
+            return toBits(QoreValue());
+        }
+        bool priv;
+        if (!self->getClass()->getClass(*qc, priv)) {
+            xsink->raiseException("BACKGROUND-ERROR", "cannot make background method call '%s' on an object of "
+                "class '%s', which does not inherit class '%s'", method_name, self->getClassName(), qc->getName());
+            return toBits(QoreValue());
+        }
+        method_cls = qore_class_private::get(*qc);
+        name = scope.getIdentifier();
+    }
     ClassAccess access = Public;
-    const QoreMethod* method = cls->runtimeFindCommittedMethod(method_name, access, cls);
+    const QoreMethod* method = method_cls->runtimeFindCommittedMethod(name, access, cls);
     if (!method) {
         xsink->raiseException("BACKGROUND-ERROR", "cannot resolve method '%s' on class '%s'",
-            method_name, cls->name.c_str());
+            method_name, method_cls->name.c_str());
         return toBits(QoreValue());
     }
 
-    // Build QoreListNode from pre-evaluated args
-    QoreListNode* arg_list = nullptr;
+    // Build QoreListNode from pre-evaluated args; held until the call node takes it, so that it is released if
+    // making the node fails
+    ReferenceHolder<QoreListNode> arg_list(nargs > 0 ? new QoreListNode(autoTypeInfo) : nullptr, xsink);
     if (nargs > 0) {
-        arg_list = new QoreListNode(autoTypeInfo);
-        qore_list_private* priv = qore_list_private::get(*arg_list);
+        qore_list_private* priv = qore_list_private::get(**arg_list);
         priv->reserve(nargs);
         for (int i = 0; i < nargs; i++) {
             QoreValue val = fromBits(args[i]);
@@ -21370,18 +21715,33 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
         }
     }
 
-    // Create a temporary SelfFunctionCallNode with resolved method identity
+    // Create a temporary SelfFunctionCallNode with resolved method identity; the call of an abstract method is
+    // dispatched by name (see SelfFunctionCallNode::evalImpl())
     // strdup gives NamedScope ownership of the name string (del=true)
     SelfFunctionCallNode temp_sfcn(&loc_builtin, strdup(method_name),
         nullptr, method, method->getClass(), cls);
 
-    // Create SetSelfFunctionCallNode which captures current self/class context and takes arg_list ownership
+    // Create SetSelfFunctionCallNode which captures current self/class context and takes arg_list ownership (the
+    // node is allocated before the argument is evaluated, so a failed allocation leaves the list in its holder)
     // do_op_background copies the expression; the original must be freed after; releasing it releases its
     // reference to self as well (SetSelfFunctionCallNode::derefImpl())
-    SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(temp_sfcn, arg_list);
-    QoreValue result = doBackgroundWithLocation(&loc_builtin, QoreValue(call_node), xsink);
-    QoreValue(call_node).discard(xsink);
+    ReferenceHolder<SetSelfFunctionCallNode> call_node(new SetSelfFunctionCallNode(temp_sfcn, arg_list.release()),
+        xsink);
+    QoreValue result = doBackgroundWithLocation(&loc_builtin, QoreValue(*call_node), xsink);
     return toBits(result);
+}
+
+//! The background self-method call helper of AOT code compiled before issue #5933, which took no class reference
+/** A standalone executable compiled by an older qcc and linked to this libqore dynamically is not refused by a
+    runtime identity check; it calls this symbol with the arguments of the old helper, so it raises an exception
+    instead of calling qore_rt_background_self_call_aot_v2() with arguments that it does not take
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(const char* method_name, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    xsink->raiseException("AOT-RUNTIME-ERROR", "the background call of method '%s' was compiled by an older version "
+        "of qcc, whose code this version of Qore no longer supports; recompile the program",
+        method_name ? method_name : "<unknown>");
+    return toBits(QoreValue());
 }
 
 namespace {
@@ -22198,6 +22558,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_call_aot_v2_throwing(
+        const char* class_ref, const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_self_call_aot_v2(class_ref, method_name, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+//! The throwing variant of the helper of AOT code compiled before issue #5933 (see
+//! qore_rt_background_self_call_aot())
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_self_call_aot_throwing(
         const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
     uint64_t result = qore_rt_background_self_call_aot(method_name, args, nargs, xsink);

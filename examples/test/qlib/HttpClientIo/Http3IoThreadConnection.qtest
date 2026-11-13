@@ -60,6 +60,8 @@ class RecordingManager inherits HttpClientIo::HttpClientConnectionManager {
         list<hash<auto>> records();
         #! the IDs of the connections recorded
         hash<string, bool> ids();
+        #! True to skip handleConnectionResult() for failed connections, as when it runs after the retry
+        bool skip_failed_results;
     }
 
     constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts)
@@ -70,6 +72,27 @@ class RecordingManager inherits HttpClientIo::HttpClientConnectionManager {
     list<HttpClientIo::HttpClientConnection> getConnections(*string key) {
         AutoLock al(m);
         return map $1.conn, records, !key || $1.key == key;
+    }
+
+    #! Returns the address families recorded as failed for the given origin
+    list<int> getFailedFamilies(string key) {
+        AutoReadLock al(pool_lock);
+        return (map $1.toInt(), keys h3_failed_families{key}) ?? ();
+    }
+
+    #! Skips handleConnectionResult() for failed connections, as when it processes a failure only after the retry
+    #! of the request has run (the request is woken before it runs): the failed connection stays in the pool for the
+    #! retry, which evicts it
+    skipFailedResults() {
+        skip_failed_results = True;
+    }
+
+    handleConnectionResult(string key, HttpClientIo::HttpClientConnection conn,
+            hash<SocketPollResultInfo> result) {
+        if (skip_failed_results && (result.ex || conn.getPollOperation().hasError())) {
+            return;
+        }
+        HttpClientIo::HttpClientConnectionManager::handleConnectionResult(key, conn, result);
     }
 
     private submitConnectionToController(string key, HttpClientIo::HttpClientConnection conn, bool initial = True) {
@@ -109,6 +132,9 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
     constructor() : Test("Http3IoThreadConnectionTest", "1.0") {
         addTestCase("an asynchronous request retries an HTTP/3 connection", \retryTest());
         addTestCase("an asynchronous request tries another address family", \familyFallbackTest());
+        addTestCase("the retry tries another address family when it evicts the failed connection first",
+            \familyFallbackEvictedTest());
+        addTestCase("the family of a failed connection that a retry evicts is recorded", \evictedFamilyRecordedTest());
         addTestCase("a race of HTTP/3 and HTTP/2 made in an I/O worker keeps HTTP/3", \raceInWorkerTest());
         addTestCase("the bind of an HTTP/3 socket is subject to the sandbox", \sandboxBindTest());
         set_return_value(main());
@@ -181,6 +207,53 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
             list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
             assertEq((AF_INET6, AF_INET), map cast<HttpClientIo::Http3ClientConnection>($1).getAddressFamily(),
                 conns, api);
+        }
+    }
+
+    #! The retry of a request tries another address family although it evicts the failed connection before the
+    #! failure is processed
+    /** The failure of a connection is processed by handleConnectionResult() on the I/O thread, which can run after
+        the retry of the request has evicted the connection from the pool; the eviction records the family, so that
+        the retry does not connect in it again.  handleConnectionResult() is skipped for the failed connections, which
+        forces that order: without the fix, the families were (v6, v6, v4)
+    */
+    familyFallbackEvictedTest() {
+        if (!checkDualStack()) {
+            return;
+        }
+        string url = sprintf("https://localhost:%d", quic_port);
+        foreach string api in (Apis) {
+            RecordingManager mgr = getManager({"protocol": "h3", "max_request_retries": 2});
+            on_exit mgr.closeAll();
+            mgr.skipFailedResults();
+            assertEq("reached", get(mgr, url, api), api);
+            list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
+            assertEq((AF_INET6, AF_INET), map cast<HttpClientIo::Http3ClientConnection>($1).getAddressFamily(),
+                conns, api);
+        }
+    }
+
+    #! The address family of a failed HTTP/3 connection is recorded when the retry of its request evicts it
+    /** The failure is processed by handleConnectionResult(), which is skipped here, as when it runs after the retry;
+        the eviction records it (without the fix, nothing was recorded, and the retry connected in the same family);
+        "localhost" need not resolve to both families for this case
+    */
+    evictedFamilyRecordedTest() {
+        # nothing receives datagrams on this port
+        int port = get_free_port("127.0.0.1");
+        string url = sprintf("https://127.0.0.1:%d", port);
+        foreach string api in (Apis) {
+            RecordingManager mgr = getManager({"protocol": "h3", "max_request_retries": 1});
+            on_exit mgr.closeAll();
+            mgr.skipFailedResults();
+            try {
+                get(mgr, url, api);
+                fail(api + ": no exception raised");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, api + ": " + ex.desc);
+            }
+            assertEq((AF_INET,), mgr.getFailedFamilies(sprintf("127.0.0.1:%d", port)), api + ": the family is "
+                "recorded");
         }
     }
 

@@ -34,6 +34,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreEventNotifier.h"
@@ -239,8 +240,23 @@ QoreHashNode* Http3ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
             case H3State::CONNECTING:
                 return handleConnecting(xsink);
 
-            case H3State::READING:
-                return handleReading(xsink);
+            case H3State::READING: {
+#ifdef DEBUG
+                // the hold is read once per pass: the test can release it while the pass runs
+                dbg_read_pass_held = QoreHttpClientDrainDebug::get().hold.load(std::memory_order_acquire);
+#endif
+                QoreHashNode* rv = handleReading(xsink);
+#ifdef DEBUG
+                // a test checks that no pass leaves completed streams without a re-poll (issue #5839); a streaming
+                // request registered by another thread meanwhile (QuicSession::setStreamStreaming()) can add a
+                // completed stream after the pass, so the check is only exact for requests that do not stream
+                if (rv && inner_op && !dbg_read_pass_held) {
+                    std::shared_ptr<QuicSession> check_session = inner_op->getSession();
+                    qore_dbg_http_client_check_read_pass(rv, check_session && check_session->hasCompletedStreams());
+                }
+#endif
+                return rv;
+            }
 
             case H3State::WAIT_READ:
                 setOpenState(H3State::READING, "cycle-start");
@@ -331,6 +347,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     }
 
     int total_drain_count = 0;
+    const int drain_limit = qore_http_client_drain_limit(MAX_DRAIN_ITERATIONS);
     QoreHashNode* last_poll_info = nullptr;
 
     while (true) {
@@ -480,9 +497,9 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 break;
             }
             had_output = true;
-            if (++total_drain_count > MAX_DRAIN_ITERATIONS) {
-                break;
-            }
+            // a response taken from the operation is always dispatched: each continuePoll() call yields one at most,
+            // and the loop stops calling it at the drain limit below (issue #5839)
+            ++total_drain_count;
             empty_read_count = 0;
 
             QoreHashNode* output = output_val->get<QoreHashNode>();
@@ -580,7 +597,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         // there may be more completed streams — loop to fetch them.
         // If C++ returned poll_info (no more completed streams, did I/O), or we
         // got no output, we're done for this cycle.
-        if (!poll_info && had_output && total_drain_count < MAX_DRAIN_ITERATIONS) {
+        if (!poll_info && had_output && total_drain_count < drain_limit) {
             continue;
         }
         break;
@@ -600,6 +617,14 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         }
     }
 
+    // the completed streams that the pass leaves in the session, at the drain limit or when the operation returned a
+    // poll info with the stream it took, are dispatched by a pass that runs at once (issue #5839)
+    bool remaining;
+    {
+        std::shared_ptr<QuicSession> drain_session = inner_op->getSession();
+        remaining = drain_session && drain_session->hasCompletedStreams();
+    }
+
     bool dispatched;
     {
         AutoLocker al(stream_lock);
@@ -608,17 +633,17 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     if (dispatched) {
         setOpenState(H3State::WAIT_READ, "response-dispatched");
         if (last_poll_info) {
-            return last_poll_info;
+            return qore_http_client_finish_read_pass(last_poll_info, remaining, xsink);
         }
         // carry the QUIC timer deadline so ngtcp2's keep-alive still fires
         // while we wait for the next response (see h3_set_quic_poll_timeout)
-        return h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
-            inner_op, xsink);
+        return qore_http_client_finish_read_pass(h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
+            inner_op, xsink), remaining, xsink);
     }
 
     if (last_poll_info) {
         empty_read_count = 0;
-        return last_poll_info;
+        return qore_http_client_finish_read_pass(last_poll_info, remaining, xsink);
     }
 
     ++empty_read_count;
@@ -636,8 +661,8 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     // QUIC timer deadline the I/O thread sleeps until a packet arrives, and a
     // peer that stays silent while computing a slow reply never sends one --
     // so the keep-alive PING is never emitted and the session idle-closes.
-    return h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
-        inner_op, xsink);
+    return qore_http_client_finish_read_pass(h3_set_quic_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
+        inner_op, xsink), remaining, xsink);
 }
 
 void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {
@@ -1263,6 +1288,26 @@ void Http3ClientPollOperationPriv::waitStreamCapacity(int64_t timeout_ms) {
     ++stream_blocked_waiters;
     stream_capacity_cond.wait(stream_lock, timeout_ms);
     --stream_blocked_waiters;
+}
+
+int Http3ClientPollOperationPriv::markFrameStateCloseSent(int64_t stream_id, ExceptionSink* xsink) {
+    ChannelAction* ch_action = nullptr;
+    std::string sid = std::to_string(stream_id);
+    {
+        AutoLocker al(stream_lock);
+        auto it = stream_actions.find(sid);
+        if (it == stream_actions.end()) {
+            return 0;
+        }
+        ch_action = dynamic_cast<ChannelAction*>(it->second);
+        if (!ch_action) {
+            return 0;
+        }
+        ch_action->ref();
+    }
+    int rv = ch_action->markFrameStateCloseSent();
+    ch_action->deref(xsink);
+    return rv;
 }
 
 void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* msg_queue,
@@ -2293,6 +2338,21 @@ Socket Http3ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
 */
 nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) [flags=NAMED_ARGS] {
     priv->registerStreamNotify(stream_id);
+}
+
+//! Records on the stream's frame state that the application sends its WebSocket close frame itself
+/** When a frame state is installed on the stream (see installFrameState()), it then sends no close frame of its own
+    when it fails the connection later with an error (an endpoint sends one close frame, RFC 6455 section 5.5.1).
+
+    @param stream_id the stream ID
+
+    @return 0 if the stream has no frame state, 1 if the close is recorded (the caller sends its close frame), 2 if
+    the frame state sent a close frame before (the caller sends none)
+
+    @since %Qore 3.0
+*/
+int Http3ClientPollOperationBase::markFrameStateCloseSent(int stream_id) [flags=NAMED_ARGS] {
+    return priv->markFrameStateCloseSent(static_cast<int64_t>(stream_id), xsink);
 }
 
 //! Installs a WebSocket frame-state decoder for a CONNECT tunnel stream

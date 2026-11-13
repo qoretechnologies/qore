@@ -1065,18 +1065,14 @@ static constexpr const char* aot_ref_type_arg_marker = "\ntypeargs:";
 
 // the name of the function of a call reference without the explicit type arguments
 static std::string getAOTFunctionRefBaseName(const LocalFunctionCallReferenceNode* fcr) {
-    const QoreFunction* f = fcr->getFunction();
-    // the bare name of a function of the root namespace would find the builtin of that name when the reference is
-    // loaded
+    // a function is named by the path of its namespace: when the reference is loaded, the bare name of a function of
+    // the root namespace would find the builtin of that name, and that of a function of another namespace the
+    // function of that name in the root namespace (\Other::step() would call ::step())
     const FunctionEntry* fe = fcr->getFunctionEntry();
     if (fe && fe->getNamespace()) {
-        std::string path;
-        fe->getNamespace()->getPath(path);
-        if (path.empty()) {
-            return qore_aot_get_function_identity_name(fe);
-        }
+        return qore_aot_get_function_identity_name(fe);
     }
-    return f->getName();
+    return fcr->getFunction()->getName();
 }
 
 std::string qore_aot_get_function_ref_name(const LocalFunctionCallReferenceNode* fcr) {
@@ -2903,6 +2899,19 @@ QoreValue deserializeExprTreeFromBlob(const uint8_t* data, uint32_t size, QorePr
     return v;
 }
 
+//! Marks a parameter or local variable of an AOT-compiled function as kept in native storage when the AOT metadata
+//! does not tell whether it is (issue #5890)
+/** A closure-bound variable is on the closure variable stack, and a reference variable reads and writes the lvalue
+    that it refers to, so neither is marked; get_local_vars() then gives the others in a frame that runs native code
+    as unavailable, and set_local_var_value() refuses them, instead of a value that the code does not use
+*/
+static void qore_aot_mark_unknown_native_local(LocalVar* lv) {
+    if (lv && !lv->closureUse() && !lv->isTopLevel() && !lv->isSelf()
+            && !QoreTypeInfo::isReference(lv->getTypeInfo())) {
+        lv->setAOTNativeStorage(LocalVar::AOT_NATIVE_STORAGE | LocalVar::AOT_NATIVE_WRITES);
+    }
+}
+
 // Forward declaration for hybrid closure resolution
 static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* name,
         QoreProgram* pgm, const QoreAOTFunc& aot_func);
@@ -3453,6 +3462,8 @@ static QoreAOTContext* buildContextFromSlotMap(
     // From QORE_AOT_LOCAL_BINDING_VERSION, a slot bound to a top-level local is flagged as one; before it, a
     // top-level local is recognized as a slot that is neither a parameter nor a body local
     const bool has_local_binding = reader.getHeader().version >= QORE_AOT_LOCAL_BINDING_VERSION;
+    // From QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION, the records flag the variables kept in native storage
+    const bool has_native_local_flags = reader.getHeader().version >= QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION;
     for (int i = 0; i < num_locals; ++i) {
         const char* lname = reader.readStringRef(ptr);
         const char* ltype = reader.readStringRef(ptr);
@@ -3554,6 +3565,23 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             if ((lflags & 0x10) && !lv->isReadOnly()) {
                 lv->setReadOnly();
+            }
+            // a parameter or local variable that the native code keeps in native storage, which get_local_vars()
+            // and set_local_var_value() refuse (issue #5890); a record of an older format does not tell, so every
+            // parameter and local variable of the function is taken to be one (qore_aot_mark_unknown_native_local())
+            if (has_native_local_flags) {
+                uint8_t native = 0;
+                if (lflags & QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE) {
+                    native |= LocalVar::AOT_NATIVE_STORAGE;
+                }
+                if (lflags & QORE_AOT_LOCAL_SLOT_NATIVE_WRITES) {
+                    native |= LocalVar::AOT_NATIVE_WRITES;
+                }
+                if (native) {
+                    lv->setAOTNativeStorage(native);
+                }
+            } else if (!(lflags & (0x04 | 0x08 | QORE_AOT_LOCAL_SLOT_TOP_LEVEL))) {
+                qore_aot_mark_unknown_native_local(lv);
             }
             ctx->locals[i] = lv;
             if (trace_slot_reg) {
@@ -5516,11 +5544,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                     closure_loc = qore_aot_read_source_location(reader, ptr, pgm);
                 }
 
-                bool is_lambda = false, is_in_method = false, closure_needs_type_context = false;
+                bool is_lambda = false, is_in_method = false, closure_needs_type_context = false,
+                    defaults_need_object = false;
                 if (flags_str) {
                     is_lambda = (flags_str[0] == '1');
                     is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
                     closure_needs_type_context = (strlen(flags_str) >= 5 && flags_str[4] == '1');
+                    // the fourth flag: the default values use the closure's object (issue #5931)
+                    defaults_need_object = (strlen(flags_str) >= 7 && flags_str[6] == '1');
                 }
 
                 // Read return type
@@ -5547,6 +5578,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                         ? type_resolver.resolveForSignature(ptype, type_error, closure_type_param_owner) : nullptr;
                     uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
                     if (has_default) {
+                        // a closure in the default value binds to the variables of this context, as the closure's
+                        // own captures do (issue #5903)
+                        QoreAOTValueLocalsHelper value_locals(ctx->locals, ctx->num_locals, ctx->globals,
+                            ctx->num_globals, local_owner_pgm);
                         std::string val_error;
                         defaults[p] = reader.readValue(ptr, end, val_error);
                         if (!val_error.empty()) {
@@ -5623,6 +5658,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const QoreClass* closure_class = nullptr;
                 if (class_type_path && *class_type_path) {
                     closure_class = qore_aot_resolve_class_ref(pgm, class_type_path, false);
+                }
+                // the class of a closure that is not in a method is the class it runs in, not a class type with
+                // self (issue #5907)
+                const QoreClass* static_class = nullptr;
+                if (flags_str && !is_in_method && class_type_path && *class_type_path) {
+                    static_class = QoreTypeInfo::getUniqueReturnClass(type_resolver.resolve(class_type_path,
+                        type_error));
+                    closure_class = nullptr;
                 }
 
                 // Construct UserClosureFunction + UserClosureVariant FIRST
@@ -5805,6 +5848,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                         if (!lv->closureUse()) {
                             lv->setClosureUse();
                         }
+                    } else if (lv) {
+                        // a closure that uses the self of the method that it is in takes the object when it is
+                        // created, as a closure of the method does (issue #5931)
+                        is_in_method = true;
+                        defaults_need_object = true;
                     }
                 }
 
@@ -5869,8 +5917,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                     AOTClosureRuntimeBinding binding;
                     binding.uvb = closure_variant;
                     binding.local_slots = closure_locals_vec;
-                    binding.class_ctx = closure_class
-                        ? qore_class_private::get(*const_cast<QoreClass*>(closure_class)) : nullptr;
+                    const QoreClass* binding_class = closure_class ? closure_class : static_class;
+                    binding.class_ctx = binding_class
+                        ? qore_class_private::get(*const_cast<QoreClass*>(binding_class)) : nullptr;
                     (*closure_bindings)[native_body_key] = std::move(binding);
                     if (q_env_is_set("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
                         fprintf(stderr, "AOT: resolved native closure '%s'\n", native_body_key);
@@ -5878,13 +5927,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
 
                 // Set class type if in a method context
-                if (class_type_path && *class_type_path) {
+                if (!static_class && class_type_path && *class_type_path) {
                     ucf->setClassType(type_resolver.resolve(class_type_path, type_error));
                 }
 
                 // Create QoreClosureParseNode
                 auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
                 closure_node->setNeedsTypeContext(closure_needs_type_context);
+                if (defaults_need_object) {
+                    closure_node->setDefaultsNeedObject();
+                }
+                if (static_class) {
+                    closure_node->setStaticClass(qore_class_private::get(*static_class));
+                }
                 ctx->exprs[i] = toBitsNB(QoreValue(closure_node));
                 continue;
             }
@@ -6092,7 +6147,9 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (self_call && self_call->getMethod()) {
             ctx->call_targets[i].method = self_call->getMethod();
             ctx->call_targets[i].qc = self_call->getClass();
-            ctx->call_targets[i].method_name = self_call->getName();
+            // the name of the method without a class qualifier, by which unqualified and abstract calls are
+            // dispatched (issue #5933: a qualified call of an abstract method was dispatched by the qualified name)
+            ctx->call_targets[i].method_name = self_call->getMethodName();
             ctx->call_targets[i].variant = self_call->getVariant();
             if (ctx->call_targets[i].variant) {
                 ctx->call_targets[i].uvb = ctx->call_targets[i].variant->getUserVariantBase();
@@ -8791,6 +8848,16 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
         ctx->pgm = pgm;
         ctx->uses_argv = qore_aot_func_uses_argv(aot_func);
         ctx->uses_self = qore_aot_func_uses_self(aot_func);
+        // the variables that the native code keeps in native storage are not known for a context built from the
+        // source: every parameter and local variable of the function is taken to be one (issue #5890)
+        if (sig) {
+            for (unsigned i = 0; i < sig->numParams() && i < sig->lv.size(); ++i) {
+                qore_aot_mark_unknown_native_local(sig->lv[i]);
+            }
+        }
+        for (LocalVar* lv : ir_func->all_body_locals) {
+            qore_aot_mark_unknown_native_local(lv);
+        }
     }
     if (ctx && ctx->num_lv_path_insts > 0) {
         // Keep IR function alive — LValuePath instructions reference path data in it

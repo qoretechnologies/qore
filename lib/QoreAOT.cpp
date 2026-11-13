@@ -4874,6 +4874,19 @@ private:
 //! back into one giant function.  On failure, erases any helper functions
 //! already emitted and returns false — the caller falls back to un-outlined
 //! lowering.
+//! Adds the locals that the lowered outlined helpers keep in native storage to those of the coordinator
+/** The coordinator's own locals that only a helper uses are kept by the helper (see
+    QoreIRFunction::aot_native_local_flags)
+*/
+static void aotMergeOutlinedNativeLocalFlags(const QoreIRFunction& coordinator,
+        const std::vector<AOTOutlinedHelper>& helpers) {
+    for (const auto& h : helpers) {
+        for (const auto& [key, flags] : h.ir_func->aot_native_local_flags) {
+            coordinator.aot_native_local_flags[key] |= flags;
+        }
+    }
+}
+
 static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
         llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
@@ -20823,6 +20836,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         std_entry_ok = retry_lowerer.lowerFunction(*ir_func, module,
                             llvm_error);
                     }
+                    if (std_entry_ok && fn_outliner.active()) {
+                        aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers);
+                    }
 
                     // Compile fast entry for AOT Approach B.
                     if (std_entry_ok && fast_entry_eligible) {
@@ -21294,6 +21310,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             }
                             method_ok = retry_lowerer.lowerFunction(*ir_func, module,
                                 llvm_error);
+                        }
+                        if (method_ok && fn_outliner.active()) {
+                            aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers);
                         }
 
                         if (method_ok && fast_entry_eligible) {
@@ -32715,6 +32734,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CheckCallTarget:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (shouldSkipExprInstructionExprSlot(ei)) {
@@ -33190,6 +33210,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CheckCallTarget:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (shouldSkipExprInstructionExprSlot(ei)) {
@@ -33695,6 +33716,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CheckCallTarget:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (shouldSkipExprInstructionExprSlot(ei)) {
@@ -35491,8 +35513,16 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // generic code, qore#5733)
         id.ref1 = std::string(closure->isLambda() ? "1" : "0") + ","
                 + (closure->isInMethod() ? "1" : "0") + "," + (closure->needsTypeContext() ? "1" : "0");
-        // ref2 = class type path (empty if no class context)
+        // ",1" after them: the default values use the closure's object (issue #5931); left out otherwise
+        if (closure->defaultsNeedObject()) {
+            id.ref1 += ",1";
+        }
+        // ref2 = class type path (empty if no class context); for a closure that is not in a method, the class that
+        // it runs in (issue #5907)
         const QoreTypeInfo* cti = ucf->getClassType();
+        if (!cti && !closure->isInMethod() && closure->getStaticClass()) {
+            cti = closure->getStaticClass()->getTypeInfo();
+        }
         if (cti) {
             id.ref2 = getSlotTypePath(cti);
         }
@@ -36709,6 +36739,14 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         }
         if (lv->isReadOnly()) {
             lid.flags |= 0x10; // read-only binding
+        }
+        // a parameter or a local variable of the function that its native code keeps in native storage (see
+        // QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE); closure-bound variables are always on the closure variable stack
+        if (!lv->closureUse() && ((lid.flags & 0x01) || ordinal_it != body_local_ordinals.end())) {
+            auto nit = func.aot_native_local_flags.find(ptr);
+            if (nit != func.aot_native_local_flags.end()) {
+                lid.flags |= nit->second;
+            }
         }
     }
 

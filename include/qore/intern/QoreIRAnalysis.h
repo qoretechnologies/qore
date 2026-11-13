@@ -108,6 +108,13 @@ std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlo
 */
 bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count);
 
+//! Marks each LoadLocal directly followed by the CheckCallTarget of its value (QoreIRInstruction::
+//! fused_call_target_check): the interpreter then makes the check in the load, without the dispatch of the check
+/** Run on the final IR of a function that the interpreter executes; the instructions themselves are unchanged, so
+    native code generation ignores the mark.  Returns the number of loads marked (issue #5784).
+*/
+size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func);
+
 struct QoreIROptimizationStats {
     size_t loops_analyzed = 0;
     size_t instructions_hoisted = 0;

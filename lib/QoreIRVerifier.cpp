@@ -40,6 +40,7 @@
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/VarRefNode.h>
+#include <qore/intern/QoreAssignmentOperatorNode.h>
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreSpliceOperatorNode.h>
@@ -2158,6 +2159,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     real_reference_ir_only_locals.clear();
     cow_container_locals.clear();
     lvalue_path_locals.clear();
+    std::unordered_set<const void*> ensure_unique_roots;
     weak_store_locals.clear();
     element_store_locals.clear();
     stored_locals.clear();
@@ -2255,6 +2257,29 @@ void QoreIRFunction::computeIROnlyLocals() {
                     if ((step.kind == LVPathStepKind::LocalVar
                             || step.kind == LVPathStepKind::ClosureVar)
                             && step.ref_ptr) {
+                        // the unique step of a weak assignment from an untyped local (qore#5847) does not move the
+                        // local to the runtime stack: the local keeps its IR storage if it has one, and the step
+                        // changes the value in that storage (qore_ir_unique_container()), so that the lifetime of
+                        // an object that the local holds does not depend on the weak assignment
+                        if (inst->opcode == QoreIROpcode::LValuePathUnary
+                                && static_cast<const QoreIRLValuePathInstruction*>(inst.get())->unary_op
+                                    == LVUnaryOp::EnsureUnique
+                                && pi->path.size() == 1 && step.kind == LVPathStepKind::LocalVar) {
+                            const LocalVar* lv = static_cast<const LocalVar*>(step.ref_ptr);
+                            const QoreTypeInfo* lti = lv->getTypeInfo();
+                            bool body_local = false;
+                            for (const LocalVar* body_lv : all_body_locals) {
+                                if (body_lv == lv) {
+                                    body_local = true;
+                                    break;
+                                }
+                            }
+                            if (body_local && !lv->closureUse() && !lv->isTopLevel()
+                                    && qore_weak_source_type_may_hold_container(lti)) {
+                                ensure_unique_roots.insert(step.ref_ptr);
+                                continue;
+                            }
+                        }
                         lvalue_path_locals.insert(step.ref_ptr);
                     }
                 }
@@ -2482,6 +2507,14 @@ void QoreIRFunction::computeIROnlyLocals() {
         if (body_local_keys.count(key)
                 && (!QoreTypeInfo::hasType(lti) || lti == anyTypeInfo || lti == autoNoNarrowTypeInfo)) {
             real_reference_ir_only_locals.insert(key);
+        }
+    }
+
+    // the root of a unique step that has no IR storage is reached through the runtime stack, as any other path root
+    for (const void* key : ensure_unique_roots) {
+        if (!hasIRStorage(key)) {
+            lvalue_path_locals.insert(key);
+            ast_referenced_locals.insert(key);
         }
     }
 
@@ -2914,6 +2947,16 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                     local_inst->is_closure = local_inst->local->closureUse();
                     local_inst->is_ref = localMayHoldReference(local_inst->local,
                         creates_reference, body_local_keys);
+                }
+            } else if (inst->opcode == QoreIROpcode::ScopeEnter) {
+                // the slots of the locals that an exception leaving the scope releases (#5867)
+                auto* se = static_cast<QoreIRScopeEnterInstruction*>(inst.get());
+                se->local_slots.assign(se->locals.size(), UINT32_MAX);
+                for (size_t i = 0; i < se->locals.size(); ++i) {
+                    auto it = slot_map.find(se->locals[i]);
+                    if (it != slot_map.end()) {
+                        se->local_slots[i] = it->second;
+                    }
                 }
             } else if (inst->opcode == QoreIROpcode::HashKeyStore) {
                 auto* hks = static_cast<QoreIRHashKeyStoreInstruction*>(inst.get());

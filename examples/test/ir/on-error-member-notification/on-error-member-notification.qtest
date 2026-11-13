@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the exception paths of blocks with on_block_exit handlers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class OnErrorMemberNotificationTest
+
+#! issue #5950: a store into a member, key or element of a local that raises an exception loses the local
+/** Native code empties the cache of a local before a store into its member, key or element (a member assignment
+    of an object, a key store into a hash, an element store into a list), so that the container's only reference is
+    the local's own and copy-on-write does not copy it, and reloads the cache from the runtime variable stack after
+    the store.  When the store raised an exception (a \c memberNotification() method that throws, a key that the
+    hashdecl of the hash does not have, a value of the wrong type), the exception path skipped the reload, and the
+    empty cache was still taken for the local's current value: a block with on_exit, on_error or on_success handlers
+    publishes its locals to the runtime stack before its handlers run out of line, and it published the empty cache,
+    so that the handlers, the catch block and the code after the try statement read the local as \c NOTHING.
+
+    on-error-member-notification.q raises such exceptions in blocks with each kind of handler, in nested blocks and
+    try statements, with locals of other types beside the container, with a closure-captured local and with an
+    assignment to the local itself that is rejected; its output must be that of the AST interpreter in every
+    execution mode, on the IR tier and as an AOT executable.
+*/
+class OnErrorMemberNotificationTest inherits QUnit::Test {
+    public {
+        #! the output of the script with the AST interpreter, which every execution mode and AOT must give
+        const ScriptLines = (
+            "on_error in try: error; caught NOTIFY-ERROR d=13",
+            "on_exit in try: exit d=13; caught NOTIFY-ERROR d=13",
+            "on_success in try: caught NOTIFY-ERROR d=13",
+            "all handlers: error d=13 NOTIFY-ERROR; exit d=13; caught NOTIFY-ERROR d=13; after d=2",
+            "nested try: inner exit d=13; inner caught NOTIFY-ERROR d=13; block error d=13; outer caught "
+                "NOTIFY-ERROR d=13",
+            "typed locals: error i=8 f=1.5 s=str! h={k: \"v\"} l=[1, 2] d=13; caught NOTIFY-ERROR i=8 f=1.5 s=str! "
+                "h={k: \"v\"} l=[1, 2] d=13",
+            "dynamic key: error d=13; caught NOTIFY-ERROR d=13",
+            "hashdecl key: error h={a: 2}; caught INVALID-MEMBER h={a: 2}; after h={a: 4}",
+            "list element store: error l=[1, 2]; caught RUNTIME-TYPE-ERROR l=[1, 2]; after l=[1, 3]",
+            "hash key store: exit h={a: 1}; caught RUNTIME-TYPE-ERROR h={a: 1}",
+            "captured locals: caught NOTIFY-ERROR d=13 n=2; exit d=13 n=2",
+            "rejected assignment: error l=[1, 2]; caught RUNTIME-TYPE-ERROR l=[1, 2]; error d=1; caught "
+                "RUNTIME-TYPE-ERROR d=1",
+            "function error handler: function error d=13; caught NOTIFY-ERROR",
+        );
+
+        #! the script prints its lines this many times
+        const Iterations = 3;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("store exceptions in blocks with handlers", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable", \aotTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode and on the IR tier, and checks that it gives the output of the AST
+    #! interpreter
+    modesTest() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("on-error-member-notification-aot-");
+        string exe = dir.path + "/on-error-member-notification";
+        string out = backquote(sprintf("%s %s -O3 -o %s %s 2>&1", env, qcc_bin, exe, scriptPath()));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/on-error-member-notification.q";
+    }
+
+    #! the expected output of the script: its lines, printed once per iteration
+    private string expected() {
+        string block = (foldl $1 + "\n" + $2, ScriptLines) + "\n";
+        return strmul(block, Iterations);
+    }
+}

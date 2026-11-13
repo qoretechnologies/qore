@@ -82,7 +82,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 430,
+static_assert(QORE_IR_MAX_OPCODE == 431,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -964,6 +964,8 @@ struct IROnBlockExitHandler {
     const QoreIRFunction* handler_ir = nullptr;  //!< compiled handler (required for IR/JIT/AOT execution)
 };
 
+struct IRCallFrame;
+
 //! A scope entered by a ScopeEnter instruction: a block with on_exit, on_error or on_success handlers
 struct IRScopeEntry {
     //! the number of handlers registered when the scope was entered; the scope's handlers follow them
@@ -971,6 +973,14 @@ struct IRScopeEntry {
     //! the number of temp scopes open when the scope was entered (PushTempMark): those of the statements that
     //! enclose the block; the temp scopes opened after them belong to the statements of the block
     size_t temp_mark_count;
+    //! the instruction that entered the scope, which records the locals of a block without an exception path of its
+    //! own, which an exception that leaves the scope releases after its handlers (#5867)
+    const QoreIRScopeEnterInstruction* enter = nullptr;
+    //! the frame, the function and the pre-instantiated locals, for that release; kept here, so that the unwind path
+    //! reads them from the scope and no lambda of the frame captures more for it
+    IRCallFrame* frame = nullptr;
+    const QoreIRFunction* func = nullptr;
+    const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr;
 };
 
 //! Tracks value-slot ids holding owned (node) values for scope-exit cleanup
@@ -1002,6 +1012,13 @@ struct IRScopeEntry {
     overwritten (see setValueSlot()) or the function's values are cleaned up.
     The value cannot have a destructor, so the longer life is not observable.
  */
+//! The flags of QoreIRFunction::interpreter_slot_owned_values: the slot owns its value
+#define QORE_IR_SLOT_OWNED 1
+//! The flags of QoreIRFunction::interpreter_slot_owned_values: a Return gives the value of the slot, which an exception
+//! that interrupts the return keeps until the locals of the frame are released, as the AST interpreter keeps the value
+//! of a return until the function ends (#5920)
+#define QORE_IR_SLOT_RETURN 2
+
 class IRCleanupSlots {
 public:
     //! clears all entries and resizes the per-slot counts to the value pool size
@@ -1173,8 +1190,21 @@ private:
     //! the slots that own their value, indexed by value id; null if none
     const std::vector<uint8_t>* slot_owned = nullptr;
 
+public:
+    //! Returns true if the slot is one whose value a Return gives (see QORE_IR_SLOT_RETURN)
+    bool isReturnSlot(uint32_t id) const {
+        return slot_owned && id < slot_owned->size() && ((*slot_owned)[id] & QORE_IR_SLOT_RETURN);
+    }
+
+    //! Returns the number of slots of the slot table, if any
+    size_t slotTableSize() const {
+        return slot_owned ? slot_owned->size() : 0;
+    }
+
+private:
+
     bool isSlotOwned(uint32_t id) const {
-        return slot_owned && id < slot_owned->size() && (*slot_owned)[id];
+        return slot_owned && id < slot_owned->size() && ((*slot_owned)[id] & QORE_IR_SLOT_OWNED);
     }
 
     void eraseEntry(uint32_t id) {
@@ -1246,6 +1276,19 @@ public:
         real_slots = real;
     }
 
+    //! Keeps a reference to the value of a return that an exception interrupted until releaseHeldReturns() (#5920)
+    DLLLOCAL void holdReturn(QoreValue v) {
+        held_returns.push_back(v);
+    }
+
+    //! Releases the values that holdReturn() keeps, after the locals of the frame
+    DLLLOCAL void releaseHeldReturns(ExceptionSink* xsink) {
+        for (QoreValue& v : held_returns) {
+            v.discard(xsink);
+        }
+        held_returns.clear();
+    }
+
     //! Releases the values of every slot, last slot first, and resets them
     DLLLOCAL void releaseAll(ExceptionSink* xsink) {
         for (size_t i = slots.size(); i; --i) {
@@ -1286,6 +1329,8 @@ private:
     std::vector<QoreValue> slots;
     //! non-zero for the slots of object locals (see QoreIRFunction::real_reference_locals); empty if none
     std::vector<uint8_t> real_slots;
+    //! the values of a return that an exception interrupted, released after the locals of the frame (#5920)
+    std::vector<QoreValue> held_returns;
 };
 
 //! A set of local variables that allocates no memory once its capacity covers the locals it holds
@@ -2182,6 +2227,79 @@ static void releaseFrameRuntimeLocal(const LocalVar* lv, const IRLocalVarSet& in
     }
     if (LocalVarValue* lvv = thread_try_find_lvar(lv)) {
         lvv->del(xsink);
+    }
+}
+
+//! Returns true if the unwind path can release the locals of a scope that an exception leaves (#5867)
+/** For a block without an exception path of its own, whose ScopeEnter records its locals.  Read only on the unwind
+    path.
+*/
+static bool qore_ir_scope_records_locals(const IRScopeEntry& scope) {
+    return scope.enter && !scope.enter->locals.empty() && scope.frame && scope.func;
+}
+
+//! Keeps the values of a return of the frame that the exception interrupted: those of the slots that a Return gives
+/** The AST interpreter keeps the value of a return until the function ends, however the locals that the unwind
+    releases reach it (as their value, in a container, through a reference or a closure); the unwind holds a reference
+    to each until the frame's values are released.  Taken once, at the start of the unwind, as the temps of each scope
+    that it leaves hold the values until the scope's temps are released.
+*/
+static void qore_ir_hold_pending_returns(const IRScopeEntry& scope, std::vector<QoreValue>& held) {
+    const std::vector<uint8_t>& return_slots = scope.func->interpreter_return_protected_slots;
+    const std::vector<QoreValue>& values = scope.frame->values;
+    for (size_t id = 0, e = std::min(return_slots.size(), values.size()); id < e; ++id) {
+        if (return_slots[id] && values[id].hasNode()) {
+            held.push_back(values[id].refSelf());
+        }
+    }
+}
+
+//! Releases the locals of a scope that an exception leaves, last declared first, as the end of the block releases them
+//! (#5867)
+/** The values that the frame caches for them are released, and the value of a local on the runtime stack, which the
+    frame removes from the stack when it ends (cleanupInstantiatedLocals()); a closure-bound local loses its value only
+    if no closure holds it.  Called only on the unwind path, with the frame that the scope keeps.
+*/
+static void qore_ir_release_unwound_scope_locals(const IRScopeEntry& scope, ExceptionSink* xsink) {
+    const QoreIRScopeEnterInstruction& enter = *scope.enter;
+    IRCallFrame& frame = *scope.frame;
+    for (size_t i = enter.locals.size(); i; --i) {
+        const LocalVar* lv = enter.locals[i - 1];
+        uint32_t slot = i - 1 < enter.local_slots.size() ? enter.local_slots[i - 1] : UINT32_MAX;
+        if (slot == UINT32_MAX) {
+            auto it = scope.func->local_var_slots.find(lv);
+            if (it != scope.func->local_var_slots.end()) {
+                slot = it->second;
+            }
+        }
+        if (slot != UINT32_MAX) {
+            // the values that the frame keeps for the local: those of its declaration and of its loads
+            if (slot < frame.local_init_slots.size() && frame.local_init_slots[slot] != UINT32_MAX) {
+                uint32_t init_slot = frame.local_init_slots[slot];
+                if (init_slot < frame.values.size()) {
+                    frame.values[init_slot].discard(xsink);
+                    frame.values[init_slot] = QoreValue();
+                }
+                frame.local_init_slots[slot] = UINT32_MAX;
+            }
+            if (slot < frame.local_load_slots.size()) {
+                for (uint32_t vid : frame.local_load_slots[slot]) {
+                    if (vid < frame.values.size()) {
+                        frame.values[vid].discard(xsink);
+                        frame.values[vid] = QoreValue();
+                    }
+                    if (vid < frame.load_slot_registered.size()) {
+                        frame.load_slot_registered[vid] = false;
+                    }
+                }
+                frame.local_load_slots[slot].clear();
+            }
+            if (slot < frame.locals_slot_cache.size()) {
+                frame.locals_slot_cache.release(slot, xsink);
+                frame.locals_slot_cache.set(slot, QoreValue());
+            }
+        }
+        releaseFrameRuntimeLocal(lv, frame.instantiated_locals, scope.pre_instantiated, xsink);
     }
 }
 
@@ -3127,6 +3245,11 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         slot_owned_values[id] = representation == QoreIRValueRepresentation::NativeInt
             || representation == QoreIRValueRepresentation::NativeFloat;
     }
+    for (uint32_t id : return_value_slot_ids) {
+        if (id < slot_owned_values.size()) {
+            slot_owned_values[id] |= QORE_IR_SLOT_RETURN;
+        }
+    }
     func.interpreter_slot_owned_values = std::move(slot_owned_values);
     func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
     func.interpreter_return_preserve_slot_ids = std::move(return_preserve_slot_ids);
@@ -3176,6 +3299,15 @@ static bool refineInterpreterEffectSummary(const QoreIRFunction& root, Exception
         bool may_invalidate = false;
     };
 
+    // the code of the callees is read, and the summaries written to it, while their Programs are held: another thread
+    // can delete them meanwhile (qore#5874); the code of a Program that its teardown has marked is not read, and the
+    // summary is not refined, as for a callee that is not known.  The root's Program is held as well: the thread need
+    // not be counted in it (see QoreProgramCodeHolds)
+    QoreProgramCodeHolds holds(&root.name);
+    if (!holds.holdRoot(root.pgm)) {
+        return true;
+    }
+
     std::vector<EffectNode> nodes;
     std::unordered_map<const QoreIRFunction*, size_t> node_ids;
     auto addNode = [&](const QoreIRFunction* func) {
@@ -3202,8 +3334,15 @@ static bool refineInterpreterEffectSummary(const QoreIRFunction& root, Exception
             if (!call) {
                 return true;
             }
+            // the call belongs to code whose Program is held, so its variant is allocated, and so is the
+            // pointer to its IR, which is checked first, so that a summary that cannot be refined yet (a callee
+            // without IR, which leaves it to be refined at a later call) takes no hold; the callee's Program is held
+            // before its code is read
             const QoreIRFunction* callee = getInterpreterDirectCallEffectCallee(*call);
             if (!callee) {
+                return true;
+            }
+            if (!holds.holdVariant(call->variant)) {
                 return true;
             }
             size_t callee_id = addNode(callee);
@@ -5384,8 +5523,8 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     }
 
     if (!self->isValid()) {
-        qore_raise_deleted_object(xsink, 
-            "cannot call '%s()' on an object that has already been deleted", method_name);
+        // as the AST interpreter raises it (issue #5784)
+        qore_raise_deleted_method_call(xsink, self, method_name, inst->qc, inst->method, inst->variant);
         result = QoreValue();
         return true;
     }
@@ -7907,9 +8046,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 on_block_exit_handlers.resize(scope_start);
                 // Invalidate caches after handler execution (both AST and compiled handlers
-                // can modify any variable type on the thread-local variable stack)
+                // can modify any variable type on the thread-local variable stack).  An IR-only local exists only in
+                // its slot, and no handler can reach it: QoreIRFunction::computeIROnlyLocals() keeps every local that
+                // an on_block_exit handler references on the runtime stack.  Its slot is left to SlotCacheCleanup,
+                // which releases it with the frame's locals, last declared first, not here in slot order
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                    if (preserveParentSlotForWriteback(i)) {
+                    if (preserveParentSlotForWriteback(i) || (i < locals_ir_only.size() && locals_ir_only[i])) {
                         continue;
                     }
                     locals_slot_cache.release(i, xsink);
@@ -8139,6 +8281,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
             }
             releaseActiveIteratorsFrom(iters, 0);
+            // the value of a return that an exception interrupted, after the locals of the frame (#5920)
+            cache.releaseHeldReturns(xsink);
         }
     } slot_cache_cleanup{locals_slot_cache, xsink, func.interpreter_slot_locals, locals_ir_only,
         instantiated_locals, pre_instantiated, active_iterators};
@@ -8892,6 +9036,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto unwindForException = [&func, &block, &ip, &values, &frame, &scope_stack, &releaseScopeTemps, &fireScopeExits,
             &dbgReportException, &dbgReportEnclosing, &dbgHandlerStatements, &dbgHandlerProgram, &dbgFunctionExit,
             xsink, cleanup_log]() QORE_IR_LAMBDA_NOINLINE {
+        // the value of a return that the exception interrupted is kept until the locals of the frame are released
+        // (SlotCacheCleanup), as the AST interpreter keeps the value of a return until the function ends; taken before
+        // the temps of any scope are released, which hold it (#5920)
+        for (size_t id = 0, e = std::min(frame.cleanup.slotTableSize(), values.size()); id < e; ++id) {
+            if (frame.cleanup.isReturnSlot(static_cast<uint32_t>(id)) && values[id].hasNode()) {
+                frame.locals_slot_cache.holdReturn(values[id].refSelf());
+            }
+        }
         dbgReportException();
         if (!func.interpreter_open_implicit_contexts.empty() && block && ip < block->instructions.size()) {
             restoreOpenImplicitContexts(func, block->instructions[ip].get(), values, xsink);
@@ -8900,9 +9052,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             releaseOperatorIterators(frame.active_iterators);
         }
         dbgReportEnclosing();
+        // the values of a return that the exception interrupted are held until the frame's values are released, taken
+        // before the temps of any scope are released (#5867)
+        std::vector<QoreValue> pending_returns;
+        for (const IRScopeEntry& entry : scope_stack) {
+            if (qore_ir_scope_records_locals(entry)) {
+                qore_ir_hold_pending_returns(entry, pending_returns);
+                break;
+            }
+        }
         while (!scope_stack.empty()) {
+            // the locals of a block without an exception path of its own are released after its handlers and before
+            // the events of the statements that contain it, as the AST interpreter releases them (#5867)
+            const IRScopeEntry scope = scope_stack.back();
             releaseScopeTemps(scope_stack.back());
             fireScopeExits(scope_stack.size() - 1);
+            if (qore_ir_scope_records_locals(scope)) {
+                qore_ir_release_unwound_scope_locals(scope, xsink);
+            }
             dbgReportEnclosing();
         }
         // handlers registered outside of any scope, if any, run as the remaining handlers of the frame
@@ -8912,6 +9079,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         dbgFunctionExit();
         cleanupValues(values, frame.cleanup, xsink, true, cleanup_log, &func.interpreter_exception_release_groups);
+        for (QoreValue& v : pending_returns) {
+            v.discard(xsink);
+        }
     };
 
     auto returnAfterUnhandledException = [&]() -> bool {
@@ -10826,6 +10996,44 @@ load_local_done:
                     if (rid < load_slot_registered.size() && !load_slot_registered[rid]) {
                         local_load_slots[local_inst->slot_id].push_back(rid);
                         load_slot_registered[rid] = true;
+                    }
+                }
+                if (local_inst->fused_call_target_check != QoreIRFusedCallTargetCheck::None) {
+                    // the CheckCallTarget of the loaded value follows: it is made here, and the operand bookkeeping
+                    // after the switch is the check's (qore_ir_fuse_call_target_checks(); issue #5784)
+                    assert(ip + 1 < block->instructions.size());
+                    QoreIRInstruction* check = block->instructions[ip + 1].get();
+                    assert(check->opcode == QoreIROpcode::CheckCallTarget && check->operands.size() == 1
+                        && check->operands.front().id == local_inst->result.id);
+                    inst = check;
+                    ++ip;
+                    const QoreValue& call = static_cast<const QoreIRExprInstruction*>(check)->expr;
+                    // the common case first, inline: a method call on an object that has not been deleted
+                    const AbstractQoreNode* target_node = out.isPointer() ? out.getPtr() : nullptr;
+                    if (local_inst->fused_call_target_check == QoreIRFusedCallTargetCheck::MethodCall
+                            && target_node && target_node->getType() == NT_OBJECT
+                            && qore_object_private::isValidInline(static_cast<const QoreObject*>(target_node))) {
+                        ++ip;
+                        break;
+                    }
+                    // and a call of a closure, which is always callable and has no object
+                    if (local_inst->fused_call_target_check == QoreIRFusedCallTargetCheck::CallReference
+                            && target_node && target_node->getType() == NT_RUNTIME_CLOSURE) {
+                        ++ip;
+                        break;
+                    }
+                    if (qore_check_call_target(call, out, xsink)) {
+                        if (check->exception_target) {
+                            // the handler is in this frame: only the raising statement's temps are dead there
+                            cleanupToTempScope(check->temp_scope_id, true, false, true);
+                            prev_block = block;
+                            block = check->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return false;
                     }
                 }
                 ++ip;
@@ -14715,7 +14923,8 @@ load_local_done:
             case QoreIROpcode::ScopeEnter: {
                 // Record the current handler list size so ScopeExit knows which handlers to execute, and the temp
                 // scopes open, which belong to the statements that enclose the scope
-                scope_stack.push_back({on_block_exit_handlers.size(), temp_cleanup_marks.size()});
+                scope_stack.push_back({on_block_exit_handlers.size(), temp_cleanup_marks.size(),
+                    static_cast<const QoreIRScopeEnterInstruction*>(inst), &frame, &func, pre_instantiated});
                 ++ip;
                 break;
             }
@@ -14827,6 +15036,28 @@ load_local_done:
                 // no exception check otherwise: the instruction also runs on the path of an exception, which stays
                 // raised; an exception raised by a destructor is added to it, and the CheckException that follows the
                 // releases of a statement's exit, as UninstantiateLocal, branches to the handler
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CheckCallTarget: {
+                // the target of a call is checked before its arguments are evaluated, as the AST interpreter checks
+                // it (issue #5784)
+                const QoreIRExprInstruction* ei = static_cast<const QoreIRExprInstruction*>(inst);
+                // qore_check_call_target() decides the common case (a method call on an object that has not been
+                // deleted) first; testing it inline here measured the same
+                if (qore_check_call_target(ei->expr, getIRValue(values, inst->operands.front()), xsink)) {
+                    if (inst->exception_target) {
+                        // the handler is in this frame: only the raising statement's temps are dead there
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ++ip;
                 break;
             }
@@ -16049,6 +16280,42 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
+                if (path_inst->unary_op == LVUnaryOp::EnsureUnique && path_inst->path.size() == 1
+                        && path_inst->path[0].kind == LVPathStepKind::LocalVar && path_inst->path[0].ref_ptr
+                        && func.hasIRStorage(path_inst->path[0].ref_ptr)) {
+                    // the unique step of a weak assignment from an untyped local that keeps its IR storage
+                    // (qore#5847): the value in the slot is the local's own, changed in place of the runtime stack
+                    uint32_t sid = path_inst->lvalue_slot_id;
+                    if (sid < locals_slot_cache.size()) {
+                        // the interpreter's own references to the value (the slots of earlier loads of the local and
+                        // the value of its initializer) are not owners of the container
+                        clearLoadSlots(sid);
+                        if (sid < local_init_slots.size() && local_init_slots[sid] != UINT32_MAX) {
+                            uint32_t init_slot = local_init_slots[sid];
+                            // a value that a later instruction of the block reads is kept (see UninstantiateLocal)
+                            if (!valueUsedLaterInCurrentBlock(init_slot)) {
+                                if (init_slot < values.size()) {
+                                    removeCleanupEntry(cleanup, init_slot);
+                                    values[init_slot].discard(xsink);
+                                    values[init_slot] = QoreValue();
+                                }
+                                local_init_slots[sid] = UINT32_MAX;
+                            }
+                        }
+                        bool copied = false;
+                        // raw slot: the value that the local holds is replaced by a unique copy of it
+                        QoreValue unique = qore_ir_unique_container(locals_slot_cache.storage(sid), copied);
+                        if (copied) {
+                            locals_slot_cache.release(sid, xsink);
+                            locals_slot_cache.set(sid, unique);
+                        }
+                    }
+                    if (path_inst->result.isValid()) {
+                        setValueSlot(values, path_inst->result.id, QoreValue(), xsink);
+                    }
+                    ++ip;
+                    break;
+                }
                 ensureLValuePathRootLocal(path_inst);
                 // Release the interpreter's own references to the root local (its slot cache entry and the slots
                 // of earlier loads) before the path is navigated, as for an assignment: a statement that only
@@ -16400,6 +16667,11 @@ load_local_done:
                                 if (t == NT_HASH || t == NT_LIST) {
                                     lvh.ensureUnique();
                                 }
+                                // the value of the variable as it is read, taken under the lock of the variable: the
+                                // weak assignment assigns it, so that a variable that another thread assigns is not
+                                // read again (qore#5847)
+                                res = lvh.getReferencedValue();
+                                evaluateOwnedWeakReferenceResult(res, xsink);
                                 break;
                             }
                             case LVUnaryOp::Shift: {

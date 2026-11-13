@@ -53,6 +53,7 @@ class FunctionEntry;
 #include <llvm/IR/Module.h>
 
 class QoreIRFunction;
+struct QoreJITObjectLayout;
 class QoreIRBasicBlock;
 class QoreIRInstruction;
 class QoreIRPhiInstruction;
@@ -1378,6 +1379,10 @@ private:
     // Check if value has a node (inline NaN-boxing check) - returns bool (i1)
     llvm::Value* hasNodeInline(llvm::Value* qv);
 
+    //! Emits the inline test that @a qv is an object that has not been deleted, with the layout of the running
+    //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
+    llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func);
+
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
     llvm::Value* emitHelperRef(llvm::Module& module, llvm::Value* val);
@@ -1428,6 +1433,10 @@ private:
 
     // Collect all unique LocalVar* pointers from the IR function
     void collectLocals(const QoreIRFunction& func);
+
+    //! Records in QoreIRFunction::aot_native_local_flags the locals that the AOT-compiled standard entry of the
+    //! function keeps in native storage, once the IR-only sets of the lowering are final (issue #5890)
+    void recordAOTNativeLocals(const QoreIRFunction& func);
 
     // Emit qore_rt_instantiate_local calls for all function locals at current insert point
     void emitLocalInstantiation(llvm::Module& module);
@@ -1514,6 +1523,13 @@ private:
 
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);
+
+    //! Branches to a new block that runs only when handlers were registered after \a saved_count, and continues there
+    /** @return the block where the code continues after the handlers; endPendingHandlerRun() branches to it */
+    llvm::BasicBlock* beginPendingHandlerRun(llvm::Module& module, llvm::Value* saved_count);
+
+    //! Ends the block started by beginPendingHandlerRun() and continues in \a done_bb
+    void endPendingHandlerRun(llvm::BasicBlock* done_bb);
 
     // Emit qore_rt_catch_unwind(catch_depth_saved, xsink) at the current insert
     // point only when specialized tracking proves a runtime catch scope remains
@@ -1835,7 +1851,7 @@ private:
     // On success writes the call result to *result and returns true; on non-match
     // (empty operands or unsupported inner shape) returns false leaving *result
     // untouched so the caller emits the AST fallback path.  In AOT mode, only the
-    // self.method shape has a dedicated helper (qore_rt_background_self_call_aot);
+    // self.method shape has a dedicated helper (qore_rt_background_self_call_aot_v2);
     // other shapes fall through to AST eval since they'd need name-based lookup.
     // @param expr_val        The QoreBackgroundOperatorNode wrapped as QoreValue
     // @param operands        Pre-evaluated operands (layout described above)
@@ -2152,6 +2168,9 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
+    // Marks the cache of a local stale, so that the next ensureLocalCacheFresh() reloads it from the runtime stack
+    // on every path (see clearLocalCachedValue())
+    void markLocalCacheStale(const void* key, llvm::Function* llvm_func);
     void ensureLocalCacheFresh(const void* key, llvm::Module& module,
             llvm::Function* llvm_func);
 

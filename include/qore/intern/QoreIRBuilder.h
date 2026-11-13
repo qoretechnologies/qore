@@ -258,6 +258,9 @@ public:
         QoreIRValue second, QoreIRValue third, const QoreProgramLocation* loc = nullptr);
     QoreIRExprInstruction* createExprOp(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
+    //! Checks the target of the call @a call before its arguments are evaluated (QoreIROpcode::CheckCallTarget)
+    QoreIRExprInstruction* createCheckCallTarget(const QoreValue& call, QoreIRValue target,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
     QoreIRBackgroundInstruction* createBackground(QoreIRBackgroundKind kind, const std::string& name,
         const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc = nullptr);
