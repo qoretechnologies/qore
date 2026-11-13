@@ -747,6 +747,15 @@ public:
         return by_type.size();
     }
 
+    //! Returns true if an entry of a cache names one of the given types
+    bool hasType(const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
+        if (empty.load(std::memory_order_acquire)) {
+            return false;
+        }
+        std::lock_guard<std::mutex> lock(m);
+        return (ti1 && by_type.count(ti1)) || (ti2 && by_type.count(ti2));
+    }
+
     //! Evicts the entries that name a dead type from every cache that registered one
     /** @param release receives what the caches removed, to be released by the caller after the lock is released
     */
@@ -923,6 +932,277 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
     }
 }
 
+//! The class, hashdecl and enum declarations retired and not freed yet (issue #5790; see QoreTypeOwner), guarded by
+//! ctl
+static std::vector<QoreTypeOwner*> retired_type_owners;
+//! true once library cleanup frees the retired declarations: no declaration is retired anymore
+/** Read without the lock first: a Program held at static scope can be deleted by a static destructor after library
+    cleanup, when the containers above can already have been destroyed
+*/
+static std::atomic<bool> type_owner_cleanup{false};
+
+//! Returns true if a derived type or a generic cache entry names the types of the declaration; the caller holds ctl
+static bool type_owner_derived(const QoreTypeOwner* o) {
+    const void* key = o->getTypeOwnerKey();
+    const QoreTypeInfo* t1 = o->getTypeOwnerType();
+    const QoreTypeInfo* t2 = o->getTypeOwnerOrNothingType();
+    if ((key && derived_type_keys.count(key)) || (t1 && derived_type_keys.count(t1))
+            || (t2 && derived_type_keys.count(t2))) {
+        return true;
+    }
+    // a generic cache entry is keyed by the types it names (ex: hash<HD<*Foo>>)
+    return qore_generic_cache_registry().hasType(t1, t2);
+}
+
+//! References the declarations that a declaration names, if they are known; the caller holds ctl
+static void type_owner_count_names(QoreTypeOwner* o) {
+    if (o->type_owner_names_counted || !o->type_owner_names_known) {
+        return;
+    }
+    for (QoreTypeOwner* n : o->type_owner_names) {
+        n->refTypeOwner();
+    }
+    o->type_owner_names_counted = true;
+}
+
+//! Gives the references to the declarations that a declaration names to \a release_list; the caller holds ctl
+/** The caller releases them after the lock is released (type_owner_release())
+*/
+static void type_owner_uncount_names(QoreTypeOwner* o, std::vector<QoreTypeOwner*>& release_list) {
+    if (!o->type_owner_names_counted) {
+        return;
+    }
+    o->type_owner_names_counted = false;
+    release_list.insert(release_list.end(), o->type_owner_names.begin(), o->type_owner_names.end());
+}
+
+namespace {
+//! The releases of the current thread that wait for the release being made (type_owner_release())
+struct QoreTypeOwnerReleaseQueue {
+    bool active = false;
+    std::vector<QoreTypeOwner*> pending;
+};
+
+//! Marks the queue of the thread active while it is drained, also if a release throws
+class QoreTypeOwnerReleaseQueueHelper {
+public:
+    DLLLOCAL QoreTypeOwnerReleaseQueueHelper(QoreTypeOwnerReleaseQueue& q) : q(q) {
+        q.active = true;
+    }
+
+    DLLLOCAL ~QoreTypeOwnerReleaseQueueHelper() {
+        q.active = false;
+    }
+
+private:
+    QoreTypeOwnerReleaseQueue& q;
+};
+}
+
+static thread_local QoreTypeOwnerReleaseQueue type_owner_release_queue;
+
+//! Releases references to declarations; the caller does not hold ctl
+/** A release can free a declaration whose destructor releases others in turn: they are queued and released here, so a
+    chain of declarations is freed without recursion
+*/
+static void type_owner_release(std::vector<QoreTypeOwner*>& release_list) {
+    if (release_list.empty()) {
+        return;
+    }
+    QoreTypeOwnerReleaseQueue& q = type_owner_release_queue;
+    if (q.active) {
+        q.pending.insert(q.pending.end(), release_list.begin(), release_list.end());
+        return;
+    }
+    QoreTypeOwnerReleaseQueueHelper qh(q);
+    std::vector<QoreTypeOwner*> work;
+    work.swap(release_list);
+    while (!work.empty()) {
+        for (QoreTypeOwner* o : work) {
+            o->derefTypeOwner();
+        }
+        work.clear();
+        work.swap(q.pending);
+    }
+}
+
+bool qore_type_owner_released(QoreTypeOwner* owner) {
+    if (type_owner_cleanup.load(std::memory_order_acquire) || owner->isTypeOwnerSystem()) {
+        return false;
+    }
+    std::vector<QoreTypeOwner*> release_list;
+    {
+        AutoLocker al(ctl);
+        // a reference taken meanwhile in another thread (ex: by the reflection API) decides when it is released
+        if (owner->hasTypeOwnerReferences()) {
+            return true;
+        }
+        if (owner->type_owner_retired) {
+            // a reference taken to the declaration while it was being retired was released; the retiring thread
+            // decides
+            return true;
+        }
+        // a declaration that other declarations name directly is referenced by them; only a derived type, which is
+        // never freed before library cleanup, can name the types of a declaration without a reference
+        if (!type_owner_derived(owner)) {
+            return false;
+        }
+        owner->type_owner_retired = true;
+        // no other thread frees it while it is retired without the lock
+        owner->type_owner_retiring = true;
+        retired_type_owners.push_back(owner);
+    }
+    // the caches drop the entries built on the types; the derived types are retired, as their addresses are kept
+    qore_purge_derived_types(owner->getTypeOwnerKey(), owner->getTypeOwnerType(), owner->getTypeOwnerOrNothingType());
+    owner->retireTypeOwner();
+    {
+        AutoLocker al(ctl);
+        owner->type_owner_retiring = false;
+        // a retired declaration that keeps its members keeps what they name; one that does not, names nothing
+        if (owner->keepsTypeOwnerMembers()) {
+            type_owner_count_names(owner);
+        } else {
+            type_owner_uncount_names(owner, release_list);
+        }
+        // the references taken and released by other code from now on never bring its count to zero, so the
+        // declaration is decided only at library cleanup
+        owner->refTypeOwner();
+        owner->type_owner_retirement_ref = true;
+    }
+    type_owner_release(release_list);
+    return true;
+}
+
+void qore_type_owner_destroyed(QoreTypeOwner* owner) {
+    if (type_owner_cleanup.load(std::memory_order_acquire)) {
+        // at library cleanup (or after it, at static destruction), the declarations that this one referenced are
+        // released directly: the lock and the release queue may be gone; no other thread decides then
+        if (owner->type_owner_names_counted) {
+            owner->type_owner_names_counted = false;
+            for (QoreTypeOwner* n : owner->type_owner_names) {
+                n->derefTypeOwner();
+            }
+        }
+        return;
+    }
+    std::vector<QoreTypeOwner*> release_list;
+    {
+        AutoLocker al(ctl);
+        type_owner_uncount_names(owner, release_list);
+    }
+    type_owner_release(release_list);
+}
+
+void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreTypeInfo* ti, const QoreTypeOwner* self) {
+    if (!ti) {
+        return;
+    }
+    QoreTypeOwner* o = nullptr;
+    if (dynamic_cast<const QoreClassTypeInfo*>(ti)) {
+        const QoreClass* qc = QoreTypeInfo::getReturnClass(ti);
+        if (qc) {
+            qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(qc));
+            if (priv && !priv->type_owner.isTypeOwnerSystem()) {
+                o = &priv->type_owner;
+            }
+        }
+    } else if (dynamic_cast<const QoreHashDeclTypeInfo*>(ti)) {
+        const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti);
+        if (hd) {
+            typed_hash_decl_private* priv = typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd));
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                o = &priv->type_owner;
+            }
+        }
+    } else if (dynamic_cast<const QoreEnumTypeInfo*>(ti)) {
+        const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(ti);
+        if (ed) {
+            qore_enum_decl_private* priv = qore_enum_decl_private::get(*const_cast<QoreEnumDecl*>(ed));
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                o = &priv->type_owner;
+            }
+        }
+    }
+    if (o && o != self) {
+        names.push_back(o);
+    }
+}
+
+QoreTypeOwnerBatch::QoreTypeOwnerBatch(qore_ns_private& ns) {
+    // after library cleanup, declarations are freed when their last reference is released
+    if (type_owner_cleanup.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::set<QoreTypeOwner*> seen;
+    std::vector<QoreTypeOwner*> all;
+    ns.getTypeOwners(all);
+    owners.reserve(all.size());
+    for (QoreTypeOwner* o : all) {
+        if (seen.insert(o).second) {
+            o->refTypeOwner();
+            owners.push_back(o);
+        }
+    }
+    // what each declaration names is taken now, while every type is valid; a declaration whose names are counted
+    // (one that survived another Program sharing it) keeps them
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : owners) {
+        if (!o->type_owner_names_counted) {
+            o->type_owner_names.clear();
+            o->getTypeOwnerNames(o->type_owner_names);
+            o->type_owner_names_known = true;
+        }
+    }
+}
+
+QoreTypeOwnerBatch::~QoreTypeOwnerBatch() {
+    if (owners.empty()) {
+        return;
+    }
+    std::vector<QoreTypeOwner*> release_list;
+    {
+        AutoLocker al(ctl);
+        // the declarations that something other than this batch still references survive the Program, and so do
+        // the hashdecls retired below (derived types name their types), which keep their members; each one keeps
+        // what it names with a reference, and a declaration of the Program kept so survives in turn; the others are
+        // destroyed together and do not keep each other
+        std::set<QoreTypeOwner*> batch(owners.begin(), owners.end());
+        std::set<QoreTypeOwner*> survivors;
+        std::vector<QoreTypeOwner*> work;
+        for (QoreTypeOwner* o : owners) {
+            if (o->getTypeOwnerReferenceCount() > 1 || (o->keepsTypeOwnerMembers() && type_owner_derived(o))) {
+                survivors.insert(o);
+                work.push_back(o);
+            }
+        }
+        while (!work.empty()) {
+            QoreTypeOwner* o = work.back();
+            work.pop_back();
+            type_owner_count_names(o);
+            for (QoreTypeOwner* n : o->type_owner_names) {
+                if (batch.count(n) && survivors.insert(n).second) {
+                    work.push_back(n);
+                }
+            }
+        }
+        // a declaration destroyed with the Program no longer keeps what it named as a survivor of another Program
+        for (QoreTypeOwner* o : owners) {
+            if (!survivors.count(o)) {
+                type_owner_uncount_names(o, release_list);
+            }
+        }
+    }
+    type_owner_release(release_list);
+    for (QoreTypeOwner* o : owners) {
+        o->derefTypeOwner();
+    }
+}
+
+size_t qore_retired_type_owner_count() {
+    AutoLocker al(ctl);
+    return retired_type_owners.size();
+}
+
 void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
     std::set<const QoreTypeInfo*> dead;
     if (ti1) {
@@ -944,6 +1224,29 @@ void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const 
 }
 
 void delete_qore_types() {
+    // the retired class, hashdecl and enum declarations are freed first, as their destructors purge their types
+    // from the caches deleted below; from now on, a declaration whose last reference is released is freed
+    {
+        std::vector<QoreTypeOwner*> owners;
+        {
+            AutoLocker al(ctl);
+            type_owner_cleanup.store(true, std::memory_order_release);
+            owners.swap(retired_type_owners);
+        }
+        for (QoreTypeOwner* o : owners) {
+            // the retirement reference is released: a declaration that is still referenced otherwise (ex: by a
+            // reflection object of a Program deleted later) is freed when its last reference is released, as the
+            // cleanup flag is set
+            if (o->type_owner_retirement_ref) {
+                o->type_owner_retirement_ref = false;
+                o->derefTypeOwner();
+            } else if (!o->hasTypeOwnerReferences() && !o->type_owner_retiring) {
+                // one that another thread is retiring is freed when its last reference is released
+                o->freeTypeOwner();
+            }
+        }
+    }
+
     // dereference global default values
     NullString->deref();
     piNumber->deref();

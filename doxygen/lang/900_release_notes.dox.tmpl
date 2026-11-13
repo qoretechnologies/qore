@@ -1688,6 +1688,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a value whose type or member types name a class, hashdecl or enum of a deleted @ref Qore::Program "Program"
+      (such as \c list<*Foo>), and a class imported from such a Program, used the freed types of the Program and could
+      crash; the declarations are now kept with their types (see @ref program_deletion_types) (issue #5790)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash

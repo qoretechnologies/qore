@@ -39,6 +39,7 @@
 #include <vector>
 #include <utility>
 #include <functional>
+#include "qore/intern/QoreTypeOwner.h"
 #include <atomic>
 #include <memory>
 
@@ -4504,6 +4505,7 @@ DLLLOCAL const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSi
     @param ti2 a second type being destroyed (the or-nothing variant); may be nullptr
 */
 DLLLOCAL void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2);
+
 
 //! What a generic cache removed, released after every lock is released
 /** A removed entry can hold the last reference to an object whose destruction purges types

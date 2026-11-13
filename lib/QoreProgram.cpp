@@ -3226,16 +3226,22 @@ void qore_program_private::del(ExceptionSink* xsink) {
     // behind the entire global compile queue.
     QoreJIT::instance().waitForBgCompileQueue(pgm);
 
-    // delete the namespace and all data
-    qore_root_ns_private::get(*RootNS)->deleteData(xsink);
+    {
+        // the declarations of the namespace that survive it (referenced by values or by other Programs) keep the
+        // declarations whose types they name, and the others are destroyed together (issue #5790)
+        QoreTypeOwnerBatch type_owner_batch(*qore_root_ns_private::get(*RootNS));
 
-    // no more code of this Program runs: free the thread-local data of the family for the last time if this
-    // Program is its root, including the data that the destructors run above have saved; the members of the family
-    // that are still alive become roots of families of their own
-    freeFamilyThreadData(true, xsink);
+        // delete the namespace and all data
+        qore_root_ns_private::get(*RootNS)->deleteData(xsink);
 
-    delete RootNS;
-    RootNS = nullptr;
+        // no more code of this Program runs: free the thread-local data of the family for the last time if this
+        // Program is its root, including the data that the destructors run above have saved; the members of the
+        // family that are still alive become roots of families of their own
+        freeFamilyThreadData(true, xsink);
+
+        delete RootNS;
+        RootNS = nullptr;
+    }
 
     // delete all root code
     // method call can be repeated

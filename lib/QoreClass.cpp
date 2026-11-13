@@ -1048,6 +1048,13 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     cls = old.cls->copyImport();
     cls->priv = this;
 
+    // a class imported from another Program uses the types of its source, which must not be freed with the source
+    // Program (issue #5790)
+    if (deref_source_program) {
+        old.ref();
+        import_source = const_cast<qore_class_private*>(&old);
+    }
+
     printd(5, "qore_class_private::qore_class_private() this: %p creating copy of '%s' (old: '%s') ID:%d cls: %p " \
         "old: %p sys: %d pgm: %p -> %p\n", this, name.c_str(), old.name.c_str(), classID, cls, old.cls, sys,
         old.spgm.load(), spgm);
@@ -1120,6 +1127,45 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
+    releaseMethodsAndData(false);
+
+    // the next class allocated can reuse these addresses and this class's
+    qore_purge_derived_types(cls, owns_typeinfo ? typeInfo : nullptr,
+        owns_ornothingtypeinfo ? orNothingTypeInfo : nullptr);
+
+    if (owns_typeinfo)
+        delete typeInfo;
+
+    if (owns_ornothingtypeinfo)
+        delete orNothingTypeInfo;
+
+    if (mud) {
+        try {
+            mud->doDeref();
+        } catch (AbstractException& e) {
+            // there is currently no way to handle these exceptions
+#ifdef DEBUG
+            // this will result in the exception being printed out on the console
+            ExceptionSink xsink;
+            e.convert(&xsink);
+#endif
+        }
+    }
+
+    // the base classes are kept by a retired class, as the type checks of its types read them (issue #5790)
+    delete scl;
+    scl = nullptr;
+
+    // the source of an imported class is released after its types are no longer used (issue #5790)
+    if (import_source) {
+        import_source->deref(false, false, false);
+    }
+
+    // the declarations named by this class's types are no longer kept for it
+    qore_type_owner_destroyed(&type_owner);
+}
+
+void qore_class_private::releaseMethodsAndData(bool retiring) {
     // dispatch caches keyed by this class's address, its methods or its types must miss from now on, before the
     // memory can be reused for another class
     qore_bump_method_dispatch_epoch();
@@ -1132,7 +1178,9 @@ qore_class_private::~qore_class_private() {
     }
     //assert(!spgm);
 
-    assert(!refs.reference_count());
+    // a class being retired can be referenced by code that reached it through a derived type (ex: the reflection
+    // API, issue #5790); such code does not use what is released here
+    assert(retiring || !refs.reference_count());
     assert(!var_refs.reference_count());
     assert(var_ref_wrappers.empty());
     assert(!data_refs.reference_count());
@@ -1157,38 +1205,105 @@ qore_class_private::~qore_class_private() {
         //printd(5, "qore_class_private::~qore_class_private() deleting method %p %s::%s()\n", m, name, m->getName());
         delete i.second;
     }
+    hm.clear();
 
     // delete static methods
     for (auto& i : shm) {
         //printd(5, "qore_class_private::~qore_class_private() deleting static method %p %s::%s()\n", m, name, m->getName());
         delete i.second;
     }
+    shm.clear();
 
-    delete scl;
     delete system_constructor;
+    system_constructor = nullptr;
+}
 
-    // the next class allocated can reuse these addresses and this class's
-    qore_purge_derived_types(cls, owns_typeinfo ? typeInfo : nullptr,
-        owns_ornothingtypeinfo ? orNothingTypeInfo : nullptr);
+__attribute__((noinline)) void qore_class_private::derefLast(bool in_del) {
+    // a class whose types are still named is retired, not freed (issue #5790); not possible when the class object is
+    // being deleted
+    if (!in_del && qore_type_owner_released(&type_owner)) {
+        return;
+    }
+    // remove the private data pointer, delete the class object, then delete ourselves
+    cls->priv = nullptr;
+    if (!in_del) {
+        delete cls;
+    }
 
-    if (owns_typeinfo)
-        delete typeInfo;
+    // delete all linked QoreClass objects
+    for (auto& i : qcrefs) {
+        i.first->priv = nullptr;
+        delete i.first;
+    }
 
-    if (owns_ornothingtypeinfo)
-        delete orNothingTypeInfo;
+    delete this;
+}
 
+void qore_class_private::retireTypeOwner() {
+    printd(5, "qore_class_private::retireTypeOwner() this: %p %s\n", this, name.c_str());
+    // what the type checks of the class's types read is kept; see the header
+    releaseMethodsAndData(true);
+    constlist.reset();
+    for (auto& i : members.member_list) {
+        free(i.first);
+        delete i.second;
+    }
+    members.member_list.clear();
+    member_init_list.clear();
+    for (auto& i : ahm) {
+        delete i.second;
+    }
+    ahm.clear();
     if (mud) {
         try {
             mud->doDeref();
         } catch (AbstractException& e) {
-            // there is currently no way to handle these exceptions
 #ifdef DEBUG
-            // this will result in the exception being printed out on the console
             ExceptionSink xsink;
             e.convert(&xsink);
 #endif
         }
+        mud = nullptr;
     }
+}
+
+void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+    for (auto& i : members.member_list) {
+        if (i.second) {
+            qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+        }
+    }
+    for (auto& i : vars.member_list) {
+        if (i.second) {
+            qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+        }
+    }
+    for (const hm_method_t* m : {&hm, &shm}) {
+        for (auto& i : *m) {
+            QoreFunctionIterator fi(*qore_method_private::get(*i.second)->getFunction());
+            while (fi.next()) {
+                const AbstractFunctionSignature* sig = fi.getVariant()->getSignature();
+                if (!sig) {
+                    continue;
+                }
+                qore_type_owner_add_name(names, sig->getReturnTypeInfo(), &type_owner);
+                for (unsigned p = 0; p < sig->numParams(); ++p) {
+                    qore_type_owner_add_name(names, sig->getParamTypeInfo(p), &type_owner);
+                }
+            }
+        }
+    }
+}
+
+void qore_class_private::freeTypeOwner() {
+    assert(!refs.reference_count());
+    cls->priv = nullptr;
+    delete cls;
+    for (auto& i : qcrefs) {
+        i.first->priv = nullptr;
+        delete i.first;
+    }
+    delete this;
 }
 
 void qore_class_private::addBuiltinStaticVar(const char* vname, QoreValue value, ClassAccess access, const QoreTypeInfo* vTypeInfo) {
