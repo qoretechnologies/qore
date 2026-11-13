@@ -2499,6 +2499,10 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         }
         // restore info hash for the descriptor handoff
         mod_info.info = info_holder.release();
+        // whether the module is library code is decided by its file name, once: addModule() records it on the
+        // module, and the module's initialization gives its Program the sandbox that it decides
+        // (inheritAOTModuleSandbox()) (issue #5913)
+        QoreModuleLoadFrameHelper load_frame(feature, isTrustedModulePath(path));
         mi = loadBinaryModuleFromDesc(xsink, nullptr, mod_info, path, feature, false,
             nullptr, tpgm, QMLO_NONE);
         if (!mi || xsink) {
@@ -3683,8 +3687,10 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
 
 void QoreModuleManager::inheritAOTModuleSandbox(QoreProgram& module_pgm, QoreProgram* loader_pgm,
         const char* feature, const char* path) const {
-    // whether the module is library code was decided when its load started, as for a source module; a module
-    // initialized with no load of it in progress in this thread is judged by its file, as in addModule()
+    // whether the module is library code was decided when its load started (every load by the module manager,
+    // also the registration of a statically linked module, records it), as for a source module and as addModule()
+    // records it on the module; a module initialized outside a load by the module manager (an init function called
+    // directly) is judged by the path it was initialized with
     const QoreModuleLoadFrame* f = module_load_frame;
     const bool trusted = (f && feature && !strcmp(f->feature, feature)) ? f->trusted : isTrustedModulePath(path);
     inherit_module_sandbox_manager(module_pgm, loader_pgm, trusted);

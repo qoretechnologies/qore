@@ -840,6 +840,11 @@ public:
         chose it; it must be called before any of the module's code runs and before its recorded module commands are
         replayed in its Program (issue #5913)
 
+        Whether the module is library code is the decision recorded when its load started (QoreModuleLoadFrameHelper,
+        pushed by every load by the module manager, including registerAOTStaticModuleIntern()), so that it agrees
+        with the trusted flag that addModule() records on the module; \a path is used only for a module whose
+        initialization runs outside such a load (an init function called directly)
+
         @param module_pgm the AOT module's new Program
         @param loader_pgm the Program loading the module, if any
         @param feature the module's feature name
