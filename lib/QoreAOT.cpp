@@ -923,6 +923,17 @@ static bool qore_aot_is_debug_instruction(const QoreIRInstruction& inst) {
     return inst.opcode == QoreIROpcode::DebugStatement || inst.opcode == QoreIROpcode::DebugBlock;
 }
 
+//! Returns true if a summary of a function body skips an instruction: a debugger instruction, and the check of the
+//! object of a call through self (CheckCallTarget with no operand, issue #5823)
+/** A summary takes the place of the call of the function it describes, which is made through self by a caller that
+    checks its object first: a call through self in the summarized body has the same object, which nothing in a body
+    that has a summary can delete.
+*/
+static bool qore_aot_is_summary_skipped_instruction(const QoreIRInstruction& inst) {
+    return qore_aot_is_debug_instruction(inst)
+        || (inst.opcode == QoreIROpcode::CheckCallTarget && inst.operands.empty());
+}
+
 //! Returns true if a block has more than the given number of instructions that are not the instructions of a debugger
 /** The debugger instructions of a statement precede its code, so the scan ends after a small multiple of the limit
 */
@@ -2080,6 +2091,7 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
     // the functional domains the Program's code uses: loading a module checks them against the restrictions of the
     // Program loading it, as parsing the module's source checks its code (issue #5556)
     serializeFunctionalDomain(writer, pp->aot_used_dom);
+    serializeModuleDomains(writer, pp->module_own_dom);
     writer.feature_flags = feature_flags;
     return true;
 }
@@ -2776,6 +2788,10 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context, constant_reverse_map);
+    // the object of the calls through self (issue #5823)
+    if (sig) {
+        lowering.setSelfLocal(sig->selfid);
+    }
     if (!lowering.lowerStatementBlock(statements, error)) {
         if (q_env_is_set("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: lowering failed for '%s': %s\n", name, error.c_str());
@@ -4874,6 +4890,19 @@ private:
 //! back into one giant function.  On failure, erases any helper functions
 //! already emitted and returns false — the caller falls back to un-outlined
 //! lowering.
+//! Adds the locals that the lowered outlined helpers keep in native storage to those of the coordinator
+/** The coordinator's own locals that only a helper uses are kept by the helper (see
+    QoreIRFunction::aot_native_local_flags)
+*/
+static void aotMergeOutlinedNativeLocalFlags(const QoreIRFunction& coordinator,
+        const std::vector<AOTOutlinedHelper>& helpers) {
+    for (const auto& h : helpers) {
+        for (const auto& [key, flags] : h.ir_func->aot_native_local_flags) {
+            coordinator.aot_native_local_flags[key] |= flags;
+        }
+    }
+}
+
 static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
         llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
@@ -6767,7 +6796,7 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
     const QoreIRInstruction* operation = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -7335,7 +7364,7 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
         return index;
     };
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -7677,7 +7706,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
     const QoreIRInstruction* operation = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -8063,7 +8092,7 @@ static bool qore_aot_get_conditional_aggregate_shape(
                 return false;
             }
             const auto& inst_ptr = block->instructions[offset];
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || terminated) {
@@ -8541,7 +8570,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                     "AOT aggregate-return instruction analysis")) {
             return false;
         }
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -9108,7 +9137,7 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                 cancelled = true;
                 return fail();
             }
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -9585,7 +9614,7 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
     int8_t returned_param = -1;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -9667,7 +9696,7 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
     int8_t returned_param = -1;
     bool returned = false;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || returned) {
@@ -9913,7 +9942,7 @@ static int8_t qore_aot_get_composed_boxed_return_param(
         for (const auto& block : func.blocks) {
             for (const auto& inst_ptr : block->instructions) {
                 const QoreIRInstruction* inst = inst_ptr.get();
-                if (inst && qore_aot_is_debug_instruction(*inst)) {
+                if (inst && qore_aot_is_summary_skipped_instruction(*inst)) {
                     continue;
                 }
                 if (!inst || inst->exception_target) {
@@ -10233,7 +10262,7 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
     AOTComposedIntSourceKind source_kind = AOTComposedIntSourceKind::None;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -10404,7 +10433,7 @@ static bool qore_aot_get_context_int(const QoreIRFunction& func,
     std::unordered_map<uint32_t, AffineValue> values;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -10542,7 +10571,7 @@ static bool qore_aot_get_global_int(const QoreIRFunction& func,
     std::unordered_map<uint32_t, AffineValue> values;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
-        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
             continue;
         }
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -11604,7 +11633,7 @@ static bool qore_aot_collect_int_expression_summaries(
         if (func->blocks.size() >= 3) {
             const QoreIRBranchIfInstruction* branch = nullptr;
             for (const auto& inst_ptr : func->blocks.front()->instructions) {
-                if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                     continue;
                 }
                 if (!inst_ptr || inst_ptr->exception_target || branch) {
@@ -11666,7 +11695,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<const LocalVar*, int> nested_locals = local_values;
                 const QoreIRBranchIfInstruction* nested_branch = nullptr;
                 for (const auto& inst_ptr : nested_block->instructions) {
-                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                         continue;
                     }
                     if (!inst_ptr || inst_ptr->exception_target || nested_branch) {
@@ -11719,7 +11748,7 @@ static bool qore_aot_collect_int_expression_summaries(
                     std::unordered_map<const LocalVar*, int> block_locals = initial_locals;
                     const QoreIRReturnInstruction* ret = nullptr;
                     for (const auto& inst_ptr : block->instructions) {
-                        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                             continue;
                         }
                         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -11781,7 +11810,7 @@ static bool qore_aot_collect_int_expression_summaries(
                     block_values = values;
                     block_locals = local_values;
                     for (const auto& inst_ptr : block->instructions) {
-                        if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                        if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                             continue;
                         }
                         if (!inst_ptr || inst_ptr->exception_target || target) {
@@ -11859,7 +11888,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<uint32_t, int> merge_values = values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : true_merge->instructions) {
-                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                         continue;
                     }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -11925,7 +11954,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 std::unordered_map<const LocalVar*, int> block_locals = local_values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : block->instructions) {
-                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                         continue;
                     }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -11964,7 +11993,7 @@ static bool qore_aot_collect_int_expression_summaries(
 
         const QoreIRReturnInstruction* ret = nullptr;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -12468,7 +12497,7 @@ static bool qore_aot_collect_float_expression_summaries(
                     return -1;
                 }
                 const QoreIRInstruction* inst = inst_ptr.get();
-                if (is_ignored(inst->opcode)) {
+                if (is_ignored(inst->opcode) || qore_aot_is_summary_skipped_instruction(*inst)) {
                     continue;
                 }
                 if (inst->opcode == QoreIROpcode::Return) {
@@ -13613,7 +13642,7 @@ bool qore_ir_resolve_batch_function_summaries(
         const QoreIRInstruction* comparison = nullptr;
         const QoreIRBranchIfInstruction* branch = nullptr;
         for (const auto& inst_ptr : entry->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || branch) {
@@ -13670,7 +13699,7 @@ bool qore_ir_resolve_batch_function_summaries(
             std::unordered_map<uint32_t, ScalarIntOperand> values = entry_values;
             const QoreIRReturnInstruction* ret = nullptr;
             for (const auto& inst_ptr : block->instructions) {
-                if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                     continue;
                 }
                 if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -13742,7 +13771,7 @@ bool qore_ir_resolve_batch_function_summaries(
                 }
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : block->instructions) {
-                    if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+                    if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                         continue;
                     }
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -13846,7 +13875,7 @@ bool qore_ir_resolve_batch_function_summaries(
         const QoreIRSelfMemberInstruction* load = nullptr;
         const QoreIRReturnInstruction* ret = nullptr;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -13908,7 +13937,7 @@ bool qore_ir_resolve_batch_function_summaries(
         std::vector<std::pair<std::string, int8_t>> assignments;
         bool returned = false;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || returned) {
@@ -14042,7 +14071,7 @@ bool qore_ir_resolve_batch_function_summaries(
         bool assigned = false;
         bool returned = false;
         for (const auto& inst_ptr : func->blocks.front()->instructions) {
-            if (inst_ptr && qore_aot_is_debug_instruction(*inst_ptr)) {
+            if (inst_ptr && qore_aot_is_summary_skipped_instruction(*inst_ptr)) {
                 continue;
             }
             if (!inst_ptr || inst_ptr->exception_target || returned) {
@@ -20823,6 +20852,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         std_entry_ok = retry_lowerer.lowerFunction(*ir_func, module,
                             llvm_error);
                     }
+                    if (std_entry_ok && fn_outliner.active()) {
+                        aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers);
+                    }
 
                     // Compile fast entry for AOT Approach B.
                     if (std_entry_ok && fast_entry_eligible) {
@@ -21294,6 +21326,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             }
                             method_ok = retry_lowerer.lowerFunction(*ir_func, module,
                                 llvm_error);
+                        }
+                        if (method_ok && fn_outliner.active()) {
+                            aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers);
                         }
 
                         if (method_ok && fast_entry_eligible) {
@@ -26452,7 +26487,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     ValueHolder init_c_holder(nullptr);
     QoreParseOptions parsed_po;
     {
-        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink);
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
+        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink, QMRL_LOCK);
 
         // Use parsePending() + parseCommit() like interpreted module loading does.
         // This allows forward references in the init closure to be resolved during commit
@@ -26472,11 +26509,6 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
         mod_ctx.close();
     }
-
-    // Clean up phantom module dependencies created during compilation
-    // (the module being compiled is not actually loaded, so any dependencies
-    // created by trySetUserModuleDependency need to be removed)
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
 
     if (qoreAotHandleWarnings(wsink, error, "module parsing")) {
         return false;
@@ -26877,7 +26909,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     // (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
     {
-        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink);
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
+        QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         // Parse main .qm file with parsePending()
         qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
@@ -27261,11 +27295,6 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             compiled_count, total_funcs, failed_count, target_triple,
             (compile_only || target_triple) ? obj_path : output_path);
     }
-
-    // Clean up phantom module dependencies created during compilation
-    // (the module being compiled is not actually loaded, so any dependencies
-    // created by trySetUserModuleDependency need to be removed)
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
 
     return true;
 }
@@ -30739,8 +30768,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
 
     ValueHolder init_c_holder(nullptr);
     {
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
-            *qpgm, xsink);
+            *qpgm, xsink, QMRL_LOCK);
 
         qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink,
             QP_WARN_DEFAULT);
@@ -31130,7 +31161,6 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             target_triple, output_path);
     }
 
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
     return true;
 }
 
@@ -31308,8 +31338,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
 
     ValueHolder init_c_holder(nullptr);
     {
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
-            qm_path.c_str(), *qpgm, xsink);
+            qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
@@ -31642,7 +31674,6 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             target_triple ? glue_obj : output_path, true);
     }
 
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
     return true;
 }
 
@@ -31861,8 +31892,10 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
 
     ValueHolder init_c_holder(nullptr);
     {
+        // the module is parsed only to be compiled and is never registered: closing its context
+        // releases the dependencies that its parse registered, whether or not it failed (#5953)
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
-            qm_path.c_str(), *qpgm, xsink);
+            qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         qpgm->parsePending(main_source.c_str(), qm_path.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
@@ -32189,7 +32222,6 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             target_triple ? glue_obj : output_path, true);
     }
 
-    QMM.removeUserModuleDependency(mod_info.name.c_str());
     return true;
 }
 
@@ -32469,8 +32501,18 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
         slots.call_relocation_kinds.emplace(bits, kind);
     };
 
-    auto recordContextExprSlots = [&recordExprSlot](const QoreIRContextInstruction* ci) {
-        auto record = [&recordExprSlot](const QoreValue& expr) {
+    // the runtime evaluates the expressions of find and context whole as ASTs, so they are written in full
+    // (AOTSlotMap::ast_expr_bits)
+    auto markASTExpr = [&slots](const QoreValue& expr) {
+        if (expr.hasNode()) {
+            uint64_t bits;
+            memcpy(&bits, &expr, sizeof(bits));
+            slots.ast_expr_bits.insert(bits);
+        }
+    };
+
+    auto recordContextExprSlots = [&recordExprSlot, &markASTExpr](const QoreIRContextInstruction* ci) {
+        auto record = [&recordExprSlot, &markASTExpr](const QoreValue& expr) {
             if (!expr) {
                 return;
             }
@@ -32478,6 +32520,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
             uint64_t bits;
             memcpy(&bits, &expr, sizeof(bits));
             recordExprSlot(bits, QoreIROpcode::Context);
+            markASTExpr(expr);
         };
 
         record(ci->exp);
@@ -32715,6 +32758,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CheckCallTarget:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (shouldSkipExprInstructionExprSlot(ei)) {
@@ -32889,6 +32933,14 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                 case QoreIROpcode::Context: {
                     auto* ci = static_cast<QoreIRContextInstruction*>(inst.get());
                     recordContextExprSlots(ci);
+                    break;
+                }
+                case QoreIROpcode::Find: {
+                    // the slots themselves are assigned when the instruction is lowered to LLVM
+                    auto* fi = static_cast<QoreIRFindInstruction*>(inst.get());
+                    markASTExpr(fi->exp);
+                    markASTExpr(fi->find_exp);
+                    markASTExpr(fi->where);
                     break;
                 }
                 case QoreIROpcode::OnBlockExit: {
@@ -33190,6 +33242,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CheckCallTarget:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (shouldSkipExprInstructionExprSlot(ei)) {
@@ -33695,6 +33748,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
+                case QoreIROpcode::CheckCallTarget:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (shouldSkipExprInstructionExprSlot(ei)) {
@@ -35212,11 +35266,20 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         return id;
     }
 
+    // an expression that the runtime evaluates whole as an AST (find, context) is written in full: the identity of a
+    // call at its root would lose the call's arguments (qore#5939)
+    if (slots.ast_expr_bits.count(bits)) {
+        id.kind = AOTExprKind::AST_EXPR;
+        id.child_expr = v;
+        return id;
+    }
+
     // FunctionCallNode: regular function call
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         id.kind = AOTExprKind::FUNC_CALL;
         if (const char* deferred_source_function = call->getAOTDeferredSourceFunction()) {
             id.ref1 = deferred_source_function;
+            id.ref2 = QORE_AOT_DEFERRED_SOURCE_CALL_SLOT;
             return id;
         }
         // Namespace-qualified identity so slot resolution at runtime
@@ -35491,8 +35554,16 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // generic code, qore#5733)
         id.ref1 = std::string(closure->isLambda() ? "1" : "0") + ","
                 + (closure->isInMethod() ? "1" : "0") + "," + (closure->needsTypeContext() ? "1" : "0");
-        // ref2 = class type path (empty if no class context)
+        // ",1" after them: the default values use the closure's object (issue #5931); left out otherwise
+        if (closure->defaultsNeedObject()) {
+            id.ref1 += ",1";
+        }
+        // ref2 = class type path (empty if no class context); for a closure that is not in a method, the class that
+        // it runs in (issue #5907)
         const QoreTypeInfo* cti = ucf->getClassType();
+        if (!cti && !closure->isInMethod() && closure->getStaticClass()) {
+            cti = closure->getStaticClass()->getTypeInfo();
+        }
         if (cti) {
             id.ref2 = getSlotTypePath(cti);
         }
@@ -36097,7 +36168,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     if (dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-        id.kind = AOTExprKind::DOT_EVAL_EXPR;
+        id.kind = AOTExprKind::AST_EXPR;
         id.child_expr = v;
         return id;
     }
@@ -36709,6 +36780,14 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         }
         if (lv->isReadOnly()) {
             lid.flags |= 0x10; // read-only binding
+        }
+        // a parameter or a local variable of the function that its native code keeps in native storage (see
+        // QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE); closure-bound variables are always on the closure variable stack
+        if (!lv->closureUse() && ((lid.flags & 0x01) || ordinal_it != body_local_ordinals.end())) {
+            auto nit = func.aot_native_local_flags.find(ptr);
+            if (nit != func.aot_native_local_flags.end()) {
+                lid.flags |= nit->second;
+            }
         }
     }
 

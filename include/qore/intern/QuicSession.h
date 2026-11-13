@@ -546,6 +546,15 @@ public:
     */
     DLLLOCAL int sendStreamControlFrame(int64_t stream_id, const void* data, size_t len, ExceptionSink* xsink);
 
+#ifdef DEBUG
+    //! Resumes the streams whose staged data dbg_quic_hold_stream_data() held back (debug builds only)
+    /** Called by dbg_quic_release_stream_data() after it clears the hold: a held stream returned
+        \c NGHTTP3_ERR_WOULDBLOCK, so nghttp3 does not read it again until it is resumed; the data is then written
+        with the session's next write, for example when a packet of the peer is processed.
+    */
+    DLLLOCAL static void dbgResumeHeldStreams();
+#endif
+
     //! Sets the limit of the data of a streaming response that is staged for sending (for example an SSE stream)
     /** Without a limit, a send returns 1 (buffer full) once more than @ref QUIC_MAX_STREAM_BODY is staged.  With a
         limit, a send that would make the staged data exceed it returns 1 instead, unless nothing is staged, so that
@@ -590,6 +599,10 @@ public:
         @return 0 if buffer drained, 1 if it is still full, -1 if stream not found or closed
     */
     DLLLOCAL int waitForStreamDrain(int64_t stream_id, int timeout_ms);
+
+    //! Returns 0 if the peer has acknowledged all the data staged for the stream (or the stream is gone), 1 otherwise;
+    //! waiters are woken by notifyStreamDrain() when the data is acknowledged or the stream closes
+    DLLLOCAL int streamSendFlushed(int64_t stream_id);
 
     //! Take the next completed stream (transfers ownership)
     DLLLOCAL std::unique_ptr<QuicStreamInfo> takeCompletedStream();
@@ -1263,6 +1276,17 @@ public:
     */
     DLLLOCAL ssize_t writeConnectionClose(uint8_t* buf, size_t buflen);
 
+    //! Submits the GOAWAY notice of a server drain, once per session (qore#5899)
+    /** The client opens no new request stream; the session is closed when the streams that it has end (see
+        SocketQuicServerPollOperation::drainSessions())
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int submitDrainNotice(ExceptionSink* xsink);
+
+    //! Returns true if any application-visible request or response stream is active
+    DLLLOCAL bool hasActiveApplicationStreams() const;
+
     //! Clear the stored qore_socket_private pointer
     /** Called after session creation to avoid dangling pointer,
         since sock_ is only needed during initialization for TLS context.
@@ -1873,6 +1897,8 @@ private:
     std::atomic<bool> attempting_0rtt_{false};          //!< true when attempting 0-RTT connection
     std::atomic<bool> early_data_rejected_{false};    //!< true when 0-RTT early data was rejected by server
     std::atomic<bool> early_data_ready_{false};       //!< true when 0-RTT TX key installed (can send early data)
+    //! true once submitDrainNotice() submitted the notice; protected by mtx_
+    bool drain_notice_sent_ = false;
     std::atomic<bool> goaway_sent_{false};           //!< true when final GOAWAY (submitShutdown) has been queued; false during notice-only phase
     std::atomic<bool> closed_{false};                //!< true when session is being torn down (abort); wakes blocked handlers
     //! True when ngtcp2 reported NGTCP2_ERR_IDLE_CLOSE from handleExpiryLocked.

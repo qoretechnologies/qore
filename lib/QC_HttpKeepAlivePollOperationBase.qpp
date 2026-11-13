@@ -233,6 +233,13 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::continueIdlePoll(ExceptionSink* xs
         return transitionToHeaderPhase(xsink);
     }
 
+    // a draining server closes a connection that has no request (a request that arrived is read above and answered
+    // with Connection: close) (qore#5899)
+    if (sock_obj->isHttpDraining()) {
+        transitionState(State::IDLE, State::CLOSED, "idle-drained");
+        return nullptr;
+    }
+
     // Need to wait for data; include poll_timeout_ms so the EventLoop wakes up
     // when the idle deadline expires, not just when the full operation timeout expires
     int64_t remaining_us = deadline_us - nowUs();

@@ -1,0 +1,48 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SocketStreamFlushed.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Socket::waitForHttp2StreamFlushed() and Socket::waitForQuicClientStreamFlushed() (issue #6001): without a
+    session they raise an error.  The HTTP/2 wait is tested with a session through the WebSocket client in
+    examples/test/qlib/WebSocketClient/WebSocketControlFrameQueue.qtest, whose test server withholds flow-control
+    credit; the HTTP/3 wait is not tested with a session, as that server is HTTP/2 only and no HTTP/3 server in the
+    tests withholds credit from a client stream.
+*/
+
+%modern
+
+%requires QUnit
+
+%exec-class SocketStreamFlushedTest
+
+class SocketStreamFlushedTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SocketStreamFlushed", "1.0") {
+        addTestCase("the flush waits raise an error without a session", \noSessionTest());
+        set_return_value(main());
+    }
+
+    noSessionTest() {
+        Socket s();
+        assertThrows("HTTP2-ERROR", "no HTTP/2 session", \s.waitForHttp2StreamFlushed(), (1, 0));
+        assertThrows("QUIC-ERROR", "no active QUIC session", \s.waitForQuicClientStreamFlushed(), (0, 0));
+    }
+}

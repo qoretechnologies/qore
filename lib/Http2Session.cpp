@@ -558,6 +558,25 @@ int Http2Session::sendConnectionPrefaceNonBlocking(ExceptionSink* xsink) {
                 nghttp2_strerror(rv));
             return -1;
         }
+        // the connection window bounds the data in flight on all the streams of the connection: at the RFC 9113
+        // default of 65535 bytes, every 64 KiB received needs a WINDOW_UPDATE round trip whatever the stream windows,
+        // and a loaded host that takes ~200 ms to schedule a round trip receives a few hundred KB/s; it is raised to
+        // ConnectionWindowStreams stream windows (nghttp2 sends the WINDOW_UPDATE for stream 0; the received data is
+        // credited as before, so the stream windows still bound the data buffered for each stream)
+#ifdef DEBUG
+        // tests that detect lost connection credit by watching the window shrink keep the default window
+        if (!qore_dbg_h2_default_connection_window.load())
+#endif
+        {
+            int64_t window = std::min<int64_t>(static_cast<int64_t>(local_settings.initial_window_size)
+                * ConnectionWindowStreams, NGHTTP2_MAX_WINDOW_SIZE);
+            rv = nghttp2_session_set_local_window_size(session, NGHTTP2_FLAG_NONE, 0, static_cast<int32_t>(window));
+            if (rv != 0) {
+                xsink->raiseException("HTTP2-ERROR", "failed to set the connection window: %s",
+                    nghttp2_strerror(rv));
+                return -1;
+            }
+        }
         connection_preface_submitted = true;
     }
 
@@ -1086,6 +1105,18 @@ int Http2Session::submitShutdownGoaway(ExceptionSink* xsink) {
     return submitGoaway(NGHTTP2_NO_ERROR, nullptr, 0, xsink) ? -1 : 0;
 }
 
+int Http2Session::startDrain(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    draining.store(true, std::memory_order_release);
+    return submitShutdownGoaway(xsink);
+}
+
+bool Http2Session::isDrainComplete() const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    return draining.load(std::memory_order_acquire) && streams.empty() && send_offset >= send_buffer.size()
+        && !nghttp2_session_want_write(session);
+}
+
 int Http2Session::sendShutdownGoaway(ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (submitShutdownGoaway(xsink)) {
@@ -1502,9 +1533,14 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     // Release memory when fully drained to prevent long-lived idle connections
     // from holding onto large send buffer allocations
     if (send_offset == send_buffer.size()) {
+        bool had_data = !send_buffer.empty();
         send_buffer_base += send_buffer.size();
         send_buffer.clear();
         send_offset = 0;
+        // a waiter for a stream's data to be sent (streamSendFlushed()) waits for the send buffer as well
+        if (had_data) {
+            notifyStreamDrain();
+        }
     }
 
     printd(5, "sendPendingData() complete, want_write=%d pending=%zu\n",
@@ -2127,6 +2163,19 @@ bool Http2Session::hasStreamingData(int32_t& out_stream_id) {
     return false;
 }
 
+#ifdef DEBUG
+size_t Http2Session::dbgStreamingDataCount() {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    size_t count = 0;
+    for (auto& it : streams) {
+        if (it.second->streaming && it.second->headers_complete && !it.second->body.empty()) {
+            ++count;
+        }
+    }
+    return count;
+}
+#endif
+
 bool Http2Session::takeStreamingEndStream(int32_t& out_stream_id, QoreHashNode** trailers_out) {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& [id, info] : streams) {
@@ -2180,6 +2229,11 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
         printd(1, "HTTP2 WARN: outgoing frame length %d exceeds peer max_frame_size %u\n",
             (int)frame->hd.length, remote_max);
     }
+#ifdef DEBUG
+    if (frame->hd.type == NGHTTP2_WINDOW_UPDATE && !frame->hd.stream_id) {
+        qore_dbg_h2_connection_window_updates[is_server ? 1 : 0].fetch_add(1, std::memory_order_relaxed);
+    }
+#endif
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         printd(5, "onFrameSendCallback GOAWAY: last_stream_id=%d error_code=%u\n",
             frame->goaway.last_stream_id, frame->goaway.error_code);
@@ -2582,9 +2636,15 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
                 nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
                     NGHTTP2_REFUSED_STREAM);
                 stream->body.clear();
-                // the discarded data is credited; data credited on consumption before is settled with the stream
-                if (len && !h2->is_server) {
-                    h2->consumeReceivedData(stream_id, len);
+                // the discarded chunk is credited here on both sides: the server credits arriving data below, which
+                // this return skips, so its connection window lost the chunk with every oversized tunnel (issue
+                // #5841); data that the client credits on consumption is settled with the stream
+                if (len) {
+                    int rv = h2->consumeReceivedData(stream_id, len);
+                    if (rv) {
+                        printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len,
+                            stream_id, nghttp2_strerror(rv));
+                    }
                 }
                 return 0;
             }
@@ -3494,6 +3554,20 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
     }
     size_t pending = it->second.data.size() - it->second.offset;
     return pending <= MAX_STREAM_BUFFER ? 0 : 1;
+}
+
+int Http2Session::streamSendFlushed(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // nothing more is sent on a closed session or a stream that nghttp2 no longer has
+    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+        return 0;
+    }
+    auto it = pending_body_data.find(stream_id);
+    if (it != pending_body_data.end() && it->second.offset < it->second.data.size()) {
+        return 1;
+    }
+    // the data that nghttp2 took is written from the session's send buffer
+    return send_offset < send_buffer.size() ? 1 : 0;
 }
 
 void Http2Session::notifyStreamDrain() {

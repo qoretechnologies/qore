@@ -236,12 +236,25 @@ public:
 
     DLLLOCAL int parseCheckComplexHashAssignment(const QoreProgramLocation* loc, const QoreTypeInfo* vti) const;
 
+    DLLLOCAL QoreHashNode* newHash(const QoreParseListNode* args, bool runtime_check,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
+
     DLLLOCAL QoreHashNode* newHash(const QoreParseListNode* args, bool runtime_check, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink, QoreHashNode* rv = nullptr) const;
 
+    DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
     DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, const QoreHashNode* overrides, bool runtime_check,
             ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, const QoreHashNode* overrides, bool runtime_check,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreHashNode* newHashWithOverridesImpl(const QoreHashNode* init, const QoreHashNode* overrides,
+            bool runtime_check, ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
 
     DLLLOCAL QoreHashNode* newHashFromTemporary(QoreHashNode* init, bool runtime_check,
             ExceptionSink* xsink, bool values_prechecked = false,
@@ -287,6 +300,24 @@ public:
         // the outcome must reflect only this type check; see ScopedTypeCheckSink
         ScopedTypeCheckSink ts(xsink);
         QoreTypeInfo::acceptInputKey(mem->getTypeInfo(), key, *val, *ts);
+        if (ts.raised()) {
+            (*ts)->appendLastDescription(" (while assigning to hashdecl '%s')", name.c_str());
+            return -1;
+        }
+        return 0;
+    }
+    DLLLOCAL int runtimeAssignKey(const char* key, ValueHolder& val, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
+        const HashDeclMemberInfo* mem = findMember(key);
+        if (!mem) {
+            if (xsink) {
+                xsink->raiseException("HASHDECL-KEY-ERROR", "cannot assign unknown key '%s' to hashdecl '%s'", key,
+                    name.c_str());
+            }
+            return -1;
+        }
+        // the outcome must reflect only this type check; see ScopedTypeCheckSink
+        ScopedTypeCheckSink ts(xsink);
+        QoreTypeInfo::acceptInputKey(mem->getTypeInfo(), key, *val, *ts, policy);
         if (ts.raised()) {
             (*ts)->appendLastDescription(" (while assigning to hashdecl '%s')", name.c_str());
             return -1;
@@ -613,6 +644,9 @@ public:
     //! Creates a hash of the hashdecl from a type that can be another Program's (see needsInitEntry())
     DLLLOCAL QoreHashNode* newHashFromType(const QoreHashNode* init, ExceptionSink* xsink) const;
 
+    DLLLOCAL QoreHashNode* newHashFromType(const QoreHashNode* init, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
     //! Sets the parse-time parent hashdecl type to be resolved during parseInit
     DLLLOCAL void setParseParent(QoreParseTypeInfo* parent) {
         assert(!parse_parent);
@@ -864,6 +898,13 @@ protected:
     */
     DLLLOCAL int enterSourceProgramForInitSlow(QoreDeclaringProgramHelper& h, const QoreHashNode* init,
             const QoreHashNode* overrides, ExceptionSink* xsink) const;
+
+    DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical>
+    DLLLOCAL int initHashInternImpl(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
 
     DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
     DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,

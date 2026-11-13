@@ -1,0 +1,205 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of the exits of blocks with on_block_exit handlers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class OnExitCapturedLocalsTest
+
+#! issue #5927: the exits of a block with on_exit handlers run the handlers' runtime protocol only when a handler is pending
+/** A block with on_exit, on_error or on_success handlers lowers them inline on its normal exits; the handlers run out
+    of line, from their own native functions, only on an exception (or a thread_exit) and from the guard at the exit
+    of the function, which runs the handlers still registered.  Native code ran the runtime protocol of out-of-line
+    handlers at each of these exits whether or not a handler was registered: it published every local of the
+    function to the runtime variable stack, created a slot cache for the handlers on the heap and copied every local
+    into it, called the runtime to run the handlers, and reloaded every local from the runtime stack afterwards.  The
+    inline exits of the scopes, after their handlers had run inline, ran it too, though no handler can run there.
+    This cost about 10,000 instructions per call of a small method with an on_exit handler with JIT execution, and
+    grew with the number of locals of the function (about 146,000 in an AOT-compiled HttpServer function).
+
+    The exits now check whether a handler is registered, and only then run the protocol; the inline exits of a scope
+    run none of it.
+
+    on-exit-captured-locals.q runs handlers of blocks whose locals are captured and modified by closures, on the
+    normal and the exception paths, and its output must be that of the AST interpreter in every execution mode, on
+    the IR tier and as an AOT executable.  The native code of its functions is checked too: the runtime protocol is
+    emitted only in the blocks that run when a handler is pending.
+*/
+class OnExitCapturedLocalsTest inherits QUnit::Test {
+    public {
+        #! the output of the script with the AST interpreter, which every execution mode and AOT must give
+        const ScriptLines = (
+            "captured before and after: exit x=a11 y=b22 flag=True",
+            "handler assigns a captured local: 30",
+            "exception exit: error s=before ex=EX; exit s=before; caught EX",
+            "success exit: success s=after; exit s=after",
+            "nested blocks: inner i=0 a=2 b=5; inner i=1 a=3 b=15; outer a=4",
+            "nested blocks with an exception: inner i=0 a=2 b=5; inner i=1 a=3 b=15; outer a=3; caught NB",
+            "closure handler: closure exit own=12 outer=3; after outer=3",
+            "closure handler with an exception: closure exit own=11 outer=2; caught CH; after outer=2",
+            "early return: 1 exit r=2",
+            "late return: 4 exit r=4",
+            "loop closures: 100,101,102",
+            "method calls: n=305 log=[\"not done x=abc!\", \"not done x=abc!\", \"not done x=abc!\", "
+                "\"not done x=abc!\", \"not done x=abc!\"] caught=5",
+            "member assignment exception: caught NOTIFY-ERROR d=13 n=1",
+            "member assignment exception without handlers: caught NOTIFY-ERROR d=13",
+            "thread_exit: success v=11; exit v=11",
+        );
+
+        #! the script prints its lines this many times
+        const Iterations = 3;
+
+        #! the runtime calls of the protocol that runs handlers out of line
+        const ProtocolCalls = (
+            "qore_rt_begin_native_ir_slot_cache",
+            "qore_rt_set_native_ir_slot_cache_value",
+            "qore_rt_set_native_ir_slot_cache_value_aot",
+            "qore_rt_end_native_ir_slot_cache",
+            "qore_rt_sync_local",
+            "qore_rt_sync_local_aot",
+            "qore_rt_exec_on_block_exit",
+            "qore_rt_exec_on_block_exit_impl",
+        );
+
+        #! the prefix of the names of the blocks that run handlers out of line when one is pending
+        /** LLVM keeps the names of the blocks through its optimizations, adding a suffix to a block it copies or
+            splits, so a prefix is matched
+        */
+        const PendingBlockPrefix = "obe.pending";
+
+        #! the functions of the script whose handlers can still be pending at one of their exits, by the pattern of
+        #! their native names (JIT: \c name@id, AOT: \c name___hash, \c Class__method_args___hash)
+        const HandlerFunctions = {
+            "captured_before_after": "^captured_before_after[@_]",
+            "make_counter": "^make_counter[@_]",
+            "exception_exit": "^exception_exit[@_]",
+            "success_exit": "^success_exit[@_]",
+            "nested_blocks": "^nested_blocks[@_]",
+            "early_return": "^early_return[@_]",
+            "loop_closures": "^loop_closures[@_]",
+            "member_assignment_exception": "^member_assignment_exception[@_][^w]",
+            "C::f": "^(f@|C__f_)",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("on_exit handlers with captured locals", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executable and its code", \aotTest());
+        addTestCase("JIT code runs the handler protocol only when a handler is pending", \jitCodeTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode and on the IR tier, and checks that it gives the output of the AST
+    #! interpreter
+    modesTest() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc, checks its LLVM code, and checks that the executable gives the output of the
+    #! AST interpreter
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("on-exit-captured-locals-aot-");
+        string exe = dir.path + "/on-exit-captured-locals";
+        TmpFile code("on-exit-captured-locals-aot-", ".ll");
+        string out = backquote(sprintf("%s QORE_DUMP_LLVM_IR=1 %s -O3 -o %s %s 2>%s", env, qcc_bin, exe,
+            scriptPath(), code.path));
+        assertTrue(is_file(exe), "qcc compiles the script: " + out);
+        checkCode(ReadOnlyFile::readTextFile(code.path), "AOT");
+        assertEq(expected(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT");
+    }
+
+    #! checks the LLVM code that the JIT compiles for the script
+    jitCodeTest() {
+        TmpFile err("on-exit-captured-locals-jit-", ".ll");
+        string out = backquote(sprintf("%s %s QORE_DUMP_LLVM_IR=1 %s --exec-mode=jit %s 2>%s", env,
+            ExecModeHarness::TraceEnv, qore_bin, scriptPath(), err.path));
+        assertEq(expected(), out, "the script runs with the LLVM code dumped");
+        checkCode(ReadOnlyFile::readTextFile(err.path), "JIT");
+    }
+
+    #! checks that every call of the out-of-line handler protocol in the functions of the script is in a block that
+    #! runs only when a handler is pending, and that each function whose handlers can be pending has such a block
+    private checkCode(string code, string label) {
+        # the calls of the protocol in pending blocks, by function
+        hash<string, int> pending_calls = {};
+        # the calls outside of a pending block
+        list<string> misplaced = ();
+        *string func;
+        string block;
+        foreach string line in (code.split("\n")) {
+            *list<*string> m = (line =~ x/^define [^@]*@"?([^"(]+)"?\(/);
+            if (m) {
+                func = m[0];
+                block = "entry";
+                continue;
+            }
+            if (line =~ /^}/) {
+                remove func;
+                continue;
+            }
+            # the native functions of the handlers themselves run the protocol only for handlers nested in them
+            if (!func || func =~ /_obe_[0-9]+$/) {
+                continue;
+            }
+            m = (line =~ x/^([-A-Za-z0-9_.$]+):/);
+            if (m) {
+                block = m[0];
+                continue;
+            }
+            *string callee = (line =~ x/call [^@]*@([A-Za-z0-9_]+)\(/)[0];
+            if (!callee || !inlist(callee, ProtocolCalls)) {
+                continue;
+            }
+            if (block.equalPartial(PendingBlockPrefix)) {
+                ++pending_calls{func};
+            } else {
+                misplaced += sprintf("%s: %s: %s", func, block, callee);
+            }
+        }
+        assertEq((), misplaced, label + ": the handler protocol runs only in blocks that run when a handler is "
+            "pending");
+        foreach hash<auto> i in (HandlerFunctions.pairIterator()) {
+            list<string> funcs = select keys pending_calls, regex($1, i.value);
+            assertGt(0, funcs.size(), sprintf("%s: %s runs its pending handlers", label, i.key));
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/on-exit-captured-locals.q";
+    }
+
+    #! the expected output of the script: its lines, printed once per iteration
+    private string expected() {
+        string block = (foldl $1 + "\n" + $2, ScriptLines) + "\n";
+        return strmul(block, Iterations);
+    }
+}

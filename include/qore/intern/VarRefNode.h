@@ -552,6 +552,9 @@ public:
     DLLLOCAL virtual QoreValue evalCallArg(ExceptionSink* xsink) const override;
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalImplInternal(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
     enum vrn_type_e : unsigned char {
         VRN_NONE = 0,
         VRN_OBJECT = 1,
@@ -581,6 +584,18 @@ protected:
     DLLLOCAL int parseInitComplexHashInitialization(const QoreProgramLocation* loc, QoreParseContext& parse_context);
 
     DLLLOCAL int parseInitComplexListInitialization(const QoreProgramLocation* loc, QoreParseContext& parse_context);
+};
+
+class LexicalVarRefNewObjectNode : public VarRefNewObjectNode {
+public:
+    using VarRefNewObjectNode::VarRefNewObjectNode;
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override;
+
+    QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalImplInternal<true>(rc, needs_deref, xsink);
+    }
 };
 
 #endif

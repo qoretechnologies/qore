@@ -243,6 +243,40 @@ req.push(NOTHING);
                 "foreach-map-select -> THREAD-CANCELLED: foreach loop n=202",
                 "foreach-drop -> THREAD-CANCELLED: drop operator expression n=100",
             ),
+            "fast-path": (
+                "cancel-while -> THREAD-CANCELLED: while loop",
+                "interrupt-while -> PROGRAM-INTERRUPTED: while loop",
+                "cleared-while -> ok 1000 no-lookup",
+                "other-while -> ok 1000 lookup",
+                "none-while -> ok 1000 no-lookup",
+                "destroyed-while -> ok 1000 no-lookup",
+                "timeout-while -> SANDBOX-TIMEOUT: while loop",
+                "memory-while -> SANDBOX-MEMORY-LIMIT",
+                "cancel-do-while -> THREAD-CANCELLED: do-while loop",
+                "interrupt-do-while -> PROGRAM-INTERRUPTED: do-while loop",
+                "cleared-do-while -> ok 1000 no-lookup",
+                "other-do-while -> ok 1000 lookup",
+                "none-do-while -> ok 1000 no-lookup",
+                "destroyed-do-while -> ok 1000 no-lookup",
+                "timeout-do-while -> SANDBOX-TIMEOUT: do-while loop",
+                "memory-do-while -> SANDBOX-MEMORY-LIMIT",
+                "cancel-for -> THREAD-CANCELLED: for loop",
+                "interrupt-for -> PROGRAM-INTERRUPTED: for loop",
+                "cleared-for -> ok 1000 no-lookup",
+                "other-for -> ok 1000 lookup",
+                "none-for -> ok 1000 no-lookup",
+                "destroyed-for -> ok 1000 no-lookup",
+                "timeout-for -> SANDBOX-TIMEOUT: for loop",
+                "memory-for -> SANDBOX-MEMORY-LIMIT",
+                "cancel-foreach -> THREAD-CANCELLED: foreach loop",
+                "interrupt-foreach -> PROGRAM-INTERRUPTED: foreach loop",
+                "cleared-foreach -> ok 1000 no-lookup",
+                "other-foreach -> ok 1000 lookup",
+                "none-foreach -> ok 1000 no-lookup",
+                "destroyed-foreach -> ok 1000 no-lookup",
+                "timeout-foreach -> SANDBOX-TIMEOUT: foreach loop",
+                "memory-foreach -> SANDBOX-MEMORY-LIMIT",
+            ),
         };
 
         #! the result lines of the scripts whose cancelled threads report unhandled exceptions
@@ -278,6 +312,8 @@ req.push(NOTHING);
         addTestCase("streaming operators over more than 100 elements", sub () { scriptTest("streaming", ResultLine); });
         addTestCase("a cancellation made pending in a pipeline",
             sub () { scriptTest("pipeline-midcancel", ResultLine); });
+        addTestCase("every request reaches the check of a loop, which looks up no sandbox manager without one",
+            sub () { scriptTest("fast-path", ResultLine); });
         set_return_value(main());
     }
 

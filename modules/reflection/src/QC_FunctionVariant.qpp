@@ -28,8 +28,60 @@
     information.
 */
 
+#include <qore/intern/LexicalReflection.h>
 #include "qore_reflection.h"
 #include "QC_FunctionVariant.h"
+
+// Both entries share the reflection authority checks; only the final invocation differs.
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue FunctionVariant_call_VV_impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, v->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the variant ptr must be valid; the variant is checked against the caller and the function's Program
+    if constexpr (Lexical) return qore_lexical_reflection_function(policy, *v->f, v->variant, args, v->pgm, v->ns, caller, xsink);
+    else return v->f->evalFunction(v->variant, args, v->pgm, v->ns, caller, xsink);
+}
+
+static QoreValue FunctionVariant_call_VV_lexical(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    return FunctionVariant_call_VV_impl<true>(qore_get_native_semantic_policy(), self, v, args, runtime_cfg, xsink);
+}
+
+static QoreValue FunctionVariant_call_VV(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue FunctionVariant_callArgs_C15_softlist_auto__impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, const QoreListNode* argv) {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, v->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the variant ptr must be valid; the variant is checked against the caller and the function's Program
+    if constexpr (Lexical) return qore_lexical_reflection_function(policy, *v->f, v->variant, argv, v->pgm, v->ns, caller, xsink);
+    else return v->f->evalFunction(v->variant, argv, v->pgm, v->ns, caller, xsink);
+}
+
+static QoreValue FunctionVariant_callArgs_C15_softlist_auto__lexical(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    const QoreListNode* argv = get_param_value(args, 0).get<const QoreListNode>();
+    return FunctionVariant_callArgs_C15_softlist_auto__impl<true>(qore_get_native_semantic_policy(), self, v, args, runtime_cfg, xsink, argv);
+}
+
+static QoreValue FunctionVariant_callArgs_C15_softlist_auto_(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+static const QoreLexicalMethodRegistrationHelper::Entry lexical_entries_FunctionVariant[] = {
+    {reinterpret_cast<q_method_t>(FunctionVariant_call_VV), reinterpret_cast<q_method_t>(FunctionVariant_call_VV_lexical)},
+    {reinterpret_cast<q_method_t>(FunctionVariant_callArgs_C15_softlist_auto_), reinterpret_cast<q_method_t>(FunctionVariant_callArgs_C15_softlist_auto__lexical)},
+};
+
+
 
 //! The class for %Qore function variants
 /**
@@ -66,16 +118,7 @@ auto val = v.call(arg1, arg2);
     @see callArgs()
 */
 auto FunctionVariant::call(...) {
-    // the privileges of the calling code, captured before switching to the function's Program
-    QoreReflectionCaller caller;
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, v->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // the variant ptr must be valid; the variant is checked against the caller and the function's Program
-    return v->f->evalFunction(v->variant, args, v->pgm, v->ns, caller, xsink);
+    return FunctionVariant_call_VV_impl<false>({}, self, v, args, runtime_cfg, xsink);
 }
 
 //! calls the given function variant and returns the value returned by the function
@@ -96,14 +139,8 @@ auto val = v.callArgs((arg1, arg2));
     @see call()
 */
 auto FunctionVariant::callArgs(*softlist<auto> argv) {
-    // the privileges of the calling code, captured before switching to the function's Program
-    QoreReflectionCaller caller;
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, v->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // the variant ptr must be valid; the variant is checked against the caller and the function's Program
-    return v->f->evalFunction(v->variant, argv, v->pgm, v->ns, caller, xsink);
+    return FunctionVariant_callArgs_C15_softlist_auto__impl<false>({}, self, v, args, runtime_cfg, xsink, argv);
 }
+
+
+//! @qppinit: QoreLexicalMethodRegistrationHelper lexical_registration(lexical_entries_FunctionVariant);

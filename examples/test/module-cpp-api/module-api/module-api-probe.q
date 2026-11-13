@@ -1,9 +1,9 @@
 %modern
-# usage: module-api-probe.q <path of apiold-api-2.0.qmod>
+# usage: module-api-probe.q <path of apiold-api-<previous>.qmod>
 # loads the apiold and apicur test modules (see apiprobe-module.cpp) and prints the results; see module-api-version.qtest
 
 # by its feature name, as %requires or load_module() finds a module: the loader looks only for the supported module
-# API, so apiold-api-2.0.qmod is not found, and the error names it
+# API, so apiold-api-<previous>.qmod is not found, and the error names it
 try {
     load_module("apiold");
     print("feature apiold: loaded\n");

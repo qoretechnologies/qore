@@ -37,6 +37,9 @@
 %requires json
 
 module GrokDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    # the module's own code starts the background thread that produces a streamed response
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "1.0";
     desc = "user module providing a data provider API for xAI Grok services";
     author = "Qore Technologies <info@qoretechnologies.com>";

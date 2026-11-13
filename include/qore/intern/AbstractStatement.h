@@ -35,6 +35,7 @@
 
 #include <qore/common.h>
 #include "qore/intern/ParseWarnOptions.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
 
 #define RC_RETURN       1
 #define RC_BREAK        2
@@ -75,6 +76,12 @@ class qore_program_private_base;
 class AbstractStatement {
 public:
     const QoreProgramLocation* loc;
+
+    //! Binds a condition's own source context before parse initialization (not the later body context).
+    DLLLOCAL void setSemanticPolicy(LexicalSemanticPolicy policy) {
+        semantic_policy = policy;
+        semantic_policy_bound = true;
+    }
     struct ParseWarnOptions pwo;
 
     DLLLOCAL AbstractStatement(qore_program_private_base* p);
@@ -164,6 +171,9 @@ public:
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
 protected:
+    //! Captured before publication; authority restrictions remain in the existing runtime option context.
+    LexicalSemanticPolicy semantic_policy;
+    bool semantic_policy_bound = false;
     QoreBreakpointList_t* breakpoints = nullptr;
     volatile bool breakpointFlag = false;  // fast access to check if breakpoints are non-empty
     bool in_try = false;  // in the body of a try statement of its function; see isInTry()

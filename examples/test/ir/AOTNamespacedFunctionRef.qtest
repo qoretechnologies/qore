@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of namespaced function references and their symbol binding
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class AOTNamespacedFunctionRefTest
+
+#! Regression test: a call reference to a function of a namespace calls that function in AOT code
+/** AOT code named the function of a call reference to a function of a namespace other than the root namespace by
+    its bare name, which resolved to the function of the same name in the root namespace when the code was loaded:
+    <tt>\\Other::step()</tt> called the root's <tt>step()</tt> in a qcc executable.  The reference is now named by the
+    path of the function's namespace, which a reference made without a namespace path records as well
+    (<tt>\\step()</tt> in namespace \c Other is \c Other::step()).  The script runs in every execution mode, on
+    the IR tier of tiered execution and as qcc executables compiled at -O0 and -O3 (see ExecModeOutputTest).
+*/
+class AOTNamespacedFunctionRefTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+int sub step(int x) { return x + 1; }
+namespace Other {
+    int sub step(int x) { return x * 10; }
+    namespace Inner {
+        int sub step(int x) { return x * 100; }
+    }
+    # an unqualified reference made in the namespace: its own function
+    code sub localRef() { return \step(); }
+    # a qualified reference to a nested namespace made in the namespace
+    code sub innerRef() { return \Inner::step(); }
+    # a function with the name of a builtin function
+    int sub strlen(string s) { return -1; }
+    # an unqualified reference made in the namespace finds the builtin function
+    code sub strlenRef() { return \strlen(); }
+}
+namespace Third {
+    # a function with no function of the same name in the root namespace
+    string sub only(string s) { return s + "!"; }
+}
+code c = \Other::step();
+printf("other: %d\n", c(3));
+printf("root: %d\n", (\step())(3));
+printf("root anchored: %d\n", (\::step())(3));
+printf("inner: %d\n", (\Other::Inner::step())(3));
+printf("map: %y\n", map (\Other::step())($1), (1, 2));
+printf("local: %d\n", Other::localRef()(3));
+printf("inner ref: %d\n", Other::innerRef()(3));
+printf("call_function: %d\n", call_function(\Other::Inner::step(), 2));
+printf("only: %s\n", (\Third::only())("x"));
+printf("builtin: %d\n", (\strlen())("abc"));
+printf("builtin qualified: %d\n", (\Qore::strlen())("abc"));
+printf("shadow: %d\n", (\Other::strlen())("abc"));
+printf("shadow local: %d\n", Other::strlenRef()("abc"));
+code s = \Other::strlen();
+printf("shadow var: %d\n", s("abc"));
+hash<string, code> h = {"a": \step(), "b": \Other::step(), "c": \Other::Inner::step()};
+printf("hash: %y\n", map {$1.key: $1.value(1)}, h.pairIterator());
+';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "other: 30",
+            "root: 4",
+            "root anchored: 4",
+            "inner: 300",
+            "map: [10, 20]",
+            "local: 30",
+            "inner ref: 300",
+            "call_function: 200",
+            "only: x!",
+            "builtin: 3",
+            "builtin qualified: 3",
+            "shadow: -1",
+            "shadow local: 3",
+            "shadow var: -1",
+            "hash: {a: 2, b: 10, c: 100}",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("AOTNamespacedFunctionRef", Script, (map $1 + "\n", Expected).join(""),
+            "calls the function of a namespace that a call reference names", NOTHING, NOTHING, ("-O0", "-O3")) {
+    }
+}

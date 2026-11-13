@@ -432,6 +432,26 @@ struct pgmloc_vec_t : public std::vector<QoreProgramLocation*> {
 
 class qore_program_private;
 
+#ifdef DEBUG
+//! test hook: called with the Program's lock held when its teardown waits for a batch JIT compile's hold (qore#5874)
+DLLLOCAL void qore_program_dbg_teardown_waits_for_compile_hold();
+//! test hook: holds the next batch collection or effect analysis of the named root function after it has held a
+//! Program other than the root function's (qore#5874); "collection" below means either
+DLLLOCAL void qore_dbg_hold_batch_collection(const char* func);
+//! test hook: waits until the armed batch collection is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_batch_collection_held(int64 timeout_ms);
+//! test hook: waits until a Program's teardown waits for a batch collection's hold; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_teardown_compile_hold(int64 timeout_ms);
+//! test hook: lets the held batch collection continue; returns false if it did not continue before the timeout
+DLLLOCAL bool qore_dbg_continue_batch_collection(int64 timeout_ms);
+//! test hook: counts the holds refused to the collections of the named root function until the count is read
+DLLLOCAL void qore_dbg_count_batch_collection_refusals(const char* func);
+//! test hook: returns the number of holds refused since qore_dbg_count_batch_collection_refusals() and disarms it
+DLLLOCAL int64 qore_dbg_get_batch_collection_refusals();
+//! test hook: records a hold refused to the collection of \a root (a function name with its unique suffix)
+DLLLOCAL void qore_dbg_batch_collection_refused(const std::string& root);
+#endif
+
 class qore_program_private_base {
     friend class QoreProgramAccessHelper;
 
@@ -503,6 +523,8 @@ public:
     */
     ptid_map_t deferred_derefs;
     unsigned thread_waiting = 0; // number of threads waiting on all threads to terminate or parsing to complete
+    //! batch JIT compiles that read the Program's code (see tryHoldForCompile()); protected by plock
+    unsigned compile_holds = 0;
     unsigned parse_count = 0;    // recursive parse count
     // thread with the parse lock; atomic because parsingLocked() reads it without plock,
     // while lockParsing()/unlockParsing() write it under plock
@@ -932,6 +954,17 @@ public:
         the functionality the module's code uses, as parsing the module's source does (see qore_aot_module_init_v3())
     */
     QoreParseOptions aot_used_dom;
+    //! the functional domains that a user module declares in its module header (\c domains), which its Program does
+    //! not inherit from the Program loading it when the module is library code (see setModuleOwnDomains())
+    int64 module_own_dom = QDOM_DEFAULT;
+    //! the domains of \c module_own_dom that apply, as the module is library code (see setModuleOwnDomains()): the
+    //! module's own code may use the functionality of these domains for any caller, also when a call is resolved at
+    //! run time (see qore_relieve_module_declared_domains())
+    int64 module_trusted_dom = QDOM_DEFAULT;
+    //! the restrictions that a user module header adds to the module's Program while its header is parsed
+    //! (MOD_HEADER_PO), which do not apply to the functional domains declared on user code (see
+    //! qore_program_private::parseDeniedDomains())
+    int64 mod_header_dom = QDOM_DEFAULT;
 
     //! the restrictions that an AOT module Program inherited from the Program that loaded it
     /** source modules are parsed with these restrictions; AOT module code runs with them (see
@@ -1502,6 +1535,9 @@ protected:
     DLLLOCAL void newProgram();
 
     DLLLOCAL void setDefines();
+
+    //! see setModuleOwnDomains()
+    DLLLOCAL int64 setModuleOwnDomainsIntern(int64 dom, bool apply);
 };
 
 class PreParseHelper {
@@ -2298,10 +2334,48 @@ public:
         ptid_map_t::iterator i = tidmap.find(tid);
         unsigned adj = (i != tidmap.end() ? i->second : 0);
 
-        while ((thread_count - adj) || parse_count) {
+        // a batch JIT compile that reads the Program's code holds it as well (see tryHoldForCompile())
+        while ((thread_count - adj) || parse_count || compile_holds) {
             ++thread_waiting;
+#ifdef DEBUG
+            if (compile_holds) {
+                qore_program_dbg_teardown_waits_for_compile_hold();
+            }
+#endif
             pcond.wait(plock);
             --thread_waiting;
+        }
+    }
+
+    //! Keeps the Program's teardown from freeing its code while a batch JIT compile or effect analysis reads it
+    /** A batch compile of a function collects the code of the functions that it calls (collectBatchCallees()), and
+        the IR interpreter's effect analysis walks the same code (refineInterpreterEffectSummary()), without running it
+        (qore#5874); see QoreProgramCodeHolds.  The hold makes the teardown wait (waitForAllThreadsToTerminateIntern())
+        until the batch is queued or the analysis is done; the teardown then drains or detaches a queued batch
+        (QoreJIT::waitForBgCompileQueue()).
+        Unlike entering the Program, the hold is not visible to its code: it is not a thread of the Program (no thread
+        map entry, thread count or activity event), so neither the Program's threads nor its debugger see it.  A thread
+        must therefore never start the teardown of a Program that it holds: unlike its own thread count, its hold is not
+        discounted, and the teardown would wait for itself (a holder runs no Qore code while it holds).
+
+        @return true if the hold was taken, false if its teardown has marked the Program (ptid): its code is not read
+        then; until then, the teardown waits for a hold taken (its first wait and the cleanup callback come before)
+    */
+    DLLLOCAL bool tryHoldForCompile() {
+        AutoLocker al(plock);
+        if (ptid) {
+            return false;
+        }
+        ++compile_holds;
+        return true;
+    }
+
+    //! Releases a hold taken with tryHoldForCompile()
+    DLLLOCAL void releaseCompileHold() {
+        AutoLocker al(plock);
+        assert(compile_holds);
+        if (!--compile_holds && thread_waiting) {
+            pcond.broadcast();
         }
     }
 
@@ -2429,7 +2503,10 @@ public:
         yy_scan_string(code, lexer);
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
-        yyparse(lexer);
+        {
+            LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+            yyparse(lexer);
+        }
         // the parser returns before the end of the input if its stack is exhausted
         qore_scanner_end_input(lexer);
 
@@ -2706,7 +2783,10 @@ public:
             yylex_init_extra(&state, &lexer);
             yyset_in(fp, lexer);
             // yyparse() will call endParsing() and restore old pgm position
-            yyparse(lexer);
+            {
+                LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+                yyparse(lexer);
+            }
             // the parser returns before the end of the input if its stack is exhausted
             qore_scanner_end_input(lexer);
 
@@ -4012,6 +4092,19 @@ public:
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* class_name, ExceptionSink* xsink) const;
 
+    //! Compiled metadata keeps canonical lookup semantics, including pending declarations and parse access guards.
+    DLLLOCAL const QoreClass* findClassCanonical(const char* path, ExceptionSink* xsink) const;
+    DLLLOCAL const TypedHashDecl* findHashDeclCanonical(const char* path, const QoreNamespace*& pns) const;
+    DLLLOCAL const QoreEnumDecl* findEnumCanonical(const char* path, const QoreNamespace*& pns) const;
+
+    template <bool Native>
+    DLLLOCAL const QoreClass* runtimeFindClassImpl(const char* path, ExceptionSink* xsink) const;
+    template <bool Native>
+    DLLLOCAL const TypedHashDecl* findHashDeclImpl(const char* path, const QoreNamespace*& pns) const;
+    template <bool Native>
+    DLLLOCAL const QoreEnumDecl* findEnumImpl(const char* path, const QoreNamespace*& pns) const;
+
+
     //! waits until no child Program copies the external data of this Program; plock must be held
     DLLLOCAL void waitForExternalDataCopiesIntern() {
         while (ext_copy_count) {
@@ -4243,6 +4336,14 @@ public:
 
     DLLLOCAL static bool runWithRegisteredPrograms(
             const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f);
+
+    //! Explicit invocation policy for source-bound dynamic forwarding; the public C++ entry is canonical.
+    DLLLOCAL QoreValue callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool LexicalInvocation>
+    DLLLOCAL QoreValue callFunctionImpl(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;
@@ -4629,6 +4730,47 @@ public:
 
     DLLLOCAL static void setAOTInheritedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         pgm.priv->aot_inherited_po = po;
+    }
+
+    //! Records the functional domains that a user module declares in its module header (\c domains)
+    /** If \a apply is true (the module is library code: see QoreModuleManager::isTrustedModulePath()), the Program no
+        longer has the restrictions of these domains, which it inherited from the Program loading it, nor their parse
+        defines, so the module's own code may use them; the code calling the module is still checked against its own
+        restrictions.
+
+        @return the restrictions that were removed
+    */
+    DLLLOCAL static int64 setModuleOwnDomains(QoreProgram& pgm, int64 dom, bool apply) {
+        return pgm.priv->setModuleOwnDomainsIntern(dom, apply);
+    }
+
+    //! Returns the functional domain bits of \a dom that the parse options of \a pgm do not allow, and records them
+    /** as parseAddDomain(); the restrictions that a module header adds for its own code do not apply to the domains
+        declared on user code (\a user_declared): the header's \c init and \c del closures may call user code that
+        declares a domain, which the code loading the module is checked for when it calls the module
+    */
+    DLLLOCAL static QoreParseOptions parseDeniedDomains(QoreProgram* pgm, int64 dom, int64 user_declared) {
+        QoreParseOptions denied = parseAddDomain(pgm, dom);
+        if (denied && user_declared && pgm->priv->mod_header_dom) {
+            denied &= ~QoreParseOptions(user_declared & pgm->priv->mod_header_dom & ~(dom & ~user_declared));
+        }
+        return denied;
+    }
+
+    //! Sets the restrictions that a user module header adds to the module's Program while its header is parsed
+    DLLLOCAL static void setModuleHeaderDomains(QoreProgram& pgm, int64 dom) {
+        pgm.priv->mod_header_dom = dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header (\c domains)
+    DLLLOCAL static int64 getModuleOwnDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_own_dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header and that apply to it, as it is
+    //! library code
+    DLLLOCAL static int64 getModuleTrustedDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_trusted_dom;
     }
 
     DLLLOCAL static QoreParseOptions getDomain(const QoreProgram& pgm) {

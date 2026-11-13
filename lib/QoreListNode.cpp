@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
@@ -291,8 +292,34 @@ QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, co
     return newComplexListFromValue(typeInfo, val, xsink);
 }
 
+QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, const QoreValue args, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    QoreValue val{};
+
+    if (!args.isNothing()) {
+        ValueEvalOptimizedRefHolder a(args, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        val = a.takeReferencedValue();
+    }
+
+    return newComplexListFromValue(typeInfo, val, xsink, policy);
+}
+
 QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init,
         ExceptionSink* xsink) {
+    return newComplexListFromValueImpl<false>(typeInfo, init, xsink, {});
+}
+
+QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    return newComplexListFromValueImpl<true>(typeInfo, init, xsink, policy);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromValueImpl(const QoreTypeInfo* typeInfo, QoreValue init,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
     ValueHolder holder(init, xsink);
 
     QoreListNode* l;
@@ -312,7 +339,13 @@ QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typ
         ListIterator i(l);
         while (i.next()) {
             QoreValue& entry = ll->getEntryReference(i.index());
-            if (!QoreTypeInfo::retypeValue(entry, vti, xsink)) {
+            bool retyped;
+            if constexpr (Lexical) {
+                retyped = QoreTypeInfo::retypeValue(entry, vti, xsink, policy);
+            } else {
+                retyped = QoreTypeInfo::retypeValue(entry, vti, xsink);
+            }
+            if (!retyped) {
                 return nullptr;
             }
             if (*xsink) {
@@ -320,7 +353,11 @@ QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typ
             }
 
             if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-                QoreTypeInfo::acceptInputParam(vti, i.index(), nullptr, entry, xsink);
+                if constexpr (Lexical) {
+                    QoreTypeInfo::acceptInputParam(vti, i.index(), nullptr, entry, xsink, policy);
+                } else {
+                    QoreTypeInfo::acceptInputParam(vti, i.index(), nullptr, entry, xsink);
+                }
                 if (*xsink) {
                     return nullptr;
                 }
@@ -331,7 +368,11 @@ QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typ
         holder = init = l = new QoreListNode(autoTypeInfo);
     } else {
         const QoreTypeInfo* vti = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
-        QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink);
+        if constexpr (Lexical) {
+            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink, policy);
+        } else {
+            QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink);
+        }
         holder.release();
         holder = init;
         if (*xsink) {
@@ -383,21 +424,8 @@ AbstractQoreNode* QoreListNode::realCopy() const {
 }
 
 bool QoreListNode::is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-    const QoreListNode* l = v && v->getType() == NT_LIST ? reinterpret_cast<const QoreListNode*>(v) : nullptr;
-    if (!l || l->size() != size()) {
-        return false;
-    }
-    // comparing recurses with the nesting of the lists, which is unbounded
-    if (xsink && q_check_stack(xsink)) {
-        return false;
-    }
-
-    for (size_t i = 0; i < l->size(); ++i) {
-        if (!l->retrieveEntry(i).isEqualSoft(retrieveEntry(i), xsink) || *xsink) {
-            return false;
-        }
-    }
-    return true;
+    if (!v || v->getType() != NT_LIST) return false;
+    return QoreLogicalEqualsOperatorNode::softEqualNative(QoreValue(this), QoreValue(v), xsink);
 }
 
 bool QoreListNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -462,7 +490,7 @@ int QoreListNode::getEntryAsInt(size_t num) const {
 }
 
 int QoreListNode::merge(const QoreListNode* list, ExceptionSink* xsink) {
-    return priv->merge(list, xsink);
+    return priv->mergeNative(list, xsink);
 }
 
 int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
@@ -507,14 +535,23 @@ int QoreListNode::push(QoreValue val, ExceptionSink* xsink) {
         val.discard(xsink);
         return -1;
     }
-    return priv->push(val, xsink);
+    return priv->pushNative(val, xsink);
+}
+
+int qore_list_private::pushCanonical(QoreListNode& list, QoreValue val, ExceptionSink* xsink) {
+    if (list.priv->checkValid(xsink)) {
+        // the value is owned by the list whatever the outcome, so a rejected value is released here
+        val.discard(xsink);
+        return -1;
+    }
+    return list.priv->push(val, xsink);
 }
 
 int QoreListNode::insert(QoreValue val, ExceptionSink* xsink) {
     assert(reference_count() == 1);
     ValueHolder holder(val, xsink);
     // see setEntry(): a list whose last reference was released cannot be changed
-    if (priv->checkValid(xsink) || priv->checkVal(holder, xsink)) {
+    if (priv->checkValid(xsink) || priv->checkValNative(holder, xsink)) {
         return -1;
     }
 
@@ -527,6 +564,58 @@ int QoreListNode::insert(QoreValue val, ExceptionSink* xsink) {
     priv->entry[0] = holder.release();
     if (needs_scan(priv->entry[0])) {
         priv->incScanCount(1);
+    }
+    return 0;
+}
+
+int qore_list_private::insertCanonical(QoreListNode& list, QoreValue val, ExceptionSink* xsink) {
+    assert(list.reference_count() == 1);
+    ValueHolder holder(val, xsink);
+    // see setEntry(): a list whose last reference was released cannot be changed
+    if (list.priv->checkValid(xsink) || list.priv->checkVal(holder, xsink)) {
+        return -1;
+    }
+
+    list.priv->resize(list.priv->length + 1);
+    if (list.priv->length - 1) {
+        memmove(static_cast<void*>(list.priv->entry + 1), list.priv->entry, sizeof(QoreValue) * (list.priv->length - 1));
+    }
+    // the value stored, not the argument: checkVal() can replace the argument with a converted value and release
+    // it, as when a string is converted for a list<softint>
+    list.priv->entry[0] = holder.release();
+    if (needs_scan(list.priv->entry[0])) {
+        list.priv->incScanCount(1);
+    }
+    return 0;
+}
+
+int qore_list_private::push(QoreListNode& list, QoreValue val, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    if (list.priv->checkValid(xsink)) {
+        // the value is owned by the list whatever the outcome, so a rejected value is released here
+        val.discard(xsink);
+        return -1;
+    }
+    return list.priv->push(val, xsink, policy);
+}
+
+int qore_list_private::insert(QoreListNode& list, QoreValue val, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    assert(list.reference_count() == 1);
+    ValueHolder holder(val, xsink);
+    // see setEntry(): a list whose last reference was released cannot be changed
+    if (list.priv->checkValid(xsink) || list.priv->checkVal(holder, nullptr, xsink, policy)) {
+        return -1;
+    }
+
+    list.priv->resize(list.priv->length + 1);
+    if (list.priv->length - 1) {
+        memmove(static_cast<void*>(list.priv->entry + 1), list.priv->entry, sizeof(QoreValue) * (list.priv->length - 1));
+    }
+    // the value stored, not the argument: checkVal() can replace the argument with a converted value and release
+    // it, as when a string is converted for a list<softint>
+    list.priv->entry[0] = holder.release();
+    if (needs_scan(list.priv->entry[0])) {
+        list.priv->incScanCount(1);
     }
     return 0;
 }
@@ -633,7 +722,7 @@ QoreListNode* QoreListNode::splice(ptrdiff_t offset, ptrdiff_t len, const QoreVa
     assert(reference_count() == 1);
     size_t n_offset, n_len;
     priv->checkOffset(offset, len, n_offset, n_len);
-    return priv->spliceIntern(n_offset, n_len, l, false, xsink);
+    return priv->spliceIntern<false, true>(n_offset, n_len, l, false, xsink);
 }
 
 QoreListNode* QoreListNode::extract(ptrdiff_t offset) {
@@ -658,7 +747,7 @@ QoreListNode* QoreListNode::extract(ptrdiff_t offset, ptrdiff_t len, const QoreV
     assert(reference_count() == 1);
     size_t n_offset, n_len;
     priv->checkOffset(offset, len, n_offset, n_len);
-    return priv->spliceIntern(n_offset, n_len, l, true, xsink);
+    return priv->spliceIntern<false, true>(n_offset, n_len, l, true, xsink);
 }
 
 QoreListNode* QoreListNode::sort(ExceptionSink* xsink) const {
@@ -1413,7 +1502,7 @@ QoreString *QoreListNode::getAsString(bool &del, int foff, ExceptionSink* xsink)
 
 bool QoreListNode::getAsBoolImpl() const {
     // check if we should do perl-style boolean evaluation
-    if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
+    if (qore_get_native_semantic_policy().strictBoolean()) {
         return false;
     }
     return !empty();

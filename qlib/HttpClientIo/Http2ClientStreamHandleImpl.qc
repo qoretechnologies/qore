@@ -436,6 +436,21 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         send_trailers = trailers;
     }
 
+    #! Waits until the data sent on the stream has been handed to the transport
+    /** @see HttpClientStreamHandle::waitSendFlushed()
+    */
+    int waitSendFlushed(timeout timeout_ms) {
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!stream_id) {
+                return 0;
+            }
+            sid = stream_id;
+        }
+        return h2conn.getSocket().waitForHttp2StreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
+    }
+
     #! Sends data on a streaming connection
     /** The request can be sent whatever has been read of the response: a server can send its complete response
         before the request is complete and keep reading the request (RFC 9113 section 8.1), and a send reports a close
@@ -557,6 +572,21 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
     *hash<string, string> getTrailers() {
         AutoLock al(lock);
         return response.trailers;
+    }
+
+    #! Records on the stream's frame state that the application sends its WebSocket close frame itself
+    /** See @ref HttpClientStreamHandle::markFrameStateCloseSent()
+    */
+    int markFrameStateCloseSent() {
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!streaming || !exists stream_id) {
+                return 0;
+            }
+            sid = stream_id;
+        }
+        return h2conn.markFrameStateCloseSent(sid);
     }
 
     #! Installs a WebSocket frame-state decoder for this H2 CONNECT stream
