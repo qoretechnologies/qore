@@ -15994,6 +15994,9 @@ load_local_done:
                 if (navigation_failed || (xsink && *xsink)) {
                     res.discard(xsink);
                     res = QoreValue();
+                    // A rejected += operand can remain here; release it before the enclosing handlers and
+                    // debugger exception event, as the AST does after releasing the lvalue lock.
+                    rhs_holder = QoreValue();
                     if (xsink && *xsink && inst->exception_target) {
                         cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                         prev_block = block;
@@ -20735,8 +20738,12 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right_holder, Excep
         if (right.getType() == NT_LIST) {
             l->merge(right.get<const QoreListNode>(), xsink);
         } else {
-            // the reference held for the value is handed over to the list, as the AST interpreter does
-            l->push(right_holder.release(), xsink);
+            // Keep a rejected value in the caller's holder, which outlives the lvalue lock. push() would
+            // consume and release it here, so a temporary's destructor could reenter the locked lvalue.
+            qore_list_private* lp = qore_list_private::get(*l);
+            if (!lp->checkValid(xsink) && !lp->checkVal(right_holder, xsink)) {
+                lp->pushIntern(right_holder.release());
+            }
         }
     } else if (vtype == NT_HASH) {
         if (right.getType() == NT_HASH) {
