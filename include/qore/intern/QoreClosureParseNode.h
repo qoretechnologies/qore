@@ -118,8 +118,12 @@ public:
     //! sets the flag of needsTypeContext() for a closure read from compiled code
     DLLLOCAL void setNeedsTypeContext(bool n) { needs_type_context = n; }
 
+    //! calls the closure
+    /** @param tmp_args true if \a args is a temporary list whose values the parameters can take over (see
+        UserClosureFunction::evalClosure())
+    */
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
-        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
 
     DLLLOCAL QoreClosureBase* evalBackground(ExceptionSink* xsink) const;
 

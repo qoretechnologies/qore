@@ -1851,6 +1851,14 @@ uint64_t qore_rt_call_function_direct_with_inst(const QoreFunction* func,
 uint64_t qore_rt_call_fast(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
     QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! qore_rt_call_fast() for a call that gives the references of its temporary arguments to the call
+/** @param arg_cleanups the caller's cleanup slots of the arguments whose references it gives to the call (null for an
+    argument whose reference it keeps), which are released once the parameters took references of their own, so that
+    the last reference of a temporary argument is released in the callee's frame (issue #5882)
+*/
+uint64_t qore_rt_call_fast_consume_args(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+    QoreProgram* pgm, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
 //! Constructor call with pre-evaluated NaN-boxed args.  Used by IR interpreter
 //! and AOT LLVM codegen to avoid AST fallback — each constructor arg is
 //! computed as a separate IR operand and passed as a NaN-boxed value.  execConstructor
@@ -2137,6 +2145,20 @@ uint64_t qore_rt_call_static_method_direct(const QoreMethod* method,
 //! Direct static method call with concrete receiver and method type arguments.
 uint64_t qore_rt_call_static_method_direct_with_inst(const QoreMethod* method,
     const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
+    const QoreTypeInfo* receiver_type_info,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+    ExceptionSink* xsink);
+
+//! qore_rt_call_static_method_direct() for a call that gives the references of its temporary arguments to the call
+//! (see qore_rt_call_fast_consume_args())
+uint64_t qore_rt_call_static_method_direct_consume_args(const QoreMethod* method,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    ExceptionSink* xsink);
+
+//! qore_rt_call_static_method_direct_with_inst() for a call that gives the references of its temporary arguments to
+//! the call (see qore_rt_call_fast_consume_args()); \a arg_cleanups can be null
+uint64_t qore_rt_call_static_method_direct_with_inst_consume_args(const QoreMethod* method,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups, int nargs,
     const QoreTypeInfo* receiver_type_info,
     const QoreTypeParamInstantiation* explicit_type_param_instantiation,
     ExceptionSink* xsink);

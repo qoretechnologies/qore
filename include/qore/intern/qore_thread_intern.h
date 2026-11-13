@@ -1983,6 +1983,10 @@ public:
     CalleeContextHelper(const CalleeContextHelper&) = delete;
     CalleeContextHelper& operator=(const CalleeContextHelper&) = delete;
 
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
+
 private:
     //! the current thread
     ThreadData* td;
@@ -2651,6 +2655,10 @@ public:
     DLLLOCAL ArgvContextHelper(QoreListNode* argv, ExceptionSink* n_xsink);
     // calls deref(xsink) on list in destructor
     DLLLOCAL ~ArgvContextHelper();
+
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
 
 private:
     QoreListNode* old_argv;

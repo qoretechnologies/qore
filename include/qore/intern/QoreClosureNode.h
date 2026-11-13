@@ -128,6 +128,11 @@ struct QoreClosureTypeContext {
 };
 
 class QoreClosureBase : public ResolvedCallReferenceNode {
+public:
+    //! calls the closure with a temporary argument list, whose values its parameters take over, as the AST
+    //! interpreter's call does (issue #5882); the caller keeps its reference to the list
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const = 0;
+
 protected:
     const QoreClosureParseNode* closure;
     mutable ThreadSafeLocalVarRuntimeEnvironment closure_env;
@@ -311,6 +316,8 @@ public:
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
     }
@@ -364,6 +371,8 @@ public:
     }
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return obj->getProgram();

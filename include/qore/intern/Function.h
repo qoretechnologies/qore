@@ -2978,7 +2978,13 @@ public:
         return serial;
     }
 
-    DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
+    //! calls the closure
+    /** @param tmp_args true if \a args is a temporary list that the caller owns, whose values the parameters take
+        over, as the AST interpreter's call moves its evaluated arguments into the parameters, so that the last
+        reference of a temporary argument is released in the closure's frame (issue #5882)
+    */
+    DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
 
     DLLLOCAL void setClassType(const QoreTypeInfo* cti) {
         classTypeInfo = cti;

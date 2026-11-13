@@ -6424,7 +6424,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
 
             const QoreTypeInfo* paramTypeInfo
                 = needs_type_param_substitution
-                    ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
+                    ? qore_substitute_type_params_if_needed_inline(signature.getParamTypeInfo(i))
                     : signature.getParamTypeInfo(i);
             // Apply type filtering for complex hash parameters
             if (paramTypeInfo && val.getType() == NT_HASH) {
@@ -6458,7 +6458,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
         //    i, signature.lv[i], signature.lv[i]->getName(), np.getType(), np.getTypeName());
 
         const QoreTypeInfo* paramTypeInfo = needs_type_param_substitution
-            ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
+            ? qore_substitute_type_params_if_needed_inline(signature.getParamTypeInfo(i))
             : signature.getParamTypeInfo(i);
         signature.lv[i]->instantiate(QoreValue(), paramTypeInfo);
     }
@@ -8904,7 +8904,9 @@ int QoreFunction::parseInitIntern(qore_ns_private* ns) {
     return err;
 }
 
-QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink,
+        bool tmp_args) const {
     RuntimeConfig& rc = rc_get_current_ref();
     // closures cannot be overloaded
     assert(vlist.singular());
@@ -8919,9 +8921,19 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     // the receiver type of a generic class that created the closure binds the type parameters of the class in the
     // closure's parameter and return types (qore#5733)
     const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
+    const QoreTypeInfo* receiver_type_info = closure_type_context ? closure_type_context->receiver_type_info : nullptr;
+    if (tmp_args) {
+        // the parameters take the values of the temporary argument list over
+        CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", const_cast<QoreListNode*>(args),
+            nullptr, class_ctx, CT_USER, false, nullptr, pgm, receiver_type_info);
+        if (*xsink) {
+            return QoreValue();
+        }
+        return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+    }
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
-        false, nullptr, pgm, closure_type_context ? closure_type_context->receiver_type_info : nullptr);
+        false, nullptr, pgm, receiver_type_info);
     if (*xsink) {
         return QoreValue();
     }

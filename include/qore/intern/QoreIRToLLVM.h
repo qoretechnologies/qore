@@ -1839,10 +1839,13 @@ private:
         @param fn the native entry
         @param args the arguments of the call
         @param callee the variant called, which names the frame
+        @param arg_cleanups if not null, the cleanup slots of the \a nargs arguments whose references the caller gives
+        to the call (buildArgCleanupArray()), which are released when the callee returns, before its frame is popped,
+        as the AST interpreter releases the parameters that took the arguments over in the callee's frame (issue #5882)
     */
     llvm::CallInst* emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
             const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
-            const llvm::Twine& name = "");
+            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0);
 
     //! Emits a call that AOT-compiled code makes directly to a native entry of user code, with its frame
     /** As emitNativeCall(); the callee is the call target of \a target_slot in this function's context, and the
@@ -1850,7 +1853,7 @@ private:
     */
     llvm::CallInst* emitNativeCallAOT(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
             int32_t target_slot, const QoreIRInstruction* inst, llvm::Module& module, llvm::Function* llvm_func,
-            const llvm::Twine& name = "");
+            const llvm::Twine& name = "", llvm::Value* arg_cleanups = nullptr, int nargs = 0);
 
     //! Emits the push of the frame of a direct native call in JIT code; see emitNativeCall()
     void emitPushNativeCallFrame(const AbstractQoreFunctionVariant* callee, llvm::Module& module,
@@ -1922,8 +1925,13 @@ private:
     /** @param keep true if the call is made or its inline code may raise an exception: the frame is popped;
         otherwise the push is removed, as nothing can see the frame of inline code that raises no exception (it makes
         no calls and cannot block)
+        @param arg_cleanups if not null, the cleanup slots of the \a nargs arguments whose references the caller gives
+        to the call, which are released before the frame is popped (see emitNativeCall()); the frame is then kept, as
+        the destructor of an argument can see it
+        @param callee_proven_nothrow see emitArgCleanupClear()
     */
-    void endAotInlineCallFrame(AotInlineCallFrame& frame, bool keep, llvm::Module& module);
+    void endAotInlineCallFrame(AotInlineCallFrame& frame, bool keep, llvm::Module& module,
+            llvm::Value* arg_cleanups = nullptr, int nargs = 0, bool callee_proven_nothrow = false);
     //! Returns the AOT expression slot of a direct function call, whose call target is the callee
     int32_t getCallDirectExprSlot(const QoreIRCallDirectInstruction& call);
     //! Creates the storage of the frames of the native calls of the function being lowered, once

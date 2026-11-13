@@ -660,6 +660,25 @@ QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args
     return qore_method_private::eval(*method, xsink, rc, obj, args, qc, pgm_ctx);
 }
 
+QoreValue RunTimeResolvedMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
+        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
+            "deleted");
+        return QoreValue();
+    }
+    // as execValue()
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreProgram* pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref);
+    if (pgm_ref & PGM_CREATOR) {
+        pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR);
+        if (pgm_ctx == rc_get_current_program(rc)) {
+            pgm_ctx = nullptr;
+        }
+    }
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, obj, args, qc, pgm_ctx);
+}
+
 QoreProgram* RunTimeResolvedMethodReferenceNode::getProgram() const {
     return obj->getProgram();
 }
@@ -720,6 +739,21 @@ QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, 
     QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
     return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethod(obj, method.c_str(), args,
         qc, rc, xsink, nullptr, pgm_ctx);
+}
+
+QoreValue RunTimeObjectMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
+        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
+            "deleted");
+        return QoreValue();
+    }
+    // as execValue()
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF);
+    QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
+    return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethodGivenArgs(obj,
+        method.c_str(), args, qc, rc, xsink, pgm_ctx);
 }
 
 QoreProgram* RunTimeObjectMethodReferenceNode::getProgram() const {
@@ -925,6 +959,12 @@ QoreValue LocalStaticMethodCallReferenceNode::execValue(const QoreListNode* args
     return qore_method_private::eval(*method, xsink, rc, nullptr, args);
 }
 
+QoreValue LocalStaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, nullptr, args);
+}
+
 bool LocalStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     const LocalStaticMethodCallReferenceNode* vc = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(v);
     //printd(5, "LocalStaticMethodCallReferenceNode::is_equal_hard() %p == %p (%p %s)\n", uf, vc ? vc->uf : 0, v,
@@ -953,6 +993,12 @@ QoreValue LocalMethodCallReferenceNode::execValue(const QoreListNode* args, Exce
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::eval(*method, xsink, rc, runtime_get_stack_object(), args, nullptr);
+}
+
+QoreValue LocalMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, runtime_get_stack_object(), args);
 }
 
 bool LocalMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -991,6 +1037,13 @@ QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, Exc
     // do not set pgm context here before evaluating args
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm);
+}
+
+QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    // as execValue()
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, nullptr, args, class_ctx, pgm);
 }
 
 DeferredStaticMethodCallReferenceNode::DeferredStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
@@ -1107,6 +1160,12 @@ QoreValue MethodCallReferenceNode::execValue(const QoreListNode* args, Exception
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_method_private::eval(*method, xsink, rc, obj, args);
+}
+
+QoreValue MethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, obj, args);
 }
 
 UnresolvedStaticMethodCallReferenceNode::UnresolvedStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
@@ -1352,6 +1411,12 @@ QoreValue LocalFunctionCallReferenceNode::execValue(const QoreListNode* args, Ex
     return uf->evalFunction(0, args, nullptr, rc, xsink, explicit_inst.get());
 }
 
+QoreValue LocalFunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return uf->evalFunctionTmpArgs(nullptr, args, nullptr, rc, xsink, explicit_inst.get());
+}
+
 bool LocalFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     const LocalFunctionCallReferenceNode* vc = dynamic_cast<const LocalFunctionCallReferenceNode*>(v);
     //printd(5, "LocalFunctionCallReferenceNode::is_equal_hard() %p == %p (%p %s)\n", uf, vc ? vc->uf : 0, v,
@@ -1372,6 +1437,12 @@ QoreValue FunctionCallReferenceNode::execValue(const QoreListNode* args, Excepti
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
     return uf->evalFunction(0, args, pgm, rc, xsink, explicit_inst.get());
+}
+
+QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return uf->evalFunctionTmpArgs(nullptr, args, pgm, rc, xsink, explicit_inst.get());
 }
 
 DeferredFunctionCallReferenceNode::DeferredFunctionCallReferenceNode(const QoreProgramLocation* loc,

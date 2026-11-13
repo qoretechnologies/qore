@@ -64,6 +64,14 @@ public:
     DLLLOCAL ResolvedCallReferenceNodeIntern(const QoreProgramLocation* loc, bool n_needs_eval = false) :
         ResolvedCallReferenceNode(n_needs_eval), CallReferenceNodeLocation(loc) {
     }
+
+    //! calls the code with a temporary argument list that the caller owns
+    /** A reference whose call can take the values of the list over for its parameters, as the AST interpreter's call
+        moves its evaluated arguments into the parameters (issue #5882), does so; the others call execValue()
+    */
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+        return execValue(args, xsink);
+    }
 };
 
 class AbstractUnresolvedCallReferenceNode : public AbstractCallReferenceNodeIntern {
@@ -121,6 +129,8 @@ public:
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreFunction* getFunction() const;
 
     DLLLOCAL const QoreMethod* getMethod() const {
@@ -155,6 +165,8 @@ public:
     }
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode *args, ExceptionSink *xsink) const;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
@@ -254,6 +266,8 @@ public:
     DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 };
 
 class MethodCallReferenceNode : public LocalMethodCallReferenceNode {
@@ -271,6 +285,8 @@ public:
     }
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 };
 
 //! a call reference to a user function from within the same QoreProgram object
@@ -279,6 +295,8 @@ public:
     DLLLOCAL LocalFunctionCallReferenceNode(const QoreProgramLocation* loc, const QoreFunction* n_uf);
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
         return LocalFunctionCallReferenceNode::is_equal_hard(v, xsink);
@@ -347,6 +365,8 @@ public:
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
 
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
     }
@@ -388,6 +408,8 @@ public:
             const char* n_method);
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const;
 
@@ -435,6 +457,8 @@ public:
             const QoreMethod* n_method, const qore_class_private* ctx);
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const;
 

@@ -226,7 +226,7 @@ QoreValue NewComplexHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) 
     // in generic code the type has type parameters (hash<string, T>) that are substituted with the types of the
     // instantiation that is running, as for VarRefNewObjectNode::constructValue()
     return qore_hash_private::newComplexHash(
-        needs_substitution ? qore_substitute_type_params_if_needed(typeInfo) : typeInfo, args, xsink);
+        needs_substitution ? qore_substitute_type_params_if_needed_inline(typeInfo) : typeInfo, args, xsink);
 }
 
 QoreValue NewComplexListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

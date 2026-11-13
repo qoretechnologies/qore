@@ -421,6 +421,12 @@ static const QoreTypeInfo* substituteRuntimeTypeParams(const QoreTypeInfo* typeI
     return qore_substitute_type_params_if_needed(typeInfo);
 }
 
+// QoreIRInterpreterGivenArgs.cpp compiles this file with QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT defined, outside the
+// single compilation unit, for the code of the calls that give the references of their temporary arguments to the
+// callee (the IRGivenCallArgs instantiations of the call sites of execute() and of evalInvoke(), issue #5882): it
+// leaves out what that code does not use, which "#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT" encloses; a helper that
+// it starts to use must be taken out of them
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // Defined in QoreIRAnalysis.cpp: the AOT compiler's outlining pass calls it too,
 // and the qcc format fingerprint (see _qcc_format_sources in CMakeLists.txt) tracks
 // the analysis file but deliberately not this one.
@@ -443,6 +449,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
             return true;
     }
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 #include <qore/intern/QoreMapOperatorNode.h>
 #include <qore/intern/QoreSelectOperatorNode.h>
 #include <qore/intern/QoreMapSelectOperatorNode.h>
@@ -479,6 +486,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/qore_list_private.h>
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
 static constinit QoreEnvFlag ir_trace_bg_fallback_env("QORE_IR_TRACE_BG_FALLBACK");
 static constinit QoreEnvFlag ir_trace_debug_env("QORE_IR_TRACE_DEBUG");
@@ -552,6 +560,7 @@ static QoreValue ir_operator_operand(const QoreValue& value) {
     }
     return value.refSelf();
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 // Helper: evaluate a node and ensure the caller owns a reference to the result.
 // Some operator eval() implementations return with needs_deref=false (borrowed reference).
@@ -675,6 +684,7 @@ static void evaluateOwnedListElement(QoreValue& value, ExceptionSink* xsink) {
     evaluateOwnedWeakReferenceResult(value, xsink);
 }
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // As evaluateOwnedListElement() for a list element borrowed from its list; the target is returned borrowed as well:
 // the weak reference held by the list keeps it allocated
 static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
@@ -972,6 +982,7 @@ struct IRScopeEntry {
     //! enclose the block; the temp scopes opened after them belong to the statements of the block
     size_t temp_mark_count;
 };
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 //! Tracks value-slot ids holding owned (node) values for scope-exit cleanup
 /** Replaces a plain std::vector<uint32_t> that allowed duplicate ids.  Loops
@@ -1185,6 +1196,7 @@ private:
     }
 };
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 //! The cache of the values of the local variables of a frame, indexed by slot
 /** For an IR-only local variable the cache is the variable itself.  The variable of a foreach loop is assigned each
     element as it is (AssignmentMode::Element), so its slot can hold a weak reference, which reads as its target, as
@@ -1690,6 +1702,7 @@ struct IRCallFrame {
     //! so that the members used in every call keep their offsets
     QoreIRDebugNest dbg_nest;
 };
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 #if defined(__GNUC__) || defined(__clang__)
 #define QORE_IR_COLD_NOINLINE __attribute__((noinline, cold))
@@ -1697,6 +1710,7 @@ struct IRCallFrame {
 #define QORE_IR_COLD_NOINLINE
 #endif
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 //! Returns the temp scope that an exception that \a raising raised drains to before it branches to its handler
 /** See exceptionBranchTempScope() in the interpreter loop; only the paths of an exception call it, so it is kept out
     of the loop, whose normal path is then the same as without it (qore#5689).
@@ -1779,6 +1793,7 @@ int64 q_get_ir_innermost_instantiated_local_entries() {
     return tls_innermost_ir_instantiated_locals
         ? static_cast<int64>(tls_innermost_ir_instantiated_locals->size()) : 0;
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 // Lightweight wrapper around a std::vector<QoreValue> that provides operator[]
 // and size(), allowing it to be used as a drop-in replacement for
@@ -2001,6 +2016,7 @@ static bool hasCleanupEntry(const IRCleanupSlots& cleanup, uint32_t id) {
     return cleanup.contains(id);
 }
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // Sets a value slot without discarding the previous value. Only use this for
 // scalar or borrowed values; owned node values in loop-reexecuted slots must
 // use setValueSlot() so the previous iteration's value is released.
@@ -2121,6 +2137,7 @@ static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
         }
     }
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 //! makes the type arguments and the receiver type of a specialized IR function current while it creates a closure
 /** The specialization binds the type parameters of the generic code statically, so they are not current at run time;
@@ -2155,6 +2172,7 @@ private:
     const QoreTypeParamInstantiation* old_inst = nullptr;
 };
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 //! Releases the value of a local on the runtime stack that the frame instantiated, at the exit of the function
 /** The variable is removed from the stack afterwards (cleanupInstantiatedLocals(), or the caller for a pre-instantiated
     local); its value is released here, at its slot's place among the IR-only locals, so that a function left by an
@@ -2276,7 +2294,7 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
         bool transfer = false, const char* desc = "<lvalue>") {
     QoreValue stored = !transfer && value.needsRef() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
-    ti = qore_substitute_type_params_if_needed(ti);
+    ti = qore_substitute_type_params_if_needed_inline(ti);
     QoreTypeInfo::acceptAssignment(ti, desc, stored, xsink);
     if (xsink && *xsink) {
         stored.discard(xsink);
@@ -2483,6 +2501,7 @@ static void updateLocalVarFromLvalue(
         assignLocalVarValue(var_ref->ref.id, value, xsink);
     }
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 static QoreListNode* buildArgList(const IRValueSlots& values,
         const std::vector<QoreIRValue>& operands, size_t start_index, ExceptionSink* xsink) {
@@ -2499,6 +2518,7 @@ static QoreListNode* buildArgList(const IRValueSlots& values,
     return args;
 }
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 static void countIRValueUse(std::vector<uint32_t>& counts, QoreIRValue value) {
     if (value.isValid() && value.id < counts.size()) {
         ++counts[value.id];
@@ -2969,6 +2989,25 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     }
     func.interpreter_value_use_counts = std::move(value_use_counts);
     func.interpreter_dot_eval_only_bases = std::move(dot_eval_only_bases);
+    // a call with an argument that it can consume gives the references of its temporary arguments to the callee (see
+    // IRConsumedCallArgs); the others, which the flag tells apart with no test of their arguments, are made with the
+    // code of a call that gives nothing (issue #5882)
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_uptr : block->instructions) {
+            QoreIRInstruction* call_inst = inst_uptr.get();
+            int arg_start = qore_ir_call_arg_start(call_inst);
+            if (arg_start < 0) {
+                continue;
+            }
+            for (size_t i = static_cast<size_t>(arg_start); i < call_inst->operands.size(); ++i) {
+                const QoreIRValue& operand = call_inst->operands[i];
+                if (operand.isValid() && operand.id < consumed_call_args.size() && consumed_call_args[operand.id]) {
+                    call_inst->interpreter_gives_call_args = true;
+                    break;
+                }
+            }
+        }
+    }
     func.interpreter_consumed_call_args = std::move(consumed_call_args);
     func.interpreter_phi_takes_incoming = std::move(phi_takes_incoming);
     {
@@ -3245,6 +3284,7 @@ static bool ensureInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink*
     return ensureInterpreterLocalAnalysis(func, xsink)
         && refineInterpreterEffectSummary(func, xsink);
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 static LocalVar* findIRSelfLocalForInterpreter(const QoreIRFunction* ir) {
     if (!ir) {
@@ -3412,6 +3452,185 @@ static constexpr int QORE_IR_FAST_CALL_PARAM_MISMATCH = -2;
 static bool qore_ir_callee_single_variant(const QoreFunction* func) {
     return func && func->hasSingleCallVariant();
 }
+
+//! Releases the references that a caller gave to a call (see IRGivenCallArgs) and that the call did not release
+/** The last argument is released first, as the AST interpreter releases the parameters that took the arguments over;
+    an exception raised by a destructor is added to any exception raised by the call, as in the AST
+*/
+static QORE_INTERN_NOINLINE void releaseGivenCallArgsIntern(uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink) {
+    for (int i = nargs - 1; i >= 0; --i) {
+        uint64_t* slot = arg_cleanups[i];
+        if (slot && *slot) {
+            uint64_t bits = *slot;
+            *slot = 0;
+            fromBits(bits).discard(xsink);
+        }
+    }
+}
+
+//! releases the references given to a call (see releaseGivenCallArgsIntern()); a call that gave none costs a test
+static inline __attribute__((always_inline)) void releaseGivenCallArgs(uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink) {
+    if (arg_cleanups) {
+        releaseGivenCallArgsIntern(arg_cleanups, nargs, xsink);
+    }
+}
+
+//! The references of the temporary arguments that a call consumes, which the caller gives to the call
+/** As the AST interpreter moves its argument list into the parameters (UserVariantBase::setupCall()), so that the
+    last reference of a temporary argument is released in the callee's frame (issue #5882), the caller gives the
+    reference that the slot of a temporary argument used only by the call holds to the call as a cleanup slot (as
+    native code gives its cleanup slots: qore_rt_clear_arg_cleanups()); the call releases it in the callee's frame
+    once the parameters took references of their own, or once the callee's body has run.  The slot keeps the value,
+    without a reference of its own, until release(), which releases a reference that the call did not release and
+    clears the slots, when the call returns.
+
+    Nothing is allocated or initialized for a call that gives nothing.
+*/
+class IRGivenCallArgs {
+public:
+    static constexpr bool GIVEN = true;
+
+    DLLLOCAL __attribute__((always_inline)) IRGivenCallArgs(int n_nargs, ExceptionSink* n_xsink)
+            : nargs(n_nargs), xsink(n_xsink) {
+    }
+
+    //! a call that gives nothing costs a test
+    DLLLOCAL __attribute__((always_inline)) ~IRGivenCallArgs() {
+        if (cleanups) {
+            finish();
+        }
+    }
+
+    IRGivenCallArgs(const IRGivenCallArgs&) = delete;
+    IRGivenCallArgs& operator=(const IRGivenCallArgs&) = delete;
+
+    //! gives the reference of the slot of argument \a i to the call; the caller removed the slot's cleanup entry
+    DLLLOCAL void give(int i, QoreValue& slot) {
+        assert(i >= 0 && i < nargs);
+        if (!cleanups) {
+            init();
+        }
+        assert(!slots[i]);
+        owned[i] = toBits(slot);
+        cleanups[i] = &owned[i];
+        slots[i] = &slot;
+    }
+
+    //! returns the cleanup slots to give to the call, or nullptr if nothing was given
+    DLLLOCAL uint64_t** get() const {
+        return cleanups;
+    }
+
+    //! releases the references that the call did not release and clears the slots of the arguments given
+    DLLLOCAL __attribute__((always_inline)) void release() {
+        if (cleanups) {
+            releaseIntern();
+        }
+    }
+
+private:
+    static constexpr int SMALL = 8;
+    int nargs;
+    ExceptionSink* xsink;
+    //! the cleanup slots given to the call; nullptr if nothing was given, the other buffers are then not set
+    uint64_t** cleanups = nullptr;
+    uint64_t* owned;
+    QoreValue** slots;
+    uint64_t small_owned[SMALL];
+    uint64_t* small_cleanups[SMALL];
+    QoreValue* small_slots[SMALL];
+    //! the owned values, the cleanup slots and the argument slots of a call with more than SMALL arguments, if any
+    uint64_t* heap;
+
+    DLLLOCAL QORE_INTERN_NOINLINE void releaseIntern() {
+        for (int i = 0; i < nargs; ++i) {
+            if (slots[i]) {
+                *slots[i] = QoreValue();
+                slots[i] = nullptr;
+            }
+        }
+        releaseGivenCallArgs(cleanups, nargs, xsink);
+    }
+
+    //! releases what the call did not release and frees the buffers
+    DLLLOCAL QORE_INTERN_NOINLINE void finish() {
+        releaseIntern();
+        if (heap) {
+            delete[] heap;
+        }
+    }
+
+    DLLLOCAL void init() {
+        if (nargs <= SMALL) {
+            owned = small_owned;
+            cleanups = small_cleanups;
+            slots = small_slots;
+            heap = nullptr;
+        } else {
+            // one allocation: the owned values, the cleanup slots, then the argument slots
+            static_assert(sizeof(uint64_t*) == sizeof(uint64_t) && sizeof(QoreValue*) == sizeof(uint64_t));
+            heap = new uint64_t[nargs * 3];
+            owned = heap;
+            cleanups = reinterpret_cast<uint64_t**>(heap + nargs);
+            slots = reinterpret_cast<QoreValue**>(heap + nargs * 2);
+        }
+        for (int i = 0; i < nargs; ++i) {
+            owned[i] = 0;
+            cleanups[i] = nullptr;
+            slots[i] = nullptr;
+        }
+    }
+};
+
+//! Stands for IRGivenCallArgs in code instantiated for a call that gives nothing, which then compiles as without it
+struct IRNoGivenCallArgs {
+    static constexpr bool GIVEN = false;
+
+    static constexpr uint64_t** get() {
+        return nullptr;
+    }
+
+    void release() {
+    }
+};
+
+//! The state of QoreIRInterpreter::execute() with which a call gives the references of its temporary arguments
+/** A call whose instruction has QoreIRInstruction::interpreter_gives_call_args set gives them with give(), out of
+    line (see the call sites of execute())
+*/
+struct IRConsumedCallArgs {
+    IRValueSlots& values;
+    IRCleanupSlots& cleanup;
+    const std::vector<uint8_t>& consumed_call_args;
+    const std::unordered_map<uint32_t, int32_t>& weak_load_temp_slots;
+    const std::vector<int32_t>& borrowed_temp_remaining;
+
+    //! Gives the references of the temporary arguments that the call consumes to the call, before it is made
+    /** The call releases them in the callee's frame, as the AST interpreter moves its argument list into the parameters
+        (see IRGivenCallArgs); the arguments must have been read from their slots before
+    */
+    DLLLOCAL void give(const QoreIRInstruction* call_inst, IRGivenCallArgs& given) const {
+        int arg_start = qore_ir_call_arg_start(call_inst);
+        if (arg_start < 0) {
+            return;
+        }
+        for (size_t i = call_inst->operands.size(); i > static_cast<size_t>(arg_start); --i) {
+            uint32_t id = call_inst->operands[i - 1].id;
+            if (!call_inst->operands[i - 1].isValid() || id >= values.size() || id >= consumed_call_args.size()
+                    || !consumed_call_args[id]
+                    || !hasCleanupEntry(cleanup, id) || weak_load_temp_slots.count(id)
+                    || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+                continue;
+            }
+            if (values[id].needsRef()) {
+                removeAllCleanupEntries(cleanup, id);
+                given.give(static_cast<int>(i - 1 - arg_start), values[id]);
+            }
+        }
+    }
+};
 
 //! Instantiates the parameters of an inlined call
 /** @return QORE_IR_FAST_CALL_PARAM_MISMATCH for an argument that does not match its parameter, with the parameter
@@ -4007,6 +4226,7 @@ static bool tryExecuteSimpleClosureIncrement(const QoreClosureBase* cb,
     return !(xsink && *xsink);
 }
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
         const UserSignature* sig, unsigned num_params) {
     if (!ir || !sig || !num_params || num_params > 2 || ir->blocks.size() < 2
@@ -5058,6 +5278,7 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
             return false;
     }
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 //! Gives a callee body that the interpreter inlines the runtime parse options of a call of the callee
 /** A call of a user variant runs its body with the variant's own runtime parse options and, if it runs in a Program
@@ -5097,10 +5318,18 @@ private:
 /** @param thread_data the current thread's data (RuntimeLocationCache::thread_data), for the switch of the object and
     class context (CalleeContextHelper)
     @param caller_ir the IR of the caller, whose context the callee's body keeps when it is a plain function
+    @param arg_cleanups the references of the temporary arguments that the caller gives to the call (see
+    IRGivenCallArgs), released in the callee's frame once its body has run and its parameters were released, as the
+    AST interpreter releases the parameters that took them over (issue #5882); if the call is not made here, they are
+    left to the caller
+    @tparam GIVEN true if the caller gives the references of temporary arguments (\a arg_cleanups); a call that gives
+    none runs the code instantiated for false, which has no test for them
 */
+template <bool GIVEN = false>
 static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
-        void* thread_data, const QoreIRFunction* caller_ir, bool* may_invalidate_external_caches = nullptr) {
+        void* thread_data, const QoreIRFunction* caller_ir, bool* may_invalidate_external_caches = nullptr,
+        uint64_t** arg_cleanups = nullptr) {
     int8_t inline_state = ensureInterpreterInlineIRFunctionState(inst, caller_pgm, nargs, caller_ir);
     if (inline_state <= 0) {
         return false;
@@ -5203,6 +5432,10 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    // the references that the caller gave to the call are released in the callee's frame
+    if constexpr (GIVEN) {
+        releaseGivenCallArgs(arg_cleanups, nargs, xsink);
+    }
 
     if (xsink && *xsink) {
         ir_return_value.discard(xsink);
@@ -5219,11 +5452,11 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
 
 static const AbstractQoreFunctionVariant* getSingleInterpreterMethodVariant(const QoreMethod* method);
 
-template <typename DirectMethodInst>
+template <bool GIVEN = false, typename DirectMethodInst>
 static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const QoreMethod* method,
         QoreObject* self, const QoreTypeInfo* receiver_type_info, int8_t inline_state,
         uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
-        bool* may_invalidate_external_caches = nullptr) {
+        bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     QoreSandboxProvenanceHelper provenance(self);
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
@@ -5311,6 +5544,10 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    // the references that the caller gave to the call are released in the callee's frame
+    if constexpr (GIVEN) {
+        releaseGivenCallArgs(arg_cleanups, nargs, xsink);
+    }
 
     if (!(xsink && *xsink)) {
         acceptInterpreterIRReturnType(sig, inst->cached_return_type, receiver_type_info, ir_return_value, xsink);
@@ -5328,10 +5565,10 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     return true;
 }
 
-template <typename DirectMethodInst>
+template <bool GIVEN = false, typename DirectMethodInst>
 static bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObject* self,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
-        bool* may_invalidate_external_caches = nullptr) {
+        bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     if (!self || !caller_pgm) {
         return false;
     }
@@ -5345,8 +5582,8 @@ static bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObje
         return false;
     }
 
-    return executeInterpreterInlineIRMethodTarget(inst, inst->method, self, nullptr,
-        inline_state, args, nargs, result, xsink, may_invalidate_external_caches);
+    return executeInterpreterInlineIRMethodTarget<GIVEN>(inst, inst->method, self, nullptr,
+        inline_state, args, nargs, result, xsink, may_invalidate_external_caches, arg_cleanups);
 }
 
 static const AbstractQoreFunctionVariant* getSingleInterpreterMethodVariant(const QoreMethod* method) {
@@ -5359,11 +5596,11 @@ static const AbstractQoreFunctionVariant* getSingleInterpreterMethodVariant(cons
     return func && func->numVariants() == 1 && !func->hasInheritedVariants() ? func->first() : nullptr;
 }
 
-template <typename DotEvalInst>
+template <bool GIVEN = false, typename DotEvalInst>
 static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreValue base,
         const char* method_name, const QoreTypeParamInstantiation* explicit_inst, QoreProgram* caller_pgm,
         uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
-        bool* may_invalidate_external_caches = nullptr) {
+        bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     if (!caller_pgm || inst->pseudo || explicit_inst || !method_name) {
         return false;
     }
@@ -5406,8 +5643,8 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
             return false;
         }
         if (!inst->cached_method->isPrivate()) {
-            return executeInterpreterInlineIRMethodTarget(inst, inst->cached_method, self, nullptr,
-                state, args, nargs, result, xsink, may_invalidate_external_caches);
+            return executeInterpreterInlineIRMethodTarget<GIVEN>(inst, inst->cached_method, self, nullptr,
+                state, args, nargs, result, xsink, may_invalidate_external_caches, arg_cleanups);
         }
     }
 
@@ -5424,8 +5661,8 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
                 || inst->cached_class_ctx_serial != (class_ctx ? class_ctx->getInstanceSerial() : 0)) {
             return false;
         }
-        return executeInterpreterInlineIRMethodTarget(inst, inst->cached_method, self, nullptr,
-            state, args, nargs, result, xsink, may_invalidate_external_caches);
+        return executeInterpreterInlineIRMethodTarget<GIVEN>(inst, inst->cached_method, self, nullptr,
+            state, args, nargs, result, xsink, may_invalidate_external_caches, arg_cleanups);
     }
     if (state == QORE_IR_INLINE_INELIGIBLE) {
         return false;
@@ -5482,11 +5719,12 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
         return false;
     }
 
-    return executeInterpreterInlineIRMethodTarget(inst, method, self, nullptr,
-        state, args, nargs, result, xsink, may_invalidate_external_caches);
+    return executeInterpreterInlineIRMethodTarget<GIVEN>(inst, method, self, nullptr,
+        state, args, nargs, result, xsink, may_invalidate_external_caches, arg_cleanups);
 }
 
 #ifdef DEBUG
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRDotEvalMethodDirectInstruction* inst, QoreValue base,
         const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink) {
     return tryExecuteInterpreterInlineIRDotEvalMethod(inst, base, method_name, nullptr, caller_pgm, nullptr, 0,
@@ -5498,15 +5736,17 @@ bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRInvokeDotEvalMethodDirectInstr
     return tryExecuteInterpreterInlineIRDotEvalMethod(inst, base, method_name, nullptr, caller_pgm, nullptr, 0,
         result, xsink);
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 #endif
 
 //! Runs a static method inline in the interpreter, if it can
 /** @param thread_data the current thread's data (RuntimeLocationCache::thread_data), for the switch of the object and
     class context (CalleeContextHelper)
 */
+template <bool GIVEN = false>
 static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
-        void* thread_data, bool* may_invalidate_external_caches = nullptr) {
+        void* thread_data, bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     int8_t inline_state = caller_pgm
         ? ensureInterpreterResolvedInlineIRCallState(inst, inst->method, inst->variant, caller_pgm, nargs, false) : -1;
     if (inline_state <= 0) {
@@ -5597,6 +5837,10 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    // the references that the caller gave to the call are released in the callee's frame
+    if constexpr (GIVEN) {
+        releaseGivenCallArgs(arg_cleanups, nargs, xsink);
+    }
 
     if (xsink && *xsink) {
         ir_return_value.discard(xsink);
@@ -5625,12 +5869,14 @@ static QoreValue qore_ir_uninstantiate_scan_value(ClosureVarValue& cvv, Exceptio
 }
 
 #ifdef DEBUG
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 //! the closure calls that found a cache entry made for a freed closure at the same addresses
 /** The entry is not used, as its serial differs (see tryExecuteInterpreterInlineIRClosure() and
     tryExecClosureNativeLeaf()); a test that reproduces the reuse of a deleted Program's addresses checks that it
     occurred (dbg_closure_call_cache_program_misses())
 */
 std::atomic<int64_t> qore_dbg_closure_call_cache_program_misses{0};
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 #endif
 
 //! Gives the parameter type error of an inlined closure call the outcome of the AST interpreter
@@ -5645,9 +5891,10 @@ static __attribute__((noinline, cold)) void qore_ir_inline_closure_param_mismatc
     update_runtime_stack_location(&stack_loc);
 }
 
+template <bool GIVEN = false>
 static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
         const QoreProgramLocation* call_loc, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
-        bool* may_invalidate_external_caches = nullptr) {
+        bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     if (!ref_val.hasNode()) {
         return false;
     }
@@ -5861,6 +6108,10 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         ir_return_value.discard(xsink);
         return false;
     }
+    // the references that the caller gave to the call are released in the callee's frame
+    if constexpr (GIVEN) {
+        releaseGivenCallArgs(arg_cleanups, nargs, xsink);
+    }
 
     if (!(xsink && *xsink)) {
         acceptInterpreterIRReturnType(sig, nullptr, nullptr, ir_return_value, xsink);
@@ -5937,6 +6188,77 @@ static inline void releaseLastUseCallArgSlot(IRValueSlots& values, IRCleanupSlot
     slot = QoreValue();
 }
 
+// only a call that gives its arguments uses them (see irCallDirectGiven())
+#ifdef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+//! takes the slot of an argument whose last use is the call and gives its reference to the call at position \a pos
+/** See releaseLastUseCallArgSlot() and IRGivenCallArgs
+*/
+static inline void giveLastUseCallArgSlot(IRValueSlots& values, IRCleanupSlots& cleanup, uint32_t id, int pos,
+        const std::unordered_map<uint32_t, int32_t>* borrowed_slots, const std::vector<int32_t>& borrowed_temps,
+        IRGivenCallArgs& given) {
+    QoreValue& slot = values[id];
+    if (!slot.needsRef()) {
+        return;
+    }
+    assert(id >= borrowed_temps.size() || borrowed_temps[id] <= 0);
+    removeAllCleanupEntries(cleanup, id);
+    if (borrowed_slots && borrowed_slots->find(id) != borrowed_slots->end()) {
+        // a borrowed slot holds no reference (the arguments of the call have been read from the slots)
+        slot = QoreValue();
+        return;
+    }
+    given.give(pos, slot);
+}
+
+//! Gives the references of the arguments whose last use is the call to the call (see consumeLastUseCallArgSlots())
+/** The arguments must have been read from their slots before; an argument given twice is given at its last position
+*/
+static void giveLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cleanup,
+        const std::vector<QoreIRValue>& operands, size_t start_index,
+        const std::vector<uint32_t>& value_use_counts,
+        const std::unordered_map<uint32_t, int32_t>* borrowed_slots, const std::vector<int32_t>& borrowed_temps,
+        IRGivenCallArgs& given) {
+    if (operands.size() - start_index <= QORE_IR_CALL_ARG_SCAN_MAX) {
+        for (size_t i = operands.size(); i > start_index; --i) {
+            QoreIRValue operand = operands[i - 1];
+            if (!isCountedCallArg(values, value_use_counts, operand)) {
+                continue;
+            }
+            bool later = false;
+            for (size_t j = i, e = operands.size(); j < e; ++j) {
+                if (operands[j].isValid() && operands[j].id == operand.id) {
+                    later = true;
+                    break;
+                }
+            }
+            if (later || value_use_counts[operand.id] != countCallArgId(operands, start_index, operand.id)) {
+                continue;
+            }
+            giveLastUseCallArgSlot(values, cleanup, operand.id, static_cast<int>(i - 1 - start_index),
+                borrowed_slots, borrowed_temps, given);
+        }
+        return;
+    }
+    std::unordered_map<uint32_t, uint32_t> occurrences;
+    countCallArgOccurrences(values, operands, start_index, value_use_counts, occurrences);
+    for (size_t i = operands.size(); i > start_index; --i) {
+        QoreIRValue operand = operands[i - 1];
+        auto it = operand.isValid() ? occurrences.find(operand.id) : occurrences.end();
+        if (it == occurrences.end()) {
+            continue;
+        }
+        uint32_t id = operand.id;
+        uint32_t occurrences_in_args = it->second;
+        occurrences.erase(it);
+        if (value_use_counts[id] != occurrences_in_args) {
+            continue;
+        }
+        giveLastUseCallArgSlot(values, cleanup, id, static_cast<int>(i - 1 - start_index), borrowed_slots,
+            borrowed_temps, given);
+    }
+}
+#endif
+
 static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cleanup,
         const std::vector<QoreIRValue>& operands, size_t start_index,
         const std::vector<uint32_t>& value_use_counts,
@@ -5984,6 +6306,7 @@ static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cle
     }
 }
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 static bool hasLastUseCallArgSlots(const IRValueSlots& values, const std::vector<QoreIRValue>& operands,
         size_t start_index, const std::vector<uint32_t>& value_use_counts) {
     if (operands.size() - start_index <= QORE_IR_CALL_ARG_SCAN_MAX) {
@@ -6068,6 +6391,7 @@ static QoreValue newComplexFromOperand(IRValueSlots& values, IRCleanupSlots& cle
     }
     return rv;
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 static QoreValue raiseIRAstFallback(ExceptionSink* xsink, const char* kind,
         const QoreIRFunction* func, const QoreIRBasicBlock* block, size_t ip,
@@ -6105,10 +6429,15 @@ static QoreValue raiseIRAstFallback(ExceptionSink* xsink, const char* kind,
 // return NOTHING when evaluated as full AST statements, but the IR expects the
 // computed value as the result.  Using evalBinary with the operand values returns
 // the correct computed value.
+//! evaluates an Invoke instruction
+/** @param given the references of the temporary arguments of a call that the caller gives to the call (see
+    IRGivenCallArgs), or nullptr
+*/
+template <bool GIVEN = false>
 static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         const IRValueSlots& values, ExceptionSink* xsink,
         const QoreIRFunction* func, const QoreIRBasicBlock* block, size_t ip,
-        bool preserve_hash_key_weak_result = false) {
+        bool preserve_hash_key_weak_result = false, IRGivenCallArgs* given = nullptr) {
     QoreIROpcode op = inv->invoke_opcode;
 
     switch (op) {
@@ -6465,6 +6794,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 }
                 return QoreValue();
             }
+            // the argument list took references of its own: it holds the last ones of the arguments given to the
+            // call, which the call moves into its parameters, as the AST interpreter does
+            if constexpr (GIVEN) {
+                given->release();
+            }
             bool used_operands = false;
             QoreValue res;
             if (op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect) {
@@ -6615,9 +6949,16 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 }
             }
             if (nargs > SMALL_BUF) delete[] nb_args;
+            // the argument list took references of its own: it holds the last ones of the arguments given to the
+            // call, which the constructor moves into its parameters, as the AST interpreter does
+            bool tmp_args = false;
+            if constexpr (GIVEN) {
+                tmp_args = given->get();
+                given->release();
+            }
             RuntimeConfig& rc = rc_get_current_ref();
             return qore_class_private::execConstructor(*qc, rc, variant,
-                nargs > 0 ? *arg_list : nullptr, xsink, object_type_info);
+                nargs > 0 ? *arg_list : nullptr, xsink, object_type_info, tmp_args);
         }
 
         // VrnConstruct: construct hashdecl/complex types without local variable assignment
@@ -6875,6 +7216,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 // Fast path: call through qore_rt_call_closure_* which uses
                 // static_cast + execClosureDirect (no dynamic_cast, no QoreListNode)
                 uint64_t ref_bits = toBits(ref_val);
+                // the references that the caller gives to the call are released in the callee's frame
+                uint64_t** arg_cleanups = GIVEN ? given->get() : nullptr;
                 if (nargs == 0) {
                     QoreValue inline_result;
                     if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), inv->loc, nullptr, 0,
@@ -6886,11 +7229,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (nargs == 1) {
                     uint64_t arg0 = toBits(getIRValue(values, inv->operands[1]));
                     QoreValue inline_result;
-                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), inv->loc, &arg0, 1,
-                            inline_result, xsink)) {
+                    if (tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, getProgram(), inv->loc, &arg0, 1,
+                            inline_result, xsink, nullptr, arg_cleanups)) {
                         return inline_result;
                     }
-                    return fromBits(qore_rt_call_closure_1(ref_bits, arg0, xsink));
+                    return fromBits(GIVEN
+                        ? qore_rt_call_closure_fast_consume_args(ref_bits, &arg0, arg_cleanups, 1, xsink)
+                        : qore_rt_call_closure_1(ref_bits, arg0, xsink));
                 }
                 // N-arg path: use stack buffer for small arg counts
                 constexpr int SMALL_BUF = 8;
@@ -6900,9 +7245,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     args[i] = toBits(getIRValue(values, inv->operands[i + 1]));
                 }
                 QoreValue inline_result;
-                bool inline_done = tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), inv->loc, args,
-                    nargs, inline_result, xsink);
-                uint64_t result_bits = inline_done ? 0 : qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
+                bool inline_done = tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, getProgram(), inv->loc, args,
+                    nargs, inline_result, xsink, nullptr, arg_cleanups);
+                uint64_t result_bits = inline_done ? 0 : (GIVEN
+                    ? qore_rt_call_closure_fast_consume_args(ref_bits, args, arg_cleanups, nargs, xsink)
+                    : qore_rt_call_closure_fast(ref_bits, args, nargs, xsink));
                 if (nargs > SMALL_BUF) {
                     delete[] args;
                 }
@@ -7102,6 +7449,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
     }
 }
 
+
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
@@ -7189,6 +7538,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
     handlers.clear();
     return nrc;
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
 // Placeholder class - QoreIRStackLocation was removed because inheriting from
 // QoreProgramStackLocationHelper caused IR frames to appear in exception callstacks,
@@ -7221,6 +7571,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
 #define QORE_IR_LAMBDA_NOINLINE
 #endif
 
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 //! The state of the debugger's events of a frame of QoreIRInterpreter::execute() (#5795)
 /** One object, so that the debugger's helpers of the frame, which are expanded where they are called, add no state
     of their own to the frame; the work that a debugger needs is done by the functions below, out of line
@@ -7415,7 +7766,592 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_dismissed_exit(QoreIRDebugFrameStat
     return_value = QoreValue();
     return true;
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
+// the call sites of execute(), whose code is that of a call that gives nothing (IRNoGivenCallArgs) in execute()
+// and that of a call that gives the references of its temporary arguments (IRGivenCallArgs) in
+// QoreIRInterpreterGivenArgs.cpp, which compiles it outside the single compilation unit, so that it does not
+// change how the code of the calls that give nothing is compiled (issue #5882)
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_IR_INLINE_SITE inline __attribute__((always_inline))
+#else
+#define QORE_IR_INLINE_SITE inline
+#endif
+
+//! makes the call of a closure or a call reference with arguments, with the references of the temporary arguments that
+//! the caller gives to it (see IRGivenCallArgs), or with none (IRNoGivenCallArgs: the code of a call that gives
+//! nothing); a call that gives them runs it in QoreIRInterpreterGivenArgs.cpp (irCallClosureGiven()), outside the
+//! single compilation unit
+template <typename Given>
+static QORE_IR_INLINE_SITE void irCallClosure(Given& given, IRValueSlots& values, QoreIRInstruction* inst,
+        QoreValue ref_val, uint64_t ref_bits, QoreProgram* pgm, int nargs, QoreValue& result, bool& used_inline_ir,
+        bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    constexpr bool GIVEN = Given::GIVEN;
+    if (nargs == 1) {
+        uint64_t arg0 = toBits(getIRValue(values, inst->operands[1]));
+        used_inline_ir = tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, pgm, inst->loc,
+            &arg0, 1, result, xsink, &inline_may_invalidate_external_caches, given.get());
+        if (!used_inline_ir) {
+            result = fromBits(GIVEN
+                ? qore_rt_call_closure_fast_consume_args(ref_bits, &arg0, given.get(), 1, xsink)
+                : qore_rt_call_closure_1(ref_bits, arg0, xsink));
+        }
+    } else {
+        constexpr int SMALL_BUF = 8;
+        uint64_t small_buf[SMALL_BUF];
+        uint64_t* args = nargs <= SMALL_BUF ? small_buf : new uint64_t[nargs];
+        for (int i = 0; i < nargs; ++i) {
+            args[i] = toBits(getIRValue(values, inst->operands[i + 1]));
+        }
+        used_inline_ir = tryExecuteInterpreterInlineIRClosure<GIVEN>(ref_val, pgm, inst->loc,
+            args, nargs, result, xsink, &inline_may_invalidate_external_caches, given.get());
+        if (!used_inline_ir) {
+            result = fromBits(GIVEN
+                ? qore_rt_call_closure_fast_consume_args(ref_bits, args, given.get(), nargs,
+                    xsink)
+                : qore_rt_call_closure_fast(ref_bits, args, nargs, xsink));
+        }
+        if (nargs > SMALL_BUF) {
+            delete[] args;
+        }
+    }
+}
+
+//! makes a CallDirect call of a user function, with the references of the temporary arguments that the caller gives to
+//! it (see IRGivenCallArgs), or with none (IRNoGivenCallArgs: the code of a call that gives nothing); a call that gives
+//! them runs it in QoreIRInterpreterGivenArgs.cpp (irCallDirectGiven()), outside the single compilation unit
+template <typename Given>
+static QORE_IR_INLINE_SITE void irCallDirect(Given& given, IRValueSlots& values, IRCleanupSlots& cleanup,
+        const std::vector<uint32_t>& value_use_counts, std::unordered_map<uint32_t, int32_t>& weak_load_temp_slots,
+        std::vector<int32_t>& borrowed_temp_remaining, RuntimeLocationCache& rl_cache, const QoreIRFunction& func,
+        QoreIRInstruction* inst, QoreIRCallDirectInstruction* direct_inst, QoreProgram* pgm,
+        const QoreTypeParamInstantiation* explicit_inst, bool has_last_use_args, bool type_name_fast_path,
+        bool debug_active, uint64_t* nanboxed_args, int nargs, QoreValue& res, bool& used_inline_ir,
+        bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    constexpr bool GIVEN = Given::GIVEN;
+    if (explicit_inst) {
+        ReferenceHolder<QoreListNode> arg_list(
+            buildArgList(values, direct_inst->operands, 0,
+                xsink), xsink);
+        // the argument list took references of its own: it holds the last ones, which the call
+        // moves into its parameters
+        if (has_last_use_args) {
+            consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
+                value_use_counts, &weak_load_temp_slots, borrowed_temp_remaining, xsink);
+        }
+        RuntimeConfig& rc = rc_get_current_ref();
+        QoreProgram* call_pgm = direct_inst->pgm
+            ? direct_inst->pgm : rc.getProgram();
+        if (!call_pgm) {
+            call_pgm = getProgram();
+        }
+        qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
+        res = direct_inst->func->evalFunctionTmpArgs(
+            direct_inst->variant, *arg_list, call_pgm, rc,
+            xsink, explicit_inst);
+        qore_ir_clear_call_site(rl_cache.loc_ptr);
+        used_inline_ir = true;
+    } else if (type_name_fast_path) {
+        res = fromBits(qore_rt_pseudo_type(nanboxed_args[0]));
+        inline_may_invalidate_external_caches = false;
+        used_inline_ir = true;
+    } else if (!debug_active
+            && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs, &func) > 0
+            && !direct_inst->cached_uvb->hasCachedFunction()
+            // a call into another Program enters it (see tryExecuteInterpreterInlineIRFunction())
+            && direct_inst->cached_uvb->pgm == pgm
+            && qore_ir_try_execute_native_leaf(direct_inst, nanboxed_args, nargs, res)) {
+        // the call is evaluated without entering the callee, so it is counted here for its
+        // promotion to native code, as qore_rt_call_fast() counts the calls it makes
+        direct_inst->cached_uvb->recordFastCallExecution();
+        inline_may_invalidate_external_caches = false;
+        used_inline_ir = true;
+    } else {
+        used_inline_ir = tryExecuteInterpreterInlineIRFunction<GIVEN>(direct_inst, pgm,
+            nanboxed_args, nargs, res, xsink, rl_cache.thread_data, &func,
+            &inline_may_invalidate_external_caches, given.get());
+    }
+    if (!used_inline_ir) {
+        qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
+        res = fromBits(GIVEN
+            ? qore_rt_call_fast_consume_args(direct_inst->func, direct_inst->variant,
+                direct_inst->pgm, nanboxed_args, given.get(), nargs, xsink)
+            : qore_rt_call_fast(direct_inst->func, direct_inst->variant, direct_inst->pgm,
+                nanboxed_args, nargs, xsink));
+        qore_ir_clear_call_site(rl_cache.loc_ptr);
+    }
+}
+
+//! makes a CallStaticDirect call of a static method, with the references of the temporary arguments that the caller
+//! gives to it (see IRGivenCallArgs), or with none (IRNoGivenCallArgs: the code of a call that gives nothing); a call
+//! that gives them runs it in QoreIRInterpreterGivenArgs.cpp (irCallStaticDirectGiven()), outside the single
+//! compilation unit
+template <typename Given>
+static QORE_IR_INLINE_SITE void irCallStaticDirect(Given& given, QoreIRCallStaticDirectInstruction* static_inst,
+        QoreProgram* pgm, RuntimeLocationCache& rl_cache, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_inst, uint64_t* nanboxed_args, int nargs, QoreValue& res,
+        bool& used_inline_ir, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    constexpr bool GIVEN = Given::GIVEN;
+    used_inline_ir = !receiver_type_info && !explicit_inst
+        && tryExecuteInterpreterInlineIRStaticMethod<GIVEN>(static_inst, pgm,
+            nanboxed_args, nargs, res, xsink, rl_cache.thread_data,
+            &inline_may_invalidate_external_caches, given.get());
+    if (!used_inline_ir) {
+        res = fromBits(receiver_type_info || explicit_inst
+            ? (GIVEN
+                ? qore_rt_call_static_method_direct_with_inst_consume_args(
+                    static_inst->method, static_inst->variant,
+                    nanboxed_args, given.get(), nargs, receiver_type_info,
+                    explicit_inst, xsink)
+                : qore_rt_call_static_method_direct_with_inst(
+                    static_inst->method, static_inst->variant,
+                    nanboxed_args, nargs, receiver_type_info,
+                    explicit_inst, xsink))
+            : (GIVEN
+                ? qore_rt_call_static_method_direct_consume_args(static_inst->method,
+                    static_inst->variant, nanboxed_args, given.get(), nargs, xsink)
+                : qore_rt_call_static_method_direct(static_inst->method, static_inst->variant,
+                    nanboxed_args, nargs, xsink)));
+    }
+}
+
+//! makes a CallMethodDirect call of a method, with the references of the temporary arguments that the caller gives to
+//! it (see IRGivenCallArgs), or with none (IRNoGivenCallArgs: the code of a call that gives nothing); a call that gives
+//! them runs it in QoreIRInterpreterGivenArgs.cpp (irCallMethodDirectGiven()), outside the single compilation unit
+template <typename Given>
+static QORE_IR_INLINE_SITE void irCallMethodDirect(Given& given, QoreIRCallMethodDirectInstruction* direct_inst,
+        QoreObject* self, QoreProgram* pgm, uint64_t* nanboxed_args, int nargs, QoreValue& res, bool& used_inline_ir,
+        bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    constexpr bool GIVEN = Given::GIVEN;
+    used_inline_ir = tryExecuteInterpreterInlineIRMethod<GIVEN>(direct_inst, self, pgm,
+        nanboxed_args, nargs, res, xsink, &inline_may_invalidate_external_caches, given.get());
+    if (!used_inline_ir) {
+        res = fromBits(GIVEN
+            ? qore_rt_call_method_fast_consume_args(direct_inst->method, direct_inst->variant,
+                nanboxed_args, given.get(), nargs, xsink)
+            : qore_rt_call_method_fast(direct_inst->method, direct_inst->variant,
+                nanboxed_args, nargs, xsink));
+    }
+}
+
+//! makes an InvokeMethodDirect call of a method, with the references of the temporary arguments that the caller gives
+//! to it (see IRGivenCallArgs), or with none (IRNoGivenCallArgs: the code of a call that gives nothing); a call that
+//! gives them runs it in QoreIRInterpreterGivenArgs.cpp (irInvokeMethodDirectGiven()), outside the single compilation
+//! unit
+template <typename Given>
+static QORE_IR_INLINE_SITE void irInvokeMethodDirect(Given& given, QoreIRInvokeMethodDirectInstruction* invoke_inst,
+        QoreObject* self, QoreProgram* pgm, uint64_t* nanboxed_args, int nargs, QoreValue& res, bool& used_inline_ir,
+        bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    constexpr bool GIVEN = Given::GIVEN;
+    used_inline_ir = tryExecuteInterpreterInlineIRMethod<GIVEN>(invoke_inst, self, pgm,
+        nanboxed_args, nargs, res, xsink, &inline_may_invalidate_external_caches, given.get());
+    if (!used_inline_ir) {
+        res = fromBits(GIVEN
+            ? qore_rt_call_method_fast_consume_args(invoke_inst->method, invoke_inst->variant,
+                nanboxed_args, given.get(), nargs, xsink)
+            : qore_rt_call_method_fast(invoke_inst->method, invoke_inst->variant,
+                nanboxed_args, nargs, xsink));
+    }
+}
+
+//! makes a DotEvalMethodDirect call of a method, with the references of the temporary arguments that the caller gives
+//! to it (see IRGivenCallArgs), or with none (IRNoGivenCallArgs: the code of a call that gives nothing); a call that
+//! gives them runs it in QoreIRInterpreterGivenArgs.cpp (irDotEvalMethodDirectGiven()), outside the single compilation
+//! unit
+template <typename Given>
+static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEvalMethodDirectInstruction* direct_inst,
+        QoreValue& base, QoreProgram* pgm, const QoreTypeParamInstantiation* explicit_inst, uint64_t* nanboxed_args,
+        int nargs, QoreValue& res, bool& called_external, ExceptionSink* xsink) {
+    constexpr bool GIVEN = Given::GIVEN;
+
+    if (direct_inst->pseudo) {
+        const auto* synthetic_global_call =
+            direct_inst->fallback_method_name
+                && direct_inst->expr.hasNode()
+            ? qore_ir_function_call_node(direct_inst->expr.getInternalNode()) : nullptr;
+        // Fast-path optimizations for common pseudo-methods
+        const char* method_name = direct_inst->method
+            ? direct_inst->method->getName()
+            : direct_inst->fallback_method_name;
+        qore_type_t base_type = base.getType();
+        bool name_dispatch_first = base_type == NT_OBJECT || base_type == NT_WEAKREF
+            || base_type == NT_HASH || base_type == NT_WEAKREF_HASH;
+
+        // Resolve pseudo-method at runtime if not resolved at
+        // deserialization time (e.g. pseudo-class not found)
+        const QoreMethod* pseudo_method = direct_inst->method;
+        const QoreClass* pseudo_qc = direct_inst->qc;
+        if (!pseudo_method && method_name) {
+            QoreClass* resolved_qc = nullptr;
+            pseudo_method = pseudo_classes_find_method(base_type, method_name, resolved_qc);
+            if (resolved_qc) {
+                pseudo_qc = resolved_qc;
+            }
+        }
+        QoreIRIntrinsic intrinsic = direct_inst->intrinsic;
+        if (intrinsic == QoreIRIntrinsic::None) {
+            intrinsic = qore_ir_resolve_pseudo_intrinsic(pseudo_method, pseudo_qc, method_name);
+        }
+
+        if (qore_ir_try_safe_value_no_arg_pseudo_fast_path(direct_inst->pseudo,
+                direct_inst->pseudo_base_safe_value_dispatch, intrinsic,
+                base, nargs, res)) {
+            // Result produced by the inline safe <value> pseudo-method helper.
+        } else if (qore_ir_try_string_no_arg_pseudo_fast_path(direct_inst->pseudo,
+                direct_inst->pseudo_base_known_assigned_string, intrinsic,
+                base, nargs, res, xsink)) {
+            // Result produced by the inline string pseudo-method helper.
+        } else if (qore_ir_try_string_arg_pseudo_fast_path(direct_inst->pseudo,
+                direct_inst->pseudo_base_known_string,
+                direct_inst->pseudo_arg0_known_string,
+                direct_inst->pseudo_arg0_known_assigned_int,
+                direct_inst->pseudo_arg1_known_assigned_int, intrinsic,
+                base, nanboxed_args, nargs, res, xsink)) {
+            // Result produced by the inline string pseudo-method helper.
+        } else if (synthetic_global_call
+                && synthetic_global_call->getFunction()) {
+            called_external = true;
+            res = fromBits(qore_rt_call_function_with_base(
+                synthetic_global_call->getFunction(),
+                synthetic_global_call->getVariant(),
+                synthetic_global_call->getProgram(), toBits(base),
+                nanboxed_args, nullptr, nargs, xsink));
+        } else if (name_dispatch_first && method_name) {
+            called_external = true;
+            res = fromBits(dot_eval_fallback_with_args(base, method_name,
+                nanboxed_args, nargs, xsink, explicit_inst));
+        } else if (qore_ir_try_common_no_arg_pseudo_fast_path(intrinsic,
+                base, nargs, res)) {
+            // Result produced by the common pseudo-method helper.
+        } else {
+            // Unsupported pseudo-method, use generic runtime dispatch
+            called_external = true;
+            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                toBits(base), pseudo_method, pseudo_qc, direct_inst->variant,
+                nanboxed_args, nargs, xsink));
+        }
+    } else {
+        const char* mname = direct_inst->fallback_method_name
+            ? direct_inst->fallback_method_name
+            : (direct_inst->method ? direct_inst->method->getName() : nullptr);
+        bool inline_may_invalidate_external_caches = true;
+        if (mname && tryExecuteInterpreterInlineIRDotEvalMethod<GIVEN>(direct_inst, base, mname,
+                explicit_inst, pgm, nanboxed_args, nargs, res, xsink,
+                &inline_may_invalidate_external_caches, given.get())) {
+            // Result produced by the inline IR path.
+            called_external = inline_may_invalidate_external_caches;
+        } else if (direct_inst->method && direct_inst->qc) {
+            called_external = true;
+            // a temporary argument that the call consumes (its only use; see
+            // buildValueUseCounts()) is released by the call once its parameters took references of
+            // their own, before its body runs, as compiled code releases it
+            // (clearConsumedArgCleanups()): a temporary object is then dereferenced while it is linked
+            // to nothing yet; released after the call, its dereference is a garbage-collection decision
+            // when the call linked it into a recursive graph (a value pushed to a Queue that it holds),
+            // which made such a loop take 1.17 times the instructions
+            res = fromBits(explicit_inst
+                ? (GIVEN
+                    ? qore_rt_dot_eval_method_direct_with_inst_consume_args(toBits(base),
+                        direct_inst->method, direct_inst->qc, direct_inst->variant, nanboxed_args,
+                        given.get(), nargs, explicit_inst, xsink)
+                    : qore_rt_dot_eval_method_direct_with_inst(toBits(base), direct_inst->method,
+                        direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, explicit_inst,
+                        xsink))
+                : (GIVEN
+                    ? qore_rt_dot_eval_method_direct_consume_args(toBits(base), direct_inst->method,
+                        direct_inst->qc, direct_inst->variant, nanboxed_args, given.get(), nargs,
+                        xsink)
+                    : qore_rt_dot_eval_method_direct(toBits(base), direct_inst->method,
+                        direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, xsink)));
+        } else if (mname) {
+            called_external = true;
+            res = fromBits(dot_eval_fallback_with_args(base, mname,
+                nanboxed_args, nargs, xsink, explicit_inst));
+        } else {
+            xsink->raiseException("IR-ERROR",
+                "DotEvalMethodDirect: null method pointer and no method name");
+        }
+    }
+}
+
+//! makes an InvokeDotEvalMethodDirect call of a method, with the references of the temporary arguments that the caller
+//! gives to it (see IRGivenCallArgs), or with none (IRNoGivenCallArgs: the code of a call that gives nothing); a call
+//! that gives them runs it in QoreIRInterpreterGivenArgs.cpp (irInvokeDotEvalMethodDirectGiven()), outside the single
+//! compilation unit
+template <typename Given>
+static QORE_IR_INLINE_SITE void irInvokeDotEvalMethodDirect(Given& given,
+        QoreIRInvokeDotEvalMethodDirectInstruction* de_invoke_inst, QoreValue& base, QoreProgram* pgm,
+        const QoreTypeParamInstantiation* explicit_inst, uint64_t* nanboxed_args, int nargs, QoreValue& res,
+        bool& called_external, ExceptionSink* xsink) {
+    constexpr bool GIVEN = Given::GIVEN;
+
+    if (de_invoke_inst->pseudo) {
+        const auto* synthetic_global_call =
+            de_invoke_inst->fallback_method_name
+                && de_invoke_inst->expr.hasNode()
+            ? qore_ir_function_call_node(de_invoke_inst->expr.getInternalNode()) : nullptr;
+        // Fast-path optimizations for common pseudo-methods
+        const char* method_name = de_invoke_inst->method
+            ? de_invoke_inst->method->getName()
+            : de_invoke_inst->fallback_method_name;
+        qore_type_t base_type = base.getType();
+        bool name_dispatch_first = base_type == NT_OBJECT || base_type == NT_WEAKREF
+            || base_type == NT_HASH || base_type == NT_WEAKREF_HASH;
+
+        // Resolve pseudo-method at runtime if not resolved at
+        // deserialization time
+        const QoreMethod* pseudo_method = de_invoke_inst->method;
+        const QoreClass* pseudo_qc = de_invoke_inst->qc;
+        if (!pseudo_method && method_name) {
+            QoreClass* resolved_qc = nullptr;
+            pseudo_method = pseudo_classes_find_method(base_type, method_name, resolved_qc);
+            if (resolved_qc) {
+                pseudo_qc = resolved_qc;
+            }
+        }
+        QoreIRIntrinsic intrinsic = de_invoke_inst->intrinsic;
+        if (intrinsic == QoreIRIntrinsic::None) {
+            intrinsic = qore_ir_resolve_pseudo_intrinsic(pseudo_method, pseudo_qc, method_name);
+        }
+
+        if (qore_ir_try_safe_value_no_arg_pseudo_fast_path(de_invoke_inst->pseudo,
+                de_invoke_inst->pseudo_base_safe_value_dispatch, intrinsic,
+                base, nargs, res)) {
+            // Result produced by the inline safe <value> pseudo-method helper.
+        } else if (qore_ir_try_string_no_arg_pseudo_fast_path(de_invoke_inst->pseudo,
+                de_invoke_inst->pseudo_base_known_assigned_string, intrinsic,
+                base, nargs, res, xsink)) {
+            // Result produced by the inline string pseudo-method helper.
+        } else if (qore_ir_try_string_arg_pseudo_fast_path(de_invoke_inst->pseudo,
+                de_invoke_inst->pseudo_base_known_string,
+                de_invoke_inst->pseudo_arg0_known_string,
+                de_invoke_inst->pseudo_arg0_known_assigned_int,
+                de_invoke_inst->pseudo_arg1_known_assigned_int, intrinsic,
+                base, nanboxed_args, nargs, res, xsink)) {
+            // Result produced by the inline string pseudo-method helper.
+        } else if (synthetic_global_call
+                && synthetic_global_call->getFunction()) {
+            called_external = true;
+            res = fromBits(qore_rt_call_function_with_base(
+                synthetic_global_call->getFunction(),
+                synthetic_global_call->getVariant(),
+                synthetic_global_call->getProgram(), toBits(base),
+                nanboxed_args, nullptr, nargs, xsink));
+        } else if (name_dispatch_first && method_name) {
+            called_external = true;
+            res = fromBits(dot_eval_fallback_with_args(base, method_name,
+                nanboxed_args, nargs, xsink, explicit_inst));
+        } else if (qore_ir_try_common_no_arg_pseudo_fast_path(intrinsic,
+                base, nargs, res)) {
+            // Result produced by the common pseudo-method helper.
+        } else {
+            // Unsupported pseudo-method, use generic runtime dispatch
+            called_external = true;
+            res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
+                toBits(base), pseudo_method, pseudo_qc, de_invoke_inst->variant,
+                nanboxed_args, nargs, xsink));
+        }
+    } else {
+        const char* mname = de_invoke_inst->fallback_method_name
+            ? de_invoke_inst->fallback_method_name
+            : (de_invoke_inst->method ? de_invoke_inst->method->getName() : nullptr);
+        bool inline_may_invalidate_external_caches = true;
+        if (mname && tryExecuteInterpreterInlineIRDotEvalMethod<GIVEN>(de_invoke_inst, base, mname,
+                explicit_inst, pgm, nanboxed_args, nargs, res, xsink,
+                &inline_may_invalidate_external_caches, given.get())) {
+            // Result produced by the inline IR path.
+            called_external = inline_may_invalidate_external_caches;
+        } else if (de_invoke_inst->method && de_invoke_inst->qc) {
+            called_external = true;
+            res = fromBits(explicit_inst
+                ? (GIVEN
+                    ? qore_rt_dot_eval_method_direct_with_inst_consume_args(toBits(base),
+                        de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                        nanboxed_args, given.get(), nargs, explicit_inst, xsink)
+                    : qore_rt_dot_eval_method_direct_with_inst(toBits(base), de_invoke_inst->method,
+                        de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs,
+                        explicit_inst,
+                        xsink))
+                : (GIVEN
+                    ? qore_rt_dot_eval_method_direct_consume_args(toBits(base), de_invoke_inst->method,
+                        de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, given.get(), nargs,
+                        xsink)
+                    : qore_rt_dot_eval_method_direct(toBits(base), de_invoke_inst->method,
+                        de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs, xsink)));
+        } else if (mname) {
+            called_external = true;
+            res = fromBits(dot_eval_fallback_with_args(base, mname,
+                nanboxed_args, nargs, xsink, explicit_inst));
+        } else {
+            xsink->raiseException("IR-ERROR",
+                "InvokeDotEvalMethodDirect: null method pointer and no method name");
+        }
+    }
+}
+
+#ifdef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallClosureGiven(const IRConsumedCallArgs& consumed, IRValueSlots& values,
+        QoreIRInstruction* inst, QoreValue ref_val, uint64_t ref_bits, QoreProgram* pgm, int nargs, QoreValue& result,
+        bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    bool used_inline_ir;
+    IRGivenCallArgs given(nargs, xsink);
+    consumed.give(inst, given);
+    irCallClosure(given, values, inst, ref_val, ref_bits, pgm, nargs, result, used_inline_ir,
+        inline_may_invalidate_external_caches, xsink);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    return used_inline_ir;
+}
+
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallDirectGiven(IRValueSlots& values, IRCleanupSlots& cleanup,
+        const std::vector<uint32_t>& value_use_counts, std::unordered_map<uint32_t, int32_t>& weak_load_temp_slots,
+        std::vector<int32_t>& borrowed_temp_remaining, RuntimeLocationCache rl_cache, const QoreIRFunction& func,
+        QoreIRInstruction* inst, QoreIRCallDirectInstruction* direct_inst, QoreProgram* pgm,
+        const QoreTypeParamInstantiation* explicit_inst, bool has_last_use_args, bool type_name_fast_path,
+        bool debug_active, uint64_t* nanboxed_args, int nargs, QoreValue& res,
+        bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    bool used_inline_ir;
+    IRGivenCallArgs given(nargs, xsink);
+    giveLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0, value_use_counts,
+        &weak_load_temp_slots, borrowed_temp_remaining, given);
+    irCallDirect(given, values, cleanup, value_use_counts, weak_load_temp_slots, borrowed_temp_remaining, rl_cache,
+        func, inst, direct_inst, pgm, explicit_inst, has_last_use_args, type_name_fast_path, debug_active,
+        nanboxed_args, nargs, res, used_inline_ir, inline_may_invalidate_external_caches, xsink);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    return used_inline_ir;
+}
+
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallStaticDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRCallStaticDirectInstruction* static_inst, QoreProgram* pgm, RuntimeLocationCache rl_cache,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_inst,
+        uint64_t* nanboxed_args, int nargs, QoreValue& res, bool& inline_may_invalidate_external_caches,
+        ExceptionSink* xsink) {
+    bool used_inline_ir;
+    IRGivenCallArgs given(nargs, xsink);
+    consumed.give(static_inst, given);
+    irCallStaticDirect(given, static_inst, pgm, rl_cache, receiver_type_info, explicit_inst, nanboxed_args, nargs, res,
+        used_inline_ir, inline_may_invalidate_external_caches, xsink);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    return used_inline_ir;
+}
+
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallMethodDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRCallMethodDirectInstruction* direct_inst, QoreObject* self, QoreProgram* pgm, uint64_t* nanboxed_args,
+        int nargs, QoreValue& res, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    bool used_inline_ir;
+    IRGivenCallArgs given(nargs, xsink);
+    consumed.give(direct_inst, given);
+    irCallMethodDirect(given, direct_inst, self, pgm, nanboxed_args, nargs, res, used_inline_ir,
+        inline_may_invalidate_external_caches, xsink);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    return used_inline_ir;
+}
+
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irInvokeMethodDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRInvokeMethodDirectInstruction* invoke_inst, QoreObject* self, QoreProgram* pgm, uint64_t* nanboxed_args,
+        int nargs, QoreValue& res, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    bool used_inline_ir;
+    IRGivenCallArgs given(nargs, xsink);
+    consumed.give(invoke_inst, given);
+    irInvokeMethodDirect(given, invoke_inst, self, pgm, nanboxed_args, nargs, res, used_inline_ir,
+        inline_may_invalidate_external_caches, xsink);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    return used_inline_ir;
+}
+
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irDotEvalMethodDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRDotEvalMethodDirectInstruction* direct_inst, QoreValue base, QoreProgram* pgm,
+        const QoreTypeParamInstantiation* explicit_inst, uint64_t* nanboxed_args, int nargs, QoreValue& res,
+        ExceptionSink* xsink) {
+    bool called_external = false;
+    IRGivenCallArgs given(nargs, xsink);
+    consumed.give(direct_inst, given);
+    irDotEvalMethodDirect(given, direct_inst, base, pgm, explicit_inst, nanboxed_args, nargs, res, called_external,
+        xsink);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    return called_external;
+}
+
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irInvokeDotEvalMethodDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRInvokeDotEvalMethodDirectInstruction* de_invoke_inst, QoreValue base, QoreProgram* pgm,
+        const QoreTypeParamInstantiation* explicit_inst, uint64_t* nanboxed_args, int nargs, QoreValue& res,
+        ExceptionSink* xsink) {
+    bool called_external = false;
+    IRGivenCallArgs given(nargs, xsink);
+    consumed.give(de_invoke_inst, given);
+    irInvokeDotEvalMethodDirect(given, de_invoke_inst, base, pgm, explicit_inst, nanboxed_args, nargs, res,
+        called_external, xsink);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    return called_external;
+}
+
+DLLLOCAL QORE_IR_COLD_NOINLINE uint64_t irNewObjectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRNewObjectInstruction* no_inst, const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        const QoreTypeInfo* object_type_info, uint64_t* nb_args, int nargs, ExceptionSink* xsink) {
+    IRGivenCallArgs given(nargs, xsink);
+    consumed.give(no_inst, given);
+    uint64_t rv = qore_rt_new_object_nb_consume_args(qc, variant, object_type_info, nb_args, given.get(), nargs,
+        xsink);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    return rv;
+}
+
+DLLLOCAL QORE_IR_COLD_NOINLINE QoreValue irEvalInvokeGiven(const IRConsumedCallArgs& consumed,
+        const QoreIRInvokeInstruction* inv, const IRValueSlots& values, ExceptionSink* xsink,
+        const QoreIRFunction* func, const QoreIRBasicBlock* block, size_t ip, bool preserve_hash_key_weak_result) {
+    IRGivenCallArgs given(static_cast<int>(inv->operands.size()), xsink);
+    consumed.give(inv, given);
+    QoreValue res = evalInvoke<true>(inv, values, xsink, func, block, ip, preserve_hash_key_weak_result, &given);
+    // a reference given to the call that it did not release is released when it returns
+    given.release();
+    return res;
+}
+#else
+DLLLOCAL bool irCallClosureGiven(const IRConsumedCallArgs& consumed, IRValueSlots& values, QoreIRInstruction* inst,
+        QoreValue ref_val, uint64_t ref_bits, QoreProgram* pgm, int nargs, QoreValue& result,
+        bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
+DLLLOCAL bool irCallDirectGiven(IRValueSlots& values, IRCleanupSlots& cleanup,
+        const std::vector<uint32_t>& value_use_counts, std::unordered_map<uint32_t, int32_t>& weak_load_temp_slots,
+        std::vector<int32_t>& borrowed_temp_remaining, RuntimeLocationCache rl_cache, const QoreIRFunction& func,
+        QoreIRInstruction* inst, QoreIRCallDirectInstruction* direct_inst, QoreProgram* pgm,
+        const QoreTypeParamInstantiation* explicit_inst, bool has_last_use_args, bool type_name_fast_path,
+        bool debug_active, uint64_t* nanboxed_args, int nargs, QoreValue& res,
+        bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
+DLLLOCAL bool irCallStaticDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRCallStaticDirectInstruction* static_inst, QoreProgram* pgm, RuntimeLocationCache rl_cache,
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_inst,
+        uint64_t* nanboxed_args, int nargs, QoreValue& res, bool& inline_may_invalidate_external_caches,
+        ExceptionSink* xsink);
+DLLLOCAL bool irCallMethodDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRCallMethodDirectInstruction* direct_inst, QoreObject* self, QoreProgram* pgm, uint64_t* nanboxed_args,
+        int nargs, QoreValue& res, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
+DLLLOCAL bool irInvokeMethodDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRInvokeMethodDirectInstruction* invoke_inst, QoreObject* self, QoreProgram* pgm, uint64_t* nanboxed_args,
+        int nargs, QoreValue& res, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
+DLLLOCAL bool irDotEvalMethodDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRDotEvalMethodDirectInstruction* direct_inst, QoreValue base, QoreProgram* pgm,
+        const QoreTypeParamInstantiation* explicit_inst, uint64_t* nanboxed_args, int nargs, QoreValue& res,
+        ExceptionSink* xsink);
+DLLLOCAL bool irInvokeDotEvalMethodDirectGiven(const IRConsumedCallArgs& consumed,
+        QoreIRInvokeDotEvalMethodDirectInstruction* de_invoke_inst, QoreValue base, QoreProgram* pgm,
+        const QoreTypeParamInstantiation* explicit_inst, uint64_t* nanboxed_args, int nargs, QoreValue& res,
+        ExceptionSink* xsink);
+DLLLOCAL uint64_t irNewObjectGiven(const IRConsumedCallArgs& consumed, QoreIRNewObjectInstruction* no_inst,
+        const QoreClass* qc, const AbstractQoreFunctionVariant* variant, const QoreTypeInfo* object_type_info,
+        uint64_t* nb_args, int nargs, ExceptionSink* xsink);
+DLLLOCAL QoreValue irEvalInvokeGiven(const IRConsumedCallArgs& consumed, const QoreIRInvokeInstruction* inv,
+        const IRValueSlots& values, ExceptionSink* xsink, const QoreIRFunction* func, const QoreIRBasicBlock* block,
+        size_t ip, bool preserve_hash_key_weak_result);
+#endif
+
+#ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -8638,6 +9574,25 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             // an exception raised by a destructor is added to any exception raised by the call, as in the AST
             v.discard(xsink);
         }
+    };
+
+    // Returns true if a call whose instruction has QoreIRInstruction::interpreter_gives_call_args set has a temporary
+    // argument to give to the callee now (see IRConsumedCallArgs::give()), with the test of releaseConsumedCallArgs():
+    // a call that has none (a value that holds no reference, such as an int) is made with the code of a call that
+    // gives nothing (IRNoGivenCallArgs)
+    auto hasConsumedCallArgs = [&](const QoreIRInstruction* call_inst) -> bool {
+        int arg_start = qore_ir_call_arg_start(call_inst);
+        for (size_t i = call_inst->operands.size(); i > static_cast<size_t>(arg_start); --i) {
+            uint32_t id = call_inst->operands[i - 1].id;
+            if (!call_inst->operands[i - 1].isValid() || id >= values.size() || id >= consumed_call_args.size()
+                    || !consumed_call_args[id]
+                    || !hasCleanupEntry(cleanup, id) || weak_load_temp_slots.count(id)
+                    || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
+                continue;
+            }
+            return true;
+        }
+        return false;
     };
 
     // Sets the slot of a Phi to the value of its incoming operand: a temporary used by the Phi only gives the Phi its
@@ -9896,30 +10851,22 @@ next_instruction:
                     if (!used_inline_ir) {
                         result = fromBits(qore_rt_call_closure_0(ref_bits, xsink));
                     }
-                } else if (nargs == 1) {
-                    uint64_t arg0 = toBits(getIRValue(values, inst->operands[1]));
-                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, inst->loc, &arg0, 1, result,
-                        xsink, &inline_may_invalidate_external_caches);
-                    if (!used_inline_ir) {
-                        result = fromBits(qore_rt_call_closure_1(ref_bits, arg0, xsink));
-                    }
                 } else {
-                    constexpr int SMALL_BUF = 8;
-                    uint64_t small_buf[SMALL_BUF];
-                    uint64_t* args = nargs <= SMALL_BUF ? small_buf : new uint64_t[nargs];
-                    for (int i = 0; i < nargs; ++i) {
-                        args[i] = toBits(getIRValue(values, inst->operands[i + 1]));
-                    }
-                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, inst->loc, args, nargs, result,
-                        xsink, &inline_may_invalidate_external_caches);
-                    if (!used_inline_ir) {
-                        result = fromBits(qore_rt_call_closure_fast(ref_bits, args, nargs, xsink));
-                    }
-                    if (nargs > SMALL_BUF) {
-                        delete[] args;
+                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                        // the references of the temporary arguments are given to the call, which releases them in the
+                        // callee's frame, as the AST interpreter moves its argument list into the parameters
+                        used_inline_ir = irCallClosureGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                            weak_load_temp_slots, borrowed_temp_remaining}, values, inst, ref_val, ref_bits, pgm, nargs,
+                            result, inline_may_invalidate_external_caches, xsink);
+                    } else {
+                        IRNoGivenCallArgs no_given;
+                        irCallClosure(no_given, values, inst, ref_val, ref_bits, pgm, nargs, result, used_inline_ir,
+                            inline_may_invalidate_external_caches, xsink);
                     }
                 }
                 if (xsink && *xsink) {
+                    // a result of a call whose given argument raised an exception when it was released
+                    result.discard(xsink);
                     if (inst->exception_target) {
                         cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                         prev_block = block;
@@ -9935,12 +10882,6 @@ next_instruction:
                     cleanupLocalCaches();
                 } else if (!used_inline_ir || inline_may_invalidate_external_caches) {
                     invalidateExternalCaches();
-                }
-                // a temporary argument of the call is released when the call returns, as in the AST
-                releaseConsumedCallArgs(inst);
-                if (xsink && *xsink) {
-                    result.discard(xsink);
-                    return returnAfterUnhandledException();
                 }
                 if (resultValueIsNeeded(inst->result)) {
                     setValueSlot(values, inst->result.id, result, xsink);
@@ -10165,10 +11106,17 @@ next_instruction:
                         inv_nch ? inv_nch->typeInfo : inv_ncl->typeInfo, inv_nch != nullptr, value_use_counts,
                         weak_load_temp_slots, borrowed_temp_remaining, xsink);
                 } else {
-                    res = evalInvoke(inv, values, xsink, &func, block, ip, preserve_hash_key_weak_result);
+                    // the references of the temporary arguments of a call are given to the call, which releases
+                    // them in the callee's frame (see IRGivenCallArgs); a call that gives nothing runs the code of
+                    // evalInvoke() instantiated for none
+                    if (inv->interpreter_gives_call_args && hasConsumedCallArgs(inv)) {
+                        res = irEvalInvokeGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                            weak_load_temp_slots, borrowed_temp_remaining}, inv, values, xsink, &func, block, ip,
+                            preserve_hash_key_weak_result);
+                    } else {
+                        res = evalInvoke(inv, values, xsink, &func, block, ip, preserve_hash_key_weak_result);
+                    }
                 }
-                // a temporary argument of a call is released when the call returns, as in the AST
-                releaseConsumedCallArgs(inv);
                 // Post-invalidation: ensure slot cache is cleared after the lvalue
                 // operation modifies TLS. Always invalidate (not repopulate) since
                 // the invoke expression may be a complex lvalue.
@@ -12316,10 +13264,20 @@ load_local_done:
                 // Dispatch via the shared no-AST runtime helper; the call stack frame of the constructor is located at
                 // the call
                 qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
-                uint64_t rv = qore_rt_new_object_nb(qc, variant, object_type_info, nb_args, nargs, xsink);
+                uint64_t rv;
+                if (no_inst->interpreter_gives_call_args && hasConsumedCallArgs(no_inst)) {
+                    // the references of the temporary arguments are given to the call, which moves them into the
+                    // constructor's argument list, as the AST interpreter does (see IRGivenCallArgs)
+                    rv = irNewObjectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args, weak_load_temp_slots,
+                        borrowed_temp_remaining}, no_inst, qc, variant, object_type_info, nb_args, nargs, xsink);
+                } else {
+                    rv = qore_rt_new_object_nb(qc, variant, object_type_info, nb_args, nargs, xsink);
+                }
                 qore_ir_clear_call_site(rl_cache.loc_ptr);
                 if (nargs > SMALL_BUF) delete[] nb_args;
                 if (xsink && *xsink) {
+                    // a constructed object whose given argument raised an exception when it was released
+                    fromBits(rv).discard(xsink);
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
@@ -12327,8 +13285,6 @@ load_local_done:
                 // Constructor may call closures that modify captured variables
                 invalidateExternalCaches();
                 QoreValue out = fromBits(rv);
-                // a temporary argument of the call is released when the call returns, as in the AST
-                releaseConsumedCallArgs(no_inst);
                 if (xsink && *xsink) {
                     out.discard(xsink);
                     return returnAfterUnhandledException();
@@ -17279,63 +18235,28 @@ load_local_done:
                     for (int i = 0; i < nargs; ++i) {
                         nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i]));
                     }
-
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
                     bool used_inline_ir = false;
-                    if (explicit_inst) {
-                        ReferenceHolder<QoreListNode> arg_list(
-                            buildArgList(values, direct_inst->operands, 0,
-                                xsink), xsink);
-                        RuntimeConfig& rc = rc_get_current_ref();
-                        QoreProgram* call_pgm = direct_inst->pgm
-                            ? direct_inst->pgm : rc.getProgram();
-                        if (!call_pgm) {
-                            call_pgm = getProgram();
-                        }
-                        qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
-                        res = direct_inst->func->evalFunctionTmpArgs(
-                            direct_inst->variant, *arg_list, call_pgm, rc,
-                            xsink, explicit_inst);
-                        qore_ir_clear_call_site(rl_cache.loc_ptr);
-                        used_inline_ir = true;
-                    } else if (type_name_fast_path) {
-                        res = fromBits(qore_rt_pseudo_type(nanboxed_args[0]));
-                        inline_may_invalidate_external_caches = false;
-                        used_inline_ir = true;
-                    } else if (!debug_active
-                            && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs, &func) > 0
-                            && !direct_inst->cached_uvb->hasCachedFunction()
-                            // a call into another Program enters it (see tryExecuteInterpreterInlineIRFunction())
-                            && direct_inst->cached_uvb->pgm == pgm
-                            && qore_ir_try_execute_native_leaf(direct_inst, nanboxed_args, nargs, res)) {
-                        // the call is evaluated without entering the callee, so it is counted here for its
-                        // promotion to native code, as qore_rt_call_fast() counts the calls it makes
-                        direct_inst->cached_uvb->recordFastCallExecution();
-                        inline_may_invalidate_external_caches = false;
-                        used_inline_ir = true;
+                    if (has_last_use_args && !explicit_inst) {
+                        // the references of the temporary arguments are given to the call, which releases them in the
+                        // callee's frame, as the AST interpreter moves its argument list into the parameters
+                        used_inline_ir = irCallDirectGiven(values, cleanup, value_use_counts, weak_load_temp_slots,
+                            borrowed_temp_remaining, rl_cache, func, inst, direct_inst, pgm, explicit_inst,
+                            has_last_use_args, type_name_fast_path, debug_active, nanboxed_args, nargs, res,
+                            inline_may_invalidate_external_caches, xsink);
                     } else {
-                        used_inline_ir = tryExecuteInterpreterInlineIRFunction(direct_inst, pgm, nanboxed_args,
-                            nargs, res, xsink, rl_cache.thread_data, &func, &inline_may_invalidate_external_caches);
-                    }
-                    if (!used_inline_ir) {
-                        qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
-                        res = fromBits(qore_rt_call_fast(
-                            direct_inst->func, direct_inst->variant, direct_inst->pgm,
-                            nanboxed_args, nargs, xsink));
-                        qore_ir_clear_call_site(rl_cache.loc_ptr);
+                        IRNoGivenCallArgs no_given;
+                        irCallDirect(no_given, values, cleanup, value_use_counts, weak_load_temp_slots,
+                            borrowed_temp_remaining, rl_cache, func, inst, direct_inst, pgm, explicit_inst,
+                            has_last_use_args, type_name_fast_path, debug_active, nanboxed_args, nargs, res,
+                            used_inline_ir, inline_may_invalidate_external_caches, xsink);
                     }
 
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
+                        res.discard(xsink);
                         return returnAfterUnhandledException();
-                    }
-                    if (has_last_use_args) {
-                        consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
-                            value_use_counts, &weak_load_temp_slots, borrowed_temp_remaining, xsink);
-                        if (xsink && *xsink) {
-                            return returnAfterUnhandledException();
-                        }
                     }
                     // If call has reference args, callee may have modified caller's locals
                     if (direct_inst->has_ref_args) {
@@ -17420,22 +18341,22 @@ load_local_done:
                             : static_call_expr->getExplicitTypeParamInstantiation();
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
-                    bool used_inline_ir = !receiver_type_info && !explicit_inst
-                        && tryExecuteInterpreterInlineIRStaticMethod(static_inst, pgm,
-                            nanboxed_args, nargs, res, xsink, rl_cache.thread_data,
-                            &inline_may_invalidate_external_caches);
-                    if (!used_inline_ir) {
-                        res = fromBits(receiver_type_info || explicit_inst
-                            ? qore_rt_call_static_method_direct_with_inst(
-                                static_inst->method, static_inst->variant,
-                                nanboxed_args, nargs, receiver_type_info,
-                                explicit_inst, xsink)
-                            : qore_rt_call_static_method_direct(
-                                static_inst->method, static_inst->variant,
-                                nanboxed_args, nargs, xsink));
+                    bool used_inline_ir;
+                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                        // the references of the temporary arguments are given to the call, which releases them in the
+                        // callee's frame, as the AST interpreter moves its argument list into the parameters
+                        used_inline_ir = irCallStaticDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                            weak_load_temp_slots, borrowed_temp_remaining}, static_inst, pgm, rl_cache,
+                            receiver_type_info, explicit_inst, nanboxed_args, nargs, res,
+                            inline_may_invalidate_external_caches, xsink);
+                    } else {
+                        IRNoGivenCallArgs no_given;
+                        irCallStaticDirect(no_given, static_inst, pgm, rl_cache, receiver_type_info, explicit_inst,
+                            nanboxed_args, nargs, res, used_inline_ir, inline_may_invalidate_external_caches, xsink);
                     }
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
+                        res.discard(xsink);
                         return returnAfterUnhandledException();
                     }
                     if (static_inst->has_ref_args) {
@@ -17443,8 +18364,6 @@ load_local_done:
                     } else if (!used_inline_ir || inline_may_invalidate_external_caches) {
                         invalidateExternalCaches();
                     }
-                    // a temporary argument of the call is released when the call returns, as in the AST
-                    releaseConsumedCallArgs(inst);
                     if (xsink && *xsink) {
                         res.discard(xsink);
                         return returnAfterUnhandledException();
@@ -17653,15 +18572,21 @@ load_local_done:
                     QoreObject* self = runtime_get_stack_object();
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
-                    bool used_inline_ir = tryExecuteInterpreterInlineIRMethod(direct_inst, self, pgm,
-                        nanboxed_args, nargs, res, xsink, &inline_may_invalidate_external_caches);
-                    if (!used_inline_ir) {
-                        res = fromBits(qore_rt_call_method_fast(
-                            direct_inst->method, direct_inst->variant,
-                            nanboxed_args, nargs, xsink));
+                    bool used_inline_ir;
+                    if (direct_inst->interpreter_gives_call_args && hasConsumedCallArgs(direct_inst)) {
+                        // the references of the temporary arguments are given to the call, which releases them in the
+                        // callee's frame, as the AST interpreter moves its argument list into the parameters
+                        used_inline_ir = irCallMethodDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                            weak_load_temp_slots, borrowed_temp_remaining}, direct_inst, self, pgm, nanboxed_args,
+                            nargs, res, inline_may_invalidate_external_caches, xsink);
+                    } else {
+                        IRNoGivenCallArgs no_given;
+                        irCallMethodDirect(no_given, direct_inst, self, pgm, nanboxed_args, nargs, res, used_inline_ir,
+                            inline_may_invalidate_external_caches, xsink);
                     }
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {
+                        res.discard(xsink);
                         return returnAfterUnhandledException();
                     }
                     if (direct_inst->has_ref_args) {
@@ -17673,8 +18598,6 @@ load_local_done:
                             invalidateExternalCaches();
                         }
                     }
-                    // a temporary argument of the call is released when the call returns, as in the AST
-                    releaseConsumedCallArgs(direct_inst);
                     if (xsink && *xsink) {
                         res.discard(xsink);
                         return returnAfterUnhandledException();
@@ -17717,6 +18640,9 @@ load_local_done:
                         priv->pushIntern(arg_val);
                     }
                 }
+                // the argument list took references of its own: it holds the last ones of the temporary arguments,
+                // which the call moves into its parameters, as the AST interpreter does
+                releaseConsumedCallArgs(direct_inst);
 
                 // Get runtime config and call the method directly
                 RuntimeConfig& rc = rc_get_current_ref();
@@ -17729,8 +18655,6 @@ load_local_done:
                 if (!method->isBuiltin() || direct_inst->has_ref_args) {
                     invalidateExternalCaches();
                 }
-                // a temporary argument of the call is released when the call returns, as in the AST
-                releaseConsumedCallArgs(direct_inst);
                 if (xsink && *xsink) {
                     res.discard(xsink);
                     return returnAfterUnhandledException();
@@ -17760,12 +18684,17 @@ load_local_done:
                     QoreObject* self = runtime_get_stack_object();
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
-                    bool used_inline_ir = tryExecuteInterpreterInlineIRMethod(invoke_inst, self, pgm,
-                        nanboxed_args, nargs, res, xsink, &inline_may_invalidate_external_caches);
-                    if (!used_inline_ir) {
-                        res = fromBits(qore_rt_call_method_fast(
-                            invoke_inst->method, invoke_inst->variant,
-                            nanboxed_args, nargs, xsink));
+                    bool used_inline_ir;
+                    if (invoke_inst->interpreter_gives_call_args && hasConsumedCallArgs(invoke_inst)) {
+                        // the references of the temporary arguments are given to the call, which releases them in the
+                        // callee's frame, as the AST interpreter moves its argument list into the parameters
+                        used_inline_ir = irInvokeMethodDirectGiven(IRConsumedCallArgs{values, cleanup,
+                            consumed_call_args, weak_load_temp_slots, borrowed_temp_remaining}, invoke_inst, self, pgm,
+                            nanboxed_args, nargs, res, inline_may_invalidate_external_caches, xsink);
+                    } else {
+                        IRNoGivenCallArgs no_given;
+                        irInvokeMethodDirect(no_given, invoke_inst, self, pgm, nanboxed_args, nargs, res,
+                            used_inline_ir, inline_may_invalidate_external_caches, xsink);
                     }
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (invoke_inst->has_ref_args) {
@@ -17782,8 +18711,6 @@ load_local_done:
                             invalidateExternalCaches();
                         }
                     }
-                    // a temporary argument of the call is released when the call returns, as in the AST
-                    releaseConsumedCallArgs(invoke_inst);
                     if (xsink && *xsink) {
                         res.discard(xsink);
                         res = QoreValue();
@@ -17837,6 +18764,9 @@ load_local_done:
                         priv->pushIntern(arg_val);
                     }
                 }
+                // the argument list took references of its own: it holds the last ones of the temporary arguments,
+                // which the call moves into its parameters, as the AST interpreter does
+                releaseConsumedCallArgs(invoke_inst);
 
                 // Get runtime config and call the method directly
                 RuntimeConfig& rc = rc_get_current_ref();
@@ -17849,8 +18779,6 @@ load_local_done:
                     invalidateExternalCaches();
                 }
 
-                // a temporary argument of the call is released when the call returns, as in the AST
-                releaseConsumedCallArgs(invoke_inst);
                 if (xsink && *xsink) {
                     res.discard(xsink);
                     res = QoreValue();
@@ -17907,159 +18835,23 @@ load_local_done:
                     nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i + 1]));
                 }
                 const QoreTypeParamInstantiation* explicit_inst = direct_inst->explicit_type_param_inst;
-
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
-                if (direct_inst->pseudo) {
-                    const auto* synthetic_global_call =
-                        direct_inst->fallback_method_name
-                            && direct_inst->expr.hasNode()
-                        ? qore_ir_function_call_node(direct_inst->expr.getInternalNode()) : nullptr;
-                    // Fast-path optimizations for common pseudo-methods
-                    const char* method_name = direct_inst->method
-                        ? direct_inst->method->getName()
-                        : direct_inst->fallback_method_name;
-                    qore_type_t base_type = base.getType();
-                    bool name_dispatch_first = base_type == NT_OBJECT || base_type == NT_WEAKREF
-                        || base_type == NT_HASH || base_type == NT_WEAKREF_HASH;
-
-                    // Resolve pseudo-method at runtime if not resolved at
-                    // deserialization time (e.g. pseudo-class not found)
-                    const QoreMethod* pseudo_method = direct_inst->method;
-                    const QoreClass* pseudo_qc = direct_inst->qc;
-                    if (!pseudo_method && method_name) {
-                        QoreClass* resolved_qc = nullptr;
-                        pseudo_method = pseudo_classes_find_method(base_type, method_name, resolved_qc);
-                        if (resolved_qc) {
-                            pseudo_qc = resolved_qc;
-                        }
-                    }
-                    QoreIRIntrinsic intrinsic = direct_inst->intrinsic;
-                    if (intrinsic == QoreIRIntrinsic::None) {
-                        intrinsic = qore_ir_resolve_pseudo_intrinsic(pseudo_method, pseudo_qc, method_name);
-                    }
-
-                    if (qore_ir_try_safe_value_no_arg_pseudo_fast_path(direct_inst->pseudo,
-                            direct_inst->pseudo_base_safe_value_dispatch, intrinsic,
-                            base, nargs, res)) {
-                        // Result produced by the inline safe <value> pseudo-method helper.
-                    } else if (qore_ir_try_string_no_arg_pseudo_fast_path(direct_inst->pseudo,
-                            direct_inst->pseudo_base_known_assigned_string, intrinsic,
-                            base, nargs, res, xsink)) {
-                        // Result produced by the inline string pseudo-method helper.
-                    } else if (qore_ir_try_string_arg_pseudo_fast_path(direct_inst->pseudo,
-                            direct_inst->pseudo_base_known_string,
-                            direct_inst->pseudo_arg0_known_string,
-                            direct_inst->pseudo_arg0_known_assigned_int,
-                            direct_inst->pseudo_arg1_known_assigned_int, intrinsic,
-                            base, nanboxed_args, nargs, res, xsink)) {
-                        // Result produced by the inline string pseudo-method helper.
-                    } else if (synthetic_global_call
-                            && synthetic_global_call->getFunction()) {
-                        called_external = true;
-                        res = fromBits(qore_rt_call_function_with_base(
-                            synthetic_global_call->getFunction(),
-                            synthetic_global_call->getVariant(),
-                            synthetic_global_call->getProgram(), toBits(base),
-                            nanboxed_args, nullptr, nargs, xsink));
-                    } else if (name_dispatch_first && method_name) {
-                        called_external = true;
-                        res = fromBits(dot_eval_fallback_with_args(base, method_name,
-                            nanboxed_args, nargs, xsink, explicit_inst));
-                    } else if (qore_ir_try_common_no_arg_pseudo_fast_path(intrinsic,
-                            base, nargs, res)) {
-                        // Result produced by the common pseudo-method helper.
-                    } else {
-                        // Unsupported pseudo-method, use generic runtime dispatch
-                        called_external = true;
-                        res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                            toBits(base), pseudo_method, pseudo_qc, direct_inst->variant,
-                            nanboxed_args, nargs, xsink));
-                    }
+                if (direct_inst->interpreter_gives_call_args && hasConsumedCallArgs(direct_inst)) {
+                    // the references of the temporary arguments are given to the call, which releases them in the
+                    // callee's frame, as the AST interpreter moves its argument list into the parameters
+                    called_external = irDotEvalMethodDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                        weak_load_temp_slots, borrowed_temp_remaining}, direct_inst, base, pgm, explicit_inst,
+                        nanboxed_args, nargs, res, xsink);
                 } else {
-                    const char* mname = direct_inst->fallback_method_name
-                        ? direct_inst->fallback_method_name
-                        : (direct_inst->method ? direct_inst->method->getName() : nullptr);
-                    bool inline_may_invalidate_external_caches = true;
-                    if (mname && tryExecuteInterpreterInlineIRDotEvalMethod(direct_inst, base, mname,
-                            explicit_inst, pgm, nanboxed_args, nargs, res, xsink,
-                            &inline_may_invalidate_external_caches)) {
-                        // Result produced by the inline IR path.
-                        called_external = inline_may_invalidate_external_caches;
-                    } else if (direct_inst->method && direct_inst->qc) {
-                        called_external = true;
-                        // a temporary argument that the call consumes (its only use; see buildValueUseCounts()) is
-                        // released right after the call's argument list is built, before the call, as compiled code
-                        // releases it (clearConsumedArgCleanups()): a temporary object is then dereferenced while it
-                        // is linked to nothing yet; released after the call, as releaseConsumedCallArgs() releases
-                        // it, its dereference is a garbage-collection decision when the call linked it into a
-                        // recursive graph (a value pushed to a Queue that it holds), which made such a loop take
-                        // 1.17 times the instructions
-                        uint64_t consumed_cells[SMALL_BUF];
-                        uint64_t* consumed_ptrs[SMALL_BUF];
-                        bool any_consumed = false;
-                        if (nargs <= SMALL_BUF) {
-                            for (int i = 0; i < nargs; ++i) {
-                                consumed_ptrs[i] = nullptr;
-                                uint32_t id = direct_inst->operands[i + 1].id;
-                                if (direct_inst->operands[i + 1].isValid() && id < values.size()
-                                        && id < consumed_call_args.size() && consumed_call_args[id]
-                                        && values[id].needsRef() && hasCleanupEntry(cleanup, id)
-                                        && !weak_load_temp_slots.count(id)
-                                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
-                                    // the same slot passed twice is released once
-                                    bool dup = false;
-                                    for (int j = 0; j < i; ++j) {
-                                        if (consumed_ptrs[j] && direct_inst->operands[j + 1].id == id) {
-                                            dup = true;
-                                            break;
-                                        }
-                                    }
-                                    if (!dup) {
-                                        consumed_cells[i] = nanboxed_args[i];
-                                        consumed_ptrs[i] = &consumed_cells[i];
-                                        any_consumed = true;
-                                    }
-                                }
-                            }
-                        }
-                        res = fromBits(explicit_inst
-                            ? (any_consumed
-                                ? qore_rt_dot_eval_method_direct_with_inst_consume_args(toBits(base),
-                                    direct_inst->method, direct_inst->qc, direct_inst->variant, nanboxed_args,
-                                    consumed_ptrs, nargs, explicit_inst, xsink)
-                                : qore_rt_dot_eval_method_direct_with_inst(toBits(base), direct_inst->method,
-                                    direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, explicit_inst,
-                                    xsink))
-                            : (any_consumed
-                                ? qore_rt_dot_eval_method_direct_consume_args(toBits(base), direct_inst->method,
-                                    direct_inst->qc, direct_inst->variant, nanboxed_args, consumed_ptrs, nargs,
-                                    xsink)
-                                : qore_rt_dot_eval_method_direct(toBits(base), direct_inst->method,
-                                    direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, xsink)));
-                        // an argument whose cell the call cleared was released by it: its slot no longer owns it,
-                        // which must be known before an exception is handled below
-                        if (any_consumed) {
-                            for (int i = 0; i < nargs; ++i) {
-                                if (consumed_ptrs[i] && !consumed_cells[i]) {
-                                    uint32_t id = direct_inst->operands[i + 1].id;
-                                    removeAllCleanupEntries(cleanup, id);
-                                    values[id] = QoreValue();
-                                }
-                            }
-                        }
-                    } else if (mname) {
-                        called_external = true;
-                        res = fromBits(dot_eval_fallback_with_args(base, mname,
-                            nanboxed_args, nargs, xsink, explicit_inst));
-                    } else {
-                        xsink->raiseException("IR-ERROR",
-                            "DotEvalMethodDirect: null method pointer and no method name");
-                    }
+                    IRNoGivenCallArgs no_given;
+                    irDotEvalMethodDirect(no_given, direct_inst, base, pgm, explicit_inst, nanboxed_args, nargs, res,
+                        called_external, xsink);
                 }
                 if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
 
                 if (xsink && *xsink) {
+                    res.discard(xsink);
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
@@ -18069,9 +18861,6 @@ load_local_done:
                 if (called_external) {
                     invalidateExternalCaches();
                 }
-                // the base, if a temporary, lives until the end of the statement (DiscardTemps), as in the AST; a
-                // temporary argument is released now
-                releaseConsumedCallArgs(direct_inst);
                 if (xsink && *xsink) {
                     res.discard(xsink);
                     unwindForException();
@@ -18103,101 +18892,18 @@ load_local_done:
                     nanboxed_args[i] = toBits(getIRValue(values, de_invoke_inst->operands[i + 1]));
                 }
                 const QoreTypeParamInstantiation* explicit_inst = de_invoke_inst->explicit_type_param_inst;
-
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
-                if (de_invoke_inst->pseudo) {
-                    const auto* synthetic_global_call =
-                        de_invoke_inst->fallback_method_name
-                            && de_invoke_inst->expr.hasNode()
-                        ? qore_ir_function_call_node(de_invoke_inst->expr.getInternalNode()) : nullptr;
-                    // Fast-path optimizations for common pseudo-methods
-                    const char* method_name = de_invoke_inst->method
-                        ? de_invoke_inst->method->getName()
-                        : de_invoke_inst->fallback_method_name;
-                    qore_type_t base_type = base.getType();
-                    bool name_dispatch_first = base_type == NT_OBJECT || base_type == NT_WEAKREF
-                        || base_type == NT_HASH || base_type == NT_WEAKREF_HASH;
-
-                    // Resolve pseudo-method at runtime if not resolved at
-                    // deserialization time
-                    const QoreMethod* pseudo_method = de_invoke_inst->method;
-                    const QoreClass* pseudo_qc = de_invoke_inst->qc;
-                    if (!pseudo_method && method_name) {
-                        QoreClass* resolved_qc = nullptr;
-                        pseudo_method = pseudo_classes_find_method(base_type, method_name, resolved_qc);
-                        if (resolved_qc) {
-                            pseudo_qc = resolved_qc;
-                        }
-                    }
-                    QoreIRIntrinsic intrinsic = de_invoke_inst->intrinsic;
-                    if (intrinsic == QoreIRIntrinsic::None) {
-                        intrinsic = qore_ir_resolve_pseudo_intrinsic(pseudo_method, pseudo_qc, method_name);
-                    }
-
-                    if (qore_ir_try_safe_value_no_arg_pseudo_fast_path(de_invoke_inst->pseudo,
-                            de_invoke_inst->pseudo_base_safe_value_dispatch, intrinsic,
-                            base, nargs, res)) {
-                        // Result produced by the inline safe <value> pseudo-method helper.
-                    } else if (qore_ir_try_string_no_arg_pseudo_fast_path(de_invoke_inst->pseudo,
-                            de_invoke_inst->pseudo_base_known_assigned_string, intrinsic,
-                            base, nargs, res, xsink)) {
-                        // Result produced by the inline string pseudo-method helper.
-                    } else if (qore_ir_try_string_arg_pseudo_fast_path(de_invoke_inst->pseudo,
-                            de_invoke_inst->pseudo_base_known_string,
-                            de_invoke_inst->pseudo_arg0_known_string,
-                            de_invoke_inst->pseudo_arg0_known_assigned_int,
-                            de_invoke_inst->pseudo_arg1_known_assigned_int, intrinsic,
-                            base, nanboxed_args, nargs, res, xsink)) {
-                        // Result produced by the inline string pseudo-method helper.
-                    } else if (synthetic_global_call
-                            && synthetic_global_call->getFunction()) {
-                        called_external = true;
-                        res = fromBits(qore_rt_call_function_with_base(
-                            synthetic_global_call->getFunction(),
-                            synthetic_global_call->getVariant(),
-                            synthetic_global_call->getProgram(), toBits(base),
-                            nanboxed_args, nullptr, nargs, xsink));
-                    } else if (name_dispatch_first && method_name) {
-                        called_external = true;
-                        res = fromBits(dot_eval_fallback_with_args(base, method_name,
-                            nanboxed_args, nargs, xsink, explicit_inst));
-                    } else if (qore_ir_try_common_no_arg_pseudo_fast_path(intrinsic,
-                            base, nargs, res)) {
-                        // Result produced by the common pseudo-method helper.
-                    } else {
-                        // Unsupported pseudo-method, use generic runtime dispatch
-                        called_external = true;
-                        res = fromBits(qore_rt_dot_eval_pseudo_method_direct(
-                            toBits(base), pseudo_method, pseudo_qc, de_invoke_inst->variant,
-                            nanboxed_args, nargs, xsink));
-                    }
+                if (de_invoke_inst->interpreter_gives_call_args && hasConsumedCallArgs(de_invoke_inst)) {
+                    // the references of the temporary arguments are given to the call, which releases them in the
+                    // callee's frame, as the AST interpreter moves its argument list into the parameters
+                    called_external = irInvokeDotEvalMethodDirectGiven(IRConsumedCallArgs{values, cleanup,
+                        consumed_call_args, weak_load_temp_slots, borrowed_temp_remaining}, de_invoke_inst, base, pgm,
+                        explicit_inst, nanboxed_args, nargs, res, xsink);
                 } else {
-                    const char* mname = de_invoke_inst->fallback_method_name
-                        ? de_invoke_inst->fallback_method_name
-                        : (de_invoke_inst->method ? de_invoke_inst->method->getName() : nullptr);
-                    bool inline_may_invalidate_external_caches = true;
-                    if (mname && tryExecuteInterpreterInlineIRDotEvalMethod(de_invoke_inst, base, mname,
-                            explicit_inst, pgm, nanboxed_args, nargs, res, xsink,
-                            &inline_may_invalidate_external_caches)) {
-                        // Result produced by the inline IR path.
-                        called_external = inline_may_invalidate_external_caches;
-                    } else if (de_invoke_inst->method && de_invoke_inst->qc) {
-                        called_external = true;
-                        res = fromBits(explicit_inst
-                            ? qore_rt_dot_eval_method_direct_with_inst(toBits(base), de_invoke_inst->method,
-                                de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs, explicit_inst,
-                                xsink)
-                            : qore_rt_dot_eval_method_direct(toBits(base), de_invoke_inst->method,
-                                de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs, xsink));
-                    } else if (mname) {
-                        called_external = true;
-                        res = fromBits(dot_eval_fallback_with_args(base, mname,
-                            nanboxed_args, nargs, xsink, explicit_inst));
-                    } else {
-                        xsink->raiseException("IR-ERROR",
-                            "InvokeDotEvalMethodDirect: null method pointer and no method name");
-                    }
+                    IRNoGivenCallArgs no_given;
+                    irInvokeDotEvalMethodDirect(no_given, de_invoke_inst, base, pgm, explicit_inst, nanboxed_args,
+                        nargs, res, called_external, xsink);
                 }
                 if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
 
@@ -18207,9 +18913,6 @@ load_local_done:
                     invalidateExternalCaches();
                 }
 
-                // the base, if a temporary, lives until the end of the statement (DiscardTemps), as in the AST; a
-                // temporary argument is released now
-                releaseConsumedCallArgs(de_invoke_inst);
                 if (xsink && *xsink) {
                     res.discard(xsink);
                     res = QoreValue();
@@ -21122,3 +21825,4 @@ QoreValue QoreIRInterpreter::evalLValueTernary(QoreIROpcode op, const QoreValue&
     }
     return QoreValue();
 }
+#endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
