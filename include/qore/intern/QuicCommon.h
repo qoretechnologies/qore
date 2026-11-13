@@ -283,6 +283,14 @@ DLLLOCAL void qore_quic_test_take_back_sent(int fd, const struct sockaddr* addr,
 */
 DLLLOCAL int qore_quic_test_send_error(int fd);
 
+//! Debug-only: receives the datagrams of a UDP socket that has none as the QUIC poll operations do
+/** For the test of the receive buffers that cannot be allocated: the socket must have no datagram to receive, as
+    there is no session to dispatch it to.
+
+    @return 0 if no datagram was received, -1 if an exception was raised in \a xsink
+*/
+DLLLOCAL int qore_quic_test_recv_dispatch(int fd, ExceptionSink* xsink);
+
 //! Debug-only: counts datagrams received on a socket for the QUIC test clock (see qore_quic_test_advance_clock())
 /** @param fd the socket the datagrams were received on
     @param src the source address of the datagrams
@@ -376,7 +384,7 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
     // inlined arrays compound with callers' own stack usage, triggering stack
     // protector failures under GCC 15+ (which enables -fstack-protector-strong
     // by default).  They are not static thread_local objects either, which would
-    // take their size from the stack of every thread (see qore_thread_scratch()).
+    // take their size from the stack of every thread (see QoreThreadScratch).
     // Per-message cmsg buffers: each message needs its own copy because
     // sendmmsg() accesses all msg_control pointers during the single syscall.
     struct SendBatchScratch {
@@ -384,10 +392,14 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
         struct mmsghdr msgs[QUIC_COMMON_MAX_SEND_BATCH];
         struct iovec iovecs[QUIC_COMMON_MAX_SEND_BATCH];
     };
-    SendBatchScratch& scratch = qore_thread_scratch<SendBatchScratch>();
-    auto& cmsg_bufs = scratch.cmsg_bufs;
-    auto& msgs = scratch.msgs;
-    auto& iovecs = scratch.iovecs;
+    QoreThreadScratch<SendBatchScratch> scratch;
+    if (!scratch) {
+        errno = ENOMEM;
+        return -1;
+    }
+    auto& cmsg_bufs = scratch->cmsg_bufs;
+    auto& msgs = scratch->msgs;
+    auto& iovecs = scratch->iovecs;
 
     while (offset < total) {
         int batch_size = std::min(total - offset, QUIC_COMMON_MAX_SEND_BATCH);

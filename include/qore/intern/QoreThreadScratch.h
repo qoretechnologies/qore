@@ -32,33 +32,81 @@
 #ifndef _QORE_INTERN_QORETHREADSCRATCH_H
 #define _QORE_INTERN_QORETHREADSCRATCH_H
 
-//! the holder of a per-thread scratch object of qore_thread_scratch(), which value-initializes it
+#include <qore/Qore.h>
+
+#include <cassert>
+
+//! the holder of a per-thread scratch object of QoreThreadScratch, which value-initializes it
 template <typename T>
 struct QoreThreadScratchHolder {
     T obj{};
 };
 
-//! returns a per-thread scratch object of type T, allocated on the heap when a thread first asks for it
+//! gives access to a per-thread scratch object of type T, allocated on the heap when a thread first asks for it
 /** Large per-thread buffers must not be declared as \c static \c thread_local objects: the static TLS block of
     libqore is reserved in every thread of the process, and glibc takes it from the thread's own stack, so each such
     buffer takes its size from the stack of every thread, also of the threads that never use it (a thread created
     with a small stack size then overflows it).  Only a pointer is in the TLS block here (QoreThreadLocalObject, which
     has no thread-local destructor, so that the object stays valid for Qore code that static destructors run at
-    exit; qore#5778); the object is value-initialized (zeroed for a plain struct) on the first call in each thread
+    exit; qore#5778); the object is value-initialized (zeroed for a plain struct) on the first use in each thread
     and released when the Qore thread ends.
 
-    Each call site uses a type of its own, so that two users of scratch buffers never share one in a thread.  Needs
-    the declarations of qore/Qore.h in libqore (qore_thread_intern.h).
+    A thread without Qore thread data (a foreign thread that is not registered with the library) does not keep the
+    object, as nothing would release it when the thread ends: each use there allocates an object of its own, which
+    is freed when this object goes out of scope.
+
+    An allocation failure does not throw: the object is then false, and the caller reports the error (the caller is
+    often called by an I/O thread, where nothing catches \c std::bad_alloc).
+
+    Each call site uses a type of its own, so that two users of scratch buffers never share one in a thread.
 
     @tparam T the type of the scratch object; must be default-constructible
-
-    @return the calling thread's scratch object
-
-    @throw std::bad_alloc if the object cannot be allocated
 */
 template <typename T>
-T& qore_thread_scratch() {
-    return QoreThreadLocalObject<QoreThreadScratchHolder<T>, T>::get().obj;
-}
+class QoreThreadScratch {
+public:
+    //! gets the calling thread's scratch object, or one of its own if the thread has no thread data
+    DLLLOCAL QoreThreadScratch() {
+        bool owned;
+        QoreThreadScratchHolder<T>* h = QoreThreadLocalObject<QoreThreadScratchHolder<T>, T>::getNoThrow(owned);
+        if (h) {
+            if (owned) {
+                own = h;
+            }
+            obj = &h->obj;
+        }
+    }
+
+    //! frees the scratch object if it is not kept by the thread
+    DLLLOCAL ~QoreThreadScratch() {
+        delete own;
+    }
+
+    QoreThreadScratch(const QoreThreadScratch&) = delete;
+    QoreThreadScratch& operator=(const QoreThreadScratch&) = delete;
+
+    //! returns true if the scratch object could be allocated
+    DLLLOCAL explicit operator bool() const {
+        return obj != nullptr;
+    }
+
+    //! returns the scratch object; the object must be valid
+    DLLLOCAL T& operator*() const {
+        assert(obj);
+        return *obj;
+    }
+
+    //! returns the scratch object; the object must be valid
+    DLLLOCAL T* operator->() const {
+        assert(obj);
+        return obj;
+    }
+
+private:
+    //! the scratch object, or nullptr if it could not be allocated
+    T* obj = nullptr;
+    //! the holder of the scratch object if this object owns it (the thread has no thread data), otherwise nullptr
+    QoreThreadScratchHolder<T>* own = nullptr;
+};
 
 #endif

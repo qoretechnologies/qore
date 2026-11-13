@@ -209,7 +209,7 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
     // All large arrays are per-thread heap scratch to avoid ~41KB of stack pressure per call
     // (receive buffers + mmsghdr + iovec + sockaddr_storage + cmsg + batch + pkt_locals); they are not
     // static thread_local objects, which would take their size from the stack of every thread (see
-    // qore_thread_scratch())
+    // QoreThreadScratch)
     struct RecvBatchScratch {
         uint8_t bufs[QUIC_MAX_RECV_BATCH][QUIC_RECV_BUF_SIZE];
         struct mmsghdr msgs[QUIC_MAX_RECV_BATCH];
@@ -219,14 +219,18 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         QuicReceivedPacket batch[QUIC_MAX_RECV_BATCH];
         struct sockaddr_storage pkt_locals[QUIC_MAX_RECV_BATCH];
     };
-    RecvBatchScratch& scratch = qore_thread_scratch<RecvBatchScratch>();
-    auto& bufs = scratch.bufs;
-    auto& msgs = scratch.msgs;
-    auto& iovecs = scratch.iovecs;
-    auto& addrs = scratch.addrs;
-    auto& cmsg_bufs = scratch.cmsg_bufs;
-    auto& batch = scratch.batch;
-    auto& pkt_locals = scratch.pkt_locals;
+    QoreThreadScratch<RecvBatchScratch> scratch;
+    if (!scratch) {
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
+        return -1;
+    }
+    auto& bufs = scratch->bufs;
+    auto& msgs = scratch->msgs;
+    auto& iovecs = scratch->iovecs;
+    auto& addrs = scratch->addrs;
+    auto& cmsg_bufs = scratch->cmsg_bufs;
+    auto& batch = scratch->batch;
+    auto& pkt_locals = scratch->pkt_locals;
     while (true) {
         memset(msgs, 0, sizeof(msgs));
 
@@ -365,14 +369,18 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
 #else
     // Drain all available incoming packets one at a time
     // Per-thread heap scratch to reduce stack pressure (see QuicCommon.h for rationale); not static
-    // thread_local objects, which would take their size from the stack of every thread (see qore_thread_scratch())
+    // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
     struct RecvScratch {
         struct sockaddr_storage src_addr;
         uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     };
-    RecvScratch& scratch = qore_thread_scratch<RecvScratch>();
-    auto& src_addr = scratch.src_addr;
-    auto& cmsg_buf = scratch.cmsg_buf;
+    QoreThreadScratch<RecvScratch> scratch;
+    if (!scratch) {
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
+        return -1;
+    }
+    auto& src_addr = scratch->src_addr;
+    auto& cmsg_buf = scratch->cmsg_buf;
     while (true) {
         socklen_t src_addrlen = sizeof(src_addr);
         size_t cmsg_len = sizeof(cmsg_buf);
@@ -441,6 +449,17 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
     }
 #endif
 }
+
+#ifdef DEBUG
+int qore_quic_test_recv_dispatch(int fd, ExceptionSink* xsink) {
+    QoreDatagramDispatcher dispatcher;
+    struct sockaddr_storage local_addr = {};
+    std::vector<uint8_t> recv_buf(QUIC_RECV_BUF_SIZE);
+    // no session is used: the socket has no datagram to dispatch
+    return recvAndDispatchQuicPackets(fd, dispatcher, local_addr, sizeof(local_addr), recv_buf.data(),
+        recv_buf.size(), nullptr, xsink);
+}
+#endif
 
 // NOTE: sock->priv is accessible because these classes are friends of QoreSocketObject
 
@@ -870,14 +889,18 @@ int SocketQuicClientPollOperation::sendPendingPackets(
 
 int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     // Per-thread heap scratch to reduce stack pressure (see QuicCommon.h for rationale); not static
-    // thread_local objects, which would take their size from the stack of every thread (see qore_thread_scratch())
+    // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
     struct ClientRecvScratch {
         struct sockaddr_storage src_addr;
         uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     };
-    ClientRecvScratch& scratch = qore_thread_scratch<ClientRecvScratch>();
-    auto& src_addr = scratch.src_addr;
-    auto& cmsg_buf = scratch.cmsg_buf;
+    QoreThreadScratch<ClientRecvScratch> scratch;
+    if (!scratch) {
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
+        return -1;
+    }
+    auto& src_addr = scratch->src_addr;
+    auto& cmsg_buf = scratch->cmsg_buf;
     socklen_t src_addrlen = sizeof(src_addr);
 
     int fd = sock->priv->socket->getDescriptor();
@@ -1901,14 +1924,18 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
 
 int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, QuicSession** target_out) {
     // Per-thread heap scratch to reduce stack pressure (see QuicCommon.h for rationale); not static
-    // thread_local objects, which would take their size from the stack of every thread (see qore_thread_scratch())
+    // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
     struct ServerRecvScratch {
         struct sockaddr_storage src_addr;
         uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     };
-    ServerRecvScratch& scratch = qore_thread_scratch<ServerRecvScratch>();
-    auto& src_addr = scratch.src_addr;
-    auto& cmsg_buf = scratch.cmsg_buf;
+    QoreThreadScratch<ServerRecvScratch> scratch;
+    if (!scratch) {
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
+        return -1;
+    }
+    auto& src_addr = scratch->src_addr;
+    auto& cmsg_buf = scratch->cmsg_buf;
     socklen_t src_addrlen = sizeof(src_addr);
 
     int fd = sock->priv->socket->getDescriptor();
