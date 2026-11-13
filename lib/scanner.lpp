@@ -1289,6 +1289,12 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 ^%no-new{WS}*$                          parse_set_parse_options(yylloc, QoreParseOptions::NO_NEW);
 ^%broken-soft-types{WS}*$               parse_set_parse_options(yylloc, QoreParseOptions::BROKEN_SOFT_TYPES);
 ^%no-summarize{WS}*$                    parse_set_parse_options(yylloc, QoreParseOptions::NO_SUMMARIZE);
+^%strict-parse-errors{WS}*$             {
+                                           parse_disable_parse_options(yylloc,
+                                               QoreParseOptions::NO_STRICT_PARSE_ERRORS);
+                                           parse_set_parse_options(yylloc, QoreParseOptions::STRICT_PARSE_ERRORS);
+                                        }
+^%no-strict-parse-errors{WS}*$          parse_set_parse_options(yylloc, QoreParseOptions::NO_STRICT_PARSE_ERRORS);
 ^%fp-fast-math{WS}*$                    parse_set_parse_options(yylloc, QoreParseOptions::FP_FAST_MATH);
 ^%no-iterate{WS}*$                      parse_set_parse_options(yylloc, QoreParseOptions::NO_ITERATE);
 ^%no-first{WS}*$                        parse_set_parse_options(yylloc, QoreParseOptions::NO_FIRST);

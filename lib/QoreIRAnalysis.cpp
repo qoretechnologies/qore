@@ -9978,8 +9978,12 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                         facts = *current;
                     }
                     QoreIRValueFacts refined_facts = facts;
-                    refined_facts.type_info = load->local->getTypeInfo();
                     bool assigned = known.count(load->local);
+                    // a load where the local may not have been assigned has its type or NOTHING (qore#5937): its
+                    // declared type alone would let the optimizers take the value as one of the type
+                    refined_facts.type_info = assigned
+                        ? load->local->getTypeInfo()
+                        : get_or_nothing_type_check(load->local->getTypeInfo());
                     refined_facts.assigned_state = assigned
                         ? QoreIRAssignedState::Assigned
                         : QoreIRAssignedState::MaybeAssigned;
@@ -15305,6 +15309,11 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
                     ++it;
                 }
             }
+        }
+        // an instruction that changes a local (delete and remove of a local are generic lvalue path operations) can
+        // leave it without a value of its type (qore#5937), whether or not it can invalidate the caller's caches
+        if (const LocalVar* written = qore_ir_get_written_local(inst)) {
+            known.erase(written);
         }
         if (!direct_call
                 && qore_ir_instruction_may_invalidate_caller_caches(

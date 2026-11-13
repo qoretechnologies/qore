@@ -2,6 +2,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 %modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit

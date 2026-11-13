@@ -123,6 +123,7 @@
 #define PO_NO_NAMESPACE_DEFS                0  //!< disallow namespace definitions; use QoreParseOptions::NO_NAMESPACE_DEFS in C++
 #define PO_NO_NEW                           0  //!< disallow the 'new' keyword; use QoreParseOptions::NO_NEW in C++
 #define PO_NO_SUMMARIZE                     0  //!< disallow the 'summarize' statement; use QoreParseOptions::NO_SUMMARIZE in C++
+#define PO_STRICT_PARSE_ERRORS              0  //!< raise errors the parser can prove as parse errors; use QoreParseOptions::STRICT_PARSE_ERRORS in C++
 #define PO_NO_MODULE_PATH_DIRECTIVES        0  //!< disallow %prepend-module-path / %append-module-path; use QoreParseOptions::NO_MODULE_PATH_DIRECTIVES in C++
 #define PO_FP_FAST_MATH                     0  //!< allow IEEE-unsafe FP optimizer rewrites; use QoreParseOptions::FP_FAST_MATH in C++
 #define PO_NEGATIVE_OFFSETS                 QoreParseOptions::NEGATIVE_OFFSETS  //!< allow negative container offsets
@@ -154,15 +155,17 @@
 //! new Qore style: no more '$' and with assumed variable scope
 #define PO_NEW_STYLE                  (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL)
 
-//! modern Qore style: new style + require types + strict args + strong encapsulation + no summarize
+//! modern Qore style: new style + require types + strict args + strong encapsulation + no summarize + strict parse
+//! errors
 /** @note all warnings are also enabled with %modern; use the %modern parse directive.
-    \c PO_NO_SUMMARIZE is an extended parse option (bit 69); its macro value is \c 0 here
-    for qpp/int64 compatibility, so the bit is also applied implicitly wherever \c PO_MODERN
-    is materialised (parse-option application, \c \%modern directive, CLI \c -M).
+    \c PO_NO_SUMMARIZE and \c PO_STRICT_PARSE_ERRORS are extended parse options (bits 69 and 89); their macro values
+    are \c 0 here for qpp/int64 compatibility, so the bits are also applied implicitly wherever \c PO_MODERN
+    is materialised (parse-option application, \c \%modern directive, CLI \c -M); \c PO_STRICT_PARSE_ERRORS is not
+    applied when QoreParseOptions::NO_STRICT_PARSE_ERRORS is set.
     @since %Qore 3.0
 */
 #define PO_MODERN                     (PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_STRICT_ARGS|PO_STRONG_ENCAPSULATION \
-    |PO_NO_SUMMARIZE)
+    |PO_NO_SUMMARIZE|PO_STRICT_PARSE_ERRORS)
 
 //! mask of all options allowing for more freedom (instead of less)
 /** @note This macro includes only the 64-bit options; the extended option

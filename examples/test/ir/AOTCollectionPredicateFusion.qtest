@@ -17,6 +17,8 @@ if (!is_file(qcc_bin)) {
 }
 
 string source = "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 our int expected_effects = 0;
 

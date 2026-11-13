@@ -367,6 +367,14 @@ public:
     QoreIRValue lowerContainerLiteral(const QoreValue& expr, std::string& error);
     QoreIRValue lowerContainerElement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
+    //! Returns true if a value can be NOTHING although its parse type does not accept NOTHING: a read of an lvalue
+    //! that may have no value, or +, - or * of two such values (qore#5937)
+    DLLLOCAL bool valueMayBeNothingDespiteType(const QoreValue& value) const;
+
+    //! Returns true if the typed operation (given by its int opcode) of the operands does not give the result of the
+    //! AST interpreter when an operand has no value, so the generic operation must be used (qore#5937)
+    DLLLOCAL bool typedOpNeedsNothingFallback(QoreIROpcode int_op, const QoreValue& left,
+        const QoreValue& right) const;
     QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
     QoreIRValue lowerElements(const QoreValue& expr, std::string& error);

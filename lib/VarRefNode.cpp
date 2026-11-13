@@ -353,13 +353,36 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
     }
 
+    // the assignment state of the variable at this read (qore#5937); the parse is one forward pass, so a read is
+    // proven unassigned only when no assignment parsed before it can have run, and no assignment parsed after it can
+    // run before it: the variable is not changed through a reference or by a closure, and no loop body, iterated
+    // expression or on_exit block lies between its declaration and the read
+    if (!new_decl && !is_assignment && (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) && ref.id) {
+        if (parse_context.pflag & PF_LVALUE_NOT_READ) {
+            // the reference, delete and remove operators do not read the variable, and a reference can assign it
+            read_state = qore_local_read_state_e::Unknown;
+        } else if (ref.id->isAssigned() || ref.id->isSelf()) {
+            // the self variable of a method has the object whenever the method runs; it is not assigned in the code
+            read_state = qore_local_read_state_e::Assigned;
+        } else if (type == VT_LOCAL && !ref.id->mayBeAssigned() && !ref.id->closureUse() && !ref.id->isTopLevel()
+                && parse_get_deferred_depth() <= ref.id->getDeclDeferredDepth()) {
+            // a top-level local of a program is also a variable of its functions and methods, which can assign or
+            // remove it whenever they are called, and whose code the parse does not see in the order it runs
+            read_state = qore_local_read_state_e::Unassigned;
+        } else {
+            read_state = qore_local_read_state_e::Unknown;
+        }
+    }
+
     // A declaration constrains a value but does not initialize it.  The flow-sensitive LocalVar
     // state is authoritative here: it is merged across branches by AssignedStateHelper, so this
-    // warning is emitted only when the read is not definitely preceded by an assignment.  `exists`
-    // is the intentional way to inspect that state and suppresses the warning through its parse flag.
-    if (!err && !new_decl && !is_assignment && !(parse_context.pflag & PF_EXISTENCE_CHECK)
-            && (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) && ref.id
-            && !ref.id->isAssigned()) {
+    // diagnostic is raised only when the read is not definitely preceded by an assignment.  `exists`
+    // is the intentional way to inspect that state and suppresses it through its parse flag.  A read that is proven
+    // unassigned where its value is used as a value of a type that does not accept NOTHING is a parse error with
+    // %strict-parse-errors; see qore_parse_check_unassigned_read()
+    if (!err && !new_decl && !is_assignment && !(parse_context.pflag & (PF_EXISTENCE_CHECK | PF_LVALUE_NOT_READ))
+            && read_state != qore_local_read_state_e::Assigned) {
+        assert(ref.id);
         const QoreTypeInfo* declared_type = ref.id->getTypeInfo();
         if (QoreTypeInfo::hasType(declared_type)
                 && QoreTypeInfo::parseReturns(declared_type, NT_NOTHING) == QTI_NOT_EQUAL) {
@@ -369,6 +392,8 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
             metadata.addFact("variable", ref.id->getName());
             metadata.addFact("declaredType", QoreTypeInfo::getName(declared_type));
             metadata.addFact("definitelyAssigned", "false");
+            metadata.addFact("assignmentState", read_state == qore_local_read_state_e::Unassigned
+                ? "unassigned" : "unknown");
             metadata.addSuggestion(QoreStringMaker("initialize %s before this read", ref.id->getName()).c_str());
             QoreStringNode* desc = new QoreStringNodeMaker("local variable '%s' with non-optional type '%s' "
                 "is read before it is definitely assigned; a declaration does not initialize the variable",
@@ -917,4 +942,29 @@ QORE_INTERN_ALWAYS_INLINE QoreValue VarRefNewObjectNode::evalImplInternal(Runtim
         return QoreValue();
     needs_deref = false;
     return QoreValue(rv);
+}
+
+int qore_parse_check_unassigned_read(QoreProgram* pgm, const QoreProgramLocation* loc, const QoreValue& expr,
+        const QoreTypeInfo* target_type, const char* target_desc) {
+    if (!expr.hasNode() || expr.getType() != NT_VARREF) {
+        return 0;
+    }
+    const VarRefNode* vrn = expr.get<const VarRefNode>();
+    if (vrn->getReadState() != qore_local_read_state_e::Unassigned
+            || !QoreTypeInfo::hasType(target_type)
+            || QoreTypeInfo::parseAcceptsReturns(target_type, NT_NOTHING)
+            || !parse_check_parse_option(QoreParseOptions::STRICT_PARSE_ERRORS)) {
+        return 0;
+    }
+    QoreStringMaker hint("assign '%s' before this use, or give %s an optional type if the absent value is "
+        "intentional", vrn->getName(), target_desc);
+    QoreDiagnosticMetadata metadata("UNINITIALIZED-LOCAL-READ", hint.c_str());
+    metadata.addFact("variable", vrn->getName());
+    metadata.addFact("targetType", QoreTypeInfo::getName(target_type));
+    metadata.addFact("assignmentState", "unassigned");
+    QoreStringNode* desc = new QoreStringNodeMaker("local variable '%s' cannot have been assigned where it is read, "
+        "so it gives NOTHING to %s, whose type '%s' does not accept NOTHING (%%strict-parse-errors)", vrn->getName(),
+        target_desc, QoreTypeInfo::getName(target_type));
+    qore_program_private::makeParseException(pgm, *loc, "PARSE-TYPE-ERROR", desc, metadata);
+    return -1;
 }
