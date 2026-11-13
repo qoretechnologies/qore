@@ -11570,6 +11570,13 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
                                     pp->sb.setLVarsFromAOTContext(ctx);
+                                    {
+                                        // the default arguments that read a top-level local (qore#5868)
+                                        std::string top_default_error;
+                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
+                                            registration_errors.push_back(std::move(top_default_error));
+                                        }
+                                    }
                                     ++registered;
                                     toplevel_registered = true;
                                     printd(2, "AOT v3: registered _toplevel from slot map\n");
@@ -11661,6 +11668,13 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                         toplevel_func->fn_ptr, ctx);
                                     // Set LVList so doTopLevelInstantiation() can instantiate the locals
                                     pp->sb.setLVarsFromAOTContext(ctx);
+                                    {
+                                        // the default arguments that read a top-level local (qore#5868)
+                                        std::string top_default_error;
+                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
+                                            registration_errors.push_back(std::move(top_default_error));
+                                        }
+                                    }
                                     ++registered;
                                     toplevel_registered = true;
                                     printd(2, "AOT v2: registered _toplevel from slot map\n");
@@ -13367,6 +13381,13 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
                                     pp->sb.setLVarsFromAOTContext(ctx);
+                                    {
+                                        // the default arguments that read a top-level local (qore#5868)
+                                        std::string top_default_error;
+                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
+                                            registration_errors.push_back(std::move(top_default_error));
+                                        }
+                                    }
                                     ++registered;
                                     toplevel_registered = true;
                                     printd(2, "AOT v3: registered _toplevel from slot map\n");
@@ -13458,6 +13479,13 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                         toplevel_func->fn_ptr, ctx);
                                     // Set LVList so doTopLevelInstantiation() can instantiate the locals
                                     pp->sb.setLVarsFromAOTContext(ctx);
+                                    {
+                                        // the default arguments that read a top-level local (qore#5868)
+                                        std::string top_default_error;
+                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
+                                            registration_errors.push_back(std::move(top_default_error));
+                                        }
+                                    }
                                     ++registered;
                                     toplevel_registered = true;
                                     printd(2, "AOT v3: registered _toplevel from slot map\n");

@@ -1157,6 +1157,10 @@ public:
     //! expressions (AOTExprKind::SOURCE_LOCATION), of members and of default arguments are left out, so that a
     //! digest does not depend on lines or on the path of a source file
     bool omit_source_locations = false;
+    //! true while the default argument of a parameter is written: a top-level local that the expression reads is then
+    //! written by its index in the Program's top-level local list ("top:<index>:<name>"), which the loader binds
+    //! once the top-level locals exist (qore#5868)
+    bool allow_top_level_local_ref = false;
 
     //! Header feature flags used by payload-level compatibility choices while
     //! section writers serialize values.
@@ -3032,6 +3036,20 @@ struct QoreAOTStringRef {
     const char* c_str() const { return ptr; }
 };
 
+//! the error that the reader of an expression sets for a reference to a top-level local that does not exist yet
+/** The reader of a default argument keeps the expression and reads it again when the top-level locals exist (see
+    QoreAOTBinaryDeserializer::resolveTopLevelNativeExprDefaults())
+*/
+#define QORE_AOT_DEFER_TOP_LEVEL_LOCAL "AOT-DEFER-TOP-LEVEL-LOCAL"
+
+class VarRefNode;
+
+//! writes the reference of an expression to a top-level local of the Program being serialized as "top:<index>:<name>"
+/** @return true if the variable is a top-level local that is in the top-level local list of the serialization Program
+    and the writer allows it (a default argument); \a ref then holds the reference
+*/
+bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const VarRefNode* varref, std::string& ref);
+
 class QoreAOTBinaryDeserializer {
     QoreAOTBinaryReader reader;
     QoreAOTTypeResolver* type_resolver = nullptr;
@@ -3365,6 +3383,8 @@ public:
 private:
     std::vector<PendingStaticMethodDefault> pending_smd;
     std::vector<PendingNativeExprDefault> pending_ned;
+    //! the default arguments that read a top-level local, which are read again when the top-level locals exist
+    std::vector<PendingNativeExprDefault> pending_top_level_ned;
     std::vector<PendingFunctionDefault> pending_fd;
 
     //! Legacy owned copies used only for deterministic borrowed-blob A/B tests.
@@ -3691,6 +3711,12 @@ public:
     //! expression resolution).  Used by the multi-deserializer AFTER
     //! the single cross-session index rebuild.
     bool finalizePostIndex(std::string& error);
+
+    //! reads the default arguments that read a top-level local, once the top-level locals of the Program exist
+    /** The top-level locals of an AOT executable are set when its top-level code is registered
+        (TopLevelStatementBlock::setLVarsFromAOTContext()), after the default arguments were first read (qore#5868)
+    */
+    bool resolveTopLevelNativeExprDefaults(std::string& error);
 
     //! Install lazy executable IR on source-stripped variants for qcc parse-time calls.
     bool installSourceParseIRFallbacks(std::string& error);

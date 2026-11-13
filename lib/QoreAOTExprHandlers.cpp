@@ -1202,6 +1202,12 @@ static bool write_expr_local_varref(AOTExprWriteCtx& ctx) {
                     return true;
                 }
             }
+            std::string top_ref;
+            if (qore_aot_top_level_local_ref(ctx.writer, varref, top_ref)) {
+                ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOCAL_VARREF));
+                ctx.writer.writeStringRef(top_ref.c_str());
+                return true;
+            }
         }
     }
     return false;
@@ -1211,6 +1217,40 @@ static QoreValue read_expr_local_varref(AOTExprReadCtx& ctx) {
     const char* index_str = ctx.reader.readStringRef(ctx.ptr);
     if (!index_str) {
         return QoreValue();
+    }
+    if (!strncmp(index_str, "top:", 4)) {
+        // a top-level local of the Program, by its index in the top-level local list and its name (qore#5868)
+        char* end = nullptr;
+        unsigned long index = strtoul(index_str + 4, &end, 10);
+        if (!end || *end != ':' || !end[1]) {
+            ctx.error = "invalid top-level local reference '";
+            ctx.error += index_str;
+            ctx.error += "'";
+            return QoreValue();
+        }
+        const char* name = end + 1;
+        const LVList* top = ctx.pgm ? qore_program_private::get(*ctx.pgm)->sb.getLVList() : nullptr;
+        LocalVar* found = nullptr;
+        if (top) {
+            if (index < top->size() && top->lv[index] && top->lv[index]->getName()
+                    && !strcmp(top->lv[index]->getName(), name)) {
+                found = top->lv[index];
+            } else {
+                // the last declaration of the name hides the earlier ones
+                for (unsigned i = top->size(); i > 0; --i) {
+                    if (top->lv[i - 1] && top->lv[i - 1]->getName() && !strcmp(top->lv[i - 1]->getName(), name)) {
+                        found = top->lv[i - 1];
+                        break;
+                    }
+                }
+            }
+        }
+        if (!found) {
+            // the top-level locals exist when the top-level code is registered: the expression is read again then
+            ctx.error = QORE_AOT_DEFER_TOP_LEVEL_LOCAL;
+            return QoreValue();
+        }
+        return QoreValue(new VarRefNode(&loc_builtin, found->getName(), found, false));
     }
     int local_slot = std::atoi(index_str);
     if (local_slot < 0 || local_slot >= ctx.num_locals || !ctx.locals || !ctx.locals[local_slot]) {
