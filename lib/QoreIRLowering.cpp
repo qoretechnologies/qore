@@ -12978,7 +12978,10 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     const QoreValue& base_expr = op->getExpression();
     LocalVar* base_local = getLocalVarFromValue(base_expr);
     bool self_base = base_local && !strcmp(base_local->getName(), "self");
-    if (m && m->getName() && self_base) {
+    // in a background expression, self is a value given to the new thread, which has no current object for it
+    // (unlike an unqualified call, see lowerSelfCall()): the call is made on the value, as any method call is, which
+    // checks it as the AST interpreter does (issue #5823)
+    if (m && m->getName() && self_base && !bg_helper) {
         const QoreMethod* method = m->getMethod();
         const QoreClass* qc = m->getClass();
         const AbstractQoreFunctionVariant* variant = m->getVariant();
@@ -15325,11 +15328,6 @@ void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, const QorePr
     }
     // the check takes the current object itself: a load of self would make a method ineligible for the fast entries
     // that have no self (isAOTImplicitSelfFastEntryEligible())
-    if (bg_helper) {
-        // a background expression with a call through self runs in the new thread with the object as its current
-        // object, as the AST interpreter runs it
-        bg_helper->uses_self = true;
-    }
     builder.createCheckCallTarget(call, QoreIRValue(), getCurrentExceptionTarget(), loc);
 }
 
