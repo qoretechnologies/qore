@@ -215,7 +215,7 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         struct mmsghdr msgs[QUIC_MAX_RECV_BATCH];
         struct iovec iovecs[QUIC_MAX_RECV_BATCH];
         struct sockaddr_storage addrs[QUIC_MAX_RECV_BATCH];
-        uint8_t cmsg_bufs[QUIC_MAX_RECV_BATCH][QUIC_CMSG_BUF_SIZE];
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_bufs[QUIC_MAX_RECV_BATCH][QUIC_CMSG_BUF_SIZE];
         QuicReceivedPacket batch[QUIC_MAX_RECV_BATCH];
         struct sockaddr_storage pkt_locals[QUIC_MAX_RECV_BATCH];
     };
@@ -372,7 +372,7 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
     // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
     struct RecvScratch {
         struct sockaddr_storage src_addr;
-        uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     };
     QoreThreadScratch<RecvScratch> scratch;
     if (!scratch) {
@@ -892,7 +892,7 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
     struct ClientRecvScratch {
         struct sockaddr_storage src_addr;
-        uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     };
     QoreThreadScratch<ClientRecvScratch> scratch;
     if (!scratch) {
@@ -1927,7 +1927,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
     struct ServerRecvScratch {
         struct sockaddr_storage src_addr;
-        uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
     };
     QoreThreadScratch<ServerRecvScratch> scratch;
     if (!scratch) {

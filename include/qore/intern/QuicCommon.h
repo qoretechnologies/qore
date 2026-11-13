@@ -153,6 +153,9 @@ struct QuicPacketBatch {
     @since %Qore 3.0
 */
 constexpr size_t QUIC_SEND_CMSG_BUF_SIZE = 64;
+// each buffer of an array of them is aligned for a cmsghdr (CMSG_FIRSTHDR())
+static_assert(QUIC_SEND_CMSG_BUF_SIZE % alignof(struct cmsghdr) == 0,
+    "QUIC_SEND_CMSG_BUF_SIZE must be a multiple of the alignment of struct cmsghdr");
 
 //! Check whether a sockaddr holds a wildcard (any) address
 /** Returns true for INADDR_ANY (0.0.0.0) or in6addr_any (::).
@@ -367,7 +370,7 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
                                 socklen_t local_addrlen = 0) {
     // Build cmsg template once (shared by all packets in this batch)
     // Zero-init to avoid valgrind warnings about CMSG_SPACE alignment padding
-    uint8_t cmsg_template[QUIC_SEND_CMSG_BUF_SIZE] = {};
+    alignas(alignof(struct cmsghdr)) uint8_t cmsg_template[QUIC_SEND_CMSG_BUF_SIZE] = {};
     size_t cmsg_len = 0;
     bool use_cmsg = local_addr && buildSendCmsg(local_addr, local_addrlen,
                                                  cmsg_template, cmsg_len);
@@ -388,7 +391,7 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
     // Per-message cmsg buffers: each message needs its own copy because
     // sendmmsg() accesses all msg_control pointers during the single syscall.
     struct SendBatchScratch {
-        uint8_t cmsg_bufs[QUIC_COMMON_MAX_SEND_BATCH][QUIC_SEND_CMSG_BUF_SIZE];
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_bufs[QUIC_COMMON_MAX_SEND_BATCH][QUIC_SEND_CMSG_BUF_SIZE];
         struct mmsghdr msgs[QUIC_COMMON_MAX_SEND_BATCH];
         struct iovec iovecs[QUIC_COMMON_MAX_SEND_BATCH];
     };
@@ -539,6 +542,9 @@ inline int enableQuicPktinfo(int fd, int family) {
 
 //! Maximum size of ancillary data buffer for recvmsg() pktinfo extraction
 constexpr size_t QUIC_CMSG_BUF_SIZE = 128;
+// each buffer of an array of them is aligned for a cmsghdr (CMSG_FIRSTHDR())
+static_assert(QUIC_CMSG_BUF_SIZE % alignof(struct cmsghdr) == 0,
+    "QUIC_CMSG_BUF_SIZE must be a multiple of the alignment of struct cmsghdr");
 
 //! Receive a single UDP datagram with ancillary data (control messages)
 /** Wraps recvmsg() to provide both the source address and control message
