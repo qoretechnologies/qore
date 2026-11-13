@@ -32,7 +32,7 @@ class AotDefaultArgTopLevelLocalTest inherits QUnit::Test {
         string dir = get_script_dir() + "/aot-default-arg-toplevel-local";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("aot-default-arg-toplevel-local", "shadowed-names");
+        const Programs = ("aot-default-arg-toplevel-local", "shadowed-names", "closure-default");
     }
 
     constructor() : QUnit::Test("AotDefaultArgTopLevelLocalTest", "1.0", \ARGV) {

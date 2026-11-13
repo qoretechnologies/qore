@@ -463,6 +463,11 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      closure, which is loaded with the module but run when the module is unloaded (#6015), or, for a local source
 //!      module that a compiled script embeds, when the script's Program is cleared; a reader of the earlier
 //!      formats refuses the type, and a module has none without a \c del closure.
+//! v35: the name of a capture of a closure that is the default argument of a function, and whose variable is a
+//!      top-level local of the Program, is "top:<index>:<name>" (the index in the Program's top-level local list), as
+//!      the reference of a default argument expression to one is (v34); the reader binds the capture to that variable
+//!      and reads the closure again when the Program has its top-level locals.  An earlier reader takes the text as
+//!      the name of a variable that does not exist (#5998).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -494,9 +499,11 @@ constexpr uint16_t QORE_AOT_DECLARED_DOMAIN_VERSION = 33;
 constexpr uint16_t QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION = 34;
 //! First format version with native find expressions (see v34 above).
 constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
+//! First format version whose closure captures can name a top-level local by its index (see v35 above).
+constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 35;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -3071,6 +3078,10 @@ class VarRefNode;
     and the writer allows it (a default argument); \a ref then holds the reference
 */
 bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const VarRefNode* varref, std::string& ref);
+
+//! As above for a local variable: the reference "top:<index>:<name>" of a top-level local of the Program that is
+//! serialized, written while a default argument is (see QoreAOTBinaryWriter::allow_top_level_local_ref)
+bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const LocalVar* lv, std::string& ref);
 
 class QoreAOTBinaryDeserializer {
     QoreAOTBinaryReader reader;
