@@ -586,11 +586,19 @@ public class SqlTestBase inherits QUnit::Test {
         }
         # the bulk and shaped create paths report a duplicate row as the single-record path does
         {
-            hash<auto> bulk = map {$1.key: ($1.value,)}, record.pairIterator();
+            # a new row, then the duplicate: the new row must not stay either (the id differs in its lowest bit, so it
+            # stays in the column's range)
+            hash<auto> fresh = record + {"id": record.id ^ 1, "name": get_random_string()};
+            hash<auto> bulk = map {$1.key: (fresh{$1.key}, $1.value)}, record.pairIterator();
             assertThrows("DUPLICATE-RECORD", \dp.createRecordsBulk(), bulk);
             assertThrows("DUPLICATE-RECORD", \dp.createRecordsShape(), (bulk, DataProviderShape::HashOfLists));
-            # nothing of a refused batch was written
-            assertEq(1, dp.searchRecords({"id": record.id}).size());
+            # nothing of a refused batch was written: the table still has the one row
+            AbstractDataProviderRecordIterator i = dp.searchRecords();
+            int rows = 0;
+            while (i.next()) {
+                ++rows;
+            }
+            assertEq(1, rows);
         }
 
         # create a dependent table
