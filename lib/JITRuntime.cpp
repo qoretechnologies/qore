@@ -4489,6 +4489,32 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
         return toBits(QoreValue());
     }
 
+    // a static method of the receiver's declared class: the reference is bound to it, whatever the class of the
+    // object, as a call through the object is (qore#5990); the name is "\x01<class reference>\x01<method name>" (see
+    // qore_aot_object_method_ref_name())
+    if (method_name[0] == '\x01') {
+        const char* end = strchr(method_name + 1, '\x01');
+        if (!end) {
+            xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "invalid AOT object method reference");
+            return toBits(QoreValue());
+        }
+        std::string class_ref(method_name + 1, end - method_name - 1);
+        const char* mname = end + 1;
+        QoreProgram* pgm = rc_get_current_ref().getProgram();
+        if (!pgm) {
+            pgm = getProgram();
+        }
+        const QoreClass* qc = pgm ? qore_aot_resolve_class_ref(pgm, class_ref.c_str()) : nullptr;
+        ClassAccess access = Public;
+        const QoreMethod* method = qc ? qc->findStaticMethod(mname, access) : nullptr;
+        if (!method) {
+            xsink->raiseException("OBJECT-METHOD-REFERENCE-ERROR", "cannot resolve reference to static method "
+                "%s::%s()", qc ? qc->getName() : class_ref.c_str(), mname);
+            return toBits(QoreValue());
+        }
+        return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, method)));
+    }
+
     const QoreClass* obj_class = obj->getClass();
     ClassAccess access = Public;
     const QoreMethod* method = obj_class->findMethod(method_name, access);
@@ -11298,7 +11324,9 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     // Skip QoreListNode allocation for builtins with fast-call variants; only for a call of the Qore builtin, never of
     // a user or module function with the same name, and each fast path returns what the builtin returns
     if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
-        const char* fname = qore_rt_is_qore_builtin_function(call->getFunctionEntry()) ? call->getName() : nullptr;
+        // a named call resolved by parameter name binds its arguments by name; the fast paths take them by position
+        const char* fname = qore_rt_is_qore_builtin_function(call->getFunctionEntry()) && !call->getRuntimeArgNames()
+            ? call->getName() : nullptr;
         if (fname) {
             // Zero-argument fast-call functions (highest priority - no arg unpacking needed)
             if (nargs == 0) {
@@ -11374,7 +11402,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     QoreValue result;
 
     if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
-        QoreValue call_expr(new FunctionCallNode(*call, arg_list.release()));
+        QoreValue call_expr(call->copyWithArgs(arg_list.release()));
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
         result = call_expr.getInternalNode()->eval(needs_deref, xsink);
@@ -11414,6 +11442,12 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         if (!needs_deref && result.needsRef()) {
             result = result.refSelf();
         }
+        used_operands = true;
+    } else if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+            dot && dot->getMethodCall() && dot->getMethodCall()->getRuntimeArgNames()) {
+        // a named call of a method of an object resolved at run time by parameter name: the receiver is the first
+        // argument
+        result = dot->evalRuntimeNamedWithArgs(arg_list.release(), xsink);
         used_operands = true;
     }
 
@@ -17430,6 +17464,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, in
             "qore_rt_call_with_args_aot", "call", "QORE_AOT_DISABLE_PRELINKED_CALLS");
     }
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    if (target.runtime_arg_names) {
+        // the call node binds the arguments by name to the variant that it selects
+        return qore_rt_call_slot_dynamic_fallback(ctx, slot, args, nullptr, nargs, xsink,
+            "qore_rt_call_with_args_aot", "call", "named call resolved by parameter name");
+    }
     if (target.is_static_method && target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_with_args_aot", "static_method", "use");
         return qore_rt_call_static_method_direct_impl(target.method, target.variant,
@@ -17479,6 +17518,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot_consume_args(
             "qore_rt_call_with_args_aot_consume_args", "call", "QORE_AOT_DISABLE_PRELINKED_CALLS");
     }
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    if (target.runtime_arg_names) {
+        // the call node binds the arguments by name to the variant that it selects
+        return qore_rt_call_slot_dynamic_fallback(ctx, slot, args, arg_cleanups, nargs, xsink,
+            "qore_rt_call_with_args_aot_consume_args", "call", "named call resolved by parameter name");
+    }
     if (target.is_static_method && target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_with_args_aot_consume_args",
             "static_method", "use");
@@ -19311,6 +19355,11 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (!strcmp(method->getName(), "copy")) {
         return false;
     }
+    // the variant of an overloaded static method called through an object is the one resolved at parse time, which
+    // the arguments may not match at run time: the slow path resolves it again, as the AST call does (qore#5990)
+    if (method->isStatic() && qore_method_private::get(*method)->getFunction()->numVariants() != 1) {
+        return false;
+    }
     const UserVariantBase* uvb = variant->getUserVariantBase();
     if (!uvb) {
         // Builtin method — fall back to slow path for proper soft type coercion
@@ -19322,7 +19371,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (!uvb->hasCachedFunction() && !uvb->getCachedIR()) {
         return false;
     }
-    if (o->getClass() != qc && o->getClass() != method->getClass()) {
+    // a static method called through an object is bound to the receiver's declared class (qore#5990)
+    if (o->getClass() != qc && o->getClass() != method->getClass() && !method->isStatic()) {
         return false;
     }
     if (!o->isValid()) {
@@ -19527,7 +19577,11 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     if (!strcmp(method->getName(), "copy")) {
         return toBits(o->getClass()->execCopy(o, xsink));
     }
-    if (qore_rt_same_class(o->getClass(), qc) || qore_rt_same_class(o->getClass(), method->getClass())) {
+    // a static method called through an object is bound to the receiver's declared class, whatever the class of the
+    // object, as Class::method() is (qore#5990)
+    const bool static_bound = method->isStatic();
+    if (static_bound || qore_rt_same_class(o->getClass(), qc)
+            || qore_rt_same_class(o->getClass(), method->getClass())) {
         if (!o->isValid()) {
             // as the AST interpreter raises it (issue #5784)
             qore_raise_deleted_method_call(xsink, o, method->getName(), qc, method, variant);
@@ -19541,7 +19595,7 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
         // and the AST interpreter resolves the variant again among the class's own and inherited variants when the
         // arguments do not match it (issue #5686)
         const QoreMethod* call_method = method;
-        if (method->getClass() != o->getClass()) {
+        if (!static_bound && method->getClass() != o->getClass()) {
             if (const QoreMethod* own = o->getClass()->findLocalMethod(method->getName())) {
                 call_method = own;
             }
@@ -20225,8 +20279,9 @@ static bool qore_rt_aot_object_method_needs_runtime_dispatch(
     // a class is compared by its ID: the copy of a class in another Program (a builtin class, or a class imported
     // from a module) is the same class; only a subclass needs the variant resolved for it by name, which checks it
     // against the runtime options, where the parser checked the bound one against the code's (#5556)
+    // a static method called through an object is bound to the receiver's declared class (qore#5990)
     return !target.method || target.is_pseudo
-        || (!qore_rt_same_class(object->getClass(), target.qc)
+        || (!target.method->isStatic() && !qore_rt_same_class(object->getClass(), target.qc)
             && !qore_rt_same_class(object->getClass(), target.method->getClass()));
 }
 
@@ -22015,7 +22070,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_function_call(
     // Clone with pre-evaluated args (tmp_args=true via AbstractFunctionCallNode copy ctor).
     // do_op_background will make its own copy via crlr_fcall_copy; we release the
     // original here so the local FunctionCallNode's destructor cleans up.
-    FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
+    FunctionCallNode* call_node = fcn->copyWithArgs(arg_list);
     QoreValue result = doBackgroundWithLocation(fcn->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
@@ -22115,7 +22170,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_function_call_aot(
         return 0;
     }
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
-    FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
+    FunctionCallNode* call_node = fcn->copyWithArgs(arg_list);
     QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);

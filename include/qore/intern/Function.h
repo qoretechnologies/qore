@@ -263,6 +263,9 @@ struct QoreNamedArgBinding {
     //! the variant whose parameter names the arguments are bound to; set if the binding is valid, also when the
     //! variant of the call is resolved at run time (see QoreFunction::parseFindVariantNamed())
     const AbstractQoreFunctionVariant* variant = nullptr;
+    //! set if the variant of the call is resolved at run time by binding the arguments by name to each candidate
+    //! variant, as the variants that could be selected name their parameters differently
+    bool runtime_names = false;
 };
 
 class UserSignatureTypeParamContextHelper {
@@ -788,6 +791,9 @@ struct QoreCallMatchInput {
     const QoreTypeParamInstantiation* explicit_inst;
     QoreTypeParamInstantiation& candidate_inst;
     bool& elements_checked;
+    //! for a named call resolved by parameter name: the parameter position of each argument; a parameter that no
+    //! argument is bound to is given no value, and its match is not counted (nullptr for a positional call)
+    const std::vector<size_t>* named_positions = nullptr;
 };
 
 //! Negative score rejects a candidate; a parameterless, argumentless match is perfect.
@@ -867,6 +873,28 @@ public:
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             unsigned n_call_flags = 0);
+    //! Creates the object for evaluating a named call whose variant is resolved at run time by parameter name; the
+    //! arguments are in source order with the names in "n_arg_names" (see QoreFunction::runtimeFindVariant())
+    /** @param self the object of a call of a normal method, otherwise nullptr
+        @param n_qc the class of the method of a method call, otherwise nullptr
+        @param cctx the class context of the variant resolved for a method call, if any
+        @param explicit_receiver_type_info the receiver of a call of a static method, if any
+        @param invocation_policy the semantic policy of a legacy AST call (default for any other call)
+    */
+    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+            const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args,
+            QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
+            QoreProgram* pgm_ctx, const QoreTypeInfo* explicit_receiver_type_info,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned n_call_flags,
+            const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy = {});
+
+    //! Creates the object for evaluating a named call with temporary arguments (see above)
+    DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
+            const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
+            QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
+            QoreProgram* pgm_ctx, const QoreTypeInfo* explicit_receiver_type_info,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned n_call_flags,
+            const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy = {});
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -1081,6 +1109,11 @@ protected:
     const QoreProgramLocation** hidden_call_site_slot = nullptr;
     const QoreProgramLocation* hidden_call_site = nullptr;
     const QoreProgramLocation* loc;
+    //! the names of the arguments in source order of a named call whose variant is resolved by parameter name
+    /** set only by the constructors for named calls and read only by initImpl<..., true>() / findVariantNamed(); the
+        constructors for other calls leave it unset, as initializing it would cost every call (see M4 phase 1 perf)
+    */
+    const name_vec_t* arg_names;
     QoreListNodeEvalOptionalRefHolder tmp;
     //! QCEF_DEFER_DOMAIN_PO and the QRFV_* filter of the variants that the call can select (see
     //! QoreFunction::runtimeFindVariant()); with QCEF_DEFER_DOMAIN_PO, the switch of the runtime parse options to
@@ -1140,15 +1173,19 @@ protected:
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
 
-    template <bool LexicalInvocation>
+    //! the call entry; LexicalInvocation: a legacy AST call with a non-default semantic policy; NAMED: a named call
+    //! whose variant is resolved at run time by parameter name (arg_names is set)
+    template <bool LexicalInvocation, bool NAMED = false>
     DLLLOCAL void initImpl(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
             const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx,
             LexicalSemanticPolicy invocation_policy);
 
-    template <bool LexicalInvocation>
+    template <bool LexicalInvocation, bool NAMED = false>
     DLLLOCAL int findVariantImpl(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
             const qore_class_private* cctx, LexicalSemanticPolicy invocation_policy);
 
+    DLLLOCAL int findVariantNamed(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
+            const qore_class_private* class_ctx, LexicalSemanticPolicy invocation_policy);
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
 
@@ -2652,6 +2689,17 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             unsigned call_flags = 0) const;
 
+    //! evaluates a named call whose variant is resolved at run time by parameter name; the arguments are in source
+    //! order, with the names in "arg_names" (see runtimeFindVariant())
+    DLLLOCAL QoreValue evalFunctionNamed(const QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
+            ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            unsigned call_flags, const name_vec_t& arg_names, LexicalSemanticPolicy invocation_policy = {}) const;
+
+    //! evalFunctionNamed() with temporary arguments
+    DLLLOCAL QoreValue evalFunctionTmpArgsNamed(QoreListNode* args, QoreProgram* pgm, RuntimeConfig& rc,
+            ExceptionSink* xsink, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            unsigned call_flags, const name_vec_t& arg_names, LexicalSemanticPolicy invocation_policy = {}) const;
+
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
@@ -2664,22 +2712,24 @@ public:
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags,
             LexicalSemanticPolicy invocation_policy) const;
 
-    template <bool LexicalInvocation>
+    //! evalFunction(); NAMED: evalFunctionNamed()
+    template <bool LexicalInvocation, bool NAMED = false>
     DLLLOCAL QoreValue evalFunctionImpl(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags,
-            LexicalSemanticPolicy invocation_policy) const;
+            LexicalSemanticPolicy invocation_policy, const name_vec_t* arg_names = nullptr) const;
 
     DLLLOCAL QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags,
             LexicalSemanticPolicy invocation_policy) const;
 
-    template <bool LexicalInvocation>
+    //! evalFunctionTmpArgs(); NAMED: evalFunctionTmpArgsNamed()
+    template <bool LexicalInvocation, bool NAMED = false>
     DLLLOCAL QoreValue evalFunctionTmpArgsImpl(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned call_flags,
-            LexicalSemanticPolicy invocation_policy) const;
+            LexicalSemanticPolicy invocation_policy, const name_vec_t* arg_names = nullptr) const;
 
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink,
             LexicalSemanticPolicy invocation_policy) const;
@@ -2737,7 +2787,12 @@ public:
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const type_vec_t* explicit_type_args = nullptr,
             const arg_value_vec_t* args_with_value = nullptr,
-            const QoreTypeInfo** deferred_rt = nullptr) const;
+            const QoreTypeInfo** deferred_rt = nullptr, bool allow_runtime_names = false) const;
+
+    //! Returns the union of the return types of the variants that the arguments of a named call can be bound to by
+    //! name, for a call resolved at run time by parameter name, or nullptr if it is not known
+    DLLLOCAL const QoreTypeInfo* parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo, const name_vec_t& argNames,
+            const qore_class_private* class_ctx, QoreParseOptions po) const;
 
     //! Returns a variant that run-time resolution could select for a named call and that does not have the parameter
     //! names of the binding at the positions of the arguments, or nullptr if there is none
@@ -2789,13 +2844,29 @@ public:
 
     // find variant at runtime
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's reachable from the object being executed
+    // arg_names: for a named call resolved by parameter name, the names of "args" (in source order; "" for a
+    // positional argument): each variant is matched with the arguments bound to its parameters by name, and a variant
+    // to whose parameters they cannot be bound is skipped; the arguments bound to the selected variant's parameters
+    // are returned in "named_bound_args" (which must then be set)
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
             unsigned variant_filter, const qore_class_private* class_ctx,
             const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr,
             bool* content_dependent = nullptr, const QoreParseOptions* user_dom_po = nullptr,
-            const QoreProgram* user_dom_code_pgm = nullptr) const;
+            const QoreProgram* user_dom_code_pgm = nullptr, const name_vec_t* arg_names = nullptr,
+            QoreListNode** named_bound_args = nullptr) const;
+
+    //! runtimeFindVariant() for a named call resolved by parameter name, with the semantic policy of the call
+    /** @param invocation_policy the semantic policy of a legacy AST call (default for any other call)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE const AbstractQoreFunctionVariant* runtimeFindVariantNamed(ExceptionSink* xsink,
+            const QoreListNode* args, unsigned variant_filter, const qore_class_private* class_ctx,
+            const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
+            const QoreTypeParamInstantiation* explicit_type_param_inst, bool* content_dependent,
+            LexicalSemanticPolicy invocation_policy, const QoreParseOptions* user_dom_po,
+            const QoreProgram* user_dom_code_pgm, const name_vec_t& arg_names, QoreListNode** named_bound_args)
+            const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
             unsigned variant_filter, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
@@ -2803,12 +2874,15 @@ public:
             bool* content_dependent, LexicalSemanticPolicy invocation_policy,
             const QoreParseOptions* user_dom_po = nullptr, const QoreProgram* user_dom_code_pgm = nullptr) const;
 
-    template <bool LexicalInvocation>
+    //! the variant search; LexicalInvocation: a legacy AST call; NAMED: a named call resolved by parameter name
+    //! (see runtimeFindVariantNamed())
+    template <bool LexicalInvocation, bool NAMED>
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariantImpl(ExceptionSink* xsink, const QoreListNode* args,
             unsigned variant_filter, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
             QoreTypeParamInstantiation* type_param_inst, const QoreTypeParamInstantiation* explicit_type_param_inst,
             bool* content_dependent, LexicalSemanticPolicy invocation_policy,
-            const QoreParseOptions* user_dom_po = nullptr, const QoreProgram* user_dom_code_pgm = nullptr) const;
+            const QoreParseOptions* user_dom_po = nullptr, const QoreProgram* user_dom_code_pgm = nullptr,
+            const name_vec_t* arg_names = nullptr, QoreListNode** named_bound_args = nullptr) const;
 
     // finds the best match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,

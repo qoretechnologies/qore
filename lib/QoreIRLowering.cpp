@@ -12598,7 +12598,9 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
 
         // background self.method(args)
         if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
-            if (sfcn->getMethod() && !sfcn->getMethod()->isStatic()
+            // a named call resolved at run time by parameter name is not decomposed: its call node binds its
+            // arguments by name, which the call made by the thread from the method alone would not
+            if (sfcn->getMethod() && !sfcn->getMethod()->isStatic() && !sfcn->getRuntimeArgNames()
                     && qore_ir_background_args_are_start_values(sfcn->getParseArgs(), sfcn->getArgs())) {
                 std::vector<QoreIRValue> operands;
                 if (lowerCallArgs(sfcn->getParseArgs(), sfcn->getArgs(), operands, error)) {
@@ -12661,7 +12663,9 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
         // background obj.method(args)
         else if (auto* devn = dynamic_cast<const QoreDotEvalOperatorNode*>(inner)) {
             MethodCallNode* m = devn->getMethodCall();
-            if (m && m->getName() && qore_ir_is_background_start_value(devn->getExpression())
+            // a named call resolved at run time by parameter name is not decomposed (see above)
+            if (m && m->getName() && !m->getRuntimeArgNames()
+                    && qore_ir_is_background_start_value(devn->getExpression())
                     && qore_ir_background_args_are_start_values(m->getParseArgs(), m->getArgs())) {
                 QoreIRValue receiver_val = lowerExpression(devn->getExpression(), error);
                 if (!receiver_val.isValid()) {
@@ -13396,7 +13400,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     // in a background expression, self is a value given to the new thread, which has no current object for it
     // (unlike an unqualified call, see lowerSelfCall()): the call is made on the value, as any method call is, which
     // checks it as the AST interpreter does (issue #5823)
-    if (m && m->getName() && self_base && !bg_helper) {
+    if (m && m->getName() && self_base && !bg_helper && !m->getRuntimeArgNames()) {
         const QoreMethod* method = m->getMethod();
         const QoreClass* qc = m->getClass();
         const AbstractQoreFunctionVariant* variant = m->getVariant();
@@ -13660,6 +13664,17 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         builder.createCheckCallTarget(expr, base_val, getCurrentExceptionTarget(), op->loc);
     }
 
+    // a named call resolved at run time by parameter name: the receiver and the arguments in source order are passed
+    // to the call node, which binds the arguments by name to the variant that it selects
+    // (QoreDotEvalOperatorNode::evalRuntimeNamedWithArgs()); no direct call applies
+    if (m && m->getRuntimeArgNames()) {
+        std::vector<QoreIRValue> operands{base_val};
+        if (!lowerCallArgs(m->getParseArgs(), m->getArgs(), operands, error)) {
+            return QoreIRValue();
+        }
+        return finish_call(lowerExprOpOrInvoke(QoreIROpcode::CallMethod, expr, operands, op->loc, error));
+    }
+
     // Pre-evaluate args and use DotEvalMethodDirect to avoid AST round-trip at runtime.
     // This handles both resolved methods (class+method set) and abstract/unresolved methods
     // (null class/method). For unresolved methods, the runtime dispatches by name using the
@@ -13831,9 +13846,14 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     || (method_func->numVariants() != 1 && variant->isUser())
                     || overloadedDirectCallNeedsRuntimeDispatch(method_func, variant,
                         m->getParseArgs(), m->getArgs()))) {
-                method = nullptr;
-                qc = nullptr;
-                variant = nullptr;
+                // a static method called through an object is bound to the receiver's declared class (qore#5990):
+                // the method and the variant resolved at parse time are kept, as the AST call keeps them; the call
+                // resolves the variant again if the arguments do not match it (see try_dispatch_method_fast())
+                if (!method || !qc || !method->isStatic()) {
+                    method = nullptr;
+                    qc = nullptr;
+                    variant = nullptr;
+                }
             }
             // Always set fallback_method_name so consumers (LLVM codegen, IR interpreter,
             // AOT deserialization) don't need to extract it from the AST expr field.
@@ -15267,6 +15287,21 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     if (QoreIRValue hoisted = findLoopInvariantValue(expr); hoisted.isValid()) {
         return hoisted;
     }
+    // a named call resolved at run time by parameter name: its arguments are passed in source order to the call
+    // node, which binds them by name to the variant that it selects (FunctionCallNode::evalImpl()); no rewrite or
+    // direct call applies
+    if (call->getRuntimeArgNames()) {
+        std::vector<QoreIRValue> operands;
+        if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
+            return QoreIRValue();
+        }
+        QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
+        if (result.isValid()
+                && !markReferenceArgumentAssignmentsUnknown(call->getParseArgs(), call->getArgs(), error)) {
+            return QoreIRValue();
+        }
+        return result;
+    }
     const char* func_name = call->getName();
     // the rewrites below that are keyed on the name of a builtin apply only to a call of the Qore builtin, never to a
     // user or module function with the same name
@@ -15792,7 +15827,9 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
-    if (call->hasExplicitTypeArgs()) {
+    // a named call resolved at run time by parameter name passes its arguments in source order to the call node,
+    // which binds them by name (AbstractMethodCallNode::execNamed()); no direct call applies
+    if (call->hasExplicitTypeArgs() || call->getRuntimeArgNames()) {
         return finish_call(lowerExprOpOrInvoke(
             QoreIROpcode::CallMethod, expr, operands, call->loc, error));
     }
