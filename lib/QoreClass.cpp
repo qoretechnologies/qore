@@ -5118,42 +5118,13 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     return self->evalMethod(*memberGate, *args, xsink);
 }
 
+// Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.
+// Their ownership/locking locals must not reserve stack space on the ordinary method-call path.
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
-        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreProgram* pgm_ctx) const {
-    QORE_TRACE("qore_class_private::evalMethod()");
-    assert(self);
-
-    qore_object_private* self_priv = qore_object_private::get(*self);
-    // Dynamic dispatch can fall back to a pseudo-method without constructing a CodeEvaluationHelper
-    // with self.  Check the receiver here so that those calls reject destroyed weak-reference targets too.
-    if (self_priv->status == OS_DELETED) {
-        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
-            "already been deleted", self->getClassName(), nme);
-        return QoreValue();
-    }
-
-    if (!strcmp(nme, "copy")) {
-        if (args) {
-            xsink->raiseException("COPY-ERROR", "while calling %s::copy(): it is illegal to pass arguments to copy methods", self->getClassName());
-            return QoreValue();
-        }
-        if constexpr (Lexical) return execCopy(policy, self, xsink);
-        else return execCopy(self, xsink);
-    }
-
-    const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    if (w) {
-        return qore_method_private::evalWithPolicy<Lexical>(policy, *w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
-            explicit_type_param_instantiation);
-    }
-
-    const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx);
+static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_private& qcp,
+        LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
+        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreMemberInfo* mi = qcp.runtimeGetMemberInfo(nme, class_ctx);
     if (mi) {
         const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
         qore_object_private* obj_priv = qore_object_private::get(*self);
@@ -5189,17 +5160,55 @@ QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodImpl(LexicalSe
 
     // first see if there is a pseudo-method for this
     QoreClass* qc = nullptr;
-    w = pseudo_classes_find_method(NT_OBJECT, nme, qc);
+    const QoreMethod* w = pseudo_classes_find_method(NT_OBJECT, nme, qc);
     if (w) {
         return qore_method_private::evalPseudoMethodWithPolicy<Lexical>(policy, *w, xsink, rc, nullptr, self, args);
-    } else if (methodGate && !methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
-        return evalMethodGateImpl<Lexical>(policy, self, nme, args, xsink);
+    } else if (qcp.methodGate && !qcp.methodGate->inMethod(self)) { // call methodGate with unknown method name and arguments
+        return qcp.evalMethodGateImpl<Lexical>(policy, self, nme, args, xsink);
     }
 
     xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined and no pseudo-method " \
         "<object>::%s() is available (class lang: %s)", self->getClassName(), nme, nme,
         self->getClass()->getLanguage());
     return QoreValue();
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_class_private::evalMethodImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
+        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, QoreProgram* pgm_ctx) const {
+    QORE_TRACE("qore_class_private::evalMethod()");
+    assert(self);
+
+    qore_object_private* self_priv = qore_object_private::get(*self);
+    // Dynamic dispatch can fall back to a pseudo-method without constructing a CodeEvaluationHelper
+    // with self.  Check the receiver here so that those calls reject destroyed weak-reference targets too.
+    if (self_priv->status == OS_DELETED) {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has "
+            "already been deleted", self->getClassName(), nme);
+        return QoreValue();
+    }
+
+    if (!strcmp(nme, "copy")) {
+        if (args) {
+            xsink->raiseException("COPY-ERROR", "while calling %s::copy(): it is illegal to pass arguments to copy methods", self->getClassName());
+            return QoreValue();
+        }
+        if constexpr (Lexical) return execCopy(policy, self, xsink);
+        else return execCopy(self, xsink);
+    }
+
+    const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    if (w) {
+        return qore_method_private::evalWithPolicy<Lexical>(policy, *w, xsink, rc, self, args, class_ctx, pgm_ctx, nullptr,
+            explicit_type_param_instantiation);
+    }
+
+    return qore_eval_missing_method<Lexical>(*this, policy, self, nme, args, class_ctx, rc, xsink);
 }
 
 QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, const QoreListNode* args,
@@ -6235,8 +6244,41 @@ int qore_class_private::parseCheckReturnTypeHierarchy() const {
     return 0;
 }
 
+namespace {
+
+//! appends the functions of the given name that a call resolved in the class \a qc can select after its own, in the
+//! order of an inheritance list: for each parent class in the order they are listed, the parent's own method, then
+//! the methods of the parent's parents (as BCList::parseAddAncestors() builds the list)
+void collect_hierarchy_functions(const qore_class_private& qc, const std::string& name, bool is_static, ilist_t& out,
+        std::unordered_set<const qore_class_private*>& visited) {
+    if (!qc.scl || !qc.scl->valid) {
+        return;
+    }
+    for (auto& i : *qc.scl) {
+        QoreClass* pc = i->sclass;
+        if (!pc) {
+            continue;
+        }
+        qore_class_private* pcp = qore_class_private::get(*pc);
+        // a class that the walk has seen again (a diamond, or a cycle that was not rejected yet) adds nothing: its
+        // methods come first where it was seen first
+        if (!visited.insert(pcp).second) {
+            continue;
+        }
+        const QoreMethod* w = is_static ? pcp->parseFindLocalStaticMethod(name.c_str())
+            : pcp->parseFindLocalMethod(name.c_str());
+        if (w) {
+            out.push_back(INode(qore_method_private::get(*w)->getFunction(), i->access));
+        }
+        collect_hierarchy_functions(*pcp, name, is_static, out, visited);
+    }
+}
+
+} // namespace
+
 int qore_class_private::parseCheckFinalHierarchy() const {
-    if (!scl) {
+    // a hierarchy that was rejected (a class that is its own ancestor) has its parse error already
+    if (!scl || !scl->valid) {
         return 0;
     }
     for (bool is_static : {false, true}) {
@@ -6255,7 +6297,17 @@ int qore_class_private::parseCheckFinalHierarchy() const {
             }
             // the parent class with the final method is a parent class, so a method of the name is always found
             assert(start);
-            if (start->checkFinalResolution(*this, *i.second, local)) {
+            // the order in which the class's calls select a variant, from the hierarchy as it is now: the inheritance
+            // list of the method was built when the method was added, and misses the methods of a parent's parents
+            // if the parent had not resolved its own parent classes then (qore#5994)
+            ilist_t hierarchy;
+            hierarchy.push_back(INode(const_cast<MethodFunctionBase*>(start), Public));
+            const qore_class_private& start_class = local ? *this
+                : *qore_class_private::get(*const_cast<QoreClass*>(start->getClass()));
+            std::unordered_set<const qore_class_private*> walked;
+            walked.insert(&start_class);
+            collect_hierarchy_functions(start_class, i.first, is_static, hierarchy, walked);
+            if (start->checkFinalResolution(*this, *i.second, local, &hierarchy)) {
                 return -1;
             }
         }
@@ -7022,6 +7074,89 @@ static bool final_variant_may_be_bypassed(const AbstractFunctionSignature* other
     return true;
 }
 
+//! Returns true if a named call that the variant \a fv accepts could select the other variant (qore#5990)
+/** A named call is resolved on the class of the object, which takes the first variant that accepts the names and the
+    arguments.  A call gives its first \c k arguments by position, which each variant binds to its first \c k
+    parameters, and the rest by name, which each variant binds to its parameters of those names after the first \c k.
+    The other variant can be selected for a call of \a fv with a name if, for some \c k, the parameter types at the
+    first \c k positions can accept a common value, and a set of names that a call of \a fv can give (every required
+    parameter of \a fv after the first \c k and none that it does not have there) is also one that the other variant
+    accepts (it has a parameter of each name after its first \c k and no other required parameter there), with
+    parameter types of the same name that can accept a common value.  The set with the required parameters of both
+    variants is the smallest such set; if neither has a required parameter after the first \c k, a call with any one
+    name of both can select it (a call without a name is a positional call; see final_variant_may_be_bypassed()).
+*/
+static bool named_variant_may_be_selected(const AbstractQoreFunctionVariant* other,
+        const AbstractQoreFunctionVariant* fv) {
+    if (!other->isNamedCallable() || !fv->isNamedCallable()) {
+        return false;
+    }
+    const AbstractFunctionSignature* osig = other->getSignature();
+    const AbstractFunctionSignature* fsig = fv->getSignature();
+    // the position of the parameter of the name at or after the position \a k, or -1
+    auto find_param = [](const AbstractFunctionSignature* sig, const char* name, unsigned k) -> int {
+        for (unsigned i = k, e = sig->numParams(); i < e; ++i) {
+            const char* n = sig->getName(i);
+            if (n && *n && !strcmp(n, name)) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    };
+    // the names after the first k parameters
+    auto names_match = [&](unsigned k) -> bool {
+        bool any_required = false;
+        // every required parameter of fv must be a parameter of the other variant with a type that can accept a value
+        // of fv's parameter type
+        for (unsigned i = k, e = fsig->numParams(); i < e; ++i) {
+            if (final_param_optional(fsig, i)) {
+                continue;
+            }
+            const char* n = fsig->getName(i);
+            int oi = n && *n ? find_param(osig, n, k) : -1;
+            if (oi < 0 || !final_param_types_intersect(osig->getParamTypeInfo(oi), fsig->getParamTypeInfo(i))) {
+                return false;
+            }
+            any_required = true;
+        }
+        // every required parameter of the other variant must be a parameter of fv
+        for (unsigned i = k, e = osig->numParams(); i < e; ++i) {
+            if (final_param_optional(osig, i)) {
+                continue;
+            }
+            const char* n = osig->getName(i);
+            int fi = n && *n ? find_param(fsig, n, k) : -1;
+            if (fi < 0 || !final_param_types_intersect(osig->getParamTypeInfo(i), fsig->getParamTypeInfo(fi))) {
+                return false;
+            }
+            any_required = true;
+        }
+        if (any_required) {
+            return true;
+        }
+        // no required parameter: a call with one name that both have
+        for (unsigned i = k, e = fsig->numParams(); i < e; ++i) {
+            const char* n = fsig->getName(i);
+            int oi = n && *n ? find_param(osig, n, k) : -1;
+            if (oi >= 0 && final_param_types_intersect(osig->getParamTypeInfo(oi), fsig->getParamTypeInfo(i))) {
+                return true;
+            }
+        }
+        return false;
+    };
+    // the first k arguments given by position, bound to the first k parameters of both
+    unsigned max_k = QORE_MIN(osig->numParams(), fsig->numParams());
+    for (unsigned k = 0; k <= max_k; ++k) {
+        if (k && !final_param_types_intersect(osig->getParamTypeInfo(k - 1), fsig->getParamTypeInfo(k - 1))) {
+            break;
+        }
+        if (names_match(k)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int MethodFunctionBase::checkFinalVariant(const MethodFunctionBase* m, const MethodVariantBase* v) const {
     if (!v->isFinal()) {
         return 0;
@@ -7045,15 +7180,19 @@ int MethodFunctionBase::checkFinalVariant(const MethodFunctionBase* m, const Met
             }
             cv->parseResolveUserSignature();
             const AbstractFunctionSignature* csig = cv->getSignature();
-            if (!final_variant_may_be_bypassed(csig, sig)) {
+            // a variant that a positional call or a named call (qore#5990) of the final variant can select
+            bool by_position = final_variant_may_be_bypassed(csig, sig);
+            if (!by_position && !named_variant_may_be_selected(cv, v)) {
                 continue;
             }
             const UserSignature* usig = dynamic_cast<const UserSignature*>(csig);
             const QoreProgramLocation* loc = usig ? usig->getParseLocation() : &loc_builtin;
             parse_error(*loc, "child class method %s%s::%s(%s) cannot overload parent class method final "
-                "%s%s::%s(%s): it accepts arguments that the final method accepts, so a call could select it instead",
-                stat, qc->getName(), getName(), csig->getSignatureText(), stat, m->qc->getName(), getName(),
-                sig->getSignatureText());
+                "%s%s::%s(%s): %s", stat, qc->getName(), getName(), csig->getSignatureText(), stat,
+                m->qc->getName(), getName(), sig->getSignatureText(), by_position
+                    ? "it accepts arguments that the final method accepts, so a call could select it instead"
+                    : "it accepts the names of the parameters of the final method and arguments that it accepts, so "
+                        "a named call could select it instead");
             return -1;
         }
         return 0;
@@ -7092,11 +7231,12 @@ int MethodFunctionBase::checkFinal() const {
 }
 
 int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, const MethodFunctionBase& final_func,
-        bool local) const {
+        bool local, const ilist_t* hierarchy) const {
+    const ilist_t& list = hierarchy ? *hierarchy : static_cast<const ilist_t&>(ilist);
     // the position of the final method in the order in which the class's calls select a variant
     size_t pos = 0;
-    for (; pos < ilist.size(); ++pos) {
-        if (ilist[pos].func == &final_func) {
+    for (; pos < list.size(); ++pos) {
+        if (list[pos].func == &final_func) {
             break;
         }
     }
@@ -7111,7 +7251,7 @@ int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, cons
         fv->parseResolveUserSignature();
         const AbstractFunctionSignature* fsig = fv->getSignature();
 
-        if (pos == ilist.size()) {
+        if (pos == list.size()) {
             parse_error(*loc, "class '%s' does not reach parent class method final %s%s::%s(%s): calls of '%s' in "
                 "this class are resolved in %s::%s(), which a parent class listed before '%s' declares or inherits",
                 cls.name.c_str(), stat, final_func.qc->getName(), getName(), fsig->getSignatureText(), getName(),
@@ -7122,7 +7262,7 @@ int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, cons
         // the variants of the methods before the final method win a tie with it; the class's own variants are
         // checked by checkFinal()
         for (size_t i = local ? 1 : 0; i < pos; ++i) {
-            const MethodFunctionBase* g = METHFB_const(ilist[i].func);
+            const MethodFunctionBase* g = METHFB_const(list[i].func);
             for (vlist_t::const_iterator gi = g->vlist.begin(), ge = g->vlist.end(); gi != ge; ++gi) {
                 MethodVariantBase* gv = const_cast<MethodVariantBase*>(METHVB_const(*gi));
                 if (gv->isAbstract() || gv->getAccess() == Internal) {
@@ -7130,7 +7270,8 @@ int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, cons
                 }
                 gv->parseResolveUserSignature();
                 const AbstractFunctionSignature* gsig = gv->getSignature();
-                if (!final_variant_may_be_bypassed(gsig, fsig)) {
+                // a variant that a positional call or a named call (qore#5990) of the final variant can select
+                if (!final_variant_may_be_bypassed(gsig, fsig) && !named_variant_may_be_selected(gv, fv)) {
                     continue;
                 }
                 parse_error(*loc, "class '%s' does not reach parent class method final %s%s::%s(%s): method "
@@ -7336,8 +7477,10 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
                 }
                 gv->parseResolveUserSignature();
                 const AbstractFunctionSignature* gsig = gv->getSignature();
-                // a variant that a call of the parent variant cannot select is another method
-                if (gsig != override_sig && !final_variant_may_be_bypassed(gsig, psig)) {
+                // a variant that a call of the parent variant cannot select, by position or by the names of its
+                // parameters (qore#5990), is another method
+                bool by_position = gsig == override_sig || final_variant_may_be_bypassed(gsig, psig);
+                if (!by_position && !named_variant_may_be_selected(gv, pv)) {
                     continue;
                 }
                 const QoreTypeInfo* grt = class_return_type(cls, g, gsig->getReturnTypeInfo());
@@ -7366,8 +7509,11 @@ int MethodFunctionBase::checkReturnTypeResolution(const qore_class_private& cls,
                         g->getClass()->getName(), getName());
                 }
                 if (gsig != override_sig) {
-                    desc.concat(": it accepts arguments that the parent class method accepts, so a call of the "
-                        "parent class method can select it");
+                    desc.concat(by_position
+                        ? ": it accepts arguments that the parent class method accepts, so a call of the parent class "
+                            "method can select it"
+                        : ": it accepts the names of the parameters of the parent class method and arguments that it "
+                            "accepts, so a named call of the parent class method can select it");
                 }
                 desc.concat("; the return type must be the parent class method's or a narrower type that it accepts "
                     "without a conversion (a call typed against the parent class trusts its return type)");
@@ -8272,6 +8418,112 @@ QoreValue StaticMethodFunction::evalMethodTmpArgs(
         const QoreTypeParamInstantiation* explicit_type_param_instantiation,
         const AbstractQoreFunctionVariant** resolved_variant) const {
     return evalMethodTmpArgsImpl<true>(policy, xsink, rc, variant, args, cctx, receiver_type_info, explicit_type_param_instantiation, resolved_variant);
+}
+
+// a named call of a normal method resolved at run time by parameter name; "args" are evaluated by the call (const)
+// or temporary values that the caller keeps; see NormalMethodFunction::evalMethod()
+template <typename ArgList>
+static QoreValue eval_normal_method_named(const NormalMethodFunction& f, ExceptionSink* xsink, RuntimeConfig& rc,
+        QoreObject* self, ArgList args, const qore_class_private* cctx, QoreProgram* pgm_ctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy) {
+    const QoreClass* qc = f.getClass();
+    const char* mname = f.getName();
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, &f, variant, mname, args, self, qore_class_private::get(*qc), cctx,
+        qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), nullptr, explicit_type_param_instantiation, false,
+        arg_names, policy);
+    if (*xsink) {
+        return QoreValue();
+    }
+    const MethodVariant* mv = METHV_const(variant);
+    if (mv->isAbstract()) {
+        xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly",
+            f.getClassName(), mname, mv->getSignature()->getSignatureText());
+        return QoreValue();
+    }
+    // a legacy AST call runs a builtin variant with its own semantic policy
+    return policy.isDefault() ? mv->evalMethod(self, ceh, xsink) : mv->evalLexicalMethod(self, ceh, xsink);
+}
+
+QoreValue NormalMethodFunction::evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
+        const QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy) const {
+    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, nullptr, explicit_type_param_instantiation,
+        arg_names, policy);
+}
+
+QoreValue NormalMethodFunction::evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
+        QoreListNode* args, const qore_class_private* cctx,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy) const {
+    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, nullptr, explicit_type_param_instantiation,
+        arg_names, policy);
+}
+
+// see NormalMethodFunction::evalPseudoMethodNamed()
+template <typename ArgList>
+static QoreValue eval_pseudo_method_named(const NormalMethodFunction& f, ExceptionSink* xsink, RuntimeConfig& rc,
+        const QoreValue n, ArgList args, const qore_class_private* cctx, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy) {
+    const QoreClass* qc = f.getClass();
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, &f, variant, f.getName(), args, nullptr,
+        qc ? qore_class_private::get(*qc) : nullptr, cctx, qc ? qore_get_method_pgm_context(*qc, spgm_holder) : nullptr,
+        nullptr, nullptr, false, arg_names, policy);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return METHV_const(variant)->evalPseudoMethod(n, ceh, xsink);
+}
+
+QoreValue NormalMethodFunction::evalPseudoMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreValue n,
+        const QoreListNode* args, bool tmp_args, const qore_class_private* cctx, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy) const {
+    return tmp_args
+        ? eval_pseudo_method_named(*this, xsink, rc, n, const_cast<QoreListNode*>(args), cctx, arg_names, policy)
+        : eval_pseudo_method_named(*this, xsink, rc, n, args, cctx, arg_names, policy);
+}
+
+// a named call of a static method resolved at run time by parameter name; see eval_normal_method_named()
+template <typename ArgList>
+static QoreValue eval_static_method_named(const StaticMethodFunction& f, ExceptionSink* xsink, RuntimeConfig& rc,
+        ArgList args, const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy) {
+    const QoreClass* qc = f.getClass();
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, &f, variant, f.getName(), args, nullptr, qore_class_private::get(*qc), cctx,
+        qore_get_method_pgm_context(*qc, spgm_holder), receiver_type_info, explicit_type_param_instantiation, false,
+        arg_names, policy);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // issue #4964: set class ctx
+    ObjectSubstitutionHelper osh(nullptr, cctx);
+    // a legacy AST call runs a builtin variant with its own semantic policy
+    return policy.isDefault() ? METHV_const(variant)->evalMethod(nullptr, ceh, xsink)
+        : METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);
+}
+
+QoreValue StaticMethodFunction::evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreListNode* args,
+        const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy) const {
+    return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
+        explicit_type_param_instantiation, arg_names, policy);
+}
+
+QoreValue StaticMethodFunction::evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreListNode* args,
+        const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy) const {
+    return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
+        explicit_type_param_instantiation, arg_names, policy);
 }
 
 const qore_class_private* MethodVariantBase::getClassPriv() const {

@@ -3255,6 +3255,10 @@ void qore_program_private::del(ExceptionSink* xsink) {
     }
     exp_set.clear();
 
+    // no code of this Program runs any more and its background compiles are drained: the native code that only it
+    // owns is removed from the JIT (qore#5772)
+    QoreJIT::instance().releaseCodeOwner(pgm);
+
     //printd(5, "QoreProgram::~QoreProgram() this: %p deleting root ns %p\n", this, RootNS);
 
     for (name_section_sline_statement_map_t::iterator it = statementByFileIndex.begin(); it != statementByFileIndex.end(); it++) {

@@ -186,17 +186,34 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     //  QoreTypeInfo::getName(iteratorTypeInfo),
     //  QoreTypeInfo::getName(QoreTypeInfo::getUniqueReturnComplexList(iteratorTypeInfo)),
     //  QoreTypeInfo::getName(typeInfo));
+    if (qore_type_contains_type_parameter(expTypeInfo)) {
+        // the result of a map in a generic callable has the type argument of the call in place of the type
+        // parameter; other maps keep their code path (issue #5988)
+        ReferenceHolder<> holder(this, nullptr);
+        QoreMapSelectOperatorNode* generic_map = getSemanticPolicy().strictBoolean()
+            ? static_cast<QoreMapSelectOperatorNode*>(new QoreGenericMapSelectOperatorNode<true>(*this))
+            : new QoreGenericMapSelectOperatorNode<false>(*this);
+        generic_map->setParseAnalysis(parse_context.analysis);
+        val = generic_map;
+    }
     return err;
 }
 
-QoreValue QoreMapSelectOperatorNode::evalImpl(bool &needs_deref, ExceptionSink *xsink) const {
+QoreValue QoreMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalIntern<false>(needs_deref, xsink);
+}
+
+template <bool generic>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreMapSelectOperatorNode::evalIntern(bool& needs_deref, ExceptionSink* xsink)
+        const {
     FunctionalValueType value_type;
     std::unique_ptr<FunctionalOperatorInterface> f(getFunctionalIterator(value_type, xsink));
     if (*xsink || value_type == nothing) {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreListNode> rv(ref_rv && (value_type != single) ? new QoreListNode(expTypeInfo) : nullptr,
+    ReferenceHolder<QoreListNode> rv(ref_rv && (value_type != single)
+        ? new QoreListNode(generic ? qore_substitute_type_params_if_needed(expTypeInfo) : expTypeInfo) : nullptr,
         xsink);
 
     // calculate the runtime element type if possible
@@ -237,14 +254,15 @@ QoreValue QoreMapSelectOperatorNode::evalImpl(bool &needs_deref, ExceptionSink *
     return rv.release();
 }
 
-template <bool StrictBoolean>
+template <bool StrictBoolean, bool Generic>
 QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* QoreMapSelectOperatorNode::getFunctionalIteratorCommon(FunctionalValueType& value_type,
         ExceptionSink* xsink) const {
     if (iterator_func) {
         std::unique_ptr<FunctionalOperatorInterface> f(iterator_func->getFunctionalIterator(value_type, xsink));
         if (*xsink || value_type == nothing)
             return 0;
-        return new QoreFunctionalMapSelectOperator<StrictBoolean>(this, f.release());
+        return new QoreFunctionalOperatorFor<Generic, QoreFunctionalMapSelectOperator<StrictBoolean>>(
+            this, f.release());
     }
 
     ValueEvalOptimizedRefHolder marg(e[1], xsink);
@@ -266,7 +284,8 @@ QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* QoreMapSelectOperatorNode
                     temp = true;
                 }
                 value_type = list;
-                return new QoreFunctionalMapSelectIteratorOperator<StrictBoolean>(this, temp, h, xsink);
+                return new QoreFunctionalOperatorFor<Generic, QoreFunctionalMapSelectIteratorOperator<StrictBoolean>>(
+                    this, temp, h, xsink);
             }
         }
         if (t == NT_NOTHING) {
@@ -275,11 +294,13 @@ QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* QoreMapSelectOperatorNode
         }
 
         value_type = single;
-        return new QoreFunctionalMapSelectSingleValueOperator<StrictBoolean>(this, marg.getReferencedValue(), xsink);
+        return new QoreFunctionalOperatorFor<Generic, QoreFunctionalMapSelectSingleValueOperator<StrictBoolean>>(
+            this, marg.getReferencedValue(), xsink);
     }
 
     value_type = list;
-    return new QoreFunctionalMapSelectListOperator<StrictBoolean>(this, marg.takeReferencedNode<QoreListNode>(), xsink);
+    return new QoreFunctionalOperatorFor<Generic, QoreFunctionalMapSelectListOperator<StrictBoolean>>(
+        this, marg.takeReferencedNode<QoreListNode>(), xsink);
 }
 
 template <bool StrictBoolean>
@@ -409,3 +430,41 @@ bool QoreFunctionalMapSelectOperator<StrictBoolean>::getNextImpl(ValueOptionalRe
     }
     return false;
 }
+
+template <bool StrictBoolean>
+QoreGenericMapSelectOperatorNode<StrictBoolean>::QoreGenericMapSelectOperatorNode(QoreMapSelectOperatorNode& old)
+        : QoreMapSelectOperatorNode(old) {
+    // the operands belong to this operator now
+    old.e[0] = QoreValue();
+    old.e[1] = QoreValue();
+    old.e[2] = QoreValue();
+    old.iterator_func = nullptr;
+}
+
+template <bool StrictBoolean>
+QoreGenericMapSelectOperatorNode<StrictBoolean>::QoreGenericMapSelectOperatorNode(const QoreProgramLocation* loc,
+        QoreValue e0, QoreValue e1, QoreValue e2) : QoreMapSelectOperatorNode(loc, e0, e1, e2) {
+}
+
+template <bool StrictBoolean>
+QoreValue QoreGenericMapSelectOperatorNode<StrictBoolean>::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalIntern<true>(needs_deref, xsink);
+}
+
+template <bool StrictBoolean>
+FunctionalOperatorInterface* QoreGenericMapSelectOperatorNode<StrictBoolean>::getFunctionalIteratorImpl(
+        FunctionalValueType& value_type, ExceptionSink* xsink) const {
+    return getFunctionalIteratorCommon<StrictBoolean, true>(value_type, xsink);
+}
+
+template <bool StrictBoolean>
+QoreMapSelectOperatorNode* QoreGenericMapSelectOperatorNode<StrictBoolean>::createBackgroundCopy(QoreValue e0,
+        QoreValue e1, QoreValue e2) const {
+    // a background expression keeps the class of the operator, generic and lexical
+    QoreGenericMapSelectOperatorNode* rv = new QoreGenericMapSelectOperatorNode(loc, e0, e1, e2);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), getSemanticPolicy());
+    return rv;
+}
+
+template class QoreGenericMapSelectOperatorNode<false>;
+template class QoreGenericMapSelectOperatorNode<true>;
