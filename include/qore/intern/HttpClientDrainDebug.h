@@ -42,13 +42,17 @@
 /** While responses are held, the HTTP/2 and HTTP/3 client poll operations read and process the data of their
     connections but dispatch no response, so that the completed responses accumulate; a test waits for them with
     dbg_http_client_wait_held_outputs(), and the read pass after the hold dispatches them all at once.  The hold is
-    process-wide and covers every response of a client, including the response to an extended CONNECT request and,
-    for HTTP/2, the data of CONNECT tunnels.
+    process-wide and covers every response of a client, including the response to an extended CONNECT request; with
+    HTTP/2, the data of streaming responses stays in the session, and the held count includes the streaming streams
+    that have buffered data.  The state is process-wide: a test that uses it has one client connection.
 */
 class QoreHttpClientDrainDebug {
 public:
     //! The drain limit set by dbg_http_client_drain_limit(); 0: the limit of the operation
     std::atomic<int> drain_limit{0};
+
+    //! The streaming batch set by dbg_http2_client_streaming_batch(); 0: the batch of the operation
+    std::atomic<int> streaming_batch{0};
 
     //! True while the responses of clients are held; checked without the lock first
     std::atomic<bool> hold{false};
@@ -89,7 +93,31 @@ public:
     DLLLOCAL void setHold(bool h) {
         AutoLocker al(lock);
         held = 0;
+        streaming_left = -1;
         hold.store(h, std::memory_order_release);
+    }
+
+    //! Records the number of streaming streams whose buffered data an HTTP/2 client pass left in its session
+    DLLLOCAL void recordStreamingLeft(size_t count) {
+        AutoLocker al(lock);
+        streaming_left = static_cast<int64_t>(count);
+        cond.broadcast();
+    }
+
+    //! Waits until an HTTP/2 client pass left no buffered data of streaming streams in its session
+    /** @return false if the wait timed out
+    */
+    DLLLOCAL bool waitStreamingDelivered(int64_t timeout_ms) {
+        int64_t deadline = q_clock_getmillis() + timeout_ms;
+        AutoLocker al(lock);
+        while (streaming_left) {
+            int64_t remaining = deadline - q_clock_getmillis();
+            if (remaining <= 0) {
+                return false;
+            }
+            cond.wait(lock, static_cast<int>(remaining > INT_MAX ? INT_MAX : remaining));
+        }
+        return true;
     }
 
 private:
@@ -97,6 +125,8 @@ private:
     QoreCondition cond;
     //! the number of completed responses that the last read pass found held
     size_t held = 0;
+    //! the number of streaming streams with buffered data that the last HTTP/2 client pass left; -1: none recorded
+    int64_t streaming_left = -1;
 };
 #endif
 
@@ -110,6 +140,21 @@ DLLLOCAL inline int qore_http_client_drain_limit(int dflt) {
     int limit = QoreHttpClientDrainDebug::get().drain_limit.load(std::memory_order_acquire);
     if (limit > 0) {
         return limit;
+    }
+#endif
+    return dflt;
+}
+
+//! Returns the number of streaming streams whose buffered data an HTTP/2 client operation delivers in one pass
+/** @param dflt the batch of the operation
+
+    In a library-debug build, a test can lower it with dbg_http2_client_streaming_batch().
+*/
+DLLLOCAL inline int qore_http2_client_streaming_batch(int dflt) {
+#ifdef DEBUG
+    int batch = QoreHttpClientDrainDebug::get().streaming_batch.load(std::memory_order_acquire);
+    if (batch > 0) {
+        return batch;
     }
 #endif
     return dflt;

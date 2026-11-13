@@ -2158,6 +2158,19 @@ bool Http2Session::hasStreamingData(int32_t& out_stream_id) {
     return false;
 }
 
+#ifdef DEBUG
+size_t Http2Session::dbgStreamingDataCount() {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    size_t count = 0;
+    for (auto& it : streams) {
+        if (it.second->streaming && it.second->headers_complete && !it.second->body.empty()) {
+            ++count;
+        }
+    }
+    return count;
+}
+#endif
+
 bool Http2Session::takeStreamingEndStream(int32_t& out_stream_id, QoreHashNode** trailers_out) {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& [id, info] : streams) {
