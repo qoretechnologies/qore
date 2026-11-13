@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - generic operator results in JIT and AOT code
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class GenericMapTypeParamTest
+
+#! The map operators in generic code create their result with the type argument of the call (qore#5988)
+/** The map, map select, hash map and hash map select operators created their result with the element or value type
+    that they were parsed with, which in a generic function or a method of a generic class is the type parameter
+    itself, so in interpreted code the first element raised RUNTIME-TYPE-ERROR (expects type 'T'); the type
+    parameter is now replaced with the type argument of the call when the result is created.  The probes
+    (generic-map-type-param/probes.q, including the operators copied for background expressions) run in each
+    execution mode in a child process, with tiered execution at the IR tier and promoted to native code, as
+    qcc-compiled executables (-O0, -O3), also with the code compiled to native code, and in a child Program with
+    %strict-bool-eval (a lexical semantic policy that filters values) in the AST interpreter, where the operators keep
+    the policy of their code (probes_lexical()).
+*/
+class GenericMapTypeParamTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Line = "[1, 2] (list<int>) | [1, 2] (list<int>) | {k0: 1, k1: 2} (hash<string, int>) | {k0: 1, k1: "
+            "2} (hash<string, int>) | [1, 2] (list<int>) | [1, 2] (list<int>) | [\"a\", \"b\"] "
+            "(list<string>) | [1, 2] (list<int>) | [1, 2] (list<int>) | [1, 2] (list<int>) | {k0: 1, k1: "
+            "2} (hash<string, int>) | [1, 2] (list<int>) | [1, 2] (list<int>) | [1] (list<int>) | [2] "
+            "(list<int>) | [1, 2] (list<int>) | [1, 2] (list<int>) | [1, 2] (list<int>) | {k0: 1, k1: 2} (hash<string, "
+            "int>) | {k0: 1, k1: 2} (hash<string, int>) | {k0: 1, k1: 2} (hash<string, int>) | [1, 2] (list<int>)";
+
+        #! probes_lexical(): a map select and a hash map select whose select expression is the string "x", also in
+        #! background expressions
+        const LexicalLine = "[1, 2] (list<int>) | {k0: 1, k1: 2} (hash<string, int>) | [1, 2] (list<int>) | {k0: 1, "
+            "k1: 2} (hash<string, int>)";
+
+        #! probes_lexical() with %strict-bool-eval, where "x" is False
+        const StrictLexicalLine = "[2] (list<int>) | {k1: 2} (hash<string, int>) | [2] (list<int>) | {k1: 2} "
+            "(hash<string, int>)";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+        string lines;
+    }
+
+    constructor() : QUnit::Test("GenericMapTypeParam", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        for (int i = 0; i < 8; ++i) {
+            lines += sprintf("%d: %s\n", i, Line);
+        }
+        expected = lines + LexicalLine + "\n";
+
+        addTestCase("generic map results use the type argument in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-generic-map-type-param-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "generic-map-type-param" + DirSep
+            + "probes.q") + "\nprint(probes() + probes_lexical() + \"\\n\");\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        # the probes in a child Program with a lexical semantic policy that filters values (%strict-bool-eval), whose
+        # operators have classes of their own; only the AST interpreter runs code without %modern
+        string strict = tmp.path + DirSep + "strict.q";
+        f.open2(strict, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%new-style\n%%require-types\n%%strict-args\nProgram p(PO_NEW_STYLE | PO_REQUIRE_TYPES "
+            "| PO_STRICT_ARGS | PO_STRICT_BOOLEAN_EVAL);\nstring src = ReadOnlyFile::readTextFile(%y);\n"
+            "src =~ s/\\n%%modern\\n/\\n/;\np.parse(src, \"probes\");\n"
+            "print(p.callFunction(\"probes\") + p.callFunction(\"probes_lexical\") + \"\\n\");\n",
+            get_script_dir() + DirSep + "generic-map-type-param" + DirSep + "probes.q"));
+        f.close();
+        assertEq(lines + StrictLexicalLine + "\n", backquote(sprintf("%s %s --exec-mode=ast %s 2>&1", env, qore_bin,
+            strict)), "strict-bool-eval: ast");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+            # with the closures compiled to native code
+            assertEq(expected, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+        }
+    }
+}

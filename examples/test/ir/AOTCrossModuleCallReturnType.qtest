@@ -1,0 +1,248 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation of pseudo-method calls on the values of cross-module calls
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTCrossModuleCallReturnTypeTest
+
+#! The value of a namespace-qualified function call keeps the function's return type in compiled code (qore#5977)
+/** A namespace-qualified call such as <tt>Provider::label(enc)</tt> - which is how one module calls a function of
+    another - is parsed as a static method call and replaced with a function call, which the static call
+    parse-initializes itself.  The analysis of the call (its return type, for one) was only recorded on the node
+    that ParseNode::parseInit() was called on, the replaced one, so code generation saw no type for the call's value:
+    a pseudo-method call on it, such as <tt>.size()</tt> on a returned string, was compiled to the generic dynamic
+    dispatch (qore_rt_dot_eval_method_direct_aot) instead of the string helper
+    (qore_rt_pseudo_string_size_noguard) that the same call without a namespace gets.
+
+    The shape assertions check the native code that the AOT compiler generates for the calling module: a call of a
+    function returning \c string uses the string helper, while one returning \c auto keeps the dynamic dispatch,
+    which has to check the type of the value at run time.  The values are compared between the module loaded from
+    source and from its compiled \c .qmod, and between every execution mode for the same calls in one Program.
+*/
+class AOTCrossModuleCallReturnTypeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! the module whose functions are called
+        const ProviderSource = "%modern
+
+module XmodProvider {
+    version = \"1.0\";
+    desc = \"qore#5977 cross-module call return type test: provider\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace XmodProvider {
+    public string sub label(string enc) {
+        return enc == \"utf8\" ? \"utf-8\" : enc;
+    }
+
+    public auto sub anyLabel(string enc) {
+        return enc == \"none\" ? NOTHING : label(enc);
+    }
+}
+";
+
+        #! the module that calls them
+        const ConsumerSource = "%modern
+%requires XmodProvider
+
+module XmodConsumer {
+    version = \"1.0\";
+    desc = \"qore#5977 cross-module call return type test: consumer\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace XmodConsumer {
+    #! the size of a string returned by another module's function
+    public int sub typedSize(string enc) {
+        return XmodProvider::label(enc).size();
+    }
+
+    #! the size of an auto value returned by another module's function, which can be NOTHING
+    public int sub autoSize(string enc) {
+        return XmodProvider::anyLabel(enc).size();
+    }
+
+    public class Holder {
+        string name(string enc) {
+            return enc == \"utf8\" ? \"utf-8\" : enc;
+        }
+
+        #! the size of a string returned by a method of the class called without a receiver
+        int nameSize(string enc) {
+            return name(enc).size();
+        }
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("AOTCrossModuleCallReturnTypeTest", "1.0", \ARGV) {
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("a call of another module's string function uses the string helper", \testNativeShape());
+        addTestCase("an AOT qmod returns the same values as its source", \testAotValuesMatchSource());
+        addTestCase("every tier returns the same values for namespace-qualified calls", \testTiersAgree());
+
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! Compiles a module source to a .qmod with the given environment and returns the compiler output
+    private string compileModule(string module_dir, string name, string env = "") {
+        return backquote(sprintf("QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s %s -b --compile-module --strip-source "
+            "--output %s/%s.qmod %s/%s.qm 2>&1", libqore_dir, module_dir, env, qore_bin, module_dir, name,
+            module_dir, name));
+    }
+
+    #! Writes and compiles both modules into \a dir; the provider is compiled first, as the consumer requires it
+    private string buildModules(string dir, string consumer_env = "") {
+        write(dir + "/XmodProvider.qm", ProviderSource);
+        write(dir + "/XmodConsumer.qm", ConsumerSource);
+        string out = compileModule(dir, "XmodProvider");
+        assertTrue(is_file(dir + "/XmodProvider.qmod"), "compiled the provider: " + out);
+        out = compileModule(dir, "XmodConsumer", consumer_env);
+        assertTrue(is_file(dir + "/XmodConsumer.qmod"), "compiled the consumer: " + out);
+        return out;
+    }
+
+    #! Returns the LLVM IR of the function whose symbol contains \a name in an LLVM IR dump
+    private string functionIr(string dump, string name) {
+        int start = -1;
+        int pos = 0;
+        while (True) {
+            int i = dump.find("\ndefine ", pos);
+            if (i < 0) {
+                break;
+            }
+            int eol = dump.find("\n", i + 1);
+            string header = dump.substr(i, eol - i);
+            if (header.find(name) >= 0) {
+                start = i;
+                break;
+            }
+            pos = i + 1;
+        }
+        assertGt(-1, start, sprintf("the LLVM IR dump defines %s", name));
+        if (start < 0) {
+            return "";
+        }
+        int end = dump.find("\n}\n", start);
+        return end < 0 ? dump.substr(start) : dump.substr(start, end - start);
+    }
+
+    testNativeShape() {
+        TmpDir tmp("qore-aot-xmod-shape-");
+        string dump = buildModules(tmp.path, "QORE_DUMP_LLVM_IR=1");
+
+        string typed = functionIr(dump, "__typedSize_string_");
+        assertNeq(-1, typed.find("qore_rt_pseudo_string_size_noguard"),
+            "the size of another module's string result is read with the string helper");
+        assertEq(-1, typed.find("qore_rt_dot_eval_method_direct_aot"),
+            "the size of another module's string result is not dispatched dynamically");
+
+        # a call of a method of the class without a receiver is parse-initialized the same way
+        string self_call = functionIr(dump, "nameSize");
+        assertNeq(-1, self_call.find("qore_rt_pseudo_string_size_noguard"),
+            "the size of a string returned by a method of the class is read with the string helper");
+        assertEq(-1, self_call.find("qore_rt_dot_eval_method_direct_aot"),
+            "the size of a string returned by a method of the class is not dispatched dynamically");
+
+        # an auto value can be anything, NOTHING included, so its type is checked when the call is made
+        string untyped = functionIr(dump, "__autoSize_string_");
+        assertEq(-1, untyped.find("qore_rt_pseudo_string_size_noguard"),
+            "the size of another module's auto result is not read with the string helper");
+        assertNeq(-1, untyped.find("qore_rt_dot_eval_method_direct_aot"),
+            "the size of another module's auto result is dispatched dynamically");
+    }
+
+    testAotValuesMatchSource() {
+        TmpDir src("qore-aot-xmod-src-");
+        write(src.path + "/XmodProvider.qm", ProviderSource);
+        write(src.path + "/XmodConsumer.qm", ConsumerSource);
+        TmpDir aot("qore-aot-xmod-qmod-");
+        buildModules(aot.path);
+        # the compiled modules only: the sources would be loaded in their place if the qmods could not be
+        unlink(aot.path + "/XmodProvider.qm");
+        unlink(aot.path + "/XmodConsumer.qm");
+
+        TmpDir run_dir("qore-aot-xmod-run-");
+        string script = run_dir.path + "/run.qr";
+        write(script, "%modern
+%requires XmodConsumer
+XmodConsumer::Holder h();
+printf(\"%y\\n\", map XmodConsumer::typedSize($1) + XmodConsumer::autoSize($1) + h.nameSize($1),
+    (\"utf8\", \"latin1\", \"none\"));
+");
+        string run = "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1";
+        string from_source = backquote(sprintf(run, libqore_dir, src.path, qore_bin, script));
+        # utf8 -> "utf-8" three times, latin1 three times, none: "none", NOTHING and "none"
+        assertEq("[15, 18, 8]\n", from_source, "source module values");
+        assertEq(from_source, backquote(sprintf(run, libqore_dir, aot.path, qore_bin, script)), "AOT qmod values");
+    }
+
+    testTiersAgree() {
+        TmpDir tmp("qore-aot-xmod-tiers-");
+        string path = tmp.path + "/tiers.qr";
+        # the same calls in one Program, namespace-qualified, as compiled by the runtime tiers
+        write(path, "%modern
+namespace P {
+    string sub label(string enc) {
+        return enc == \"utf8\" ? \"utf-8\" : enc;
+    }
+
+    auto sub anyLabel(string enc) {
+        return enc == \"none\" ? NOTHING : label(enc);
+    }
+}
+
+class Holder {
+    string name(string enc) {
+        return enc == \"utf8\" ? \"utf-8\" : enc;
+    }
+
+    int nameSize(string enc) {
+        return name(enc).size();
+    }
+}
+
+int sub sizes(string enc) {
+    return P::label(enc).size() + P::anyLabel(enc).size();
+}
+
+Holder h();
+list<int> l = ();
+for (int i = 0; i < 3; ++i) {
+    l = map sizes($1) + h.nameSize($1), (\"utf8\", \"latin1\", \"none\");
+}
+printf(\"%y\\n\", l);
+");
+        foreach string mode in (Modes) {
+            assertEq("[15, 18, 8]\n", ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, path)), sprintf("exec-mode=%s values", mode));
+        }
+    }
+}
