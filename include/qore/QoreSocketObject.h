@@ -45,6 +45,7 @@ class QoreSSLCertificate;
 class QoreConnectionDestinations;
 class QoreSSLPrivateKey;
 class Queue;
+class AbstractAsyncAction;
 class my_socket_priv;
 
 //! Non-blocking operation direction flags for directional socket locking
@@ -730,6 +731,18 @@ if (accepted) {
     DLLLOCAL int sendHttp2StreamDataForAsyncPoll(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
 
+    //! Sends a WebSocket control frame (a pong or a close echo) of a stream's frame state on an HTTP/2 stream
+    /** A close frame and a pong are not refused for a full send buffer; see Http2Session::sendStreamControlFrame()
+        (issue #5900).  Safe on the I/O thread, as sendHttp2StreamDataForAsyncPoll().
+
+        @return 0 if the frame was buffered or kept, 1 if the frame was refused for a full buffer (a frame that is
+        not a pong or a close, or a stream's second close frame), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int sendHttp2StreamControlFrameForAsyncPoll(int32_t stream_id, const BinaryNode* data,
+            ExceptionSink* xsink);
+
     //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
     /** Handler thread calls this and returns immediately. The I/O thread reads from
         the InputStream and sends DATA frames incrementally.
@@ -792,6 +805,8 @@ if (accepted) {
     DLLLOCAL bool isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) const;
     //! Internal async-poll helper: True if the peer ended an HTTP/2 stream with END_STREAM
     DLLLOCAL bool isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const;
+    //! Returns true if the HTTP/2 stream is known and was reset (issue #5859)
+    DLLLOCAL bool isHttp2StreamResetForAsyncPoll(int32_t stream_id) const;
 
     //! Sets the host name of the next TLS connection made on the socket (async-poll helper)
     /** The name is sent with SNI and the server certificate is verified against it; by default it is the host
@@ -854,6 +869,30 @@ if (accepted) {
         @return 0 on success, -1 if an exception was raised
     */
     DLLLOCAL int watchHttp2ResponseSend(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Sends a GOAWAY on the socket's server HTTP/2 session before the server closes the connection (qore#5899)
+    /** Does nothing if the socket has no server HTTP/2 session, or if a GOAWAY was sent already; the frame is written
+        without blocking on the I/O thread of the socket, and a caller on another thread waits for that; a caller on
+        an I/O thread or in a continuePoll worker only submits the frame, which the connection's poll operation writes
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int sendHttp2ShutdownGoaway(ExceptionSink* xsink);
+
+    //! Starts a graceful drain of the socket's server HTTP/2 session (qore#5899)
+    /** Submits a GOAWAY like sendHttp2ShutdownGoaway(); the streams open then are served to their end, and the
+        connection's poll operation closes the connection when none is left.  Does nothing if the socket has no
+        server HTTP/2 session.  Run on the I/O thread of the socket like sendHttp2ShutdownGoaway()
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int startHttp2Drain(ExceptionSink* xsink);
+
+    //! Returns true if a drain of the socket's HTTP/2 session was started and it has no open stream and nothing to write
+    DLLLOCAL bool isHttp2DrainComplete() const;
+
+    //! Returns true if the server drains the socket's connection (see Socket::drainHttpConnection())
+    DLLLOCAL bool isHttpDraining() const;
 
     //! Drains the transmission results of HTTP/2 responses watched with watchHttp2ResponseSend() (I/O thread only)
     /** @return (stream ID, sent) pairs; empty if there is no HTTP/2 session
@@ -1076,6 +1115,18 @@ if (accepted) {
     DLLLOCAL int sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
 
+    //! Sends a WebSocket control frame (a pong or a close echo) of a stream's frame state on an HTTP/3 client stream
+    /** See QuicSession::sendStreamControlFrame() (issue #5900); safe on the I/O thread, as
+        sendQuicClientStreamDataForAsyncPoll().
+
+        @return 0 if the frame was staged or kept, 1 if the frame was refused (a frame that is not a pong or a close,
+        or a stream's second close frame), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int sendQuicClientStreamControlFrameForAsyncPoll(int64_t stream_id, const void* data, size_t len,
+        ExceptionSink* xsink);
+
     //! Mark a client-side HTTP/3 stream for incremental response body delivery
     /** Internal direct variant for callers that already serialized request submission on the
         async I/O thread; mutates only lock-protected QuicSession bookkeeping (no ngtcp2 calls),
@@ -1144,6 +1195,51 @@ if (accepted) {
         @since %Qore 3.0
     */
     DLLLOCAL int cancelQuicStreamAsync(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
+
+    //! Sets the limit of the data of an HTTP/2 stream that is buffered for sending; see Http2Session::setStreamSendLimit()
+    /** @return 0 on success, -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int setHttp2StreamSendLimit(int32_t stream_id, int64_t limit, ExceptionSink* xsink);
+
+    //! Sets the limit of the data of an HTTP/3 streaming response that is staged for sending; see QuicSession::setStreamSendLimit()
+    /** @return 0 on success, -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int setQuicStreamSendLimit(int64_t session_id, int64_t stream_id, int64_t limit, ExceptionSink* xsink);
+    //! Has the stream credit of an HTTP/2 client stream's response data granted as the action's consumer takes it
+    /** Installs a consume hook (see HttpStreamConsumeHook) on @p action if it is a streaming action that delivers
+        the data to a consumer (ChannelAction) or discards it (StreamingHeadersPromiseNotifierAction,
+        FrameStateAction), and then defers the stream's credit (issue #5820); with any other action, the stream's
+        credit is granted as the data is received.  Called before the action is registered for the stream.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void installHttp2StreamConsumeHook(int32_t stream_id, AbstractAsyncAction* action);
+
+    //! Defers the stream credit of an HTTP/2 client stream's data until it is taken from the stream (issue #5859)
+    /** For a stream whose data is drained to a registered stream queue: the data that the queue has no room for
+        stays in the stream without credit.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setHttp2StreamCreditOnConsume(int32_t stream_id);
+
+    //! Fails an HTTP/2 client stream with the error given: its response is the error (issue #5859)
+    /** @return true if the stream was failed, false if it has ended or there is no HTTP/2 session
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool failHttp2Stream(int32_t stream_id, const char* err, const char* desc);
+
+    //! Has the stream credit of an HTTP/3 client stream's response data granted as the action's consumer takes it
+    /** See installHttp2StreamConsumeHook().
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void installQuicStreamConsumeHook(int64_t session_id, int64_t stream_id, AbstractAsyncAction* action);
 
     //! Aborts the read side of a pending HTTP/3 stream so that a blocked
     //! @ref readQuicStreamDataBlock() unblocks immediately with clean EOF

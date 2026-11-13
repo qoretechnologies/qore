@@ -1220,6 +1220,18 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     return inst;
 }
 
+QoreIRExprInstruction* QoreIRBuilder::createCheckCallTarget(const QoreValue& call, QoreIRValue target,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRExprInstruction>(QoreIROpcode::CheckCallTarget, call);
+    // no target: the call is made through self, on the current object (issue #5823)
+    if (target.isValid()) {
+        inst->operands.push_back(target);
+    }
+    inst->exception_target = exception_target;
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRBackgroundInstruction* QoreIRBuilder::createBackground(QoreIRBackgroundKind kind,
         const std::string& name, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc) {
@@ -1541,9 +1553,11 @@ QoreIRThrowInstruction* QoreIRBuilder::createRethrow(QoreIRBasicBlock* exception
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc) {
+QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc,
+        QoreIRBasicBlock* exception_target) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ThreadExit);
     inst->loc = loc;
+    inst->exception_target = exception_target;
     return inst;
 }
 
@@ -1671,6 +1685,10 @@ uint32_t QoreIRBuilder::getExceptionTempScopeId() const {
     return exception_temp_scope_id;
 }
 
+uint32_t QoreIRBuilder::allocateUnmarkedTempScopeId() {
+    return next_temp_scope_id++;
+}
+
 void QoreIRBuilder::abandonTempScope() {
     if (!temp_scope_id_stack.empty()) {
         temp_scope_id_stack.pop_back();
@@ -1742,6 +1760,13 @@ QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, cons
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createReleaseStageInput(QoreIRValue input, QoreIRValue kept,
+        const QoreProgramLocation* loc) {
+    QoreIRInstruction* inst = createReleaseOwnedTemp(input, loc);
+    inst->operands.push_back(kept);
+    return inst;
+}
+
 QoreIRCallAOTHelperInstruction* QoreIRBuilder::createCallAOTHelper(
         const std::string& helper_name, const QoreProgramLocation* loc) {
     auto inst = append<QoreIRCallAOTHelperInstruction>(helper_name);
@@ -1805,6 +1830,28 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(Qore
     inst->opcode = QoreIROpcode::IteratorCreateIterate;
     inst->loc = loc;
     inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateSource(QoreIRValue operand,
+        QoreIRIteratorSourceKind kind, int64_t flags, QoreIRValue first, QoreIRValue second,
+        const QoreProgramLocation* loc) {
+    QoreIRValue kind_val = createConstInt(static_cast<int64_t>(kind), loc)->result;
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    if (!first.isValid()) {
+        first = createConstNothing(loc)->result;
+    }
+    if (!second.isValid()) {
+        second = createConstNothing(loc)->result;
+    }
+    auto inst = append<QoreIRIteratorCreateInstruction>(operand);
+    inst->opcode = QoreIROpcode::IteratorCreateSource;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(kind_val);
+    inst->operands.push_back(flags_val);
+    inst->operands.push_back(first);
+    inst->operands.push_back(second);
     return inst;
 }
 

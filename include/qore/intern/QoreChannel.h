@@ -32,6 +32,7 @@
 #ifndef _QORE_INTERN_QORECHANNEL_H
 #define _QORE_INTERN_QORECHANNEL_H
 
+#include "qore/intern/QoreConsumeHook.h"
 #include <qore/Qore.h>
 #include <qore/QoreCondition.h>
 #include <qore/QoreReferenceCounter.h>
@@ -249,6 +250,8 @@ public:
         timed_out = false;
         has_value = false;
 
+        // reports the value taken to the consume hook after the lock is released
+        QoreConsumeNotifier cn;
         WaiterNotifyHelper wnh;
         AutoLocker al(&lck);
 
@@ -286,6 +289,9 @@ public:
             unbuffered_value = QoreValue();
             unbuffered_has_value = false;
             has_value = true;
+            if (consume_hook) {
+                cn.set(consume_hook, consume_hook->measure(rv));
+            }
             send_cond.signal();
             wnh.addAll(external_waiters);
             return rv;
@@ -323,6 +329,9 @@ public:
         QoreValue rv = buffer.front();
         buffer.pop_front();
         has_value = true;
+        if (consume_hook) {
+            cn.set(consume_hook, consume_hook->measure(rv));
+        }
         send_cond.signal();
         wnh.addAll(external_waiters);
         return rv;
@@ -360,6 +369,8 @@ public:
         @return the value or NOTHING
     */
     DLLLOCAL QoreValue tryRecv(bool& has_value) {
+        // reports the value taken to the consume hook after the lock is released
+        QoreConsumeNotifier cn;
         WaiterNotifyHelper wnh;
         AutoLocker al(&lck);
         has_value = false;
@@ -368,6 +379,9 @@ public:
                 QoreValue rv = unbuffered_value;
                 unbuffered_value = QoreValue();
                 unbuffered_has_value = false;
+                if (consume_hook) {
+                    cn.set(consume_hook, consume_hook->measure(rv));
+                }
                 send_cond.signal();
                 wnh.addAll(external_waiters);
                 has_value = true;
@@ -381,9 +395,20 @@ public:
         has_value = true;
         QoreValue rv = buffer.front();
         buffer.pop_front();
+        if (consume_hook) {
+            cn.set(consume_hook, consume_hook->measure(rv));
+        }
         send_cond.signal();
         wnh.addAll(external_waiters);
         return rv;
+    }
+
+    //! Sets the hook that is told about the values taken from the channel, and those dropped with it
+    /** See QoreConsumeHook for the lock order.  Values already in the channel are reported when they are taken.
+    */
+    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+        AutoLocker al(&lck);
+        consume_hook = std::move(hook);
     }
 
     //! Closes the channel
@@ -476,6 +501,8 @@ public:
 
     //! Called from destructor
     DLLLOCAL void destructor(ExceptionSink* xsink) {
+        // reports the values dropped with the channel to the consume hook after the lock is released
+        QoreConsumeNotifier cn;
         WaiterNotifyHelper wnh;
         AutoLocker al(&lck);
         if (send_waiting > 0 || recv_waiting > 0) {
@@ -490,14 +517,24 @@ public:
         recv_cond.broadcast();
         wnh.addAll(external_waiters);
 
-        // Clean up any buffered values
+        // Clean up any buffered values; they are reported to the consume hook as consumed
+        size_t dropped = 0;
         for (auto& v : buffer) {
+            if (consume_hook) {
+                dropped += consume_hook->measure(v);
+            }
             v.discard(xsink);
         }
         buffer.clear();
         if (unbuffered_has_value) {
+            if (consume_hook) {
+                dropped += consume_hook->measure(unbuffered_value);
+            }
             unbuffered_value.discard(xsink);
             unbuffered_has_value = false;
+        }
+        if (dropped) {
+            cn.set(consume_hook, dropped);
         }
     }
 
@@ -528,13 +565,24 @@ protected:
         // Values can be left in the buffer when the channel is closed
         // before all values are consumed (e.g., error paths, timeouts).
         ExceptionSink xsink;
+        // the values dropped with the channel are reported to the consume hook as consumed
+        size_t dropped = 0;
         for (auto& v : buffer) {
+            if (consume_hook) {
+                dropped += consume_hook->measure(v);
+            }
             v.discard(&xsink);
         }
         buffer.clear();
         if (cap == 0 && unbuffered_has_value) {
+            if (consume_hook) {
+                dropped += consume_hook->measure(unbuffered_value);
+            }
             unbuffered_value.discard(&xsink);
             unbuffered_has_value = false;
+        }
+        if (dropped) {
+            consume_hook->consumed(dropped);
         }
     }
 
@@ -555,6 +603,9 @@ private:
 
     // External waiters for channel_select
     std::vector<SelectWaiter*> external_waiters;
+
+    //! told about the values taken from the channel and those dropped with it, if set; see QoreConsumeHook
+    std::shared_ptr<QoreConsumeHook> consume_hook;
 };
 
 #endif // _QORE_INTERN_QORECHANNEL_H

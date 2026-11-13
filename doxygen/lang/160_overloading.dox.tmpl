@@ -166,5 +166,40 @@ total(strs);    # calls total(list<string>), which gets a list<string>
     of method is considered, <tt>Child::p()</tt> calls a static \c p() method of a parent class even when \c Child
     declares a normal \c p() method.
 
+    @subsection override_return_types Return Types of Overriding and Overloading Methods
+
+    A call of a method on an object typed with a parent class is resolved at parse time to a variant of the parent
+    class method, and its result is trusted to have that variant's declared return type; at run time the object's
+    class can provide the variant that is called.  Therefore a child class method variant that such a call can select
+    must return a compatible type, or the class is refused with a \c PARSE-TYPE-ERROR:
+    - a variant that overrides a parent class variant (with the same parameter types), or a variant that accepts
+      arguments that the parent class variant accepts (an overload with broader or additional optional parameters),
+      must return the parent class variant's type or a narrower type that it accepts without a conversion
+      (covariant return types: a subclass of a returned class, \c int for \c *int); a type that would be converted,
+      such as \c float for \c int, is refused
+    - a parent class variant that returns @ref nothing allows any return type, as it promises no value to a call
+    - the variants of all methods that calls of the class select before the parent class method are checked: with
+      @ref multiple_inheritance_order "multiple inheritance", also the variants of a parent class listed before the
+      class that declares the parent class method
+    - in a class that inherits an instantiation of a generic class, the type arguments are substituted in the return
+      types of the generic class's methods (<tt>T get()</tt> of <tt>Box&lt;int&gt;</tt> returns \c int); a generic child class that passes its own type parameter to the parent class must return it where the parent class
+      method returns the type parameter, as an instantiation can bind it to any type
+    - variants without a declared return type, static methods, and \c private:internal parent class methods (which
+      are not inherited) are not checked
+    - an overload that a parent class call cannot select, as its parameter types do not intersect, can return any type
+
+    @par Example
+    @code{.py}
+class Base {
+    int m(int i) { return i; }
+}
+class Child inherits Base {
+    # OK: an overload that a call typed against Base cannot select
+    string m(string s) { return s; }
+    # PARSE-TYPE-ERROR: a call b.m(1) for an object b typed Base can select it
+    string m(softint i) { return "x"; }
+}
+    @endcode
+
     @see @ref qore_classes for more information
 */

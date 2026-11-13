@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+
+%exec-class ListLiteralTypeFoldingTest
+
+#! a list literal whose element's parse type does not allow its value does not abort a debug build (qore#5891)
+/** The type folding of a list literal's element (QoreParseListNode::evalImpl()) asserted that it could never raise an
+    exception.  When the parse type of an element expression is wrong, it raises the type error: the list is now not
+    built and the exception propagates, as for an exception raised by the evaluation of the element.  The program is
+    in \c list-literal-type-folding/; it ends with the value of the expression or the type error, in every mode.
+*/
+class ListLiteralTypeFoldingTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string program = get_script_dir() + "/list-literal-type-folding/list-literal-type-folding.q";
+    }
+
+    constructor() : QUnit::Test("ListLiteralTypeFoldingTest", "1.0", \ARGV) {
+        addTestCase("no execution mode aborts", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+                "--exec-mode=%s %s", qore_bin, mode, program));
+            assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+            assertTrue(r.stdout =~ /done\n$/, sprintf("%s: the program ran to its end: %y", mode, r.stdout));
+            assertFalse(r.out =~ /Assertion/, sprintf("%s: no assertion failure: %y", mode, r.out));
+        }
+    }
+}

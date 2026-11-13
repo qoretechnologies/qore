@@ -9290,7 +9290,11 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // call itself, however the close and the start interleave.  Mirrors the deferred-error pattern in
     // startPollConnectConnMgr (SOCKET-CONNECT-ERROR test case).
     auto deferred_error = [&] (const std::string& err_str, const std::string& desc_str) -> QoreObject* {
-        mgr.closeAndEvict(conn, xsink);
+        // a connection that another thread is closing (invalidated, not closed yet) is left to that thread: a second
+        // closeConnection() must not run beside it; the pool drops it once it is closed (#5814)
+        if (conn->isClosed() || !conn->isInvalidated()) {
+            mgr.closeAndEvict(conn, xsink);
+        }
         release_local_conn_ref();
 
         // Signal notifier so first drivePoll wakes up and sees deferred_err
@@ -9331,15 +9335,20 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         return deferred_error(err_str, desc_str);
     };
 
-    // true if the submit failed because the connection was closed meanwhile: the connection is closed and the error
-    // is the one a submit on a closed connection raises (the connection's own error, or the closed-state error)
+    // true if the submit failed because the connection was closed meanwhile: the error is the connection's own error,
+    // or the closed-state error of a connection that is closed.  The connection's own error is matched whether or not
+    // the connection is marked closed yet: its protocol operation stores the error before it marks the connection
+    // closed, on the I/O thread, and a submit made in between raises the stored error while the connection still
+    // looks open (#5802)
     auto closed_submit_error = [&] () -> bool {
-        if (!*xsink || !conn->isClosed()) {
+        if (!*xsink) {
             return false;
         }
         QoreStringValueHelper err(xsink->getExceptionErr());
         if (!strcmp(err->c_str(), "HTTPCLIENT-STATE-ERROR")) {
-            return true;
+            // a connection that another thread is closing (closeConnection() invalidates it before it closes it,
+            // and refuses the submit meanwhile) is reported like a closed one (#5814)
+            return conn->isClosed() || conn->isInvalidated();
         }
         ExceptionSink info_xsink;
         ReferenceHolder<QoreHashNode> err_info(conn->getReferencedErrorInfo(), &info_xsink);
@@ -9361,6 +9370,12 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         std::string err_str(err->c_str());
         std::string desc_str(desc->c_str());
         xsink->clear();
+        // a connection closed by HTTPClient::disconnect() is reported as the poll operations report a disconnect
+        // (see HttpClientConnMgrPollOp::continuePoll())
+        if (user_disconnect_in_progress.load(std::memory_order_acquire)) {
+            err_str = "SOCKET-NOT-OPEN";
+            desc_str = "HTTPClient was disconnected during poll operation";
+        }
         return deferred_error(err_str, desc_str);
     };
 
@@ -9410,6 +9425,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
 #ifdef DEBUG
         // tests submit the request only once the I/O thread has marked the connection closed
         qore_dbg_http_wait_submit_after_close();
+        // tests hold the submit to order it with a concurrent close of the connection
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::Submit);
 #endif
         int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
             *nh, data, size, action, xsink);
@@ -9464,6 +9481,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             reportPollSendEvent(method, msgpath, *nh);
 #ifdef DEBUG
             qore_dbg_http_wait_submit_after_close();
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::Submit);
 #endif
             int64_t stream_id = conn->submitRequestWithAction(method,
                 msgpath, *nh, data, size, action, xsink);

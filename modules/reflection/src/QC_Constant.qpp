@@ -47,7 +47,8 @@ QoreReflectionNamespaceConstant::QoreReflectionNamespaceConstant(QoreProgram* pg
     }
 }
 
-static QoreValue find_all_constants(const QoreString& pattern, int re_opts, QoreProgram* pgm, ExceptionSink* xsink) {
+static QoreValue find_all_constants(const ReflectionLookupCaller& caller, const QoreString& pattern, int re_opts,
+        QoreProgram* pgm, ExceptionSink* xsink) {
     const_vec_t const_vec = pgm->findAllNamespaceConstantsRegex(pattern, re_opts, xsink);
     if (*xsink) {
         return QoreValue();
@@ -55,6 +56,10 @@ static QoreValue find_all_constants(const QoreString& pattern, int re_opts, Qore
 
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_CONSTANT->getTypeInfo()), xsink);
     for (auto& i : const_vec) {
+        // a constant that a module does not export is not found by a caller its export boundary applies to
+        if (!caller.canSeeDeclaration(pgm, i.second, reflection_exported(i.first))) {
+            continue;
+        }
         l->push(new QoreObject(QC_CONSTANT, pgm, new QoreReflectionNamespaceConstant(pgm, i.first, i.second)), xsink);
     }
 
@@ -94,9 +99,16 @@ Constant::constructor(string path) {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionNamespaceConstant> con(
         new QoreReflectionNamespaceConstant(lookup_pgm, npath->c_str(), xsink), xsink);
     if (*xsink) {
+        return;
+    }
+    // a constant that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeDeclaration(lookup_pgm, con->ns, reflection_exported(con->ce))) {
+        xsink->raiseException("UNKNOWN-CONSTANT", "cannot resolve namespace constant '%s'", npath->c_str());
         return;
     }
     self->setPrivate(CID_CONSTANT, con.release());
@@ -153,9 +165,16 @@ static Constant Constant::forName(string path) [flags=RET_VALUE_ONLY] {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionNamespaceConstant> cls(
         new QoreReflectionNamespaceConstant(lookup_pgm, npath->c_str(), xsink), xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a constant that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeDeclaration(lookup_pgm, cls->ns, reflection_exported(cls->ce))) {
+        xsink->raiseException("UNKNOWN-CONSTANT", "cannot resolve namespace constant '%s'", npath->c_str());
         return QoreValue();
     }
 
@@ -198,6 +217,11 @@ static Constant Constant::forName(Program[QoreProgram] pgm, string path) [flags=
     if (*xsink) {
         return QoreValue();
     }
+    // a constant that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeDeclaration(*pgm, cls->ns, reflection_exported(cls->ce))) {
+        xsink->raiseException("UNKNOWN-CONSTANT", "cannot resolve namespace constant '%s'", npath->c_str());
+        return QoreValue();
+    }
 
     return new QoreObject(QC_CONSTANT, *pgm, cls.release());
 }
@@ -218,7 +242,9 @@ list<Constant> l = Constant::findAllRegex("^T");
 */
 static list<Constant> Constant::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
-    return find_all_constants(*pattern, re_opts, lookup_pgm, xsink);
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
+    return find_all_constants(caller, *pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of constants matching the regular expression pattern argument or an empty list if no namespace constants match
@@ -243,5 +269,5 @@ static list<Constant> Constant::findAllRegex(Program[QoreProgram] pgm, string pa
     if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
-    return find_all_constants(*pattern, re_opts, *pgm, xsink);
+    return find_all_constants(caller, *pattern, re_opts, *pgm, xsink);
 }

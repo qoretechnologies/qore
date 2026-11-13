@@ -1271,7 +1271,10 @@ void RObject::derefDone(bool del, bool wait_only) {
     if (ref_waiting) {
         // we have to use broadcast here because the condition variable is shared
         rcond.broadcast();
-        assert(ref_inprogress || !del);
+        // a deleting dereference never completes while another deleting dereference waits for it; a dereference
+        // that handed the deletion off and waits before releasing a weak reference (wait_only) can wait for the
+        // deleting one, which holds its own reference to the object (qore_object_private::takeDeleteReference())
+        assert(ref_inprogress || !del || !dbg_del_waiting);
     }
     if (del || wait_only) {
         // either we will delete the object ourselves, or we handed off deletion but still need
@@ -1291,7 +1294,17 @@ void RObject::derefDone(bool del, bool wait_only) {
 #endif
         while (ref_inprogress > own) {
             ++ref_waiting;
+#ifdef DEBUG
+            if (del) {
+                ++dbg_del_waiting;
+            }
+#endif
             rcond.wait(rlck);
+#ifdef DEBUG
+            if (del) {
+                --dbg_del_waiting;
+            }
+#endif
             --ref_waiting;
         }
     }
@@ -1912,6 +1925,9 @@ robject_dereference_helper::~robject_dereference_helper() {
     // references it counted as recursive are released later, and the last of them releases the base reference;
     // releasing it here as well freed the object while those dereferences still used it.
     if (qo && !refs) {
+#ifdef DEBUG
+        qo->dbgReleaseZeroCountWeakRef();
+#endif
         qo->tDeref();
     }
 }

@@ -108,6 +108,14 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
       @ref ServerSentEventHandler::ServerSentEventHandler::setMaxQueueSize() "setMaxQueueSize()"): a slow or
       non-reading client whose outbound event queue reaches the limit is dropped instead of growing server memory
       without bound; protects servers exposed to untrusted clients
+    - every SSE stream bounds the data held for its client (the \c sse_max_buffer_size handler option and
+      @ref ServerSentEventHandler::ServerSentEventHandler::setSseMaxBufferSize() "setSseMaxBufferSize()", which
+      override the listener option of the same name): queueing never waits for a client that stops reading, a
+      client whose data would exceed the bound is dropped, a send to that connection alone raises
+      \c SSE-CLIENT-OVERFLOW, and
+      @ref ServerSentEventHandler::ServerSentEventHandler::sendAll() "sendAll()" and
+      @ref ServerSentEventHandler::SseObservableBridge "SseObservableBridge" never raise an exception for the state
+      of one connection (see @ref httpserverasyncio_sse_buffer)
     - added AsyncAPI 3.0 validation support for outbound SSE event data via the \c asyncapi,
       \c validator, and \c asyncapi_channel handler and bridge options
     - added @ref ServerSentEventHandler::SseObservableBridge and the

@@ -38,6 +38,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QC_AbstractSmartLock.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreIRAnalysis.h"
@@ -118,6 +119,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <unordered_map>
 #include <chrono>
 #include <condition_variable>
 #include <functional>
@@ -348,27 +350,73 @@ struct UnitTestCounters {
     } \
 } while (0)
 
-//! Reserves a loopback TCP port that nothing listens on: binds a socket to an ephemeral port and closes it
-/** @return the port, or -1 if no port could be reserved
+//! Holds a loopback TCP port that nothing listens on, for a connection to it that must be refused
+/** A listener on 127.0.0.1 that does not reuse the address is connected to, the connection is accepted, and the
+    listener is closed: the connection then holds the port.  While the holder exists, the system assigns the port to
+    no other socket (neither to a bind of port 0 nor to a connection), a bind of the port without SO_REUSEADDR is
+    refused, and a connection request to the port finds no listener and is refused at once.  A port that was only
+    bound and closed could be assigned to a listener that a test running in parallel binds to port 0, which would then
+    accept the connection that the test expects to be refused.  A socket that stays bound without listening would hold
+    the port too, but macOS drops a connection request to such a socket instead of refusing it.  Both ends of the
+    connection are closed with an abortive close, so that no connection in TIME_WAIT is left on the port.
 */
-static int ut_reserve_closed_port() {
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) {
-        return -1;
+class UtClosedPort {
+public:
+    DLLLOCAL UtClosedPort() {
+        int lfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (lfd < 0) {
+            return;
+        }
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = 0;
+        socklen_t alen = sizeof(addr);
+        // ::bind() and not bind(): where namespace std is used, bind() is std::bind(), which binds nothing
+        if (!::bind(lfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) && !::listen(lfd, 1)
+            && !getsockname(lfd, reinterpret_cast<sockaddr*>(&addr), &alen)) {
+            client = socket(AF_INET, SOCK_STREAM, 0);
+            // the listener is blocking: the connection is accepted once it is in the listener's queue
+            if (client >= 0 && !::connect(client, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))) {
+                peer = ::accept(lfd, nullptr, nullptr);
+            }
+        }
+        ::close(lfd);
+        if (peer < 0) {
+            closeAbortive(client);
+            return;
+        }
+        held_port = ntohs(addr.sin_port);
     }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    socklen_t alen = sizeof(addr);
-    // ::bind() and not bind(): where namespace std is used, bind() is std::bind(), which binds nothing
-    int rc = ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    if (!rc) {
-        rc = getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+
+    DLLLOCAL ~UtClosedPort() {
+        closeAbortive(client);
+        closeAbortive(peer);
     }
-    ::close(sfd);
-    return rc ? -1 : ntohs(addr.sin_port);
-}
+
+    UtClosedPort(const UtClosedPort&) = delete;
+    UtClosedPort& operator=(const UtClosedPort&) = delete;
+
+    //! returns the port, or -1 if no port could be held
+    DLLLOCAL int port() const {
+        return held_port;
+    }
+
+private:
+    int held_port = -1;
+    int client = -1;
+    int peer = -1;
+
+    DLLLOCAL static void closeAbortive(int& fd) {
+        if (fd < 0) {
+            return;
+        }
+        struct linger lg = {1, 0};
+        setsockopt(fd, SOL_SOCKET, SO_LINGER, &lg, sizeof(lg));
+        ::close(fd);
+        fd = -1;
+    }
+};
 
 // each argument is evaluated once: the failure message must not run a call with side effects (a fork(), a wait for
 // a child process) a second time
@@ -5809,7 +5857,85 @@ private:
         0;
 #endif
 
+    //! the number of IPv4 ports that bindIpv4ThenIpv6OnlyHolder() tries before it gives up
+    static constexpr int Ipv6OnlyPortAttempts = 16;
+
+    //! binds the IPv4 socket to 127.0.0.1 on a port that the system assigns, then the IPv6-only socket to :: on it
+    /** The IPv4 socket picks the port, so that the port is never free on IPv4 while the test runs: a port that the
+        system assigns to an IPv6-only socket on :: is only free on IPv6, as another socket on an IPv4 address serves
+        no address in common with it, and if the IPv4 socket were bound after the IPv6-only socket, another program
+        could hold the port on 127.0.0.1 already (as the local end of a connection), or be assigned it in the meantime
+        by a bind to port 0 (as a listener of a test that runs in parallel; see runIpv6OnlyPortHeldOnIpv4()), and the
+        bind of 127.0.0.1 would be refused.  The system assigns the IPv4 socket a port that no IPv4 or dual-stack
+        socket uses, and the IPv4 socket holds it from then on.  The bind of the IPv6-only socket is refused only if
+        another socket holds the port on IPv6: the refused IPv4 socket then stays open until the function returns, so
+        that the system assigns another port to the next one.
+
+        @param c the test counters
+        @param v4 receives the bound IPv4 socket
+        @param h the IPv6-only socket
+        @param reuseport if true, the IPv4 socket also reuses the port
+
+        @return the port, or -1
+    */
+    static int bindIpv4ThenIpv6OnlyHolder(UnitTestCounters& c, Fd& v4, int h, bool reuseport) {
+        std::vector<std::unique_ptr<Fd>> refused;
+        for (int i = 0; i < Ipv6OnlyPortAttempts; ++i) {
+            Fd s{open(AF_INET, false, true, reuseport)};
+            int rc = s.fd >= 0 ? bindTo(s.fd, AF_INET, "127.0.0.1", 0) : -1;
+            UT_ASSERT_EQ(c, 0, rc, "specific bind: the IPv4 socket is bound to a port on 127.0.0.1");
+            if (rc) {
+                return -1;
+            }
+            int port = portOf(s.fd);
+            rc = bindTo(h, AF_INET6, "::", port);
+            if (!rc) {
+                std::swap(v4.fd, s.fd);
+                return port;
+            }
+            UT_ASSERT_EQ(c, EADDRINUSE, rc,
+                "specific bind: the IPv6-only holder is refused a port only because another socket uses it on IPv6");
+            if (rc != EADDRINUSE) {
+                return -1;
+            }
+            refused.push_back(std::make_unique<Fd>());
+            std::swap(refused.back()->fd, s.fd);
+        }
+        UT_ASSERT(c, false, "specific bind: the IPv6-only holder is bound to the port of the IPv4 socket");
+        return -1;
+    }
+
+    //! a system-assigned port of an IPv6-only socket on :: can be used on IPv4
+    /** This is how the bind of 127.0.0.1 to the port of an IPv6-only socket on :: that the system had assigned failed
+        when another program held the port on 127.0.0.1, or was assigned it by a bind to port 0 before the bind of
+        127.0.0.1; bindIpv4ThenIpv6OnlyHolder() therefore lets the IPv4 socket pick the port.
+    */
+    static void runIpv6OnlyPortHeldOnIpv4(UnitTestCounters& c) {
+        Fd other{open(AF_INET, false, false)};
+        UT_ASSERT_EQ(c, 0, other.fd >= 0 ? bindTo(other.fd, AF_INET, "127.0.0.1", 0) : -1,
+            "specific bind: another socket holds a port on 127.0.0.1");
+        int port = portOf(other.fd);
+        if (port <= 0) {
+            return;
+        }
+        Fd h{open(AF_INET6, true, false)};
+        UT_ASSERT_EQ(c, 0, h.fd >= 0 ? bindTo(h.fd, AF_INET6, "::", port) : -1,
+            "specific bind: an IPv6-only socket on :: is given a port held on 127.0.0.1");
+        Fd v4{open(AF_INET, false, true)};
+        UT_ASSERT_EQ(c, EADDRINUSE, bindTo(v4.fd, AF_INET, "127.0.0.1", port),
+            "specific bind: 127.0.0.1 is refused the port of an IPv6-only socket that is held on 127.0.0.1");
+    }
+
     //! an IPv6-only socket on :: serves no IPv4 address: 127.0.0.1 may share its port, ::1 may not
+    /** The socket on 127.0.0.1 is bound first and picks the port (see bindIpv4ThenIpv6OnlyHolder()), so that no other
+        program can take the port on IPv4 while the test runs.  The IPv6-only socket on :: is then bound to the port,
+        and the checks of qore_socket_bind_unshadowed() and qore_socket_listen_unshadowed() on 127.0.0.1 are made with
+        it holding the port: a second socket on 127.0.0.1 that reuses the port with the first one is bound (the bind
+        is checked for the port being held on another address, which the IPv6-only socket, which does not reuse the
+        port, must not be, as it serves no IPv4 address), and the first one listens (the listen is checked in the same
+        way).  The system applies the same rules, so each check also holds on Linux, where the functions leave them to
+        the system.
+    */
     static void runIpv6OnlyHolder(UnitTestCounters& c) {
         if (!hasIpv6()) {
             return;
@@ -5822,25 +5948,35 @@ private:
             UT_ASSERT_EQ(c, ReuseBoundHolderResult, bindTo(v6.fd, AF_INET6, "::1", portOf(h.fd)),
                 "specific bind: ::1 with SO_REUSEADDR over a bound IPv6-only socket on :: that reuses the address");
         }
+        runIpv6OnlyPortHeldOnIpv4(c);
+#ifdef SO_REUSEPORT
         for (bool listening : {true, false}) {
             Fd h{open(AF_INET6, true, false)};
             UT_ASSERT(c, h.fd >= 0, "specific bind: an IPv6-only holder is opened");
             if (h.fd < 0) {
                 return;
             }
-            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET6, "::", 0), "specific bind: the IPv6-only holder is bound");
+            Fd v4;
+            int port = bindIpv4ThenIpv6OnlyHolder(c, v4, h.fd, true);
+            if (port <= 0) {
+                return;
+            }
             if (listening) {
                 UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the IPv6-only holder listens");
             }
-            int port = portOf(h.fd);
-            Fd v4{open(AF_INET, false, true)};
-            UT_ASSERT_EQ(c, 0, bindTo(v4.fd, AF_INET, "127.0.0.1", port),
-                "specific bind: 127.0.0.1 shares the port of an IPv6-only socket on ::");
+            {
+                Fd v4b{open(AF_INET, false, true, true)};
+                UT_ASSERT_EQ(c, 0, bindTo(v4b.fd, AF_INET, "127.0.0.1", port),
+                    "specific bind: 127.0.0.1 shares the port of an IPv6-only socket on ::");
+            }
+            UT_ASSERT_EQ(c, 0, listenOn(v4.fd),
+                "specific bind: 127.0.0.1 listens on the port of an IPv6-only socket on ::");
             Fd v6{open(AF_INET6, true, true)};
             UT_ASSERT_EQ(c, EADDRINUSE, bindTo(v6.fd, AF_INET6, "::1", port),
                 "specific bind: ::1 with SO_REUSEADDR is refused the port of an IPv6-only socket on :: that does not "
                 "reuse the address");
         }
+#endif
     }
 
     //! of two sockets bound with SO_REUSEADDR to overlapping addresses, the one that listens first holds the port
@@ -6409,7 +6545,12 @@ public:
             if (rc || xsink) {
                 return;
             }
-            holder_peer = ::accept(listener.getDescriptor(), nullptr, nullptr);
+            // the listener is non-blocking, and the connection can be complete for the client before it is in the
+            // listener's queue (macOS processes loopback input in another thread): wait for it
+            struct pollfd lpfd = {listener.getDescriptor(), POLLIN, 0};
+            if (::poll(&lpfd, 1, 10000) == 1) {
+                holder_peer = ::accept(listener.getDescriptor(), nullptr, nullptr);
+            }
             UT_ASSERT(c, holder_peer >= 0, "connect failure port holder is accepted");
             if (holder_peer < 0) {
                 return;
@@ -6546,7 +6687,13 @@ public:
             if (rc || xsink) {
                 return;
             }
-            int peer = ::accept(listener->getPollableDescriptor(), nullptr, nullptr);
+            // the listener is non-blocking, and the connection can be complete for the client before it is in the
+            // listener's queue (macOS processes loopback input in another thread): wait for it
+            int peer = -1;
+            struct pollfd lpfd = {listener->getPollableDescriptor(), POLLIN, 0};
+            if (::poll(&lpfd, 1, 10000) == 1) {
+                peer = ::accept(listener->getPollableDescriptor(), nullptr, nullptr);
+            }
             UT_ASSERT(c, peer >= 0, "shared registration peer is accepted");
             if (peer < 0) {
                 return;
@@ -11547,7 +11694,8 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     // Pick an ephemeral closed port — connect will be refused, the poll op
     // will transition to CLOSED, and onClosedHook should fire once via the
     // I/O thread setError → setClosed path.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket succeeds");
         return;
@@ -11640,23 +11788,13 @@ static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
 static void ut_http1_connection_connect_refused(UnitTestCounters& c) {
     ExceptionSink xsink;
 
-    // Bind an ephemeral port then immediately close the listen socket —
-    // the kernel will refuse subsequent connects to it (ECONNREFUSED).
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    UT_ASSERT(c, sfd >= 0, "reserve socket succeeds");
-    if (sfd < 0) {
+    // a port with no listener, which no other socket can be given: the kernel refuses connects to it (ECONNREFUSED)
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
+    UT_ASSERT(c, dead_port > 0, "a port with no listener is held");
+    if (dead_port <= 0) {
         return;
     }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    int br = ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    UT_ASSERT(c, br == 0, "bind ephemeral port succeeds");
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
 
     ReferenceHolder<Http1ClientConnection> conn(
         new Http1ClientConnection("127.0.0.1", dead_port, false, &xsink), &xsink);
@@ -12258,7 +12396,8 @@ static void ut_wait_for_connect_failure(HttpClientConnectionBase* conn) {
 // keep it.
 static void ut_manager_new_connection_closed_before_reservation(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12468,7 +12607,8 @@ public:
 // the connection and been shut down.
 static void ut_manager_closed_new_connection_detached(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12509,7 +12649,8 @@ static void ut_manager_closed_new_connection_detached(UnitTestCounters& c) {
 // before its close notification is sent, which is held here until the manager has evicted it and been shut down.
 static void ut_manager_evicted_closed_connection_detached(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12557,7 +12698,8 @@ static void ut_manager_evicted_closed_connection_detached(UnitTestCounters& c) {
 // back-pointer cleared too, so that every connection the manager releases stops notifying it.
 static void ut_manager_notified_closed_connection_detached(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12607,7 +12749,8 @@ static void ut_shut_down_manager_on_new_connection(HttpClientConnectionBase* con
 // released with its back-pointer cleared.
 static void ut_manager_shutdown_new_connection_detached(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int port = ut_reserve_closed_port();
+    UtClosedPort port_holder;
+    int port = port_holder.port();
     if (port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -12653,7 +12796,8 @@ static void ut_manager_shutdown_new_connection_detached(UnitTestCounters& c) {
 // a thread whose count would go below zero now fails the assertion in inc_active_exceptions() at once.
 static void ut_async_redirect_task_error_counted_on_driving_thread(UnitTestCounters& c) {
     ExceptionSink xsink;
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve a port with no listener");
         return;
@@ -13896,10 +14040,11 @@ static void ut_http2_pending_response_data(UnitTestCounters& c) {
 
 static void ut_http2_connection_construct(UnitTestCounters& c) {
     ExceptionSink xsink;
-    // Bind an ephemeral port and immediately close — the next connect
-    // is refused.  H2 socket setup includes ALPN configuration which
+    // Hold a port with no listener — the next connect is refused.
+    // H2 socket setup includes ALPN configuration which
     // exercises the SSL code path on construction.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket succeeds");
         return;
@@ -13929,7 +14074,8 @@ static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
     // HTTPS H2 — the constructor configures ALPN ("h2") on the socket
     // BEFORE the SSL handshake.  The actual handshake will fail (no
     // server) but we verify that the ALPN setup path doesn't crash.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14234,7 +14380,8 @@ static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
     if (xsink) { xsink.clear(); return; }
 
     // Bind+close an ephemeral port so the next connect is refused.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14368,7 +14515,8 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     // Acquire to a refused port — used to raise PROTOCOL-NOT-IMPLEMENTED
     // before P4; now should attempt the connect and surface a CONNECT
     // error.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14391,7 +14539,8 @@ static void ut_http3_connection_construct(UnitTestCounters& c) {
     // Use localhost with a closed port — the QUIC handshake will fail but
     // the construction path (UDP bind + SocketQuicClientPollOperation
     // creation + controller submission) is exercised.
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14424,7 +14573,8 @@ static void ut_manager_h3_dispatch(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager(H3) construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    int dead_port = ut_reserve_closed_port();
+    UtClosedPort dead_port_holder;
+    int dead_port = dead_port_holder.port();
     if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket");
         return;
@@ -14500,10 +14650,11 @@ static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
 static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
     ExceptionSink xsink;
 
-    // Reserve an ephemeral port to use as the "proxy" address.  It's closed
-    // immediately so the connect will fail — but the error message should
-    // reference this port, proving the H1 connection targets the proxy.
-    int proxy_port = ut_reserve_closed_port();
+    // Hold a port with no listener to use as the "proxy" address, so the
+    // connect will fail — but the error message should reference this port,
+    // proving the H1 connection targets the proxy.
+    UtClosedPort proxy_port_holder;
+    int proxy_port = proxy_port_holder.port();
     if (proxy_port <= 0) {
         UT_ASSERT(c, false, "reserve proxy port");
         return;
@@ -15533,6 +15684,43 @@ static QoreValue f_dbg_async_io_release_held_timer_callbacks(const QoreListNode*
     return static_cast<int64>(AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(xsink));
 }
 
+//! Debug-only: sets the number of responses that an HTTP/2 or HTTP/3 client dispatches in one read pass; 0: the default
+static QoreValue f_dbg_http_client_drain_limit(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t limit = get_param_value(params, 0).getAsBigInt();
+    if (limit < 0 || limit > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_client_drain_limit(): invalid limit %lld",
+            (long long)limit);
+        return QoreValue();
+    }
+    QoreHttpClientDrainDebug::get().drain_limit.store(static_cast<int>(limit), std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: holds the completed responses of HTTP/2 and HTTP/3 clients from now on (True), or not (False)
+/** While held, the responses accumulate; the read pass after the hold dispatches them all
+*/
+static QoreValue f_dbg_http_client_hold_outputs(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreHttpClientDrainDebug::get().setHold(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until a read pass of a client found at least the given number of responses held
+/** @return False if the wait timed out
+*/
+static QoreValue f_dbg_http_client_wait_held_outputs(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t count = get_param_value(params, 0).getAsBigInt();
+    return QoreHttpClientDrainDebug::get().waitHeld(count < 0 ? 0 : static_cast<size_t>(count),
+        get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: the number of HTTP/2 and HTTP/3 client read passes that left responses without an immediate re-poll
+static QoreValue f_dbg_http_client_stranded_passes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(QoreHttpClientDrainDebug::get().stranded_passes.load(std::memory_order_relaxed));
+}
+
 //! Debug-only: the number of system events that matched no event loop registration in the process
 /** See QoreEventLoop::dbgUnmatchedKernelEvents(): a registration left in the kqueue or the epoll set wakes every poll
     at once
@@ -15565,6 +15753,45 @@ static QoreValue f_dbg_socket_wait_controller_op(const QoreListNode* params, Run
     }
     return my_socket_priv::getPriv(**s)->dbgWaitForControllerOp(
         static_cast<int>(get_param_value(params, 1).getAsBigInt()));
+}
+
+//! Debug-only: returns the number of onComplete() calls that the global async I/O controller has dispatched
+/** A test sees with it whether the completion of an operation has been dispatched at a given point, such as while
+    the operation's abort() runs, which no Qore code can see otherwise
+*/
+static QoreValue f_dbg_async_io_on_complete_dispatched(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgOnCompleteDispatched();
+}
+
+//! Debug-only: sets or clears the shutdown mark of an owner in the global async I/O controller's dispatcher
+/** As flushCallbacksByOwner() does around its wait; a test holds the mark with it to check what happens to the work
+    of an owner that is shutting down
+*/
+static QoreValue f_dbg_async_io_mark_owner_shutting_down(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* owner = get_param_value(params, 0).get<const QoreStringNode>();
+    bool mark = HARD_QORE_VALUE_BOOL(params, 1);
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    ctrl->dbgSetOwnerShuttingDown(owner->c_str(), mark);
+    return QoreValue();
 }
 
 //! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
@@ -15904,6 +16131,34 @@ static QoreValue f_dbg_async_io_dispatch_held_releases(const QoreListNode* param
     }
     return AsyncIoControllerPriv::dbgDispatchHeldOffIoThreadReleases((size_t)count,
         get_param_value(params, 1).getAsBigInt(), xsink);
+}
+
+//! Debug-only: makes the next async I/O thread that delivers work (pushes an operation's result to its result Queue,
+//! or dispatches the callback of a fired timer) wait after the delivery, or ends that wait
+/** Tests use this to check what a thread that has received an operation's result, or has seen a timer callback's
+    work done, observes before the I/O thread does anything after the delivery, deterministically.  With @a pause
+    true, the next delivery pauses (the pause is taken before the delivery); with @a pause false, the pause is ended
+    (or cancelled if not taken yet), and the function returns True if a delivery took it.  A test must end the pause
+    (also when it fails), or the I/O thread waits until the process exits.
+ */
+static QoreValue f_dbg_async_io_pause_after_delivery(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgPauseAfterDelivery(AsyncIoControllerPriv::DBG_PAUSE_DELIVERY,
+        get_param_value(params, 0).getAsBool());
+}
+
+//! Debug-only: makes the next callback worker that sends the result of a continuePoll() step of an async I/O
+//! operation to the I/O thread wait after sending it, or ends that wait
+/** Tests use this to check what a thread that has received an operation's result observes before the callback
+    worker that ran the operation's last step does anything after sending the step's result, deterministically.
+    With @a pause true, the next step result pauses (the pause is taken before the result is sent); with @a pause
+    false, the pause is ended (or cancelled if not taken yet), and the function returns True if a step result took
+    it.  A test must end the pause (also when it fails), or the worker waits until the process exits.
+ */
+static QoreValue f_dbg_async_io_pause_after_step_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return AsyncIoControllerPriv::dbgPauseAfterDelivery(AsyncIoControllerPriv::DBG_PAUSE_STEP_RESULT,
+        get_param_value(params, 0).getAsBool());
 }
 
 //! Debug-only: detach (release) a registered socket's private data while keeping the object live and its fd open.
@@ -17098,11 +17353,500 @@ static QoreValue f_dbg_get_program_thread_cancel_generation_count(const QoreList
 }
 #endif
 
+//! Crafted AOT value payloads: a value that cannot be read leaves the read pointer past the value, or at the end of
+//! the data if it is malformed, and no reader reads past the end (qore#5848)
+/** The payloads are read from buffers of their exact size, so a read past the end is seen by valgrind and ASan.
+*/
+namespace {
+struct AotCraft {
+    QoreAOTBinaryWriter w;
+    std::vector<uint8_t> image;
+    QoreAOTBinaryReader r;
+    std::string error;
+
+    AotCraft() {
+        w.feature_flags = QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS;
+    }
+
+    //! makes the image; the payloads use the string pool of the writer
+    bool finish() {
+        uint32_t sec = w.beginSection(QoreAOTSectionType::TYPEDEFS);
+        w.endSection(sec);
+        QoreAOTBinaryHeader hdr{};
+        hdr.magic = QORE_AOT_BINARY_MAGIC;
+        hdr.version = QORE_AOT_BINARY_VERSION;
+        hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
+        hdr.qore_version_major = QORE_VERSION_MAJOR;
+        hdr.qore_version_minor = QORE_VERSION_MINOR;
+        hdr.qore_version_patch = QORE_VERSION_PATCH;
+        hdr.feature_flags = w.feature_flags;
+        return w.finalize(hdr, image) && r.open(image.data(), static_cast<uint32_t>(image.size()), error);
+    }
+
+    //! a string ref: the offset of the string in the pool, written to a scratch writer
+    uint32_t ref(const char* str) {
+        QoreAOTBinaryWriter& wr = w;
+        uint32_t pos = wr.position();
+        wr.writeStringRef(str);
+        const uint8_t* p = wr.getBuffer().data() + pos;
+        uint32_t off = QoreAOTBinaryReader::readU32(p);
+        wr.truncate(pos);
+        return off;
+    }
+};
+
+struct Bytes {
+    std::vector<uint8_t> b;
+    Bytes& u8(uint8_t v) { b.push_back(v); return *this; }
+    Bytes& u16(uint16_t v) { uint8_t t[2]; memcpy(t, &v, 2); b.insert(b.end(), t, t + 2); return *this; }
+    Bytes& u32(uint32_t v) { uint8_t t[4]; memcpy(t, &v, 4); b.insert(b.end(), t, t + 4); return *this; }
+    Bytes& i64(int64_t v) { uint8_t t[8]; memcpy(t, &v, 8); b.insert(b.end(), t, t + 8); return *this; }
+    Bytes& tag(QoreAOTValueTag t) { return u8(static_cast<uint8_t>(t)); }
+    Bytes& add(const Bytes& o) { b.insert(b.end(), o.b.begin(), o.b.end()); return *this; }
+    //! an int value
+    Bytes& intv(int64_t v) { return tag(QoreAOTValueTag::VT_INT64).i64(v); }
+    //! a plain container kind (typed value containers are enabled)
+    Bytes& plain() { return u8(static_cast<uint8_t>(QoreAOTContainerValueType::Plain)); }
+};
+
+//! reads a value from an exactly-sized copy of the payload; returns the offset of the read pointer after it
+static size_t ut_aot_read(AotCraft& a, const std::vector<uint8_t>& payload, std::string& error, QoreValue* out = nullptr,
+        size_t start = 0) {
+    std::unique_ptr<uint8_t[]> buf(new uint8_t[payload.size()]);
+    memcpy(buf.get(), payload.data(), payload.size());
+    const uint8_t* p = buf.get() + start;
+    QoreValue v = a.r.readValue(p, buf.get() + payload.size(), error);
+    size_t rv = p - buf.get();
+    if (out) {
+        *out = v;
+    } else {
+        v.discard(nullptr);
+    }
+    return rv;
+}
+}
+
+static void ut_aot_value_reader_bounds(UnitTestCounters& c) {
+    AotCraft a;
+    // valid values of every kind that needs no Program, written by the writer: reading and skipping each consume the
+    // same bytes, as a value that fails is skipped
+    std::vector<std::vector<uint8_t>> valid;
+    {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        l->push(QoreValue(1), &xsink);
+        l->push(new QoreStringNode("x"), &xsink);
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+        h->setKeyValue("a", l->refSelf(), &xsink);
+        h->setKeyValue("b", QoreValue(2.5), &xsink);
+        std::vector<QoreValue> vals = {QoreValue(), QoreValue(null()), QoreValue(true), QoreValue(-5),
+            QoreValue(1.25), QoreValue(new QoreStringNode("abc")), QoreValue(new QoreNumberNode("1.5")),
+            QoreValue(new BinaryNode(strdup("xyz"), 3)), QoreValue(DateTimeNode::makeAbsolute(nullptr, 1000, 5)),
+            QoreValue(DateTimeNode::makeRelative(1, 2, 3, 4, 5, 6, 7)), QoreValue(l->refSelf()),
+            QoreValue(h->refSelf())};
+        for (QoreValue& v : vals) {
+            uint32_t pos = a.w.position();
+            if (a.w.writeValue(v)) {
+                const std::vector<uint8_t>& buf = a.w.getBuffer();
+                valid.emplace_back(buf.begin() + pos, buf.end());
+            }
+            a.w.truncate(pos);
+            v.discard(&xsink);
+        }
+    }
+    uint32_t key = a.ref("k");
+    uint32_t str = a.ref("abc");
+    uint32_t enum_path = a.ref("NoSuchEnum5848");
+    uint32_t enum_member = a.ref("X");
+    uint32_t class_path = a.ref("NoSuchClass5848");
+    if (!a.finish()) {
+        UT_ASSERT(c, false, ("AOT value reader: image: " + a.error).c_str());
+        return;
+    }
+    const uint32_t bad_offset = 0xfffffff0u;
+
+    UT_ASSERT_EQ(c, 12, static_cast<int>(valid.size()), "AOT value reader: the valid values are written");
+    for (size_t i = 0; i < valid.size(); ++i) {
+        std::string err;
+        QoreValue v;
+        size_t read_len = ut_aot_read(a, valid[i], err, &v);
+        v.discard(nullptr);
+        std::unique_ptr<uint8_t[]> buf(new uint8_t[valid[i].size()]);
+        memcpy(buf.get(), valid[i].data(), valid[i].size());
+        const uint8_t* p = buf.get();
+        std::string skip_err;
+        bool skipped = a.r.skipValue(p, buf.get() + valid[i].size(), skip_err);
+        UT_ASSERT(c, err.empty() && skipped && read_len == valid[i].size()
+            && static_cast<size_t>(p - buf.get()) == valid[i].size(),
+            ("AOT value reader: value " + std::to_string(i) + " is read and skipped whole: " + err + skip_err).c_str());
+    }
+    // a string whose length is past the end of the string pool
+    {
+        Bytes sv;
+        sv.tag(QoreAOTValueTag::VT_STRING).u32(0x7fffffffu).u32(str);
+        std::string err;
+        size_t pos = ut_aot_read(a, sv.b, err);
+        UT_ASSERT(c, !err.empty() && pos == sv.b.size(),
+            "AOT value reader: a string longer than the string pool fails, and is skipped");
+    }
+    // a value nested deeper than the reader allows: it fails without overflowing the stack
+    {
+        Bytes deep;
+        for (int i = 0; i < 300; ++i) {
+            deep.tag(QoreAOTValueTag::VT_LIST).plain().u32(1);
+        }
+        deep.intv(1);
+        std::string err;
+        size_t pos = ut_aot_read(a, deep.b, err);
+        UT_ASSERT(c, !err.empty() && pos == deep.b.size(), "AOT value reader: a value nested too deeply fails");
+    }
+
+    // a list whose second element has an invalid string offset, followed by an int
+    {
+        Bytes list;
+        list.tag(QoreAOTValueTag::VT_LIST).plain().u32(3).intv(1)
+            .tag(QoreAOTValueTag::VT_STRING).u32(3).u32(bad_offset).intv(3);
+        Bytes all = Bytes().add(list).intv(7);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a list element with an invalid string offset fails");
+        UT_ASSERT_EQ(c, list.b.size(), pos, "AOT value reader: the pointer is past the list after an element error");
+        std::string err2;
+        QoreValue v;
+        ut_aot_read(a, all.b, err2, &v, pos);
+        UT_ASSERT(c, err2.empty() && v.getType() == NT_INT && v.getAsBigInt() == 7,
+            "AOT value reader: the value after a list that failed is read");
+        v.discard(nullptr);
+    }
+    // a hash with an enum that does not resolve, followed by an int
+    {
+        Bytes hash;
+        hash.tag(QoreAOTValueTag::VT_HASH).plain().u32(2).u32(key).tag(QoreAOTValueTag::VT_ENUM)
+            .u32(14).u32(enum_path).u32(1).u32(enum_member).u32(key).intv(2);
+        Bytes all = Bytes().add(hash).intv(8);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a hash value with an unknown enum fails");
+        UT_ASSERT_EQ(c, hash.b.size(), pos, "AOT value reader: the pointer is past the hash after a value error");
+    }
+    // a constructor default whose second argument fails, followed by an int
+    {
+        Bytes obj;
+        obj.tag(QoreAOTValueTag::VT_NEW_OBJECT).u32(15).u32(class_path).u32(2).intv(1)
+            .tag(QoreAOTValueTag::VT_STRING).u32(3).u32(bad_offset);
+        Bytes all = Bytes().add(obj).intv(9);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a constructor argument with an invalid string offset fails");
+        UT_ASSERT_EQ(c, obj.b.size(), pos, "AOT value reader: the pointer is past the constructor default after an "
+            "argument error");
+    }
+    // a plugin value with a non-zero reserved field
+    {
+        Bytes pl;
+        pl.tag(QoreAOTValueTag::VT_PLUGIN_INSTANCE).u16(0).u16(0).u16(0).u16(1).u32(3).u8(1).u8(2).u8(3);
+        Bytes all = Bytes().add(pl).intv(10);
+        std::string err;
+        size_t pos = ut_aot_read(a, all.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a plugin value with a reserved field fails");
+        UT_ASSERT_EQ(c, pl.b.size(), pos, "AOT value reader: the pointer is past the plugin value after an error");
+    }
+    // malformed values: the pointer is at the end of the data
+    {
+        // a list that claims more elements than the data has
+        Bytes list;
+        list.tag(QoreAOTValueTag::VT_LIST).plain().u32(0xffffffffu).intv(1).tag(QoreAOTValueTag::VT_STRING).u32(3);
+        std::string err;
+        size_t pos = ut_aot_read(a, list.b, err);
+        UT_ASSERT(c, !err.empty(), "AOT value reader: a truncated list fails");
+        UT_ASSERT_EQ(c, list.b.size(), pos, "AOT value reader: the pointer is at the end after a truncated list");
+        // every prefix of a valid hash with a nested list
+        Bytes nested;
+        nested.tag(QoreAOTValueTag::VT_HASH).plain().u32(1).u32(key).tag(QoreAOTValueTag::VT_LIST).plain().u32(2)
+            .tag(QoreAOTValueTag::VT_STRING).u32(3).u32(str).intv(4);
+        bool all_ok = true;
+        for (size_t n = 0; n < nested.b.size(); ++n) {
+            std::vector<uint8_t> prefix(nested.b.begin(), nested.b.begin() + n);
+            std::string perr;
+            size_t ppos = prefix.empty() ? 0 : ut_aot_read(a, prefix, perr);
+            if (!prefix.empty() && (perr.empty() || ppos != prefix.size())) {
+                all_ok = false;
+            }
+        }
+        UT_ASSERT(c, all_ok, "AOT value reader: every truncation of a nested value fails at the end of the data");
+        std::string err2;
+        QoreValue v;
+        size_t pos2 = ut_aot_read(a, nested.b, err2, &v);
+        UT_ASSERT(c, err2.empty() && pos2 == nested.b.size() && v.getType() == NT_HASH,
+            "AOT value reader: the complete nested value is read");
+        v.discard(nullptr);
+    }
+    // a closure record read as an expression (read_expr_closure_create()): truncated after each field, and with a
+    // default that fails, after which the next expression is read
+    {
+        auto closure = [&](bool bad_default) {
+            Bytes e;
+            // flags and class type
+            e.u8(static_cast<uint8_t>(AOTExprKind::CLOSURE_CREATE)).u32(str).u32(str);
+            // the location of the closure (format version 26: QORE_AOT_SOURCE_LOCATIONS_VERSION): none (lines 0)
+            if (a.r.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
+                e.u32(0).u32(0).i64(0).u32(str).u32(str);
+            }
+            // return type, one parameter with a default
+            e.u32(str).u16(1).u32(str).u32(str).u8(1);
+            if (bad_default) {
+                e.tag(QoreAOTValueTag::VT_LIST).plain().u32(2).intv(1).tag(QoreAOTValueTag::VT_STRING).u32(3)
+                    .u32(bad_offset);
+            } else {
+                e.intv(5);
+            }
+            // varargs flag (old form), no captures, IR of 4 bytes
+            e.u8(0).u16(0).u8(1).u32(4).u32(0);
+            return e;
+        };
+        Bytes full = closure(true);
+        bool all_ok = true;
+        for (size_t n = 1; n < full.b.size(); ++n) {
+            std::unique_ptr<uint8_t[]> buf(new uint8_t[n]);
+            memcpy(buf.get(), full.b.data(), n);
+            const uint8_t* p = buf.get();
+            std::string err;
+            QoreValue v = readOneExpr(a.r, p, buf.get() + n, err, getProgram(), nullptr, 0, nullptr, 0);
+            v.discard(nullptr);
+            if (err.empty() || p > buf.get() + n) {
+                all_ok = false;
+            }
+        }
+        UT_ASSERT(c, all_ok, "AOT value reader: every truncation of a closure record fails within the data");
+        Bytes all = Bytes().add(full).u8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE)).intv(11);
+        std::unique_ptr<uint8_t[]> buf(new uint8_t[all.b.size()]);
+        memcpy(buf.get(), all.b.data(), all.b.size());
+        const uint8_t* p = buf.get();
+        const uint8_t* end = buf.get() + all.b.size();
+        std::string err;
+        QoreValue v = readOneExpr(a.r, p, end, err, getProgram(), nullptr, 0, nullptr, 0);
+        v.discard(nullptr);
+        UT_ASSERT(c, err.find("default") != std::string::npos,
+            ("AOT value reader: a closure default that fails is the error: " + err).c_str());
+        UT_ASSERT_EQ(c, full.b.size(), static_cast<size_t>(p - buf.get()),
+            "AOT value reader: the pointer is past the closure record after a default error");
+        std::string err2;
+        QoreValue v2 = readOneExpr(a.r, p, end, err2, getProgram(), nullptr, 0, nullptr, 0);
+        UT_ASSERT(c, err2.empty() && v2.getType() == NT_INT && v2.getAsBigInt() == 11,
+            "AOT value reader: the expression after a closure record that failed is read");
+        v2.discard(nullptr);
+    }
+}
+
+//! Debug-only: runs the unit tests of the AOT value reader with crafted payloads (qore#5848)
+static QoreValue f_dbg_run_aot_value_reader_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_aot_value_reader_bounds(c);
+    return make_unit_test_result(c, xsink);
+}
+
 //! Debug-only: runs the unit tests of the poll operation states that need no connection (Http3ServerPollStateTest)
 static QoreValue f_dbg_run_poll_state_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     Http3ServerPollStateTest::run(c);
     return make_unit_test_result(c, xsink);
+}
+
+//! issues #5917, #5933: self calls without a method, as the AOT runtime makes for calls that it dispatches by name
+/** The background operator holds the object of the starting code for a call of a normal method, which a call without
+    a method is unless its name resolves only to a static method (SelfFunctionCallNode::backgroundCallIsStatic()).
+    BGThreadParams asserted that only a copy() call has no method.  A qualified call without a method asserted that
+    it had one (SelfFunctionCallNode::evalImpl()); it now calls the method of the class that it names, which the class
+    of the object must be or inherit.
+*/
+static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* pgm = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS);
+    ON_BLOCK_EXIT([pgm] () {
+        ExceptionSink xs;
+        // waits for the threads that the test starts
+        pgm->waitForTerminationAndDeref(&xs);
+        xs.clear();
+    });
+    // the code is parsed as at the top level, with no return type of running code: StatementBlock::parseCheckReturn()
+    // reads the return type of the running code (getReturnTypeInfo()), here hash for run_debug_unit_tests(), and not
+    // the one of the code being parsed (parse_get_return_type_info()), so the blocks of the methods were refused
+    // (issue #5940)
+    const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
+    pgm->parse("%modern\n"
+        "class UtBgBase {\n"
+        "    public { static Queue q(); }\n"
+        "    m() { UtBgBase::q.push(\"UtBgBase::m\"); }\n"
+        "    static sm() { UtBgBase::q.push(\"UtBgBase::sm\"); }\n"
+        "}\n"
+        "class UtBgChild inherits UtBgBase {\n"
+        "    m() { UtBgBase::q.push(\"UtBgChild::m\"); }\n"
+        "}\n"
+        "class UtBgOther {\n"
+        "    m() {}\n"
+        "}\n"
+        "UtBgChild sub ut_make() { return new UtBgChild(); }\n"
+        "string sub ut_take() { return UtBgBase::q.get(10s); }\n",
+        "ut-self-call-without-method", &xsink, nullptr, 0);
+    saveReturnTypeInfo(old_return_type);
+    UT_ASSERT(c, !xsink, "the self call test program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        return;
+    }
+    const QoreClass* base = pgm->findClass("UtBgBase", &xsink);
+    const QoreClass* child = pgm->findClass("UtBgChild", &xsink);
+    const QoreClass* other = pgm->findClass("UtBgOther", &xsink);
+    UT_ASSERT(c, base && child && other && !xsink, "the classes of the self call test program are found");
+    if (!base || !child || !other || xsink) {
+        xsink.clear();
+        return;
+    }
+    ValueHolder obj_holder(pgm->callFunction("ut_make", nullptr, &xsink), &xsink);
+    UT_ASSERT(c, !xsink && obj_holder->getType() == NT_OBJECT, "the object of the self call test is made");
+    if (xsink || obj_holder->getType() != NT_OBJECT) {
+        xsink.clear();
+        return;
+    }
+    QoreObject* obj = obj_holder->get<QoreObject>();
+
+    // makes a self call without a method; a qualified name is resolved on the class of the call
+    auto make_call = [&xsink] (const char* name, const QoreClass* qc, bool is_copy = false) {
+        return ReferenceHolder<SelfFunctionCallNode>(new SelfFunctionCallNode(&loc_builtin, strdup(name), nullptr,
+            qc, qore_class_private::get(*qc), is_copy), &xsink);
+    };
+    // takes the record of the next call made by the test program
+    auto take = [&] () -> std::string {
+        ValueHolder v(pgm->callFunction("ut_take", nullptr, &xsink), &xsink);
+        if (xsink || v->getType() != NT_STRING) {
+            xsink.clear();
+            return std::string();
+        }
+        return v->get<const QoreStringNode>()->c_str();
+    };
+
+    // the calls that hold the object in a background thread
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("m", base);
+        UT_ASSERT(c, !n->backgroundCallIsStatic(obj), "a call of a normal method by name is not static");
+        UT_ASSERT(c, !n->backgroundCallIsStatic(nullptr),
+            "a call of a normal method by name is not static without an object");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("sm", base);
+        UT_ASSERT(c, n->backgroundCallIsStatic(obj), "a call of a static method by name is static");
+        UT_ASSERT(c, n->backgroundCallIsStatic(nullptr), "a call of a static method by name is static without an "
+            "object");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgBase::sm", base);
+        UT_ASSERT(c, n->backgroundCallIsStatic(obj), "a qualified call of a static method by name is static");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("no_such_method", base);
+        UT_ASSERT(c, !n->backgroundCallIsStatic(obj), "a call of an unknown method by name is not static");
+    }
+    {
+        ReferenceHolder<SelfFunctionCallNode> n = make_call("copy", base, true);
+        UT_ASSERT(c, !n->backgroundCallIsStatic(obj), "a copy() call is not static");
+        UT_ASSERT(c, !n->backgroundCallIsStatic(nullptr), "a copy() call is not static without an object");
+    }
+
+    {
+        ProgramThreadCountContextHelper tch(&xsink, pgm, true);
+        UT_ASSERT(c, !xsink, "the self call test program is entered");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        ObjectSubstitutionHelper osh(obj, qore_class_private::get(*child));
+
+        // background calls without a method: virtual by name, qualified (not virtual), and static by name
+        struct {
+            const char* name;
+            const QoreClass* qc;
+            const char* expected;
+        } bg_calls[] = {
+            {"m", child, "UtBgChild::m"},
+            {"UtBgBase::m", base, "UtBgBase::m"},
+            {"sm", base, "UtBgBase::sm"},
+        };
+        for (auto& bc : bg_calls) {
+            ReferenceHolder<SelfFunctionCallNode> n = make_call(bc.name, bc.qc);
+            ValueHolder tid(do_op_background(QoreValue(*n), &xsink), &xsink);
+            std::string desc = std::string("a background call of ") + bc.name + "() without a method";
+            UT_ASSERT(c, !xsink && tid->getType() == NT_INT, (desc + " starts a thread").c_str());
+            xsink.clear();
+            UT_ASSERT(c, take() == bc.expected, (desc + " calls " + bc.expected + "()").c_str());
+        }
+
+        // a qualified call without a method evaluated in the starting thread calls the method of the class that it
+        // names
+        {
+            ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgBase::m", base);
+            ValueHolder rv(n->eval(&xsink), &xsink);
+            UT_ASSERT(c, !xsink, "a qualified call without a method is evaluated");
+            xsink.clear();
+            UT_ASSERT(c, take() == "UtBgBase::m", "a qualified call without a method is not virtual");
+        }
+        // which the class of the object must be or inherit
+        {
+            ReferenceHolder<SelfFunctionCallNode> n = make_call("UtBgOther::m", other);
+            ValueHolder rv(n->eval(&xsink), &xsink);
+            QoreValue err = xsink.isException() ? xsink.getExceptionErr() : QoreValue();
+            UT_ASSERT(c, err.getType() == NT_STRING
+                && !strcmp(err.get<const QoreStringNode>()->c_str(), "METHOD-DOES-NOT-EXIST"),
+                "a qualified call of a class that the object does not inherit raises METHOD-DOES-NOT-EXIST");
+            xsink.clear();
+        }
+    }
+}
+
+// the helpers of AOT code compiled before issue #5933 (JITRuntime.cpp), with the arguments that such code passes
+extern "C" uint64_t qore_rt_background_self_call_aot(const char* method_name, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+extern "C" uint64_t qore_rt_background_self_call_aot_throwing(const char* method_name, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+
+//! issue #5933: the background self-call helper of code compiled by an older qcc raises an exception
+/** The helper became qore_rt_background_self_call_aot_v2(), which takes a class reference before the name of the
+    method; a standalone executable compiled by an older qcc and linked to libqore dynamically (which no runtime
+    identity check refuses) calls the old symbol with the old arguments, which must not be taken as the new ones
+*/
+static void ut_old_background_self_call_helper(UnitTestCounters& c) {
+    auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
+        if (!xsink.isException()) {
+            return false;
+        }
+        QoreValue err = xsink.getExceptionErr();
+        QoreValue desc = xsink.getExceptionDesc();
+        return err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "AOT-RUNTIME-ERROR")
+            && desc.getType() == NT_STRING && strstr(desc.get<const QoreStringNode>()->c_str(), "'m'")
+            && strstr(desc.get<const QoreStringNode>()->c_str(), "recompile the program");
+    };
+    {
+        ExceptionSink xsink;
+        uint64_t args[1] = {0};
+        qore_rt_background_self_call_aot("m", args, 1, &xsink);
+        UT_ASSERT(c, is_rebuild_error(xsink), "the old background self-call helper raises AOT-RUNTIME-ERROR");
+        xsink.clear();
+    }
+    {
+        ExceptionSink xsink;
+        bool thrown = false;
+        try {
+            qore_rt_background_self_call_aot_throwing("m", nullptr, 0, &xsink);
+        } catch (...) {
+            thrown = true;
+        }
+        UT_ASSERT(c, thrown && is_rebuild_error(xsink),
+            "the old throwing background self-call helper raises AOT-RUNTIME-ERROR and unwinds");
+        xsink.clear();
+    }
 }
 
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -17120,6 +17864,8 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_callback_caller_parse_options(c, rc.getProgram());
+    ut_self_call_without_method(c, rc.getProgram());
+    ut_old_background_self_call_helper(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
 #endif
@@ -17663,12 +18409,17 @@ struct ProgramTeardownHold {
     std::condition_variable cond;
     //! the Program to hold the teardown of; null if not armed; only compared, never dereferenced
     QoreProgram* pgm = nullptr;
-    //! the thread is waiting in the hook
+    //! the thread has reached the hook (it stays set when the thread continues)
     bool held = false;
     //! the thread may continue
     bool released = false;
     //! the thread has marked the Program and waits for the threads in it to leave
     bool final_wait = false;
+    //! a thread waits in the hook and has not woken yet; a new hold is not armed then, as arming it resets "released"
+    bool waiting = false;
+    //! the thread was released without being woken (a negative timeout of dbg_continue_program_teardown()); it
+    //! continues at the next call of that function, not at a spurious wakeup
+    bool no_wake = false;
 };
 
 ProgramTeardownHold& program_teardown_hold() {
@@ -17688,8 +18439,10 @@ void dbg_hold_program_teardown(QoreProgram* pgm, qore_program_private::DbgTeardo
             return;
         }
         h.held = true;
+        h.waiting = true;
         h.cond.notify_all();
-        h.cond.wait(l, [&h]() { return h.released; });
+        h.cond.wait(l, [&h]() { return h.released && !h.no_wake; });
+        h.waiting = false;
         return;
     }
     // the Program's lock is held: this point only reports that it was reached
@@ -17701,7 +18454,7 @@ void dbg_hold_program_teardown(QoreProgram* pgm, qore_program_private::DbgTeardo
 }
 
 //! arms a hold of the thread that tears down the given Program; see ProgramTeardownHold
-/** @throw DBG-ARGUMENT-ERROR a hold is already armed
+/** @throw DBG-ARGUMENT-ERROR a hold is already armed, or the thread of the previous hold has not woken yet
 */
 static QoreValue f_dbg_hold_program_teardown(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
@@ -17716,10 +18469,17 @@ static QoreValue f_dbg_hold_program_teardown(const QoreListNode* params, Runtime
         xsink->raiseException("DBG-ARGUMENT-ERROR", "a Program teardown hold is already armed");
         return QoreValue();
     }
+    // the thread of a hold whose dbg_continue_program_teardown() timed out before the thread woke still waits for
+    // "released", which a new hold would reset
+    if (h.waiting) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the teardown of the previous hold has not continued yet");
+        return QoreValue();
+    }
     h.pgm = *pgm;
     h.held = false;
     h.released = false;
     h.final_wait = false;
+    h.no_wake = false;
     qore_program_private::dbg_teardown_hook.store(dbg_hold_program_teardown);
     return QoreValue();
 }
@@ -17736,9 +18496,13 @@ static QoreValue f_dbg_wait_program_teardown_held(const QoreListNode* params, Ru
 //! lets the held teardown continue and waits until it waits for the threads in the Program to leave it
 /** The hold is disarmed in any case.
 
-    @return False if the teardown did not reach the wait within the timeout
+    A negative timeout lets the teardown continue without waking its thread and returns at once: the thread wakes at
+    the next notification (another call of this function); a test uses it for a thread that has not woken yet, which
+    a timeout can leave as well.
 
-    @throw DBG-ARGUMENT-ERROR no teardown is held
+    @return False if the teardown did not reach the wait within the timeout; True with a negative timeout
+
+    @throw DBG-ARGUMENT-ERROR no teardown is held (a thread that waits in the hold is woken all the same)
 */
 static QoreValue f_dbg_continue_program_teardown(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -17746,10 +18510,24 @@ static QoreValue f_dbg_continue_program_teardown(const QoreListNode* params, Run
     ProgramTeardownHold& h = program_teardown_hold();
     std::unique_lock<std::mutex> l(h.m);
     if (!h.pgm || !h.held) {
+        // an armed hold that no teardown has reached is disarmed, so that a teardown that reaches it later continues
+        if (h.pgm) {
+            h.pgm = nullptr;
+            h.released = true;
+        }
+        // and a thread of an earlier hold that was not woken (see above) is woken
+        h.no_wake = false;
+        h.cond.notify_all();
         xsink->raiseException("DBG-ARGUMENT-ERROR", "no Program teardown is held");
         return QoreValue();
     }
     h.released = true;
+    if (timeout_ms < 0) {
+        h.no_wake = true;
+        h.pgm = nullptr;
+        return true;
+    }
+    h.no_wake = false;
     h.cond.notify_all();
     bool rv = h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return h.final_wait; });
     // "released" stays set, so that a held thread that has not woken yet continues
@@ -18141,6 +18919,30 @@ static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig
     return QoreValue();
 }
 
+//! lets a held background compile that the end of the process abandons end before the process does (qore#5842)
+/** Without this, a compile held at the end of the process stays held, and the process ends with \c _exit().  With
+    \c "shutdown", the compile is let go when it is abandoned, and QoreJIT::shutdown() waits for it, so that it
+    releases the JIT; with \c "exit", it is let go at the end of the process, which waits for it and releases the JIT
+    then (QoreJIT::exitQuickly()).
+
+    @throw DBG-ARGUMENT-ERROR the point is neither \c "shutdown" nor \c "exit"
+*/
+static QoreValue f_dbg_finish_abandoned_bg_compile(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* where = get_param_value(params, 0).get<const QoreStringNode>();
+    QoreJIT::DbgFinishAbandoned w;
+    if (where && *where == "shutdown") {
+        w = QoreJIT::DbgFinishAbandoned::Shutdown;
+    } else if (where && *where == "exit") {
+        w = QoreJIT::DbgFinishAbandoned::Exit;
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the point must be \"shutdown\" or \"exit\"");
+        return QoreValue();
+    }
+    QoreJIT::instance().dbgFinishAbandonedCompile(w);
+    return QoreValue();
+}
+
 //! waits until the background JIT compiler is stopped at the given point; returns False on timeout
 static QoreValue f_dbg_wait_bg_compile_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::BgCompileHoldPoint point;
@@ -18330,6 +19132,50 @@ static QoreValue f_dbg_get_live_bigint_count(const QoreListNode* params, Runtime
 */
 static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return q_get_live_bigfloat_count();
+}
+
+//! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
+static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
+}
+
+//! holds the next batch JIT collection of the named root function after it has held a Program (qore#5874)
+static QoreValue f_dbg_hold_batch_collection(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    qore_dbg_hold_batch_collection(func ? func->c_str() : "");
+    return QoreValue();
+}
+
+//! waits until the armed batch collection is held; returns False on timeout
+static QoreValue f_dbg_wait_batch_collection_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_wait_batch_collection_held(get_param_value(params, 0).getAsBigInt());
+}
+
+//! waits until a Program's teardown waits for a batch collection's hold; returns False on timeout
+static QoreValue f_dbg_wait_teardown_compile_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_wait_teardown_compile_hold(get_param_value(params, 0).getAsBigInt());
+}
+
+//! counts the holds refused to the batch collections and effect analyses of the named root function (qore#5874)
+static QoreValue f_dbg_count_batch_collection_refusals(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* func = get_param_value(params, 0).get<const QoreStringNode>();
+    qore_dbg_count_batch_collection_refusals(func ? func->c_str() : "");
+    return QoreValue();
+}
+
+//! returns the number of holds refused since dbg_count_batch_collection_refusals()
+static QoreValue f_dbg_get_batch_collection_refusals(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_get_batch_collection_refusals();
+}
+
+//! lets the held batch collection continue; returns False if it did not continue before the timeout
+static QoreValue f_dbg_continue_batch_collection(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_continue_batch_collection(get_param_value(params, 0).getAsBigInt());
 }
 
 //! returns the number of hashes and lists copied in the current thread
@@ -18595,6 +19441,85 @@ static QoreValue f_dbg_register_user_module_from_source(const QoreListNode* para
     QoreStringNodeValueHelper src(get_param_value(params, 1));
     MM.registerUserModuleFromSource(name->c_str(), src->c_str(), getProgram(), xsink);
     return QoreValue();
+}
+
+//! returns a hash of module name -> sorted list of names for a dependency record map
+static QoreHashNode* dbg_dependency_record_hash(const md_map_t& m) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    for (const auto& i : m) {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), nullptr);
+        for (const std::string& n : i.second) {
+            l->push(new QoreStringNode(n), nullptr);
+        }
+        rv->setKeyValue(i.first.c_str(), l.release(), nullptr);
+    }
+    return rv.release();
+}
+
+//! Debug-only: returns the module manager's dependency records (#5953)
+/** @return a hash with the keys \c requires (user module -> the user modules it requires), \c dependents (user module
+    -> the user modules that require it) and \c binary_users (binary module -> the user modules that require it)
+*/
+static QoreValue f_dbg_get_module_dependency_records(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    md_map_t reqs, dependents, binary_users;
+    QMM.getDependencyRecords(reqs, dependents, binary_users);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("requires", dbg_dependency_record_hash(reqs), xsink);
+    rv->setKeyValue("dependents", dbg_dependency_record_hash(dependents), xsink);
+    rv->setKeyValue("binary_users", dbg_dependency_record_hash(binary_users), xsink);
+    return rv.release();
+}
+
+//! Debug-only: compiles a user module in this process as qcc does, to check the module manager's records after it
+/** @param mode \c "single" (a single-file module: compileModule()), \c "separated" (a directory module:
+    compileSeparatedModule()), \c "file" (one file of a directory module: compileSeparatedModuleFile()), \c "objects"
+    (a directory module from per-file objects: compileModuleFromObjects()) or \c "archive" (archiveModuleFromObjects())
+    @param path the module file or directory
+    @param output the output file
+    @param target the file compiled in \c "file" mode, the object files in \c "objects" and \c "archive" modes
+
+    @return the error, or NOTHING if the module was compiled
+*/
+static QoreValue f_dbg_aot_compile_module(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper mode(get_param_value(params, 0));
+    QoreStringNodeValueHelper path(get_param_value(params, 1));
+    QoreStringNodeValueHelper output(get_param_value(params, 2));
+    std::vector<std::string> targets;
+    if (const QoreListNode* l = get_param_value(params, 3).get<const QoreListNode>()) {
+        ConstListIterator li(l);
+        while (li.next()) {
+            QoreStringValueHelper str(li.getValue());
+            targets.emplace_back(str->c_str());
+        }
+    }
+    std::string error;
+    bool ok;
+    if (!strcmp(mode->c_str(), "single")) {
+        std::string src = QoreDir::get_file_content(path->c_str());
+        ok = QoreAOT::compileModule(src.c_str(), static_cast<int>(src.size()), path->c_str(), output->c_str(),
+            PO_DEFAULT, error);
+    } else if (!strcmp(mode->c_str(), "separated")) {
+        ok = QoreAOT::compileSeparatedModule(path->c_str(), output->c_str(), PO_DEFAULT, error);
+    } else if (!strcmp(mode->c_str(), "file")) {
+        if (targets.size() != 1) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_aot_compile_module(): \"file\" mode requires one target");
+            return QoreValue();
+        }
+        ok = QoreAOT::compileSeparatedModuleFile(path->c_str(), targets[0].c_str(), output->c_str(), PO_DEFAULT,
+            error);
+    } else if (!strcmp(mode->c_str(), "objects")) {
+        ok = QoreAOT::compileModuleFromObjects(path->c_str(), targets, output->c_str(), PO_DEFAULT, error);
+    } else if (!strcmp(mode->c_str(), "archive")) {
+        ok = QoreAOT::archiveModuleFromObjects(path->c_str(), targets, output->c_str(), PO_DEFAULT, error);
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_aot_compile_module(): unknown mode '%s'", mode->c_str());
+        return QoreValue();
+    }
+    if (ok) {
+        return QoreValue();
+    }
+    return new QoreStringNode(error);
 }
 
 //! returns the private data of a Counter argument, or raises an exception
@@ -18901,6 +19826,10 @@ struct DerefPointHold {
 DerefPointHold deref_decide_hold;
 //! the hold of dbg_hold_deref_marked()
 DerefPointHold deref_marked_hold;
+//! the hold of dbg_hold_deref_delete()
+DerefPointHold deref_delete_hold;
+//! the hold of dbg_hold_deref_last()
+DerefPointHold deref_last_hold;
 
 //! runs in the dereferencing thread with no lock held; disarms the hook, so it holds that thread once
 template <typename T>
@@ -18936,6 +19865,14 @@ void dbg_hold_deref_decide_hook(const char* class_name) {
 
 void dbg_hold_deref_marked_hook(const char* class_name) {
     dbg_run_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, class_name, "dbg_hold_deref_marked");
+}
+
+void dbg_hold_deref_delete_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, class_name, "dbg_hold_deref_delete");
+}
+
+void dbg_hold_deref_last_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, class_name, "dbg_hold_deref_last");
 }
 
 //! arms a hold of a dereference at one point of qore_object_private::customDeref()
@@ -18997,6 +19934,40 @@ static QoreValue f_dbg_hold_deref_decide(const QoreListNode* params, RuntimeConf
 static QoreValue f_dbg_hold_deref_marked(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, dbg_hold_deref_marked_hook,
         params, xsink);
+}
+
+//! holds the next dereference that deletes an object of the given class, once it has completed
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference that marked the object as
+    being destroyed has completed (RObject::derefDone()), and before the deletion starts (the object's destructor);
+    another thread can release a reference to the object meanwhile, and tests use the hold to make that
+    deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_delete(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_delete_hold, qore_dbg_deref_delete_hook, dbg_hold_deref_delete_hook,
+        params, xsink);
+}
+
+//! holds the next dereference that releases the last reference to an object of the given class
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference has released the last
+    reference to the object (one that has no collection to decide), and before it takes the object's lock to delete
+    the object or to hand its deletion off; another dereference can mark the object as being destroyed meanwhile, and
+    tests use the hold to make that deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_last(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_last_hold, qore_dbg_deref_last_hook, dbg_hold_deref_last_hook, params,
+        xsink);
 }
 
 namespace {
@@ -19133,6 +20104,26 @@ static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConf
     h.waiting = waiting.release();
     qore_dbg_deref_wait_hook.store(dbg_deref_wait_notify_hook);
     return QoreValue();
+}
+
+//! disarms the notification of dbg_deref_wait_notify(), if it has not been made
+/** A test disarms it when the wait it was armed for did not happen.
+
+    @return true if a notification was armed
+*/
+static QoreValue f_dbg_deref_wait_notify_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    DerefWaitNotify& h = deref_wait_notify;
+    ReferenceHolder<Counter> waiting(xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.waiting) {
+            return false;
+        }
+        waiting = h.waiting;
+        h.waiting = nullptr;
+        qore_dbg_deref_wait_hook.store(nullptr);
+    }
+    return true;
 }
 
 namespace {
@@ -19929,6 +20920,252 @@ static QoreValue f_dbg_hold_http1_send_failure_recovery(const QoreListNode* para
     }
     dbg_http1_send_failure_arm(http1_send_failure.hold_recovery, c, nullptr, std::string(),
         "dbg_hold_http1_send_failure_recovery", xsink);
+    return QoreValue();
+}
+
+QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+std::atomic<int64_t> qore_dbg_h2_connection_window_updates[2] = {{0}, {0}};
+std::atomic<bool> qore_dbg_h2_default_connection_window{false};
+
+//! keeps (or no longer keeps) the RFC 9113 default connection window (65535) in the HTTP/2 sessions created from now on
+/** For tests that detect lost connection credit by watching the window shrink, which the larger window would hide
+
+    @param on True to keep the default window
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_http2_default_connection_window(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_h2_default_connection_window.exchange(HARD_QORE_VALUE_BOOL(params, 0));
+}
+
+//! returns the WINDOW_UPDATE frames for the connection (stream 0) that HTTP/2 sessions sent
+/** @return a hash with keys \c client and \c server: the frames sent by client and by server sessions
+*/
+static QoreValue f_dbg_http2_connection_window_updates(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("client", qore_dbg_h2_connection_window_updates[0].load(), xsink);
+    h->setKeyValue("server", qore_dbg_h2_connection_window_updates[1].load(), xsink);
+    return h.release();
+}
+
+std::atomic<int64_t> qore_dbg_quic_connect_buffered{0};
+
+//! returns the bytes held by the extended-CONNECT stream buffers of all QUIC sessions (issue #5821)
+static QoreValue f_dbg_quic_connect_buffered_bytes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_quic_connect_buffered.load();
+}
+
+namespace {
+//! wakes the threads waiting in dbg_http_stream_credit_wait_deferred()
+std::mutex dbg_stream_credit_m;
+std::condition_variable dbg_stream_credit_cond;
+}
+
+void qore_dbg_stream_credit_deferred(int64_t bytes) {
+    {
+        std::lock_guard<std::mutex> lg(dbg_stream_credit_m);
+        qore_dbg_stream_credit_stats.deferred.fetch_add(bytes, std::memory_order_relaxed);
+    }
+    dbg_stream_credit_cond.notify_all();
+}
+
+//! waits until the bytes whose stream credit was deferred reach the given total
+/** @param total the total of the \c deferred count of dbg_http_stream_credit_stats() to wait for
+    @param timeout_ms the maximum time to wait (a hang guard)
+
+    @return the \c deferred count, or -1 if the timeout expired first
+*/
+static QoreValue f_dbg_http_stream_credit_wait_deferred(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 total = HARD_QORE_VALUE_INT(params, 0);
+    int64 timeout_ms = HARD_QORE_VALUE_INT(params, 1);
+    std::unique_lock<std::mutex> ul(dbg_stream_credit_m);
+    if (!dbg_stream_credit_cond.wait_for(ul, std::chrono::milliseconds(timeout_ms), [total] () {
+                return qore_dbg_stream_credit_stats.deferred.load() >= total;
+            })) {
+        return -1;
+    }
+    return qore_dbg_stream_credit_stats.deferred.load();
+}
+
+//! returns the accounting of the client stream credit deferred until the application consumes the data
+/** @return a hash with keys \c deferred, \c credited, \c settled, \c excess and \c orphaned (bytes); see
+    QoreDbgStreamCreditStats
+*/
+static QoreValue f_dbg_http_stream_credit_stats(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    QoreDbgStreamCreditStats& s = qore_dbg_stream_credit_stats;
+    h->setKeyValue("deferred", s.deferred.load(), xsink);
+    h->setKeyValue("credited", s.credited.load(), xsink);
+    h->setKeyValue("settled", s.settled.load(), xsink);
+    h->setKeyValue("excess", s.excess.load(), xsink);
+    h->setKeyValue("orphaned", s.orphaned.load(), xsink);
+    return h.release();
+}
+
+namespace {
+//! the HTTP/3 stream whose staged response data is held, set by dbg_quic_hold_stream_data(); session 0: none
+std::atomic<int64_t> dbg_quic_hold_session{0};
+std::atomic<int64_t> dbg_quic_hold_stream{-1};
+}
+
+bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id) {
+    return dbg_quic_hold_session.load(std::memory_order_acquire) == session_id
+        && dbg_quic_hold_stream.load(std::memory_order_acquire) == stream_id;
+}
+
+//! holds the staged response data of an HTTP/3 stream back from the transport, as when its client grants no
+//! flow-control credit
+/** The data that the server queues on the stream stays staged in the QUIC session, so that tests can fill the
+    stream's send buffer deterministically.  Only one stream is held at a time.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID of a streaming response
+*/
+static QoreValue f_dbg_quic_hold_stream_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t session_id = get_param_value(params, 0).getAsBigInt();
+    int64_t stream_id = get_param_value(params, 1).getAsBigInt();
+    if (session_id <= 0 || stream_id < 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_hold_stream_data(): invalid session ID %lld or stream "
+            "ID %lld", (long long)session_id, (long long)stream_id);
+        return QoreValue();
+    }
+    // the stream is set first, so that no other stream of the session matches meanwhile
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(stream_id, std::memory_order_release);
+    dbg_quic_hold_session.store(session_id, std::memory_order_release);
+    return QoreValue();
+}
+
+//! stops holding the staged response data of the stream held with dbg_quic_hold_stream_data()
+/** The held streams are resumed; their data is written with the session's next write, for example when a packet of
+    the peer is processed.
+*/
+static QoreValue f_dbg_quic_release_stream_data(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_quic_hold_session.store(0, std::memory_order_release);
+    dbg_quic_hold_stream.store(-1, std::memory_order_release);
+    // a held stream is deferred until it is resumed: without this, its data stayed held after the release
+    QuicSession::dbgResumeHeldStreams();
+    return QoreValue();
+}
+
+namespace {
+//! one point armed by dbg_http_hold_at(): the Counters are referenced
+struct DbgHttpHold {
+    Counter* reached = nullptr;
+    Counter* release = nullptr;
+};
+std::mutex dbg_http_hold_m;
+DbgHttpHold dbg_http_holds[2];
+}
+
+void qore_dbg_http_hold(QoreDbgHttpHoldPoint point) {
+    DbgHttpHold h;
+    {
+        std::lock_guard<std::mutex> l(dbg_http_hold_m);
+        DbgHttpHold& armed = dbg_http_holds[static_cast<int>(point)];
+        if (!armed.reached) {
+            return;
+        }
+        // one-shot: the hold is taken over by this thread
+        h = armed;
+        armed = DbgHttpHold();
+    }
+    ExceptionSink xsink;
+    h.reached->dec(&xsink);
+    // a hang guard only: the test releases the hold
+    h.release->waitForZero(&xsink, 60000);
+    h.reached->deref(&xsink);
+    h.release->deref(&xsink);
+    xsink.clear();
+}
+
+//! holds the next HTTP client thread that reaches the given point until \a release reaches zero (one-shot)
+/** @param point \c "submit": HTTPClient::startPollSendRecv() has checked out its connection and is about to submit
+    the request; \c "close": an HTTP/1 or HTTP/2 client connection that is being closed has been invalidated (new
+    calls on it are refused) and is not closed yet
+    @param reached decremented when a thread reaches the point
+    @param release the thread waits until it reaches zero
+
+    @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
+*/
+static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper name(get_param_value(params, 0));
+    int point;
+    if (!strcmp(name->c_str(), "submit")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Submit);
+    } else if (!strcmp(name->c_str(), "close")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+    } else {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> reached(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(dbg_http_hold_m);
+    DbgHttpHold& h = dbg_http_holds[point];
+    if (h.reached) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): point '%s' is already armed",
+            name->c_str());
+        return QoreValue();
+    }
+    h.reached = reached.release();
+    h.release = release.release();
+    return QoreValue();
+}
+
+namespace {
+//! the HTTP client connections whose closeConnection() runs now, with the number of closes of each
+std::mutex dbg_http_closing_m;
+std::unordered_map<const void*, int> dbg_http_closing;
+//! the number of times a close of a connection started while another close of it ran
+std::atomic<int64_t> dbg_http_concurrent_closes{0};
+}
+
+QoreDbgHttpCloseScope::QoreDbgHttpCloseScope(const void* conn) : conn(conn) {
+    std::lock_guard<std::mutex> l(dbg_http_closing_m);
+    if (dbg_http_closing[conn]++) {
+        dbg_http_concurrent_closes.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+QoreDbgHttpCloseScope::~QoreDbgHttpCloseScope() {
+    std::lock_guard<std::mutex> l(dbg_http_closing_m);
+    auto i = dbg_http_closing.find(conn);
+    assert(i != dbg_http_closing.end());
+    if (!--i->second) {
+        dbg_http_closing.erase(i);
+    }
+}
+
+//! returns the number of times a close of an HTTP client connection started while another close of the same
+//! connection was running
+static QoreValue f_dbg_http_concurrent_closes(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_http_concurrent_closes.load(std::memory_order_relaxed);
+}
+
+//! disarms the points armed by dbg_http_hold_at() that were not reached
+static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> l(dbg_http_hold_m);
+    for (DbgHttpHold& h : dbg_http_holds) {
+        if (h.reached) {
+            h.reached->deref(xsink);
+            h.release->deref(xsink);
+            h = DbgHttpHold();
+        }
+    }
     return QoreValue();
 }
 
@@ -20876,6 +22113,8 @@ void init_debug_functions(QoreNamespace& qns) {
 #endif
     qns.addBuiltinVariant("dbg_run_poll_state_tests", f_dbg_run_poll_state_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
+    qns.addBuiltinVariant("dbg_run_aot_value_reader_tests", f_dbg_run_aot_value_reader_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
@@ -20909,6 +22148,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_pause_after_delivery", f_dbg_async_io_pause_after_delivery,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "pause");
+    qns.addBuiltinVariant("dbg_async_io_pause_after_step_result", f_dbg_async_io_pause_after_step_result,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "pause");
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
@@ -20924,6 +22169,18 @@ void init_debug_functions(QoreNamespace& qns) {
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_release_held_timer_callbacks", f_dbg_async_io_release_held_timer_callbacks,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_http_client_drain_limit", f_dbg_http_client_drain_limit,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "limit");
+    qns.addBuiltinVariant("dbg_http_client_hold_outputs", f_dbg_http_client_hold_outputs,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_http_client_wait_held_outputs", f_dbg_http_client_wait_held_outputs,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_http_client_stranded_passes", f_dbg_http_client_stranded_passes,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_event_loop_unmatched_kernel_events", f_dbg_event_loop_unmatched_kernel_events,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_sync_release_counts", f_dbg_async_io_sync_release_counts,
@@ -20932,6 +22189,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolTypeInfo, 2,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_on_complete_dispatched", f_dbg_async_io_on_complete_dispatched,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_mark_owner_shutting_down", f_dbg_async_io_mark_owner_shutting_down,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "mark");
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
@@ -21051,6 +22313,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
     qns.addBuiltinVariant("dbg_get_bg_compile_refused_count", f_dbg_get_bg_compile_refused_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_finish_abandoned_bg_compile", f_dbg_finish_abandoned_bg_compile, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "where");
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "func");
@@ -21101,6 +22365,20 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_live_bigint_count", f_dbg_get_live_bigint_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_bigfloat_count", f_dbg_get_live_bigfloat_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
+    qns.addBuiltinVariant("dbg_wait_batch_collection_held", f_dbg_wait_batch_collection_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_wait_teardown_compile_hold", f_dbg_wait_teardown_compile_hold, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_continue_batch_collection", f_dbg_continue_batch_collection, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_count_batch_collection_refusals", f_dbg_count_batch_collection_refusals,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
+    qns.addBuiltinVariant("dbg_get_batch_collection_refusals", f_dbg_get_batch_collection_refusals, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_container_copy_count", f_dbg_get_container_copy_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
@@ -21160,6 +22438,14 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
+    qns.addBuiltinVariant("dbg_hold_deref_last", f_dbg_hold_deref_last,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_deref_delete", f_dbg_hold_deref_delete,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
     qns.addBuiltinVariant("dbg_hold_deref_collect", f_dbg_hold_deref_collect,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
@@ -21167,6 +22453,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_deref_wait_notify", f_dbg_deref_wait_notify,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
+    qns.addBuiltinVariant("dbg_deref_wait_notify_clear", f_dbg_deref_wait_notify_clear,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 0);
     qns.addBuiltinVariant("dbg_fd_wait_notify", f_dbg_fd_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo,
         3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", QC_QUEUE->getTypeInfo(), QORE_PARAM_NO_ARG, "queue",
         autoTypeInfo, QORE_PARAM_NO_ARG, "value");
@@ -21199,6 +22487,29 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "closed");
     qns.addBuiltinVariant("dbg_http_submit_after_close_clear", f_dbg_http_submit_after_close_clear, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_default_connection_window", f_dbg_http2_default_connection_window, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
+    qns.addBuiltinVariant("dbg_http2_connection_window_updates", f_dbg_http2_connection_window_updates, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_hold_stream_data", f_dbg_quic_hold_stream_data, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "stream_id");
+    qns.addBuiltinVariant("dbg_quic_release_stream_data", f_dbg_quic_release_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_hold_at", f_dbg_http_hold_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3,
+        stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "reached",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_http_stream_credit_stats", f_dbg_http_stream_credit_stats, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_quic_connect_buffered_bytes", f_dbg_quic_connect_buffered_bytes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_http_stream_credit_wait_deferred", f_dbg_http_stream_credit_wait_deferred,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "total",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_http1_answer_at", f_dbg_http1_answer_at, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "point", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "reached", QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG, "response");
@@ -21233,6 +22544,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");
+    qns.addBuiltinVariant("dbg_get_module_dependency_records", f_dbg_get_module_dependency_records, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_compile_module", f_dbg_aot_compile_module, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK | QDOM_FILESYSTEM, stringOrNothingTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "mode",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "path", stringTypeInfo, QORE_PARAM_NO_ARG, "output", listOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "targets");
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");
     qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

@@ -174,6 +174,8 @@ auto v = pgm.callFunction("eval");
     @endcode
 
     @throw PROGRAM-OPTION-ERROR the parse options contain options that can only be set by the system
+    @throw OPTION-ERROR the new Program would have @ref modern "%modern" and a compatibility option that it does not
+    allow, given or from this Program (see @ref modern_option_consistency)
     @throw PROGRAM-ERROR this Program is being parsed, or has been deleted
 
     @since %Qore 3.0
@@ -189,6 +191,12 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
     // (see qore_program_private::EvalCopyHolder)
     qore_program_private::EvalCopyHolder copy_holder(*p, xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // the new Program has this Program's options too: %modern cannot be in effect with a compatibility option that it
+    // does not allow, given or inherited (issue #5682)
+    if (qore_program_private::checkNewProgramModernOptions(p, parse_options, xsink,
+            "ProgramControl::createEvalProgram()")) {
         return QoreValue();
     }
     QoreProgram* pgm;
@@ -342,6 +350,29 @@ static list<ProgramControl> ProgramControl::getAllPrograms() [flags=RET_VALUE_ON
 */
 list<int> ProgramControl::getThreadList() [flags=CONSTANT] {
    return p->getThreadList();
+}
+
+//! Requests cooperative cancellation of one of this Program's threads, scoped to this Program
+/** As @ref Qore::Program::cancelThread() "Program::cancelThread()": the request applies only while the thread runs
+    in this Program or in a call that originated in it, so that a thread that called into this Program and returned
+    does not raise it in its own code; a debugger ends the threads of a program with it (see
+    DebugProgramControl::terminateProgram())
+
+    @param tid positive thread ID
+    @param reason optional explanation
+
+    @return true if cancellation was requested, false if the thread is no longer active here
+
+    @throw PROGRAM-THREAD-ERROR invalid ID or self-cancellation
+
+    @since %Qore 3.0
+*/
+bool ProgramControl::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL] {
+   if (tid <= 0 || tid > INT_MAX) {
+      xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
+      return false;
+   }
+   return p->cancelThread(tid, reason ? reason->c_str() : nullptr, xsink);
 }
 
 //! Checks if a user function exists in the program object

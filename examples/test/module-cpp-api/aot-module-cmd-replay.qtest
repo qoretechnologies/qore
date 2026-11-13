@@ -1,0 +1,367 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A sandboxed Program can load a compiled (qcc) library module whose source has a %module-cmd directive as it can
+# load the module's source (issue #5905): the directive recorded in the compiled module is replayed in the module's
+# own Program when the module is loaded, as the directive runs there when the source is parsed; it is not a command
+# from the loading code to another Program.  Sandboxed code still cannot issue a module command to another Program
+# at run time (Program::issueModuleCmd(), issue #5659).
+#
+# The compiled module's Program gets the sandbox that its source module's Program gets (issue #5913): a module that
+# is not library code (one loaded by path, or found by name in a directory that the loading code added to its module
+# path, and a dependency that such a module finds in its own module path) is governed by the sandbox of the code that
+# loads it - its initialization, its own code and the module commands that run in its Program; library code (a
+# module found by name in the process-wide module path) is not.  The loader's sandbox allows reading the test
+# directory except for one subdirectory, so that the module's initialization shows which sandbox governs it: it can
+# read a file in the allowed part and cannot read one in the denied part, while library code can read both.
+#
+# The module commands go to the cppapiuser test module, which records the commands it receives
+# (cpp_api_module_cmds()) and whether the Program they run in has a sandbox; cpp_api_program_has_sandbox() tells
+# whether the calling code's Program has one.  Each load runs in a process of its own, so that each loads the modules
+# afresh, and the results of the source and of the compiled modules must be the same.
+#
+# qcc generates modules that are initialized with qore_aot_module_init_v3(); the older initialization entry points and
+# statically linked modules are not exercised here.  AOT module Programs run compiled code, so the execution modes
+# that the loads run in vary only the loader's own code.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%requires cppapiuser
+
+%exec-class AotModuleCmdReplayTest
+
+class AotModuleCmdReplayTest inherits QUnit::Test {
+    public {
+        #! the shared part of each test module: initialization results, the module's own sandbox and its commands
+        const ModuleBody = "
+const InitSandbox = cpp_api_program_has_sandbox();
+const InitAllowed = try_read(\"@ALLOWED@\");
+const InitDenied = try_read(\"@DENIED@\");
+
+#! returns the results of the module's initialization and whether its own Program has a sandbox now
+public hash<auto> sub info() {
+    return {
+        \"init-sandbox\": InitSandbox,
+        \"init-allowed\": InitAllowed,
+        \"init-denied\": InitDenied,
+        \"sandbox\": cpp_api_program_has_sandbox(),
+    };
+}
+
+string sub try_read(string path) {
+    try {
+        File::readTextFile(path);
+        return \"read\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! a library module with a module command
+        const ProbeSource = "%modern
+%requires cppapiuser
+%module-cmd(cppapiuser) replay-probe
+
+module ReplayProbe {
+    version = \"1.0\";
+    desc = \"module command replay probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace ReplayProbe {" + ModuleBody + "}
+";
+
+        #! a module that ReplayOuter finds in its own module path
+        const DepSource = "%modern
+%requires cppapiuser
+%module-cmd(cppapiuser) replay-dep
+
+module ReplayDep {
+    version = \"1.0\";
+    desc = \"module command replay dependency\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace ReplayDep {" + ModuleBody + "}
+";
+
+        #! a module that requires ReplayDep by name from a directory that it adds to its module path
+        const OuterSource = "%modern
+%prepend-module-path @DEPDIR@
+%requires cppapiuser
+%requires ReplayDep
+%module-cmd(cppapiuser) replay-outer
+
+module ReplayOuter {
+    version = \"1.0\";
+    desc = \"module command replay module with a dependency\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace ReplayOuter {" + ModuleBody + "
+#! returns the results of ReplayDep
+public hash<auto> sub dep_info() {
+    return ReplayDep::info();
+}
+}
+";
+
+        #! loads a module from a sandboxed Program and prints the result
+        /** arguments: the module (a name or a path), the module's namespace, and optionally a directory: the module
+            is then loaded by name with \\c %requires after the directory is added to the Program's module path
+        */
+        const LoaderSource = "%modern
+%requires cppapiuser
+
+string base = ENV.REPLAY_TEST_DIR;
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(False);
+sm.addFilesystemAllowedPath(base, QSEC_READ);
+sm.addFilesystemDeniedPath(base + \"/denied\");
+Program p(PO_NEW_STYLE);
+p.setSandboxManager(sm);
+hash<auto> rv;
+try {
+    string code = \"%modern\\n\";
+    if (ARGV[2]) {
+        code = sprintf(\"%%prepend-module-path %s\\n%%requires %s\\n\", ARGV[2], ARGV[0]) + code;
+    } else {
+        p.loadModule(ARGV[0]);
+    }
+    code += sprintf(\"hash<auto> sub get_info() { return %s::info(); }\\n\", ARGV[1]);
+    if (ARGV[1] == \"ReplayOuter\") {
+        code += \"hash<auto> sub get_dep_info() { return ReplayOuter::dep_info(); }\\n\";
+    }
+    p.parse(code, \"loader\");
+    rv.info = p.callFunction(\"get_info\");
+    if (ARGV[1] == \"ReplayOuter\") {
+        rv.dep = p.callFunction(\"get_dep_info\");
+    }
+    rv.commands = cpp_api_module_cmds();
+} catch (hash<ExceptionInfo> ex) {
+    rv.error = ex.err + \": \" + ex.desc;
+}
+printf(\"%y\\n\", rv);
+";
+
+        #! sandboxed code that issues module commands to a Program it is handed and to its own Program
+        const SandboxedSource = "%modern
+string sub module_cmd(Program p, string mod, string cmd) {
+    try {
+        p.issueModuleCmd(mod, cmd);
+        return 'issued';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + ': ' + ex.desc;
+    }
+}
+string sub own_cmd(string mod, string cmd) {
+    try {
+        Program::issueModuleCmd(mod, cmd);
+        return 'issued';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + ': ' + ex.desc;
+    }
+}
+";
+
+        #! the results of a module that is library code: no sandbox governs it
+        const LibraryInfo = {
+            "init-sandbox": False,
+            "init-allowed": "read",
+            "init-denied": "read",
+            "sandbox": False,
+        };
+
+        #! the results of a module that the loader's sandbox governs
+        const SandboxedInfo = {
+            "init-sandbox": True,
+            "init-allowed": "read",
+            "init-denied": "FILESYSTEM-ACCESS-DENIED",
+            "sandbox": True,
+        };
+
+        #! the execution modes that the loads run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        TmpDir dir("qore-aot-module-cmd-replay-");
+    }
+
+    constructor() : QUnit::Test("AotModuleCmdReplayTest", "1.0", \ARGV) {
+        addTestCase("a sandboxed Program loads the source modules", \sourceTest());
+        addTestCase("a sandboxed Program loads the compiled modules, which get the sandbox of the source modules",
+            \compiledTest());
+        addTestCase("sandboxed code cannot issue a run-time module command to another Program", \crossTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        foreach string d in (("src", "src-dep", "obj", "bin", "bin-dep", "denied")) {
+            mkdir(dir.path + "/" + d);
+        }
+        write(dir.path + "/allowed.txt", "allowed\n");
+        write(dir.path + "/denied/denied.txt", "denied\n");
+        write(dir.path + "/src/ReplayProbe.qm", fill(ProbeSource));
+        write(dir.path + "/src-dep/ReplayDep.qm", fill(DepSource));
+        write(dir.path + "/src/ReplayOuter.qm", fill(OuterSource, dir.path + "/src-dep"));
+        # the compiled ReplayOuter is compiled against the compiled ReplayDep and finds it in its own module path
+        write(dir.path + "/obj/ReplayOuter.qm", fill(OuterSource, dir.path + "/bin-dep"));
+        write(dir.path + "/load.qr", LoaderSource);
+    }
+
+    sourceTest() {
+        checkLoads("src", "src-dep", ".qm");
+    }
+
+    compiledTest() {
+        if (!is_executable(qcc_bin)) {
+            testSkip(sprintf("qcc is not available in %y; set QCC to test compiled modules", qcc_bin));
+        }
+        compile("src/ReplayProbe.qm", "bin/ReplayProbe.qmod");
+        compile("src-dep/ReplayDep.qm", "bin-dep/ReplayDep.qmod");
+        compile("obj/ReplayOuter.qm", "bin/ReplayOuter.qmod");
+        checkLoads("bin", "bin-dep", ".qmod");
+    }
+
+    crossTest() {
+        SandboxManager sm();
+        Program s(PO_NEW_STYLE);
+        s.setSandboxManager(sm);
+        s.parse(SandboxedSource, "sandboxed");
+        Program t(PO_NEW_STYLE);
+        list<string> before = cpp_api_module_cmds();
+        # refused before the command reaches the module
+        assertRegex("^RUNTIME-COMMAND-ERROR: .*sandboxed code can only issue module commands to its own Program",
+            s.callFunction("module_cmd", t, "cppapiuser", "cross"));
+        assertEq(before, cpp_api_module_cmds());
+        # the sandboxed code can issue a command to its own Program, which reaches the module
+        assertEq("issued", s.callFunction("own_cmd", "cppapiuser", "own"));
+        assertEq(before + ("own [sandboxed]",), cpp_api_module_cmds());
+        # a command that the module refuses fails as before
+        assertRegex("^CPPAPIUSER-COMMAND-ERROR", s.callFunction("own_cmd", "cppapiuser", "fail"));
+        # trusted code can issue a command to another Program
+        assertEq("issued", module_cmd(t, "cppapiuser", "trusted"));
+        assertEq(before + ("own [sandboxed]", "trusted"), cpp_api_module_cmds());
+    }
+
+    #! loads the modules in \a sub_dir (and their dependency in \a dep_dir) in every way, in every execution mode
+    private checkLoads(string sub_dir, string dep_dir, string ext) {
+        string mdir = dir.path + "/" + sub_dir;
+        string ddir = dir.path + "/" + dep_dir;
+        foreach string mode in (ExecModes) {
+            # by name from the process-wide module path: library code
+            assertEq(expect({"info": LibraryInfo, "commands": ("replay-probe",)}),
+                load(mode, mdir, ("ReplayProbe", "ReplayProbe")), mode + " by name from the module path");
+            # by path
+            assertEq(expect({"info": SandboxedInfo, "commands": ("replay-probe [sandboxed]",)}),
+                load(mode, NOTHING, (mdir + "/ReplayProbe" + ext, "ReplayProbe")), mode + " by path");
+            # by name from a directory that the loader added to its own module path
+            assertEq(expect({"info": SandboxedInfo, "commands": ("replay-probe [sandboxed]",)}),
+                load(mode, NOTHING, ("ReplayProbe", "ReplayProbe", mdir)), mode + " by name from the loader's path");
+            # by path, with a dependency that the module finds in its own module path
+            assertEq(expect({"info": SandboxedInfo, "dep": SandboxedInfo,
+                    "commands": ("replay-dep [sandboxed]", "replay-outer [sandboxed]")}),
+                load(mode, NOTHING, (mdir + "/ReplayOuter" + ext, "ReplayOuter")),
+                mode + " by path with a dependency from the module's path");
+            # by path, with a dependency in the process-wide module path: the dependency is library code
+            assertEq(expect({"info": SandboxedInfo, "dep": LibraryInfo,
+                    "commands": ("replay-dep", "replay-outer [sandboxed]")}),
+                load(mode, ddir, (mdir + "/ReplayOuter" + ext, "ReplayOuter")),
+                mode + " by path with a dependency from the process-wide module path");
+        }
+    }
+
+    #! compiles a module with qcc
+    private compile(string src, string target) {
+        string out = run(sprintf("%s -O0 -m %s -o %s", quote(qcc_bin), quote(dir.path + "/" + src),
+            quote(dir.path + "/" + target)));
+        assertTrue(is_file(dir.path + "/" + target), "qcc compiles " + src + ": " + out);
+    }
+
+    #! runs the loader in a process of its own with \a module_dir prepended to the module path and returns its output
+    private string load(string mode, *string module_dir, list<string> args) {
+        string module_path = ENV.QORE_MODULE_DIR ?? "";
+        if (module_dir) {
+            module_path = module_dir + (module_path ? ":" + module_path : "");
+        }
+        string out = run(sprintf("env QORE_MODULE_DIR=%s REPLAY_TEST_DIR=%s %s -b --enable-debug --exec-mode=%s %s "
+            "%s", quote(module_path), quote(dir.path), quote(qore_bin), mode, quote(dir.path + "/load.qr"),
+            (map quote($1), args).join(" ")));
+        return out;
+    }
+
+    #! returns the output of the loader for a result
+    private static string expect(hash<auto> result) {
+        return sprintf("%y\n", result);
+    }
+
+    #! returns the module source with the paths of the test directory
+    private string fill(string source, *string dep_dir) {
+        source = replace(source, "@ALLOWED@", dir.path + "/allowed.txt");
+        source = replace(source, "@DENIED@", dir.path + "/denied/denied.txt");
+        if (dep_dir) {
+            source = replace(source, "@DEPDIR@", dep_dir);
+        }
+        return source;
+    }
+
+    #! runs a command with the library of the build and returns its output; fails the test if the command fails
+    private string run(string command) {
+        int rc;
+        string out = backquote("env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + command + " 2>&1", \rc);
+        assertEq(0, rc, out);
+        return out;
+    }
+
+    #! issues a module command to a Program and returns "issued" or the error
+    private static string module_cmd(Program p, string mod, string cmd) {
+        try {
+            p.issueModuleCmd(mod, cmd);
+            return "issued";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    private static write(string path, string value) {
+        File file();
+        file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        on_exit file.close();
+        file.write(value);
+    }
+}

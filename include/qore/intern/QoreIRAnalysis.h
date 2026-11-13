@@ -37,6 +37,15 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
 //! @param visitor callback invoked once per successor
 void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVisitor& visitor);
 
+//! Returns true for a release that only runs once a functional operator's loop has ended on an exception
+/** A ReleaseOwnedTemp of the exception cleanup of a functional operator (QoreIRInstruction::exception_cleanup_release):
+    a value that it releases and that a Phi or a container took over is released there through its new owner, so the
+    release is not a use that keeps the value from being taken over (qore#5830)
+*/
+static inline bool qore_ir_is_exception_only_release(const QoreIRInstruction& inst) {
+    return inst.exception_cleanup_release && inst.opcode == QoreIROpcode::ReleaseOwnedTemp;
+}
+
 struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze
@@ -55,6 +64,34 @@ struct QoreIRControlFlowGraph {
     std::vector<std::vector<uint64_t>> dominators;
     std::vector<uint8_t> reachable;
     bool cancelled = false;
+};
+
+//! Answers whether a block of a function can reach any of a set of blocks without passing a given block
+/** The control-flow edges are the normal successors and the exception targets of the instructions (a throw's too).
+    The strongly connected components of the graph are computed once (iteratively, in linear time); Tarjan's algorithm
+    finishes a component after every component that it reaches, so a block of a component that finished later than
+    the start's cannot be reached from it, which answers the common case - the uses of an operator's accumulator in its
+    loop, and the operator's final block after the loop - in constant time; only a block of the start's own component
+    (an operator in an enclosing loop) needs a walk, which stays within the component, and a block of a component that
+    finished earlier a walk of the function.
+
+    Built without check points: the IR interpreter caches the results of its analysis for every thread that runs the
+    function, so they must not depend on a cancellation pending in the thread that computes them
+*/
+class QoreIRBlockReachability {
+public:
+    explicit QoreIRBlockReachability(const QoreIRFunction& func);
+
+    //! returns true if \a from reaches a block of \a targets through a path of at least one edge that does not pass
+    //! \a avoid (a path that comes back to \a from counts)
+    bool reachesAnyAvoiding(const QoreIRBasicBlock* from, const QoreIRBasicBlock* avoid,
+            const std::vector<const QoreIRBasicBlock*>& targets) const;
+
+private:
+    std::unordered_map<const QoreIRBasicBlock*, uint32_t> block_ids;
+    std::vector<std::vector<uint32_t>> successors;
+    //! the component of each block: the order in which Tarjan's algorithm finished it
+    std::vector<uint32_t> component;
 };
 
 struct QoreIRNaturalLoop {
@@ -98,6 +135,13 @@ std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlo
     @return true if the analysis completed, false if cancellation was requested (only with \a check_count)
 */
 bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count);
+
+//! Marks each LoadLocal directly followed by the CheckCallTarget of its value (QoreIRInstruction::
+//! fused_call_target_check): the interpreter then makes the check in the load, without the dispatch of the check
+/** Run on the final IR of a function that the interpreter executes; the instructions themselves are unchanged, so
+    native code generation ignores the mark.  Returns the number of loads marked (issue #5784).
+*/
+size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func);
 
 struct QoreIROptimizationStats {
     size_t loops_analyzed = 0;
@@ -259,6 +303,15 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
     @param groups receives the class of each value, indexed by value id
 */
 DLLLOCAL void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vector<uint32_t>& groups);
+
+//! Finds the implicit arguments and elements open at each instruction that leaves the function on an exception
+/** The PushImplicitArg, SetImplicitArgv and PushImplicitElement instructions that the lowering restores on every path
+    in the function (QoreIRInstruction::restore_on_exception_exit) are followed through the control flow, normal and exception edges;
+    an instruction with no exception target that runs while some are set gets them in \a open, outermost first, so
+    that the frame's exit restores them, innermost first, before it releases the frame's values (qore#5670)
+*/
+DLLLOCAL void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
+        std::unordered_map<const QoreIRInstruction*, std::vector<const QoreIRInstruction*>>& open);
 
 //! Orders the temporaries of a statement for their release when an exception leaves it
 /** The temporaries of each argument list (see qore_ir_build_exception_release_groups()) are released together, first

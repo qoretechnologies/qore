@@ -199,6 +199,10 @@ public class Http2StreamContext inherits AbstractStreamContext {
             }
             sock.waitForHttp2StreamDrain(stream_id, wait_ms);
         }
+        # the stream was ended with the data: it is not ended again
+        if (end_stream) {
+            ended = True;
+        }
         if (wake_callback) {
             wake_callback();
         }

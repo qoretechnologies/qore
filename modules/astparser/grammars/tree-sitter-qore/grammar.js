@@ -453,6 +453,7 @@ module.exports = grammar({
       optional(field('type_parameters', $.type_parameter_list)),
       $.parameter_list,
       optional($.method_qualifier),
+      optional($.callable_attributes),
       optional(seq('returns', field('returns', $.type))),
       choice(
         $.block,
@@ -464,6 +465,7 @@ module.exports = grammar({
       optional($.modifiers),
       'constructor',
       $.parameter_list,
+      optional($.callable_attributes),
       optional($.base_class_constructor_calls),
       choice(
         $.block,
@@ -522,6 +524,7 @@ module.exports = grammar({
         field('name', choice($.identifier, $.scoped_identifier)),
         optional(field('type_parameters', $.type_parameter_list)),
         $.parameter_list,
+        optional($.callable_attributes),
         optional(seq('returns', field('returns', $.type))),
         $.block,
       ),
@@ -532,6 +535,7 @@ module.exports = grammar({
         optional(field('type_parameters', $.type_parameter_list)),
         $.parameter_list,
         optional($.method_qualifier),
+        optional($.callable_attributes),
         optional(seq('returns', field('returns', $.type))),
         $.block,
       ),
@@ -542,12 +546,29 @@ module.exports = grammar({
         optional(field('type_parameters', $.type_parameter_list)),
         $.parameter_list,
         optional($.method_qualifier),
+        optional($.callable_attributes),
         optional(seq('returns', field('returns', $.type))),
         ';',
       ),
     ),
 
     method_qualifier: $ => 'const',
+
+    // the attribute list of a function or method after its parameter list (lib/parser.ypp: callable_attrs):
+    // [key=value,...;key=value,...] with an optional trailing ';'; the only key is "dom" (functional domains)
+    callable_attributes: $ => seq(
+      '[',
+      $.callable_attribute,
+      repeat(seq(';', $.callable_attribute)),
+      optional(';'),
+      ']',
+    ),
+
+    callable_attribute: $ => seq(
+      field('name', $.identifier),
+      '=',
+      commaSep1(field('value', $.identifier)),
+    ),
 
     // lib/parser.ypp reads the parameters as a list expression, which may end with a comma
     parameter_list: $ => seq(

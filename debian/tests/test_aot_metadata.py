@@ -88,7 +88,7 @@ class AotMetadataTest(unittest.TestCase):
         self.assertEqual(self.module.stat().st_mtime_ns, timestamp)
 
     def test_native_module_and_symlink(self):
-        native = self.root / "native-api-2.0.qmod"
+        native = self.root / "native-api-2.1.qmod"
         self.build(native, b"")
         self.assertEqual(metadata.read_module_info(native), b"")
         (self.root / "Alias.qmod").symlink_to(self.module)

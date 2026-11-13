@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class CallNameTextTest
+
+/*  The names of the frames of call stacks and of error messages (issue #5852).
+
+    A call names its call stack frame "[Class::]function"; the name is built when a call stack or an error message
+    reads it, not when the call is made.  The names, longer than a short string buffer, are the same as when every
+    call built them, for functions, methods, static methods and closures, in call stacks read by the code itself, in
+    the call stacks of exceptions and from another thread, in every execution mode.
+*/
+
+public class CallNameTextTest inherits QUnit::Test {
+    public {
+        const Code = "%modern
+# the synchronization of a thread whose call stack another thread reads
+public class FrameSync {
+    public {
+        Mutex m();
+        Condition c();
+        bool waiting;
+        bool done;
+    }
+}
+
+# the names of the frames of a call stack that are calls of this code
+list<string> sub frame_names(list<hash<CallStackInfo>> stack) {
+    return map $1.function, stack, $1.type == \"user\";
+}
+
+public class VeryLongClassNameForFrames {
+    public list<string> veryLongMethodNameForFrames(int n) {
+        return n ? veryLongMethodNameForFrames(n - 1) : frame_names(get_thread_call_stack());
+    }
+
+    public static list<string> veryLongStaticMethodNameForFrames(int n) {
+        return n ? VeryLongClassNameForFrames::veryLongStaticMethodNameForFrames(n - 1)
+            : frame_names(get_thread_call_stack());
+    }
+
+    public veryLongThrowingMethodNameForFrames(int n) {
+        if (n) {
+            veryLongThrowingMethodNameForFrames(n - 1);
+        } else {
+            throw \"CALL-NAME-TEST\", \"error\";
+        }
+    }
+
+    # waits until another thread has read the call stack of this thread
+    public veryLongWaitingMethodNameForFrames(FrameSync s) {
+        s.m.lock();
+        on_exit s.m.unlock();
+        s.waiting = True;
+        s.c.broadcast();
+        while (!s.done) {
+            s.c.wait(s.m);
+        }
+    }
+}
+
+list<string> sub veryLongFunctionNameForFrames(int n) {
+    return n ? veryLongFunctionNameForFrames(n - 1) : frame_names(get_thread_call_stack());
+}
+
+list<string> sub method_frames() {
+    VeryLongClassNameForFrames o();
+    return o.veryLongMethodNameForFrames(2);
+}
+
+list<string> sub static_method_frames() {
+    return VeryLongClassNameForFrames::veryLongStaticMethodNameForFrames(2);
+}
+
+list<string> sub function_frames() {
+    return veryLongFunctionNameForFrames(2);
+}
+
+list<string> sub closure_frames() {
+    code veryLongClosureVariable = list<string> sub (int n) {
+        return frame_names(get_thread_call_stack());
+    };
+    return veryLongClosureVariable(1);
+}
+
+list<string> sub exception_frames() {
+    VeryLongClassNameForFrames o();
+    try {
+        o.veryLongThrowingMethodNameForFrames(2);
+    } catch (hash<ExceptionInfo> ex) {
+        return frame_names(ex.callstack);
+    }
+    return ();
+}
+
+# the names of the frames of a thread waiting in a method, as another thread reads them
+list<string> sub other_thread_frames() {
+    FrameSync s();
+    VeryLongClassNameForFrames o();
+    int tid = background o.veryLongWaitingMethodNameForFrames(s);
+    list<string> rv;
+    {
+        s.m.lock();
+        on_exit s.m.unlock();
+        while (!s.waiting) {
+            s.c.wait(s.m);
+        }
+        rv = frame_names(get_all_thread_call_stacks(){tid});
+        s.done = True;
+        s.c.broadcast();
+    }
+    return rv;
+}
+";
+
+        const Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        #! the call -> the names of its frames, innermost first, up to the call made from this test
+        const Expected = {
+            "method_frames": (
+                "VeryLongClassNameForFrames::veryLongMethodNameForFrames",
+                "VeryLongClassNameForFrames::veryLongMethodNameForFrames",
+                "VeryLongClassNameForFrames::veryLongMethodNameForFrames",
+                "method_frames",
+            ),
+            "static_method_frames": (
+                "VeryLongClassNameForFrames::veryLongStaticMethodNameForFrames",
+                "VeryLongClassNameForFrames::veryLongStaticMethodNameForFrames",
+                "VeryLongClassNameForFrames::veryLongStaticMethodNameForFrames",
+                "static_method_frames",
+            ),
+            "function_frames": (
+                "veryLongFunctionNameForFrames",
+                "veryLongFunctionNameForFrames",
+                "veryLongFunctionNameForFrames",
+                "function_frames",
+            ),
+            "closure_frames": (
+                "<anonymous closure>",
+                "closure_frames",
+            ),
+            "exception_frames": (
+                "VeryLongClassNameForFrames::veryLongThrowingMethodNameForFrames",
+                "VeryLongClassNameForFrames::veryLongThrowingMethodNameForFrames",
+                "VeryLongClassNameForFrames::veryLongThrowingMethodNameForFrames",
+                "exception_frames",
+            ),
+            "other_thread_frames": (
+                "VeryLongClassNameForFrames::veryLongWaitingMethodNameForFrames",
+            ),
+        };
+    }
+
+    constructor() : Test("CallNameTextTest", "1.0") {
+        addTestCase("names of call stack frames", \testFrameNames());
+        set_return_value(main());
+    }
+
+    testFrameNames() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            if (m.value == EM_JIT || m.value == EM_TIERED) {
+                if (!inlist("JIT", get_feature_list())) {
+                    continue;
+                }
+            }
+            Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+            pgm.setExecMode(m.value);
+            pgm.parse(Code, "call-name-text");
+            pgm.run();
+            foreach hash<auto> e in (Expected.pairIterator()) {
+                list<string> names = pgm.callFunction(e.key);
+                # the frames below the call made from this test (the call itself and this test's frames) differ
+                # between the execution modes and are not compared
+                assertEq(e.value, names[0..e.value.size() - 1], sprintf("%s: %s", m.key, e.key));
+            }
+        }
+    }
+}

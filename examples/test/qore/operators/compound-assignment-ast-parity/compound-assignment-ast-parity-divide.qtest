@@ -1,0 +1,22 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%include compound-assignment-ast-parity.qc
+
+%exec-class CompoundAssignmentAstParityDivideTest
+
+#! Checks \c /= in every execution mode against the AST interpreter; see CompoundAssignmentAstParityBase
+class CompoundAssignmentAstParityDivideTest inherits CompoundAssignmentAstParityBase {
+    constructor() : CompoundAssignmentAstParityBase("CompoundAssignmentAstParityDivide", ("/=",)) {
+    }
+}

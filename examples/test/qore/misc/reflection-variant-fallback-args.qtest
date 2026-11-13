@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires QUnit
+%requires reflection
+
+%exec-class ReflectionVariantFallbackArgsTest
+
+string sub f(softint a, int b) {
+    return sprintf("A %y %y", a, b);
+}
+
+string sub f(string a, string b) {
+    return sprintf("B %y %y", a, b);
+}
+
+string sub f(int a, string b) {
+    return sprintf("C %y %y", a, b);
+}
+
+# the check of the first variant converts five arguments (more than are kept in place) before it fails on the sixth
+string sub g(softint a, softint b, softint c, softint d, softint e, int z) {
+    return sprintf("A %y %y %y %y %y %y", a, b, c, d, e, z);
+}
+
+string sub g(string a, string b, string c, string d, string e, string z) {
+    return sprintf("B %y %y %y %y %y %y", a, b, c, d, e, z);
+}
+
+class VM {
+    string m(softint a, int b) {
+        return sprintf("A %y %y", a, b);
+    }
+
+    string m(string a, string b) {
+        return sprintf("B %y %y", a, b);
+    }
+
+    static string s(softint a, int b) {
+        return sprintf("A %y %y", a, b);
+    }
+
+    static string s(string a, string b) {
+        return sprintf("B %y %y", a, b);
+    }
+}
+
+#! A call through a fixed variant whose arguments that variant does not accept is made with another variant
+/** The variant is found for the arguments as given, as for a direct call: the arguments that the check of the fixed
+    variant converted before it failed on a later one (here the first, converted to an int for its softint parameter)
+    are restored first (#5692).
+*/
+class ReflectionVariantFallbackArgsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("reflection variant fallback arguments", "1.0") {
+        addTestCase("fallback with the arguments as given", \fallbackArgs());
+        addTestCase("method fallback with the arguments as given", \methodFallbackArgs());
+        set_return_value(main());
+    }
+
+    fallbackArgs() {
+        string direct = f("1", "x");
+        assertEq("B \"1\" \"x\"", direct);
+        Function fn = Function::forName("f");
+        foreach AbstractVariant v in (fn.getVariants()) {
+            # the variant that accepts the arguments is called; through the others, the variant of the direct call
+            assertEq(direct, cast<FunctionVariant>(v).call("1", "x"), v.toString());
+        }
+        # a fixed variant that accepts the arguments after converting them keeps the converted values
+        assertEq("A 1 2", fn.getVariant(SoftIntType, IntType).call("1", 2));
+
+        # more converted arguments than are kept in place
+        string direct6 = g("1", "2", "3", "4", "5", "x");
+        assertEq("B \"1\" \"2\" \"3\" \"4\" \"5\" \"x\"", direct6);
+        Function g = Function::forName("g");
+        foreach AbstractVariant v in (g.getVariants()) {
+            assertEq(direct6, cast<FunctionVariant>(v).call("1", "2", "3", "4", "5", "x"), v.toString());
+        }
+        assertEq("A 1 2 3 4 5 6", g.getVariant(SoftIntType, SoftIntType, SoftIntType, SoftIntType, SoftIntType,
+            IntType).call("1", "2", "3", "4", "5", 6));
+    }
+
+    #! the same for the variants of methods, which reach the variant by other paths than a function's
+    methodFallbackArgs() {
+        VM o();
+        Class cls = Class::forName("VM");
+        foreach AbstractVariant v in (cls.getNormalMethod("m").getVariants()) {
+            assertEq("B \"1\" \"x\"", cast<NormalMethodVariant>(v).call(o, "1", "x"), v.toString());
+        }
+        foreach AbstractVariant v in (cls.getStaticMethod("s").getVariants()) {
+            assertEq("B \"1\" \"x\"", cast<StaticMethodVariant>(v).call("1", "x"), v.toString());
+        }
+    }
+}

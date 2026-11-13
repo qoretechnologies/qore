@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT code generation and linking, EH frame registration and the end of the process
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class JitTeardownAtExitTest
+
+#! issue #5842: the JIT is released at the end of the process after an abandoned background compile ends
+/** A background compile that is still in LLVM when the process ends is abandoned, and the JIT is not released under
+    it.  When the compile ends before the process does, the process ends with exit(), and the JIT must be released
+    before: that deregisters the EH frames that JITLink registered with libgcc for the compiled code.  Before, they
+    stayed registered, libgcc freed its table of registered frames at exit, and the memory that it had allocated for
+    each frame was lost ("definitely lost" in valgrind, from __register_frame), as was the memory of the JIT
+    ("possibly lost").
+
+    The script holds a background compile in LLVM at the end and lets it end before the process does (test hooks of
+    a debug libqore): when it is abandoned, so that QoreJIT::shutdown() releases the JIT, or at the end of the
+    process, so that QoreJIT::exitQuickly() releases it.  The test checks that the JIT is released where expected
+    (QORE_JIT_TIMING output), and, when valgrind is available, that valgrind reports no leak and no error.
+*/
+class JitTeardownAtExitTest inherits QUnit::Test {
+    public {
+        const Expected = "held: True result: 810";
+        #! where the compile ends, and what QORE_JIT_TIMING reports then
+        const Released = {
+            "shutdown": "[BG-JIT] released the JIT in shutdown() after the abandoned compile ended",
+            "exit": "[BG-JIT] released the JIT at the end of the process after the abandoned compile ended",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("JIT teardown at exit", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        # background compiles, compiled at the first call
+        env = sprintf("env -u QORE_JIT_SYNC_COMPILE -u DEBUGINFOD_URLS LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+            "QORE_LIBDIR=%s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/JitTeardownAtExit.qr";
+
+        addTestCase("released after the abandoned compile", \releasedTest());
+        addTestCase("valgrind", \valgrindTest());
+        set_return_value(main());
+    }
+
+    #! skips the test case without library debugging, which the script needs
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_finish_abandoned_bg_compile() requires library debugging");
+        }
+    }
+
+    #! the JIT is released where the compile ends, in JIT and tiered execution
+    private releasedTest() {
+        checkDebugging();
+        foreach string mode in (("jit", "tiered")) {
+            foreach hash<auto> i in (Released.pairIterator()) {
+                string out = backquote(sprintf("%s QORE_JIT_TIMING=1 %s -b --exec-mode=%s %s %s 2>&1", env, qore_bin,
+                    mode, script, i.key));
+                string what = sprintf("%s, %s", mode, i.key);
+                assertTrue(out.find(Expected) >= 0, sprintf("%s: result: %s", what, out));
+                assertTrue(out.find(i.value) >= 0, sprintf("%s: the JIT is released there: %s", what, out));
+                foreach string other in (keys Released) {
+                    if (other != i.key) {
+                        assertEq(-1, out.find(Released{other}), sprintf("%s: released once: %s", what, out));
+                    }
+                }
+            }
+        }
+    }
+
+    #! valgrind reports no leak and no error (issue #5842: memory of the EH frame registration was lost)
+    private valgrindTest() {
+        checkDebugging();
+        if (is_file("/proc/self/maps") && ReadOnlyFile::readTextFile("/proc/self/maps") =~ /valgrind|vgpreload/) {
+            testSkip("the test runs under valgrind already");
+        }
+        *string valgrind = find_valgrind();
+        if (!valgrind) {
+            testSkip("valgrind is not available");
+        }
+        foreach string mode in (("jit", "tiered")) {
+            foreach string point in (keys Released) {
+                int rc;
+                string out = backquote(sprintf("%s QORE_PCRE2_NO_JIT=1 %s --leak-check=full "
+                    "--errors-for-leak-kinds=definite,possible --error-exitcode=99 %s -b --exec-mode=%s %s %s 2>&1",
+                    env, valgrind, qore_bin, mode, script, point), \rc);
+                string what = sprintf("%s, %s", mode, point);
+                assertEq(0, rc, sprintf("%s: valgrind reports no error: %s", what, out));
+                assertRegex("definitely lost: 0 bytes|no leaks are possible|All heap blocks were freed", out,
+                    what + ": no memory is lost");
+                assertTrue(out.find(Expected) >= 0, sprintf("%s: result: %s", what, out));
+            }
+        }
+    }
+
+    #! returns the path of valgrind, if it is in the PATH
+    private static *string find_valgrind() {
+        foreach string dir in ((ENV.PATH ?? "").split(":")) {
+            if (dir && is_executable(dir + "/valgrind")) {
+                return dir + "/valgrind";
+            }
+        }
+    }
+}

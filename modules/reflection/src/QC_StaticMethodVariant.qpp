@@ -80,6 +80,10 @@ auto StaticMethodVariant::call(...) {
     if (reflection_check_variant_call(caller, v->variant, m->getClass()->getName(), m->getName(), v->pgm, xsink)) {
         return QoreValue();
     }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, m->getClass(), v->pgm, xsink)) {
+        return QoreValue();
+    }
     // the method ptr must be valid
     return QoreObject::evalStaticMethodVariant(*m, mv, args, xsink);
 }
@@ -114,6 +118,10 @@ auto StaticMethodVariant::callArgs(*softlist<auto> argv) {
     const QoreMethod* m = mv->getMethod();
     // the variant (with its class's domain) must be allowed by the caller and the method's Program
     if (reflection_check_variant_call(caller, v->variant, m->getClass()->getName(), m->getName(), v->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, m->getClass(), v->pgm, xsink)) {
         return QoreValue();
     }
     // the method ptr must be valid

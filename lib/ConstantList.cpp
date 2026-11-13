@@ -55,8 +55,21 @@ thread_local unsigned qore_constant_init_depth = 0;
 
 static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed);
 
-static void reapplyConstantType(const QoreTypeInfo* typeInfo, QoreValue& value) {
+//! Gives the value that the init function of a constant compiled ahead of time computed the type of the constant
+/** As the AST interpreter does when it initializes a constant (ConstantEntry::parseInit()), the value of a constant
+    with an explicit declared type is retyped to it.  The type of a constant without one is that of the value that the
+    AST interpreter computed at compile time, which the init function can compute with less specific container types
+    (from the parse types of the expressions); its value is retyped to it as well, unless it already has that type:
+    retyping a container to its own type gives the containers that it holds its value type, which drops the more
+    specific types that they have, as the AST interpreter keeps them (#5925).
+*/
+static void reapplyConstantType(const QoreTypeInfo* typeInfo, QoreValue& value, bool explicit_type) {
     if (!typeInfo || value.isNothing()) {
+        return;
+    }
+    // complex types are unique, so the same type is the same pointer; QoreTypeInfo::equal() does not tell a code
+    // type from one with a signature
+    if (!explicit_type && value.getFullTypeInfo() == typeInfo) {
         return;
     }
 
@@ -359,7 +372,7 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     // AOT init functions can lose container metadata while computing values.
     // Re-apply the declared constant type before storing so runtime overload
     // dispatch sees the same value type as source mode.
-    reapplyConstantType(typeInfo, result);
+    reapplyConstantType(typeInfo, result, explicit_type);
 
 #ifdef DEBUG
     // the last point where a thread copying the entry can run before the store; see dbg_hold_constant_store()
@@ -411,7 +424,7 @@ void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
         return;
     }
 
-    reapplyConstantType(typeInfo, resolved);
+    reapplyConstantType(typeInfo, resolved, explicit_type);
 
     {
         std::lock_guard<std::mutex> value_lock(runtimeValueLock());
@@ -453,7 +466,7 @@ void ConstantEntry::materializeAOTParseShellValue(ExceptionSink* xsink) {
         resolved.discard(nullptr);
         return;
     }
-    reapplyConstantType(typeInfo, resolved);
+    reapplyConstantType(typeInfo, resolved, explicit_type);
     aot_parse_shell_value.discard(xsink);
     aot_parse_shell_value = resolved;
 }
@@ -536,7 +549,11 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         const QoreTypeInfo* declaredTypeInfo = explicit_type ? typeInfo : nullptr;
         parse_context.expected_type_info = declaredTypeInfo;
-        err = parse_init_value(val, parse_context);
+        {
+            // the initializer is the value of the constant of the declared type (issue #5782)
+            QoreParseTargetHelper target(parse_context, val, declaredTypeInfo);
+            err = parse_init_value(val, parse_context);
+        }
         if (declaredTypeInfo) {
             const QoreTypeInfo* exprTypeInfo = parse_context.typeInfo;
             qore_type_result_e res = QoreTypeInfo::parseAccepts(declaredTypeInfo, exprTypeInfo);
@@ -1020,6 +1037,7 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
             // the defining source file so a folded cross-unit constant/enum
             // reference still triggers a rebuild when that file changes.
             qore_aot_note_referenced_decl(i->second->loc, consumer_loc);
+            qore_aot_record_folded_constant_import(consumer_loc, i->second, ptr);
             return i->second->getParseValue();
         }
         constantTypeInfo = nothingTypeInfo;

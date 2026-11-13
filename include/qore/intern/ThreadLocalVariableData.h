@@ -226,10 +226,22 @@ public:
 
     DLLLOCAL int getFrame(int frame, Block*& w, int& p);
 
-    DLLLOCAL void getLocalVars(QoreHashNode& h, int frame, ExceptionSink* xsink);
+    //! Adds the local variables of the frame to the hash, as get_local_vars() gives them
+    /** @param aot_code true if the frame runs AOT-compiled native code (see
+        ProgramThreadCountContextHelper::getContextFrame()): a variable that the code assigns in native storage only
+        (LocalVar::AOT_NATIVE_WRITES) is then given without a value and with \c "unavailable" set (issue #5890)
+    */
+    DLLLOCAL void getLocalVars(QoreHashNode& h, int frame, ExceptionSink* xsink, bool aot_code = false);
 
-    // returns 0 = OK, 1 = no such variable, -1 exception setting variable
-    DLLLOCAL int setVarValue(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink);
+    //! Sets the value of a local variable of the frame
+    /** @param aot_code true if the frame runs AOT-compiled native code: a variable that the code keeps in native
+        storage (LocalVar::AOT_NATIVE_STORAGE), which would not see the value, raises \c AOT-FRAME-ERROR then (issue
+        #5890)
+
+        @return 0 = OK, 1 = no such variable, -1 exception setting variable
+    */
+    DLLLOCAL int setVarValue(int frame, const char* name, const QoreValue& val, ExceptionSink* xsink,
+            bool aot_code = false);
 };
 
 #endif

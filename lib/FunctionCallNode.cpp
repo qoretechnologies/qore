@@ -405,6 +405,21 @@ static int parse_init_complex_buffer_factory(const QoreProgramLocation* loc, con
     return parse_init_value(val, parse_context);
 }
 
+// raises the exception for a method call on a deleted object
+/** Outlined from AbstractMethodCallNode::exec(), whose frame is on the stack at every level of a recursion of a
+    method (issue #5852)
+*/
+static QORE_INTERN_NOINLINE void raise_method_call_deleted_object(ExceptionSink* xsink, const QoreClass* qc,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    if (variant) {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has already been deleted",
+            qc->getName(), method->getName(), variant->getSignature()->getSignatureText());
+    } else {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+            qc->getName(), method->getName());
+    }
+}
+
 // eval method against an object where the assumed qoreclass and method were saved at parse time
 QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const qore_class_private* ctx,
         ExceptionSink* xsink) const {
@@ -431,14 +446,7 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         //    method->getClassName(), method->getName(), qc->getName(), o->getClass()->getName(), variant);
         assert(method);
         if (!o->isValid()) {
-            if (variant) {
-                qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has " \
-                    "already been deleted", qc->getName(), method->getName(),
-                    variant->getSignature()->getSignatureText());
-            } else {
-                qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
-                    "already been deleted", qc->getName(), method->getName());
-            }
+            raise_method_call_deleted_object(xsink, qc, method, variant);
             return QoreValue();
         }
 
@@ -460,7 +468,11 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
-    if (tmp_args) {
+    // issue #5917: a copy() call (which takes no arguments; see QoreDotEvalOperatorNode::parseInitImpl()) is
+    // dispatched by qore_class_private::evalMethod() below to the copy constructor of the class, also when the call is
+    // the background copy of a call with pre-evaluated arguments: its variant is a copy variant, which cannot be called
+    // as a normal method
+    if (tmp_args && strcmp(c_str, "copy")) {
         // Dynamic dispatch with pre-evaluated args: look up the method on the actual class
         // and use evalTmpArgs to preserve ReferenceNode values
         const qore_class_private* priv = qore_class_private::get(*o->getClass());
@@ -486,11 +498,12 @@ const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
     return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
 }
 
-static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func) {
-   // func will always be non-zero with builtin functions
-   const char* class_name = func->className();
-   parse_error(*loc, "parse options do not allow access to builtin %s '%s%s%s()'", class_name ? "method" : "function",
-        class_name ? class_name : "", class_name ? "::" : "", func->getName());
+static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func, const QoreParseOptions& denied,
+        bool user) {
+    const char* class_name = func->className();
+    parse_error(*loc, "parse options do not allow access to %s%s '%s%s%s()'; functional domain: %s",
+        user ? "" : "builtin ", class_name ? "method" : "function", class_name ? class_name : "",
+        class_name ? "::" : "", func->getName(), qore_describe_source_domains(denied.getLo()).c_str());
 }
 
 static void warn_retval_ignored(const QoreProgramLocation* loc, QoreFunction* func, bool is_bg_call = false) {
@@ -706,13 +719,15 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         // find variant
         QoreNamedArgBinding named_binding;
         type_param_instantiation.clear();
+        // the return type of a call whose variant is resolved at run time only because another variant could match
+        const QoreTypeInfo* deferred_rt = nullptr;
         variant = named_args
             ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding,
                 receiver_type_info, &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
-                &args_with_value)
+                &args_with_value, &deferred_rt)
             : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info,
                 &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
-                &args_with_value);
+                &args_with_value, &deferred_rt);
 
         if (named_args) {
             // a call whose variant is resolved at run time keeps the binding of its arguments (see
@@ -769,10 +784,13 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                 //printd(5, "FunctionCallBase::parseArgsVariant() this: %p (%s::)%s variant: %p dflags: " QLLD
                 //    " fdflags: " QLLD "\n", this, func->className() ? func->className() : "", func->getName(),
                 //    variant, dflags, func->parseGetUniqueFunctionality());
-                if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags)) {
-                    invalid_access(loc, func);
-                    if (!err) {
-                        err = -1;
+                if (dflags) {
+                    if (QoreParseOptions denied = qore_program_private::parseDeniedDomains(parse_context.pgm, dflags,
+                            variant->isUser() ? variant->getUserVariantBase()->getDeclaredDomain() : QDOM_DEFAULT)) {
+                        invalid_access(loc, func, denied, variant->isUser());
+                        if (!err) {
+                            err = -1;
+                        }
                     }
                 }
                 int64 flags = variant->getFlags();
@@ -785,17 +803,21 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             //    func->parseGetUniqueFlags() & QCF_RET_VALUE_ONLY);
 
             int64 dflags = func->parseGetUniqueFunctionality();
-            if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags)) {
-                invalid_access(loc, func);
-                if (!err) {
-                    err = -1;
+            if (dflags) {
+                if (QoreParseOptions denied = qore_program_private::parseDeniedDomains(parse_context.pgm, dflags,
+                        func->parseGetUniqueDeclaredDomain())) {
+                    invalid_access(loc, func, denied, !func->hasBuiltin());
+                    if (!err) {
+                        err = -1;
+                    }
                 }
             }
             check_flags(loc, func, func->parseGetUniqueFlags(), parse_context.pflag);
         }
 
         parse_context.typeInfo = qore_substitute_type_params_if_needed(
-            variant ? variant->parseGetReturnTypeInfo() : func->parseGetUniqueReturnTypeInfo(),
+            variant ? variant->parseGetReturnTypeInfo()
+                : (deferred_rt ? deferred_rt : func->parseGetUniqueReturnTypeInfo()),
             receiver_type_info, &type_param_instantiation);
 
         //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p pflag: %d pe: %d\n", this,
@@ -859,21 +881,91 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
         return exec(self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
     }
 
+    if (is_abstract) {
+        // issue #5933: a qualified call of an abstract method is dispatched by the name of the method (not the
+        // qualified name) on the class of the object, which implements it; exec() sets the call site
+        return exec(self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, xsink);
+    }
+
+    if (!method) {
+        // issue #5933: a qualified call that the AOT runtime dispatches by name
+        return evalUnresolvedQualified(self, class_ctx ? class_ctx : runtime_cls, rc, xsink);
+    }
+
     // the location of this call is the location of the call stack frame of the called code
     QoreRcCallSiteHelper call_site(rc, loc);
 
-    if (is_abstract) {
-        return qore_class_private::get(*self->getClass())->evalMethod(self, ns.ostr, args,
-            class_ctx ? class_ctx : runtime_cls, rc, xsink);
-    }
-
-    assert(method);
+    // the explicit type arguments of the call (qore#5818)
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
 
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
-        return qore_method_private::evalTmpArgs(*method, xsink, rc, self, getEvalTmpArgs(args_copy));
+        return qore_method_private::evalTmpArgs(*method, xsink, rc, self, getEvalTmpArgs(args_copy), nullptr,
+            nullptr, nullptr, explicit_inst);
     }
-    return qore_method_private::eval(*method, xsink, rc, self, args);
+    return qore_method_private::eval(*method, xsink, rc, self, args, nullptr, nullptr, nullptr, explicit_inst);
+}
+
+SelfFunctionCallNode::SelfFunctionCallNode(const QoreProgramLocation* loc, char* n, QoreParseListNode* n_args,
+        const QoreMethod* m, const QoreClass* n_qc, const qore_class_private* class_ctx) :
+        AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc, m), ns(n), class_ctx(class_ctx), is_copy(false),
+        is_abstract(m && qore_method_private::get(*m)->isAbstract()) {
+}
+
+QoreValue SelfFunctionCallNode::evalUnresolvedQualified(QoreObject* self, const qore_class_private* ctx,
+        RuntimeConfig& rc, ExceptionSink* xsink) const {
+    // the call is non-virtual: it calls the method of the class that it names (qc; see the deferred self calls in
+    // QoreAOTRuntime.cpp), or of a class that the named class inherits
+    const char* name = ns.getIdentifier();
+    bool priv;
+    if (!qc || !self->getClass()->getClass(*qc, priv)) {
+        xsink->raiseException("METHOD-DOES-NOT-EXIST", "cannot call %s() on an object of class '%s', which does "
+            "not inherit the class of the call", ns.ostr, self->getClassName());
+        return QoreValue();
+    }
+    const qore_class_private* qcp = qore_class_private::get(*qc);
+    const QoreMethod* m = qcp->getMethodForEval(name, self->getProgram(), ctx, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the explicit type arguments of the call (qore#5818)
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    if (!m) {
+        // raises the exception for a method that does not exist, or calls a pseudo-method
+        return qcp->evalMethod(self, name, args, ctx, rc, xsink, explicit_inst);
+    }
+    if (qore_method_private::get(*m)->isAbstract()) {
+        // exec() sets the call site
+        return exec(self, name, ctx, xsink);
+    }
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+    if (tmp_args) {
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return qore_method_private::evalTmpArgs(*m, xsink, rc, self, getEvalTmpArgs(args_copy), nullptr, nullptr,
+            nullptr, explicit_inst);
+    }
+    return qore_method_private::eval(*m, xsink, rc, self, args, nullptr, nullptr, nullptr, explicit_inst);
+}
+
+bool SelfFunctionCallNode::backgroundCallIsStatic(const QoreObject* obj) const {
+    if (method) {
+        return method->isStatic();
+    }
+    if (is_copy) {
+        return false;
+    }
+    // an unqualified call is resolved on the class of the object, a qualified one on the class that it names
+    const QoreClass* c = (ns.size() == 1 && obj) ? obj->getClass() : qc;
+    if (!c && obj) {
+        c = obj->getClass();
+    }
+    if (!c) {
+        return false;
+    }
+    ClassAccess access;
+    const char* name = ns.getIdentifier();
+    return !c->findMethod(name, access) && c->findStaticMethod(name, access);
 }
 
 int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_context) {
@@ -1085,14 +1177,14 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     // functional-domain (dom=...) check is evaluated against the CALLER's parse options (the
     // cross-Program privilege model).  A normal call (no explicit Program) keeps the default, so the
     // dom check is evaluated against the function's own Program.
-    const bool defer_domain_po = (pgm != nullptr);
+    const unsigned call_flags = pgm ? QCEF_DEFER_DOMAIN_PO : 0;
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
         return func->evalFunctionTmpArgs(variant, getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
-            getExplicitTypeParamInstantiation(), defer_domain_po);
+            getExplicitTypeParamInstantiation(), call_flags);
     }
     return func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
-        defer_domain_po);
+        call_flags);
 }
 
 int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -1185,8 +1277,12 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                     if (!m->isStatic()) {
                         sfcn = new SelfFunctionCallNode(loc, takeName(), takeParseArgs(), m, qc,
                             qore_class_private::get(*qc));
+                        // the explicit type arguments of the call go to the method call (qore#5818)
+                        sfcn->moveExplicitTypeArgsFrom(*this);
                     } else {
                         StaticMethodCallNode* smcn = new StaticMethodCallNode(loc, m, takeParseArgs());
+                        // the explicit type arguments of the call go to the method call (qore#5818)
+                        smcn->moveExplicitTypeArgsFrom(*this);
                         // issue #5769: the receiver of an implicit call to a static method of a generic base class
                         smcn->setReceiverTypeInfo(implicit_self_call_receiver(m, qore_class_private::get(*qc)));
                         val = smcn;
@@ -1208,6 +1304,8 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
             const QoreMethod* m = class_ctx->parseFindStaticMethod(c_str, class_ctx);
             if (m) {
                 StaticMethodCallNode* smcn = new StaticMethodCallNode(loc, m, takeParseArgs());
+                // the explicit type arguments of the call go to the method call (qore#5818)
+                smcn->moveExplicitTypeArgsFrom(*this);
                 // issue #5769: the receiver of an implicit call to a static method of a generic base class
                 smcn->setReceiverTypeInfo(implicit_self_call_receiver(m, class_ctx));
                 val = smcn;
@@ -1554,6 +1652,33 @@ QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
     return AbstractMethodCallNode::exec(o, c_str, class_ctx, xsink);
 }
 
+void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
+        const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    // the exception that AbstractMethodCallNode::exec() raises: through the method saved at parse time, or through
+    // the dynamic dispatch of qore_class_private::evalMethod()
+    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass())) {
+        if (variant) {
+            qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has " \
+                "already been deleted", qc->getName(), method->getName(),
+                variant->getSignature()->getSignatureText());
+        } else {
+            qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
+                "already been deleted", qc->getName(), method->getName());
+        }
+    } else {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
+            "already been deleted", o->getClassName(), name);
+    }
+}
+
+int AbstractMethodCallNode::checkObject(QoreObject* o, const char* c_str, ExceptionSink* xsink) const {
+    if (o->isValid()) {
+        return 0;
+    }
+    qore_raise_deleted_method_call(xsink, o, c_str, qc, method, variant);
+    return -1;
+}
+
 QoreValue MethodCallNode::execPseudo(const QoreValue n, ExceptionSink* xsink) const {
    //printd(5, "MethodCallNode::execPseudo() %s::%s() variant: %p\n", qc->getName(), method->getName(), variant);
    // if n is nothing make sure and use the "<nothing>" class with a dynamic method lookup
@@ -1858,6 +1983,8 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             assert(!parameterized_receiver);
             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(loc, scope->takeName(), takeParseArgs(), method, qc,
                 class_ctx);
+            // the explicit type arguments of the call go to the method call (qore#5818)
+            sfcn->moveExplicitTypeArgsFrom(*this);
             val = sfcn;
             deref();
             return parse_init_value(val, parse_context);

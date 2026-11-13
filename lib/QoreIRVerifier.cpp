@@ -40,6 +40,7 @@
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/VarRefNode.h>
+#include <qore/intern/QoreAssignmentOperatorNode.h>
 #include <qore/intern/QoreOperatorNode.h>
 #include <qore/intern/QoreExtractOperatorNode.h>
 #include <qore/intern/QoreSpliceOperatorNode.h>
@@ -413,7 +414,8 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 }
             } else if (inst->opcode == QoreIROpcode::IteratorCreate
                     || inst->opcode == QoreIROpcode::IteratorCreateIterate
-                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors) {
+                    || inst->opcode == QoreIROpcode::IteratorCreateSelectors
+                    || inst->opcode == QoreIROpcode::IteratorCreateSource) {
                 auto* iter = dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst.get());
                 if (!iter || !iter->iterable.isValid()) {
                     error = "iterator.create missing iterable";
@@ -2157,6 +2159,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     real_reference_ir_only_locals.clear();
     cow_container_locals.clear();
     lvalue_path_locals.clear();
+    std::unordered_set<const void*> ensure_unique_roots;
     weak_store_locals.clear();
     element_store_locals.clear();
     stored_locals.clear();
@@ -2254,6 +2257,29 @@ void QoreIRFunction::computeIROnlyLocals() {
                     if ((step.kind == LVPathStepKind::LocalVar
                             || step.kind == LVPathStepKind::ClosureVar)
                             && step.ref_ptr) {
+                        // the unique step of a weak assignment from an untyped local (qore#5847) does not move the
+                        // local to the runtime stack: the local keeps its IR storage if it has one, and the step
+                        // changes the value in that storage (qore_ir_unique_container()), so that the lifetime of
+                        // an object that the local holds does not depend on the weak assignment
+                        if (inst->opcode == QoreIROpcode::LValuePathUnary
+                                && static_cast<const QoreIRLValuePathInstruction*>(inst.get())->unary_op
+                                    == LVUnaryOp::EnsureUnique
+                                && pi->path.size() == 1 && step.kind == LVPathStepKind::LocalVar) {
+                            const LocalVar* lv = static_cast<const LocalVar*>(step.ref_ptr);
+                            const QoreTypeInfo* lti = lv->getTypeInfo();
+                            bool body_local = false;
+                            for (const LocalVar* body_lv : all_body_locals) {
+                                if (body_lv == lv) {
+                                    body_local = true;
+                                    break;
+                                }
+                            }
+                            if (body_local && !lv->closureUse() && !lv->isTopLevel()
+                                    && qore_weak_source_type_may_hold_container(lti)) {
+                                ensure_unique_roots.insert(step.ref_ptr);
+                                continue;
+                            }
+                        }
                         lvalue_path_locals.insert(step.ref_ptr);
                     }
                 }
@@ -2484,6 +2510,14 @@ void QoreIRFunction::computeIROnlyLocals() {
         }
     }
 
+    // the root of a unique step that has no IR storage is reached through the runtime stack, as any other path root
+    for (const void* key : ensure_unique_roots) {
+        if (!hasIRStorage(key)) {
+            lvalue_path_locals.insert(key);
+            ast_referenced_locals.insert(key);
+        }
+    }
+
     // Build filtered instantiation list: body locals NOT classified as IR-only, which have no storage on the runtime
     // stack
     ast_visible_body_locals.clear();
@@ -2675,6 +2709,18 @@ void QoreIRFunction::restoreHandlerPreInstantiatedLocals() {
     }
 }
 
+void QoreIRFunction::embedLocalClosureFlags() {
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (auto* local_inst = dynamic_cast<QoreIRLocalInstruction*>(inst.get())) {
+                if (local_inst->local) {
+                    local_inst->is_closure = local_inst->local->closureUse();
+                }
+            }
+        }
+    }
+}
+
 void QoreIRFunction::computeSlotIdsAndEmbed() {
     // Pass 1: Compute max value ID for right-sizing interpreter value vector
     // AND compute local variable slot IDs for flat array access in interpreter
@@ -2852,6 +2898,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             }
             if (inst->opcode == QoreIROpcode::IteratorCreate || inst->opcode == QoreIROpcode::IteratorCreateIterate
                     || inst->opcode == QoreIROpcode::IteratorCreateSelectors
+                    || inst->opcode == QoreIROpcode::IteratorCreateSource
                     || inst->opcode == QoreIROpcode::IteratorCreateReverse) {
                 interpreter_iterator_slot_boundary[inst.get()] = seen_slots;
                 pending_iterator = inst.get();
@@ -2896,6 +2943,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                     if (it != slot_map.end()) {
                         local_inst->slot_id = it->second;
                     }
+                    // the flag that embedLocalClosureFlags() embeds alone
                     local_inst->is_closure = local_inst->local->closureUse();
                     local_inst->is_ref = localMayHoldReference(local_inst->local,
                         creates_reference, body_local_keys);

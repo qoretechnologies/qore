@@ -33,6 +33,7 @@
 
 #define _QORE_STATEMENT_BLOCK_H
 
+#include "qore/intern/QoreNativeParseInfo.h"
 #include "qore/intern/AbstractStatement.h"
 #include <qore/safe_dslist>
 
@@ -125,6 +126,9 @@ class qore_program_private_base;
 class StatementBlock : public AbstractStatement {
 public:
     typedef safe_dslist<AbstractStatement*> statement_list_t;
+
+    //! Parse-only eligibility of the complete body (including its signature defaults).
+    QoreNativeParseInfo native_parse_info;
 
     //! Metadata-only block with an explicit program-owned location.
     DLLLOCAL StatementBlock(qore_program_private_base* p, const QoreProgramLocation* loc);
@@ -252,6 +256,15 @@ public:
 
     DLLLOCAL virtual ~TopLevelStatementBlock();
 
+    //! Frees the code compiled from the top-level statements (IR, AOT context) when the Program's code is deleted
+    /** The IR of the top-level code refers to the closures that the code creates (QoreClosureParseNode), whose
+        variants keep the Program allocated while they live (UserVariantBase::setProgram()): freeing it only when the
+        Program is destroyed would keep both forever (qore#5822).  Called by qore_program_private::del() once no thread
+        runs the Program's code and its background compiles are drained (QoreJIT::waitForBgCompileQueue()), as a
+        background compile can lower the closures' code.
+    */
+    DLLLOCAL void delCompiledCode();
+
     using StatementBlock::parseInit;
     DLLLOCAL int parseInit();
 
@@ -270,6 +283,7 @@ public:
         }
 
         statement_list.erase_to_end(hwm);
+        native_parse_info = committed_native_parse_info;
     }
 
     // local vars are not instantiated here because they are instantiated by the QoreProgram object
@@ -303,6 +317,7 @@ public:
     }
 
 protected:
+    QoreNativeParseInfo committed_native_parse_info;
     // iterator to last commit element in statement list (for parsing)
     statement_list_t::iterator hwm;
     // iterator to last executed element in statement list (for REPARSE mode execution)
@@ -329,6 +344,18 @@ protected:
     using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
     mutable AotFunctionPtr cached_toplevel_aot_fn = nullptr;
     mutable QoreAOTContext* cached_toplevel_aot_ctx = nullptr;
+    //! the debug IR of top-level code compiled ahead of time, which runs while a debugger is attached (qore#5851)
+    mutable QoreIRFunction* cached_toplevel_aot_debug_ir = nullptr;
+    mutable std::mutex toplevel_aot_debug_ir_mutex;
+
+    //! Runs the IR of the top-level code: compiled by the JIT if \a use_jit, or in the IR interpreter
+    DLLLOCAL int execIR(QoreIRFunction* ir_func, bool use_jit, const QoreParseOptions& runtime_parse_options,
+            QoreProgram* pgm, QoreValue& return_value, ExceptionSink* xsink);
+
+    //! Returns the debug IR of top-level code compiled ahead of time, made from its image on first use (qore#5851)
+    /** @return the debug IR, or nullptr with an exception in \a xsink
+    */
+    DLLLOCAL QoreIRFunction* getAOTDebugIR(ExceptionSink* xsink) const;
 
 public:
     //! Register a pre-compiled AOT function pointer for top-level code

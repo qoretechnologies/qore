@@ -160,14 +160,20 @@ public:
         the caller's read loop unblocks immediately, and skip the map insert
         (the closed Queue won't receive any more data).
     */
-    DLLLOCAL void registerStreamQueue(const std::string& stream_key, Queue* queue) {
+    DLLLOCAL void registerStreamQueue(const std::string& stream_key, Queue* queue, bool tunnel = false) {
         AutoLocker al(op_lock);
+        if (tunnel) {
+            tunnel_stream_keys.insert(stream_key);
+        }
         if (stream_queues_closed) {
             // Push the NOTHING sentinel so the handler thread's read loop
             // exits cleanly.  Don't deref the Queue — the QoreObject ref is
             // held in the QPP layer's `stream_queue_objs` member hash and
-            // is released by the standard internal_members deref path.
-            queue->pushAndTakeRef(QoreValue());
+            // is released by the standard internal_members deref path.  Pushed
+            // without waiting, even if the Queue is bounded and full (issue #5859).
+            ExceptionSink push_xsink;
+            queue->tryPush(&push_xsink, QoreValue(), true);
+            push_xsink.clear();
             return;
         }
         stream_queues[stream_key] = queue;
@@ -463,6 +469,9 @@ private:
         without Qore interpreter overhead.
     */
     std::unordered_map<std::string, Queue*> stream_queues;
+    //! The keys of the stream_queues entries that are CONNECT tunnels (no WebSocket frame state); a draining server
+    //! ends them (see checkStreamQueues()), protected by op_lock
+    std::unordered_set<std::string> tunnel_stream_keys;
 
     //! Set under @c op_lock at the start of @ref closeStreamQueues() so any concurrent
     //! @ref registerStreamQueue() call from a handler thread that races shutdown

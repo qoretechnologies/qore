@@ -59,6 +59,8 @@ extern "C" DLLEXPORT void sshutil_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = sshutil_module_init;
     mod_info.ns_init = sshutil_module_ns_init;
     mod_info.del = sshutil_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &SshUtilNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

@@ -1,0 +1,389 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class PoOverrideBorrowTest
+
+/*  The runtime parse options override of the code of a user variant is set in the helper of its call (issue #5852).
+
+    A call that did not enter a module's Program has no override of its own, and the evaluation of the variant
+    (UserVariantBase::eval(), UserClosureVariant::evalClosure()) borrows the call's helper for the override of its
+    code; a call that entered a module's Program keeps the override of the crossing.  Whether the call has the
+    override of a crossing must be asked before the helper is borrowed: debug builds assert that it is not asked
+    after.  This test makes every kind of call that borrows the helper or keeps the override of a crossing, in every
+    execution mode: functions, methods, static and synchronized methods, closures, call references, destructors,
+    calls into module code that call back into the caller's code, recursion through module code, and exceptions that
+    leave all of them; in a debug build, a call path that asked after borrowing fails here.
+*/
+
+public class PoOverrideBorrowTest inherits QUnit::Test {
+    public {
+        const Code = "%modern
+public class DestroyCount {
+    public {
+        int destroyed;
+    }
+}
+
+public class Tracked {
+    private {
+        DestroyCount counter;
+    }
+
+    constructor(DestroyCount counter) {
+        self.counter = counter;
+    }
+
+    destructor() {
+        # user code run by a destructor, which has no call helper of its own
+        counter.destroyed += plain(1);
+    }
+}
+
+public class Callee {
+    public int method(int n) {
+        return n ? method(n - 1) + 1 : 0;
+    }
+
+    public static int staticMethod(int n) {
+        return n ? Callee::staticMethod(n - 1) + 1 : 0;
+    }
+
+    public synchronized int synchronizedMethod(int n) {
+        return n ? synchronizedMethod(n - 1) + 1 : 0;
+    }
+
+    public int throwing(int n) {
+        if (!n) {
+            throw \"BORROW-TEST\", \"deep\", n;
+        }
+        return throwing(n - 1);
+    }
+}
+
+int sub plain(int n) {
+    return n ? plain(n - 1) + 1 : 0;
+}
+
+# calls of user code from user code
+int sub user_calls() {
+    Callee c();
+    code closure = int sub (int n) { return plain(n) + c.method(n); };
+    code ref = \\c.method();
+    return plain(3) + c.method(3) + Callee::staticMethod(3) + c.synchronizedMethod(3) + closure(3) + ref(3)
+        + call_function(\"plain\", 3);
+}
+
+# calls into module code that call back into user code, and recursion through module code
+int sub module_calls() {
+    Callee c();
+    ModuleCaller mc();
+    code cb = int sub (int n) { return plain(n) + c.method(n); };
+    int rv = call_back(cb, 3) + mc.callBack(cb, 3) + mc.callBackSynchronized(cb, 3);
+    # module code that calls back into user code that calls into module code again
+    rv += call_back(int sub (int n) { return mc.callBack(cb, n) + call_back(\\c.method(), n); }, 2);
+    rv += module_recurse(int sub () { return plain(4); }, 5);
+    return rv;
+}
+
+# destructors that run user code
+int sub destructor_calls() {
+    DestroyCount counter();
+    for (int i = 0; i < 5; ++i) {
+        Tracked t(counter);
+        delete t;
+    }
+    {
+        Tracked t(counter);
+    }
+    return counter.destroyed;
+}
+
+# exceptions that leave user code, module code and callbacks; returns the depth reported by each
+list<int> sub exception_calls() {
+    Callee c();
+    ModuleCaller mc();
+    list<int> rv = ();
+    try {
+        c.throwing(4);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.arg;
+    }
+    try {
+        call_back(int sub (int n) { return c.throwing(n); }, 3);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.arg;
+    }
+    try {
+        mc.callBackSynchronized(int sub (int n) { return call_back(\\c.throwing(), n); }, 2);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.arg;
+    }
+    # the calls work as before after the exceptions
+    rv += user_calls() + module_calls();
+    return rv;
+}
+";
+
+        #! the code of a caller restricted with PO_LOCKDOWN, which calls into the module and is called back by it
+        const ParseOptionsCode = "%modern
+# \"allowed\" if the code running now may create an RWLock, or the error if not: this code runs with PO_LOCKDOWN
+string sub caller_probe() {
+    try {
+        create_object(\"RWLock\");
+        return \"allowed\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# probes, calls into the module, which calls this function back with n - 1, and probes again
+list<string> sub caller_frame(int n) {
+    list<string> rv = (caller_probe(),);
+    if (n) {
+        rv += module_frame(\\caller_frame(), n - 1);
+    }
+    rv += caller_probe();
+    return rv;
+}
+
+public class CallerFrames {
+    # caller_frame() through methods and a closure
+    list<string> frame(int n) {
+        list<string> rv = (caller_probe(),);
+        if (n) {
+            ModuleCaller mc();
+            rv += mc.frame(list<string> sub (int m) { return frame(m); }, n - 1);
+        }
+        rv += caller_probe();
+        return rv;
+    }
+}
+
+list<string> sub function_frames(int n) {
+    list<string> rv = (caller_probe(),);
+    rv += module_frame(\\caller_frame(), n);
+    rv += caller_probe();
+    return rv;
+}
+
+list<string> sub method_frames(int n) {
+    CallerFrames f();
+    list<string> rv = (caller_probe(),);
+    rv += f.frame(n + 1);
+    rv += caller_probe();
+    return rv;
+}
+
+# calls into the module, which calls back code of another Program (this test's)
+list<string> sub other_frames(code cb) {
+    list<string> rv = (caller_probe(),);
+    rv += module_frame(cb, 0);
+    rv += caller_probe();
+    return rv;
+}
+
+list<string> sub other_catch(code cb) {
+    list<string> rv = (caller_probe(),);
+    rv += module_catch(cb);
+    rv += caller_probe();
+    return rv;
+}
+
+# an exception thrown in the caller's code, called back from module code, after probing there
+list<string> sub exception_frames() {
+    list<string> rv = (caller_probe(),);
+    rv += module_catch(sub () { throw \"BORROW-TEST\", caller_probe(); });
+    rv += caller_probe();
+    try {
+        module_frame(list<string> sub (int n) { throw \"BORROW-TEST\", caller_probe(); }, 0);
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.desc;
+    }
+    rv += caller_probe();
+    return rv;
+}
+";
+
+        const Allowed = "allowed";
+        const Denied = "CREATE-OBJECT-ERROR";
+
+        const Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+            "jit": EM_JIT,
+            "tiered": EM_TIERED,
+        };
+
+        # plain 3, method 3, static 3, synchronized 3, closure 3 + 3, call ref 3, call_function 3
+        const UserCalls = 24;
+        # 6 * 3 callbacks of (3 + 3), nested (2 + 2) * 2 + 2, recursion 4 + 5
+        const ModuleCalls = 3 * 6 + 2 + 2 + 2 + 4 + 5;
+    }
+
+    constructor() : Test("PoOverrideBorrowTest", "1.0") {
+        addTestCase("calls that borrow the override helper", \testCalls());
+        addTestCase("the parse options of the code run by each call", \testParseOptions());
+        addTestCase("the parse options of callbacks into another Program", \testOtherProgramCallbacks());
+        set_return_value(main());
+    }
+
+    #! the probes of caller_frame(n): the caller's, the module's frame of n - 1 and the caller's again
+    static list<string> callerFrame(int n) {
+        list<string> rv = (Denied,);
+        if (n) {
+            rv += moduleFrame(n - 1);
+        }
+        rv += Denied;
+        return rv;
+    }
+
+    #! the probes of module_frame(caller_frame, n)
+    static list<string> moduleFrame(int n) {
+        return (Allowed,) + callerFrame(n) + (Allowed,);
+    }
+
+    #! the runtime parse options of each call: module code runs with the module's options, the caller's code that
+    #! module code calls back with the caller's (PO_LOCKDOWN), before, during and after nested calls and exceptions
+    testParseOptions() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            if ((m.value == EM_JIT || m.value == EM_TIERED) && !inlist("JIT", get_feature_list())) {
+                continue;
+            }
+            Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+            pgm.setExecMode(m.value);
+            pgm.loadModule(get_script_dir() + "PoOverrideBorrowHelper.qm");
+            pgm.setParseOptions(PO_LOCKDOWN);
+            pgm.parse(ParseOptionsCode, "po-override-borrow-parse-options");
+            for (int i = 0; i < 2; ++i) {
+                string label = sprintf("%s %d", m.key, i);
+                assertEq(Denied, pgm.callFunction("caller_probe"), label + ": caller");
+                foreach int n in (0, 3) {
+                    assertEq((Denied,) + moduleFrame(n) + (Denied,), pgm.callFunction("function_frames", n),
+                        sprintf("%s: functions, depth %d", label, n));
+                    assertEq((Denied,) + callerFrame(n + 1) + (Denied,), pgm.callFunction("method_frames", n),
+                        sprintf("%s: methods and closures, depth %d", label, n));
+                }
+                assertEq((Denied, Allowed, Denied, Allowed, Allowed, Denied, Denied, Denied),
+                    pgm.callFunction("exception_frames"), label + ": exceptions");
+                assertEq(Denied, pgm.callFunction("caller_probe"), label + ": caller after the calls");
+            }
+        }
+    }
+
+    #! "allowed" if the code running now may create an RWLock, or the error if not: this test's code may
+    string uProbe() {
+        try {
+            create_object("RWLock");
+            return Allowed;
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! a callback of the module: this test's code, which runs with this test's options
+    list<string> uFrame(int n) {
+        return (uProbe(),);
+    }
+
+    #! uFrame() as a synchronized method, whose call goes through UserMethodVariant::evalSynchronizedMethod()
+    synchronized list<string> uFrameSynchronized(int n) {
+        return (uProbe(),);
+    }
+
+    #! code of this test called back by module code that a caller restricted with PO_LOCKDOWN called: the callback
+    #! runs with this test's options (the override of the module call is cleared for it in the borrowed helper, see
+    #! UserVariantBase::eval() and UserClosureVariant::evalClosure()), and the module code after it with the module
+    #! call's override again: the module's own options, and for a sandboxed caller also the caller's restrictions
+    /** Only the sandboxed caller's callbacks detect a wrong borrow, such as an override restored before the callback
+        runs: its restrictions are those of the override, and the callback must not keep them.  For the unsandboxed
+        caller, and in testParseOptions(), where the callbacks are code of the caller itself, switching Programs gives
+        the same results, so they check the semantics only.  Each kind of callback probes in its own body: a callback
+        that calls another method to probe would have the options set again by that method's call.
+    */
+    testOtherProgramCallbacks() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            if ((m.value == EM_JIT || m.value == EM_TIERED) && !inlist("JIT", get_feature_list())) {
+                continue;
+            }
+            foreach bool sandboxed in ((False, True)) {
+                Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+                if (sandboxed) {
+                    pgm.setSandboxManager(new SandboxManager());
+                }
+                pgm.setExecMode(m.value);
+                pgm.loadModule(get_script_dir() + "PoOverrideBorrowHelper.qm");
+                pgm.setParseOptions(PO_LOCKDOWN);
+                pgm.parse(ParseOptionsCode, "po-override-borrow-other");
+                # module code: allowed, or for a sandboxed caller denied by the caller's restrictions
+                string module = sandboxed ? Denied : Allowed;
+                for (int i = 0; i < 2; ++i) {
+                    string label = sprintf("%s %s %d", m.key, sandboxed ? "sandboxed" : "unsandboxed", i);
+                    list<string> frames = (Denied, module, Allowed, module, Denied);
+                    assertEq(frames, pgm.callFunction("other_frames", \uFrame()), label + ": method");
+                    assertEq(frames, pgm.callFunction("other_frames", \uFrameSynchronized()),
+                        label + ": synchronized method");
+                    # a closure that probes in its own body (see UserClosureVariant::evalClosure())
+                    assertEq(frames, pgm.callFunction("other_frames", list<string> sub (int n) {
+                            try {
+                                create_object("RWLock");
+                                return (Allowed,);
+                            } catch (hash<ExceptionInfo> ex) {
+                                return (ex.err,);
+                            }
+                        }), label + ": closure");
+                    assertEq((Denied, module, Allowed, module, module, Denied),
+                        pgm.callFunction("other_catch", sub () { throw "BORROW-TEST", uProbe(); }),
+                        label + ": exception");
+                }
+            }
+        }
+    }
+
+    testCalls() {
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            if ((m.value == EM_JIT || m.value == EM_TIERED) && !inlist("JIT", get_feature_list())) {
+                continue;
+            }
+            Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+            pgm.setExecMode(m.value);
+            pgm.loadModule(get_script_dir() + "PoOverrideBorrowHelper.qm");
+            pgm.parse(Code, "po-override-borrow");
+            pgm.run();
+            # each kind of call twice: the second calls use what the first calls compiled or cached
+            for (int i = 0; i < 2; ++i) {
+                string label = sprintf("%s %d", m.key, i);
+                assertEq(UserCalls, pgm.callFunction("user_calls"), label + ": user calls");
+                assertEq(ModuleCalls, pgm.callFunction("module_calls"), label + ": module calls");
+                assertEq(6, pgm.callFunction("destructor_calls"), label + ": destructors");
+                assertEq((0, 0, 0, UserCalls + ModuleCalls), pgm.callFunction("exception_calls"),
+                    label + ": exceptions");
+            }
+        }
+    }
+}

@@ -2097,6 +2097,26 @@ MACRO (QORE_BINARY_MODULE _module_name _version)
    QORE_BINARY_MODULE_INTERN(${_module_name} ${_version} "" ${ARGN})
 ENDMACRO (QORE_BINARY_MODULE)
 
+# qore_remove_stale_module_api_files(<target>)
+# After each build of the binary module <target> (a <name>-api-<major>.<minor>.qmod file), removes the files of the
+# same module built for another module API from its output directory: CMake does not remove the file with the old name
+# when the module API of the Qore headers changes, and tools that look for a module's file by a pattern would find the
+# stale one (see QoreRemoveStaleModuleApiFiles.cmake and design/module-api-version.md).  QORE_BINARY_MODULE* call it;
+# a module that sets its -api-*.qmod suffix itself calls it after doing so.
+function(qore_remove_stale_module_api_files _target)
+    if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.15)
+        # the base name of the file, from LIBRARY_OUTPUT_NAME, OUTPUT_NAME or the target name
+        set(_name "$<TARGET_FILE_BASE_NAME:${_target}>")
+    else()
+        # CMake 3.14 has no TARGET_FILE_BASE_NAME; a LIBRARY_OUTPUT_NAME here only means that nothing is found
+        set(_name "$<IF:$<BOOL:$<TARGET_PROPERTY:${_target},OUTPUT_NAME>>,$<TARGET_PROPERTY:${_target},OUTPUT_NAME>,${_target}>")
+    endif()
+    add_custom_command(TARGET ${_target} POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" "-DDIR=$<TARGET_FILE_DIR:${_target}>" "-DNAME=${_name}"
+            "-DKEEP=$<TARGET_FILE_NAME:${_target}>" -P "${QORE_CMAKE_DIR}/QoreRemoveStaleModuleApiFiles.cmake"
+        VERBATIM)
+endfunction()
+
 # Create qore binary module.
 # Arguments:
 #  _module_name - string name of the module
@@ -2116,6 +2136,10 @@ ENDMACRO (QORE_BINARY_MODULE_INTERN)
 
 MACRO (QORE_BINARY_MODULE_QORE _module_name _version _install_suffix)
     QORE_BINARY_MODULE_INTERN2(${_module_name} ${_version} "${_install_suffix}" 1 ${ARGN})
+    # the in-tree binary modules, which the qore-bootstrap component builds and installs: the top-level CMakeLists.txt
+    # makes the qore-bootstrap target's module list and the module path of the metadata extraction from them
+    set_property(GLOBAL APPEND PROPERTY QORE_INTREE_BINARY_MODULE_TARGETS ${_module_name})
+    set_property(GLOBAL APPEND PROPERTY QORE_INTREE_BINARY_MODULE_DIRS ${CMAKE_CURRENT_BINARY_DIR})
     # a module of Qore must load only Qore's OpenSSL if it links OpenSSL itself (see QoreCheckSslConsumers.cmake);
     # checked at the end of the module's directory, where its imported library targets are visible, after all its
     # libraries are linked
@@ -2311,6 +2335,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     set(_mod_target_dir ${QORE_MODULES_DIR}${_install_suffix})
 
     set_target_properties(${_module_name} PROPERTIES PREFIX "" SUFFIX "-api-${QORE_API_VERSION}.qmod")
+    qore_remove_stale_module_api_files(${_module_name})
 
     # issue #3802: do not link with the qore library
     target_link_libraries(${_module_name} ${_libs})

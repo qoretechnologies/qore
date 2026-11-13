@@ -62,6 +62,25 @@ protected:
     }
 };
 
+//! returns true if a variable of the given declared type can hold a hash or a list
+/** A variable declared with a type that excludes both (an int, a string, an object type) is never made unique by a
+    weak assignment and is not touched (qore#5847)
+*/
+static inline bool qore_weak_source_type_may_hold_container(const QoreTypeInfo* ti) {
+    return !QoreTypeInfo::hasType(ti)
+        || QoreTypeInfo::parseReturns(ti, NT_HASH) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(ti, NT_LIST) != QTI_NOT_EQUAL;
+}
+
+//! returns true if the right side of a weak assignment is a variable whose container the assignment makes unique
+/** the right side must be a variable (a local, closure-bound, thread-safe, global or thread-local variable, or a class
+    static variable), whatever its declared type: a weak reference then always designates the variable's own
+    container, never one that the variable shares with a literal of the program or another variable.  A value that
+    is not a hash or a list (an object, a scalar, NOTHING) and a weak reference held by the variable are left as they
+    are (qore#5756, qore#5847)
+*/
+DLLLOCAL bool qore_weak_assignment_source_made_unique(const QoreValue& right);
+
 class QoreWeakAssignmentOperatorNode : public QoreAssignmentOperatorNode {
 OP_COMMON
 public:

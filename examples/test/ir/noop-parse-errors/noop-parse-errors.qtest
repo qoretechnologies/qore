@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the scripts run in child processes that set their own --exec-mode, or are compiled by qcc
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class NoopParseErrorsTest
+
+#! a builtin call that is certain to fail at run time with strict arguments is a parse error (issue #5686)
+/** With %strict-args or %require-types (as with %modern), the no-op variants of the builtins (flagged NOOP, which
+    accept NOTHING and return a constant value) are not candidates: a call whose argument has the type @ref nothing
+    exactly can match only such a variant, so it is a parse error (PARSE-TYPE-ERROR) in every execution mode and with
+    qcc.  A call whose argument may have no value (a *type) can still succeed, so it is resolved at run time and
+    raises RUNTIME-OVERLOAD-ERROR when the value is NOTHING (may-nothing.q, in every mode, on the IR tier and as AOT
+    executables, compared with the AST interpreter and an .expected file).  length() and strlen() have regular
+    variants for NOTHING.  sort*() and inlist*() are left out: they get regular variants for NOTHING.
+*/
+class NoopParseErrorsTest inherits QUnit::Test {
+    public {
+        #! calls with an argument whose type is NOTHING exactly; NOTHING is substituted for "%n"
+        const Calls = (
+            "substr(%n, 1)",
+            "sprintf(%n)",
+            "vsprintf(%n, ())",
+            "chr(%n)",
+            "setenv(%n, \"x\")",
+            "unsetenv(%n)",
+            "getenv(%n)",
+            "reverse(%n)",
+            "exists_function(%n)",
+            "is_date_absolute(%n)",
+        );
+
+        #! the parse options under which no-op variants are not candidates
+        const Headers = {
+            "%modern": "%modern\n",
+            "%strict-args": "%new-style\n%strict-args\n",
+            "%require-types": "%new-style\n%require-types\n",
+        };
+
+        #! the arguments of type NOTHING: the literal and a call of a function returning nothing
+        const Args = ("NOTHING", "g()");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("noop parse errors", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        addTestCase("NOTHING arguments are parse errors", \parseErrorTest());
+        addTestCase("NOTHING arguments are parse errors with qcc", \qccParseErrorTest());
+        addTestCase("negative: without strict arguments the no-op variants are called", \legacyTest());
+        addTestCase("may-nothing: execution modes", \modesTest());
+        addTestCase("may-nothing: AOT executable -O0", sub () { aotTest("-O0"); });
+        addTestCase("may-nothing: AOT executable -O3", sub () { aotTest("-O3"); });
+        set_return_value(main());
+    }
+
+    #! runs a command that is expected to fail at parse time, or that runs no compiled code, and returns its output
+    /** ExecModeHarness::run_any() requires native code in the compiled modes, which a script that does not parse
+        does not run
+    */
+    private static string runParse(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    #! writes a script calling \a call with each argument of type NOTHING
+    private string writeScript(TmpDir tmp, string name, string header, string call, string arg) {
+        string path = tmp.path + "/" + name + ".q";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(header + "nothing sub g() {}\nauto x = " + replace(call, "%n", arg) + ";\nprintf(\"%y\\n\", x);\n");
+        return path;
+    }
+
+    parseErrorTest() {
+        TmpDir tmp("noop-parse-errors-");
+        int n = 0;
+        foreach hash<auto> h in (Headers.pairIterator()) {
+            foreach string call in (Calls) {
+                foreach string arg in (Args) {
+                    string path = writeScript(tmp, "s" + ++n, h.value, call, arg);
+                    # the execution mode does not change parsing: every mode for %modern, the default for the others
+                    list<string> modes = h.key == "%modern" ? ExecModeHarness::ExecModes : ("tiered",);
+                    foreach string mode in (modes) {
+                        string out = runParse(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path));
+                        assertRegex("PARSE-TYPE-ERROR: no variant matching", out,
+                            sprintf("%s %s with %s (%s)", h.key, call, arg, mode));
+                    }
+                }
+            }
+        }
+    }
+
+    qccParseErrorTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("noop-parse-errors-qcc-");
+        int n = 0;
+        foreach string call in (Calls) {
+            string path = writeScript(tmp, "q" + ++n, Headers."%modern", call, "NOTHING");
+            string exe = tmp.path + "/q" + n;
+            string out = runParse(sprintf("%s %s -O0 -o %s %s", env, qcc_bin, exe, path));
+            assertRegex("PARSE-TYPE-ERROR: no variant matching", out, "qcc: " + call);
+            assertFalse(is_file(exe), "qcc: " + call + ": no executable");
+        }
+    }
+
+    #! without %strict-args and %require-types, a no-op variant is called and returns its constant value
+    legacyTest() {
+        TmpDir tmp("noop-parse-errors-legacy-");
+        string path = writeScript(tmp, "legacy", "%new-style\n", "substr(%n, 1)", "NOTHING");
+        string out = runParse(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, path));
+        # the no-op variant is called with a warning, and returns NOTHING
+        assertRegex("CALL-WITH-TYPE-ERRORS", out);
+        assertRegex("\nnull\n$", out);
+    }
+
+    #! the output of the AST interpreter for may-nothing.q, which must be that of the .expected file
+    private string astOutput() {
+        string exp = ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s/may-nothing.q", env, qore_bin, dir));
+        assertEq(ReadOnlyFile::readTextFile(dir + "/may-nothing.expected"), exp, "the output of the AST interpreter");
+        return exp;
+    }
+
+    modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/may-nothing.q", env, qore_bin, mode,
+                dir)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s/may-nothing.q", env, qore_bin,
+            dir)), ExecModeHarness::IRTierName);
+    }
+
+    aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("noop-parse-errors-aot-");
+        string exe = tmp.path + "/may-nothing";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s/may-nothing.q", env, qcc_bin, opt, exe, dir));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(astOutput(), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+}

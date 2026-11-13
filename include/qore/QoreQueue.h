@@ -33,8 +33,13 @@
 
 #define _QORE_QOREQUEUE_H
 
+#include <memory>
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreCondition.h>
+
+class QoreConsumeHook;
+class QueueItemConsumeHook;
+class QoreQueueRoomListener;
 
 class QoreQueueNode;
 
@@ -64,19 +69,28 @@ public:
     DLLEXPORT void pushAndTakeRef(QoreValue n);
 
     //! push at the end of the queue
+    /** The queue takes the reference to the value in every case: also when it raises an exception (a queue in an
+        error state, an interrupted wait, or a queue deleted while the push waits for space), when it times out
+        (\a to is set, and no exception is raised), and when it drops the value silently (a queue already deleted).
+        The caller must not release the value afterwards.
+    */
     DLLEXPORT void push(ExceptionSink* xsink, QoreValue n, int timeout_ms = 0, bool* to = 0);
 
     //! insert at the beginning of the queue
+    /** The queue takes the reference to the value in every case, as with push(ExceptionSink*, QoreValue, int, bool*).
+    */
     DLLEXPORT void insert(ExceptionSink* xsink, QoreValue n, int timeout_ms = 0, bool* to = 0);
 
     //! push at the end of the queue and scan for recursive references
-    /**
+    /** The queue takes the reference to the value in every case, as with push(ExceptionSink*, QoreValue, int, bool*).
+
         @since %Qore 0.9
     */
     DLLEXPORT void push(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms = 0, bool* to = nullptr);
 
     //! insert at the beginning of the queue and scan for recursive references
-    /**
+    /** The queue takes the reference to the value in every case, as with push(ExceptionSink*, QoreValue, int, bool*).
+
         @since %Qore 0.9
     */
     DLLEXPORT void insert(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms = 0, bool* to = nullptr);
@@ -142,6 +156,58 @@ public:
         @since Qore 0.8.12
     */
     DLLEXPORT void clearError();
+
+    //! Sets the hook that is told about the values taken from the queue, and those dropped with it (internal)
+    /** See QoreConsumeHook (issue #5820).
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook);
+
+    //! Returns the queue's item consume hook, which is created if the queue has none (internal)
+    /** Shared by the streams whose items are pushed to the queue; see QueueItemConsumeHook (issue #5820).
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL std::shared_ptr<QueueItemConsumeHook> getItemConsumeHook();
+
+    //! The results of tryPush() (internal)
+    enum TryPushResult {
+        //! the value was pushed, and the queue took the reference
+        QTP_PUSHED = 0,
+        //! the queue is full: the caller keeps the value, and the room listeners are told when there is room
+        QTP_FULL = 1,
+        //! the queue is in an error state, which was raised: the queue took the reference
+        QTP_REFUSED = 2,
+        //! the queue has been deleted: the queue took the reference
+        QTP_DELETED = 3,
+    };
+
+    //! Pushes a value at the end of the queue without waiting (internal)
+    /** For producers that must not block, such as the I/O thread (issue #5859).
+
+        @param ignore_max true to push even if the queue is full: for a value that ends a stream of values (an end
+        or error marker), which must reach the consumer after the values before it
+
+        @note values pushed this way are not counted for the garbage collector's scan, as with pushAndTakeRef():
+        only values that cannot be part of a reference cycle (data, plain hashes) may be pushed
+
+        @return see TryPushResult; with QTP_FULL the caller keeps the reference, otherwise the queue takes it
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL TryPushResult tryPush(ExceptionSink* xsink, QoreValue n, bool ignore_max = false);
+
+    //! Adds a listener told when the queue has room after tryPush() found it full, or is deleted or set to an error
+    //! state (internal)
+    /** @since %Qore 3.0
+    */
+    DLLLOCAL void addRoomListener(std::shared_ptr<QoreQueueRoomListener> listener);
+
+    //! Removes a room listener (internal)
+    /** @since %Qore 3.0
+    */
+    DLLLOCAL void removeRoomListener(const QoreQueueRoomListener* listener);
 };
 
 class Queue : public AbstractPrivateData, public QoreQueue {

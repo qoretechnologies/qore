@@ -80,6 +80,57 @@ int reflection_check_class_call(const QoreReflectionCaller& caller, const QoreCl
     return -1;
 }
 
+int reflection_check_class_export(const QoreReflectionCaller& caller, const QoreClass* cls,
+        const QoreProgram* target, ExceptionSink* xsink) {
+    return caller.checkModuleExport(caller.canSeeClass(target, cls), "class", cls->getName(), xsink);
+}
+
+bool reflection_can_see_typed_hash(const QoreReflectionCaller& caller, const TypedHashDecl* th) {
+    // a system hashdecl runs no user code
+    if (th->isSystem()) {
+        return true;
+    }
+    // the caller could name the typed hash in the language: it is declared in, imported into or inherited by the
+    // caller's Program (a module's exported typed hash is imported into the Programs that load the module; a
+    // non-exported one, or a parent's that a child does not inherit, is not found there)
+    const QoreProgram* caller_pgm = caller.getProgram();
+    if (!caller_pgm) {
+        return false;
+    }
+    if (th->getProgram() == caller_pgm) {
+        return true;
+    }
+    const QoreNamespace* pns = nullptr;
+    const TypedHashDecl* found = caller_pgm->findHashDecl(th->getNamespacePath().c_str(), pns);
+    return found && (found == th || found->equal(th));
+}
+
+int reflection_check_typed_hash_init(const QoreReflectionCaller& caller, const QoreProgram* target,
+        const TypedHashDecl* th, ExceptionSink* xsink) {
+    // a typed hash that the caller could name: a cast that it could make itself in the language
+    if (reflection_can_see_typed_hash(caller, th)) {
+        return 0;
+    }
+    // otherwise the caller must have access to the Program of the handle, as for any initializer
+    if (caller.checkProgramAccess(target, "evaluate typed hash initializers in",
+            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+        return -1;
+    }
+    // and a caller to which the language's access rules apply must be able to name it
+    if (!caller.appliesMemberAccess()) {
+        return 0;
+    }
+    const QoreProgram* decl_pgm = th->getProgram();
+    if (decl_pgm && decl_pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+        return caller.checkModuleExport(false, "typed hash", th->getName(), xsink);
+    }
+    // a typed hash of another Program that the caller's Program does not inherit or import
+    xsink->raiseException("REFLECTION-ACCESS-ERROR", "typed hash '%s' is not visible in the Program of the calling "
+        "code and cannot be used through reflection by code that a sandbox governs or whose functional domains are "
+        "restricted", th->getName());
+    return -1;
+}
+
 int reflection_check_class_value_access(const QoreReflectionCaller& caller, const QoreClass* cls,
         const QoreProgram* target, ExceptionSink* xsink) {
     bool caller_refused = false;
@@ -107,6 +158,18 @@ int reflection_check_method_access(const QoreReflectionCaller& caller, const Qor
     return 0;
 }
 
+//! returns the functional domains of \a dom that the caller or the target Program does not allow
+static int64 reflection_denied_domains(const QoreReflectionCaller& caller, int64 dom, const QoreProgram* target) {
+    int64 denied = 0;
+    for (int i = 0; i < 64; ++i) {
+        int64 bit = static_cast<int64>(1ULL << i);
+        if ((dom & bit) && !caller.allowsDomain(bit, target)) {
+            denied |= bit;
+        }
+    }
+    return denied;
+}
+
 int reflection_check_variant_call(const QoreReflectionCaller& caller, const QoreExternalVariant* variant,
         const char* cname, const char* fname, const QoreProgram* target, ExceptionSink* xsink) {
     // a method variant that is not public, used by a caller to which member access applies
@@ -121,9 +184,10 @@ int reflection_check_variant_call(const QoreReflectionCaller& caller, const Qore
         return caller.checkClassCallAccess(variant->getClass(), target, xsink);
     }
     // the message of a call resolved at run time when the calling code's restrictions refuse the variant
-    xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to %s '%s%s%s(%s)'",
-        caller_refused ? "parse options" : "the parse options of the Program it was found in",
-        cname ? "method" : "function", cname ? cname : "", cname ? "::" : "", fname, variant->getSignatureText());
+    xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to %s '%s%s%s(%s)'; functional domain: "
+        "%s", caller_refused ? "parse options" : "the parse options of the Program it was found in",
+        cname ? "method" : "function", cname ? cname : "", cname ? "::" : "", fname, variant->getSignatureText(),
+        q_describe_functional_domains(reflection_denied_domains(caller, variant->getDomain(), target)).c_str());
     return -1;
 }
 

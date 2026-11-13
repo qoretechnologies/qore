@@ -1,0 +1,68 @@
+# Frame budgets (bytes) of the functions on the per-call path of interpreted code, checked by
+# tools/check-stack-usage.py in a build configured with -DQORE_STACK_USAGE_REPORT=ON (issue #5852).
+#
+# Every level of a recursion of interpreted code puts one frame of each function of its call path on the thread's
+# stack, so a frame that grows by N bytes costs N bytes per level: a deep recursion that fits in an 8 MB thread stack
+# on Alpine (musl) today fails after such growth.  The budgets are the frames measured with the compiler, flags and
+# target below (a single-compilation-unit build, as CI builds libqore), plus a small margin (about 5%, at least 32
+# bytes) for code changes that do not matter; QoreIRInterpreter::execute, the largest frame by far, has 160 bytes
+# (4%), less than the 528 bytes that one array in its frame costs (13281fbbd7 added an 880 byte one).
+#
+# A budget that is exceeded is a frame to shrink: move the large locals of rarely-used paths into QORE_INTERN_NOINLINE
+# helpers.  If the growth is needed, raise the budget here and give the reason and the measured bytes per level
+# (examples/test/qore/stack/recursion-frame-budget.qtest) in the commit.  A function that is MISSING was renamed or
+# inlined into its callers: update its name here, or move its budget to the caller that its frame is now part of.
+#
+# The budgets are for Release builds only; debug builds are not checked here (their per-level growth is covered by
+# examples/test/qore/stack/recursion-frame-budget.qtest, which CI's debug test jobs run on every target).
+#
+# Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload of
+# the function, not the lambdas and local classes inside it.  Its frame is the largest of its records (GCC records its
+# .constprop and .isra clones under its name), as an overload is assumed not to call another (checked for direct
+# calls: OVERLOAD-CALL).  A function that partial inlining split (a .part clone in the symbol table) fails as SPLIT,
+# one that identical code folding merged into another (only a branch to it) as FOLDED, and one that allocates stack of
+# a size known only at run time (a "dynamic" record) as DYNAMIC; see tools/check-stack-usage.py.
+
+@compiler GNU
+# the major version must match
+@compiler-version 15.2.0
+@build-type Release
+@build-type-flags -O3 -DNDEBUG
+@cxx-flags -fno-strict-aliasing -std=c++20
+# the hardening macros that Ubuntu's GCC predefines; no link-time optimization
+@hardening _FORTIFY_SOURCE=3 __CET__=3 __SSP_STRONG__=3
+@ipo 0
+# glibc (the Ubuntu image of the CI's release build); musl (Alpine) gives the same frames on this path since
+# toBits() and fromBits() convert with std::bit_cast instead of a memcpy() that musl's fortify-headers check
+@target x86_64-linux-gnu
+
+# IR execution: every call of a function or method from the IR interpreter
+4096 QoreIRInterpreter::execute
+928 tryExecuteInterpreterInlineIRFunction
+880 tryExecuteInterpreterInlineIRStaticMethod
+96 evalAndRef
+
+# a method call evaluated as an expression (IR and AST)
+96 AbstractQoreNode::eval
+192 AbstractMethodCallNode::exec
+832 NormalMethodFunction::evalMethodTmpArgs
+832 StaticMethodFunction::evalMethodTmpArgs
+880 qore_method_private::evalNormalVariant
+96 UserMethodVariant::evalMethod
+
+# the evaluation of a user variant
+432 UserVariantBase::eval
+480 UserClosureVariant::evalClosure
+320 UserVariantBase::evalTiered
+160 UserVariantBase::evalIntern
+
+# AST execution: function calls and the statements of a function body
+1088 QoreFunction::evalFunction
+1104 QoreFunction::evalFunctionTmpArgs
+64 UserFunctionVariant::evalFunction
+176 FunctionCallNode::evalImpl
+224 StaticMethodCallNode::evalImpl
+304 StatementBlock::execIntern
+208 StatementBlock::execImpl
+336 AbstractStatement::exec
+176 ReturnStatement::execImpl

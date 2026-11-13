@@ -36,7 +36,11 @@
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreMapOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreQuestionMarkOperatorNode.h"
+#include "qore/intern/QoreNullCoalescingOperatorNode.h"
+#include "qore/intern/QoreValueCoalescingOperatorNode.h"
 #include "qore/intern/Variable.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
 QoreString QoreWeakAssignmentOperatorNode::op_str("weak assignment (:=) operator expression");
@@ -186,6 +190,38 @@ QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,
     return metadata;
 }
 
+//! records the local variables that a weak assignment of \a expr can take a weak reference to the container of
+/** the variable itself, and the variables that the branches of a conditional (<tt>c ? a : b</tt>) and the operands of
+    the coalescing operators (<tt>a ?? b</tt>, <tt>a ?: b</tt>) can give (qore#5846)
+*/
+static void qore_mark_weak_assignment_sources(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return;
+    }
+    if (const VarRefNode* source = dynamic_cast<const VarRefNode*>(node)) {
+        qore_var_t source_type = source->getType();
+        if ((source_type == VT_LOCAL || source_type == VT_CLOSURE || source_type == VT_LOCAL_TS) && source->ref.id) {
+            source->ref.id->parseWeakSource();
+        }
+        return;
+    }
+    if (const QoreQuestionMarkOperatorNode* q = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        qore_mark_weak_assignment_sources(q->getExpression(1));
+        qore_mark_weak_assignment_sources(q->getExpression(2));
+        return;
+    }
+    if (const QoreNullCoalescingOperatorNode* n = dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+        qore_mark_weak_assignment_sources(n->getLeft());
+        qore_mark_weak_assignment_sources(n->getRight());
+        return;
+    }
+    if (const QoreValueCoalescingOperatorNode* v = dynamic_cast<const QoreValueCoalescingOperatorNode*>(node)) {
+        qore_mark_weak_assignment_sources(v->getLeft());
+        qore_mark_weak_assignment_sources(v->getRight());
+    }
+}
+
 int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode) {
     // the operator's spelling, used in diagnostics
     const char* op_name = mode == AssignmentMode::Weak
@@ -241,11 +277,19 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     const QoreTypeInfo* prev_expected = parse_context.expected_type_info;
     parse_context.expected_type_info = ti;
     QoreParseAnalysis right_analysis;
-    if (parse_init_value(right, parse_context) && !err) {
-        err = -1;
+    {
+        // the right-hand side is the value stored in the lvalue (issue #5782)
+        QoreParseTargetHelper target(parse_context, right, ti);
+        if (parse_init_value(right, parse_context) && !err) {
+            err = -1;
+        }
     }
     parse_context.expected_type_info = prev_expected;
     right_analysis = parse_context.analysis;
+    // a local variable that a weak reference is taken of must be changed in place (qore#5846)
+    if (mode == AssignmentMode::Weak) {
+        qore_mark_weak_assignment_sources(right);
+    }
 
     // check for illegal assignment to $self
     if (parse_context.oflag && check_self_assignment(loc, left, parse_context.oflag) && !err) {
@@ -609,6 +653,20 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     return err;
 }
 
+bool qore_weak_assignment_source_made_unique(const QoreValue& right) {
+    const AbstractQoreNode* node = right.getInternalNode();
+    if (!node) {
+        return false;
+    }
+    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        return var->getType() != VT_IMMEDIATE && qore_weak_source_type_may_hold_container(var->getTypeInfo());
+    }
+    // a class static variable, or a static or global variable that AOT source parsing has not resolved: the value is
+    // checked when the step runs
+    return dynamic_cast<const StaticClassVarRefNode*>(node) != nullptr
+        || dynamic_cast<const DeferredStaticClassMemberRefNode*>(node) != nullptr;
+}
+
 QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& needs_deref,
         AssignmentMode mode) const {
     /* assign new value, this value gets referenced with the
@@ -616,8 +674,33 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
         for the variable assignment - however it does need to be
         copied/referenced for the return value
     */
+    // a weak reference to a variable designates the variable's own container: a container that the variable shares
+    // with another owner (a literal of the program, another variable) is made unique first, so that the owner's later
+    // writes are seen through the weak reference (qore#5756)
+    // The container made unique is the value assigned: the variable is not read again, as another thread can assign
+    // a variable that is shared (a global, a variable that a closure captures) between the two reads, and the
+    // weak reference would then designate a container that the step did not make unique (qore#5847).
+    QoreValue unique_source;
+    if (mode == AssignmentMode::Weak) {
+        if (qore_weak_assignment_source_made_unique(right)) {
+            LValueHelper source(right, xsink, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            // a weak reference held by the variable and a value of another type are left as they are
+            if (source && (source.getType() == NT_HASH || source.getType() == NT_LIST)) {
+                source.ensureUnique();
+                unique_source = source.getReferencedValue();
+            }
+        }
+    }
+
     // the operand is a statement of its own where the other execution modes evaluate it so
-    QoreMutationOperandHolder new_value(left, right, true, xsink);
+    QoreMutationOperandHolder new_value(left, unique_source.hasNode() ? unique_source : right, true, xsink);
+    // the operand holds a reference of its own
+    if (unique_source.hasNode()) {
+        unique_source.discard(xsink);
+    }
     if (*xsink)
         return QoreValue();
 

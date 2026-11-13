@@ -40,19 +40,40 @@ class PartitionedDropSchema inherits AbstractSchema {
     }
 }
 
+#! A datasource that counts its commits, so a test sees how many transactions a drop used
+class CountingDatasource inherits Datasource {
+    public {
+        #! the number of commits since the datasource was created
+        int commits = 0;
+    }
+
+    constructor(string connstr) : Datasource(connstr) {
+    }
+
+    commit() {
+        ++commits;
+        Datasource::commit();
+    }
+}
+
 #! Dropping partitioned PostgreSQL tables stays within the server's default lock limits
 /** Dropping a partitioned table takes a lock on every partition and on each partition's indexes and TOAST relations
     in one transaction; a schema dropped in one transaction holds the locks of all its tables.  With more partitions
     than the lock table (max_locks_per_transaction times the number of connections) holds, the drop failed with
-    "out of shared memory".  The partitions are sized from the server's own limits, so the test is above them on any
-    configuration.
+    "out of shared memory".  Where the server's lock table can be exceeded with at most MaxPartitions partitions
+    (by a conservative count, the default PostgreSQL configuration needs about 3250), the partitions are sized from
+    the server's own limits and a drop in one transaction is shown to fail; on a server with a larger lock table, the
+    drops are checked with SmallPartitions partitions per table by the number of statements and transactions they
+    use.
 */
 class PartitionedSchemaDropTest inherits QUnit::Test {
     public {
         const SchemaTables = ("psd_schema_a", "psd_schema_b");
 
-        #! the relations that one partition of the test tables has: the table, its primary key index, its TOAST
-        #! table and the TOAST table's index
+        #! the locks a drop in one transaction is assumed to take for each partition of the test tables
+        /** A deliberately low bound: a partition takes about 5.5 (its table and primary key index, and its row type,
+            array type and constraint), so the partitions sized from it exceed the lock table by a wide margin
+        */
         const RelationsPerPartition = 4;
 
         #! partitions created per transaction during setup, well within the lock table
@@ -60,17 +81,18 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
 
         #! the most partitions a case creates to exceed the lock table
         /** Above this, the lock table of the server is too large to exceed in the test's time; the default
-            PostgreSQL configuration (64 locks per transaction for 100 connections) needs 2400 partitions
+            PostgreSQL configuration (64 locks per transaction for 100 connections and its background processes)
+            needs about 2950 (PostgreSQL 17) to 3250 (PostgreSQL 18) partitions
         */
-        const MaxPartitions = 3000;
+        const MaxPartitions = 3500;
 
         #! the partitions of a table when the lock table is too large to exceed
         const SmallPartitions = 20;
     }
 
     constructor() : Test("Dropping partitioned PostgreSQL tables", "1.0", \ARGV) {
-        addTestCase("a partitioned table above the lock budget is dropped by dropCommit()", \tableDropCommit());
-        addTestCase("a schema of partitioned tables above the lock budget is dropped", \schemaDrop());
+        addTestCase("a partitioned table is dropped by dropCommit() a partition per transaction", \tableDropCommit());
+        addTestCase("a schema of partitioned tables is dropped a partition per transaction", \schemaDrop());
         addTestCase("the drop SQL of a table that is not partitioned is unchanged", \plainTable());
         addTestCase("a partitioned table that a view depends on keeps its data when its drop fails", \viewDependent());
         addTestCase("a foreign table partition is dropped as a foreign table", \foreignPartition());
@@ -79,7 +101,7 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
     }
 
     #! Returns a datasource of the run's PostgreSQL schema, or skips the test
-    private Datasource datasource() {
+    private CountingDatasource datasource() {
 %ifdef NO_PGSQL
         testSkip("pgsql module unavailable");
 %endif
@@ -87,7 +109,7 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
             testSkip("QORE_DB_CONNSTR_PGSQL is not set");
         }
         PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PartitionedSchemaDrop");
-        Datasource ds(PgsqlRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_PGSQL));
+        CountingDatasource ds(PgsqlRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_PGSQL));
         ds.open();
         return ds;
     }
@@ -108,10 +130,17 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
     }
 
     #! Returns the number of locks the server's lock table holds for all connections
+    /** The server sizes it as max_locks_per_transaction times its backends and prepared transactions: the
+        connections, the autovacuum workers (their slots from PostgreSQL 18) and their launcher, the background
+        workers and the WAL senders
+    */
     private static int lockBudget(AbstractDatasource ds) {
         hash<auto> h = ds.selectRow("select current_setting('max_locks_per_transaction')::int * "
-            "(current_setting('max_connections')::int + current_setting('max_prepared_transactions')::int) "
-            "as budget");
+            "(current_setting('max_connections')::int "
+            "+ coalesce(current_setting('autovacuum_worker_slots', true), "
+            "current_setting('autovacuum_max_workers'))::int + 1 "
+            "+ current_setting('max_worker_processes')::int + current_setting('max_wal_senders')::int "
+            "+ current_setting('max_prepared_transactions')::int) as budget");
         return h.budget;
     }
 
@@ -153,7 +182,7 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
     }
 
     tableDropCommit() {
-        Datasource ds = datasource();
+        CountingDatasource ds = datasource();
         *int above = partitionsAboveBudget(ds);
         int partitions = above ?? SmallPartitions;
         string name = "psd_table";
@@ -179,13 +208,16 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
         assertRegex("^drop table .*psd_table_p", sql[0], "the partitions are dropped first");
         assertEq("drop table " + t.getSqlName(), sql.last(), "the partitioned table is dropped last");
 
+        int commits = ds.commits;
         t.dropCommit();
+        assertGe(partitions + 1, ds.commits - commits,
+            "each partition and the table are dropped in a transaction of their own");
         assertFalse(tableExists(ds, name), "the partitioned table is dropped");
         assertFalse(tableExists(ds, name + "_p0"), "its partitions are dropped");
     }
 
     schemaDrop() {
-        Datasource ds = datasource();
+        CountingDatasource ds = datasource();
         # the two tables together exceed the budget in one transaction
         *int above = partitionsAboveBudget(ds);
         int partitions = above ? above / SchemaTables.size() : SmallPartitions;
@@ -195,7 +227,11 @@ class PartitionedSchemaDropTest inherits QUnit::Test {
         }
 
         PartitionedDropSchema schema(ds);
+        int commits = ds.commits;
         schema.drop(False, -1, False);
+        # each partition and each partitioned table is dropped in a transaction of its own
+        assertGe(SchemaTables.size() * (partitions + 1), ds.commits - commits,
+            "the schema is dropped a partition per transaction");
 
         foreach string name in (SchemaTables) {
             assertFalse(tableExists(ds, name), name + ": the partitioned table is dropped");
