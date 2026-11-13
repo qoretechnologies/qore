@@ -129,7 +129,7 @@ public class AftershipReturnsDataProvider inherits AftershipDataProviderBase {
     constructor(*hash<auto> options) : AftershipDataProviderBase(options) {}
     string getName() { return ProviderInfo.name; }
 
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params = {};
         if (search_options.approval_status) params.approval_status = search_options.approval_status;

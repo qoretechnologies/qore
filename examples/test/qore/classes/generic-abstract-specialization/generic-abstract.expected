@@ -6,5 +6,7 @@ const: "cc" "[1, 2]"
 through the base: "cc"
 two params: 3
 nested: [1, 2]
-negative: ABSTRACT-CLASS-ERROR: 2 unimplemented
-negative or-nothing: ABSTRACT-CLASS-ERROR: 2 unimplemented
+negative: ABSTRACT-CLASS-ERROR: 1 unimplemented
+negative or-nothing: ABSTRACT-CLASS-ERROR: 1 unimplemented
+negative return type: PARSE-TYPE-ERROR
+negative return type: PARSE-TYPE-ERROR

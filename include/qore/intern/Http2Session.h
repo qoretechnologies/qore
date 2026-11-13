@@ -397,6 +397,24 @@ public:
     */
     DLLLOCAL int sendShutdownGoaway(ExceptionSink* xsink);
 
+    //! Starts a graceful drain of a server session: submits the GOAWAY with submitShutdownGoaway() (qore#5899)
+    /** The streams open at that point are served to their end; the client opens no new ones (nghttp2 refuses
+        streams above the last stream ID in the GOAWAY).  The connection's poll operation closes the connection once
+        isDrainComplete() returns true.  Performs no socket I/O.
+
+        @return 0 for success, -1 if the frame could not be submitted (an exception is raised)
+    */
+    DLLLOCAL int startDrain(ExceptionSink* xsink);
+
+    //! Returns true if a drain was started and the session has no open streams and nothing left to write
+    DLLLOCAL bool isDrainComplete() const;
+
+    //! Returns true if startDrain() was called; lock-free, so that the paths that end a stream pay for the
+    //! completion check only while draining
+    DLLLOCAL bool isDraining() const {
+        return draining.load(std::memory_order_acquire);
+    }
+
     //! Submit a PING frame
     DLLLOCAL int submitPing(const uint8_t* opaque_data = nullptr, ExceptionSink* xsink = nullptr);
 
@@ -506,6 +524,10 @@ public:
 
     //! The default limit of the data of a stream that is buffered for sending
     static constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+
+    //! the connection's receive window, in stream windows (SETTINGS_INITIAL_WINDOW_SIZE): the RFC 9113 default of
+    //! 65535 bytes made every 64 KiB received wait for a WINDOW_UPDATE round trip
+    static constexpr uint32_t ConnectionWindowStreams = 16;
 
     //! Submit HTTP/2 trailer headers on a stream (server-side)
     /** Sends a HEADERS frame with END_STREAM flag containing trailer fields.
@@ -666,6 +688,8 @@ public:
     */
     DLLLOCAL void markClosed() {
         session_closed_.store(true, std::memory_order_release);
+        // nothing more is sent: waiters for a stream's data to be sent are done (see streamSendFlushed())
+        notifyStreamDrain();
     }
 
     //! Returns true once @ref markClosed has been called.
@@ -833,6 +857,11 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL bool hasStreamingData(int32_t& stream_id);
+
+#ifdef DEBUG
+    //! Returns the number of streaming streams whose data is buffered, as hasStreamingData() finds them
+    DLLLOCAL size_t dbgStreamingDataCount();
+#endif
 
     //! Take an end-of-stream notification for a dispatched streaming stream
     /** Used by the client multiplex poll op to surface peer END_STREAM for streams that
@@ -1161,6 +1190,8 @@ private:
     // GOAWAY state
     bool goaway_received = false;
     bool goaway_sent = false;
+    //! true once startDrain() was called; set under m, read without it by isDraining()
+    std::atomic<bool> draining{false};
     int32_t last_stream_id = 0;
 
     // Request body data for callbacks - owns the data
@@ -1366,9 +1397,14 @@ public:
     */
     DLLLOCAL int waitForStreamDrain(int32_t stream_id, int timeout_ms);
 
+    //! Returns 0 if the stream has no data buffered to be sent (all of it was handed to the transport, or the stream
+    //! is gone), 1 otherwise; waiters are woken by notifyStreamDrain() when data is handed over or the stream closes
+    DLLLOCAL int streamSendFlushed(int32_t stream_id);
+
     //! Wake controller poll operations waiting for stream drain
-    /** Called by dataProviderReadCallback and onStreamCloseCallback.
-        Must be called while holding the session mutex m.
+    /** Called by dataProviderReadCallback, onStreamCloseCallback and sendPendingData with the session mutex m held,
+        and by markClosed() without it, which is safe: a waiter checks its condition again after it registered, and
+        the closed state is atomic.
 
         @since %Qore 3.0
     */

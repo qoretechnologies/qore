@@ -53,6 +53,7 @@ class FunctionEntry;
 #include <llvm/IR/Module.h>
 
 class QoreIRFunction;
+struct QoreJITObjectLayout;
 class QoreIRBasicBlock;
 class QoreIRInstruction;
 class QoreIRPhiInstruction;
@@ -227,6 +228,9 @@ private:
     bool aot_mode = false;
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
+    //! the current object (NaN-boxed), read at the start of the function by the first check of a call through self
+    //! (QoreIROpcode::CheckCallTarget with no operand, issue #5823); null until then
+    llvm::Value* current_self_bits = nullptr;
     bool aot_direct_closure_fast_entry = true;
 
     // Deferred exception checking for code proven not to observe exceptions before
@@ -597,6 +601,9 @@ private:
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
     // can be decref'd at exit (matching the IR interpreter's cleanup vector).
     std::vector<llvm::Value*> invoke_result_allocas;
+    //! the slot of each of invoke_result_allocas in invoke_cleanup_array, if it has one: a long release sequence is
+    //! emitted as one call of qore_rt_cleanup_release_slots() with a table of the slots (qore#5962)
+    std::unordered_map<llvm::Value*, unsigned> invoke_cleanup_slot;
 
     // Entry-block array of pointers to invoke_result_allocas slots.  Large
     // functions use qore_rt_cleanup_run_allocas() to avoid emitting thousands
@@ -618,6 +625,28 @@ private:
     size_t exit_temp_cleanup_count = 0;
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
+    //! the values that the Return instructions of the function return (qore#5941)
+    /** When an exception interrupts a return (as one that a handler of a block that the return leaves raises), the
+        AST interpreter keeps the value of the return until the function ends, after its locals: an exit of the
+        function on an exception releases the cleanup allocas of these values after the locals
+        (see holding_return_values).
+    */
+    std::unordered_set<uint32_t> return_value_ids;
+    //! for each value of a Return instruction, the values of return_value_ids that hold it
+    std::unordered_map<uint32_t, std::vector<uint32_t>> return_value_family;
+    //! true between the release of the temporaries and that of the locals of an exit on an exception: the values of
+    //! return_value_ids are released after the locals (see emitLocalUninstantiation())
+    bool holding_return_values = false;
+    //! Returns true if \a alloca_ptr is the cleanup alloca of one of return_value_ids
+    bool isReturnValueAlloca(llvm::Value* alloca_ptr) const;
+    //! the blocks at the start of the catch paths of try statements that release the values of the returns of their
+    //! try blocks (QoreIRFunction::catch_interrupted_returns), filled once the function is lowered, as the catch
+    //! block is lowered before the try block (qore#5941)
+    std::vector<std::pair<llvm::BasicBlock*, const std::vector<uint32_t>*>> catch_return_release_blocks;
+    //! Fills the blocks of catch_return_release_blocks
+    void finalizeCatchReturnReleases(llvm::Module& module);
+    //! Releases the cleanup allocas of return_value_ids, after the locals of an exit on an exception
+    void emitHeldReturnValueRelease(llvm::Module& module);
     //! the value id of each cleanup alloca of invoke_alloca_map, for the order of the release of a statement's
     //! temporaries by an exception
     std::unordered_map<llvm::Value*, uint32_t> cleanup_alloca_value_ids;
@@ -746,6 +775,35 @@ private:
         size_t iterator_count = 0;
     };
     std::vector<TempCleanupMark> temp_cleanup_marks;
+    //! The release code of the exception edges to each handler block (see getExceptionEdgeTarget())
+    /** An edge releases the temporaries of the temp scopes that the exception leaves, in the order in which the AST
+        interpreter unwinds them: those of argument lists, then the receivers (qore_ir_order_exception_release()).  The
+        edges of the checks of a statement to the same handler release the temporaries registered up to each check, and
+        each of the two parts of a later check's order is mostly that of an earlier check with the temporaries
+        registered after it in front.  So each part is a chain of blocks, each of which releases the temporaries that a
+        check adds and continues with the block of the earlier check, instead of each edge releasing all of its
+        temporaries itself, which made the code of a statement quadratic in its size (qore#5962).  The chain of the
+        argument lists ends in a block that continues with the receivers of the edge, which the edge stores in \c
+        selector; that of the receivers ends in the handler.
+    */
+    struct ExceptionEdgeChain {
+        //! the temporaries that the last block of the chain releases with the blocks that it continues with
+        std::vector<llvm::Value*> temps;
+        //! the last block of the chain
+        llvm::BasicBlock* block = nullptr;
+    };
+    struct ExceptionEdges {
+        ExceptionEdgeChain lists;
+        ExceptionEdgeChain receivers;
+        //! the end of the chain of the argument lists: a switch on \c selector to the receivers of the edge
+        llvm::BasicBlock* lists_end = nullptr;
+        llvm::SwitchInst* lists_end_switch = nullptr;
+        //! the receivers of the edge (0: none, then the handler), stored by each edge
+        llvm::AllocaInst* selector = nullptr;
+        //! the case of each block of the receivers' chain in lists_end_switch
+        std::unordered_map<llvm::BasicBlock*, uint32_t> receiver_cases;
+    };
+    std::unordered_map<llvm::BasicBlock*, ExceptionEdges> exception_edges;
     //! the number of invoke_result_allocas when the mark of each temp scope was closed (see emitDiscardTemps())
     std::unordered_map<uint32_t, size_t> temp_scope_end;
 
@@ -1265,7 +1323,7 @@ private:
         const QoreIRBasicBlock* ir_block;
         QoreIRPhiValueKind value_kind;
         //! the cleanup slot of a Phi of temporaries, which takes each incoming temporary's reference over at the end
-        //! of its predecessor (see consumable_phis); null for any other Phi
+        //! of its predecessor (see consumable_phis), or of a Phi in owning_phis; null for any other Phi
         llvm::AllocaInst* temp_cleanup = nullptr;
     };
     std::vector<PendingPhi> pending_phis;
@@ -1278,8 +1336,43 @@ private:
         incoming slots kept their references until the end of the statement, after the temporaries that the call
         consumed, which the AST interpreter releases last argument first when the call returns, as the callee's
         parameters.
+
+        A loop header's Phi whose incoming values include the Phi itself (a path that keeps its value, such as the
+        skip path of a select stage before a fold at the root of a fused pipeline) is one only when it can hold a
+        temporary (see owning_phis): the Phi's own value is not a use of it, and stays in its slot on that edge.
     */
     std::unordered_set<uint32_t> consumable_phis;
+    //! QoreValue Phis that hold a reference of their own in a cleanup slot, and that no call consumes
+    /** A Phi that is not a Phi of temporaries gets a cleanup slot as one does, which takes over the incoming
+        temporaries that it is the only user of (single_use_phi_incoming) and takes a reference of its own to its
+        other incoming values (qore#5883), when it is:
+        - a loop header's Phi among its own incoming values (the accumulator of a fold at the root of a fused pipeline
+          with a select stage, which keeps its value for an element that the stage skips) unless all its values are
+          constants: any other value can be released in the loop, such as an iterator's element, which the next
+          IteratorNext releases, the value of a call or an operator (a string concatenation, a list), whose slot the
+          next execution of the instruction replaces, or a value read from a variable, which code in the loop can
+          assign.  It keeps its value in its
+          slot on the edge back to the header; without the slot, it borrowed the element that the next IteratorNext
+          released, or the value that the next element's operator replaced.  A Phi of temporaries among its own incoming values is one too, as its value can reach the header
+          again, and no call consumes it
+        - a loop header's Phi that is not a Phi of temporaries and that can hold such a value (the accumulator of a fold
+          over a fused pipeline, whose value can be the value of a map stage, which the next IteratorNext releases, or
+          of an operator, which the next element replaces)
+        - a Phi whose only use is an incoming value of a Phi with a slot of its own and that has an incoming temporary
+          that it is the only user of: the value of a fold over a fused pipeline on the edge that gives the
+          accumulator, which is the first element or the value of the fold's expression.  The reference of its own
+          that it takes to the first element is the one that the accumulator's Phi took to it otherwise, and the value
+          of the expression, which it takes over, gave the accumulator a reference of its own as well
+    */
+    std::unordered_set<uint32_t> owning_phis;
+    //! The Phis of owning_phis whose only use is an incoming value of a Phi in the block that their block goes on to:
+    //! that Phi takes their slot over on every path, so the slot is empty when they get their next value, which then
+    //! releases nothing (a fold's value on the edge that gives the accumulator, see the Phi fixup)
+    //! (by Phi, with the Phi that uses it)
+    std::unordered_map<uint32_t, uint32_t> emptied_phi_slots;
+    //! The incoming values of QoreValue Phis that one Phi uses once, and no instruction outside the block that
+    //! defines them (see consumable_phis)
+    std::unordered_set<uint32_t> single_use_phi_incoming;
 
     // Pointer to current IR function being lowered (for reading type profiles)
     const QoreIRFunction* current_ir_func = nullptr;
@@ -1378,6 +1471,10 @@ private:
     // Check if value has a node (inline NaN-boxing check) - returns bool (i1)
     llvm::Value* hasNodeInline(llvm::Value* qv);
 
+    //! Emits the inline test that @a qv is an object that has not been deleted, with the layout of the running
+    //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
+    llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func);
+
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
     llvm::Value* emitHelperRef(llvm::Module& module, llvm::Value* val);
@@ -1429,6 +1526,10 @@ private:
     // Collect all unique LocalVar* pointers from the IR function
     void collectLocals(const QoreIRFunction& func);
 
+    //! Records in QoreIRFunction::aot_native_local_flags the locals that the AOT-compiled standard entry of the
+    //! function keeps in native storage, once the IR-only sets of the lowering are final (issue #5890)
+    void recordAOTNativeLocals(const QoreIRFunction& func);
+
     // Emit qore_rt_instantiate_local calls for all function locals at current insert point
     void emitLocalInstantiation(llvm::Module& module);
 
@@ -1444,6 +1545,7 @@ private:
 
     // Emit qore_rt_uninstantiate_local calls for all function locals at current insert point
     void emitLocalUninstantiation(llvm::Module& module);
+    void emitLocalUninstantiationIntern(llvm::Module& module);
 
     //! The boxed slots emitPreinstantiatedCleanup() releases, in emission order.
     /** Pre-instantiated entry cleanup slots, then fast-entry parameter slots, then
@@ -1514,6 +1616,13 @@ private:
 
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);
+
+    //! Branches to a new block that runs only when handlers were registered after \a saved_count, and continues there
+    /** @return the block where the code continues after the handlers; endPendingHandlerRun() branches to it */
+    llvm::BasicBlock* beginPendingHandlerRun(llvm::Module& module, llvm::Value* saved_count);
+
+    //! Ends the block started by beginPendingHandlerRun() and continues in \a done_bb
+    void endPendingHandlerRun(llvm::BasicBlock* done_bb);
 
     // Emit qore_rt_catch_unwind(catch_depth_saved, xsink) at the current insert
     // point only when specialized tracking proves a runtime catch scope remains
@@ -1594,10 +1703,24 @@ private:
     // when an exception leaves the statement (see qore_ir_order_exception_release()); returns true if it differs from
     // the reverse of the registration order.  \a observable_only leaves out the values whose release cannot run a
     // destructor
-    bool orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps);
+    bool orderExceptionTemps(size_t start, bool observable_only, std::vector<llvm::Value*>& temps,
+            size_t* receivers = nullptr);
+    //! Emits, at the insertion point, the release of \a temps from \a begin to \a end in their order: one call with a
+    //! table of their slots in invoke_cleanup_array for a long sequence, as each release inline would make the code of
+    //! a large statement large (qore#5962)
+    void emitTempReleaseSequence(llvm::Module& module, const std::vector<llvm::Value*>& temps, size_t begin,
+            size_t end);
+    //! Emits a block that releases \a temps from \a begin to \a end in their order and continues with \a next
+    llvm::BasicBlock* emitExceptionTempRelease(llvm::Module& module, llvm::Function* llvm_func,
+            const std::vector<llvm::Value*>& temps, size_t begin, size_t end, llvm::BasicBlock* next);
+    //! Returns the block of \a chain that releases \a temps from \a begin to \a end and continues with \a tail,
+    //! continuing the chain (see ExceptionEdges)
+    llvm::BasicBlock* getExceptionEdgeChainBlock(llvm::Module& module, llvm::Function* llvm_func,
+            ExceptionEdgeChain& chain, const std::vector<llvm::Value*>& temps, size_t begin, size_t end,
+            llvm::BasicBlock* tail);
     //! the same for the cleanup allocas of \a indices (positions in invoke_result_allocas, in increasing order)
     bool orderExceptionTemps(const std::vector<size_t>& indices, bool observable_only,
-            std::vector<llvm::Value*>& temps);
+            std::vector<llvm::Value*>& temps, size_t* receivers = nullptr);
 
     // Emit statement/condition-boundary temp cleanup for values tracked since
     // the latest PushTempMark.
@@ -1835,7 +1958,7 @@ private:
     // On success writes the call result to *result and returns true; on non-match
     // (empty operands or unsupported inner shape) returns false leaving *result
     // untouched so the caller emits the AST fallback path.  In AOT mode, only the
-    // self.method shape has a dedicated helper (qore_rt_background_self_call_aot);
+    // self.method shape has a dedicated helper (qore_rt_background_self_call_aot_v2);
     // other shapes fall through to AST eval since they'd need name-based lookup.
     // @param expr_val        The QoreBackgroundOperatorNode wrapped as QoreValue
     // @param operands        Pre-evaluated operands (layout described above)
@@ -2152,6 +2275,9 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
+    // Marks the cache of a local stale, so that the next ensureLocalCacheFresh() reloads it from the runtime stack
+    // on every path (see clearLocalCachedValue())
+    void markLocalCacheStale(const void* key, llvm::Function* llvm_func);
     void ensureLocalCacheFresh(const void* key, llvm::Module& module,
             llvm::Function* llvm_func);
 

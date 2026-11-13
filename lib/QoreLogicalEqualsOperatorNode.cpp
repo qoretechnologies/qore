@@ -32,6 +32,58 @@
 #include <qore/intern/QorePluginRegistry.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/WeakListReferenceNode.h"
+#include "qore/intern/WeakHashReferenceNode.h"
+
+namespace {
+class StrictBooleanLogicalEqualsOperatorNode : public QoreLogicalEqualsOperatorNode {
+public:
+    using QoreLogicalEqualsOperatorNode::QoreLogicalEqualsOperatorNode;
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        return copyBackgroundExplicit<StrictBooleanLogicalEqualsOperatorNode>(xsink);
+    }
+private:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreLogicalEqualsOperatorNode* QoreLogicalEqualsOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue left, QoreValue right) {
+    QoreLogicalEqualsOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanLogicalEqualsOperatorNode(loc, left, right)
+        : new QoreLogicalEqualsOperatorNode(loc, left, right);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
+QoreValue QoreLogicalEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+namespace {
+class StrictBooleanLogicalNotEqualsOperatorNode : public QoreLogicalNotEqualsOperatorNode {
+public:
+    using QoreLogicalNotEqualsOperatorNode::QoreLogicalNotEqualsOperatorNode;
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        return copyBackgroundExplicit<StrictBooleanLogicalNotEqualsOperatorNode>(xsink);
+    }
+private:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreLogicalNotEqualsOperatorNode* QoreLogicalNotEqualsOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue left, QoreValue right) {
+    QoreLogicalNotEqualsOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanLogicalNotEqualsOperatorNode(loc, left, right)
+        : new QoreLogicalNotEqualsOperatorNode(loc, left, right);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
 
 QoreString QoreLogicalEqualsOperatorNode::logical_equals_str("logical equals operator expression");
 QoreString QoreLogicalNotEqualsOperatorNode::logical_not_equals_str("logical not equals operator expression");
@@ -85,7 +137,8 @@ static int try_plugin_binary_parse_eq(QoreParseContext& parse_context, const Qor
     return 0;
 }
 
-QoreValue QoreLogicalEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreLogicalEqualsOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     QoreOperandEvalHolder l(left, xsink);
     if (*xsink)
         return QoreValue();
@@ -114,9 +167,13 @@ QoreValue QoreLogicalEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
     } else if (pfunc == &QoreLogicalEqualsOperatorNode::bigIntSoftEqual) {
         result = l->getAsBigInt() == r->getAsBigInt();
     } else if (pfunc == &QoreLogicalEqualsOperatorNode::boolSoftEqual) {
-        result = l->getAsBool() == r->getAsBool();
+        result = LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*l) == LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*r);
     } else {
-        result = softEqual(*l, *r, xsink);
+        if constexpr (StrictBoolean) {
+            result = softEqualLexical(*l, *r, xsink, getSemanticPolicy());
+        } else {
+            result = softEqual(*l, *r, xsink);
+        }
     }
     return invertFallbackResult() ? !result : result;
 }
@@ -177,7 +234,7 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreLogicalEqualsOperatorNode> del(this);
         ParseExceptionSink xsink;
-        bool result = softEqual(left, right, *xsink);
+        bool result = softEqualLexical(left, right, *xsink, getSemanticPolicy());
         val = invertFallbackResult() ? !result : result;
         set_binary_analysis_eq(parse_context, left_analysis, right_analysis);
         return **xsink ? -1 : 0;
@@ -185,15 +242,25 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
 
     // check for optimizations based on type, but only assign if neither side is a string or number (highest priority)
     // and types are known for both operands (if not, QoreTypeInfo::parseReturns(type, NT_STRING) will return a
-    // non-zero value
+    // non-zero value); a lower-priority comparison is not chosen when an operand can be a value of a higher-priority
+    // type (float, then int), which the generic comparison compares as that type: ex: int == union<int, float> and
+    // int == *float compare floats (an or-nothing or union type is not of a value type for QoreTypeInfo::isType();
+    // qore#5875)
     if (!QoreTypeInfo::parseReturns(lti, NT_STRING) && !QoreTypeInfo::parseReturns(rti, NT_STRING)
         && !QoreTypeInfo::parseReturns(lti, NT_NUMBER) && !QoreTypeInfo::parseReturns(rti, NT_NUMBER)) {
-        if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT))
+        bool can_be_float = QoreTypeInfo::parseReturns(lti, NT_FLOAT) || QoreTypeInfo::parseReturns(rti, NT_FLOAT);
+        bool can_be_int = QoreTypeInfo::parseReturns(lti, NT_INT) || QoreTypeInfo::parseReturns(rti, NT_INT);
+        if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT)) {
             pfunc = &QoreLogicalEqualsOperatorNode::floatSoftEqual;
-        else if (QoreTypeInfo::isType(lti, NT_INT) || QoreTypeInfo::isType(rti, NT_INT))
-            pfunc = &QoreLogicalEqualsOperatorNode::bigIntSoftEqual;
-        else if (QoreTypeInfo::isType(lti, NT_BOOLEAN) || QoreTypeInfo::isType(rti, NT_BOOLEAN))
-            pfunc = &QoreLogicalEqualsOperatorNode::boolSoftEqual;
+        } else if (QoreTypeInfo::isType(lti, NT_INT) || QoreTypeInfo::isType(rti, NT_INT)) {
+            if (!can_be_float) {
+                pfunc = &QoreLogicalEqualsOperatorNode::bigIntSoftEqual;
+            }
+        } else if (QoreTypeInfo::isType(lti, NT_BOOLEAN) || QoreTypeInfo::isType(rti, NT_BOOLEAN)) {
+            if (!can_be_float && !can_be_int) {
+                pfunc = &QoreLogicalEqualsOperatorNode::boolSoftEqual;
+            }
+        }
     }
 
     set_binary_analysis_eq(parse_context, left_analysis, right_analysis);
@@ -201,7 +268,23 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
 }
 
 bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreValue& right,
-        ExceptionSink *xsink) {
+        ExceptionSink* xsink) {
+    return softEqualImpl<false>(left, right, xsink, {});
+}
+
+bool QoreLogicalEqualsOperatorNode::softEqualLexical(const QoreValue& left, const QoreValue& right,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    return softEqualImpl<true>(left, right, xsink, policy);
+}
+
+bool QoreLogicalEqualsOperatorNode::softEqualNative(const QoreValue& left, const QoreValue& right,
+        ExceptionSink* xsink) {
+    return softEqualImpl<true, true>(left, right, xsink, {});
+}
+
+template <bool Lexical, bool Native>
+bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const QoreValue& right,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
     // Unwrap TAG_ENUM to base values for soft comparison
     QoreValue l = left.isEnum() ? left.getEnumMember()->getValue() : left;
     QoreValue r = right.isEnum() ? right.getEnumMember()->getValue() : right;
@@ -284,7 +367,15 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
     }
 
     if (lt == NT_BOOLEAN || rt == NT_BOOLEAN) {
-        return l.getAsBool() == r.getAsBool();
+        if constexpr (Native) {
+            // Public conversions read the bridge only for policy-sensitive node types; bool/null/nothing
+            // comparisons retain their scalar fast paths without a TLS lookup.
+            return l.getAsBool() == r.getAsBool();
+        } else if constexpr (Lexical) {
+            return policy.getAsBool(l) == policy.getAsBool(r);
+        } else {
+            return LexicalSemanticPolicy::getAsBoolDefault(l) == LexicalSemanticPolicy::getAsBoolDefault(r);
+        }
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {
@@ -301,6 +392,35 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
         return lt == NT_NOTHING && rt == NT_NOTHING;
     }
 
+    // The policy belongs to the comparison, including each nested element; container values carry no policy.
+    if (lt == NT_LIST) {
+        if (rt != NT_LIST) return false;
+        const QoreListNode* ll = l.get<const QoreListNode>();
+        const QoreListNode* rl = r.get<const QoreListNode>();
+        if (ll->size() != rl->size() || (xsink && q_check_stack(xsink))) return false;
+        for (size_t i = 0; i < ll->size(); ++i) {
+            // Keep the public list comparison's operand order.
+            if (!softEqualImpl<Lexical, Native>(rl->retrieveEntry(i), ll->retrieveEntry(i), xsink, policy)
+                    || (xsink && *xsink)) return false;
+        }
+        return true;
+    }
+    if (lt == NT_HASH) {
+        if (rt != NT_HASH) return false;
+        const QoreHashNode* lh = l.get<const QoreHashNode>();
+        const QoreHashNode* rh = r.get<const QoreHashNode>();
+        if (lh->size() != rh->size() || (xsink && q_check_stack(xsink))) return false;
+        const qore_hash_private* right_hash = qore_hash_private::get(*rh);
+        ConstHashIterator hi(lh);
+        while (hi.next()) {
+            hm_hm_t::const_iterator found = right_hash->hm.find(hi.getKey());
+            if (found == right_hash->hm.end()
+                    || !softEqualImpl<Lexical, Native>(hi.get(), (*found->second)->val, xsink, policy)
+                    || (xsink && *xsink)) return false;
+        }
+        return true;
+    }
+
     const AbstractQoreNode* ln = l.getInternalNode();
     if (!ln) {
         ln = &Nothing;
@@ -310,6 +430,22 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
         rn = &Nothing;
     }
 
+    // Preserve the existing LHS-only reference delegation. In particular a regular container compared to a
+    // weak RHS container remains unequal, while a weak LHS delegates to its target's container comparison.
+    if (lt == NT_WEAKREF_LIST) {
+        return rt == NT_LIST && softEqualImpl<Lexical, Native>(
+            QoreValue(l.get<const WeakListReferenceNode>()->get()), r, xsink, policy);
+    }
+    if (lt == NT_WEAKREF_HASH) {
+        return rt == NT_HASH && softEqualImpl<Lexical, Native>(
+            QoreValue(l.get<const WeakHashReferenceNode>()->get()), r, xsink, policy);
+    }
+    if (lt == NT_REFERENCE) {
+        ValueHolder value(ln->eval(xsink), xsink);
+        if (*xsink) return false;
+        if (!value) return is_nothing(rn);
+        return softEqualImpl<Lexical, Native>(*value, QoreValue(rn), xsink, policy);
+    }
     return ln->is_equal_soft(rn, xsink);
 }
 
@@ -337,5 +473,5 @@ bool QoreLogicalEqualsOperatorNode::boolSoftEqual(ExceptionSink *xsink) const {
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
 
-    return lh->getAsBool() == rh->getAsBool();
+    return getSemanticPolicy().getAsBool(*lh) == getSemanticPolicy().getAsBool(*rh);
 }

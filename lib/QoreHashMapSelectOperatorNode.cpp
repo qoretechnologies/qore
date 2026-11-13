@@ -35,6 +35,25 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 
+namespace {
+class LexicalHashMapSelectOperatorNode : public QoreHashMapSelectOperatorNode {
+public:
+    using QoreHashMapSelectOperatorNode::QoreHashMapSelectOperatorNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreHashMapSelectOperatorNode* QoreHashMapSelectOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue p0, QoreValue p1, QoreValue p2, QoreValue p3) {
+    auto* node = policy.needsFilter()
+        ? static_cast<QoreHashMapSelectOperatorNode*>(new LexicalHashMapSelectOperatorNode(loc, p0, p1, p2, p3))
+        : new QoreHashMapSelectOperatorNode(loc, p0, p1, p2, p3);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
 QoreString QoreHashMapSelectOperatorNode::map_str("map operator expression");
 
 // if del is true, then the returned QoreString * should be mapd, if false, then it must not be
@@ -143,6 +162,11 @@ QoreHashNode* QoreHashMapSelectOperatorNode::getNewHash() const {
 }
 
 QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreValue QoreHashMapSelectOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder arg_lst(e[2], xsink);
     if (*xsink || arg_lst->isNothing())
         return QoreValue();
@@ -163,7 +187,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
                 return QoreValue();
 
             if (h)
-                return mapIterator(h, xsink); // TODO!!
+                return mapIterator<Lexical>(h, xsink); // TODO!!
             // passed iterator
         }
 
@@ -172,7 +196,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
         ImplicitElementHelper eh(0);
         SingleArgvContextHelper argv_helper(arg_lst.takeReferencedValue(), xsink);
         ValueEvalOptimizedRefHolder result(e[3], xsink);
-        if (*xsink || !result->getAsBool())
+        if (*xsink || !(Lexical ? semantic_policy.getAsBool(*result) : LexicalSemanticPolicy::getAsBoolDefault(*result)))
             return QoreValue();
 
         ValueEvalOptimizedRefHolder arg_key(e[0], xsink);
@@ -199,7 +223,12 @@ QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
             }
 
             // Insert key-Value pair to the hash
-            ret_val->setKeyValue(str_util.c_str(), arg_val.takeReferencedValue(), xsink);
+            if constexpr (Lexical) {
+                qore_hash_private::setKeyValueLexical(**ret_val, str_util.c_str(), arg_val.takeReferencedValue(), xsink,
+                    getSemanticPolicy());
+            } else {
+                qore_hash_private::setKeyValueCanonical(**ret_val, str_util.c_str(), arg_val.takeReferencedValue(), xsink);
+            }
         }
     } else { // List of values
         ConstListIterator li(arg_lst->get<const QoreListNode>());
@@ -212,7 +241,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
             if (*xsink)
                 return QoreValue();
 
-            if (!result->getAsBool())
+            if (!(Lexical ? semantic_policy.getAsBool(*result) : LexicalSemanticPolicy::getAsBoolDefault(*result)))
                 continue;
 
             {
@@ -243,7 +272,12 @@ QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
                         vcommon = false;
                     }
 
-                    ret_val->setKeyValue(key.c_str(), val.takeReferencedValue(), xsink);
+                    if constexpr (Lexical) {
+                        qore_hash_private::setKeyValueLexical(**ret_val, key.c_str(), val.takeReferencedValue(), xsink,
+                            getSemanticPolicy());
+                    } else {
+                        qore_hash_private::setKeyValueCanonical(**ret_val, key.c_str(), val.takeReferencedValue(), xsink);
+                    }
                 }
             }
             // if there is an exception dereferencing one of the evaluted nodes above, then exit the loop
@@ -263,6 +297,7 @@ QoreValue QoreHashMapSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSi
     return ret_val.release();
 }
 
+template <bool Lexical>
 QoreValue QoreHashMapSelectOperatorNode::mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const {
     ReferenceHolder<QoreHashNode> rv(ref_rv ? getNewHash() : nullptr, xsink);
 
@@ -292,7 +327,7 @@ QoreValue QoreHashMapSelectOperatorNode::mapIterator(AbstractIteratorHelper& h, 
         if (*xsink)
             return QoreValue();
 
-        if (!result->getAsBool())
+        if (!(Lexical ? semantic_policy.getAsBool(*result) : LexicalSemanticPolicy::getAsBoolDefault(*result)))
             continue;
 
         {
@@ -323,7 +358,12 @@ QoreValue QoreHashMapSelectOperatorNode::mapIterator(AbstractIteratorHelper& h, 
                     vcommon = false;
                 }
 
-                rv->setKeyValue(key.c_str(), val.takeReferencedValue(), xsink);
+                if constexpr (Lexical) {
+                    qore_hash_private::setKeyValueLexical(**rv, key.c_str(), val.takeReferencedValue(), xsink,
+                        getSemanticPolicy());
+                } else {
+                    qore_hash_private::setKeyValueCanonical(**rv, key.c_str(), val.takeReferencedValue(), xsink);
+                }
             }
         }
         // if there is an exception dereferencing one of the evaluted nodes above, then exit the loop

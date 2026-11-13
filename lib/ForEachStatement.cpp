@@ -38,6 +38,38 @@
 #include <memory>
 #include "qore/intern/QoreDeferredRelease.h"
 
+namespace {
+class LexicalForEachStatement : public ForEachStatement {
+public:
+    using ForEachStatement::ForEachStatement;
+private:
+    int execImpl(QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(return_value, xsink);
+    }
+    int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(rc, return_value, xsink);
+    }
+};
+}
+
+ForEachStatement* ForEachStatement::create(LexicalSemanticPolicy policy, int start_line, int end_line,
+        QoreValue var, QoreValue list, StatementBlock* code) {
+    ForEachStatement* rv = policy.needsFilter()
+        ? new LexicalForEachStatement(start_line, end_line, var, list, code)
+        : new ForEachStatement(start_line, end_line, var, list, code);
+    rv->setSemanticPolicy(policy);
+    return rv;
+}
+
+template <bool Lexical>
+int ForEachStatement::assignLoopValue(LValueHelper& lvalue, QoreValue value, const char* desc) const {
+    if constexpr (Lexical) {
+        return lvalue.assign(value, desc, semantic_policy);
+    } else {
+        return lvalue.assign(value, desc);
+    }
+}
+
 ForEachStatement::ForEachStatement(int start_line, int end_line, QoreValue v, QoreValue l, StatementBlock* cd) : AbstractStatement(start_line, end_line), var(v), list(l), code(cd) {
 }
 
@@ -49,8 +81,13 @@ ForEachStatement::~ForEachStatement() {
 }
 
 int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(return_value, xsink);
+}
+
+template <bool Lexical>
+int ForEachStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) {
     if (is_ref)
-        return execRef(return_value, xsink);
+        return execRef<Lexical>(return_value, xsink);
 
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
@@ -94,7 +131,7 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
                 break;
 
             // assign variable to current value
-            if (n.assign(iv.takeReferencedValue(), "<foreach lvalue assignment>"))
+            if (assignLoopValue<Lexical>(n, iv.takeReferencedValue(), "<foreach lvalue assignment>"))
                 break;
         }
 
@@ -117,8 +154,13 @@ int ForEachStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
 }
 
 int ForEachStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(rc, return_value, xsink);
+}
+
+template <bool Lexical>
+int ForEachStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     if (is_ref)
-        return execRef(rc, return_value, xsink);
+        return execRef<Lexical>(rc, return_value, xsink);
 
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
@@ -162,7 +204,7 @@ int ForEachStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excep
                 break;
 
             // assign variable to current value
-            if (n.assign(iv.takeReferencedValue(), "<foreach lvalue assignment>"))
+            if (assignLoopValue<Lexical>(n, iv.takeReferencedValue(), "<foreach lvalue assignment>"))
                 break;
         }
 
@@ -184,6 +226,7 @@ int ForEachStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excep
     return rc_state;
 }
 
+template <bool Lexical>
 int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
     int rc = 0;
 
@@ -231,7 +274,7 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
             }
 
             // assign variable to current value in list
-            if (n.assign(l_tlist ? l_tlist->getReferencedEntry(i) : tlist.release())) {
+            if (assignLoopValue<Lexical>(n, l_tlist ? l_tlist->getReferencedEntry(i) : tlist.release())) {
                 return 0;
             }
         }
@@ -294,13 +337,14 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
         return 0;
     }
 
-    if (val.assign(ln.release())) {
+    if (assignLoopValue<Lexical>(val, ln.release())) {
         return 0;
     }
 
     return rc;
 }
 
+template <bool Lexical>
 int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     int rc_state = 0;
 
@@ -347,7 +391,7 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
             }
 
             // assign variable to current value in list
-            if (n.assign(l_tlist ? l_tlist->getReferencedEntry(i) : tlist.takeReferencedValue())) {
+            if (assignLoopValue<Lexical>(n, l_tlist ? l_tlist->getReferencedEntry(i) : tlist.takeReferencedValue())) {
                 return 0;
             }
         }
@@ -420,7 +464,7 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
         return 0;
     }
 
-    if (val.assign(ln.release())) {
+    if (assignLoopValue<Lexical>(val, ln.release())) {
         return 0;
     }
 

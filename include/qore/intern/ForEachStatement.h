@@ -40,9 +40,12 @@
 #include "qore/intern/FunctionalOperatorInterface.h"
 
 class RuntimeConfig;
+class LValueHelper;
 
 class ForEachStatement : public AbstractStatement {
 public:
+    DLLLOCAL static ForEachStatement* create(LexicalSemanticPolicy policy, int start_line, int end_line,
+        QoreValue var, QoreValue list, StatementBlock* code);
     DLLLOCAL ForEachStatement(int start_line, int end_line, QoreValue v, QoreValue l, StatementBlock* cd);
     DLLLOCAL virtual ~ForEachStatement();
     // faked here, checked at runtime
@@ -84,6 +87,18 @@ public:
         return lvars;
     }
 
+protected:
+    template <bool Lexical>
+    DLLLOCAL int execCommon(QoreValue& return_value, ExceptionSink* xsink);
+    template <bool Lexical>
+    DLLLOCAL int execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
+    template <bool Lexical>
+    DLLLOCAL int execRef(QoreValue& return_value, ExceptionSink* xsink);
+    template <bool Lexical>
+    DLLLOCAL int execRef(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
+    template <bool Lexical>
+    DLLLOCAL int assignLoopValue(LValueHelper& lvalue, QoreValue value, const char* desc = "<lvalue>") const;
+
 private:
     QoreValue var,
         list;
@@ -92,8 +107,6 @@ private:
     FunctionalOperator* iterator_func = nullptr;
     bool is_ref = false;
 
-    DLLLOCAL int execRef(QoreValue& return_value, ExceptionSink* xsink);
-    DLLLOCAL int execRef(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);

@@ -1,0 +1,226 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalCallFiltersTest
+
+#! User declarations choose parameter and return filters independently of the calling Program's current options.
+class LexicalCallFiltersTest inherits QUnit::Test {
+    private {
+        const Base = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS;
+    }
+
+    constructor() : QUnit::Test("LexicalCallFiltersTest", "1.0", \ARGV) {
+        foreach string name in ("param", "default_param", "method_param", "constructor_param", "closure_param",
+                "list_param", "hash_param", "result", "null_param", "null_dynamic", "null_list_param",
+                "foreign_param", "foreign_default", "foreign_method", "foreign_constructor", "foreign_ref",
+                "foreign_list", "foreign_hash", "foreign_null_dynamic", "retry_case", "softlist_param",
+                "iterator_result", "reference_param", "nested_softlist_param", "foreign_result", "rejected_return", "nothing_softlist", "nothing_auto_softlist",
+                "nested_hash_result", "nested_hash_null_result") {
+            foreach bool current_legacy in (False, True) {
+                foreach bool declaration_legacy in (False, True) {
+                    addTestCase(sprintf("%s: legacy declaration %y, legacy Program %y", name,
+                        declaration_legacy, current_legacy), \check(), (name, current_legacy, declaration_legacy));
+                }
+            }
+        }
+        foreach bool current_legacy in (False, True) {
+            addTestCase(sprintf("mixed parameter directives: legacy Program %y", current_legacy),
+                \mixedParameters(), (current_legacy,));
+        }
+        foreach bool declaration_legacy in (False, True) {
+            foreach bool current_legacy in (False, True) {
+                addTestCase(sprintf("return declaration %y, body %y, current Program %y", declaration_legacy,
+                    !declaration_legacy, current_legacy), \mixedReturn(), (declaration_legacy, current_legacy));
+                addTestCase(sprintf("default expression differs from declaration %y, current Program %y",
+                    declaration_legacy, current_legacy), \mixedDefault(), (declaration_legacy, current_legacy));
+            }
+        }
+        set_return_value(main());
+    }
+
+    private static string source(string prefix) {
+        return replace(replace('
+namespace Prefix {
+    string sub text() { return "text"; }
+    auto sub opaque(auto value) { return value; }
+    bool sub take(softbool value) { return value; }
+    bool sub default_value(softbool value = text()) { return value; }
+    list<bool> sub take_list(list<list<softbool>> value) { return value[0]; }
+    hash<string, bool> sub take_hash(hash<string, hash<string, softbool>> value) { return value.a; }
+    int sub take_int(softint value) { return value; }
+    list<int> sub take_int_list(list<list<softint>> value) { return value[0]; }
+    list<bool> sub take_softlist(softlist<softbool> value) { return value; }
+    list<bool> sub take_flat(list<softbool> value) { return value; }
+    bool sub take_reference(reference<softbool> value) { return value; }
+    list<bool> sub take_nested_softlist(list<softlist<softbool>> value) { return value[0]; }
+    softbool sub converted_result() { return text(); }
+    class Probe {
+        private { bool stored; }
+        constructor(softbool value) { stored = value; }
+        bool value() { return stored; }
+        static bool take(softbool value) { return value; }
+    }
+    list<*int> sub take_optional_softlist(softlist<*int> value) { return value; }
+    list<auto> sub take_auto_softlist(softlist<auto> value) { return value; }
+    hashdecl Converted { softbool value; }
+    hashdecl ConvertedNull { softint value; }
+    list<Converted> sub converted_hash_result() { return opaque(({"value": "text"},)); }
+    list<ConvertedNull> sub converted_hash_null_result() { return opaque(({"value": NULL},)); }
+    our list<string> cleanup;
+    class Tracked {
+        destructor() { push cleanup, "destroy"; }
+    }
+    auto sub make_tracked() { return new Tracked(); }
+    int sub reject_return() {
+        try {
+            return make_tracked();
+        } catch (hash<ExceptionInfo> ex) {
+            push cleanup, "catch";
+            return 2;
+        }
+    }
+    class Missing { public { int second; } }
+}
+auto sub Prefix_param() { return Prefix::take(Prefix::text()); }
+auto sub Prefix_default_param() { return Prefix::default_value(); }
+auto sub Prefix_method_param() { return Prefix::Probe::take(Prefix::text()); }
+auto sub Prefix_constructor_param() { return (new Prefix::Probe(Prefix::text())).value(); }
+auto sub Prefix_closure_param() {
+    code closure = bool sub (softbool value) { return value; };
+    return closure(Prefix::text());
+}
+auto sub Prefix_list_param() {
+    auto value = Prefix::opaque((("text", "1"),));
+    return Prefix::take_list(value);
+}
+auto sub Prefix_hash_param() {
+    auto value = Prefix::opaque({"a": {"b": "text", "c": "1"}});
+    return Prefix::take_hash(value);
+}
+auto sub Prefix_nothing_softlist() { return Prefix::take_optional_softlist(Prefix::opaque(NOTHING)); }
+auto sub Prefix_nothing_auto_softlist() { return Prefix::take_auto_softlist(Prefix::opaque(NOTHING)); }
+auto sub Prefix_nested_hash_result() { return Prefix::converted_hash_result()[0].value; }
+auto sub Prefix_nested_hash_null_result() { return Prefix::converted_hash_null_result()[0].value; }
+auto sub Prefix_rejected_return() {
+    Prefix::reject_return();
+    push Prefix::cleanup, "returned";
+    return Prefix::cleanup;
+}
+auto sub Prefix_result() { return Prefix::converted_result(); }
+auto sub Prefix_foreign_result() { return Peer::converted_result(); }
+auto sub Prefix_softlist_param() { return Prefix::take_softlist(Prefix::text()); }
+list<softbool> sub Prefix_iterator_result() { return Prefix::opaque(new ListIterator(("text", "1"))); }
+auto sub Prefix_reference_param() { any value = Prefix::text(); Prefix::take_reference(\value); return value; }
+auto sub Prefix_nested_softlist_param() { return Prefix::take_nested_softlist(Prefix::opaque(("text",))); }
+auto sub Prefix_null_param() { return Prefix::take_int(Prefix::opaque(NULL)); }
+auto sub Prefix_null_dynamic() { return call_function("Prefix::take_int", NULL); }
+auto sub Prefix_null_list_param() {
+    list<auto!> inner = (NULL,);
+    list<auto!> value = (inner,);
+    return Prefix::take_int_list(Prefix::opaque(value));
+}
+auto sub Prefix_foreign_param() { return Peer::take(Prefix::text()); }
+auto sub Prefix_foreign_default() { return Peer::default_value(); }
+auto sub Prefix_foreign_method() { return Peer::Probe::take(Prefix::text()); }
+auto sub Prefix_foreign_constructor() { return (new Peer::Probe(Prefix::text())).value(); }
+auto sub Prefix_foreign_ref() { code call = \Peer::take(); return call(Prefix::text()); }
+auto sub Prefix_foreign_list() { return Peer::take_list(Prefix::opaque((("text", "1"),))); }
+auto sub Prefix_foreign_hash() { return Peer::take_hash(Prefix::opaque({"a": {"b": "text", "c": "1"}})); }
+auto sub Prefix_foreign_null_dynamic() { return call_function("Peer::take_int", NULL); }
+bool sub Prefix_retry(softbool first, int second) { return first; }
+bool sub Peer_retry(softbool first, *int second) { return first; }
+bool sub Prefix_retry_case() { Prefix::Missing obj(); return Prefix_retry(Prefix::text(), obj.second); }
+', "Prefix", prefix), "Peer", prefix == "Legacy" ? "Default" : "Legacy");
+    }
+
+    private auto invoke(Program p, string name) {
+        try {
+            return p.callFunction(name);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    private check(string name, bool current_legacy, bool declaration_legacy) {
+        Program p(Base);
+        ParseOptions soft("broken-soft-types");
+        p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        p.setParseOptions(soft);
+        p.parsePending(source("Legacy"), "legacy-filter-declarations");
+        p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        p.disableParseOptions(soft);
+        p.parsePending(source("Default"), "default-filter-declarations");
+        p.parseCommit();
+        if (current_legacy) {
+            p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.setParseOptions(soft);
+        }
+        bool callee_legacy = name.find("foreign_") == 0 || name == "retry_case"
+            ? !declaration_legacy : declaration_legacy;
+        auto expected = !callee_legacy;
+        if (name == "nothing_softlist" || name == "nothing_auto_softlist") {
+            expected = new list<auto>();
+        } else if (name == "nested_hash_null_result") {
+            expected = callee_legacy ? 0 : "RUNTIME-TYPE-ERROR";
+        } else if (name == "rejected_return") {
+            expected = ("destroy", "catch", "returned");
+        } else if (name == "softlist_param" || name == "nested_softlist_param") {
+            expected = (!callee_legacy,);
+        } else if (name == "list_param" || name == "foreign_list" || name == "iterator_result") {
+            expected = (!callee_legacy, True);
+        } else if (name == "hash_param" || name == "foreign_hash") {
+            expected = {"b": !callee_legacy, "c": True};
+        } else if (name == "null_param" || name == "null_dynamic" || name == "foreign_null_dynamic") {
+            expected = callee_legacy ? 0 : "RUNTIME-OVERLOAD-ERROR";
+        } else if (name == "null_list_param") {
+            expected = declaration_legacy ? (0,) : "RUNTIME-OVERLOAD-ERROR";
+        }
+        string fn = (declaration_legacy ? "Legacy_" : "Default_") + name;
+        assertEq(expected, invoke(p, fn), sprintf("%s with current legacy options %y", fn, current_legacy));
+    }
+
+    private mixedDefault(bool declaration_legacy, bool current_legacy) {
+        Program p(Base);
+        string declaration = declaration_legacy ? "%strict-bool-eval\n" : "%perl-bool-eval\n";
+        string expression = declaration_legacy ? "%perl-bool-eval\n" : "%strict-bool-eval\n";
+        p.parse(declaration + "auto sub sample(list<softbool> value =\n" + expression
+            + '("text" ? ("text", "1") : ("0", "text"))) { return value; }', "default-expression-policy");
+        if (current_legacy) {
+            p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        } else {
+            p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        }
+        assertEq((False, True), p.callFunction("sample"), "default expression and parameter keep separate policies");
+    }
+
+    private mixedReturn(bool declaration_legacy, bool current_legacy) {
+        Program p(Base);
+        string declaration = declaration_legacy ? "%strict-bool-eval\n" : "%perl-bool-eval\n";
+        string body = declaration_legacy ? "%perl-bool-eval\n" : "%strict-bool-eval\n";
+        p.parse(declaration + "softbool sub sample() {\n" + body + "return \"text\"; }", "return-declaration");
+        if (current_legacy) {
+            p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        } else {
+            p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        }
+        assertEq(!declaration_legacy, p.callFunction("sample"), "return coercion belongs to the declaration");
+    }
+
+    private mixedParameters(bool current_legacy) {
+        Program p(Base);
+        p.parse("auto sub mixed(softbool first,\n%strict-bool-eval\nsoftbool second) { return (first, second); }",
+            "mixed-parameter-directives");
+        if (current_legacy) {
+            p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        } else {
+            p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        }
+        assertEq((True, False), p.callFunction("mixed", "text", "text"),
+            "each parameter retains its own declaration's policy");
+    }
+}

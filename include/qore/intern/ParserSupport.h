@@ -40,6 +40,15 @@
 
 #include <cstring>
 #include "qore/intern/QoreNativeParseInfo.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
+
+//! a method qualifier and the functional domains declared in a callable's attribute list (\c [dom=...])
+struct CallableQualifier {
+    //! the method modifier bits from the qualifier (OFM_CONST)
+    int mod;
+    //! the declared functional domain bits (QDOM_*), or keys seen while parsing an attribute list
+    int64 dom;
+};
 
 class QoreParserLocation {
 public:
@@ -55,6 +64,8 @@ public:
    unsigned depth = 0;
 
    QoreNativeParseInfo native_parse_info;
+   LexicalSemanticPolicy semantic_policy;
+   bool has_semantic_policy = false;
 
    DLLLOCAL void saveFirst() {
       //printd(0, "QoreParserLocation::setFirst: current: %d:%d - %d:%d\n", first_line, first_col, last_line, last_col);
@@ -131,6 +142,8 @@ struct TryModuleError {
 
 //! The state of a parse that the parser shares with its scanner
 struct QoreParseState {
+   //! The token or grammar rule currently constructing executable source nodes.
+   LexicalSemanticPolicy semantic_policy;
    //! true if the parse stops at an error, and the scanner ends the input
    bool stop = false;
    //! true if the scanner has ended the input

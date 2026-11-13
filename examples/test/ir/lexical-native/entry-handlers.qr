@@ -1,0 +1,32 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%requires compatprobe
+
+Program target(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+target.parse("auto sub normal(auto value) { return value; }", "modern-handler-target");
+auto reference = target.getCallReference("normal");
+target.setThreadEntryHandler(CompatProbe::native_callback(True, False), CompatProbe::native_callback(True, False));
+Program caller(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRICT_BOOLEAN_EVAL
+    | PO_NO_CHILD_PO_RESTRICTIONS);
+caller.parse('%requires compatprobe
+    auto sub invoke_target(code cb) { return CompatProbe::callback_state(cb, "text"); }', "legacy-handler-caller");
+caller.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+CompatProbe::handler_results();
+auto result = caller.callFunction("invoke_target", reference);
+auto observations = CompatProbe::handler_results();
+printf("result=%y handlers=%y\n", result, observations);
+if (result !== (False, False, False) || observations !== (True, True)) {
+    return 1;
+}
+foreach bool fail_enter in (True, False) {
+    target.setThreadEntryHandler(CompatProbe::native_callback(True, fail_enter),
+        CompatProbe::native_callback(True, !fail_enter));
+    CompatProbe::handler_results();
+    result = caller.callFunction("invoke_target", reference);
+    observations = CompatProbe::handler_results();
+    auto expected = fail_enter ? (True,) : (True, True);
+    printf("fail enter=%y result=%y handlers=%y\n", fail_enter, result, observations);
+    if (result !== (False, False, True) || observations !== expected) return 1;
+}
+printf("PASS\n");

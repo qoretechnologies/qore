@@ -38,12 +38,14 @@
 #include "qore/intern/FunctionalOperatorInterface.h"
 
 class QoreMapSelectOperatorNode : public QoreNOperatorNodeBase<3>, public FunctionalOperator {
-    friend class QoreFunctionalMapSelectListOperator;
-    friend class QoreFunctionalMapSelectSingleValueOperator;
-    friend class QoreFunctionalMapSelectIteratorOperator;
-    friend class QoreFunctionalMapSelectOperator;
+    template <bool> friend class QoreFunctionalMapSelectListOperator;
+    template <bool> friend class QoreFunctionalMapSelectSingleValueOperator;
+    template <bool> friend class QoreFunctionalMapSelectIteratorOperator;
+    template <bool> friend class QoreFunctionalMapSelectOperator;
 
 public:
+    DLLLOCAL static QoreMapSelectOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+            QoreValue e0, QoreValue e1, QoreValue e2);
     DLLLOCAL QoreMapSelectOperatorNode(const QoreProgramLocation* loc, QoreValue e0, QoreValue e1, QoreValue e2)
             : QoreNOperatorNodeBase<3>(loc, e0, e1, e2),
             returnTypeInfo(nullptr), iterator_func(nullptr) {
@@ -68,7 +70,7 @@ public:
         ValueHolder n_e2(copy_value_and_resolve_lvar_refs_bound_implicit(e[2], xsink), xsink);
         if (*xsink)
             return nullptr;
-        QoreMapSelectOperatorNode* rv = new QoreMapSelectOperatorNode(loc, n_e0.release(), n_e1.release(),
+        QoreMapSelectOperatorNode* rv = create(getSemanticPolicy(), loc, n_e0.release(), n_e1.release(),
             n_e2.release());
         rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->e[1].getInternalNode());
         return rv;
@@ -107,6 +109,10 @@ public:
             ExceptionSink* xsink) const;
 
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* getFunctionalIteratorCommon(
+        FunctionalValueType& value_type, ExceptionSink* xsink) const;
+
     const QoreTypeInfo* returnTypeInfo;
     const QoreTypeInfo* expTypeInfo = nullptr;
     FunctionalOperator* iterator_func;
@@ -127,6 +133,7 @@ protected:
     DLLLOCAL QoreValue mapSelectIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalMapSelectListOperator : public FunctionalOperatorInterface, public ConstListIterator {
 protected:
     const QoreMapSelectOperatorNode* map;
@@ -151,6 +158,7 @@ public:
     }
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalMapSelectSingleValueOperator : public FunctionalOperatorInterface {
 protected:
     const QoreMapSelectOperatorNode* map;
@@ -173,6 +181,7 @@ public:
     }
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalMapSelectIteratorOperator : public FunctionalOperatorInterface {
 protected:
     const QoreMapSelectOperatorNode* map;
@@ -197,6 +206,7 @@ public:
     }
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalMapSelectOperator : public FunctionalOperatorInterface {
 protected:
     const QoreMapSelectOperatorNode* map;

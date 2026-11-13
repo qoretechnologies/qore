@@ -153,6 +153,7 @@ class ConstantEntry : public QoreReferenceCounter {
 public:
     const QoreProgramLocation* loc;
     ParseWarnOptions pwo;
+    LexicalSemanticPolicy semantic_policy;
     std::string name;
     const QoreTypeInfo* typeInfo;
     // unresolved declared type for an explicitly-typed constant; resolution is deferred to parseInit() so that
@@ -465,6 +466,11 @@ public:
     //! Returns true if this constant had a delayed-eval init expression
     DLLLOCAL bool hasInitExpr() const {
         return has_init_expr;
+    }
+
+    //! Returns true if this constant has an explicit declared type
+    DLLLOCAL bool hasExplicitType() const {
+        return explicit_type;
     }
 
     //! Returns true for qcc --stub constants that are declarations only.

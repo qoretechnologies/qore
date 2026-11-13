@@ -45,6 +45,9 @@
 #include "qore/intern/qore_list_private.h"
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include <qore/QoreBufferNode.h>
 
 #include <bit>
 
@@ -504,6 +507,73 @@ bool QoreValue::getAsBool() const {
     return false;
 }
 
+template <bool Strict>
+static bool qore_get_as_bool_lexical(const QoreValue& value) {
+    // Keep inline scalar conversions independent of native invocation context too.
+    if (value.isBool()) {
+        return value.getBool();
+    }
+    if (value.isInt()) {
+        return value.getInt() != 0;
+    }
+    if (value.isFloat()) {
+        return value.getDouble() != 0.0;
+    }
+    if (value.isEnum()) {
+        return qore_get_as_bool_lexical<Strict>(value.getEnumMember()->getValue());
+    }
+    switch (value.getType()) {
+        case NT_STRING: {
+            auto convert = [](const char* text, size_t size) -> bool {
+                return Strict ? q_strtod(text) != 0.0
+                    : size && (size != 1 || text[0] != '0');
+            };
+            if (value.isShortString()) {
+                char text[8];
+                value.getShortString(text);
+                return convert(text, value.shortStringLen());
+            }
+            return QoreAsciiCompatStringHelper::withText(*value.get<const QoreStringNode>(), convert);
+        }
+        case NT_LIST:
+            return !Strict && !value.get<const QoreListNode>()->empty();
+        case NT_HASH:
+            return !Strict && !value.get<const QoreHashNode>()->empty();
+        case NT_BINARY:
+            return !Strict && !value.get<const BinaryNode>()->empty();
+        case NT_BUFFER:
+            return !Strict && !value.get<const QoreBufferNode>()->empty();
+        case NT_OBJECT:
+            return !Strict && value.get<const QoreObject>()->getAsBoolDefault();
+        case NT_WEAKREF: {
+            const QoreObject* target = value.get<const WeakReferenceNode>()->get();
+            return !Strict && target->isValid() && target->getAsBoolDefault();
+        }
+        case NT_WEAKREF_LIST:
+            return !Strict && !value.get<const WeakListReferenceNode>()->get()->empty();
+        case NT_WEAKREF_HASH:
+            return !Strict && !value.get<const WeakHashReferenceNode>()->get()->empty();
+        case NT_FUNCREF:
+        case NT_RUNTIME_CLOSURE:
+            return !Strict;
+        default:
+            // The remaining value types have no compatibility-dependent boolean conversion.
+            return value.getAsBool();
+    }
+}
+
+bool LexicalSemanticPolicy::getAsBoolDefault(const QoreValue& value) {
+    return qore_get_as_bool_lexical<false>(value);
+}
+
+bool LexicalSemanticPolicy::getAsBoolStrict(const QoreValue& value) {
+    return qore_get_as_bool_lexical<true>(value);
+}
+
+bool LexicalSemanticPolicy::getAsBool(const QoreValue& value) const {
+    return strictBoolean() ? qore_get_as_bool_lexical<true>(value) : qore_get_as_bool_lexical<false>(value);
+}
+
 // ============================================================================
 // QoreValue API
 // ============================================================================
@@ -757,7 +827,7 @@ bool QoreValue::isEqualHardIntern(const QoreValue& other, ExceptionSink* xsink) 
 }
 
 bool QoreValue::isEqualSoft(const QoreValue& other, ExceptionSink* xsink) const {
-    return QoreLogicalEqualsOperatorNode::softEqual(*this, other, xsink);
+    return QoreLogicalEqualsOperatorNode::softEqualNative(*this, other, xsink);
 }
 
 bool QoreValue::isEqualValue(const QoreValue& other) const {

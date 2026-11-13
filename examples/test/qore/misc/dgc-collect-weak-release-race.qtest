@@ -61,6 +61,15 @@ public class DgcCollectWeakReleaseRaceTest inherits QUnit::Test {
         const ClassName = "DgcWeakReleaseObject";
     }
 
+    private {
+        #! the weak reference to b through which the release thread clears b.other
+        /** The release thread reads it here: a weak reference passed as an argument is a strong reference in the
+            called function, which its frame holds until it returns, after its on_exit blocks, and then destroys b if
+            the collector has released a's reference to b meanwhile (qore#5909)
+        */
+        static auto release_target;
+    }
+
     constructor() : QUnit::Test("dgc-collect-weak-release-race", "1.0") {
         addTestCase("a reference released through a weak reference while the collector marks the object",
             \releaseWhileMarkedTest());
@@ -109,6 +118,8 @@ public class DgcCollectWeakReleaseRaceTest inherits QUnit::Test {
         auto weak_a;
         auto weak_b;
         DgcCollectWeakReleaseRaceTest::makeCycle(q, \weak_a, \weak_b);
+        # set before a hook is armed: a hook acts on any object of the class
+        DgcCollectWeakReleaseRaceTest::release_target := weak_b;
 
         Counter held(1);
         Counter release(1);
@@ -126,7 +137,10 @@ public class DgcCollectWeakReleaseRaceTest inherits QUnit::Test {
         # the release of the last reference to a: b.other, cleared through the weak reference to b
         Counter released(1);
         Counter release_done(1);
-        background DgcCollectWeakReleaseRaceTest::releaseOther(weak_b, released, release_done);
+        Counter release_exit(1);
+        # the release thread ends when the case does, also when an assertion fails
+        on_exit release_exit.dec();
+        background DgcCollectWeakReleaseRaceTest::releaseOther(released, release_done, release_exit);
         int rc = released.waitForZero(HoldTimeout);
 
         # the collector deletes a
@@ -135,10 +149,13 @@ public class DgcCollectWeakReleaseRaceTest inherits QUnit::Test {
         release_done.waitForZero(HoldTimeout);
         assertEq(0, rc, "the release finishes while the collector is held");
 
+        # the release thread does not end before the check, so that nothing that it holds until it ends is released
+        # before it
         checkDestructed(collector_tid.get());
 
         # the weak references are released after the objects have been deleted; a weak reference released after the
         # object's memory has been freed is a use after free
+        remove DgcCollectWeakReleaseRaceTest::release_target;
         remove weak_a;
         remove weak_b;
     }
@@ -153,6 +170,8 @@ public class DgcCollectWeakReleaseRaceTest inherits QUnit::Test {
         auto weak_a;
         auto weak_b;
         DgcCollectWeakReleaseRaceTest::makeCycle(q, \weak_a, \weak_b);
+        # set before a hook is armed: a hook acts on any object of the class
+        DgcCollectWeakReleaseRaceTest::release_target := weak_b;
 
         # the collector decides to collect a and is held before it takes a's lock
         Counter collect_held(1);
@@ -172,8 +191,11 @@ public class DgcCollectWeakReleaseRaceTest inherits QUnit::Test {
         Counter last_release(1);
         Counter released(1);
         Counter release_done(1);
+        Counter release_exit(1);
+        # the release thread ends when the case does, also when an assertion fails
+        on_exit release_exit.dec();
         call_function("dbg_hold_deref_last", ClassName, last_held, last_release);
-        background DgcCollectWeakReleaseRaceTest::releaseOther(weak_b, released, release_done);
+        background DgcCollectWeakReleaseRaceTest::releaseOther(released, release_done, release_exit);
         list<Counter> releases = (collect_release, last_release);
         if (last_held.waitForZero(HoldTimeout)) {
             DgcCollectWeakReleaseRaceTest::releaseAll(releases, (collector_done, release_done));
@@ -209,8 +231,10 @@ public class DgcCollectWeakReleaseRaceTest inherits QUnit::Test {
         assertEq(0, rc, "the release waits for the collector's dereference");
         assertEq(0, released.getCount(), "the release finishes");
 
+        # the release thread does not end before the check (see runTest())
         checkDestructed(collector_tid.get());
 
+        remove DgcCollectWeakReleaseRaceTest::release_target;
         remove weak_a;
         remove weak_b;
     }
@@ -236,10 +260,16 @@ public class DgcCollectWeakReleaseRaceTest inherits QUnit::Test {
         }
     }
 
-    #! Releases the last reference to a: b.other, cleared through the weak reference to b
-    static releaseOther(auto weak_b, Counter released, Counter done) {
-        on_exit done.dec();
-        weak_b.other = NOTHING;
+    #! Releases the last reference to a: b.other, cleared through the weak reference to b in release_target
+    /** The thread holds no reference to a or b: the strong reference that the assignment takes to b through the weak
+        reference is released by the statement.  It signals \a done and then waits for \a exit before it ends.
+    */
+    static releaseOther(Counter released, Counter done, Counter exit) {
+        on_exit {
+            done.dec();
+            exit.waitForZero(HoldTimeout);
+        }
+        DgcCollectWeakReleaseRaceTest::release_target.other = NOTHING;
         released.dec();
     }
 

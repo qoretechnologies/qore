@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/ReturnStatement.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -536,6 +537,7 @@ int StatementBlock::parseInitIntern(QoreParseContext& parse_context, statement_l
     int err = 0;
 
     for (statement_list_t::iterator i = start, l = statement_list.last(), e = statement_list.end(); i != e; ++i) {
+        i.node->data = ReturnStatement::bindDeclarationPolicy(*i);
         if ((*i)->parseInit(parse_context) && !err) {
             err = -1;
         }

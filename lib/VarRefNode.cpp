@@ -381,11 +381,20 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     return err;
 }
 
+template <typename... Args>
+static VarRefNewObjectNode* qore_make_var_ref_new(Args&&... args) {
+    LexicalSemanticPolicy policy;
+    LexicalParsePolicyHelper::capture(policy);
+    return !policy.isDefault()
+        ? new LexicalVarRefNewObjectNode(std::forward<Args>(args)...)
+        : new VarRefNewObjectNode(std::forward<Args>(args)...);
+}
+
 VarRefNewObjectNode* VarRefNode::globalMakeNewCall(QoreValue args) {
     assert(type == VT_GLOBAL || type == VT_THREAD_LOCAL);
     if (ref.var->hasTypeInfo()) {
         QoreParseTypeInfo* pti = ref.var->copyParseTypeInfo();
-        VarRefNewObjectNode* rv = new VarRefNewObjectNode(loc, takeName(), ref.var,
+        VarRefNewObjectNode* rv = qore_make_var_ref_new(loc, takeName(), ref.var,
             make_args(loc, args), pti ? nullptr : ref.var->getTypeInfo(), pti);
         deref();
         return rv;
@@ -525,8 +534,8 @@ int VarRefDeclNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_contex
 
 // for checking for new object calls
 AbstractQoreNode* VarRefDeclNode::makeNewCall(QoreValue args) {
-    VarRefNewObjectNode* rv = new VarRefNewObjectNode(loc, takeName(), typeInfo, takeParseTypeInfo(),
-        make_args(loc, args), type);
+    VarRefNewObjectNode* rv = qore_make_var_ref_new(loc, takeName(), typeInfo, takeParseTypeInfo(),
+        make_args(loc, args), static_cast<qore_var_t>(type));
     if (isReadOnlyDecl()) {
         rv->setReadOnlyDecl();
     }
@@ -793,12 +802,21 @@ QoreValue VarRefNewObjectNode::evalCallArg(ExceptionSink* xsink) const {
     return needs_deref ? v : v.refSelf();
 }
 
+QoreValue LexicalVarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(rc_get_current_ref(), needs_deref, xsink);
+}
+
 QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 
 QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(rc, needs_deref, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue VarRefNewObjectNode::evalImplInternal(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     ReferenceHolder<> value(xsink);
 
     const QoreTypeInfo* runtime_type_info = qore_substitute_type_params_if_needed(typeInfo);
@@ -807,23 +825,36 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
             assert(QoreTypeInfo::getUniqueReturnClass(runtime_type_info));
             // the location of this call is the location of the call stack frame of the constructor
             QoreRcCallSiteHelper call_site(rc, loc);
-            value = qore_class_private::execConstructor(
+            value = qore_class_private::execConstructorWithPolicy<Lexical>(getSemanticPolicy(),
                 *QoreTypeInfo::getUniqueReturnClass(runtime_type_info), rc, variant, args, xsink, runtime_type_info
             );
             break;
         }
 
         case VRN_HASHDECL:
-            value = typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info))
-                ->newHash(parse_args, runtime_check, xsink);
+            if constexpr (Lexical) {
+                value = typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info))
+                    ->newHash(parse_args, runtime_check, xsink, getSemanticPolicy());
+            } else {
+                value = typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info))
+                    ->newHash(parse_args, runtime_check, xsink);
+            }
             break;
 
         case VRN_COMPLEXHASH:
-            value = qore_hash_private::newComplexHash(runtime_type_info, parse_args, xsink);
+            if constexpr (Lexical) {
+                value = qore_hash_private::newComplexHash(runtime_type_info, parse_args, xsink, getSemanticPolicy());
+            } else {
+                value = qore_hash_private::newComplexHash(runtime_type_info, parse_args, xsink);
+            }
             break;
 
         case VRN_COMPLEXLIST:
-            value = qore_list_private::newComplexList(runtime_type_info, new_args, xsink);
+            if constexpr (Lexical) {
+                value = qore_list_private::newComplexList(runtime_type_info, new_args, xsink, getSemanticPolicy());
+            } else {
+                value = qore_list_private::newComplexList(runtime_type_info, new_args, xsink);
+            }
             break;
 
         case VRN_DYNAMIC_OBJECT: {
@@ -836,7 +867,7 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
                 return QoreValue();
             }
             QoreRcCallSiteHelper call_site(rc, loc);
-            value = qc->execConstructor(args, xsink);
+            value = qore_class_private::execConstructorWithPolicy<Lexical>(getSemanticPolicy(), *qc, rc, nullptr, args, xsink);
             break;
         }
 
@@ -857,7 +888,11 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
                     dynamic_hashdecl_name.c_str());
                 break;
             }
-            value = typed_hash_decl_private::get(*hd)->newHash(parse_args, runtime_check, xsink);
+            if constexpr (Lexical) {
+                value = typed_hash_decl_private::get(*hd)->newHash(parse_args, runtime_check, xsink, getSemanticPolicy());
+            } else {
+                value = typed_hash_decl_private::get(*hd)->newHash(parse_args, runtime_check, xsink);
+            }
             break;
         }
 
@@ -873,7 +908,11 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
     if (!lv)
         return QoreValue();
     AbstractQoreNode* rv;
-    lv.assign(rv = value.release());
+    if constexpr (Lexical) {
+        lv.assign(rv = value.release(), "<lvalue>", getSemanticPolicy());
+    } else {
+        lv.assign(rv = value.release());
+    }
     if (*xsink)
         return QoreValue();
     needs_deref = false;

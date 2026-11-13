@@ -2502,7 +2502,8 @@ pgm.setParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
     @see Program::disableParseOptions() for a reciprocal method that disables parse options; also see Program::replaceParseOptions()
- */
+     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
+*/
 nothing Program::setParseOptions(softint parse_options = PO_DEFAULT) [flags=NAMED_ARGS] {
    if (parse_options & PO_SYSTEM_OPS)
       return xsink->raiseException("PROGRAM-OPTION-ERROR",
@@ -2524,6 +2525,7 @@ pgm.setParseOptions(opts);
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
 
     @since %Qore 3.0
+    @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
 */
 nothing Program::setParseOptions(ParseOptions[QoreParseOptionsData] parse_options) [flags=NAMED_ARGS] {
     p->setParseOptions(parse_options->get(), xsink);
@@ -2577,7 +2579,8 @@ pgm.disableParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
     @see Program::setParseOptions() for a reciprocal method that enables parse options; also see Program::replaceParseOptions()
- */
+     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
+*/
 nothing Program::disableParseOptions(softint parse_options) [flags=NAMED_ARGS] {
    if (parse_options & PO_SYSTEM_OPS)
       return xsink->raiseException("PROGRAM-OPTION-ERROR",
@@ -2599,6 +2602,7 @@ pgm.disableParseOptions(opts);
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
 
     @since %Qore 3.0
+    @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
 */
 nothing Program::disableParseOptions(ParseOptions[QoreParseOptionsData] parse_options) [flags=NAMED_ARGS] {
     p->disableParseOptions(parse_options->get(), xsink);
@@ -2618,7 +2622,8 @@ pgm.replaceParseOptions(PO_NO_THREADS | PO_NO_GUI);
     @throw OPTION-ERROR The calling Program does not have the @ref PO_NO_CHILD_PO_RESTRICTIONS option set, and therefore cannot call Program::replaceParseOptions()
 
     @see Program::setParseOptions() and Program::disableParseOptions().
- */
+     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
+*/
 nothing Program::replaceParseOptions(softint parse_options) [flags=NAMED_ARGS] {
    p->replaceParseOptions(parse_options, xsink);
 }
@@ -3973,14 +3978,16 @@ nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES
 
     @return the call reference to the given function or static method; the string is resolved in the Program as
     follows:
-    - a string with a class path (<tt>Class::method</tt>) that names a method of a class is resolved as that static
-      method (a non-static method raises \c CALL-REFERENCE-ERROR, as there is no object)
+    - a name with a class path (<tt>Class::method</tt>, also with a namespace path) is looked up as a public static
+      method of the class; a non-static method raises \c CALL-REFERENCE-ERROR, as this method runs without an object
     - otherwise it is resolved as a function of the Program, which can include a namespace path; a method of the
       @ref Qore::Program "Program" object itself is not found (ex: the Program's function \c run() is referenced by
       \c "run", not the @ref Qore::Program::run() "Program::run()" method; since %Qore 3.0)
     - if not found, a \c CALL-REFERENCE-ERROR exception is thrown
 
-    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context, or the identifier contains a NUL character (since %Qore 3.0)
+    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context; a
+    non-static method (which needs an object; use <object>::getCallReference() in the object's code); the identifier
+    contains a NUL character (since %Qore 3.0)
 
     @note
     - use <object>::getCallReference() to get call references to non-public class methods; this builtin function
@@ -4333,4 +4340,48 @@ int Program::clearObjectCache(date cutoff) {
 */
 int Program::objectCacheSize() {
     return (int64)qore_program_private::get(*p)->getSavedObjectCount();
+}
+
+template <bool ListArguments, bool StaticMethod = false>
+static QoreValue q_program_call_lexical(QoreObject* self, AbstractPrivateData* private_data,
+        const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreProgram* pgm = static_cast<QoreProgram*>(private_data);
+    constexpr unsigned offset = StaticMethod ? 2 : 1;
+    ReferenceHolder<QoreListNode> copied_args(xsink);
+    const QoreListNode* forwarded_args;
+    if constexpr (ListArguments) forwarded_args = get_param_value(args, offset).get<const QoreListNode>();
+    else {
+        if (num_args(args) > offset) copied_args = args->copyListFrom(offset);
+        forwarded_args = *copied_args;
+    }
+    QoreStringNodeValueHelper name(get_hard_value_param(args, 0));
+    LexicalSemanticPolicy policy = qore_get_native_semantic_policy();
+    if constexpr (StaticMethod) {
+        QoreStringNodeValueHelper method(get_hard_value_param(args, 1));
+        return q_call_static_method_args(policy, pgm, *name, *method, forwarded_args, xsink);
+    } else {
+        if (q_check_no_nul((*name)->c_str(), (*name)->size(), "function name", "function names", "NO-FUNCTION",
+                xsink)) return QoreValue();
+        TempEncodingHelper encoded(*name, QCS_DEFAULT, xsink);
+        if (!encoded) return QoreValue();
+        return qore_program_private::get(*pgm)->callFunction(encoded->c_str(), forwarded_args, xsink, policy);
+    }
+}
+
+static QoreValue Program_callFunction_VsVV(QoreObject*, QoreProgram*, const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue Program_callFunctionArgs_VsC15_softlist_auto_(QoreObject*, QoreProgram*, const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue Program_callStaticMethod_VsVsVV(QoreObject*, QoreProgram*, const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue Program_callStaticMethodArgs_VsVsC15_softlist_auto_(QoreObject*, QoreProgram*, const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+
+q_method_t qore_get_lexical_program_method(q_method_t method) {
+    static const std::pair<q_method_t, q_method_t> forwarding[] = {
+        {reinterpret_cast<q_method_t>(Program_callFunction_VsVV), q_program_call_lexical<false>},
+        {reinterpret_cast<q_method_t>(Program_callFunctionArgs_VsC15_softlist_auto_), q_program_call_lexical<true>},
+        {reinterpret_cast<q_method_t>(Program_callStaticMethod_VsVsVV), q_program_call_lexical<false, true>},
+        {reinterpret_cast<q_method_t>(Program_callStaticMethodArgs_VsVsC15_softlist_auto_), q_program_call_lexical<true, true>},
+    };
+    for (const auto& entry : forwarding) {
+        if (entry.first == method) return entry.second;
+    }
+    return nullptr;
 }
