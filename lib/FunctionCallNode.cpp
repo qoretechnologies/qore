@@ -1405,7 +1405,9 @@ template <bool LexicalInvocation>
 QORE_INTERN_NOINLINE QoreValue FunctionCallNode::evalReusableTmpArgs(QoreFunction* func, QoreProgram* call_pgm,
         unsigned call_flags, RuntimeConfig& rc, ExceptionSink* xsink) const {
     assert(tmp_args && reusable_tmp_args && args);
-    ReferenceHolder<QoreListNode> args_copy(args->copy(), xsink);
+    // the copy keeps the parameter positions of the arguments of a named call bound at parse time
+    ReferenceHolder<QoreListNode> args_copy(xsink);
+    copyEvalTmpArgs(args_copy);
     if constexpr (LexicalInvocation) {
         return func->evalFunctionTmpArgs(variant, *args_copy, call_pgm, rc, xsink,
             getExplicitTypeParamInstantiation(), call_flags, getSemanticPolicy());
