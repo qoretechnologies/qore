@@ -1725,6 +1725,23 @@ public:
     //! Unregisters a user variant of the Program's code when it is destroyed or moved to another Program
     DLLLOCAL void unregisterUserVariant(const UserVariantBase* v);
 
+    //! clears the data of the Programs that still exist when the library is cleaned up (qore#6045)
+    /** called by qore_cleanup() once no thread but the calling one can run Qore code and the modules have been
+        deleted, while the types, the thread data and the JIT engine still exist: a Program that its owner keeps
+        beyond that (ex: a module's Program with static storage duration, which a static destructor deletes after
+        the library has been cleaned up) has its data (global variables, constants) cleared here, so the Qore code
+        that its objects run when they are destroyed (their destructors) runs while the library can run it; the
+        owner's later deletion of the Program finds its data cleared (see waitForTerminationAndClear(), which clears
+        it only once)
+
+        No reference that the owner holds is released: each Program is held by a reference of its own while it is
+        cleared.  The Programs are cleared oldest first, and the registry is scanned again after each one, so a
+        Program that another one holds is cleared when that one releases it, and a Program created while the
+        Programs are cleared is cleared too.  No thread can be started by the code that runs then (see
+        qore_thread_start_closed).  Exceptions raised by the destructors are reported as unhandled exceptions.
+    */
+    DLLLOCAL static void clearRemainingPrograms();
+
 #ifdef DEBUG
     //! For tests: the number of Program objects that exist (created and not yet destroyed)
     DLLLOCAL static size_t dbgGetLiveProgramCount();

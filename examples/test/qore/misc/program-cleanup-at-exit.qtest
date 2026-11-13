@@ -32,6 +32,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires Util
+%requires FsUtil
 
 %try-module jni
 %define NoJni
@@ -40,6 +41,11 @@
 %exec-class ProgramCleanupAtExitTest
 
 class ProgramCleanupAtExitTest inherits QUnit::Test {
+    public {
+        #! the line the destructor of the global object of the module "staticpgmcode" prints at its end
+        const TeardownMarker = "staticpgmcode: teardown complete";
+    }
+
     private {
         #! the interpreter running this test, used to launch the children
         string qore_exe;
@@ -68,6 +74,16 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             \staticProgramNormalEndTest());
         addTestCase("Qore code run by a static Program's objects at exit() uses live thread-local data",
             \staticProgramCodeExitTest());
+        addTestCase("Qore code run by a static Program's objects at the end of a script that does not call exit() "
+            "runs before the library is cleaned up", \staticProgramCodeNormalEndTest());
+        addTestCase("an exception raised by a static Program's destructor at the end of a script is reported",
+            \staticProgramDestructorExceptionTest());
+        addTestCase("the objects of a child Program that a static Program holds are destroyed while the child has "
+            "its data", \staticProgramChildProgramTest());
+        addTestCase("a static Program's destructor cannot start a thread when the library is cleaned up",
+            \staticProgramThreadStartTest());
+        addTestCase("a sandbox time limit cannot be enforced for a call made when the library is cleaned up",
+            \staticProgramSandboxLimitTest());
         set_return_value(main());
     }
 
@@ -77,7 +93,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         teardown exception reaches std::terminate(), or by the JVM's crash handler) rather than as
         any status the script could have set itself
     */
-    private int runChild(string statement, int expected, string module = "jni", string options = "") {
+    private int runChild(string statement, int expected, string module = "jni", string options = "",
+            *reference<string> output, string extra_env = "") {
         # the statement is embedded in single quotes below, so it must not contain any;
         # String::find() returns -1 when the substring is absent
         @assert(statement.find("'") == -1);
@@ -87,9 +104,13 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         # Discarding it left a CI failure with nothing to act on.
         string out_file = sprintf("%s/qore-cleanup-child-%d.log", tmp_location(), gettid());
         on_exit unlink(out_file);
-        int rc = system(sprintf("%s%s %s -l %s -e '%s' >%s 2>&1", env_prefix, qore_exe, options, module,
+        int rc = system(sprintf("%s%s%s %s -l %s -e '%s' >%s 2>&1", env_prefix, extra_env, qore_exe, options, module,
             statement, out_file));
-        if (rc != expected) {
+        if (exists output) {
+            output = File::readTextFile(out_file);
+        }
+        # a negative status means that the caller checks the status and the output itself
+        if (expected >= 0 && rc != expected) {
             printf("--- child (-l %s, %s) exited with status %d, expected %d; output follows ---\n",
                 module, statement, rc, expected);
             try {
@@ -197,9 +218,185 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         }
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             string options = "--exec-mode=" + mode;
-            assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options), "exit(0): " + mode);
+            string output = "";
+            assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options, \output), "exit(0): " + mode);
+            assertRegex(TeardownMarker, output, "exit(0): the destructor ran to its end: " + mode);
             assertEq(7, runChild("exit(7);", 7, "staticpgmcode", options), "exit(7): " + mode);
         }
+    }
+
+    #! the static Program of the module "staticpgmcode" at the end of a script that does not call exit() (qore#6045)
+    /** qore_cleanup() freed the types (and the JIT engine and the thread data) before the static destructor of the
+        module deleted the Program, and the Qore code of its global object's destructor then ran on freed memory: the
+        child crashed with a segmentation fault in every execution mode (valgrind: invalid reads of freed type data).
+        qore_cleanup() now clears the data of the Programs that outlive the modules while the library can still run
+        their code, so the destructor runs to its end, once, before the library is cleaned up
+    */
+    private staticProgramCodeNormalEndTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            string output = "";
+            assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgmcode", options, \output), "normal end: " + mode);
+            # the destructor runs exactly once: when the library is cleaned up, not again from the static destructor
+            assertEq(1, (output =~ x/(staticpgmcode: teardown complete)/g).size(),
+                "normal end: the destructor ran to its end once: " + mode);
+            assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
+        }
+    }
+
+    #! runs the code in \a code as the code of the static Program of "staticpgmcode" (QORE_STATICPGM_CODE_FILE) in a
+    #! script that ends normally, in each execution mode, and calls \a check with the mode, the status and the output
+    private runStaticProgramCode(string name, string code, code check) {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        TmpDir tmp("qore-program-cleanup-" + name + "-");
+        string file = tmp.path + DirSep + name + ".q";
+        File f();
+        f.open2(file, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string output = "";
+            int rc = runChild("int i = 0; ++i;", -1, "staticpgmcode", "--exec-mode=" + mode, \output,
+                sprintf("QORE_STATICPGM_CODE_FILE=%s ", file));
+            check(mode, rc, output);
+        }
+    }
+
+    #! an exception raised by the destructor of an object of the static Program when the library is cleaned up is
+    #! reported as an unhandled exception and makes the process fail, without a crash
+    private staticProgramDestructorExceptionTest() {
+        runStaticProgramCode("throw", "%modern
+class Thrower {
+    destructor() {
+        printf(\"thrower: start\\n\");
+        throw \"STATICPGM-TEARDOWN-ERROR\", \"thrown by a destructor when the library is cleaned up\";
+    }
+}
+our Thrower t = new Thrower();
+", sub (string mode, int rc, string output) {
+            # a crash gives 128 + the signal number
+            assertTrue(rc > 0 && rc < 128, sprintf("%s: the process fails without a crash (status %d)", mode, rc));
+            assertRegex("thrower: start", output, mode + ": the destructor ran");
+            assertRegex("STATICPGM-TEARDOWN-ERROR", output, mode + ": the exception is reported");
+        });
+    }
+
+    #! the static Program holds a child Program and an object of a class of the child, which it releases in its own
+    #! destructor before the child: the object's destructor reads a global variable of the child, which still has its
+    #! data, as when the owner deletes the static Program
+    private staticProgramChildProgramTest() {
+        runStaticProgramCode("child", "%modern
+class Holder {
+    private {
+        Program child;
+        object obj;
+    }
+
+    constructor() {
+        child = new Program(PO_NEW_STYLE);
+        child.parse(\"our string label = 'child-global';
+class ChildObj {
+    destructor() {
+        printf('child destructor: %s\\n', label);
+    }
+}
+ChildObj sub make() {
+    return new ChildObj();
+}\", \"child\");
+        # assigns the global variable of the child
+        child.run();
+        obj = child.callFunction(\"make\");
+    }
+
+    destructor() {
+        # the object of the child Program is released before the child Program
+        delete obj;
+        printf(\"holder: done\\n\");
+    }
+}
+our Holder h = new Holder();
+", sub (string mode, int rc, string output) {
+            assertEq(0, rc, mode + ": the process succeeds; output: " + output);
+            assertRegex("child destructor: child-global\nholder: done", output,
+                mode + ": the child's object was destroyed with the child's data, before the holder ended");
+        });
+    }
+
+    #! no thread can be started by Qore code that runs when the library is cleaned up: the threads have been waited
+    #! for; a timed wait still times out
+    private staticProgramThreadStartTest() {
+        runStaticProgramCode("thread", "%modern
+class Starter {
+    destructor() {
+        try {
+            background printf(\"thread: ran\\n\");
+            printf(\"thread: started\\n\");
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"thread: %s\\n\", ex.err);
+        }
+        Counter c(1);
+        printf(\"wait: %d\\n\", c.waitForZero(20));
+    }
+}
+our Starter s = new Starter();
+", sub (string mode, int rc, string output) {
+            assertEq(0, rc, mode + ": the process succeeds; output: " + output);
+            # Counter::waitForZero() returns a non-zero error code when it times out
+            assertRegex("thread: THREAD-CREATION-FAILURE\nwait: [1-9]", output,
+                mode + ": the thread was refused and the timed wait timed out");
+            assertEq(Qore::False, output =~ /thread: (ran|started)/, mode + ": no thread was started");
+        });
+    }
+
+    #! a call with a sandbox wall time limit made by a destructor when the library is cleaned up fails at its first
+    #! cancellation point: the watchdog thread that enforces the limit has been stopped and is not started again
+    private staticProgramSandboxLimitTest() {
+        runStaticProgramCode("sandbox", "%modern
+%no-child-restrictions
+class Limited {
+    private {
+        Program p;
+    }
+
+    constructor() {
+        SandboxManager sm();
+        sm.setWallTimeLimit(5000);
+        p = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(\"%new-style
+int sub f() {
+    Counter c(1);
+    c.waitForZero(10);
+    return 42;
+}\", \"sandboxed\");
+        # the limit is enforced while the library runs
+        printf(\"before: %d\\n\", p.callFunction(\"f\"));
+    }
+
+    destructor() {
+        try {
+            printf(\"sandboxed: %d\\n\", p.callFunction(\"f\"));
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"sandboxed: %s: %s\\n\", ex.err, ex.desc);
+        }
+    }
+}
+our Limited l = new Limited();
+", sub (string mode, int rc, string output) {
+            assertEq(0, rc, mode + ": the process succeeds; output: " + output);
+            assertRegex("before: 42", output, mode + ": the call succeeds while the library runs");
+            assertRegex("sandboxed: SANDBOX-ERROR: .*wall time limit of 5000 ms cannot be enforced", output,
+                mode + ": the call fails closed when the library is cleaned up");
+        });
     }
 
     private staticProgramExitStatusTest() {

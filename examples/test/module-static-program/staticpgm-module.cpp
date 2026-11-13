@@ -33,7 +33,11 @@
 
 #include <qore/Qore.h>
 
+#include <cstdlib>
+#include <fstream>
 #include <memory>
+#include <sstream>
+#include <string>
 
 static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void staticpgm_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -152,6 +156,8 @@ class Teardown {
         if (total < 0) {
             printf("unexpected %d\n", total);
         }
+        # the marker that program-cleanup-at-exit.qtest checks: the destructor ran to its end
+        printf("staticpgmcode: teardown complete\n");
     }
 }
 
@@ -168,7 +174,19 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     qph.reset(new QoreProgramHelper(PO_NEW_STYLE, module_xsink));
     (*qph)->setScriptPath("staticpgm module global Program context");
 #ifdef STATICPGM_CODE
-    (*qph)->parse(staticpgm_code, "staticpgmcode", &xsink, &xsink);
+    // a test can give other code in a file: QORE_STATICPGM_CODE_FILE (see program-cleanup-at-exit.qtest)
+    std::string code = staticpgm_code;
+    if (const char* file = getenv("QORE_STATICPGM_CODE_FILE")) {
+        std::ifstream in(file);
+        if (!in) {
+            xsink.raiseException("STATICPGM-ERROR", "cannot read QORE_STATICPGM_CODE_FILE '%s'", file);
+            return;
+        }
+        std::ostringstream str;
+        str << in.rdbuf();
+        code = str.str();
+    }
+    (*qph)->parse(code.c_str(), "staticpgmcode", &xsink, &xsink);
     if (!xsink) {
         (*qph)->run(&xsink);
     }
