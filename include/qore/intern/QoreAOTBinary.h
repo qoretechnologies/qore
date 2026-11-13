@@ -459,6 +459,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      An expression that is a find expression is written natively (AOTExprKind::FIND, with its node form EN_FIND),
 //!      so that a find expression can be nested in the expressions of another one (#5974); the earlier formats have no
 //!      such expression, and a reader of them refuses the kind.
+//!      An init function descriptor can have the target type MODULE_DEL (7): the compiled body of the module's \c del
+//!      closure, which is loaded with the module but run when the module is unloaded (#6015); a reader of the earlier
+//!      formats refuses the type, and a module has none without a \c del closure.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -2936,6 +2939,9 @@ struct AOTCompiledInitFunc {
                               //!< resolve globals / constants it references.
         GLOBAL_VAR = 5,       //!< namespace-level global or thread-local variable
         GLOBAL_VAR_CONSTRUCT = 6, //!< initializer expression constructs and stores the value
+        MODULE_DEL = 7,       //!< module del closure body (side-effects only): loaded with the module's own Program
+                              //!< like MODULE_INIT but NOT run at load; qore_aot_module_delete() runs it when the
+                              //!< module is unloaded, as the source module runs its del closure
     };
     TargetType target_type = NS_CONSTANT;
     std::string ns_path;            //!< namespace path or class path

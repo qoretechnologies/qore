@@ -1690,7 +1690,8 @@
 
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
-    - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure (issue #6015)
+    - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled
+      module now runs the closure when it is unloaded, as the source module does (issue #6015)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash

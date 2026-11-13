@@ -225,7 +225,8 @@ static bool isAOTInitFunctionName(const char* name) {
     return name && (!strncmp(name, "__const_init::", 14)
         || !strncmp(name, "__svar_init::", 13)
         || !strncmp(name, "__gvar_init::", 13)
-        || !strncmp(name, "__module_init::", 15));
+        || !strncmp(name, "__module_init::", 15)
+        || !strncmp(name, "__module_del::", 14));
 }
 
 static std::string describeAOTClassRef(const char* class_ref);
@@ -11806,6 +11807,11 @@ struct AotModuleState {
     };
     ShadowInitState shadow_init_state = SHADOW_NOT_STARTED;
     int shadow_init_tid = 0;     //!< owner thread while SHADOW_IN_PROGRESS
+    //! The compiled body of the module's \c del closure (a MODULE_DEL init function), built by the pass that
+    //! populates the shadow (the module's own Program, whose locals it owns), run by qore_aot_module_delete() when
+    //! the module is unloaded (#6015)
+    std::unique_ptr<QoreAOTContext> del_ctx;
+    AotFunctionPtr del_fn = nullptr;
 };
 
 //! Map from module name to per-module state
@@ -12476,6 +12482,10 @@ static bool aotInitDescriptorNeedsExecution(const AOTInitFuncDescriptor& desc, Q
         }
 
         case AOTCompiledInitFunc::MODULE_INIT:
+            return write_shadow;
+
+        // the context of the del closure is built, but the closure not run, by the pass that populates the shadow
+        case AOTCompiledInitFunc::MODULE_DEL:
             return write_shadow;
 
         case AOTCompiledInitFunc::OUTLINED_HELPER:
@@ -14043,17 +14053,82 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init_v2(QoreNamespace* root_ns, Qor
     qore_aot_module_ns_init_impl(root_ns, qore_ns, xsink);
 }
 
+//! Runs the compiled \c del closure of an AOT module in the module's own Program, as QoreUserModule::runDelCallback()
+//! runs the del closure of a source module
+static void runAOTModuleDelClosure(const std::string& mod_name, const std::string& mod_path, QoreProgram* pgm,
+        QoreAOTContext* ctx, AotFunctionPtr fn_ptr) {
+    assert(ctx && fn_ptr);
+    ExceptionSink xsink;
+    if (pgm) {
+        ProgramThreadCountContextHelper tch(&xsink, pgm, true);
+        if (!xsink) {
+            // the unloading Program does not run the del closure on its own behalf: it runs with the module's
+            // options, with the module's name and path as its context, as the init closure does
+            QoreModuleLifecycleBarrierHelper lifecycle_barrier;
+            LoadTimeParseOptionsHelper lifecycle_po(pgm->getParseOptions());
+            struct ModuleNamePathContextHelper {
+                const char* old_name;
+                const char* old_path;
+
+                ModuleNamePathContextHelper(const char* name, const char* path)
+                        : old_name(set_module_context_name(name)), old_path(set_module_context_path(path)) {
+                }
+
+                ~ModuleNamePathContextHelper() {
+                    set_module_context_path(old_path);
+                    set_module_context_name(old_name);
+                }
+            };
+            ModuleNamePathContextHelper module_ctx(mod_name.c_str(), mod_path.empty() ? nullptr : mod_path.c_str());
+            qore_ns_private* mod_ns = findNamespaceByPath(
+                qore_ns_private::get(*qore_program_private::get(*pgm)->RootNS), mod_name);
+            std::unique_ptr<QoreParseClassHelper> parse_ctx_helper;
+            if (mod_ns) {
+                parse_ctx_helper = std::make_unique<QoreParseClassHelper>(nullptr, mod_ns);
+            }
+            // the compiled body expects its body locals to be instantiated, as a function called by evalTiered
+            // expects them; instantiate them around the call as for the init closure
+            int instantiated = 0;
+            for (LocalVar* lv : ctx->all_body_locals) {
+                if (lv) {
+                    lv->instantiate(QoreParseOptions());
+                    ++instantiated;
+                }
+            }
+            try {
+                fn_ptr(ctx, &xsink);
+            } catch (const QoreJITException&) {
+                // xsink is already populated at the raise site
+            }
+            for (int k = instantiated - 1; k >= 0; --k) {
+                LocalVar* lv = ctx->all_body_locals[k];
+                if (lv) {
+                    lv->uninstantiate(&xsink);
+                }
+            }
+        }
+    }
+    delete ctx;
+    xsink.handleExceptions();
+}
+
 extern "C" DLLEXPORT void qore_aot_module_delete() {
     // Use the module context name to clean up only the module being unloaded
     // (set by QoreBuiltinModule::~QoreBuiltinModule via QoreModuleNameContextHelper)
     const char* mod_name = get_module_context_name();
     QoreProgram* pgm = nullptr;
     if (mod_name) {
+        std::unique_ptr<QoreAOTContext> del_ctx;
+        AotFunctionPtr del_fn = nullptr;
+        std::string del_path;
         {
             AutoLocker aot_state_al(get_aot_module_state_lock());
             auto it = aot_module_map.find(mod_name);
             if (it != aot_module_map.end()) {
                 pgm = it->second.pgm;
+                del_ctx = std::move(it->second.del_ctx);
+                del_fn = it->second.del_fn;
+                del_path = it->second.path;
                 aot_module_map.erase(it);
             }
             // Clear per-module state if it matches the module being deleted
@@ -14064,6 +14139,10 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
                 aot_module_funcs = nullptr;
                 aot_module_num_funcs = 0;
             }
+        }
+        // the module's del closure runs before its Program is torn down
+        if (del_ctx) {
+            runAOTModuleDelClosure(mod_name, del_path, pgm, del_ctx.release(), del_fn);
         }
         if (pgm) {
             // Clear namespace data before deref to release cross-program
@@ -14077,11 +14156,23 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
     } else {
         // Fallback: no module context — clean up all (shutdown path)
         std::vector<QoreProgram*> programs;
+        struct DelInfo {
+            std::string name;
+            std::string path;
+            QoreProgram* pgm;
+            std::unique_ptr<QoreAOTContext> ctx;
+            AotFunctionPtr fn;
+        };
+        std::vector<DelInfo> dels;
         {
             AutoLocker aot_state_al(get_aot_module_state_lock());
             for (auto& entry : aot_module_map) {
                 if (entry.second.pgm) {
                     programs.push_back(entry.second.pgm);
+                }
+                if (entry.second.del_ctx) {
+                    dels.push_back({entry.first, entry.second.path, entry.second.pgm,
+                        std::move(entry.second.del_ctx), entry.second.del_fn});
                 }
             }
             aot_module_map.clear();
@@ -14090,6 +14181,10 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
             aot_module_path.clear();
             aot_module_funcs = nullptr;
             aot_module_num_funcs = 0;
+        }
+        // the del closures run before the Programs of the modules are torn down
+        for (auto& d : dels) {
+            runAOTModuleDelClosure(d.name, d.path, d.pgm, d.ctx.release(), d.fn);
         }
         for (QoreProgram* p : programs) {
             p->waitForTerminationAndDeref(nullptr);
@@ -15265,6 +15360,7 @@ static int executeInitFunctions(
             }
 
             case AOTCompiledInitFunc::OUTLINED_HELPER:
+            case AOTCompiledInitFunc::MODULE_DEL:
                 return nullptr;
         }
         return nullptr;
@@ -15402,6 +15498,11 @@ static int executeInitFunctions(
             continue;
         }
         const AOTInitFuncDescriptor& desc = descriptors[di];
+        // the module's del closure runs when the module is unloaded (see qore_aot_module_delete())
+        if (desc.target_type == AOTCompiledInitFunc::MODULE_DEL) {
+            desc_done[di] = true;
+            continue;
+        }
         bool is_module_init = (desc.target_type == AOTCompiledInitFunc::MODULE_INIT);
         if (is_module_init != run_module_init) {
             continue;
@@ -15826,6 +15927,12 @@ static int executeInitFunctions(
                 break;
             }
 
+            case AOTCompiledInitFunc::MODULE_DEL: {
+                // never reached: a del closure is skipped above and run when the module is unloaded
+                result.discard(&xsink);
+                break;
+            }
+
             case AOTCompiledInitFunc::OUTLINED_HELPER: {
                 // Outlined helpers are LLVM-lowered and linked into the module
                 // but called BY their outer init function — not run at module
@@ -15932,6 +16039,28 @@ static int executeInitFunctions(
         // process); every later per-Program pass owns them here and loses them at teardown.
         if (retained_ctx && (!shadow_pgm || !write_shadow)) {
             aotAdoptScriptPendingConstantContext(pgm, rec);
+        }
+    }
+
+    // The context of the module's del closure is built in the module's own Program by the pass that populates the
+    // shadow (see AotModuleState::del_ctx), so only that pass keeps it; the context of any other import is freed
+    // with the others, as the closure runs only once, when the module is unloaded (#6015)
+    if (write_shadow && shadow_pgm && mod_name) {
+        for (size_t di = 0; di < descriptors.size(); ++di) {
+            if (descriptors[di].target_type != AOTCompiledInitFunc::MODULE_DEL) {
+                continue;
+            }
+            auto it = exec_map.find(descriptors[di].name);
+            if (it == exec_map.end() || !it->second->ctx || !it->second->fn_ptr) {
+                continue;
+            }
+            AutoLocker aot_state_al(get_aot_module_state_lock());
+            auto sit = aot_module_map.find(mod_name);
+            if (sit != aot_module_map.end() && !sit->second.del_ctx) {
+                sit->second.del_ctx.reset(it->second->ctx);
+                sit->second.del_fn = it->second->fn_ptr;
+                deferred_contexts.insert(it->second->ctx);
+            }
         }
     }
 

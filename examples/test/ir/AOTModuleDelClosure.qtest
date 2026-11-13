@@ -12,9 +12,13 @@
 
 %exec-class AOTModuleDelClosureTest
 
-#! qore#6015: qcc --module compiled a module whose header has a del closure into a crash
+#! qore#6015: qcc --module compiled a module whose header has a del closure into a crash, and the compiled module did
+#! not run the closure when it was unloaded
 /** The closure object is released with the module definition context, before the AOT compile has collected the
     locations of the statements that the Program registered, which the released statements left dangling.
+
+    A source module runs its del closure when it is unloaded (at the latest at the end of the process); the compiled
+    module runs its closure as a MODULE_DEL init function from qore_aot_module_delete().
 */
 class AOTModuleDelClosureTest inherits QUnit::Test {
     private {
@@ -32,6 +36,8 @@ class AOTModuleDelClosureTest inherits QUnit::Test {
         addTestCase("a module with a del closure", \testDelClosure());
         addTestCase("a module with an empty del closure", \testEmptyDelClosure());
         addTestCase("a module with init and del closures", \testInitAndDelClosures());
+        addTestCase("the del closure runs when the module is unloaded", \testDelRuns());
+        addTestCase("the del closure of a module that is imported by two programs runs once", \testDelRunsOnce());
 
         set_return_value(main());
     }
@@ -87,6 +93,90 @@ printf(\"value=%%d\\n\", %s::value());
             assertEq("value=42\n", run(sprintf("%s %s -b %s", env(), qore_bin, probe)),
                 name + " " + opt + " loads and runs");
         }
+    }
+
+    #! the module whose del closure appends a line to the given file
+    private string markerModuleSource(string name, string marker, string extra = "") {
+        return sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"del closure probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    domains = \"FILESYSTEM\";
+%s    del = sub () {
+        File f();
+        f.open2(%y, O_WRONLY | O_CREAT | O_APPEND);
+        f.write(\"del\\n\");
+    };
+}
+public namespace %s {
+public int sub value() { return 42; }
+}
+", name, extra, marker, name);
+    }
+
+    #! runs the probe program with the marker file; returns the output and the content of the marker file
+    private list<string> runWithMarker(string dir, string name, string probe_body) {
+        string marker = dir + "/marker.txt";
+        unlink(marker);
+        string probe = dir + "/probe.qr";
+        write(probe, sprintf("%%modern
+%%no-child-restrictions
+%%append-module-path %s/mods
+%%requires %s
+%s
+", dir, name, probe_body));
+        string out = run(sprintf("%s %s -b %s", env(), qore_bin, probe));
+        return (out, is_file(marker) ? ReadOnlyFile::readTextFile(marker) : "");
+    }
+
+    #! the module as a source module and compiled with each optimization level
+    private checkMarker(string name, string probe_body, string expected_marker) {
+        TmpDir tmp("qore-aot-del-run-");
+        string dir = tmp.path;
+        mkdir(dir + "/mods");
+        string marker = dir + "/marker.txt";
+        write(dir + "/" + name + ".qm", markerModuleSource(name, marker));
+
+        # the source module: the reference
+        string src_dir = dir + "/srcmods";
+        mkdir(src_dir);
+        write(src_dir + "/" + name + ".qm", markerModuleSource(name, marker));
+        string probe = dir + "/probe-src.qr";
+        write(probe, sprintf("%%modern
+%%no-child-restrictions
+%%append-module-path %s
+%%requires %s
+%s
+", src_dir, name, probe_body));
+        unlink(marker);
+        string out = run(sprintf("%s %s -b %s", env(), qore_bin, probe));
+        assertEq(expected_marker, is_file(marker) ? ReadOnlyFile::readTextFile(marker) : "",
+            "source module del closure runs: " + out);
+
+        foreach string opt in ("-O0", "-O3") {
+            string qmod = dir + "/mods/" + name + ".qmod";
+            unlink(qmod);
+            string cout = run(sprintf("%s %s --module %s --output %s %s/%s.qm", env(), qcc_bin, opt, qmod, dir, name));
+            assertTrue(is_file(qmod), name + " compiled with " + opt + ": " + cout);
+            list<string> result = runWithMarker(dir, name, probe_body);
+            assertEq(expected_marker, result[1], name + " " + opt + " del closure runs like the source module's: "
+                + result[0]);
+        }
+    }
+
+    testDelRuns() {
+        checkMarker("AotDelMarker", "printf(\"value=%d\\n\", AotDelMarker::value());", "del\n");
+    }
+
+    #! a module that two Programs import: the closure runs once, when the module is unloaded
+    testDelRunsOnce() {
+        checkMarker("AotDelOnce", "
+Program p();
+p.parse(\"%requires AotDelOnce\\nint sub f() { return AotDelOnce::value(); }\", \"p\");
+printf(\"value=%d %d\\n\", AotDelOnce::value(), p.callFunction(\"f\"));
+", "del\n");
     }
 
     testDelClosure() {

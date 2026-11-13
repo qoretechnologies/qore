@@ -5142,7 +5142,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledInitFunc>& compiled_init_funcs,
         const AOTConstantReverseMap* const_reverse_map,
-        std::string& error, const char* module_path = nullptr) {
+        std::string& error, const char* module_path = nullptr, bool is_del = false) {
     const QoreFunction* source_qf = nullptr;
     UserVariantBase* uvb = getModuleInitUserVariant(init_c, mod_name, module_path, source_qf, error);
     if (!uvb) {
@@ -5152,7 +5152,9 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
         return false;
     }
 
-    std::string init_name = std::string("__module_init::") + mod_name;
+    // the module's \c del closure is compiled the same way; it is loaded with the module and run by
+    // qore_aot_module_delete() (#6015)
+    std::string init_name = std::string(is_del ? "__module_del::" : "__module_init::") + mod_name;
 
     QoreIRFunction* ir_func = nullptr;
     std::string lower_error;
@@ -5214,7 +5216,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
     cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
     cif.feature_flags = scanIRFeatureFlags(*ir_func);
-    cif.target_type = AOTCompiledInitFunc::MODULE_INIT;
+    cif.target_type = is_del ? AOTCompiledInitFunc::MODULE_DEL : AOTCompiledInitFunc::MODULE_INIT;
     cif.ns_path = mod_name;
     cif.item_name = module_path ? module_path : "";
 
@@ -26615,6 +26617,17 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         }
     }
 
+    // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+    if (del_c_holder) {
+        std::string del_error;
+        if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+            *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+            &const_reverse_map, del_error, nullptr, true)) {
+            error = del_error;
+            return false;
+        }
+    }
+
     reportAOTCompileStats("module compilation", compiled_count, total_funcs,
         failed_count, compiled_funcs, target_triple);
 
@@ -27113,6 +27126,17 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
                 &const_reverse_map, init_error)) {
                 error = init_error;
+                return false;
+            }
+        }
+
+        // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+        if (del_c_holder) {
+            std::string del_error;
+            if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map, del_error, nullptr, true)) {
+                error = del_error;
                 return false;
             }
         }
@@ -31516,6 +31540,17 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             }
         }
 
+        // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+        if (del_c_holder) {
+            std::string del_error;
+            if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map, del_error, nullptr, true)) {
+                error = del_error;
+                return false;
+            }
+        }
+
         reportAOTCompileStats("aggregator (metadata-only)",
             compiled_count, total_funcs, failed_count, compiled_funcs, target_triple, true);
 
@@ -32061,6 +32096,17 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
                 &const_reverse_map, init_error)) {
                 error = init_error;
+                return false;
+            }
+        }
+
+        // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+        if (del_c_holder) {
+            std::string del_error;
+            if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map, del_error, nullptr, true)) {
+                error = del_error;
                 return false;
             }
         }
