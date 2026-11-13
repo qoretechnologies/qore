@@ -10,20 +10,26 @@
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
+%include exec-mode-output-test.qc
+
 %exec-class ExceptionExitHandlerLocalUpdateTest
 
-#! Test: a handler that assigns to or removes a local of a function left by an exception
-/** The value that a handler of a function left by an exception replaces or removes is released where the handler
-    does so, and the value it assigns is released with the frame's locals, as with the AST interpreter.  The local is
-    referenced by the handler, so it is never IR-only (QoreIRFunction::computeIROnlyLocals()); the test covers the
-    semantics of assignment and remove in handlers, not the release of IR-only locals (see
-    ExceptionExitHandlerLocalOrder.qtest).  The script runs with the AST interpreter, with <tt>--exec-mode=ir</tt> and
-    on the IR tier of tiered execution; JIT execution, native code with tiered execution and qcc executables are left
-    out because of qore#5942 and should be added back once it is fixed.
+#! Regression test: a handler that assigns to or removes a local of a block left by an exception (qore#5942)
+/** The value that a handler of a block left by an exception replaces or removes is released where the handler does
+    so, and the value it assigns is released with the frame's locals, as with the AST interpreter.  Native code runs
+    such handlers out of line, and gave them a counted copy of each local in a slot cache while its own cache of the
+    local kept another reference, so that the handler's assignment or remove released only a copy and the old value
+    was destroyed after the other locals of the frame (or after the catch block of a try block left by the
+    exception): the native code now publishes the locals to the runtime stack, where the handlers read and assign
+    them, and releases its own references to them before the handlers run, and reloads its caches afterwards
+    (QoreIRToLLVM::publishLocalsForHandlers()).  The local is referenced by the handler, so it is never IR-only
+    (QoreIRFunction::computeIROnlyLocals()).  The script runs every case twice, in every execution mode (with
+    native compilation at the first call, so that JIT and tiered execution run native code), on the IR tier of
+    tiered execution and as qcc executables compiled at -O0 and -O3 (see ExecModeOutputTest).
 */
-class ExceptionExitHandlerLocalUpdateTest inherits QUnit::Test {
+class ExceptionExitHandlerLocalUpdateTest inherits ExecModeOutputTest {
     public {
-        #! the script
+        #! the script run in every execution mode
         const Script = '%modern
 class T {
     public { string n; }
@@ -46,9 +52,48 @@ sub removeLocal() {
     printf("%s%s\n", b.n, a.n);
     throw "R";
 }
+# a handler that assigns to a local twice, and untyped locals
+sub assignTwice() {
+    auto a = new T("ta");
+    on_exit {
+        printf("on_exit twice\n");
+        a = new T("ta2");
+        printf("after first\n");
+        a = new T("ta3");
+        printf("after second\n");
+    }
+    auto b = new T("tb");
+    printf("%s%s\n", b.n, a.n);
+    throw "T";
+}
+# the handlers of a try block left by an exception that the function catches
+string sub caught() {
+    T a("ca");
+    T r("cr");
+    try {
+        on_exit { printf("block on_exit assign\n"); a = new T("ca2"); printf("after block assign\n"); }
+        on_error { printf("block on_error remove\n"); remove r; printf("after block remove\n"); }
+        throw "C";
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s\n", ex.err);
+    }
+    printf("after catch: %s %y\n", a.n, r ? r.n : NOTHING);
+    return a.n;
+}
+# a handler that reads the local after the assignment of another handler
+sub readAfter() {
+    T a("ea");
+    on_exit { printf("on_exit reads %s\n", a.n); }
+    on_error { printf("on_error assign\n"); a = new T("ea2"); printf("after assign\n"); }
+    throw "E";
+}
 for (int i = 0; i < 2; ++i) {
     try { assign(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
     try { removeLocal(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    try { assignTwice(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    printf("returned %s\n", caught());
+    try { readAfter(); } catch (hash<ExceptionInfo> ex) { printf("caught %s\n", ex.err); }
+    printf("--\n");
 }
 ';
 
@@ -67,38 +112,38 @@ for (int i = 0; i < 2; ++i) {
             "after remove",
             "dtor rb",
             "caught R",
+            "tbta",
+            "on_exit twice",
+            "dtor ta",
+            "after first",
+            "dtor ta2",
+            "after second",
+            "dtor tb",
+            "dtor ta3",
+            "caught T",
+            "block on_error remove",
+            "dtor cr",
+            "after block remove",
+            "block on_exit assign",
+            "dtor ca",
+            "after block assign",
+            "caught C",
+            "after catch: ca2 null",
+            "dtor ca2",
+            "returned ca2",
+            "on_error assign",
+            "dtor ea",
+            "after assign",
+            "on_exit reads ea2",
+            "dtor ea2",
+            "caught E",
+            "--",
         );
     }
 
-    private {
-        string qore_bin;
-        string libqore_dir;
-    }
-
-    constructor() : QUnit::Test("ExceptionExitHandlerLocalUpdate", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        addTestCase("the AST interpreter, the IR interpreter and the IR tier release the locals that handlers update "
-            "as the AST interpreter does", \testModes());
-        set_return_value(main());
-    }
-
-    testModes() {
-        TmpDir tmp("qore-exceptionexithandlerlocalupdate-");
-        string path = tmp.path + DirSep + "update.qr";
-        File f();
-        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
-        f.write(Script);
-        f.close();
-
-        string expected = (map $1 + "\n", ExpectedOnce + ExpectedOnce).join("");
-        hash<string, string> actual();
-        foreach string mode in ("ast", "ir", ExecModeHarness::IRTierName) {
-            bool ir_tier = mode == ExecModeHarness::IRTierName;
-            string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
-                libqore_dir, libqore_dir, qore_bin, ir_tier ? "tiered" : mode, path);
-            actual{mode} = ir_tier ? ExecModeHarness::run_ir_tier(cmd) : ExecModeHarness::run(cmd);
-        }
-        assertEq({"ast": expected, "ir": expected, ExecModeHarness::IRTierName: expected}, actual);
+    constructor() : ExecModeOutputTest("ExceptionExitHandlerLocalUpdate", Script,
+            (map $1 + "\n", ExpectedOnce + ExpectedOnce).join(""),
+            "releases the value that a handler of a block left by an exception replaces or removes where the "
+            "handler does so", NOTHING, NOTHING, ("-O0", "-O3")) {
     }
 }
