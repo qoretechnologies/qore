@@ -834,6 +834,9 @@ private:
     std::vector<FunctionalSourceCapture> functional_source_captures;
     //! Releases the temporary that a functional operator's source gave once the operator has run (see the definition)
     class FunctionalSourceRelease;
+    //! returns true if the source of the functional operator being lowered is released after the operator (a
+    //! temporary or a plain read of a local, see FunctionalSourceRelease)
+    DLLLOCAL bool functionalSourceReleased() const;
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
