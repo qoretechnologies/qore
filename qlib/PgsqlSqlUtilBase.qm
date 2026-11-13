@@ -445,6 +445,9 @@ $function$
       another unique key now raises an exception instead of being skipped
     - fixed @ref SqlUtil::AbstractTable::updatePhysicalPlacement() "updatePhysicalPlacement()" starting the
       transaction again when it is called in an open transaction, which made PostgreSQL log a warning for each call
+    - with PostgreSQL before 9.5, an insert-first or insert-only upsert of a row that conflicts with a unique key
+      other than the upsert key raises the conflict instead of dropping the row (see
+      @ref sqlutilv3_11_0 "SqlUtil v3.11.0")
 
     @section pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver

@@ -482,6 +482,16 @@ module SqlUtil {
       divergent tables; tables are processed in foreign-key dependency order
     - fixed the foreign constraint DDL of Oracle, MySQL, SQL Server, Firebird and SQLite to keep quoted and renamed
       column names on both sides of the constraint
+    - fixed the @ref SqlUtil::AbstractTable::UpsertInsertFirst "UpsertInsertFirst" and
+      @ref SqlUtil::AbstractTable::UpsertInsertOnly "UpsertInsertOnly" upsert strategies, which took a conflict
+      with a unique key other than the upsert key for an existing row: the row was dropped without an error and
+      reported as verified or unchanged.  Such a conflict now raises the database's exception, as with the other
+      strategies, and no other row is changed.  This applies to databases without a native merge, such as SQLite,
+      MySQL and Firebird, and to PostgreSQL before 9.5
+    - fixed an @ref SqlUtil::AbstractTable::UpsertInsertFirst "UpsertInsertFirst" upsert of a row whose columns
+      are all upsert key columns, which raised an SQL error when the row existed
+    - fixed @ref SqlUtil::AbstractTable::UpsertAuto "UpsertAuto", which inserted first into a table with rows and
+      updated first in an empty table, the opposite of what it is documented to do
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
