@@ -1657,8 +1657,35 @@ private:
     DLLLOCAL ~QoreThreadEntryHandlers() = default;
 };
 
+//! A compiled del closure of a local module that a compiled script embeds (qcc -c, qore#6015)
+/** Held by the script's Program, which runs it when the Program is cleared, while the data of the Program exists, as
+    the module manager runs the del closure of a source module that a script loads
+*/
+class AOTScriptDelClosure {
+public:
+    DLLLOCAL virtual ~AOTScriptDelClosure() = default;
+
+    //! runs the closure once; exceptions are handled
+    DLLLOCAL virtual void run() = 0;
+};
+
 class qore_program_private : public qore_program_private_base {
 public:
+    //! the del closures of the local modules that a compiled script embeds, in the order that the compiler gave them
+    /** A module comes before the modules that it requires, as the closure of a module can use those (see qore#6015)
+    */
+    std::vector<std::unique_ptr<AOTScriptDelClosure>> aot_script_dels;
+
+    //! runs the del closures of the embedded local modules in their order, once
+    DLLLOCAL void runAOTScriptDelClosures() {
+        // a closure that runs can end up registering no other
+        std::vector<std::unique_ptr<AOTScriptDelClosure>> dels;
+        dels.swap(aot_script_dels);
+        for (auto& i : dels) {
+            i->run();
+        }
+    }
+
     //! set when the exit hooks of the Program have started to run; guarded by the exit hook registry's lock
     /** No hook can be registered for the Program afterwards (see qore_register_exit_hook())
     */

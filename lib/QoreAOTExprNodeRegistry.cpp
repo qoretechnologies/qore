@@ -263,7 +263,7 @@ const QoreAOTExprNodeKindInfo AOT_EXPR_NODE_KIND_REGISTRY[256] = {
     {"EN_STREAMING", 167, true, read_node_EN_STREAMING, "Streaming operator"},
 
     // [168-255] Undefined (all remaining entries)
-    {nullptr, 168, false, nullptr, nullptr}, {nullptr, 169, false, nullptr, nullptr},
+    {"EN_FIND", 168, true, read_node_EN_FIND, "Find expression"}, {nullptr, 169, false, nullptr, nullptr},
     {nullptr, 170, false, nullptr, nullptr}, {nullptr, 171, false, nullptr, nullptr},
     {nullptr, 172, false, nullptr, nullptr}, {nullptr, 173, false, nullptr, nullptr},
     {nullptr, 174, false, nullptr, nullptr}, {nullptr, 175, false, nullptr, nullptr},
