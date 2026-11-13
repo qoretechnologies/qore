@@ -1731,7 +1731,12 @@ int FunctionCallNode::parseInitFinalizedCall(QoreValue& val, QoreParseContext& p
     if (runtime_arg_names) {
         // the call is replaced with one of the class of named calls resolved at run time; this node is released
         assert(val.getInternalNode() == this);
-        val = makeRuntimeNamed(this);
+        FunctionCallNode* call = makeRuntimeNamed(this);
+        val = call;
+        // the replacement is parse-initialized with this call's analysis (its known type, for one), which
+        // ParseNode::parseInit() records only on the node that it was called on: code generation reads it from the
+        // node that it compiles, and the replacement is never parse-initialized again
+        call->setParseAnalysis(parse_context.analysis);
     }
     return err;
 }
