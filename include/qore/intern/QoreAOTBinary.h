@@ -456,6 +456,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      is the index in the Program's top-level local list and <name> the name of the variable; every other
 //!      LOCAL_VARREF string is the decimal index of a local slot.  A reader that does not know it reads the string as
 //!      the slot 0 (#5868).
+//!      An expression that is a find expression is written natively (AOTExprKind::FIND, with its node form EN_FIND),
+//!      so that a find expression can be nested in the expressions of another one (#5974); the earlier formats have no
+//!      such expression, and a reader of them refuses the kind.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -485,6 +488,8 @@ constexpr uint8_t QORE_AOT_CONST_FLAG_EXPLICIT_TYPE = 0x02;
 constexpr uint16_t QORE_AOT_DECLARED_DOMAIN_VERSION = 33;
 //! First format version whose LOCAL_VARREF expressions of parameter defaults can name a top-level local (see v34 above).
 constexpr uint16_t QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION = 34;
+//! First format version with native find expressions (see v34 above).
+constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
 constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION;
@@ -2374,6 +2379,8 @@ enum class AOTExprKind : uint8_t {
     REGEX_SUBST        = 125,
     //! transliteration (=~ tr///): source(stringref) + target(stringref) + lvalue(AOTExprKind)
     TRANSLIT           = 126,
+    //! Find expression (v34): mode byte (FindNode::Mode) + result expression + find-in expression + where expression
+    FIND               = 127,
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -2533,6 +2540,7 @@ enum class AOTExprNodeKind : uint8_t {
     EN_FOLDR         = 165, //!< 2 children: [accumulator_expr, source]
     EN_ITERATE       = 166, //!< 1 child: [source]
     EN_STREAMING     = 167, //!< u8 kind; 2 children: [predicate_or_count, source]
+    EN_FIND          = 168, //!< u8 mode; 3 children: [result_expr, find_expr, where_expr]
 };
 
 //! AOT context local slot flag: the slot is a Program top-level local (from QORE_AOT_LOCAL_BINDING_VERSION)

@@ -1995,6 +1995,32 @@ static QoreValue read_node_EN_ITERATE(AOTExprNodeReadCtx& ctx) {
     return QoreValue(new QoreIterateOperatorNode(&loc_builtin, source));
 }
 
+static QoreValue read_node_EN_FIND(AOTExprNodeReadCtx& ctx) {
+    uint8_t mode_byte = readU8(ctx.ptr, ctx.end);
+    uint16_t num_children = readU16(ctx.ptr, ctx.end);
+    QoreValue operands[3];
+    // the children are read (also when the node is invalid) so that the stream stays aligned for the error
+    for (unsigned i = 0; i < num_children; ++i) {
+        QoreValue child = ctx.recurse(ctx);
+        if (i < 3) {
+            operands[i] = child;
+        } else {
+            child.discard(nullptr);
+        }
+    }
+    if (num_children != 3 || mode_byte > static_cast<uint8_t>(FindNode::One) || ctx.failed) {
+        printd(0, "AOT EXPR_TREE: invalid find expression (mode %d, %d children)\n", (int)mode_byte,
+            (int)num_children);
+        for (auto& v : operands) {
+            v.discard(nullptr);
+        }
+        ctx.failed = true;
+        return QoreValue();
+    }
+    return QoreValue(new FindNode(&loc_builtin, operands[0], operands[1], operands[2],
+        static_cast<FindNode::Mode>(mode_byte)));
+}
+
 static QoreValue read_node_EN_STREAMING(AOTExprNodeReadCtx& ctx) {
     auto kind = static_cast<QoreStreamingOperatorNode::Kind>(readU8(ctx.ptr, ctx.end));
     uint16_t num_children = readU16(ctx.ptr, ctx.end);

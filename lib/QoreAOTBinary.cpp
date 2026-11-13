@@ -104,6 +104,7 @@
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreStreamingOperatorNode.h"
+#include "qore/intern/FindNode.h"
 #include "qore/intern/QoreElementsOperatorNode.h"
 #include "qore/intern/QoreDeleteOperatorNode.h"
 #include "qore/intern/QoreRemoveOperatorNode.h"
@@ -13718,6 +13719,13 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::ITERATE));
         return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
             parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const FindNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::FIND));
+        writer.writeU8(static_cast<uint8_t>(op->getMode()));
+        return classifyAndWriteExpr(writer, op->exp, parent_locals, parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->find_exp, parent_locals, parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->where, parent_locals, parent_globals, const_reverse_map);
     }
     if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STREAMING));

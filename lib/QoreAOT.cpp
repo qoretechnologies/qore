@@ -187,6 +187,7 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreStreamingOperatorNode.h"
+#include "qore/intern/FindNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
@@ -35028,6 +35029,12 @@ class ExprTreeSerializer {
         if (auto* op = dynamic_cast<const QoreIterateOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_ITERATE, op->getExp());
         }
+        if (auto* op = dynamic_cast<const FindNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FIND));
+            writeU8(static_cast<uint8_t>(op->getMode()));
+            writeU16(3);
+            return serializeValue(op->exp) && serializeValue(op->find_exp) && serializeValue(op->where);
+        }
         if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STREAMING));
             writeU8(static_cast<uint8_t>(op->getKind()));
@@ -35990,6 +35997,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (dynamic_cast<const QoreIterateOperatorNode*>(node)) {
         id.kind = AOTExprKind::ITERATE;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const FindNode*>(node)) {
+        id.kind = AOTExprKind::FIND;
         id.child_expr = v;
         return id;
     }

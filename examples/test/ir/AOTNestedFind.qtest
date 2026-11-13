@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks run the interpreter and compiled executables as child processes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTNestedFindTest
+
+#! qore#5974: a find expression nested in the result, find-in or where expression of another find expression is
+#! compiled natively, and a compiled program gives the result of the interpreter
+class AOTNestedFindTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        const Body = "%modern
+auto sub p1(auto v) { return v; }
+hash<auto> q = {\"a\": (1, 2, 3), \"b\": (\"x\", \"y\", \"z\")};
+context (q) {
+    # a find expression in the result and in the where expression of another one
+    printf(\"%y\\n\", find (find p1(%b) in q where (%a == 2)) in q where (%a == 1));
+    printf(\"%y\\n\", find %b in q where (%a == (find p1(%a) in q where (%a == 3))));
+    # the find modes, nested
+    printf(\"%y\\n\", find first (find last %b in q where (%a > 1)) in q where (%a < 3));
+    printf(\"%y\\n\", find last (find first %b in q where (%a > 1)) in q where (%a < 3));
+    printf(\"%y\\n\", find one (find one %b in q where (%a == 2)) in q where (%a == 2));
+    # three levels
+    printf(\"%y\\n\", find (find (find p1(%b) in q where (%a == 3)) in q where (%a == 2)) in q where (%a == 1));
+}
+";
+    }
+
+    constructor() : QUnit::Test("AOTNestedFindTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("nested find in the interpreter modes", \testInterpreter());
+        addTestCase("nested find in compiled executables", \testExecutables());
+        addTestCase("nested find in a .qo object", \testQoObject());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+    }
+
+    testInterpreter() {
+        TmpDir tmp("qore-aot-nested-find-");
+        string src = tmp.path + "/nested-find.qr";
+        write(src, Body);
+        string expected = run(sprintf("%s %s -b %s", env(), qore_bin, src));
+        # the result of every find is the value that the AST interpreter gives
+        # the output of the AST interpreter: one line per row of the context for each of the six statements
+        assertEq("\"y\"\n\"z\"\n\"z\"\n\"y\"\n\"y\"\n\"z\"\n\"y\"\n\"z\"\n\"z\"\n\"y\"\n\"y\"\n\"z\"\n\"y\"\n\"z\"\n\"z\"\n"
+            + "\"y\"\n\"y\"\n\"z\"\n", expected, "interpreter output");
+        assertFalse(expected.find("EXCEPTION") != -1, "no exception: " + expected);
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(expected, run(sprintf("%s %s -b --exec-mode=%s %s", env(), qore_bin, mode, src)),
+                "exec mode " + mode);
+        }
+    }
+
+    testExecutables() {
+        TmpDir tmp("qore-aot-nested-find-");
+        string src = tmp.path + "/nested-find.qr";
+        write(src, Body);
+        string expected = run(sprintf("%s %s -b %s", env(), qore_bin, src));
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + "/exe" + opt;
+            string out = run(sprintf("%s %s %s -o %s %s", env(), qcc_bin, opt, exe, src));
+            assertTrue(is_file(exe), "executable compiled with " + opt + ": " + out);
+            assertEq(expected, run(sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, exe)),
+                "executable " + opt + " matches the interpreter");
+        }
+    }
+
+    testQoObject() {
+        TmpDir tmp("qore-aot-nested-find-");
+        string src = tmp.path + "/nested-find.qr";
+        write(src, Body);
+        string expected = run(sprintf("%s %s -b %s", env(), qore_bin, src));
+        # a program linked from script objects runs only its entry function: the same code in a main()
+        string main_src = tmp.path + "/nested-find-main.qr";
+        string main_body = replace(Body, "hash<auto> q =", "int sub main() {\nhash<auto> q =") + "return 0;\n}\n";
+        write(main_src, main_body);
+        string qo_dir = tmp.path + "/qo";
+        mkdir(qo_dir);
+        string qo_out = run(sprintf("%s %s -c --output-dir=%s %s", env(), qcc_bin, qo_dir, main_src));
+        assertTrue(qo_out.find("script-context .qo") != -1, "script object emitted: " + qo_out);
+        string linked = tmp.path + "/linked";
+        string link_out = run(sprintf("%s %s -o %s %s/*.qo", env(), qcc_bin, linked, qo_dir));
+        assertTrue(is_file(linked), "linked executable compiled: " + link_out);
+        assertEq(expected, run(sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, linked)),
+            "linked .qo matches the interpreter");
+    }
+}

@@ -108,6 +108,7 @@
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreStreamingOperatorNode.h"
+#include "qore/intern/FindNode.h"
 #include "qore/intern/QoreElementsOperatorNode.h"
 #include "qore/intern/QoreDeleteOperatorNode.h"
 #include "qore/intern/QoreRemoveOperatorNode.h"
@@ -4939,6 +4940,48 @@ static QoreValue read_expr_streaming(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     return QoreValue(new QoreStreamingOperatorNode(&loc_builtin, kind, predicate, source));
+}
+
+// ============================================================================
+// FIND (127)
+// ============================================================================
+
+static bool write_expr_find(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const FindNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FIND));
+    ctx.writer.writeU8(static_cast<uint8_t>(op->getMode()));
+    return classifyAndWriteExpr(ctx.writer, op->exp, ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->find_exp, ctx.parent_locals, ctx.parent_globals,
+            ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->where, ctx.parent_locals, ctx.parent_globals,
+            ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_find(AOTExprReadCtx& ctx) {
+    uint8_t mode_byte = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (mode_byte > static_cast<uint8_t>(FindNode::One)) {
+        ctx.error = "invalid find expression mode " + std::to_string(mode_byte);
+        return QoreValue();
+    }
+    QoreValue operands[3];
+    for (unsigned i = 0; i < 3; ++i) {
+        std::string err;
+        operands[i] = readOneExpr(ctx.reader, ctx.ptr, ctx.end, err, ctx.pgm, ctx.locals, ctx.num_locals,
+            ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
+        if (!err.empty()) {
+            for (unsigned j = 0; j <= i; ++j) {
+                operands[j].discard(nullptr);
+            }
+            ctx.error = err;
+            return QoreValue();
+        }
+    }
+    return QoreValue(new FindNode(&loc_builtin, operands[0], operands[1], operands[2],
+        static_cast<FindNode::Mode>(mode_byte)));
 }
 
 // ============================================================================

@@ -181,6 +181,7 @@
 #include "qore/intern/QoreFoldlOperatorNode.h"
 #include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/QoreStreamingOperatorNode.h"
+#include "qore/intern/FindNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
@@ -5331,6 +5332,25 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreIterateOperatorNode(&loc_builtin, source)));
+                }
+                continue;
+            }
+            case AOTExprKind::FIND: {
+                uint8_t mode_byte = QoreAOTBinaryReader::readU8(ptr);
+                QoreValue operands[3];
+                std::string err;
+                for (unsigned j = 0; j < 3 && err.empty(); ++j) {
+                    operands[j] = readOneExpr(reader, ptr, end, err, pgm, ctx->locals, num_locals, ctx->globals,
+                        num_globals, local_owner_pgm);
+                }
+                if (!err.empty() || mode_byte > static_cast<uint8_t>(FindNode::One)) {
+                    for (auto& v : operands) {
+                        v.discard(nullptr);
+                    }
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(new FindNode(&loc_builtin, operands[0], operands[1],
+                        operands[2], static_cast<FindNode::Mode>(mode_byte))));
                 }
                 continue;
             }
