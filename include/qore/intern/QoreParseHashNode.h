@@ -44,6 +44,11 @@ DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, Exceptio
 
 class QoreParseHashNode : public ParseNode {
 public:
+    DLLLOCAL static QoreParseHashNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        bool curly = false);
+    //! Finishes an unparsed literal after its opening delimiter's policy is known.
+    DLLLOCAL static QoreParseHashNode* bindSource(QoreParseHashNode* node, LexicalSemanticPolicy policy);
+    DLLLOCAL static QoreParseHashNode* copyBackground(const QoreParseHashNode& old, ExceptionSink* xsink);
     typedef std::vector<QoreValue> nvec_t;
     typedef std::vector<const QoreTypeInfo*> tvec_t;
 
@@ -157,6 +162,8 @@ public:
     }
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     //! Releases the keys and values with the given exception sink; see derefImpl()
     DLLLOCAL void releaseEntries(ExceptionSink* xsink) {
         // a background copy that fails can hold fewer values than keys, as the keys are copied first

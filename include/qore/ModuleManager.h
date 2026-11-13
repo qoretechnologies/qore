@@ -53,9 +53,12 @@
     refused with an API mismatch error instead of failing at run time; see design/module-api-version.md.
 
     @since %Qore 3.0: 2.1, which covers all public ABI changes made during %Qore 3.0 development after module API 2.0
-    was introduced; modules built with the 2.0 headers are refused
+    was introduced. The current minor additionally includes the source-compatible callback invocation slots
+    for lexical semantics in ResolvedCallReferenceNode; only the current API is accepted, so older modules
+    must be rebuilt
 */
-#define QORE_MODULE_API_MINOR 1
+// Module API 2.2 includes the lexical callback entry slots.
+#define QORE_MODULE_API_MINOR 2
 
 #define QORE_MODULE_COMPAT_API_MAJOR QORE_MODULE_API_MAJOR  //!< the major number of the earliest recommended Qore module API
 #define QORE_MODULE_COMPAT_API_MINOR QORE_MODULE_API_MINOR  //!< the minor number of the earliest recommended Qore module API

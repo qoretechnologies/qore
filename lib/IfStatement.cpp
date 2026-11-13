@@ -35,6 +35,38 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreDeferredRelease.h"
 
+namespace {
+class StrictBooleanIfStatement : public IfStatement {
+public:
+    using IfStatement::IfStatement;
+private:
+    int execImpl(QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(return_value, xsink);
+    }
+    int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(rc, return_value, xsink);
+    }
+};
+}
+
+IfStatement* IfStatement::create(LexicalSemanticPolicy policy, int start_line, int end_line,
+        QoreValue c, StatementBlock* i, StatementBlock* e) {
+    IfStatement* rv = policy.strictBoolean()
+        ? new StrictBooleanIfStatement(start_line, end_line, c, i, e)
+        : new IfStatement(start_line, end_line, c, i, e);
+    rv->setSemanticPolicy(policy);
+    return rv;
+}
+
+int IfStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(return_value, xsink);
+}
+
+int IfStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(rc, return_value, xsink);
+}
+
+
 IfStatement::IfStatement(int start_line, int end_line, QoreValue c, StatementBlock* i, StatementBlock* e)
         : AbstractStatement(start_line, end_line), cond(c), if_code(i), else_code(e) {
 }
@@ -47,13 +79,14 @@ IfStatement::~IfStatement() {
 }
 
 // only executed by Statement::exec()
-int IfStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int IfStatement::execCommon(QoreValue& return_value, ExceptionSink *xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
     // the condition and its temporaries are released before the branch runs
     bool b;
-    if (qore_eval_condition(cond, b, xsink)) {
+    if (qore_eval_condition<StrictBoolean>(cond, b, xsink)) {
         return 0;
     }
 
@@ -71,13 +104,14 @@ int IfStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     return rc;
 }
 
-int IfStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int IfStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
     // the condition and its temporaries are released before the branch runs
     bool b;
-    if (qore_eval_condition(cond, b, xsink, rc)) {
+    if (qore_eval_condition<StrictBoolean>(cond, b, xsink, rc)) {
         return 0;
     }
 

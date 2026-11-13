@@ -72,8 +72,8 @@ protected:
     ExceptionSink* xsink;
 
 public:
-    DLLLOCAL QoreFunctionalRangeOperator(int64 start, int64 stop, ExceptionSink* xs)
-        : RangeIterator(start, stop, 1, &Nothing, xs), xsink(xs) {
+    DLLLOCAL QoreFunctionalRangeOperator(int64 start, int64 stop, bool broken_range, ExceptionSink* xs)
+        : RangeIterator(start, stop, 1, &Nothing, broken_range, xs), xsink(xs) {
     }
 
     DLLLOCAL virtual ~QoreFunctionalRangeOperator() {

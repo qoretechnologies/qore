@@ -39,6 +39,8 @@ class RuntimeConfig;
 
 class IfStatement : public AbstractStatement {
 public:
+    DLLLOCAL static IfStatement* create(LexicalSemanticPolicy policy, int start_line, int end_line,
+            QoreValue c, StatementBlock* i, StatementBlock* e = nullptr);
     DLLLOCAL IfStatement(int start_line, int end_line, QoreValue c, StatementBlock* i, StatementBlock* e = nullptr);
     DLLLOCAL virtual ~IfStatement();
 
@@ -72,6 +74,12 @@ public:
     DLLLOCAL const LVList* getLVList() const {
         return lvars;
     }
+
+protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(QoreValue& return_value, ExceptionSink* xsink);
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
 private:
     QoreValue cond{};

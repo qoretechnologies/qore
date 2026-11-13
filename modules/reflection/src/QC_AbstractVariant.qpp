@@ -307,17 +307,18 @@ AbstractReflectionFunction AbstractVariant::getFunction() [flags=RET_VALUE_ONLY]
     return v->getFunctionObject(xsink);
 }
 
-//! returns the functional domain of the variant (for builtin variants only) as a bitfield of @ref functional_domain_constants
+//! returns the functional domain of the variant as a bitfield of @ref functional_domain_constants
 /** @par Example:
     @code{.py}
 int i = v.getDomain();
     @endcode
 
-    @return the functional domain of the variant (for builtin variants only) as a bitfield of @ref functional_domain_constants
+    @return the functional domain of the variant as a bitfield of @ref functional_domain_constants
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
-    @note user variants always return 0 here; a value is only returned by builtin variants
+    @note a user variant returns the functional domains declared on it with an attribute list (see
+    @ref function_domains) and those of its class; since %Qore 3.0
 */
 int AbstractVariant::getDomain() [flags=RET_VALUE_ONLY] {
     // get read access to program object
@@ -330,17 +331,18 @@ int AbstractVariant::getDomain() [flags=RET_VALUE_ONLY] {
     return v->variant->getDomain();
 }
 
-//! returns a list of functional domain strings for the variant (for builtin variants only); an empty list is returned for user variants
+//! returns a list of functional domain strings for the variant
 /** @par Example:
     @code{.py}
 list<string> l = v.getDomainStringList();
     @endcode
 
-    @return a list of functional domain strings for the variant (for builtin variants only)
+    @return a list of functional domain strings for the variant
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
-    @note user variants always return an empty list here
+    @note a user variant returns the functional domains declared on it with an attribute list (see
+    @ref function_domains) and those of its class; since %Qore 3.0
 */
 list<string> AbstractVariant::getDomainStringList() [flags=RET_VALUE_ONLY] {
     // get read access to program object

@@ -1,0 +1,199 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalValueConversionsTest
+
+#! Conversion belongs to the operation, including initialization and writes into existing containers.
+class LexicalValueConversionsTest inherits QUnit::Test {
+    private {
+        const Base = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS;
+        const Cases = {
+            "local": 'softbool v = opaque("text"); return v;',
+            "reassign": 'softbool v; v = opaque("text"); return v;',
+            "weak_assign": 'softbool v; v := opaque("text"); return v;',
+            "opaque_assign": 'softbool v; v @= opaque("text"); return v;',
+            "destructure": '(softbool a, softbool b) = opaque(("text", "text")); return a || b;',
+            "destructure_reassign": 'softbool a; softbool b; (a, b) = opaque(("text", "text")); return a || b;',
+            "destructure_scalar": '(softbool a, auto b) = opaque("text"); return a;',
+            "foreach_list": 'foreach softbool v in (opaque(("text",))) { return v; } return False;',
+            "foreach_scalar": 'foreach softbool v in (opaque("text")) { return v; } return False;',
+            "foreach_ref_list": 'auto values = opaque(("text",)); softbool result; foreach softbool v in (\values) { result = v; } return result;',
+            "foreach_ref_scalar": 'auto value = opaque("text"); softbool result; foreach softbool v in (\value) { result = v; } return result;',
+            "foreach_ref_writeback": 'list<softbool> values = (False,); foreach auto v in (\values) { v = opaque("text"); } return values[0];',
+            "foreach_ref_scalar_writeback": 'softbool value = False; foreach auto v in (\value) { v = opaque("text"); } return value;',
+            "null_destructure": '(softint a, softint b) = opaque((NULL, NULL)); return a + b;',
+            "null_foreach": 'foreach softint v in (opaque((NULL,))) { return v; } return 1;',
+            "null_foreach_ref": 'auto values = opaque((NULL,)); softint result; foreach softint v in (\values) { result = v; } return result;',
+            "null_foreach_ref_writeback": 'list<softint> values = (1,); foreach auto v in (\values) { v = opaque(NULL); } return values[0];',
+            "list_splice": 'list<softbool> v = (False,); splice v, 0, 1, opaque("text"); return v[0];',
+            "list_extract": 'list<softbool> v = (False,); extract v, 0, 1, opaque("text"); return v[0];',
+            "hash_literal": 'hash<string, softbool> v = {"value": opaque("text")}; return v.value;',
+            "null_list_splice": 'list<softint> v = (1,); splice v, 0, 1, opaque(NULL); return v[0];',
+            "null_list_extract": 'list<softint> v = (1,); extract v, 0, 1, opaque(NULL); return v[0];',
+            "null_mixed_hash_literal": 'hash<string, softint> v = {"value": opaque(NULL), "other": opaque(1)}; return v.value;',
+            "null_mixed_hash_map": 'hash<string, softint> v = map {$1: opaque($1 == "value" ? NULL : 1)}, ("value", "other"); return v.value;',
+            "null_mixed_hash_map_select": 'hash<string, softint> v = map {$1: opaque($1 == "value" ? NULL : 1)}, ("value", "other"), True; return v.value;',
+            "null_hash_literal": 'hash<string, softint> v = {"value": opaque(NULL)}; return v.value;',
+            "hash_map_scalar": 'hash<string, softbool> v = map {"value": opaque("text")}, 1; return v.value;',
+            "hash_map_iterator": 'hash<string, softbool> v = map {"value": opaque("text")}, new ListIterator((1,)); return v.value;',
+            "hash_map_select_scalar": 'hash<string, softbool> v = map {"value": opaque("text")}, 1, True; return v.value;',
+            "hash_map_select_iterator": 'hash<string, softbool> v = map {"value": opaque("text")}, new ListIterator((1,)), True; return v.value;',
+            "hash_map": 'hash<string, softbool> v = map {"value": opaque("text")}, (1,); return v.value;',
+            "hash_map_select": 'hash<string, softbool> v = map {"value": opaque("text")}, (1,), True; return v.value;',
+            "null_hash_map": 'hash<string, softint> v = map {"value": opaque(NULL)}, (1,); return v.value;',
+            "null_hash_map_select": 'hash<string, softint> v = map {"value": opaque(NULL)}, (1,), True; return v.value;',
+            "instanceof_null": 'return opaque(NULL) instanceof softint;',
+            "instanceof_null_constant": 'return NULL instanceof softint;',
+            "constant_bool": 'return TypedBool;',
+            "constant_bool_deferred": 'return DeferredBool;',
+            "case_equal": 'auto v = (1, 2); switch (v) { case == True: return True; default: return False; }',
+            "builtin_inlist": 'return inlist(True, ({"k": 1},));',
+            "list_slot": 'list<softbool> v = (True,); v[0] = opaque("text"); return v[0];',
+            "hash_slot": 'hash<string, softbool> v; v.a = opaque("text"); return v.a;',
+            "member_slot": 'Probe p(); p.value = opaque("text"); return p.value;',
+            "hashdecl_slot": 'Converted h(); h.value = opaque("text"); return h.value;',
+            "cast_bool": 'return cast<bool>(opaque("text"));',
+            "cast_list": 'return cast<list<softbool>>(opaque(("text",)))[0];',
+            "cast_softlist": 'return cast<softlist<softbool>>(opaque("text"))[0];',
+            "cast_nested_softlist": 'return cast<softlist<softlist<softbool>>>(opaque("text"))[0][0];',
+            "cast_hash": 'return cast<hash<string, softbool>>(opaque({"value": "text"})).value;',
+            "cast_hashdecl": 'return cast<Converted>(opaque({"value": "text"})).value;',
+            "new_list": 'list<softbool> v(opaque("text")); return v[0];',
+            "new_hash": 'hash<string, softbool> v(opaque({"value": "text"})); return v.value;',
+            "new_hashdecl": 'Converted h(opaque({"value": "text"})); return h.value;',
+            "member_default": 'Probe p(); return p.value;',
+            "member_literal": 'Literal p(); return p.value;',
+            "member_implied": 'Implied p(); return p.values[0];',
+            "generic_member": 'Generic<softbool> p(); return p.value;',
+            "generic_member_from_method": 'Builder<int> b(); return b.build().value;',
+            "generic_member_other_specialization": 'GenericNumber<softbool> p(); return p.makeInt();',
+            "generic_hashdecl": 'GenericHash<softbool> h(); return h.value;',
+            "inherited_hashdecl": 'InheritedHash h(); return h.value;',
+            "hashdecl_default": 'Converted h(); return h.value;',
+            "static_default": 'return Probe::shared;',
+            "global_default": 'return global_value;',
+            "list_push": 'list<softbool> v; push v, opaque("text"); return v[0];',
+            "list_unshift": 'list<softbool> v; unshift v, opaque("text"); return v[0];',
+            "list_append": 'list<softbool> v; v += opaque("text"); return v[0];',
+            "list_merge": 'list<softbool> v; v += opaque(("text",)); return v[0];',
+            "hash_merge": 'hash<string, softbool> h; h += opaque({"value": "text"}); return h.value;',
+            "hashdecl_merge": 'Converted h(); h += opaque({"value": "text"}); return h.value;',
+            "object_merge": 'Probe p(); p += opaque({"value": "text"}); return p.value;',
+            "object_object_merge": 'Probe p(); Untyped u(); p += opaque(u); return p.value;',
+            "hash_object_merge": 'hash<string, softbool> h; Untyped u(); h += opaque(u); return h.value;',
+            "hashdecl_object_merge": 'Converted h(); Untyped u(); h += opaque(u); return h.value;',
+            "nested_list_merge": 'list<list<softbool>> v; v += opaque((("text",),)); return v[0][0];',
+            "nested_hash_merge": 'hash<string, list<softbool>> h; h += opaque({"value": ("text",)}); return h.value[0];',
+            "nested_hashdecl_merge": 'Nested h(); h += opaque({"value": ("text",)}); return h.value[0];',
+            "nested_object_merge": 'NestedProbe p(); p += opaque({"value": ("text",)}); return p.value[0];',
+            "private_object_merge": 'PrivateProbe p(); return p.mergeValue();',
+            "copy_list_merge": 'list<softbool> original = (False,); auto copy = original; copy += opaque("text"); return (original, copy);',
+            "copy_hash_merge": 'hash<string, softbool> original = {"value": False}; auto copy = original; copy += opaque({"value": "text"}); return (original.value, copy.value);',
+            "reject_list_merge": 'list<softint> v; string err; try { v += opaque(("4", new Queue())); } catch (hash<ExceptionInfo> ex) { err = ex.err; } return (err, v);',
+            "reject_hash_merge": 'hash<string, softint> h; string err; try { h += opaque({"ok": "4", "bad": new Queue()}); } catch (hash<ExceptionInfo> ex) { err = ex.err; } return (err, h);',
+            "reject_hashdecl_merge": 'Converted h(); string err; try { h += opaque({"unknown": 1}); } catch (hash<ExceptionInfo> ex) { err = ex.err; } return (err, h.size(), h.value);',
+            "null_list_append": 'list<softint> v; v += opaque(NULL); return v[0];',
+            "null_list_merge": 'list<softint> v; v += opaque((NULL,)); return v[0];',
+            "null_hash_merge": 'hash<string, softint> h; h += opaque({"value": NULL}); return h.value;',
+            "null_hashdecl_merge": 'IntConverted h(); h += opaque({"value": NULL}); return h.value;',
+            "null_object_merge": 'IntProbe p(); p += opaque({"value": NULL}); return p.value;',
+            "null_local": 'softint v = opaque(NULL); return v;',
+            "null_cast": 'return cast<softint>(opaque(NULL));',
+            "null_slot": 'list<softint> v = (1,); v[0] = opaque(NULL); return v[0];',
+        };
+    }
+
+    constructor() : QUnit::Test("LexicalValueConversionsTest", "1.0", \ARGV) {
+        foreach string name in (keys Cases) {
+            foreach bool legacy in (False, True) {
+                foreach bool current_legacy in (False, True) {
+                    addTestCase(sprintf("%s: source legacy %y, Program legacy %y", name, legacy, current_legacy),
+                        \check(), (name, legacy, current_legacy));
+                }
+            }
+        }
+        set_return_value(main());
+    }
+
+    private check(string name, bool legacy, bool current_legacy) {
+        Program p(Base);
+        p.setParseOptions(PO_ALLOW_WEAK_REFERENCES);
+        p.setParseOptions(new ParseOptions("allow-opaque-references"));
+        ParseOptions soft("broken-soft-types");
+        if (legacy) {
+            p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.setParseOptions(soft);
+        }
+        p.parse('const softbool TypedBool = "text"; const softbool DeferredBool = sprintf("%s", "text");
+            auto sub opaque(auto v) { return v; }
+            our softbool global_value = opaque("text");
+            class Probe {
+                public {
+                    softbool value = opaque("text");
+                    static softbool shared = opaque("text");
+                }
+            }
+            class Untyped { public { auto value = "text"; } }
+            class NestedProbe { public { list<softbool> value; } }
+            class IntProbe { public { softint value; } }
+            class PrivateProbe {
+                private { softbool value; }
+                auto mergeValue() { self += opaque({"value": "text"}); return value; }
+            }
+            class Literal { public { softbool value = "text"; } }
+            class Implied { public { list<softbool> values(opaque("text")); } }
+            class Generic<T> { public { T value = opaque("text"); } }
+            class Builder<T> { auto build() { return new Generic<softbool>(); } }
+            class GenericNumber<T> {
+                public { T value = opaque("24"); }
+                auto makeInt() { GenericNumber<softint> p(); return p.value; }
+            }
+            hashdecl Nested { list<softbool> value; }
+            hashdecl IntConverted { softint value; }
+            hashdecl Converted { softbool value = opaque("text"); }
+            hashdecl InheritedHash inherits Converted { int marker; }
+            hashdecl GenericHash<T> { T value = opaque("text"); }
+            auto sub sample() { ' + Cases{name} + ' }', "value-conversion-source");
+        if (current_legacy) {
+            p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.setParseOptions(soft);
+        } else {
+            p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.disableParseOptions(soft);
+        }
+        auto actual;
+        try {
+            p.run();
+            actual = p.callFunction("sample");
+        } catch (hash<ExceptionInfo> ex) {
+            actual = ex.err;
+        }
+        auto expected = !legacy;
+        if (name == "copy_list_merge") {
+            expected = ((False,), (False, !legacy));
+        } else if (name == "copy_hash_merge") {
+            expected = (False, !legacy);
+        } else if (name == "reject_list_merge") {
+            expected = ("RUNTIME-TYPE-ERROR", (4,));
+        } else if (name == "reject_hash_merge") {
+            expected = ("RUNTIME-TYPE-ERROR", {"ok": 4});
+        } else if (name == "reject_hashdecl_merge") {
+            expected = ("HASHDECL-KEY-ERROR", 1, !legacy);
+        } else if (name == "generic_member_other_specialization") {
+            expected = 24;
+        } else if (name.find("instanceof_null") == 0) {
+            expected = legacy;
+        } else if (name == "null_hash_literal" || name == "null_hash_map" || name == "null_hash_map_select") {
+            # AST rejects a homogeneous hash<null> before element folding, even with broken soft types.
+            expected = "RUNTIME-TYPE-ERROR";
+        } else if (name.find("null_") == 0) {
+            expected = legacy || name == "null_cast" ? 0 : "RUNTIME-TYPE-ERROR";
+        }
+        assertEq(expected, actual, "source policy survives Program mutation");
+    }
+}

@@ -36,6 +36,9 @@
 %requires QUnit
 %requires Logger
 %requires FsUtil
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketHandler
 %requires WebSocketUtil
 %requires WebSocketClient
 %requires ../../TestCertificates.qm
@@ -49,11 +52,65 @@
 #! a message larger than the stream's send buffer (1 MiB)
 const Size = 3 * 1024 * 1024;
 
+#! a message larger than the default flow-control window of a stream, and under the send buffer's limit
+const HeldSize = 100000;
+
 #! a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
+#! The server side of the HTTP/3 case: sends a large message on request and reports the messages it gets
+class TestConnection inherits WebSocketConnection {
+    public {
+        Queue events;
+    }
+
+    constructor(WebSocketHandler handler, Queue events) : WebSocketConnection(handler) {
+        self.events = events;
+    }
+
+    gotMessage(string msg) {
+        if (msg == "big") {
+            send(binary(strmul("s", Size)));
+        }
+        events.push(msg);
+    }
+
+    gotMessage(binary msg) {
+        gotMessage(msg.toString());
+    }
+}
+
+class TestHandler inherits WebSocketHandler {
+    public {
+        Queue events();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        # the stream's staged data is held back from the transport, as when the client grants no credit, until the
+        # test releases it
+        call_function("dbg_quic_hold_stream_data", cx."header-info".session_id, cx."header-info".stream_id);
+        return new TestConnection(self, events);
+    }
+
+    #! Reports when the connection is set up: its messages are written straight to the stream from then on
+    /** Before that, a message sent is buffered and written once the setup is complete, so a pong of the frame state
+        could be written ahead of it
+    */
+    bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
+        bool rv = WebSocketHandler::startImpl(lid, cx, hdr, sock);
+        events.push("started");
+        return rv;
+    }
+}
+
 #! Pushes the client's message about the start of an error close, so that a test can wait for it
 class ErrorCloseLogAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! the client's messages about its close that the tests wait for
+        const MessageRe = "closing the connection for an error|sent the close frame|the connection is closed|"
+            "discarding a close frame";
+    }
+
     public {
         Queue lines();
     }
@@ -63,7 +120,7 @@ class ErrorCloseLogAppender inherits LoggerAppenderWithLayout {
     }
 
     processEventImpl(int type, auto params) {
-        if (type == EVENT_LOG && params =~ /closing the connection for an error/) {
+        if (type == EVENT_LOG && regex(params, MessageRe)) {
             lines.push(params);
         }
     }
@@ -73,11 +130,83 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
     constructor() : QUnit::Test("WebSocketControlFrameQueue", "1.0") {
         addTestCase("HTTP/2 client: the pong of the latest ping is sent when the send buffer has room",
             \testPong());
+        addTestCase("HTTP/3 server: the pong is sent once the staged data has been handed to the transport",
+            \testH3ServerPong());
         addTestCase("HTTP/2 client: the close frame of an error is sent although the send buffer is full",
             \testErrorClose(), True);
         addTestCase("HTTP/2 client: an error close that the server does not answer ends at the close timeout",
             \testErrorClose(), False);
+        addTestCase("HTTP/2 client: an error after the client's own close frame sends no second close frame",
+            \testErrorAfterClose());
+        addTestCase("HTTP/2 client: an error while the client's own close frame waits to be sent keeps the frame",
+            \testErrorAfterHeldClose());
+        addTestCase("HTTP/2 client: the cause of the client's close is reported when the server ends the stream",
+            \testCloseCauseAtStreamEnd());
+        addTestCase("HTTP/2 client: a close frame that arrives after the connection was closed is discarded",
+            \testLateCloseDiscarded());
         set_return_value(main());
+    }
+
+    #! A ping arrives while the server's staged data for the stream is over its limit: the pong follows the data
+    testH3ServerPong() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        TestHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        on_exit {
+            call_function("dbg_quic_release_stream_data");
+            server.stop();
+        }
+        server.setDefaultHandler("ws", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+
+        # the frames that the client receives, in order: with a raw callback, the messages are delivered to it
+        Queue frames();
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://localhost:%d", port),
+            "http_version": "3.0",
+            "ssl_verify_cert": False,
+            "raw_callback": int sub (hash<WsMsgInfo> event) {
+                if (event.op == WSOP_Pong) {
+                    frames.push("pong " + event.msg.toString());
+                } else if (event.op == WSOP_Binary) {
+                    frames.push("binary " + event.msg.size());
+                }
+                return WSC_Process;
+            },
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp3(), "the connection uses HTTP/3");
+        # the client's connect() returns when it gets the response to its CONNECT request, which the server sends
+        # before it sets up the connection
+        assertEq("started", handler.events.get(HangGuard), "the server set up the connection");
+        # the server stages a message over the staged data's limit, which is held back from the transport
+        wsc.send("big");
+        assertEq("big", handler.events.get(HangGuard), "the server staged the large message");
+        # frames are handled in order: when the server reports the message after the ping, it has answered the ping
+        wsc.ping(binary("p1"));
+        wsc.send("after");
+        assertEq("after", handler.events.get(HangGuard), "the server got the ping and the next message");
+        call_function("dbg_quic_release_stream_data");
+        # a packet of the client makes the server write the stream's data
+        wsc.send("go");
+        assertEq("go", handler.events.get(HangGuard), "the server got the next message");
+        assertEq("binary " + Size, frames.get(HangGuard), "the client gets the large message");
+        assertEq("pong p1", frames.get(HangGuard), "the client gets the pong after it");
     }
 
 %ifdef NoProcess
@@ -86,6 +215,22 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
     }
 
     testErrorClose(bool answer) {
+        testSkip("the process module is not available");
+    }
+
+    testErrorAfterClose() {
+        testSkip("the process module is not available");
+    }
+
+    testErrorAfterHeldClose() {
+        testSkip("the process module is not available");
+    }
+
+    testCloseCauseAtStreamEnd() {
+        testSkip("the process module is not available");
+    }
+
+    testLateCloseDiscarded() {
         testSkip("the process module is not available");
     }
 %else
@@ -169,6 +314,209 @@ class WebSocketControlFrameQueueTest inherits QUnit::Test {
         assertEq(sprintf("CLOSE %d", WSCC_MessageTooBig), readLine(\node), "the client's close frame arrives");
         # the server answered the close frame and ended the stream: the client reports the error's code
         assertEq(WSCC_MessageTooBig, closed.get(HangGuard), "the client closes with 1009");
+    }
+
+    #! The frame state rejects a frame after the client sent its own close frame: no second close frame is sent
+    /** The client's close frame goes through the frame state, which then knows that it was sent; it sent a second
+        close frame (for the error) when the client's close went around it
+    */
+    testErrorAfterClose() {
+        hash<auto> node = startNode();
+        on_exit stopNode(node.process);
+        ErrorCloseLogAppender capture();
+        Logger logger("ws", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://127.0.0.1:%d/ws", node.port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+            "logger": logger,
+        });
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        # the client starts the close; disconnect() waits for the server's answer, which comes after the release
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }();
+        on_exit done.waitForZero(HangGuard);
+        # the client's close frame (1001) is queued before its frame state rejects a frame from the server; the
+        # server's answer comes after that frame (it is sent after the release), so the client rejects the frame
+        # while its close is in progress, and a close frame sent for the error is queued before the client ends the
+        # stream
+        assertRegex("sent the close frame: close code 1001", capture.lines.get(HangGuard),
+            "the client queued its close frame");
+        node.process.write("big-header\n");
+        assertEq("SENT BIG-HEADER", readLine(\node), "the server announced a frame over the limit");
+        node.process.write("release\n");
+        assertEq(sprintf("CLOSE %d", WSCC_GoingAway), readLine(\node), "the client's close frame arrives");
+        # nothing follows the close frame but the end of the stream
+        assertEq("END", readLine(\node), "no second close frame is sent");
+    }
+
+    #! The frame state rejects a frame while the client's own close frame waits to be sent: the close goes on
+    /** The client's close frame waits behind a message that the server grants no credit for, while disconnect()
+        waits for the end of the close handshake.  The connection was closed at the error, which ended the wait, and
+        the teardown dropped the message and the close frame (issue #5993)
+    */
+    testErrorAfterHeldClose() {
+        hash<auto> node = startNode();
+        on_exit stopNode(node.process);
+        ErrorCloseLogAppender capture();
+        Logger logger("ws", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        WebSocketClient wsc(sub (*data msg) {}, {
+            "url": sprintf("wss://127.0.0.1:%d/ws", node.port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+            "logger": logger,
+        });
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        # a message larger than the stream's flow-control window (65535 bytes), under the send buffer's limit, so that
+        # the close is not held by the send: the server grants no more credit until the release
+        wsc.send(binary(strmul("a", HeldSize)));
+        # the client starts the close; its close frame waits behind the message, and disconnect() waits for the end
+        # of the close handshake
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }();
+        on_exit done.waitForZero(HangGuard);
+        assertRegex("sent the close frame: close code 1001", capture.lines.get(HangGuard),
+            "the client queued its close frame");
+        # disconnect() logs the close frame with the client's lock held, and releases the lock only once it has taken
+        # the connection (and cleared its callbacks, with the close timer): isOpen() takes the lock, so the frame below
+        # is rejected after that, when the error no longer finds the close timer
+        assertFalse(wsc.isOpen(), "disconnect() took the connection");
+        # the frame state rejects a frame while the close frame waits
+        node.process.write("big-header\n");
+        assertEq("SENT BIG-HEADER", readLine(\node), "the server announced a frame over the limit");
+        assertRegex("closing the connection for an error: close code 1009", capture.lines.get(HangGuard),
+            "the client waits for the end of the close handshake");
+        node.process.write("release\n");
+        assertEq(sprintf("MSG %d 97 97", HeldSize), readLine(\node), "the message arrives");
+        assertEq(sprintf("CLOSE %d", WSCC_GoingAway), readLine(\node), "the client's close frame arrives");
+        # the server answered the close frame and ended the stream; the client ends the connection
+        assertEq("END", readLine(\node), "the client ends the stream");
+    }
+
+    #! The client closes the connection for an idle timeout; the server ends the stream instead of answering the close
+    /** The close is reported with the cause of the client's close ("idle-timeout"), which the end of the stream lost
+    */
+    testCloseCauseAtStreamEnd() {
+        hash<auto> node = startNode();
+        on_exit stopNode(node.process);
+        ErrorCloseLogAppender capture();
+        Logger logger("ws", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        Queue closed();
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (!exists msg) {
+                # in the closing callback, the cause, code and reason of this connection's close
+                closed.push({"cause": wsc.getAsyncCloseCause(), "code": wsc.getCloseCode(),
+                    "reason": wsc.getCloseReason()});
+            }
+        }, {
+            "url": sprintf("wss://127.0.0.1:%d/ws", node.port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            # the close waits for the server's answer up to the client's timeout: a hang guard only
+            "timeout": HangGuard,
+            # the server sends nothing, so the client closes the connection for an idle timeout
+            "idle_timeout": 1s,
+            "logger": logger,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        assertRegex("sent the close frame: close code 1001", capture.lines.get(HangGuard),
+            "the client closes the connection for the idle timeout");
+        # the server ends the stream without answering the close frame
+        node.process.write("end\n");
+        assertEq("SENT END", readLine(\node), "the server ended the stream");
+        # the end of the stream closes the connection (not the close timer, a hang guard only, which would report the
+        # cause with 1006 "close handshake timed out")
+        assertEq({"cause": "idle-timeout", "code": WSCC_AbnormalClosure, "reason": "stream ended"},
+            closed.get(HangGuard), "the close is reported with the cause of the client's close");
+    }
+
+    #! A close frame that arrives after the client closed the connection, before the client ends the stream, is
+    #! discarded and logged
+    /** The client closes the connection when its close handshake times out (the server does not answer); the stream
+        is ended when the client handles the close, which waits here behind a message callback that the test holds,
+        so a close frame of the server arrives while the stream is open and the connection closed: it was left in
+        the frame queue unprocessed and unlogged
+    */
+    testLateCloseDiscarded() {
+        hash<auto> node = startNode();
+        on_exit stopNode(node.process);
+        ErrorCloseLogAppender capture();
+        Logger logger("ws", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        Queue got();
+        Queue closed();
+        Counter hold(1);
+        on_exit if (hold.getCount()) {
+            hold.dec();
+        }
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (exists msg) {
+                got.push(msg);
+                # the delivery of the client's messages and events waits here until the test releases it
+                hold.waitForZero();
+            } else {
+                closed.push(wsc.getCloseCode());
+            }
+        }, {
+            "url": sprintf("wss://127.0.0.1:%d/ws", node.port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            # the close handshake times out after this: the server does not answer
+            "timeout": 2s,
+            # the server sends nothing after its message, so the client closes the connection for an idle timeout
+            "idle_timeout": 1s,
+            "logger": logger,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the connection uses HTTP/2");
+        node.process.write("text hold\n");
+        assertEq("SENT TEXT hold", readLine(\node), "the server sent a message");
+        assertEq("hold", got.get(HangGuard), "the client's message callback holds the delivery");
+        assertRegex("sent the close frame: close code 1001", capture.lines.get(HangGuard),
+            "the client closes the connection for the idle timeout");
+        assertRegex("the connection is closed: close code 1006", capture.lines.get(HangGuard),
+            "the close handshake times out");
+        # the client has not handled the close yet: the stream is open, and a close frame of the server arrives
+        node.process.write("close 4001\n");
+        assertEq("SENT CLOSE 4001", readLine(\node), "the server sent a close frame");
+        assertRegex("discarding a close frame \\(code 4001\\)", capture.lines.get(HangGuard),
+            "the close frame that arrived after the close is discarded and logged");
+        hold.dec();
+        assertEq(WSCC_AbnormalClosure, closed.get(HangGuard), "the first close wins");
     }
 
     #! Starts the server that grants no credit until it is released; skips the test without node

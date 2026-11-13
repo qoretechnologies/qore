@@ -63,6 +63,7 @@ qore_type_t QoreTypeSpec::getType() const {
             return QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
+        case QTS_INITIALIZER_FILTER:
             // Keep type parameters distinct from untyped auto/any in internal type checks.
             return NT_NOTHING;
     }

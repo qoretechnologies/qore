@@ -60,7 +60,7 @@ struct qore_type_safe_ref_helper_priv_t : public LValueHelper {
 
     DLLLOCAL int assign(QoreValue val) {
         disableRemovalScanSkip();
-        return LValueHelper::assign(val, "<reference>");
+        return LValueHelper::assignNative(val, "<reference>");
     }
 
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove) {

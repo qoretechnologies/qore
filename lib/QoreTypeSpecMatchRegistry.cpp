@@ -38,6 +38,12 @@
 // Include all handler functions
 #include "QoreTypeSpecMatchHandlers.cpp"
 
+// An initializer filter is execution metadata, not a type that can participate in matching.
+static qore_type_result_e match_QTS_INITIALIZER_FILTER(const QoreTypeSpec&, QoreTypeSpecMatchCtx& ctx) {
+    ctx.max_result = QTI_NOT_EQUAL;
+    return QTI_NOT_EQUAL;
+}
+
 // Registry table: maps q_typespec_t to handler function
 const QoreTypeSpecMatchHandlerInfo QORE_TYPE_SPEC_MATCH_REGISTRY[] = {
     {
@@ -135,6 +141,12 @@ const QoreTypeSpecMatchHandlerInfo QORE_TYPE_SPEC_MATCH_REGISTRY[] = {
         QTS_COMPLEXBUFFER,
         match_QTS_COMPLEXBUFFER,
         "Complex buffer type (buffer<T>) - storage element type matching"
+    },
+    {
+        "QTS_INITIALIZER_FILTER",
+        QTS_INITIALIZER_FILTER,
+        match_QTS_INITIALIZER_FILTER,
+        "Code-owned lexical initializer conversion descriptor; excluded from type matching"
     },
     { nullptr, (q_typespec_t)0, nullptr, nullptr } // sentinel
 };

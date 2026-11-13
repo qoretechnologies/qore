@@ -40,6 +40,8 @@
 %modern
 
 module SmtpClient {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "2.2";
     desc = "SMTP client support module";
     author = "Wolfgang Ritzinger <aargon@rat.at>, Marian Bonda <marian_bonda@users.sourceforge.net>, "

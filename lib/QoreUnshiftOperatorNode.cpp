@@ -96,10 +96,31 @@ int QoreUnshiftOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
         parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
+    if (!err && getSemanticPolicy().needsFilter()) {
+        const QoreTypeInfo* result_type = returnTypeInfo;
+        QoreUnshiftOperatorNode* replacement;
+        if (dynamic_cast<QorePushOperatorNode*>(this)) {
+            replacement = static_cast<QoreUnshiftOperatorNode*>(makeSpecialization<LexicalQorePushOperatorNode>());
+        } else {
+            replacement = static_cast<QoreUnshiftOperatorNode*>(makeSpecialization<LexicalQoreUnshiftOperatorNode>());
+        }
+        replacement->returnTypeInfo = result_type;
+        replacement->setParseAnalysis(parse_context.analysis);
+        val = replacement;
+    }
     return err;
 }
 
 QoreValue QoreUnshiftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(needs_deref, xsink);
+}
+
+QoreValue QoreUnshiftOperatorNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreUnshiftOperatorNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
     // the operand is a statement of its own where the other execution modes evaluate it so
     QoreMutationOperandHolder res(left, right, false, xsink);
     if (*xsink)
@@ -139,7 +160,11 @@ QoreValue QoreUnshiftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
 
     QoreListNode* l = val.getValue().get<QoreListNode>();
 
-    l->insert(res.takeReferencedValue(), xsink);
+    if constexpr (Lexical) {
+        qore_list_private::insert(*l, res.takeReferencedValue(), xsink, getSemanticPolicy());
+    } else {
+        qore_list_private::insertCanonical(*l, res.takeReferencedValue(), xsink);
+    }
 
     // reference for return value
     return ref_rv ? l->refSelf() : QoreValue();

@@ -43,6 +43,8 @@ module DataStreamClient {
         ConnectionSchemeCache::registerScheme("ds", DataStreamConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("dss", DataStreamConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage DataStreamClient Module

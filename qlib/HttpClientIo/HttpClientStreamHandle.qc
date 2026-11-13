@@ -1369,6 +1369,19 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
             "frame-state streaming is not supported by " + conn.getProtocol();
     }
 
+    #! Records on the stream's frame state that the application sends its WebSocket close frame itself
+    /** The frame state (see installFrameState()) then sends no close frame of its own when it fails the connection
+        later with an error (an endpoint sends one close frame, RFC 6455 section 5.5.1).
+
+        @return 0 if the stream has no frame state, 1 if the close is recorded (the caller sends its close frame), 2
+        if the frame state sent a close frame before (the caller sends none); this implementation always returns 0
+
+        @since HttpClientIo 1.0
+    */
+    int markFrameStateCloseSent() {
+        return 0;
+    }
+
     #! Installs an SSE event parser for this streaming response
     /** Swaps a stream started with @ref startStreaming() from raw response
         delivery through @ref readData() to I/O-thread SSE parsing.  Concrete

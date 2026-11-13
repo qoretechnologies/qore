@@ -32,6 +32,36 @@
 #include "qore/intern/AssertStatement.h"
 #include "qore/intern/QoreParseListNode.h"
 
+namespace {
+class StrictBooleanAssertStatement : public AssertStatement {
+public:
+    using AssertStatement::AssertStatement;
+private:
+    int execImpl(QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(return_value, xsink);
+    }
+    int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(rc, return_value, xsink);
+    }
+};
+}
+
+AssertStatement* AssertStatement::create(LexicalSemanticPolicy policy, int start_line, int end_line, QoreValue exp) {
+    AssertStatement* rv = policy.strictBoolean() ? new StrictBooleanAssertStatement(start_line, end_line, exp)
+        : new AssertStatement(start_line, end_line, exp);
+    rv->setSemanticPolicy(policy);
+    return rv;
+}
+
+int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(return_value, xsink);
+}
+
+int AssertStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(rc, return_value, xsink);
+}
+
+
 AssertStatement::AssertStatement(int start_line, int end_line, QoreValue exp)
         : AbstractStatement(start_line, end_line) {
     // If exp is a parse list, split it into condition and message args
@@ -69,7 +99,8 @@ AssertStatement::~AssertStatement() {
     message.discard(nullptr);
 }
 
-int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int AssertStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) {
     // Evaluate the condition
     ValueEvalOptimizedRefHolder cond_val(condition, xsink);
     if (*xsink) {
@@ -77,7 +108,7 @@ int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     }
 
     // Check if condition is true
-    if (!cond_val->getAsBool()) {
+    if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*cond_val)) {
         // Assertion failed - get the message if provided
         QoreStringNode* msg_str = nullptr;
         if (message) {
@@ -122,7 +153,8 @@ int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     return 0;
 }
 
-int AssertStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int AssertStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     // Evaluate the condition
     ValueEvalRefHolder cond_val(rc, condition, xsink);
     if (*xsink) {
@@ -130,7 +162,7 @@ int AssertStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
     }
 
     // Check if condition is true
-    if (!cond_val->getAsBool()) {
+    if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*cond_val)) {
         // Assertion failed - get the message if provided
         QoreStringNode* msg_str = nullptr;
         if (message) {

@@ -33,6 +33,30 @@
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 
+namespace {
+class StrictBooleanQuestionMarkOperatorNode : public QoreQuestionMarkOperatorNode {
+public:
+    using QoreQuestionMarkOperatorNode::QoreQuestionMarkOperatorNode;
+private:
+    QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(rc, needs_deref, xsink);
+    }
+};
+}
+
+QoreQuestionMarkOperatorNode* QoreQuestionMarkOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue e0, QoreValue e1, QoreValue e2) {
+    QoreQuestionMarkOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanQuestionMarkOperatorNode(loc, e0, e1, e2)
+        : new QoreQuestionMarkOperatorNode(loc, e0, e1, e2);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
+QoreValue QoreQuestionMarkOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(rc, needs_deref, xsink);
+}
+
+
 QoreString QoreQuestionMarkOperatorNode::question_mark_str("question mark (?:) operator expression");
 
 static void set_ternary_analysis(QoreParseContext& parse_context,
@@ -151,7 +175,8 @@ QoreValue QoreQuestionMarkOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     return evalImpl(rc, needs_deref, xsink);
 }
 
-QoreValue QoreQuestionMarkOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreQuestionMarkOperatorNode::evalCommon(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalRefHolder b(rc, e[0], xsink);
     if (*xsink)
         return QoreValue();
@@ -160,7 +185,7 @@ QoreValue QoreQuestionMarkOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_
         QoreStatementTempScope::holdReceiver(e[0], b, xsink);
     }
 
-    QoreValue exp = b->getAsBool() ? e[1] : e[2];
+    QoreValue exp = LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*b) ? e[1] : e[2];
 
     ValueEvalRefHolder rv(rc, exp, xsink);
     if (*xsink)

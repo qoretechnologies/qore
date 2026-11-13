@@ -47,6 +47,8 @@ module AssemblyAiRestClient {
         QoreSpeechUtils::SpeechProviderRegistry::registerTranscriberFactory(
             new AssemblyAiTranscriberFactory());
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage AssemblyAiRestClient Module

@@ -4,7 +4,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # RestSchemaModuleTypes.q (eager|lazy) <output file> <module>...: loads the given REST-schema provider modules
-# and writes, as JSON, a structural digest of every action they register; used by RestSchemaModuleLazyTypes.qtest
+# and writes, as JSON, a structural digest of every action they register; used by the
+# RestSchemaModuleLazyTypes-<n>.qtest tests (RestSchemaModuleLazyTypes.qc)
 
 %modern
 
