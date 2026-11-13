@@ -5898,6 +5898,32 @@ const MethodFunctionBase* find_first_parent_method(const qore_class_private& qc,
 
 } // namespace
 
+namespace {
+
+//! appends the functions of the given name that a call resolved in the class \a qc can select after its own, in the
+//! order of an inheritance list: for each parent class in the order they are listed, the parent's own method, then
+//! the methods of the parent's parents (as BCList::parseAddAncestors() builds the list)
+void collect_hierarchy_functions(const qore_class_private& qc, const std::string& name, bool is_static, ilist_t& out) {
+    if (!qc.scl) {
+        return;
+    }
+    for (auto& i : *qc.scl) {
+        QoreClass* pc = i->sclass;
+        if (!pc) {
+            continue;
+        }
+        qore_class_private* pcp = qore_class_private::get(*pc);
+        const QoreMethod* w = is_static ? pcp->parseFindLocalStaticMethod(name.c_str())
+            : pcp->parseFindLocalMethod(name.c_str());
+        if (w) {
+            out.push_back(INode(qore_method_private::get(*w)->getFunction(), i->access));
+        }
+        collect_hierarchy_functions(*pcp, name, is_static, out);
+    }
+}
+
+} // namespace
+
 int qore_class_private::parseCheckFinalHierarchy() const {
     if (!scl) {
         return 0;
@@ -5918,7 +5944,15 @@ int qore_class_private::parseCheckFinalHierarchy() const {
             }
             // the parent class with the final method is a parent class, so a method of the name is always found
             assert(start);
-            if (start->checkFinalResolution(*this, *i.second, local)) {
+            // the order in which the class's calls select a variant, from the hierarchy as it is now: the inheritance
+            // list of the method was built when the method was added, and misses the methods of a parent's parents
+            // if the parent had not resolved its own parent classes then (qore#5994)
+            ilist_t hierarchy;
+            hierarchy.push_back(INode(const_cast<MethodFunctionBase*>(start), Public));
+            collect_hierarchy_functions(local ? *this : *qore_class_private::get(*const_cast<QoreClass*>(start->getClass())),
+                i.first, is_static,
+                hierarchy);
+            if (start->checkFinalResolution(*this, *i.second, local, &hierarchy)) {
                 return -1;
             }
         }
@@ -6727,11 +6761,12 @@ int MethodFunctionBase::checkFinal() const {
 }
 
 int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, const MethodFunctionBase& final_func,
-        bool local) const {
+        bool local, const ilist_t* hierarchy) const {
+    const ilist_t& list = hierarchy ? *hierarchy : static_cast<const ilist_t&>(ilist);
     // the position of the final method in the order in which the class's calls select a variant
     size_t pos = 0;
-    for (; pos < ilist.size(); ++pos) {
-        if (ilist[pos].func == &final_func) {
+    for (; pos < list.size(); ++pos) {
+        if (list[pos].func == &final_func) {
             break;
         }
     }
@@ -6746,7 +6781,7 @@ int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, cons
         fv->parseResolveUserSignature();
         const AbstractFunctionSignature* fsig = fv->getSignature();
 
-        if (pos == ilist.size()) {
+        if (pos == list.size()) {
             parse_error(*loc, "class '%s' does not reach parent class method final %s%s::%s(%s): calls of '%s' in "
                 "this class are resolved in %s::%s(), which a parent class listed before '%s' declares or inherits",
                 cls.name.c_str(), stat, final_func.qc->getName(), getName(), fsig->getSignatureText(), getName(),
@@ -6757,7 +6792,7 @@ int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, cons
         // the variants of the methods before the final method win a tie with it; the class's own variants are
         // checked by checkFinal()
         for (size_t i = local ? 1 : 0; i < pos; ++i) {
-            const MethodFunctionBase* g = METHFB_const(ilist[i].func);
+            const MethodFunctionBase* g = METHFB_const(list[i].func);
             for (vlist_t::const_iterator gi = g->vlist.begin(), ge = g->vlist.end(); gi != ge; ++gi) {
                 MethodVariantBase* gv = const_cast<MethodVariantBase*>(METHVB_const(*gi));
                 if (gv->isAbstract() || gv->getAccess() == Internal) {

@@ -49,6 +49,7 @@ class Derived inherits Base {
         addTestCase("parent class listed before the final method's class", \testMultipleInheritance());
         addTestCase("overloads accepting the final method's arguments", \testOverloads());
         addTestCase("static methods", \testStatic());
+        addTestCase("a child of a class that lists the final method's class first", \testGrandchild());
         addTestCase("accepted hierarchies select the final method", \testAccepted());
         addTestCase("sandboxed subclasses of a trusted class", \testSandboxedSubclass());
         set_return_value(main());
@@ -130,6 +131,48 @@ string sub test(auto v) { return C::s(v); }", "static disjoint");
         p.run();
         assertEq("c", p.callFunction("test", "x"));
         assertEq("final", p.callFunction("test", 1));
+    }
+
+    #! a class with two parent classes (the final method's class first) and a child that overrides the method with
+    #! another signature (qore#5994: the shape of Qorus's AbstractServiceSoapHandler and its subclasses)
+    testGrandchild() {
+        Program p = parseAccepted("
+class SoapLike {
+    final string hr(hash<auto> cx, hash<auto> hdr, *data body) { return \"soap final\"; }
+}
+class HttpLike {
+    string hr(string listener, hash<auto> cx, hash<auto> hdr, *data body) { return \"http\"; }
+    string other(int i) { return \"other\"; }
+}
+class Service inherits SoapLike, HttpLike {
+    string hr(string listener, hash<auto> cx, hash<auto> hdr, *data body) { return \"service \" + listener; }
+}
+class ServiceChild inherits Service {
+    string hr(int n, string listener, hash<auto> cx, hash<auto> hdr, *data body) { return \"child \" + n; }
+}
+class ServiceGrandchild inherits ServiceChild {
+}
+list<string> sub test() {
+    auto c = new ServiceChild();
+    auto g = new ServiceGrandchild();
+    return (c.hr({}, {}), c.hr(\"L\", {}, {}), c.hr(1, \"L\", {}, {}), g.hr({}, {}), g.hr(2, \"L\", {}, {}));
+}", "grandchild accepted");
+        p.run();
+        assertEq(("soap final", "service L", "child 1", "soap final", "child 2"), p.callFunction("test"));
+
+        # the class that lists the sibling first does not reach the final method, also through children
+        assertRejected("
+class SoapLike2 {
+    final string hr(hash<auto> cx, hash<auto> hdr, *data body) { return \"soap final\"; }
+}
+class HttpLike2 {
+    string hr(hash<auto> cx, hash<auto> hdr, *data body) { return \"http\"; }
+}
+class BadService inherits HttpLike2, SoapLike2 {
+}
+class BadChild inherits BadService {
+    string hr(string x, hash<auto> cx, hash<auto> hdr, *data body) { return \"child\"; }
+}", "does not reach parent class method final SoapLike2::hr", "grandchild sibling first");
     }
 
     testAccepted() {
