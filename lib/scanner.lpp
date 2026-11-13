@@ -1133,6 +1133,73 @@ static bool angle_balanced(const char* p) {
     return ob == cb;
 }
 
+//! Returns the position after the '>' that closes the '<' at \a p, or nullptr if it is not closed
+static const char* angle_close(const char* p) {
+    assert(*p == '<');
+    int depth = 0;
+    for (; *p; ++p) {
+        if (*p == '<') {
+            ++depth;
+        } else if (*p == '>' && !--depth) {
+            return p + 1;
+        }
+    }
+    return nullptr;
+}
+
+//! Returns the length of the generic static method reference at the start of \a text, or 0 if it is not one
+/** The reference is "<class path><type arguments>::<method>", followed by the method's own type arguments if
+    \a method_type_args is true.  The type arguments of the class end with the '>' that closes their '<': the
+    patterns of the rules allow '>', parentheses and commas in type arguments, so their longest match can run on over
+    the rest of an expression, such as "Holder<int>::m(1), Holder<int>::m" in "(Holder<int>::m(1), Holder<int>::m(2))"
+    (qore#6037), with balanced angle brackets.
+
+    @param text the text matched
+    @param method_type_args true if the reference can have the method's own type arguments
+    @param has_method_type_args set to true if the reference returned has the method's type arguments
+*/
+static size_t generic_static_ref_len(const char* text, bool method_type_args, bool& has_method_type_args) {
+    has_method_type_args = false;
+    const char* p = strchr(text, '<');
+    if (!p || !(p = angle_close(p)) || p[0] != ':' || p[1] != ':') {
+        return 0;
+    }
+    p += 2;
+    if (!isalpha(*p) && *p != '_') {
+        return 0;
+    }
+    while (isalnum(*p) || *p == '_') {
+        ++p;
+    }
+    if (method_type_args && *p == '<') {
+        if (const char* e = angle_close(p)) {
+            p = e;
+            has_method_type_args = true;
+        }
+    }
+    return p - text;
+}
+
+//! Returns the length that the match of a generic static method reference is cut back to, or 0 if it is not cut
+/** The text after the reference is given back with yyless() (see generic_static_ref_len())
+
+    @param text the text matched
+    @param leng the length of the text matched
+    @param method_type_args true if the rule's reference has the method's own type arguments
+    @param scoped set to true if the reference left has no method type arguments though the rule's has them, so it
+    is a SCOPED_REF
+*/
+static size_t generic_static_ref_trim(const char* text, size_t leng, bool method_type_args, bool& scoped) {
+    bool has_margs;
+    size_t len = generic_static_ref_len(text, method_type_args, has_margs);
+    scoped = false;
+    if (!len || len >= leng) {
+        return 0;
+    }
+    scoped = method_type_args && !has_margs;
+    return len;
+}
+
 #define DO_DOT_KW_IDENTIFIER(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_KW_IDENTIFIER; }
 #define DO_DOT_HARD_KEYWORD(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_HARD_KEYWORD; }
 
@@ -3240,6 +3307,16 @@ hash\<{WORD}\>\{                        {
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
 ({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+                                           {
+                                               bool scoped;
+                                               if (size_t len = generic_static_ref_trim(yytext, yyleng, true, scoped)) {
+                                                   yyless(len);
+                                                   if (scoped) {
+                                                       yylval->string = strdup(yytext);
+                                                       return SCOPED_REF;
+                                                   }
+                                               }
+                                           }
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return ANGLE_IDENTIFIER;
@@ -3250,6 +3327,16 @@ hash\<{WORD}\>\{                        {
                                            return ANGLE_IDENTIFIER;
                                         }
 (::{WORD})+{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+                                           {
+                                               bool scoped;
+                                               if (size_t len = generic_static_ref_trim(yytext, yyleng, true, scoped)) {
+                                                   yyless(len);
+                                                   if (scoped) {
+                                                       yylval->string = strdup(yytext);
+                                                       return SCOPED_REF;
+                                                   }
+                                               }
+                                           }
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return ANGLE_IDENTIFIER;
@@ -3260,6 +3347,12 @@ hash\<{WORD}\>\{                        {
                                            return ANGLE_IDENTIFIER;
                                         }
 ({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD} {
+                                           {
+                                               bool scoped;
+                                               if (size_t len = generic_static_ref_trim(yytext, yyleng, false, scoped)) {
+                                                   yyless(len);
+                                               }
+                                           }
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return SCOPED_REF;
@@ -3270,6 +3363,12 @@ hash\<{WORD}\>\{                        {
                                            return SCOPED_REF;
                                         }
 (::{WORD})+{TYPE_ARGS_NESTED}::{WORD} {
+                                           {
+                                               bool scoped;
+                                               if (size_t len = generic_static_ref_trim(yytext, yyleng, false, scoped)) {
+                                                   yyless(len);
+                                               }
+                                           }
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return SCOPED_REF;
