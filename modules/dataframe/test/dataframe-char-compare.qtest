@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-char-compare.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires dataframe
+
+%exec-class DataFrameCharCompareTest
+
+#! Tests that DataFrame filters compare char cells as the core operators compare them (qore#6040, qore#6036)
+/** The DataFrame comparisons compared a char cell with a date as dates for ==, while their less-than comparison
+    compared it as its code point, a char cell with a char value never matched == (qore#6036), and a char cell
+    with a bool matched through the bool comparison.  Each filter of a char column and of a column of mixed values
+    is compared with the result of the core operator on the same cells, for every comparison operator and "in",
+    against ints, strings, dates, bools, chars, floats and numbers.
+*/
+class DataFrameCharCompareTest inherits QUnit::Test {
+    public {
+        #! the comparison operators of DataFrame::filter()
+        const Ops = ("==", "!=", "<", "<=", ">", ">=", "in", "not_in");
+
+        #! the values that the cells are compared with
+        const Values = (97, 98, 0, "a", "b", "97", 1970-01-01T00:01:37Z, 1970-01-01T00:01:38Z, True, False, c"a",
+            c"b", 97.0, 97.5, 97n);
+    }
+
+    constructor() : QUnit::Test("DataFrameCharCompare", "1.0") {
+        addTestCase("char column filters", \testColumn(), ("char", (c"a", c"b", c"5", c"\u{e9}")));
+        addTestCase("mixed column filters", \testColumn(), ("mixed", (c"a", "a", 97, c"b", True,
+            1970-01-01T00:01:37Z)));
+        addTestCase("documented results", \testDocumented());
+        set_return_value(main());
+    }
+
+    #! returns the result of the core operator for a cell and a value
+    static bool core(auto cell, string op, auto value) {
+        switch (op) {
+            case "==": return cell == value;
+            case "!=": return cell != value;
+            case "<": return cell < value;
+            case "<=": return cell <= value;
+            case ">": return cell > value;
+            case ">=": return cell >= value;
+            case "in": return cell == value;
+            case "not_in": return cell != value;
+        }
+        throw "TEST-ERROR", sprintf("unknown operator %y", op);
+    }
+
+    testColumn(string name, list<auto> cells) {
+        list<hash<auto>> rows = ();
+        for (int i = 0; i < cells.size(); ++i) {
+            rows += {"idx": i, "c": cells[i]};
+        }
+        DataFrame::DataFrame df(rows);
+        list<string> wrong = ();
+        foreach auto value in (Values) {
+            foreach string op in (Ops) {
+                auto operand = (op == "in" || op == "not_in") ? (value,) : value;
+                list<auto> actual = df.filter("c", op, operand).getColumn("idx") ?? ();
+                list<auto> expected = ();
+                for (int i = 0; i < cells.size(); ++i) {
+                    if (core(cells[i], op, value)) {
+                        expected += i;
+                    }
+                }
+                if (actual != expected) {
+                    wrong += sprintf("%s %s %y (%s): DataFrame %y, core %y", name, op, value, value.fullType(),
+                        actual, expected);
+                }
+            }
+        }
+        assertEq((), wrong);
+    }
+
+    #! the results of the cases of the issues
+    testDocumented() {
+        DataFrame::DataFrame df(({"c": c"a"}, {"c": c"b"}, {"c": 97}));
+        # qore#6036: a char cell equals a char value (and the int cell its code point)
+        assertEq((c"a", 97), df.filter("c", "==", c"a").getColumn("c"));
+        # qore#6040: a char cell is compared with a date as its code point by every operator
+        date d = 1970-01-01T00:01:37Z;
+        assertEq((c"a", 97), df.filter("c", "==", d).getColumn("c"));
+        assertEq((c"b",), df.filter("c", ">", d).getColumn("c"));
+        assertEq((), df.filter("c", "<", d).getColumn("c") ?? ());
+        # a char cell is not equal to True (97 != 1)
+        assertEq((), df.filter("c", "==", True).getColumn("c") ?? ());
+    }
+}
