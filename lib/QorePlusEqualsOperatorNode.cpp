@@ -177,10 +177,28 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     parse_context.typeInfo = ti;
     // the analysis left by the right operand describes that operand, not the result
     qore_set_result_parse_analysis(parse_context, ti);
+    if (getSemanticPolicy().needsFilter()) {
+        const QoreTypeInfo* result_type = ti;
+        auto* replacement = static_cast<LexicalQorePlusEqualsOperatorNode*>(
+            makeSpecialization<LexicalQorePlusEqualsOperatorNode>());
+        replacement->ti = result_type;
+        replacement->setParseAnalysis(parse_context.analysis);
+        val = replacement;
+    }
     return err;
 }
 
 QoreValue QorePlusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(needs_deref, xsink);
+}
+
+QoreValue QorePlusEqualsOperatorNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QorePlusEqualsOperatorNode::evalImplInternal(bool& needs_deref,
+        ExceptionSink* xsink) const {
     // the operand is a statement of its own where the other execution modes evaluate it so
     QoreMutationOperandHolder new_right(left, right, false, xsink);
     if (*xsink) {
@@ -201,7 +219,12 @@ QoreValue QorePlusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
     }
 
     // the implementation is shared with the other execution modes
-    ValueHolder rv(doPlusEqualsOnLValue(v, right_holder, xsink), xsink);
+    ValueHolder rv(xsink);
+    if constexpr (Lexical) {
+        rv = doPlusEqualsOnLValue(v, right_holder, xsink, getSemanticPolicy());
+    } else {
+        rv = doPlusEqualsOnLValue(v, right_holder, xsink);
+    }
     if (*xsink || !ref_rv) {
         return QoreValue();
     }

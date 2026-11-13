@@ -8347,7 +8347,10 @@ public class WebSocketClientHcioPollOp {
         when the server, having answered the close frame, ends the stream (RFC 8441 section 5, RFC 9220 section 3),
         or at the close timeout (15 seconds without one, as in waitClosed()).  Either way it is reported as an
         \c "error" message with the error's code and reason.  Tearing the connection down at once lost the close frame
-        when it had not been written yet, so the server never learned why the connection closed (issue #5910).
+        when it had not been written yet, so the server never learned why the connection closed (issue #5910).  When
+        the client had sent its own close frame and a teardown took the connection (which cancels the close timer),
+        the teardown waits for the end of the close handshake within its own bound (see waitClosed()), and the
+        connection ends when the server ends the stream (issue #5993).
 
         @param code the close code of the error
         @param reason the reason of the error
@@ -8355,6 +8358,8 @@ public class WebSocketClientHcioPollOp {
     private startErrorClose(int code, string reason) {
         # a close timer ends the close if the server does not end the stream; the logging is done without the lock
         bool timer;
+        # the close handshake of the client's own close goes on: a teardown waits for its end
+        bool handshake;
         *hash<ExceptionInfo> timer_err;
         {
             AutoLock al(heartbeat_mutex);
@@ -8364,6 +8369,7 @@ public class WebSocketClientHcioPollOp {
             error_close_code = code;
             error_close_reason = reason;
             error_close = True;
+            bool own_close = ws_close_sent;
             # the frame state sent the close frame: no other is sent, and no data frame follows it
             ws_close_sent = True;
             # no PING follows the close frame, and the connection is not idle-closed while the server answers
@@ -8371,6 +8377,13 @@ public class WebSocketClientHcioPollOp {
             if (close_timer_id) {
                 # the timer of a close the client started ends this close too, with the error's code
                 timer = True;
+            } else if (callbacks_cleared && own_close) {
+                # the client's close frame was sent before the error, and the connection was taken by a teardown that
+                # cleared the callbacks (with the close timer) and waits for the end of the close handshake (see
+                # waitClosed(), which is bounded by the close timeout): the handshake goes on, as closing the
+                # connection now ended the wait, and the teardown dropped the client's close frame when it had not
+                # been written yet (issue #5993)
+                handshake = True;
             } else if (!callbacks_cleared) {
                 try {
                     AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
@@ -8382,7 +8395,7 @@ public class WebSocketClientHcioPollOp {
                 }
             }
         }
-        if (timer) {
+        if (timer || handshake) {
             logDebug("closing the connection for an error: close code %d: %s; waiting for the server to end the "
                 "stream", code, reason);
             return;
@@ -8391,8 +8404,8 @@ public class WebSocketClientHcioPollOp {
             logError("cannot arm the close timer: %s: %s; the connection is closed at once", timer_err.err,
                 timer_err.desc);
         }
-        # without a close timer (it cannot be armed, or the callbacks were cleared in a teardown), nothing would end
-        # the close: the connection is closed now
+        # without a close timer (it cannot be armed, or the callbacks were cleared in a teardown that did not send the
+        # client's close), nothing would end the close: the connection is closed now
         markClosedAndEnqueue(code, reason, NOTHING, "error");
     }
 

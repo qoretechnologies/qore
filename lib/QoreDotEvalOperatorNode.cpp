@@ -35,7 +35,8 @@
 
 QoreString QoreDotEvalOperatorNode::name("dot eval expression");
 
-QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+template <bool Lexical>
+QoreValue QoreDotEvalOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder op(left, xsink);
     if (*xsink) {
         return QoreValue();
@@ -56,21 +57,29 @@ QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     // reference that the method returns - can use it
     QoreStatementTempScope::holdReceiver(left, op, xsink);
 
-    return evalWithBase(*op, xsink);
+    return evalWithBaseCommon<Lexical>(*op, xsink);
 }
 
-QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* xsink) const {
+template <bool Lexical>
+QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionSink* xsink) const {
+    LexicalSemanticPolicy policy;
+    if constexpr (Lexical) policy = getSemanticPolicy();
     switch (base.getType()) {
         case NT_WEAKREF: {
             // FIXME: inefficient
-            return m->exec(base.get<WeakReferenceNode>()->get(), xsink);
+            return m->execWithPolicy<Lexical>(policy, base.get<WeakReferenceNode>()->get(), xsink);
         }
 
         case NT_WEAKREF_HASH: {
             // FIXME: inefficient
             const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), m->getName());
             if (ref) {
-                return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
+                if constexpr (Lexical) {
+                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invokeLexical(m->getArgs(), xsink,
+                        policy);
+                } else {
+                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
+                }
             }
             break;
         }
@@ -78,13 +87,18 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
         case NT_OBJECT: {
             QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(base.getInternalNode()));
             // FIXME: inefficient
-            return m->exec(o, xsink);
+            return m->execWithPolicy<Lexical>(policy, o, xsink);
         }
 
         case NT_HASH: {
             const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), m->getName());
             if (ref) {
-                return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
+                if constexpr (Lexical) {
+                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invokeLexical(m->getArgs(), xsink,
+                        policy);
+                } else {
+                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
+                }
             }
             break;
         }
@@ -95,15 +109,27 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
 
     // FIXME: inefficient
     if (m->isPseudo()) {
-        return m->execPseudo(base, xsink);
+        return m->execPseudoWithPolicy<Lexical>(policy, base, xsink);
     }
 
     // a named call of a method of an object resolved at run time by parameter name whose receiver is not an object
     if (m->getRuntimeArgNames()) {
-        return m->execPseudoNamed(base, xsink);
+        return m->execPseudoNamed(policy, base, xsink);
     }
 
-    return pseudo_classes_eval(base, m->getName(), m->getArgs(), xsink);
+    if constexpr (Lexical) return pseudo_classes_eval(policy, base, m->getName(), m->getArgs(), xsink);
+    else return pseudo_classes_eval(base, m->getName(), m->getArgs(), xsink);
+}
+QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+QoreValue QoreDotEvalOperatorNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<true>(needs_deref, xsink);
+}
+
+QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* xsink) const {
+    return evalWithBaseCommon<false>(base, xsink);
 }
 
 int qore_check_method_call_receiver(QoreValue base, const char* name, const QoreClass* qc,
@@ -166,7 +192,8 @@ QoreValue QoreDotEvalOperatorNode::evalRuntimeNamedWithArgs(QoreListNode* args, 
     assert(m->getRuntimeArgNames());
     ReferenceHolder<QoreListNode> args_holder(args, xsink);
     ValueHolder base(args ? args->shift() : QoreValue(), xsink);
-    // a copy of the call with the arguments, which keeps the names of the arguments
+    // a copy of the call with the arguments, which keeps the names of the arguments; compiled code (the only caller)
+    // has the default semantic policy
     ReferenceHolder<MethodCallNode> call(new MethodCallNode(*m, args_holder.release()), xsink);
     switch (base->getType()) {
         case NT_WEAKREF:
@@ -178,7 +205,7 @@ QoreValue QoreDotEvalOperatorNode::evalRuntimeNamedWithArgs(QoreListNode* args, 
         default:
             break;
     }
-    return call->execPseudoNamed(*base, xsink);
+    return call->execPseudoNamed({}, *base, xsink);
 }
 
 int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -472,5 +499,6 @@ QoreOperatorNode* QoreDotEvalOperatorNode::copyBackground(ExceptionSink* xsink) 
         return nullptr;
     }
 
-    return new QoreDotEvalOperatorNode(loc, copy_value_and_resolve_lvar_refs(left, xsink), holder.release().get<MethodCallNode>());
+    return qore_make_dot_call(getSemanticPolicy(), loc, copy_value_and_resolve_lvar_refs(left, xsink),
+        holder.release().get<MethodCallNode>());
 }

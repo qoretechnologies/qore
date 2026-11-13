@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreSandboxMemory.h"
 
 #include <cstdint>
@@ -262,7 +263,7 @@ int BinaryNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
 
 bool BinaryNode::getAsBoolImpl() const {
     // check if we should do perl-style boolean evaluation
-    if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL))
+    if (qore_get_native_semantic_policy().strictBoolean())
         return false;
     return !empty();
 }

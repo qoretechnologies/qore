@@ -4232,3 +4232,63 @@ if (stats_before && stats_after) {
 #endif
 }
 ///@}
+
+// Legacy forwarding is selected once when a core builtin variant is registered. No mutable registry, runtime
+// lookup, policy read or branch is added to the ordinary forwarding bodies above.
+template <bool ByReference, bool ListArguments, bool BuiltinOnly = false>
+static QoreValue q_call_function_lexical(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    LexicalSemanticPolicy policy = qore_get_native_semantic_policy();
+    ReferenceHolder<QoreListNode> copied_args(xsink);
+    const QoreListNode* forwarded_args;
+    if constexpr (ListArguments) {
+        forwarded_args = get_param_value(args, 1).get<const QoreListNode>();
+    } else {
+        if (num_args(args) > 1) {
+            copied_args = args->copyListFrom(1);
+        }
+        forwarded_args = *copied_args;
+    }
+    if constexpr (ByReference) {
+        const ResolvedCallReferenceNode* callable = get_param_value(args, 0).get<const ResolvedCallReferenceNode>();
+        ProgramCallContextHelper pch(callable->getProgram());
+        return callable->invokeLexical(forwarded_args, xsink, policy);
+    } else {
+        QoreStringNodeValueHelper name_holder(get_param_value(args, 0));
+        const QoreStringNode* name = *name_holder;
+        if constexpr (BuiltinOnly) {
+            const QoreFunction* f = get_builtin_func(name, xsink);
+            return f ? f->evalDynamic(forwarded_args, rc, xsink, policy) : QoreValue();
+        } else {
+            if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
+                return QoreValue();
+            }
+            return qore_program_private::get(*q_get_runtime_call_program(rc))->callFunction(name->c_str(),
+                forwarded_args, xsink, policy);
+        }
+    }
+}
+
+// qpp emits raw C++ before its generated wrappers, so declare the wrappers used by the immutable table.
+static QoreValue f_call_function_VsVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_function_VcVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_function_args_VsC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_function_args_VcC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_builtin_function_VsVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_builtin_function_args_VsC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+
+q_func_t qore_get_lexical_builtin(q_func_t func) {
+    static const std::pair<q_func_t, q_func_t> forwarding[] = {
+        {f_call_function_VsVV, q_call_function_lexical<false, false>},
+        {f_call_function_VcVV, q_call_function_lexical<true, false>},
+        {f_call_function_args_VsC15_softlist_auto_, q_call_function_lexical<false, true>},
+        {f_call_function_args_VcC15_softlist_auto_, q_call_function_lexical<true, true>},
+        {f_call_builtin_function_VsVV, q_call_function_lexical<false, false, true>},
+        {f_call_builtin_function_args_VsC15_softlist_auto_, q_call_function_lexical<false, true, true>},
+    };
+    for (const auto& entry : forwarding) {
+        if (entry.first == func) {
+            return entry.second;
+        }
+    }
+    return qore_get_lexical_object_builtin(func);
+}

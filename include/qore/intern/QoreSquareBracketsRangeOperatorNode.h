@@ -83,7 +83,8 @@ public:
         @param po the parse options of the code (PO_BROKEN_LIST_RANGE, PO_NEGATIVE_OFFSETS, PO_BROKEN_RANGE)
     */
     DLLLOCAL static FunctionalOperatorInterface* getSliceIterator(ValueEvalRefHolder& seq, const QoreValue start_index,
-            const QoreValue stop_index, QoreParseOptions po, FunctionalValueType& value_type, ExceptionSink* xsink);
+            const QoreValue stop_index, QoreParseOptions po, FunctionalValueType& value_type, ExceptionSink* xsink,
+            LexicalSemanticPolicy semantic_policy = {});
 
 protected:
     const QoreTypeInfo* typeInfo = nullptr;
@@ -121,8 +122,8 @@ protected:
 
 public:
     DLLLOCAL QoreFunctionalSquareBracketsRangeOperator(ValueEvalRefHolder& old_seq, int64 begin, int64 end,
-            ExceptionSink* xsink)
-            : RangeIterator(begin, end, 1, &Nothing, xsink), seq(*old_seq, old_seq.isTemp(), xsink), start(begin),
+            bool broken_range, ExceptionSink* xsink)
+            : RangeIterator(begin, end, 1, &Nothing, broken_range, xsink), seq(*old_seq, old_seq.isTemp(), xsink), start(begin),
             stop(end) {
         old_seq.clearTemp();
     }

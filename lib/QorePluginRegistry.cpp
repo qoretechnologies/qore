@@ -840,7 +840,7 @@ bool verifyPluginResult(const ResolvedPluginOperation& op, const char* helper_na
     }
 
     QoreValue result = valueFromBits(result_bits);
-    if (qore_type_is_assignable_from(op.signature.return_type, result) == QTI_NOT_EQUAL) {
+    if (QoreTypeInfo::runtimeAcceptsValueOrFold(op.signature.return_type, result) == QTI_NOT_EQUAL) {
         std::string expected = qore_type_get_path(op.signature.return_type);
         return raisePluginVerifierError(op, helper_name, "PLUGIN-HELPER-RESULT-TYPE-MISMATCH",
             "return_type", expected.c_str(), result.getTypeName(), "result_type_mismatch", "3.4", xsink);
@@ -1848,10 +1848,10 @@ static int resolveProgramOperationInfoForValues(QoreProgram* pgm, QoreValue lhs,
             if (!arity_ok) {
                 continue;
             }
-            if (qore_type_is_assignable_from(op.signature.primary_type, lhs) == QTI_NOT_EQUAL) {
+            if (QoreTypeInfo::runtimeAcceptsValueOrFold(op.signature.primary_type, lhs) == QTI_NOT_EQUAL) {
                 continue;
             }
-            if (rhs && qore_type_is_assignable_from(op.signature.secondary_type, *rhs) == QTI_NOT_EQUAL) {
+            if (rhs && QoreTypeInfo::runtimeAcceptsValueOrFold(op.signature.secondary_type, *rhs) == QTI_NOT_EQUAL) {
                 continue;
             }
 

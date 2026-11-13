@@ -437,10 +437,9 @@ public:
         return const_cast<QoreProgram*>(pgm);
     }
 
-    //! returns a copy of the call with the given temporary arguments, of the class of this call
-    DLLLOCAL virtual FunctionCallNode* copyWithArgs(QoreListNode* n_args) const {
-        return new FunctionCallNode(*this, n_args);
-    }
+    //! returns a copy of the call with the given temporary arguments, of the class of this call and with its semantic
+    //! policy (see qore_make_function_call())
+    DLLLOCAL virtual FunctionCallNode* copyWithArgs(QoreListNode* n_args) const;
 
     //! returns the call as a named call whose variant is resolved at run time by parameter name
     /** @param call a call whose runtime argument names are set; it is consumed (dereferenced)
@@ -528,6 +527,11 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
+    template <bool LexicalInvocation>
+    DLLLOCAL QoreValue evalImplInternal(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
     //! evaluates a named call whose variant is resolved at run time by parameter name
     DLLLOCAL QoreValue evalNamed(QoreFunction* func, QoreProgram* call_pgm, RuntimeConfig& rc, unsigned call_flags,
             ExceptionSink* xsink) const;
@@ -590,6 +594,28 @@ public:
     DLLLOCAL virtual AbstractQoreNode* makeReferenceNodeAndDerefImpl();
 };
 
+//! Source-bound builtin invocation, selected at parse time; ordinary calls retain FunctionCallNode's entry.
+template <typename Base>
+class LexicalFunctionCallNode : public Base {
+public:
+    using Base::Base;
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return this->evalLexical(needs_deref, xsink);
+    }
+
+    QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override {
+        return this->evalLexical(rc, needs_deref, xsink);
+    }
+};
+
+template <typename Base = FunctionCallNode, typename... Args>
+Base* qore_make_function_call(LexicalSemanticPolicy policy, Args&&... args) {
+    return policy.isDefault() ? new Base(std::forward<Args>(args)...)
+        : new LexicalFunctionCallNode<Base>(std::forward<Args>(args)...);
+}
+
 //! Raises the exception for a call of the method @a name on the object @a o that has been deleted, as the AST
 //! interpreter raises it (issue #5784)
 /** Through the method resolved at parse time (@a method of the class @a qc, with its variant if known) if @a o is an
@@ -628,6 +654,12 @@ public:
     DLLLOCAL QoreValue exec(QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
             const;
 
+    DLLLOCAL QoreValue exec(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
+            const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue execImpl(LexicalSemanticPolicy policy, QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
+            const;
     //! Raises the exception that exec() raises for an object that has been deleted before it evaluates the
     //! arguments (issue #5784)
     /** @return -1 if the exception was raised, 0 if the object is valid
@@ -644,7 +676,8 @@ public:
         @param cstr the name of the method
         @param ctx the class context of the call
     */
-    DLLLOCAL QoreValue execNamed(QoreObject* o, const QoreMethod* bind_m, const QoreMethod* dispatch_m,
+    DLLLOCAL QoreValue execNamed(LexicalSemanticPolicy policy, QoreObject* o, const QoreMethod* bind_m,
+            const QoreMethod* dispatch_m,
             const char* cstr, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL const QoreClass* getClass() const {
@@ -680,15 +713,36 @@ public:
             free(c_str);
     }
 
+    template <bool Lexical, typename... Args>
+    DLLLOCAL QoreValue execWithPolicy(LexicalSemanticPolicy policy, Args&&... args) const {
+        if constexpr (Lexical) return exec(policy, std::forward<Args>(args)...);
+        else return exec(std::forward<Args>(args)...);
+    }
+
+    template <bool Lexical, typename... Args>
+    DLLLOCAL QoreValue execPseudoWithPolicy(LexicalSemanticPolicy policy, Args&&... args) const {
+        if constexpr (Lexical) return execPseudo(policy, std::forward<Args>(args)...);
+        else return execPseudo(std::forward<Args>(args)...);
+    }
+
     using AbstractMethodCallNode::exec;
     DLLLOCAL QoreValue exec(QoreObject* o, ExceptionSink* xsink) const;
 
+    DLLLOCAL QoreValue exec(LexicalSemanticPolicy policy, QoreObject* o, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue execImpl(LexicalSemanticPolicy policy, QoreObject* o, ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue execPseudo(const QoreValue n, ExceptionSink* xsink) const;
 
+    DLLLOCAL QoreValue execPseudo(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const;
     //! evaluates a named call resolved at run time by parameter name on a value that is not an object: the call of
     //! a method of an object whose receiver has no value or another value at run time (see
     //! QoreDotEvalOperatorNode::evalWithBase())
-    DLLLOCAL QoreValue execPseudoNamed(const QoreValue n, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execPseudoNamed(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual const char* getName() const {
         return c_str ? c_str : "copy";
@@ -826,9 +880,19 @@ public:
         return ns.ostr;
     }
 
+
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+        return evalImpl(getSemanticPolicy(), rc, needs_deref, xsink);
+    }
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalImpl(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
@@ -875,7 +939,9 @@ protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     //! evaluates a qualified call without a method (one that the AOT runtime dispatches by name)
-    DLLLOCAL QoreValue evalUnresolvedQualified(QoreObject* self, const qore_class_private* ctx, RuntimeConfig& rc,
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalUnresolvedQualified(LexicalSemanticPolicy policy, QoreObject* self,
+            const qore_class_private* ctx, RuntimeConfig& rc,
             ExceptionSink* xsink) const;
 };
 
@@ -889,6 +955,9 @@ public:
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
 protected:
     QoreObject* self;
@@ -914,12 +983,21 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
+    DLLLOCAL QoreValue evalImpl(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const;
 
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+        return evalImpl(getSemanticPolicy(), rc, needs_deref, xsink);
+    }
     //! evaluates a named call resolved at run time by parameter name
-    DLLLOCAL QoreValue evalNamed(RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalNamed(LexicalSemanticPolicy policy, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, NamedScope* n_scope, QoreParseListNode* args)

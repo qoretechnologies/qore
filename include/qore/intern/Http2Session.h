@@ -856,6 +856,11 @@ public:
     */
     DLLLOCAL bool hasStreamingData(int32_t& stream_id);
 
+#ifdef DEBUG
+    //! Returns the number of streaming streams whose data is buffered, as hasStreamingData() finds them
+    DLLLOCAL size_t dbgStreamingDataCount();
+#endif
+
     //! Take an end-of-stream notification for a dispatched streaming stream
     /** Used by the client multiplex poll op to surface peer END_STREAM for streams that
         markStreamComplete() returns early for (i.e. @c dispatched=true streams — RFC 8441

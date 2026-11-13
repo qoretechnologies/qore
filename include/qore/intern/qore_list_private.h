@@ -38,6 +38,7 @@
 #include <vector>
 
 #include "qore/intern/qore_container_free.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreSandboxMemory.h"
 
 typedef ReferenceHolder<QoreListNode> safe_qorelist_t;
@@ -229,6 +230,15 @@ struct qore_list_private {
 
     //! checks and converts a value for the list as checkVal() above; \a vtype is the type of the value, if known
     DLLLOCAL int checkVal(ValueHolder& holder, const QoreTypeInfo* vtype, ExceptionSink* xsink) const {
+        return checkValNativeImpl<false>(holder, vtype, xsink);
+    }
+
+    DLLLOCAL int checkValNative(ValueHolder& holder, ExceptionSink* xsink) const {
+        return checkValNativeImpl<true>(holder, nullptr, xsink);
+    }
+
+    template <bool Native>
+    DLLLOCAL int checkValNativeImpl(ValueHolder& holder, const QoreTypeInfo* vtype, ExceptionSink* xsink) const {
         if (complexTypeInfo) {
             const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
             if (QoreTypeInfo::hasType(vti)
@@ -237,7 +247,38 @@ struct qore_list_private {
                 // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
                 // with a long-lived sink silently drops elements after an unrelated error
                 ScopedTypeCheckSink ts(xsink);
-                QoreTypeInfo::acceptAssignment(vti, "<list element assignment>", v, *ts, QLVTS_List);
+                if constexpr (Native) {
+                    QoreTypeInfo::acceptAssignment(vti, "<list element assignment>", v, *ts,
+                        qore_get_native_semantic_policy(), QLVTS_List);
+                } else {
+                    QoreTypeInfo::acceptAssignment(vti, "<list element assignment>", v, *ts, QLVTS_List);
+                }
+                holder = v;
+                if (ts.raised()) {
+                    (*ts)->appendLastDescription(" (while converting types for list<%s> subtype)",
+                        QoreTypeInfo::getName(vti));
+                    return -1;
+                }
+                return 0;
+            }
+            return 0;
+        } else {
+            return stripVal(holder, xsink);
+        }
+        return 0;
+    }
+
+    DLLLOCAL int checkVal(ValueHolder& holder, const QoreTypeInfo* vtype, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const {
+        if (complexTypeInfo) {
+            const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
+            if (QoreTypeInfo::hasType(vti)
+                    && !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo())) {
+                QoreValue v(holder.release());
+                // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
+                // with a long-lived sink silently drops elements after an unrelated error
+                ScopedTypeCheckSink ts(xsink);
+                QoreTypeInfo::acceptAssignment(vti, "<list element assignment>", v, *ts, policy, QLVTS_List);
                 holder = v;
                 if (ts.raised()) {
                     (*ts)->appendLastDescription(" (while converting types for list<%s> subtype)",
@@ -293,6 +334,45 @@ struct qore_list_private {
         return push(val, nullptr, xsink);
     }
 
+    //! Pushes a value using the source operation's conversion policy.
+    DLLLOCAL int push(QoreValue val, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        ValueHolder holder(val, xsink);
+        if (checkVal(holder, nullptr, xsink, policy)) {
+            return -1;
+        }
+        pushIntern(holder.release());
+        return 0;
+    }
+
+    //! Public-list mutation checks with a source-bound conversion entry.
+    DLLLOCAL static int push(QoreListNode& list, QoreValue val, ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    DLLLOCAL static int insert(QoreListNode& list, QoreValue val, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    //! Native public APIs consult the bridge only when the existing type check requires a conversion.
+    DLLLOCAL int pushNative(QoreValue val, ExceptionSink* xsink) {
+        ValueHolder holder(val, xsink);
+        if (checkValNative(holder, xsink)) return -1;
+        pushIntern(holder.release());
+        return 0;
+    }
+
+    DLLLOCAL int mergeNative(const QoreListNode* list, ExceptionSink* xsink) {
+        reserve(length + list->size());
+        ConstListIterator i(list);
+        while (i.next()) {
+            if (pushNative(i.getReferencedValue(), xsink)) return -1;
+        }
+        return 0;
+    }
+
+    DLLLOCAL static int pushCanonical(QoreListNode& list, QoreValue val, ExceptionSink* xsink);
+    DLLLOCAL static int insertCanonical(QoreListNode& list, QoreValue val, ExceptionSink* xsink);
+    DLLLOCAL static int mergeCanonical(QoreListNode& list, const QoreListNode* other, ExceptionSink* xsink) {
+        return list.priv->merge(other, xsink);
+    }
+
     //! pushes a value as push() above; \a vtype is the type of the value, if known
     DLLLOCAL int push(QoreValue val, const QoreTypeInfo* vtype, ExceptionSink* xsink) {
         ValueHolder holder(val, xsink);
@@ -309,6 +389,21 @@ struct qore_list_private {
         while (i.next()) {
             if (push(i.getReferencedValue(), xsink))
                 return -1;
+        }
+        return 0;
+    }
+
+    DLLLOCAL int merge(const QoreListNode* list, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        reserve(length + list->size());
+        ConstListIterator i(list);
+        size_t count = 0;
+        while (i.next()) {
+            if (++count % 100 == 0 && qore_check_cancel(xsink, "list merge")) {
+                return -1;
+            }
+            if (push(i.getReferencedValue(), xsink, policy)) {
+                return -1;
+            }
         }
         return 0;
     }
@@ -412,7 +507,35 @@ struct qore_list_private {
         return rv;
     }
 
-    DLLLOCAL QoreListNode* spliceIntern(size_t offset, size_t len, const QoreValue l, bool extract, ExceptionSink* xsink) {
+    //! Replacement entry for source-bound AST operations; compiled callers use the canonical overload.
+    DLLLOCAL static QoreListNode* replace(QoreListNode& list, ptrdiff_t offset, ptrdiff_t length, QoreValue value,
+            bool extract, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        assert(list.reference_count() == 1);
+        size_t n_offset, n_length;
+        list.priv->checkOffset(offset, length, n_offset, n_length);
+        return list.priv->spliceIntern<true>(n_offset, n_length, value, extract, xsink, policy);
+    }
+
+    DLLLOCAL static QoreListNode* replace(QoreListNode& list, ptrdiff_t offset, ptrdiff_t length, QoreValue value,
+            bool extract, ExceptionSink* xsink) {
+        assert(list.reference_count() == 1);
+        size_t n_offset, n_length;
+        list.priv->checkOffset(offset, length, n_offset, n_length);
+        return list.priv->spliceIntern(n_offset, n_length, value, extract, xsink);
+    }
+
+    template <bool Lexical = false, bool Native = false>
+    DLLLOCAL QoreListNode* spliceIntern(size_t offset, size_t len, const QoreValue l, bool extract,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy = {}) {
+        auto check = [&](ValueHolder& value) {
+            if constexpr (Native) {
+                return checkValNative(value, xsink);
+            } else if constexpr (Lexical) {
+                return checkVal(value, nullptr, xsink, policy);
+            } else {
+                return checkVal(value, xsink);
+            }
+        };
         // check type compatibility before modifying the list
         ValueHolder holder(xsink);
         if (l.getType() == NT_LIST) {
@@ -423,7 +546,7 @@ struct qore_list_private {
             tmp->priv->reserve(sl->length);
             for (size_t i = 0; i < sl->length; ++i) {
                 ValueHolder eh(sl->entry[i].refSelf(), xsink);
-                if (checkVal(eh, xsink)) {
+                if (check(eh)) {
                     return nullptr;
                 }
                 tmp->priv->entry[i] = eh.release();
@@ -431,7 +554,7 @@ struct qore_list_private {
             }
         } else {
             holder = l.refSelf();
-            if (checkVal(holder, xsink)) {
+            if (check(holder)) {
                 return nullptr;
             }
         }
@@ -706,11 +829,21 @@ struct qore_list_private {
             const QoreTypeInfo* vti, const char* context_action, bool strict_check = true);
 
     DLLLOCAL static QoreListNode* newComplexList(const QoreTypeInfo* typeInfo, const QoreValue args,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    DLLLOCAL static QoreListNode* newComplexList(const QoreTypeInfo* typeInfo, const QoreValue args,
             ExceptionSink* xsink);
 
     // caller owns any reference in "init"
     DLLLOCAL static QoreListNode* newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init,
             ExceptionSink* xsink);
+
+    DLLLOCAL static QoreListNode* newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL static QoreListNode* newComplexListFromValueImpl(const QoreTypeInfo* typeInfo, QoreValue init,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy);
 
     DLLLOCAL static const qore_list_private* get(const QoreListNode& l) {
         return l.priv;

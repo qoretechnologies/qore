@@ -79,6 +79,8 @@ static const QoreProgramLocation* get_loc(YYLTYPE* yylloc) {
 // already have consumed a restoring directive, and an expression may contain several option changes.
 static void set_native_token_info(YYLTYPE* loc, QoreParseState* state) {
     const QoreParseOptions& po = qore_program_private::getParseOptions(*getProgram());
+    loc->semantic_policy = state->semantic_policy = LexicalSemanticPolicy(po);
+    loc->has_semantic_policy = true;
     if (qore_parse_options_support_ir(po) && !(po & qore_program_private_base::modernIncompatibleOptions())) {
         state->native_parse_info = {};
         loc->native_parse_info = {nullptr, nullptr, true};

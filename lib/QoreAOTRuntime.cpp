@@ -1174,7 +1174,7 @@ static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* 
         }
         return nullptr;
     }
-    if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, name)) {
+    if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, name, LexicalSemanticPolicy{})) {
         return fe;
     }
 
@@ -1211,7 +1211,7 @@ static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* 
         // name bound the reference to the wrong function silently (qore#5956)
         if (deferred_source) {
             if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-                    *pp->RootNS, nscope.getIdentifier())) {
+                    *pp->RootNS, nscope.getIdentifier(), LexicalSemanticPolicy{})) {
                 return fe;
             }
         }
@@ -1991,7 +1991,7 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
                 return 0;
             }
             const QoreNamespace* pns = nullptr;
-            const QoreEnumDecl* ed = pgm->findEnum(ref1, pns);
+            const QoreEnumDecl* ed = qore_program_private::get(*pgm)->findEnumCanonical(ref1, pns);
             if (!ed) {
                 printd(0, "AOT v2: cannot resolve enum '%s' for const enum\n", ref1);
                 aot_slot_resolve_error = describeUnresolvedAOTSymbol("enum", ref1, pgm);
@@ -2291,10 +2291,10 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_path, found_ns);
+        *pp->RootNS, class_path, found_ns, LexicalSemanticPolicy{});
     if (!qc && class_path[0] == ':' && class_path[1] == ':') {
         qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS,
-            class_path + 2, found_ns);
+            class_path + 2, found_ns, LexicalSemanticPolicy{});
     }
     if (!qc) {
         // AOT metadata is emitted from source parse, where private/internal
@@ -2761,7 +2761,7 @@ static Var* resolveGlobalVarRefPayload(const char* ref, QoreProgram* pgm,
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* vns = nullptr;
-    return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns);
+    return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns, LexicalSemanticPolicy{});
 }
 
 const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
@@ -2790,6 +2790,8 @@ QoreValue readOneExpr(
         LocalVar** locals, int num_locals,
         Var** globals, int num_globals,
         QoreProgram* local_owner_pgm) {
+    // Deferred defaults can be reconstructed after the main load phases, even during a legacy source parse.
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     uint8_t ekind = QoreAOTBinaryReader::readU8(p);
     AOTExprKind ek = static_cast<AOTExprKind>(ekind);
 
@@ -2802,7 +2804,9 @@ QoreValue readOneExpr(
     AOTExprReadCtx rctx{
         rdr, p, e, pgm, err, locals, num_locals, globals, num_globals, local_owner_pgm
     };
-    return kinfo->read_fn(rctx);
+    QoreValue value = kinfo->read_fn(rctx);
+    ParseNode::bindSemanticPolicy(value, LexicalSemanticPolicy());
+    return value;
 }
 
 QoreValue readOneTopLevelIRExpr(
@@ -2951,11 +2955,13 @@ public:
 
     //! Deserialize an expression tree from the blob and return NaN-boxed bits
     uint64_t deserialize() {
+        LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
         QoreValue v = deserializeValue();
         if (failed) {
             v.discard(nullptr);
             return 0;
         }
+        ParseNode::bindSemanticPolicy(v, LexicalSemanticPolicy());
         return toBitsNB(v);
     }
 
@@ -3373,6 +3379,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         QoreProgram* local_owner_pgm = nullptr) {
     // the closures read in the context name the type parameters of the function (qore#5733)
     QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
+    // The slot-map roots are reconstructed here, outside the scopes used to read their nested expressions.
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     const uint8_t* entry_payload_start = ptr;
     auto setBuildError = [name, build_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
@@ -3710,7 +3718,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (gname && *gname) {
             // Look up global variable by name across all namespaces
             const qore_ns_private* vns = nullptr;
-            Var* v = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, gname, vns);
+            Var* v = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, gname, vns, LexicalSemanticPolicy{});
             if (v) {
                 ctx->globals[i] = v;
             } else {
@@ -3991,10 +3999,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             printd(0, "AOT v2: error reading complex hash arg %d for '%s': %s\n",
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(*call_args, QoreValue(), nullptr);
                             has_unsupported = true;
                         } else {
-                            call_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(*call_args, arg, nullptr);
                         }
                     }
                 }
@@ -4148,10 +4156,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             printd(0, "AOT v2: error reading hashdecl arg %d for '%s': %s\n",
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(*call_args, QoreValue(), nullptr);
                             has_unsupported = true;
                         } else {
-                            call_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(*call_args, arg, nullptr);
                         }
                     }
                 }
@@ -4455,10 +4463,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                             local_owner_pgm);
                         if (!arg_err.empty()) {
                             arg.discard(nullptr);
-                            self_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(**self_args, QoreValue(), nullptr);
                             self_args_ok = false;
                         } else {
-                            self_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(**self_args, arg, nullptr);
                         }
                     }
                     // Build the base (method/class/variant-resolved) self-call node, then wrap it
@@ -4523,10 +4531,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 "cannot read argument " + std::to_string(j) + " of the call to '"
                                     + describeAOTStaticCallTarget(ref1, method_name) + "': " + arg_err);
                             arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
+                            qore_list_private::pushCanonical(*call_args, QoreValue(), nullptr);
                             has_unsupported = true;
                         } else {
-                            call_args->push(arg, nullptr);
+                            qore_list_private::pushCanonical(*call_args, arg, nullptr);
                         }
                     }
                 }
@@ -6611,7 +6619,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         && !step.name.empty()) {
                     const qore_ns_private* vns = nullptr;
                     step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
-                        *pp->RootNS, step.name.c_str(), vns);
+                        *pp->RootNS, step.name.c_str(), vns, LexicalSemanticPolicy{});
                 } else if (step.kind == LVPathStepKind::StaticVar
                         && !step.name.empty()) {
                     // Keep the symbolic path. Standalone-compiled fragments can
@@ -7051,7 +7059,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                     const char* member_name = reader.readStringRef(ptr);
                     if (enum_path && *enum_path && member_name && *member_name) {
                         const QoreNamespace* pns = nullptr;
-                        const QoreEnumDecl* ed = pgm->findEnum(enum_path, pns);
+                        const QoreEnumDecl* ed = qore_program_private::get(*pgm)->findEnumCanonical(enum_path, pns);
                         if (ed) {
                             ci->constant.enum_member = ed->findMember(member_name);
                             if (ci->constant.enum_member) {
@@ -7153,7 +7161,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (vname && *vname) {
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 const qore_ns_private* vns = nullptr;
-                var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns);
+                var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns, LexicalSemanticPolicy{});
             }
             auto* vi = new QoreIRVarInstruction(opcode, var);
             vi->mode = mode;
@@ -8958,6 +8966,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
 */
 static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* name,
         QoreProgram* pgm, const QoreAOTFunc& aot_func) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         printd(1, "AOT: buildContextForVariant '%s': no statement block\n", name);
@@ -9399,7 +9408,7 @@ static void registerAOTFunctionsFromSlotMaps(
                 qore_program_private* pp = qore_program_private::get(*pgm);
                 const qore_ns_private* found_ns = nullptr;
                 qc = qore_root_ns_private::runtimeFindClass(
-                    *pp->RootNS, class_name.c_str(), found_ns);
+                    *pp->RootNS, class_name.c_str(), found_ns, LexicalSemanticPolicy{});
                 last_qc = qc;
                 last_class_name = class_name;
             }
@@ -10872,7 +10881,7 @@ static void registerFallbackFunctionsOnMainVariants(
                 // Find matching method variant in MAIN program
                 qore_program_private* main_pp = qore_program_private::get(*main_pgm);
                 const QoreClass* main_qc = qore_root_ns_private::runtimeFindClass(
-                    *main_pp->RootNS, class_path);
+                    *main_pp->RootNS, class_path, LexicalSemanticPolicy{});
                 UserVariantBase* main_uvb = nullptr;
                 if (main_qc) {
                     qore_class_private* main_qcp = qore_class_private::get(
@@ -12472,7 +12481,7 @@ static bool aotInitDescriptorNeedsExecution(const AOTInitFuncDescriptor& desc, Q
                 }
                 const qore_ns_private* found_ns = nullptr;
                 const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                    *p->RootNS, desc.ns_path.c_str(), found_ns);
+                    *p->RootNS, desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
                 return qc ? qore_class_private::get(*const_cast<QoreClass*>(qc))->vars.find(
                     desc.item_name.c_str()) : nullptr;
             };
@@ -14593,7 +14602,7 @@ static void aotFindInitConstantEntries(const AOTInitFuncDescriptor& desc, QorePr
             return nullptr;
         }
         const qore_ns_private* found_ns = nullptr;
-        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*p->RootNS, desc.ns_path.c_str(), found_ns);
+        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*p->RootNS, desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
         if (!qc) {
             return nullptr;
         }
@@ -15092,10 +15101,10 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
             QoreProgram* class_pgm = shadow_ctx && rec->shadow_pgm ? rec->shadow_pgm : init_pgm;
             const qore_ns_private* found_ns = nullptr;
             const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *qore_program_private::get(*class_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns);
+                *qore_program_private::get(*class_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
             if (!qc && class_pgm != init_pgm) {
                 qc = qore_root_ns_private::runtimeFindClass(
-                    *qore_program_private::get(*init_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns);
+                    *qore_program_private::get(*init_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
             }
             if (qc) {
                 parse_ctx.reset(new QoreParseClassHelper(const_cast<QoreClass*>(qc)));
@@ -15259,7 +15268,7 @@ static int executeInitFunctions(
         }
         const qore_ns_private* found_ns = nullptr;
         const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-            *class_pp->RootNS, class_path.c_str(), found_ns);
+            *class_pp->RootNS, class_path.c_str(), found_ns, LexicalSemanticPolicy{});
         return const_cast<QoreClass*>(qc);
     };
     auto make_parse_context = [&](const AOTInitFuncDescriptor& desc,
@@ -15660,7 +15669,7 @@ static int executeInitFunctions(
                 {
                     const qore_ns_private* found_ns = nullptr;
                     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, desc.ns_path.c_str(), found_ns);
+                        *pp->RootNS, desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
                     if (qc) {
                         qore_class_private* qcp = qore_class_private::get(
                             *const_cast<QoreClass*>(qc));
@@ -15671,7 +15680,7 @@ static int executeInitFunctions(
                 if (shadow_pp) {
                     const qore_ns_private* found_ns = nullptr;
                     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *shadow_pp->RootNS, desc.ns_path.c_str(), found_ns);
+                        *shadow_pp->RootNS, desc.ns_path.c_str(), found_ns, LexicalSemanticPolicy{});
                     if (qc) {
                         qore_class_private* qcp = qore_class_private::get(
                             *const_cast<QoreClass*>(qc));

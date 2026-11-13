@@ -1,0 +1,133 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%requires compatprobe
+%requires reflection
+
+const Cases = {
+    "class-new": 'cls.newObject("text", "text").observed()',
+    "class-new-args": 'cls.newObjectArgs(("text", "text")).observed()',
+    "class-call-constructor": 'cls.callConstructor(("text", "text"), NOTHING).observed()',
+    "constructor": 'cls.getConstructorMethod().call("text", "text").observed()',
+    "constructor-args": 'cls.getConstructorMethod().callArgs(("text", "text")).observed()',
+    "constructor-variant": 'cls.getConstructorMethod().getVariants()[0].call("text", "text").observed()',
+    "constructor-variant-args": 'cls.getConstructorMethod().getVariants()[0].callArgs(("text", "text")).observed()',
+    "method": 'cls.getNormalMethod("value_bool").call(obj, "text")',
+    "method-args": 'cls.getNormalMethod("value_bool").callArgs(obj, ("text",))',
+    "method-variant": 'cls.getNormalMethod("value_bool").getVariants()[0].call(obj, "text")',
+    "method-variant-args": 'cls.getNormalMethod("value_bool").getVariants()[0].callArgs(obj, ("text",))',
+    "method-filter": 'cls.getNormalMethod("filter_bool").call(obj, "text")',
+    "method-filter-args": 'cls.getNormalMethod("filter_bool").callArgs(obj, ("text",))',
+    "method-filter-variant": 'cls.getNormalMethod("filter_bool").getVariants()[0].call(obj, "text")',
+    "method-filter-variant-args": 'cls.getNormalMethod("filter_bool").getVariants()[0].callArgs(obj, ("text",))',
+    "static": 'cls.getStaticMethod("static_bool").call("text")',
+    "static-args": 'cls.getStaticMethod("static_bool").callArgs(("text",))',
+    "static-variant": 'cls.getStaticMethod("static_bool").getVariants()[0].call("text")',
+    "static-variant-args": 'cls.getStaticMethod("static_bool").getVariants()[0].callArgs(("text",))',
+    "static-filter": 'cls.getStaticMethod("static_filter").call("text")',
+    "static-filter-args": 'cls.getStaticMethod("static_filter").callArgs(("text",))',
+    "static-filter-variant": 'cls.getStaticMethod("static_filter").getVariants()[0].call("text")',
+    "static-filter-variant-args": 'cls.getStaticMethod("static_filter").getVariants()[0].callArgs(("text",))',
+    "pseudo": 'Reflection::ValuePseudoClass.getMethod("toBool").call("text")',
+    "pseudo-args": 'Reflection::ValuePseudoClass.getMethod("toBool").callArgs("text", ())',
+    "pseudo-variant": 'Reflection::ValuePseudoClass.getMethod("toBool").getVariants()[0].call("text")',
+    "pseudo-variant-args": 'Reflection::ValuePseudoClass.getMethod("toBool").getVariants()[0].callArgs("text", ())',
+    "function": 'Reflection::Function::forName("CompatProbe::value_bool").call("text")',
+    "function-args": 'Reflection::Function::forName("CompatProbe::value_bool").callArgs(("text",))',
+    "function-variant": 'Reflection::Function::forName("CompatProbe::value_bool").getVariants()[0].call("text")',
+    "function-variant-args": 'Reflection::Function::forName("CompatProbe::value_bool").getVariants()[0].callArgs(("text",))',
+    "function-filter": 'Reflection::Function::forName("CompatProbe::soft_bool").call("text")',
+    "function-filter-args": 'Reflection::Function::forName("CompatProbe::soft_bool").callArgs(("text",))',
+    "function-filter-variant": 'Reflection::Function::forName("CompatProbe::soft_bool").getVariants()[0].call("text")',
+    "function-filter-variant-args": 'Reflection::Function::forName("CompatProbe::soft_bool").getVariants()[0].callArgs(("text",))',
+};
+auto sub invoke(Program target, list<auto> handles) { return target.callFunctionArgs("sample", handles); }
+
+int failures = 0;
+foreach bool legacy in (False, True) {
+    foreach string name in (keys Cases) {
+        string expression = Cases{name};
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+        if (legacy) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        # Create the handles under the opposite policy; invocation semantics belong to the caller.
+        if (legacy) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        p.parsePending('%requires compatprobe
+%requires reflection
+auto sub handles() { return (Reflection::Class::forName("CompatProbe::NativeProbe"),
+    Reflection::Function::forName("CompatProbe::value_bool"),
+    Reflection::Function::forName("CompatProbe::soft_bool"), Reflection::ValuePseudoClass.getMethod("toBool")); }
+', "reflection-handles");
+        if (legacy) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        else p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        string forwarded = replace(expression, 'Reflection::Function::forName("CompatProbe::value_bool")', "fn");
+        forwarded = replace(forwarded, 'Reflection::Function::forName("CompatProbe::soft_bool")', "filter");
+        forwarded = replace(forwarded, 'Reflection::ValuePseudoClass.getMethod("toBool")', "pseudo");
+        p.parsePending('%requires compatprobe
+%requires reflection
+auto sub sample(auto cls, auto fn, auto filter, auto pseudo) {
+            CompatProbe::NativeProbe obj("text", "text");
+            return ' + forwarded + '; }', "reflection-native-policy-" + name);
+        p.parseCommit();
+        auto handles = p.callFunction("handles");
+        foreach int invocation in (0, 1) {
+            auto expected = name.startsWith("class-") || name.startsWith("constructor")
+                ? (!legacy, !legacy) : !legacy;
+            auto actual = invoke(p, handles);
+            bool passed = actual === expected;
+            printf("%s legacy=%y mutated=%d expected=%y actual=%y %s\n", name, legacy, invocation,
+                expected, actual, passed ? "PASS" : "FAIL");
+            if (!passed) ++failures;
+            if (legacy) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        }
+    }
+}
+# A handle created by another Program must not grant that Program's authority to a legacy caller.
+Program owner(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+owner.parse('%requires reflection
+class Secret { private:internal bool hidden() { return True; } }
+auto sub handles() { Reflection::Class cls("Secret");
+    return (cls.getNormalMethod("hidden"), new Secret(), Reflection::Function::forName("system")); }
+', "reflection-authority-owner");
+auto protected_handles = owner.callFunction("handles");
+foreach bool strict in (False, True) {
+    Program caller(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_EXTERNAL_PROCESS
+        | PO_NO_CHILD_PO_RESTRICTIONS);
+    if (strict) caller.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+    caller.parse('%requires reflection
+        auto sub sample(auto method, auto object, auto function) {
+            list<string> results;
+            try { method.call(object); push results, "ALLOWED"; }
+            catch (hash<ExceptionInfo> ex) { push results, ex.err; }
+            try { method.callArgs(object, ()); push results, "ALLOWED"; }
+            catch (hash<ExceptionInfo> ex) { push results, ex.err; }
+            try { method.getVariants()[0].call(object); push results, "ALLOWED"; }
+            catch (hash<ExceptionInfo> ex) { push results, ex.err; }
+            try { method.getVariants()[0].callArgs(object, ()); push results, "ALLOWED"; }
+            catch (hash<ExceptionInfo> ex) { push results, ex.err; }
+            try { function.call("true"); push results, "ALLOWED"; }
+            catch (hash<ExceptionInfo> ex) { push results, ex.err; }
+            try { function.callArgs(("true",)); push results, "ALLOWED"; }
+            catch (hash<ExceptionInfo> ex) { push results, ex.err; }
+            try { function.getVariants()[0].call("true"); push results, "ALLOWED"; }
+            catch (hash<ExceptionInfo> ex) { push results, ex.err; }
+            try { function.getVariants()[0].callArgs(("true",)); push results, "ALLOWED"; }
+            catch (hash<ExceptionInfo> ex) { push results, ex.err; }
+            return results;
+        }', "reflection-legacy-authority");
+    foreach int mutation in (0, 1) {
+        auto expected = ("REFLECTION-ACCESS-ERROR", "REFLECTION-ACCESS-ERROR",
+            "REFLECTION-ACCESS-ERROR", "REFLECTION-ACCESS-ERROR", "INVALID-FUNCTION-ACCESS",
+            "INVALID-FUNCTION-ACCESS", "INVALID-FUNCTION-ACCESS", "INVALID-FUNCTION-ACCESS");
+        auto actual = invoke(caller, protected_handles);
+        bool passed = actual === expected;
+        printf("authority strict=%y mutated=%d expected=%y actual=%y %s\n", strict, mutation,
+            expected, actual, passed ? "PASS" : "FAIL");
+        if (!passed) ++failures;
+        if (strict) caller.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        else caller.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+    }
+}
+if (failures) throw "REFLECTION-NATIVE-POLICY", sprintf("%d failures", failures);
+printf("PASS\n");

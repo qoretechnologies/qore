@@ -2672,7 +2672,7 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* cns = nullptr;
     ConstantEntry* ce = const_cast<ConstantEntry*>(
-        qore_root_ns_private::runtimeFindNamespaceConstant(*pp->RootNS, fqn, cns));
+        qore_root_ns_private::runtimeFindNamespaceConstant(*pp->RootNS, fqn, cns, LexicalSemanticPolicy{}));
     if (ce) {
         return ce;
     }
@@ -2718,7 +2718,7 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
     std::string const_name = path.substr(sep + 2);
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_path.c_str(), found_ns);
+        *pp->RootNS, class_path.c_str(), found_ns, LexicalSemanticPolicy{});
     if (!qc) {
         const char* pending_class_path = class_path.c_str();
         if (pending_class_path[0] == ':' && pending_class_path[1] == ':') {
@@ -3472,7 +3472,7 @@ const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* found_ns = nullptr;
-    if (const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS, path, found_ns)) {
+    if (const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS, path, found_ns, LexicalSemanticPolicy{})) {
         return hd;
     }
 
@@ -3643,7 +3643,7 @@ static bool qoreAOTContainerValueTypeResolvable(const QoreAOTBinaryWriter& write
     // value's
     if (kind == QoreAOTContainerValueType::HashDecl) {
         const QoreNamespace* pns = nullptr;
-        return pgm->findHashDecl(type_path, pns) == hd;
+        return qore_program_private::get(*pgm)->findHashDeclCanonical(type_path, pns) == hd;
     }
     QoreAOTTypeResolver resolver(pgm);
     std::string type_error;
@@ -3815,7 +3815,7 @@ static bool qoreAOTApplyContainerValueType(QoreValue& v,
     const QoreTypeInfo* ti = nullptr;
     if (kind == QoreAOTContainerValueType::HashDecl) {
         const QoreNamespace* pns = nullptr;
-        const TypedHashDecl* hd = pgm ? pgm->findHashDecl(type_path, pns) : nullptr;
+        const TypedHashDecl* hd = pgm ? qore_program_private::get(*pgm)->findHashDeclCanonical(type_path, pns) : nullptr;
         if (!hd) {
             error = "cannot resolve hashdecl '" + std::string(type_path)
                 + "' while reading typed AOT container value";
@@ -4772,6 +4772,7 @@ QoreAOTValueLocalsHelper::~QoreAOTValueLocalsHelper() {
 
 QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end,
         std::string& error) const {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     const uint8_t* start = ptr;
     QoreValue rv = readValueIntern(ptr, end, error);
     if (error.empty()) {
@@ -5178,7 +5179,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 return QoreValue();
             }
             const QoreNamespace* pns = nullptr;
-            const QoreEnumDecl* ed = getProgram()->findEnum(path, pns);
+            const QoreEnumDecl* ed = qore_program_private::get(*getProgram())->findEnumCanonical(path, pns);
             if (!ed) {
                 error = std::string("enum not found: ") + path;
                 return QoreValue();
@@ -5318,7 +5319,7 @@ QoreValue QoreAOTBinaryReader::readValueIntern(const uint8_t*& ptr, const uint8_
                 // Hashdecl: type_path is a namespace path to a hashdecl
                 QoreProgram* pgm = getProgram();
                 const QoreNamespace* pns = nullptr;
-                const TypedHashDecl* hd = pgm ? pgm->findHashDecl(type_path, pns) : nullptr;
+                const TypedHashDecl* hd = pgm ? qore_program_private::get(*pgm)->findHashDeclCanonical(type_path, pns) : nullptr;
                 if (!hd) {
                     printd(0, "AOT readValue VT_NEW_COMPLEX_DEFAULT: cannot resolve hashdecl '%s'\n",
                         type_path);
@@ -5635,7 +5636,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
         }
 
         const QoreNamespace* pns = nullptr;
-        const TypedHashDecl* base_hd = pgm->findHashDecl(base_path.c_str(), pns);
+        const TypedHashDecl* base_hd = qore_program_private::get(*pgm)->findHashDeclCanonical(base_path.c_str(), pns);
         if (!base_hd) {
             return nullptr;
         }
@@ -5679,7 +5680,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
     }
 
     const QoreNamespace* pns = nullptr;
-    const TypedHashDecl* thd = pgm->findHashDecl(decl_name.c_str(), pns);
+    const TypedHashDecl* thd = qore_program_private::get(*pgm)->findHashDeclCanonical(decl_name.c_str(), pns);
     if (thd) {
         if (typed_hash_decl_private::get(*thd)->hasTypeParams()) {
             return nullptr;
@@ -5719,7 +5720,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveEnumType(const char* path) {
     }
 
     const QoreNamespace* pns = nullptr;
-    const QoreEnumDecl* ed = pgm->findEnum(enum_name.c_str(), pns);
+    const QoreEnumDecl* ed = qore_program_private::get(*pgm)->findEnumCanonical(enum_name.c_str(), pns);
     if (ed) {
         return ed->getTypeInfo(or_nothing);
     }
@@ -6113,7 +6114,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveTypeParameterType(const char* pa
         }
 
         const QoreNamespace* pns = nullptr;
-        const TypedHashDecl* hd = pgm->findHashDecl(hashdecl_path.c_str(), pns);
+        const TypedHashDecl* hd = qore_program_private::get(*pgm)->findHashDeclCanonical(hashdecl_path.c_str(), pns);
         if (!hd) {
             return nullptr;
         }
@@ -15991,6 +15992,8 @@ bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
 }
 
 bool QoreAOTBinaryDeserializer::deserializeShellsFromOpenReader(std::string& error) {
+    // Native images have canonical semantics, including AST metadata reconstructed during a legacy parse.
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     if (!checkAOTFeatureCompatibility(reader, error)) {
         return false;
     }
@@ -16312,6 +16315,7 @@ const QoreProgramLocation* QoreAOTBinaryDeserializer::getBlobLocation(int32_t st
 }
 
 bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Install pending-static-method-default context for the function/method
     // deserialization phase. Param defaults like
     // `string b = MultiPartMessage::getBoundary()` inside MultiPartMessage's
@@ -16437,6 +16441,7 @@ bool QoreAOTBinaryDeserializer::commitClasses(std::string& error) {
 // embedded source metadata, rebuilds root-namespace indexes, and
 // resolves the BCA (base-class constructor argument) expression blobs.
 bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     {
         for (const auto& pd : pending_smd) {
             const QoreClass* qc = !pd.class_path.empty()
@@ -16477,6 +16482,7 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::finalizePostIndex(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Resolve deferred BCA (base class constructor argument) blobs.
     // Must run after commitDeserializedClasses + rebuildAllIndexes so all
     // methods and classes are findable by the native/legacy expression handlers.
@@ -17279,6 +17285,7 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Second pass: create instance members now that types are resolved
     // NOTE: hashdecls and enums must be deserialized before calling this method
     // so that type references to them can be resolved
@@ -17338,7 +17345,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             // reference enum values are deferred until here.
             if (!pim.pending_enum_path.empty()) {
                 const QoreNamespace* pns = nullptr;
-                const QoreEnumDecl* ed = getProgram()->findEnum(
+                const QoreEnumDecl* ed = qore_program_private::get(*getProgram())->findEnumCanonical(
                     pim.pending_enum_path.c_str(), pns);
                 if (ed) {
                     const QoreEnumMember* member = ed->findMember(
@@ -17489,6 +17496,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Second pass: create static members now that types are resolved
     // NOTE: hashdecls and enums must be deserialized before calling this method
     // so that type references to them can be resolved
@@ -17548,7 +17556,7 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             // that reference enum values are deferred until here.
             if (!psm.pending_enum_path.empty()) {
                 const QoreNamespace* pns = nullptr;
-                const QoreEnumDecl* ed = getProgram()->findEnum(
+                const QoreEnumDecl* ed = qore_program_private::get(*getProgram())->findEnumCanonical(
                     psm.pending_enum_path.c_str(), pns);
                 if (ed) {
                     const QoreEnumMember* member = ed->findMember(
@@ -17982,6 +17990,7 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
+    LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Preserve constant references as lazy expressions while their values are
     // still pending. All constant names now exist, including sibling fragments.
     struct RcrWrapGuard {
@@ -18016,7 +18025,7 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             // has run, look up the enum member and materialise the value.
             if (!phm.pending_enum_path.empty()) {
                 const QoreNamespace* pns = nullptr;
-                const QoreEnumDecl* ed = getProgram()->findEnum(
+                const QoreEnumDecl* ed = qore_program_private::get(*getProgram())->findEnumCanonical(
                     phm.pending_enum_path.c_str(), pns);
                 if (ed) {
                     const QoreEnumMember* member = ed->findMember(
@@ -18473,7 +18482,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
                 qore_ns_private::get(*pp->RootNS));
             const qore_ns_private* found_ns = nullptr;
             const TypedHashDecl* parent = qore_root_ns_private::runtimeFindHashDecl(
-                *rpriv->rns, hdi.parent_path.c_str(), found_ns);
+                *rpriv->rns, hdi.parent_path.c_str(), found_ns, LexicalSemanticPolicy{});
             if (parent) {
                 typed_hash_decl_private::get(*hdi.hd)->setParentHashDecl(parent);
             }

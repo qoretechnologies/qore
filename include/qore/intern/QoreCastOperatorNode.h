@@ -160,6 +160,16 @@ public:
             ExceptionSink* xsink);
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue castValueImpl(QoreValue inner, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL int checkValueImpl(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
+
+    template <bool Lexical>
+    DLLLOCAL static QoreValue castValueToTypeImpl(const QoreTypeInfo* typeInfo, bool or_nothing,
+            QoreValue inner, ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
     const QoreTypeInfo* typeInfo;
     bool or_nothing;
 
@@ -247,6 +257,12 @@ public:
     }
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue castValueImpl(QoreValue inner, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
+
     const TypedHashDecl* hd;
     std::string dynamic_hashdecl_name;
     bool or_nothing;
@@ -283,6 +299,12 @@ public:
     DLLLOCAL virtual bool isOrNothing() const { return or_nothing; }
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue castValueImpl(QoreValue inner, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
+
     const QoreTypeInfo* typeInfo;
     bool or_nothing;
 
@@ -317,6 +339,12 @@ public:
     DLLLOCAL virtual bool isOrNothing() const { return or_nothing; }
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue castValueImpl(QoreValue inner, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
+
     const QoreTypeInfo* typeInfo;
     bool or_nothing;
 

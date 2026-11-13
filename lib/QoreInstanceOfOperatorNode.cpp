@@ -34,6 +34,34 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreStatementTemps.h"
 
+namespace {
+class LexicalInstanceOfOperatorNode : public QoreInstanceOfOperatorNode {
+public:
+    using QoreInstanceOfOperatorNode::QoreInstanceOfOperatorNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreInstanceOfOperatorNode* QoreInstanceOfOperatorNode::create(LexicalSemanticPolicy policy,
+        const QoreProgramLocation* loc, QoreValue exp, QoreParseTypeInfo* type) {
+    auto* node = policy.brokenSoftTypes()
+        ? static_cast<QoreInstanceOfOperatorNode*>(new LexicalInstanceOfOperatorNode(loc, exp, type))
+        : new QoreInstanceOfOperatorNode(loc, exp, type);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
+QoreInstanceOfOperatorNode* QoreInstanceOfOperatorNode::create(LexicalSemanticPolicy policy,
+        const QoreProgramLocation* loc, QoreValue exp, const QoreTypeInfo* type) {
+    auto* node = policy.brokenSoftTypes()
+        ? static_cast<QoreInstanceOfOperatorNode*>(new LexicalInstanceOfOperatorNode(loc, exp, type))
+        : new QoreInstanceOfOperatorNode(loc, exp, type);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
 QoreString QoreInstanceOfOperatorNode::InstanceOf_str("instanceof operator expression");
 
 // if del is true, then the returned QoreString * should be deleted, if false, then it must not be
@@ -48,6 +76,11 @@ int QoreInstanceOfOperatorNode::getAsString(QoreString& str, int foff, Exception
 }
 
 QoreValue QoreInstanceOfOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreValue QoreInstanceOfOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     assert(ti);
 
     QoreOperandEvalHolder v(exp, xsink);
@@ -55,18 +88,26 @@ QoreValue QoreInstanceOfOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
         return QoreValue();
     }
 
+    auto accepts = [&](QoreValue value) {
+        if constexpr (Lexical) {
+            return QoreTypeInfo::runtimeAcceptsValue(ti, value, getSemanticPolicy()) != QTI_NOT_EQUAL;
+        } else {
+            return QoreTypeInfo::runtimeAcceptsValue(ti, value) != QTI_NOT_EQUAL;
+        }
+    };
+
     // treat a weak reference as the target object
     qore_type_t t = v->getType();
     switch (t) {
         case NT_WEAKREF:
-            return QoreTypeInfo::runtimeAcceptsValue(ti, **v->get<const WeakReferenceNode>()) ? true : false;
+            return accepts(**v->get<const WeakReferenceNode>()) ? true : false;
         case NT_WEAKREF_HASH:
-            return QoreTypeInfo::runtimeAcceptsValue(ti, **v->get<const WeakHashReferenceNode>()) ? true : false;
+            return accepts(**v->get<const WeakHashReferenceNode>()) ? true : false;
         case NT_WEAKREF_LIST:
-            return QoreTypeInfo::runtimeAcceptsValue(ti, **v->get<const WeakListReferenceNode>()) ? true : false;
+            return accepts(**v->get<const WeakListReferenceNode>()) ? true : false;
     }
 
-    return QoreTypeInfo::runtimeAcceptsValue(ti, *v) ? true : false;
+    return accepts(*v) ? true : false;
 }
 
 // returns true if "super" unconditionally accepts every runtime value of "sub" (i.e. without may_not_match - the

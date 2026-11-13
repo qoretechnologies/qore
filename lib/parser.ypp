@@ -108,6 +108,7 @@ static int check_strong_encapsulation(const QoreProgramLocation* loc, const char
 #define YYLLOC_DEFAULT(Current, Rhs, N)                         \
     do {                                                        \
         (Current).native_parse_info = {};                        \
+        (Current).has_semantic_policy = false;                   \
         if (N) {                                                \
             (Current).first_line = YYRHSLOC(Rhs, 1).first_line; \
             (Current).first_col  = YYRHSLOC(Rhs, 1).first_col;  \
@@ -115,6 +116,10 @@ static int check_strong_encapsulation(const QoreProgramLocation* loc, const char
             (Current).last_col   = YYRHSLOC(Rhs, N).last_col;   \
             unsigned yydepth = 0;                               \
             for (int yyi = 1; yyi <= (N); ++yyi) {              \
+                if (!(Current).has_semantic_policy && YYRHSLOC(Rhs, yyi).has_semantic_policy) { \
+                    (Current).semantic_policy = YYRHSLOC(Rhs, yyi).semantic_policy; \
+                    (Current).has_semantic_policy = true;        \
+                }                                               \
                 (Current).native_parse_info.merge(YYRHSLOC(Rhs, yyi).native_parse_info); \
                 if (YYRHSLOC(Rhs, yyi).depth > yydepth) {       \
                     yydepth = YYRHSLOC(Rhs, yyi).depth;         \
@@ -129,6 +134,8 @@ static int check_strong_encapsulation(const QoreProgramLocation* loc, const char
                 YYRHSLOC(Rhs, 0).last_col;                      \
             (Current).depth = 0;                                \
         }                                                       \
+        yyget_extra(yyscanner)->semantic_policy = (Current).has_semantic_policy \
+            ? (Current).semantic_policy : LexicalSemanticPolicy(parse_get_parse_options()); \
     } while (0)
 
 // a list that the parser builds from left to right is as deep as its deepest element
@@ -200,14 +207,17 @@ public:
     const QoreTypeInfo* typeInfo;
     QoreParseTypeInfo* parseTypeInfo;
     bool pub;
+    LexicalSemanticPolicy semantic_policy;
 
     DLLLOCAL ConstNode(const QoreProgramLocation* loc, char* n, QoreValue v, bool p = false,
             const QoreTypeInfo* ti = nullptr, QoreParseTypeInfo* pti = nullptr)
             : loc(loc), name(n), value(v), typeInfo(ti), parseTypeInfo(pti), pub(p) {
+        LexicalParsePolicyHelper::capture(semantic_policy);
     }
     DLLLOCAL ConstNode(const QoreProgramLocation* loc, NamedScope* n, QoreValue v, bool p = false,
             const QoreTypeInfo* ti = nullptr, QoreParseTypeInfo* pti = nullptr)
             : loc(loc), name(n), value(v), typeInfo(ti), parseTypeInfo(pti), pub(p) {
+        LexicalParsePolicyHelper::capture(semantic_policy);
     }
     DLLLOCAL ~ConstNode() {
         delete parseTypeInfo;
@@ -1158,7 +1168,12 @@ static inline MethodVariantBase* new_method_variant(const QoreProgramLocation* l
             parse_error(*loc, "return type information cannot be defined for %s() methods", name);
             delete returnTypeInfo;
         }
-        return new UserConstructorVariant(access, b, n_sig_first_line, n_sig_last_line, params, bcal, flags);
+        if (bcal && bcal->needsLexicalEntry()) {
+            return qore_make_user_variant<LexicalBaseConstructorVariant>(params, access, b,
+                n_sig_first_line, n_sig_last_line, params, bcal, flags);
+        }
+        return qore_make_user_variant<UserConstructorVariant>(params, access, b, n_sig_first_line, n_sig_last_line,
+            params, bcal, flags);
     }
     if (bcal) {
         parse_error(*loc, "only constructors may have base class constructor arguments");
@@ -1184,7 +1199,7 @@ static inline MethodVariantBase* new_method_variant(const QoreProgramLocation* l
         }
         if (access > Public)
             parse_error(*loc, "destructors cannot be private");
-        return new UserDestructorVariant(b, n_sig_first_line, n_sig_last_line);
+        return qore_make_user_variant<UserDestructorVariant>(QoreValue(), b, n_sig_first_line, n_sig_last_line);
     }
     if (!strcmp(name, "copy")) {
         if (const_method) {
@@ -1196,7 +1211,7 @@ static inline MethodVariantBase* new_method_variant(const QoreProgramLocation* l
         if (mod & OFM_ABSTRACT) {
             parse_error(*loc, "%s() methods cannot be declared abstract", name);
         }
-        return new UserCopyVariant(access, b, n_sig_first_line, n_sig_last_line, params, returnTypeInfo, mod & OFM_SYNCED);
+        return qore_make_user_variant<UserCopyVariant>(params, access, b, n_sig_first_line, n_sig_last_line, params, returnTypeInfo, mod & OFM_SYNCED);
     }
 
     if (!strcmp(name, "methodGate") || !strcmp(name, "memberGate") || !strcmp(name, "memberNotification")) {
@@ -1211,7 +1226,7 @@ static inline MethodVariantBase* new_method_variant(const QoreProgramLocation* l
     if (mod & OFM_FINAL && mod & OFM_ABSTRACT)
         parse_error(*loc, "method '%s()' is declared both final and abstract", name);
 
-    return new UserMethodVariant(access, mod & OFM_FINAL, b, n_sig_first_line, n_sig_last_line, params,
+    return qore_make_user_variant<UserMethodVariant>(params, access, mod & OFM_FINAL, b, n_sig_first_line, n_sig_last_line, params,
         returnTypeInfo, mod & OFM_SYNCED, flags, mod & OFM_ABSTRACT, const_method);
 }
 
@@ -1343,17 +1358,19 @@ static QoreValue parse_hash_map(const QoreProgramLocation* loc, QoreParseHashNod
         return QoreValue();
     }
 
+    LexicalSemanticPolicy policy;
+    LexicalParsePolicyHelper::capture(policy);
     if (l->size() == 1) {
         QoreValue iter = l->shift();
-        return new QoreHashMapOperatorNode(loc, exp->takeFirstKey(), exp->takeFirstValue(), iter);
+        return QoreHashMapOperatorNode::create(policy, loc, exp->takeFirstKey(), exp->takeFirstValue(), iter);
     }
 
     QoreValue iter = l->shift();
     QoreValue select = l->shift();
-    return new QoreHashMapSelectOperatorNode(loc, exp->takeFirstKey(), exp->takeFirstValue(), iter, select);
+    return QoreHashMapSelectOperatorNode::create(policy, loc, exp->takeFirstKey(), exp->takeFirstValue(), iter, select);
 }
 
-static AbstractQoreNode* parse_map(const QoreProgramLocation* loc, QoreValue exp, QoreParseListNode* l) {
+static AbstractQoreNode* parse_map(LexicalSemanticPolicy policy, const QoreProgramLocation* loc, QoreValue exp, QoreParseListNode* l) {
     assert(l && (l->size() == 1 || l->size() == 2));
     ReferenceHolder<> lh(l, 0);
 
@@ -1364,10 +1381,10 @@ static AbstractQoreNode* parse_map(const QoreProgramLocation* loc, QoreValue exp
 
     QoreValue iterator_exp = l->shift();
     QoreValue select_exp = l->shift();
-    return new QoreMapSelectOperatorNode(loc, exp, iterator_exp, select_exp);
+    return QoreMapSelectOperatorNode::create(policy, loc, exp, iterator_exp, select_exp);
 }
 
-static AbstractQoreNode* parse_streaming_operator(const QoreProgramLocation* loc,
+static AbstractQoreNode* parse_streaming_operator(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
         QoreStreamingOperatorNode::Kind kind, const char* name, const char* left_desc, QoreValue args,
         bool source_only_allowed) {
     QoreValue v(args);
@@ -1376,7 +1393,7 @@ static AbstractQoreNode* parse_streaming_operator(const QoreProgramLocation* loc
         if (l->size() == 2) {
             QoreValue predicate = l->shift();
             QoreValue source = l->shift();
-            AbstractQoreNode* rv = new QoreStreamingOperatorNode(loc, kind, predicate, source);
+            AbstractQoreNode* rv = QoreStreamingOperatorNode::create(policy, loc, kind, predicate, source);
             v.discard(nullptr);
             return rv;
         }
@@ -1394,7 +1411,7 @@ static AbstractQoreNode* parse_streaming_operator(const QoreProgramLocation* loc
         return nullptr;
     }
 
-    return new QoreStreamingOperatorNode(loc, kind, QoreValue(), args);
+    return QoreStreamingOperatorNode::create(policy, loc, kind, QoreValue(), args);
 }
 
 #define NSN_NONE     0
@@ -1505,7 +1522,8 @@ struct NSNode {
                 }
                 delete n.enumdef;
                 break;
-            case NSN_CONST:
+            case NSN_CONST: {
+                LexicalParsePolicyHelper policy(n.cn->semantic_policy);
                 if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
                     parse_error(*n.cn->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                         n.cn->name.ostr);
@@ -1514,6 +1532,7 @@ struct NSNode {
                     n.cn->takeParseTypeInfo());
                 delete n.cn;
                 break;
+            }
             case NSN_TYPEDEF:
                 ns.parseAddTypedef(n.td->loc, n.td->name, n.td->getTypeInfo(), n.td->takeParseTypeInfo(), n.td->pub);
                 delete n.td;
@@ -1608,9 +1627,13 @@ public:
     // unresolved declared type for an explicitly-typed class constant (MI_Constant); deferred to ConstantEntry so
     // that forward references to hashdecls/classes declared later in the same module resolve correctly
     QoreParseTypeInfo* constParseTypeInfo = nullptr;
+    LexicalSemanticPolicy constant_policy;
 
     DLLLOCAL MemberInfo(char* n, QoreMemberInfo* mi) : loc(mi->loc), name(n), type(MI_Member) {
         u.memberInfo = mi;
+        LexicalSemanticPolicy policy;
+        LexicalParsePolicyHelper::capture(policy);
+        mi->bindInitializationPolicy(policy, true);
         if (!(mi && mi->parseHasTypeInfo()) && parse_check_parse_option(PO_REQUIRE_TYPES))
             parse_error(*mi->loc, "member '%s' declared without type information, but parse options require type information for all declarations", name);
     }
@@ -1619,10 +1642,14 @@ public:
             const QoreTypeInfo* ti = nullptr, QoreParseTypeInfo* pti = nullptr)
             : loc(loc), name(n), type(MI_Constant), typeInfo(ti), constParseTypeInfo(pti) {
         u.exp = exp;
+        LexicalParsePolicyHelper::capture(constant_policy);
     }
 
     DLLLOCAL MemberInfo(char* n, HashDeclMemberInfo* mi) : loc(mi->loc), name(n), type(MI_HashMem) {
         u.hashMemberInfo = mi;
+        LexicalSemanticPolicy policy;
+        LexicalParsePolicyHelper::capture(policy);
+        mi->bindInitializationPolicy(policy);
     }
 
     DLLLOCAL ~MemberInfo() {
@@ -1700,6 +1727,9 @@ struct ClassVarInfo : public MemberInfo {
         name = n;
         type = MI_Var;
         u.varInfo = vi;
+        LexicalSemanticPolicy policy;
+        LexicalParsePolicyHelper::capture(policy);
+        vi->bindInitializationPolicy(policy);
         if (!(vi && vi->parseHasTypeInfo()) && parse_check_parse_option(PO_REQUIRE_TYPES)) {
             parse_error(*vi->loc, "class static variable '%s' declared without type information, but parse options "
                 "require type information for all declarations", name);
@@ -1732,10 +1762,11 @@ public:
 
         if (member->type == MI_Member)
             mmap.addNoCheck(member->getPair());
-        else if (member->type == MI_Constant)
+        else if (member->type == MI_Constant) {
+            LexicalParsePolicyHelper policy(member->constant_policy);
             cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo(), false, Public,
                 member->takeConstParseTypeInfo());
-        else
+        } else
             vmap.addNoCheck(member->getVarPair());
 
         delete member;
@@ -1771,6 +1802,7 @@ public:
             }
 
             // add new constant to list
+            LexicalParsePolicyHelper policy(member->constant_policy);
             cmap.parseAdd(member->loc, member->name, member->takeExp(), member->getTypeInfo(), false, Public,
                 member->takeConstParseTypeInfo());
         } else {
@@ -2139,9 +2171,11 @@ static AbstractQoreNode* process_dot(int sline, int eline, QoreValue l, QoreValu
             if (!f->isFinalized()) {
                 MethodCallNode* m = new MethodCallNode(loc, f->takeName(), f->takeParseArgs());
                 m->moveExplicitTypeArgsFrom(*f);
+                LexicalSemanticPolicy policy = f->getSemanticPolicy();
+                ParseNode::bindSemanticPolicy(QoreValue(m), policy);
                 f->deref();
 
-                return new QoreDotEvalOperatorNode(loc, l, m);
+                return qore_make_dot_call(policy, loc, l, m);
             }
             break;
         }
@@ -2478,7 +2512,10 @@ static QoreParseListNode* append_call_args(QoreParseListNode* positional, QorePa
 }
 
 static AbstractQoreNode* processCall(int sline, int eline, int scol, int ecol, QoreValue $1,
-        QoreParseListNode* args) {
+        QoreParseListNode* args, LexicalSemanticPolicy policy) {
+    // Factory selection and the resulting node must use the same call-site token, even when a directive
+    // separates a typed declaration from its opening parenthesis.
+    LexicalParsePolicyHelper lexical_policy(policy);
     AbstractQoreNode* $$;
     const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(sline, eline, scol, ecol);
 
@@ -2489,7 +2526,7 @@ static AbstractQoreNode* processCall(int sline, int eline, int scol, int ecol, Q
         char* str = b->takeString();
         b->deref();
         printd(5, "parsing call %s()\n", str);
-        $$ = new FunctionCallNode(loc, str, args);
+        $$ = qore_make_function_call(policy, loc, str, args);
     } else if (t == NT_CONSTANT) {
         ScopedRefNode* c = $1.get<ScopedRefNode>();
         // take NamedScope from node and delete node
@@ -2497,14 +2534,14 @@ static AbstractQoreNode* processCall(int sline, int eline, int scol, int ecol, Q
         c->deref();
         assert(ns->size() > 1);
         printd(5, "parsing scoped call (static method, new object call, or program function call) %s()\n", ns->ostr);
-        $$ = new StaticMethodCallNode(loc, ns, args);
+        $$ = qore_make_function_call<StaticMethodCallNode>(policy, loc, ns, args);
     } else if (t == NT_SELF_VARREF) {
         SelfVarrefNode* v = $1.get<SelfVarrefNode>();
         // take string from node and delete node
         char* str = v->takeString();
         v->deref();
         //printd(5, "parsing in-object method call %s()\n", str);
-        $$ = new SelfFunctionCallNode(loc, str, args);
+        $$ = qore_make_function_call<SelfFunctionCallNode>(policy, loc, str, args);
     } else {
         QoreHashObjectDereferenceOperatorNode* hodon;
 
@@ -2536,7 +2573,7 @@ static AbstractQoreNode* processCall(int sline, int eline, int scol, int ecol, Q
             QoreValue l = hodon->swapLeft(QoreValue());
             hodon->deref(nullptr);
 
-            $$ = new QoreDotEvalOperatorNode(loc, l, mc);
+            $$ = qore_make_dot_call(policy, loc, l, mc);
         } else {
             $$ = nullptr;
             if ($1.getType() == NT_VARREF) {
@@ -2555,7 +2592,7 @@ static AbstractQoreNode* processCall(int sline, int eline, int scol, int ecol, Q
                 }
             }
             if (!$$) {
-                $$ = new CallReferenceCallNode(loc, $1, args);
+                $$ = qore_make_reference_call(policy, loc, $1, args);
                 printd(5, "made new CallReferenceCallNode: %p exp: %s\n", $$, $1.getTypeName());
             }
         }
@@ -3088,6 +3125,7 @@ top_level_command:
         }
         // see if strong encapsulation is enabled
         check_strong_encapsulation($1->loc, "constant", $1->name.ostr);
+        LexicalParsePolicyHelper policy($1->semantic_policy);
         qore_root_ns_private::parseAddConstant($1->loc, *getRootNS(), $1->name, $1->value, $1->pub,
             $1->typeInfo, $1->takeParseTypeInfo());
         delete $1;
@@ -3097,6 +3135,7 @@ top_level_command:
             parse_error(*$1->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->name.ostr);
         }
+        LexicalParsePolicyHelper policy($1->semantic_policy);
         qore_root_ns_private::parseAddConstant($1->loc, *getRootNS(), $1->name, $1->value, $1->pub,
             $1->typeInfo, $1->takeParseTypeInfo());
         delete $1;
@@ -3577,7 +3616,9 @@ statement:
         assert(ns->size() > 1);
         printd(5, "statement: parsing static method call: %s() size=%d\n", ns->ostr, ns->size());
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
-        $$ = new ExpressionStatement(loc, new StaticMethodCallNode(loc, ns, $3));
+        auto* call = qore_make_function_call<StaticMethodCallNode>(@2.semantic_policy, loc, ns, $3);
+        ParseNode::bindSemanticPolicy(QoreValue(call), @2.semantic_policy);
+        $$ = new ExpressionStatement(loc, call);
     }
     | try_statement
     { $$ = $1; }
@@ -3602,7 +3643,7 @@ statement:
     | TOK_ASSERT '(' exp ')' ';' {
         // exp could be: single condition, or list (condition, msg, args...)
         // AssertStatement handles both cases
-        $$ = new AssertStatement(@1.first_line, @4.last_line, $3);
+        $$ = AssertStatement::create(@3.semantic_policy, @1.first_line, @4.last_line, $3);
         $$->setColumns(@1.first_col, @4.last_col);
     }
     | TOK_DEBUG '(' exp ')' ';' {
@@ -3644,23 +3685,24 @@ statement:
         $$->setColumns(@1.first_col, @7.last_col);
     }
     | TOK_IF '(' exp ')' statement_or_block %prec IFX {
-        $$ = new IfStatement(@1.first_line, @5.last_line, $3, $5);
+        $$ = IfStatement::create(@3.semantic_policy, @1.first_line, @5.last_line, $3, $5);
         $$->setColumns(@1.first_col, @5.last_col);
     }
     | TOK_IF '(' exp ')' statement_or_block TOK_ELSE statement_or_block {
-        $$ = new IfStatement(@1.first_line, @7.last_line, $3, $5, $7);
+        $$ = IfStatement::create(@3.semantic_policy, @1.first_line, @7.last_line, $3, $5, $7);
         $$->setColumns(@1.first_col, @7.last_col);
     }
     | TOK_WHILE '(' exp ')' statement_or_block {
-        $$ = new WhileStatement(@1.first_line, @5.last_line, $3, $5);
+        $$ = WhileStatement::create(@3.semantic_policy, @1.first_line, @5.last_line, $3, $5);
         $$->setColumns(@1.first_col, @5.last_col);
     }
     | TOK_DO statement_or_block TOK_WHILE '(' exp ')' ';' {
-        $$ = new DoWhileStatement(@1.first_line, @5.last_line, $5, $2);
+        $$ = DoWhileStatement::create(@5.semantic_policy, @1.first_line, @5.last_line, $5, $2);
         $$->setColumns(@1.first_col, @5.last_col);
     }
     | TOK_FOR '(' myexp ';' myexp ';' myexp ')' statement_or_block {
-        $$ = new ForStatement(@1.first_line, @9.last_line, $3, $5, $7, $9);
+        $$ = ForStatement::create(@5.has_semantic_policy ? @5.semantic_policy : @1.semantic_policy,
+            @1.first_line, @9.last_line, $3, $5, $7, $9);
         $$->setColumns(@1.first_col, @9.last_col);
     }
     | TOK_FOREACH exp TOK_IN '(' exp ')' statement_or_block {
@@ -3671,7 +3713,7 @@ statement:
             parseException(*loc, "READONLY-VARIABLE-ASSIGNMENT-ERROR",
                 "read-only foreach variables are not supported; declare a mutable foreach variable");
         }
-        $$ = new ForEachStatement(@1.first_line, @7.last_line, $2, $5, $7);
+        $$ = ForEachStatement::create(@1.semantic_policy, @1.first_line, @7.last_line, $2, $5, $7);
         $$->setColumns(@1.first_col, @7.last_col);
     }
     | return_statement ';' { $$ = $1; }
@@ -3730,6 +3772,7 @@ switch_statement:
     {
         $6->setSwitch($3);
         $$ = $6;
+        $$->setSemanticPolicy(@1.semantic_policy);
         $$->finalizeBlock(@1.first_line, @7.last_line);
         $$->setColumns(@1.first_col, @7.last_col);
     }
@@ -3777,13 +3820,13 @@ case_code:
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         check_case(loc, "==", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, $5, QoreLogicalEqualsOperatorNode::softEqual);
+        $$ = CaseNodeWithOperator::makeEquality(loc, $3, $5, @2.semantic_policy);
     }
     | TOK_CASE LOGICAL_EQ exp ':' // nothing
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         check_case(loc, "==", $3);
-        $$ = new CaseNodeWithOperator(loc, $3, nullptr, QoreLogicalEqualsOperatorNode::softEqual);
+        $$ = CaseNodeWithOperator::makeEquality(loc, $3, nullptr, @2.semantic_policy);
     }
     | TOK_CASE '<' exp ':' statements
     {
@@ -4356,10 +4399,11 @@ hashdecl_member:
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             }
             else {
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
+                new_call = qore_make_function_call<ScopedObjectCallNode>(@3.semantic_policy, loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
             }
         }
 
+        ParseNode::bindSemanticPolicy(QoreValue(new_call), @3.semantic_policy);
         $$ = new MemberInfo($2, new HashDeclMemberInfo(loc, t, pti, new_call));
 
         delete $1;
@@ -4382,10 +4426,11 @@ hashdecl_member:
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $3);
             }
             else {
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $3);
+                new_call = qore_make_function_call<ScopedObjectCallNode>(@2.semantic_policy, loc, new NamedScope(strdup(pti->cscope->ostr)), $3);
             }
         }
 
+        ParseNode::bindSemanticPolicy(QoreValue(new_call), @2.semantic_policy);
         $$ = new MemberInfo($2, new HashDeclMemberInfo(loc, t, pti, new_call));
 
         delete $1;
@@ -4422,6 +4467,7 @@ class_attributes:
                 $1->getName());
         }
         $$ = new QoreParseClass(loc);
+        LexicalParsePolicyHelper policy($1->semantic_policy);
         qore_class_private::parseAddConstant(*($$), loc, $1->getName(), $1->takeValue(), Public, $1->typeInfo,
             $1->takeParseTypeInfo());
         delete $1;
@@ -4456,6 +4502,7 @@ class_attributes:
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $2->getName());
         }
+        LexicalParsePolicyHelper policy($2->semantic_policy);
         qore_class_private::parseAddConstant(*($$), loc, $2->getName(), $2->takeValue(), Public, $2->typeInfo,
             $2->takeParseTypeInfo());
         $$ = $1;
@@ -4587,10 +4634,11 @@ classvardecl:
             if (pti->hasExplicitSubtypeList()) {
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $5);
             } else {
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)),
+                new_call = qore_make_function_call<ScopedObjectCallNode>(@4.semantic_policy, loc, new NamedScope(strdup(pti->cscope->ostr)),
                     $5);
             }
         }
+        ParseNode::bindSemanticPolicy(QoreValue(new_call), @4.semantic_policy);
         $$ = new ClassVarInfo($3, new QoreVarInfo(loc, t, pti, new_call));
         delete $2;
     }
@@ -4609,10 +4657,11 @@ classvardecl:
             if (pti->hasExplicitSubtypeList()) {
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             } else {
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)),
+                new_call = qore_make_function_call<ScopedObjectCallNode>(@3.semantic_policy, loc, new NamedScope(strdup(pti->cscope->ostr)),
                     $4);
             }
         }
+        ParseNode::bindSemanticPolicy(QoreValue(new_call), @3.semantic_policy);
         $$ = new ClassVarInfo($3, new QoreVarInfo(loc, t, pti, new_call));
         delete $2;
     }
@@ -4653,9 +4702,10 @@ member2:
             if (pti && pti->hasExplicitSubtypeList())
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             else
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
+                new_call = qore_make_function_call<ScopedObjectCallNode>(@3.semantic_policy, loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
         }
 
+        ParseNode::bindSemanticPolicy(QoreValue(new_call), @3.semantic_policy);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, t, pti, new_call));
 
         delete $1;
@@ -4693,9 +4743,10 @@ member2:
             if (pti->hasExplicitSubtypeList())
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             else
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
+                new_call = qore_make_function_call<ScopedObjectCallNode>(@3.semantic_policy, loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
         }
 
+        ParseNode::bindSemanticPolicy(QoreValue(new_call), @3.semantic_policy);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, t, pti, new_call));
 
         delete $1;
@@ -4719,9 +4770,10 @@ member2:
             if (pti->hasExplicitSubtypeList())
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $3);
             else
-                new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $3);
+                new_call = qore_make_function_call<ScopedObjectCallNode>(@2.semantic_policy, loc, new NamedScope(strdup(pti->cscope->ostr)), $3);
         }
 
+        ParseNode::bindSemanticPolicy(QoreValue(new_call), @2.semantic_policy);
         $$ = new MemberInfo($2, new QoreMemberInfo(loc, t, pti, new_call));
 
         delete $1;
@@ -5124,10 +5176,12 @@ base_constructor:
     IDENTIFIER '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new BCANode($1, $3, loc);
+        $$->semantic_policy = @2.semantic_policy;
     }
     | SCOPED_REF '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = new BCANode(new NamedScope($1), $3, loc);
+        $$->semantic_policy = @2.semantic_policy;
     }
     ;
 
@@ -5268,7 +5322,7 @@ sub_def:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
         $7->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
-        $$ = new ParseUserFunction(loc, $2, set_function_dom(new UserFunctionVariant($7, @3.first_line, @3.last_line, $3, $6, false, flags), $5));
+        $$ = new ParseUserFunction(loc, $2, set_function_dom(qore_make_user_variant<UserFunctionVariant>($3, $7, @3.first_line, @3.last_line, $3, $6, false, flags), $5));
     }
     | uncqtypedef TOK_SUB ident_openparen myexp ')' callable_attrs_opt block {
         int ar = get_pop_argv_ref();
@@ -5280,7 +5334,7 @@ sub_def:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
         $7->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
-        $$ = new ParseUserFunction(loc, $3, set_function_dom(new UserFunctionVariant($7, @4.first_line, @4.last_line, $4, rt, false, flags), $6));
+        $$ = new ParseUserFunction(loc, $3, set_function_dom(qore_make_user_variant<UserFunctionVariant>($4, $7, @4.first_line, @4.last_line, $4, rt, false, flags), $6));
     }
     | method_modifiers TOK_SUB ident_openparen myexp ')' callable_attrs_opt return_value block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
@@ -5292,7 +5346,7 @@ sub_def:
 
         $8->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
-        $$ = new ParseUserFunction(loc, $3, set_function_dom(new UserFunctionVariant($8, @4.first_line, @4.last_line, $4, $7, $1 & OFM_SYNCED, flags), $6));
+        $$ = new ParseUserFunction(loc, $3, set_function_dom(qore_make_user_variant<UserFunctionVariant>($4, $8, @4.first_line, @4.last_line, $4, $7, $1 & OFM_SYNCED, flags), $6));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }
@@ -5309,7 +5363,7 @@ sub_def:
 
         $8->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
-        $$ = new ParseUserFunction(loc, $4, set_function_dom(new UserFunctionVariant($8, @5.first_line, @5.last_line, $5, rt, $1 & OFM_SYNCED, flags), $7));
+        $$ = new ParseUserFunction(loc, $4, set_function_dom(qore_make_user_variant<UserFunctionVariant>($5, $8, @5.first_line, @5.last_line, $5, rt, $1 & OFM_SYNCED, flags), $7));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }
@@ -5326,7 +5380,7 @@ scoped_sub_def:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         $8->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
-        $$ = new ParseScopedUserFunction(loc, $2, set_function_dom(new UserFunctionVariant($8, @4.first_line, @4.last_line, $4, $7, false, flags), $6));
+        $$ = new ParseScopedUserFunction(loc, $2, set_function_dom(qore_make_user_variant<UserFunctionVariant>($4, $8, @4.first_line, @4.last_line, $4, $7, false, flags), $6));
     }
     | uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' callable_attrs_opt block {
         int ar = get_pop_argv_ref();
@@ -5338,7 +5392,7 @@ scoped_sub_def:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         $8->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
-        $$ = new ParseScopedUserFunction(loc, $3, set_function_dom(new UserFunctionVariant($8, @5.first_line, @5.last_line, $5, rt, false, flags), $7));
+        $$ = new ParseScopedUserFunction(loc, $3, set_function_dom(qore_make_user_variant<UserFunctionVariant>($5, $8, @5.first_line, @5.last_line, $5, rt, false, flags), $7));
     }
     | method_modifiers TOK_SUB SCOPED_REF '(' myexp ')' callable_attrs_opt return_value block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @9.last_line, @1.first_col, @9.last_col);
@@ -5350,7 +5404,7 @@ scoped_sub_def:
 
         $9->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
-        $$ = new ParseScopedUserFunction(loc, $3, set_function_dom(new UserFunctionVariant($9, @5.first_line, @5.last_line, $5, $8, $1 & OFM_SYNCED, flags), $7));
+        $$ = new ParseScopedUserFunction(loc, $3, set_function_dom(qore_make_user_variant<UserFunctionVariant>($5, $9, @5.first_line, @5.last_line, $5, $8, $1 & OFM_SYNCED, flags), $7));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }
@@ -5367,7 +5421,7 @@ scoped_sub_def:
 
         $9->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
-        $$ = new ParseScopedUserFunction(loc, $4, set_function_dom(new UserFunctionVariant($9, @6.first_line, @6.last_line, $6, rt, $1 & OFM_SYNCED, flags), $8));
+        $$ = new ParseScopedUserFunction(loc, $4, set_function_dom(qore_make_user_variant<UserFunctionVariant>($6, $9, @6.first_line, @6.last_line, $6, rt, $1 & OFM_SYNCED, flags), $8));
         if ($1 & OFM_PUBLIC)
             $$->setPublic();
     }
@@ -5446,7 +5500,7 @@ alt_hash:
         $2->setCurly();
         $2->finalizeBlock(@1.first_line, @3.last_line);
 
-        $$ = $2;
+        $$ = QoreParseHashNode::bindSource($2, @1.semantic_policy);
     }
     ;
 
@@ -5458,25 +5512,25 @@ immediate_typed_hash:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         QoreStringMaker fake_cast("hash<%s>", $1);
         free($1);
-        $$ = new QoreParseCastOperatorNode(loc, ParserTypeStruct::getParseType(loc, fake_cast.giveBuffer(), false), $2,
-            false);
+        $$ = new QoreParseCastOperatorNode(loc, ParserTypeStruct::getParseType(loc, fake_cast.giveBuffer(), false),
+            QoreParseHashNode::bindSource($2, @1.semantic_policy), false);
     }
     | HASHDECL_IDENTIFIER_OPENCURLY '}' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         QoreStringMaker fake_cast("hash<%s>", $1);
         free($1);
         $$ = new QoreParseCastOperatorNode(loc, ParserTypeStruct::getParseType(loc, fake_cast.giveBuffer(), false),
-            new QoreParseHashNode(loc, true), false);
+            QoreParseHashNode::create(@$.semantic_policy, loc, true), false);
     }
     ;
 
 exp_c:
     scalar
-    { $$ = $1; }
+    { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
     | BINARY
-    { $$ = $1; }
+    { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
     | '(' hash ')'
-    { $$ = $2; }
+    { $$ = QoreParseHashNode::bindSource($2, @1.semantic_policy); }
     | ANGLE_IDENTIFIER '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
             @4.last_line, @1.first_col,
@@ -5484,19 +5538,21 @@ exp_c:
         ptype_vec_t type_args;
         char* name = parse_explicit_generic_call_name(loc, $1, type_args);
         if (strstr(name, "::")) {
-            StaticMethodCallNode* node = new StaticMethodCallNode(loc, new NamedScope(name), $3);
+            StaticMethodCallNode* node = qore_make_function_call<StaticMethodCallNode>(@2.semantic_policy, loc, new NamedScope(name), $3);
             node->setExplicitTypeArgs(std::move(type_args));
             $$ = node;
         } else {
-            FunctionCallNode* node = new FunctionCallNode(loc, name, $3);
+            FunctionCallNode* node = qore_make_function_call(@2.semantic_policy, loc, name, $3);
             node->setExplicitTypeArgs(std::move(type_args));
             $$ = node;
         }
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | SCOPED_REF
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new ScopedRefNode(loc, $1));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | qtypedef VAR_REF {
         fix_start_location($1, @$, @2);
@@ -5512,6 +5568,7 @@ exp_c:
         delete $1;
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "reference to variable '%s' with the '$' sign is not allowed when parse option 'allow-bare-refs' is set", $2);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | qtypedef SCOPED_VREF {
         fix_start_location($1, @$, @2);
@@ -5524,6 +5581,7 @@ exp_c:
         delete $1;
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "reference to variable '%s' with the '$' sign is not allowed when parse option 'allow-bare-refs' is set", $2);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_CONST qtypedef VAR_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
@@ -5546,6 +5604,7 @@ exp_c:
             parse_error(*loc, "reference to variable '$%s' with the '$' sign is not allowed when parse option "
                 "'allow-bare-refs' is set", $3);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_CONST uncqtypedef identifier %prec CONST_READONLY_DECL_PREFIX {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
@@ -5560,6 +5619,7 @@ exp_c:
             parse_error(*loc, "local variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' "
                 "is not set", $3);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_CONST identifier %prec CONST_READONLY_DECL_PREFIX {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
@@ -5575,6 +5635,7 @@ exp_c:
             parse_error(*loc, "local variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' "
                 "is not set", $2);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | uncqtypedef identifier {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
@@ -5582,6 +5643,7 @@ exp_c:
         delete $1;
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "local variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is not set", $2);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | uncqtypedef KW_IDENTIFIER_OPENPAREN call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
@@ -5593,7 +5655,8 @@ exp_c:
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "local variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is "
                 "not set", $2);
-        $$ = processCall(@1.first_line, @4.last_line, @1.first_col, @4.last_col, decl, $3);
+        $$ = processCall(@1.first_line, @4.last_line, @1.first_col, @4.last_col, decl, $3, @2.semantic_policy);
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | TOK_MY uncqtypedef identifier {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
@@ -5603,6 +5666,7 @@ exp_c:
         delete $2;
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "local variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is not set", $3);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_MY identifier {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
@@ -5614,6 +5678,7 @@ exp_c:
         $$ = (v);
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "local variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is not set", $2);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_MY qtypedef VAR_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
@@ -5631,6 +5696,7 @@ exp_c:
         $$ = (v);
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "reference to variable '$%s' with the '$' sign is not allowed when parse option 'allow-bare-refs' is set", $3);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_MY '(' list ')' {
         $3->setVariableList();
@@ -5666,9 +5732,11 @@ exp_c:
                 parse_error(*loc, "element %d in list following 'my' is not a variable reference (%s)", i, n.getTypeName());
         }
         $$ = ($3);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | gvardecl {
         $$ = ($1->makeVar());
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | IDENTIFIER
     {
@@ -5677,26 +5745,31 @@ exp_c:
 
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new BarewordNode(loc, $1));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | CONTEXT_REF
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new ContextrefNode(loc, $1));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_CONTEXT_ROW
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new ContextRowNode(loc));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | COMPLEX_CONTEXT_REF
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new ComplexContextrefNode(loc, $1));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_FIND exp TOK_IN exp TOK_WHERE '(' exp ')'
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @8.last_line, @1.first_col, @8.last_col);
         $$ = (new FindNode(loc, $2, $4, $7));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_FIND TOK_FIRST exp TOK_IN exp TOK_WHERE '(' exp ')'
     {
@@ -5711,6 +5784,7 @@ exp_c:
         } else {
             $$ = (new FindNode(loc, $3, $5, $8, FindNode::First));
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_FIND TOK_LAST exp TOK_IN exp TOK_WHERE '(' exp ')'
     {
@@ -5724,6 +5798,7 @@ exp_c:
         } else {
             $$ = (new FindNode(loc, $3, $5, $8, FindNode::Last));
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_FIND TOK_ONE exp TOK_IN exp TOK_WHERE '(' exp ')'
     {
@@ -5737,20 +5812,24 @@ exp_c:
         } else {
             $$ = (new FindNode(loc, $3, $5, $8, FindNode::One));
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_EXISTS exp
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreExistsOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_ELEMENTS exp
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreElementsOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_KEYS exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreKeysOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_UNSHIFT exp {  // unshift list, element
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
@@ -5766,10 +5845,12 @@ exp_c:
             $$ = (new QoreUnshiftOperatorNode(loc, lv, l->shift()));
             v2.discard(nullptr);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_SHIFT exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreShiftOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_PUSH exp {  // push lvalue-list, element
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
@@ -5785,18 +5866,22 @@ exp_c:
             $$ = (new QorePushOperatorNode(loc, lv, l->shift()));
             v2.discard(nullptr);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_POP exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QorePopOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_CHOMP exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreChompOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_TRIM exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreTrimOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_SPLICE exp {  // splice lvalue-list, offset, [length, list]
         QoreValue v2($2);  // Convert to QoreValue for method calls
@@ -5818,9 +5903,10 @@ exp_c:
             QoreValue lv = l->shift();
             QoreValue offset = l->shift();
             QoreValue length = l->shift();
-            $$ = (new QoreSpliceOperatorNode(loc, lv, offset, length, l->shift()));
+            $$ = (QoreSpliceOperatorNode::create(@$.semantic_policy, loc, lv, offset, length, l->shift()));
             discard(l, 0);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_EXTRACT exp {  // extract lvalue-list, offset, [length, list]
         QoreValue v2($2);  // Convert to QoreValue for method calls
@@ -5845,9 +5931,10 @@ exp_c:
             QoreValue lv = l->shift();
             QoreValue offset = l->shift();
             QoreValue length = l->shift();
-            $$ = (new QoreExtractOperatorNode(loc, lv, offset, length, l->shift()));
+            $$ = (QoreExtractOperatorNode::create(@$.semantic_policy, loc, lv, offset, length, l->shift()));
             discard(l, 0);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_MAP exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
@@ -5874,9 +5961,10 @@ exp_c:
             }
 
             if (!$$ && !is_curly) {
-                $$ = (parse_map(loc, exp, l));
+                $$ = (parse_map(@$.semantic_policy, loc, exp, l));
             }
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_FOLDR exp {
         pop_ignore_numeric_argv_ref();
@@ -5894,6 +5982,7 @@ exp_c:
             $$ = (new QoreFoldrOperatorNode(loc, code_exp, arg));
             v2.discard(nullptr);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_FOLDL exp {
         pop_ignore_numeric_argv_ref();
@@ -5911,6 +6000,7 @@ exp_c:
             $$ = (new QoreFoldlOperatorNode(loc, code_exp, arg));
             v2.discard(nullptr);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_SELECT exp {
         pop_ignore_numeric_argv_ref();
@@ -5925,66 +6015,78 @@ exp_c:
         else {
             QoreValue arg = l->shift();
             QoreValue select_exp = l->shift();
-            $$ = (new QoreSelectOperatorNode(loc, arg, select_exp));
+            $$ = (QoreSelectOperatorNode::create(@$.semantic_policy, loc, arg, select_exp));
             v2.discard(nullptr);
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_ITERATE exp {
         pop_ignore_numeric_argv_ref();
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = new QoreIterateOperatorNode(loc, $2);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_FIRST exp {
         pop_ignore_numeric_argv_ref();
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::First, "first", "predicate expression", $2,
+        $$ = parse_streaming_operator(@$.semantic_policy, loc, QoreStreamingOperatorNode::First, "first", "predicate expression", $2,
             true);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_ANY_OP exp {
         pop_ignore_numeric_argv_ref();
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::Any, "any", "predicate expression", $2, true);
+        $$ = parse_streaming_operator(@$.semantic_policy, loc, QoreStreamingOperatorNode::Any, "any", "predicate expression", $2, true);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_ALL exp {
         pop_ignore_numeric_argv_ref();
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::All, "all", "predicate expression", $2, false);
+        $$ = parse_streaming_operator(@$.semantic_policy, loc, QoreStreamingOperatorNode::All, "all", "predicate expression", $2, false);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_COUNT exp {
         pop_ignore_numeric_argv_ref();
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::Count, "count", "predicate expression", $2,
+        $$ = parse_streaming_operator(@$.semantic_policy, loc, QoreStreamingOperatorNode::Count, "count", "predicate expression", $2,
             true);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_TAKE exp {
         pop_ignore_numeric_argv_ref();
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::Take, "take", "count expression", $2, false);
+        $$ = parse_streaming_operator(@$.semantic_policy, loc, QoreStreamingOperatorNode::Take, "take", "count expression", $2, false);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_DROP exp {
         pop_ignore_numeric_argv_ref();
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::Drop, "drop", "count expression", $2, false);
+        $$ = parse_streaming_operator(@$.semantic_policy, loc, QoreStreamingOperatorNode::Drop, "drop", "count expression", $2, false);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_TAKEWHILE exp {
         pop_ignore_numeric_argv_ref();
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::TakeWhile, "takewhile",
+        $$ = parse_streaming_operator(@$.semantic_policy, loc, QoreStreamingOperatorNode::TakeWhile, "takewhile",
             "predicate expression", $2, false);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_TAKEUNTIL exp {
         pop_ignore_numeric_argv_ref();
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = parse_streaming_operator(loc, QoreStreamingOperatorNode::TakeUntil, "takeuntil",
+        $$ = parse_streaming_operator(@$.semantic_policy, loc, QoreStreamingOperatorNode::TakeUntil, "takeuntil",
             "predicate expression", $2, false);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | P_INCREMENT exp {  // pre-increment
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QorePreIncrementOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | P_DECREMENT exp {  // pre-decrement
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QorePreDecrementOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | BASE_CLASS_CALL '(' call_args ')' {
         printd(5, "parsing in-object base class method call %s()\n", $1->ostr);
@@ -5992,12 +6094,14 @@ exp_c:
         if (!strcmp($1->getIdentifier(), "copy"))
             parse_error(*loc, "illegal call to base class copy method '%s'", $1->ostr);
 
-        $$ = (new SelfFunctionCallNode(loc, $1, $3));
+        $$ = (qore_make_function_call<SelfFunctionCallNode>(@2.semantic_policy, loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | KW_IDENTIFIER_OPENPAREN call_args ')' {
         printd(5, "parsing call %s()\n", $1);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
-        $$ = (new FunctionCallNode(loc, $1, $2));
+        $$ = (qore_make_function_call(@1.semantic_policy, loc, $1, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | SELF_REF
     {
@@ -6005,6 +6109,7 @@ exp_c:
         $$ = (new SelfVarrefNode(loc, $1));
         if (parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "reference to '$.%s' with the '$.' prefix is not allowed when parse option 'allow-bare-refs' is set", $1);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | '-' exp %prec NEG {
         // FIXME: need to expand constant expression checking to determine
@@ -6012,19 +6117,23 @@ exp_c:
         // first check for constant expressions
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreUnaryMinusOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | '+' exp %prec UPLUS
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreUnaryPlusOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | '~' exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreBinaryNotOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | '!' exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
-        $$ = (new QoreLogicalNotOperatorNode(loc, $2));
+        $$ = (QoreLogicalNotOperatorNode::create(@$.semantic_policy, loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | '\\' exp {
         QoreValue v2($2);  // Convert to QoreValue for method calls
@@ -6057,13 +6166,15 @@ exp_c:
                 $$ = (new ParseReferenceNode(loc, $2));
             }
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_NEW identifier '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         if (parse_check_restriction(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
-        $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $4));
+        $$ = (qore_make_function_call<ScopedObjectCallNode>(@$.semantic_policy, loc, new NamedScope($2), $4));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_NEW KW_IDENTIFIER_OPENPAREN call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
@@ -6072,14 +6183,16 @@ exp_c:
         if (parse_check_restriction(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
-        $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $3));
+        $$ = (qore_make_function_call<ScopedObjectCallNode>(@$.semantic_policy, loc, new NamedScope($2), $3));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_NEW SCOPED_REF '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
         if (parse_check_restriction(QoreParseOptions::NO_NEW)) {
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
-        $$ = (new ScopedObjectCallNode(loc, new NamedScope($2), $4));
+        $$ = (qore_make_function_call<ScopedObjectCallNode>(@$.semantic_policy, loc, new NamedScope($2), $4));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_NEW ANGLE_IDENTIFIER '(' call_args ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col);
@@ -6087,6 +6200,7 @@ exp_c:
             parse_error(*loc, "the 'new' operator cannot be used with parse option NO_NEW set");
         }
         $$ = (new ParseNewComplexTypeNode(loc, ParserTypeStruct::getParseType(loc, $2, false), $4));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_BACKGROUND exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
@@ -6102,12 +6216,14 @@ exp_c:
         } else if (!v2bg.hasEffect()) {
             parse_error(*loc, "argument to background operator (%s) has no effect", v2bg.getTypeName());
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | BACKQUOTE {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new BackquoteNode(loc, $1));
         if (parse_check_restriction(PO_NO_EXTERNAL_PROCESS))
             parse_error(*loc, "illegal use of backquote operator (conflicts with parse option PO_NO_EXTERNAL_PROCESS)");
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | '(' exp ')' {
         $$ = ($2);
@@ -6126,12 +6242,14 @@ exp_c:
                 v2.get<QoreOperatorNode>()->setInParentheses();
                 break;
         }
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | '(' ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         QoreParseListNode* l = new QoreParseListNode(loc);
         l->setFinalized();
         $$ = (l);
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_SUB '(' myexp ')' return_value block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
@@ -6139,6 +6257,7 @@ exp_c:
         $6->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($6, @3.first_line, @3.last_line, $3, $5, false, ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS)));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | uncqtypedef TOK_SUB '(' myexp ')' block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @6.last_line, @1.first_col, @6.last_col);
@@ -6149,6 +6268,7 @@ exp_c:
         $6->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($6, @4.first_line, @4.last_line, $4, rt, false, ar > 0 ? QCF_USES_EXTRA_ARGS : QCF_NO_FLAGS)));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | method_modifiers TOK_SUB '(' myexp ')' return_value block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
@@ -6160,6 +6280,7 @@ exp_c:
         $7->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($7, @4.first_line, @4.last_line, $4, $6, $1 | OFM_SYNCED, flags)));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | method_modifiers uncqtypedef TOK_SUB '(' myexp ')' block {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @7.last_line, @1.first_col, @7.last_col);
@@ -6175,51 +6296,61 @@ exp_c:
         $7->native_parse_info = @$.native_parse_info;
         qore_program_private::get(*getProgram())->recordNativeParseInfo(@$.native_parse_info);
         $$ = (new QoreClosureParseNode(loc, new UserClosureFunction($7, @5.first_line, @5.last_line, $5, rt, $1 | OFM_SYNCED, flags)));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | IMPLICIT_ARG_REF {
         $$ = ($1);
         inc_numeric_argv_ref();
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | IMPLICIT_ELEMENT {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = (new QoreImplicitElementNode(loc));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_DELETE exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreDeleteOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | TOK_REMOVE exp {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
         $$ = (new QoreRemoveOperatorNode(loc, $2));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | QORE_CAST '(' exp ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = (new QoreParseCastOperatorNode(loc, ParserTypeStruct::getParseType(loc, $1, false), $3));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     | QORE_OR_NOTHING_CAST '(' exp ')' {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         $$ = (new QoreParseCastOperatorNode(loc, ParserTypeStruct::getParseType(loc, $1, true), $3));
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     ;
 
+// Infix and postfix operations bind the operator token, which can follow a directive after their left operand.
+// Each operand already owns its own policy; source binding below affects only the newly constructed operation.
 exp:
-    exp_c                               { $$ = $1; }
-    | list                              { @$.depth = @1.depth; $$ = $1; }
-    | alt_hash                          { $$ = $1; }
-    | immediate_typed_hash              { $$ = $1; }
-    | '{' '}'                           { $$ = (new QoreParseHashNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), true)); }
-    | exp PLUS_EQUALS exp               { $$ = (new QorePlusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp MINUS_EQUALS exp              { $$ = (new QoreMinusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp AND_EQUALS exp                { $$ = (new QoreAndEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp OR_EQUALS exp                 { $$ = (new QoreOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp MODULA_EQUALS exp             { $$ = (new QoreModuloEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp MULTIPLY_EQUALS exp           { $$ = (new QoreMultiplyEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp DIVIDE_EQUALS exp             { $$ = (new QoreDivideEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp XOR_EQUALS exp                { $$ = (new QoreXorEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp SHIFT_LEFT_EQUALS exp         { $$ = (new QoreShiftLeftEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp SHIFT_RIGHT_EQUALS exp        { $$ = (new QoreShiftRightEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    exp_c                               { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | list                              { @$.depth = @1.depth; $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | alt_hash                          { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | immediate_typed_hash              { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | '{' '}'                           { $$ = (QoreParseHashNode::create(@$.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), true)); ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | exp PLUS_EQUALS exp               { $$ = (new QorePlusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp MINUS_EQUALS exp              { $$ = (new QoreMinusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp AND_EQUALS exp                { $$ = (new QoreAndEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp OR_EQUALS exp                 { $$ = (new QoreOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp MODULA_EQUALS exp             { $$ = (new QoreModuloEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp MULTIPLY_EQUALS exp           { $$ = (new QoreMultiplyEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp DIVIDE_EQUALS exp             { $$ = (new QoreDivideEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp XOR_EQUALS exp                { $$ = (new QoreXorEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp SHIFT_LEFT_EQUALS exp         { $$ = (new QoreShiftLeftEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp SHIFT_RIGHT_EQUALS exp        { $$ = (new QoreShiftRightEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp '=' exp                       {
         $$ = (process_assignment(@1.first_line, @3.last_line, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | exp WEAK_ASSIGNMENT exp           {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
@@ -6228,6 +6359,7 @@ exp:
             parse_error(*loc, "unauthorized use of the weak reference assignment operator \":=\" (parse option PO_ALLOW_WEAK_REFERENCES is not set)");
 
         $$ = (process_weak_assignment(loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | exp OPAQUE_ASSIGNMENT exp         {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
@@ -6236,67 +6368,73 @@ exp:
             parse_error(*loc, "unauthorized use of the opaque reference assignment operator \"@=\" (parse option 'allow-opaque-references' is not set)");
 
         $$ = (process_opaque_assignment(loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | exp TOK_INSTANCEOF uncqtypedef    {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = ($3->getTypeInfo()
-            ? new QoreInstanceOfOperatorNode(loc, $1, $3->getTypeInfo())
-            : new QoreInstanceOfOperatorNode(loc, $1, $3->getParseTypeInfo()));
+            ? QoreInstanceOfOperatorNode::create(@2.semantic_policy, loc, $1, $3->getTypeInfo())
+            : QoreInstanceOfOperatorNode::create(@2.semantic_policy, loc, $1, $3->getParseTypeInfo()));
         delete $3;
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp NULL_COALESCING exp           { $$ = (new QoreNullCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp VALUE_COALESCING exp          { $$ = (new QoreValueCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, $5)); }
-    | exp P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-increment
-    | exp P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-decrement
-    | exp '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, @1.first_col, @4.last_col, $1, $3)); }
+    | exp NULL_COALESCING exp           { $$ = (new QoreNullCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp VALUE_COALESCING exp          { $$ = (QoreValueCoalescingOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '?' exp ':' exp               { $$ = (QoreQuestionMarkOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, $5)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); } // post-increment
+    | exp P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); } // post-decrement
+    | exp '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, @1.first_col, @4.last_col, $1, $3, @2.semantic_policy)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp LOGICAL_AND exp               {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_log_or(loc, $1, "logical AND");
-        $$ = (new QoreLogicalAndOperatorNode(loc, $1, $3));
+        $$ = (QoreLogicalAndOperatorNode::create(@2.semantic_policy, loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp LOGICAL_OR exp                { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp BROKEN_LOGICAL_OR exp         { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp BROKEN_BINARY_OR exp          { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp LOGICAL_OR exp                { $$ = (QoreLogicalOrOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp BROKEN_LOGICAL_OR exp         { $$ = (QoreLogicalOrOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp BROKEN_BINARY_OR exp          { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp BROKEN_BINARY_XOR exp         {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_bin_or(loc, $1, "binary XOR");
         $$ = (new QoreBinaryXorOperatorNode(loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp '|' exp                       { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp '|' exp                       { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp '&' exp                       {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_bin_or(loc, $1, "binary AND");
         check_operator_bin_xor(loc, $1, "binary AND");
         $$ = (new QoreBinaryAndOperatorNode(loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp '^' exp                       { $$ = (new QoreBinaryXorOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp REGEX_MATCH REGEX             { $$ = (new QoreRegexMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp REGEX_NMATCH REGEX            { $$ = (new QoreRegexNMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp REGEX_MATCH REGEX_SUBST       { $$ = (new QoreRegexSubstOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp REGEX_MATCH REGEX_TRANS       { $$ = (new QoreTransliterationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp REGEX_MATCH REGEX_EXTRACT     { $$ = (new QoreRegexExtractOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '>' exp                       { $$ = (new QoreLogicalGreaterThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '<' exp                       { $$ = (new QoreLogicalLessThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp LOGICAL_CMP exp               { $$ = (new QoreLogicalComparisonOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp LOGICAL_EQ exp                { $$ = (new QoreLogicalEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp ABSOLUTE_EQ exp               { $$ = (new QoreLogicalAbsoluteEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp ABSOLUTE_NE exp               { $$ = (new QoreLogicalAbsoluteNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp LOGICAL_NE exp                { $$ = (new QoreLogicalNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp LOGICAL_LE exp                { $$ = (new QoreLogicalLessThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp LOGICAL_GE exp                { $$ = (new QoreLogicalGreaterThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp SHIFT_LEFT exp                { $$ = (new QoreShiftLeftOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp SHIFT_RIGHT exp               { $$ = (new QoreShiftRightOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '+' exp                       { $$ = (new QorePlusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '-' exp                       { $$ = (new QoreMinusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '%' exp                       { $$ = (new QoreModuloOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '/' exp                       { $$ = (new QoreDivisionOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '*' exp                       { $$ = (new QoreMultiplicationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '[' exp RANGE ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, QoreValue())); }
-    | exp '[' RANGE exp ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, QoreValue(), $4)); }
+    | exp '^' exp                       { $$ = (new QoreBinaryXorOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp REGEX_MATCH REGEX             { $$ = (new QoreRegexMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp REGEX_NMATCH REGEX            { $$ = (new QoreRegexNMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp REGEX_MATCH REGEX_SUBST       { $$ = (new QoreRegexSubstOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp REGEX_MATCH REGEX_TRANS       { $$ = (new QoreTransliterationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp REGEX_MATCH REGEX_EXTRACT     { $$ = (new QoreRegexExtractOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '>' exp                       { $$ = (new QoreLogicalGreaterThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '<' exp                       { $$ = (new QoreLogicalLessThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp LOGICAL_CMP exp               { $$ = (new QoreLogicalComparisonOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp LOGICAL_EQ exp                { $$ = (QoreLogicalEqualsOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp ABSOLUTE_EQ exp               { $$ = (new QoreLogicalAbsoluteEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp ABSOLUTE_NE exp               { $$ = (new QoreLogicalAbsoluteNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp LOGICAL_NE exp                { $$ = (QoreLogicalNotEqualsOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp LOGICAL_LE exp                { $$ = (new QoreLogicalLessThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp LOGICAL_GE exp                { $$ = (new QoreLogicalGreaterThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp SHIFT_LEFT exp                { $$ = (new QoreShiftLeftOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp SHIFT_RIGHT exp               { $$ = (new QoreShiftRightOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '+' exp                       { $$ = (new QorePlusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '-' exp                       { $$ = (new QoreMinusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '%' exp                       { $$ = (new QoreModuloOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '/' exp                       { $$ = (new QoreDivisionOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '*' exp                       { $$ = (new QoreMultiplicationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '[' exp RANGE ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, QoreValue())); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '[' RANGE exp ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, QoreValue(), $4)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp '[' RANGE ']'                 {
         parse_error(*qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), "illegal range without start or end expressions; at least start or end must be given for a range");
         $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), $1, QoreValue(), QoreValue()));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | exp '[' exp ']'                   {
         $$.bits = 0;
@@ -6312,29 +6450,31 @@ exp:
         if (!$$) {
             $$ = (new QoreSquareBracketsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3));
         }
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp '{' exp '}'                   { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); }
-    | exp DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); }
-    | exp DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2.first_line, @2.first_col, $1, $2); }
+    | exp '{' exp '}'                   { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2.first_line, @2.first_col, $1, $2); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     ;
 
 exp_n:
-    exp_c                                 { $$ = $1; }
-    | list_n                              { @$.depth = @1.depth; $$ = $1; }
-    | exp_n PLUS_EQUALS exp               { $$ = (new QorePlusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n MINUS_EQUALS exp              { $$ = (new QoreMinusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n AND_EQUALS exp                { $$ = (new QoreAndEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n OR_EQUALS exp                 { $$ = (new QoreOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n MODULA_EQUALS exp             { $$ = (new QoreModuloEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n MULTIPLY_EQUALS exp           { $$ = (new QoreMultiplyEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n DIVIDE_EQUALS exp             { $$ = (new QoreDivideEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n XOR_EQUALS exp                { $$ = (new QoreXorEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n SHIFT_LEFT_EQUALS exp         { $$ = (new QoreShiftLeftEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n SHIFT_RIGHT_EQUALS exp        { $$ = (new QoreShiftRightEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    exp_c                                 { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | list_n                              { @$.depth = @1.depth; $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | exp_n PLUS_EQUALS exp               { $$ = (new QorePlusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n MINUS_EQUALS exp              { $$ = (new QoreMinusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n AND_EQUALS exp                { $$ = (new QoreAndEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n OR_EQUALS exp                 { $$ = (new QoreOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n MODULA_EQUALS exp             { $$ = (new QoreModuloEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n MULTIPLY_EQUALS exp           { $$ = (new QoreMultiplyEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n DIVIDE_EQUALS exp             { $$ = (new QoreDivideEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n XOR_EQUALS exp                { $$ = (new QoreXorEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n SHIFT_LEFT_EQUALS exp         { $$ = (new QoreShiftLeftEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n SHIFT_RIGHT_EQUALS exp        { $$ = (new QoreShiftRightEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp_n '=' exp                       {
         $$ = (process_assignment(@1.first_line, @3.last_line, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | exp_n WEAK_ASSIGNMENT exp           {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
@@ -6343,6 +6483,7 @@ exp_n:
             parse_error(*loc, "unauthorized use of the weak reference assignment operator \":=\" (parse option PO_ALLOW_WEAK_REFERENCES is not set)");
 
         $$ = (process_weak_assignment(loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | exp_n OPAQUE_ASSIGNMENT exp         {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
@@ -6351,68 +6492,74 @@ exp_n:
             parse_error(*loc, "unauthorized use of the opaque reference assignment operator \"@=\" (parse option 'allow-opaque-references' is not set)");
 
         $$ = (process_opaque_assignment(loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | exp_n TOK_INSTANCEOF uncqtypedef    {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = ($3->getTypeInfo()
-            ? new QoreInstanceOfOperatorNode(loc, $1, $3->getTypeInfo())
-            : new QoreInstanceOfOperatorNode(loc, $1, $3->getParseTypeInfo()));
+            ? QoreInstanceOfOperatorNode::create(@2.semantic_policy, loc, $1, $3->getTypeInfo())
+            : QoreInstanceOfOperatorNode::create(@2.semantic_policy, loc, $1, $3->getParseTypeInfo()));
         delete $3;
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp_n NULL_COALESCING exp           { $$ = (new QoreNullCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n VALUE_COALESCING exp          { $$ = (new QoreValueCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, $5)); }
-    | exp_n P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-increment
-    | exp_n P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-decrement
-    | exp_n '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, @1.first_col, @4.last_col, $1, $3)); }
+    | exp_n NULL_COALESCING exp           { $$ = (new QoreNullCoalescingOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n VALUE_COALESCING exp          { $$ = (QoreValueCoalescingOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '?' exp ':' exp               { $$ = (QoreQuestionMarkOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, $5)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); } // post-increment
+    | exp_n P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); } // post-decrement
+    | exp_n '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, @1.first_col, @4.last_col, $1, $3, @2.semantic_policy)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp_n LOGICAL_AND exp               {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_log_or(loc, $1, "logical AND");
-        $$ = (new QoreLogicalAndOperatorNode(loc, $1, $3));
+        $$ = (QoreLogicalAndOperatorNode::create(@2.semantic_policy, loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp_n LOGICAL_OR exp                { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n BROKEN_LOGICAL_OR exp         { $$ = (new QoreLogicalOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n BROKEN_BINARY_OR exp          { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n LOGICAL_OR exp                { $$ = (QoreLogicalOrOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n BROKEN_LOGICAL_OR exp         { $$ = (QoreLogicalOrOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n BROKEN_BINARY_OR exp          { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp_n BROKEN_BINARY_XOR exp         {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_bin_or(loc, $1, "binary XOR");
         $$ = (new QoreBinaryXorOperatorNode(loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp_n '|' exp                       { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
+    | exp_n '|' exp                       { $$ = (new QoreBinaryOrOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp_n '&' exp                       {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_bin_or(loc, $1, "binary AND");
         check_operator_bin_xor(loc, $1, "binary AND");
         $$ = (new QoreBinaryAndOperatorNode(loc, $1, $3));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp_n '^' exp                       { $$ = (new QoreBinaryXorOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n REGEX_MATCH REGEX             { $$ = (new QoreRegexMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n REGEX_NMATCH REGEX            { $$ = (new QoreRegexNMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n REGEX_MATCH REGEX_SUBST       { $$ = (new QoreRegexSubstOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n REGEX_MATCH REGEX_TRANS       { $$ = (new QoreTransliterationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n REGEX_MATCH REGEX_EXTRACT     { $$ = (new QoreRegexExtractOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '>' exp                       { $$ = (new QoreLogicalGreaterThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '<' exp                       { $$ = (new QoreLogicalLessThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n LOGICAL_CMP exp               { $$ = (new QoreLogicalComparisonOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n LOGICAL_EQ exp                { $$ = (new QoreLogicalEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n ABSOLUTE_EQ exp               { $$ = (new QoreLogicalAbsoluteEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n ABSOLUTE_NE exp               { $$ = (new QoreLogicalAbsoluteNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n LOGICAL_NE exp                { $$ = (new QoreLogicalNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n LOGICAL_LE exp                { $$ = (new QoreLogicalLessThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n LOGICAL_GE exp                { $$ = (new QoreLogicalGreaterThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n SHIFT_LEFT exp                { $$ = (new QoreShiftLeftOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n SHIFT_RIGHT exp               { $$ = (new QoreShiftRightOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '+' exp                       { $$ = (new QorePlusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '-' exp                       { $$ = (new QoreMinusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '%' exp                       { $$ = (new QoreModuloOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '/' exp                       { $$ = (new QoreDivisionOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '*' exp                       { $$ = (new QoreMultiplicationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '[' exp RANGE ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, QoreValue())); }
-    | exp_n '[' RANGE exp ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, QoreValue(), $4)); }
+    | exp_n '^' exp                       { $$ = (new QoreBinaryXorOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n REGEX_MATCH REGEX             { $$ = (new QoreRegexMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n REGEX_NMATCH REGEX            { $$ = (new QoreRegexNMatchOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n REGEX_MATCH REGEX_SUBST       { $$ = (new QoreRegexSubstOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n REGEX_MATCH REGEX_TRANS       { $$ = (new QoreTransliterationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n REGEX_MATCH REGEX_EXTRACT     { $$ = (new QoreRegexExtractOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '>' exp                       { $$ = (new QoreLogicalGreaterThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '<' exp                       { $$ = (new QoreLogicalLessThanOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n LOGICAL_CMP exp               { $$ = (new QoreLogicalComparisonOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n LOGICAL_EQ exp                { $$ = (QoreLogicalEqualsOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n ABSOLUTE_EQ exp               { $$ = (new QoreLogicalAbsoluteEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n ABSOLUTE_NE exp               { $$ = (new QoreLogicalAbsoluteNotEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n LOGICAL_NE exp                { $$ = (QoreLogicalNotEqualsOperatorNode::create(@2.semantic_policy, qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n LOGICAL_LE exp                { $$ = (new QoreLogicalLessThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n LOGICAL_GE exp                { $$ = (new QoreLogicalGreaterThanOrEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n SHIFT_LEFT exp                { $$ = (new QoreShiftLeftOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n SHIFT_RIGHT exp               { $$ = (new QoreShiftRightOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '+' exp                       { $$ = (new QorePlusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '-' exp                       { $$ = (new QoreMinusOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '%' exp                       { $$ = (new QoreModuloOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '/' exp                       { $$ = (new QoreDivisionOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '*' exp                       { $$ = (new QoreMultiplicationOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '[' exp RANGE ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, QoreValue())); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '[' RANGE exp ']'             { $$ = (new QoreSquareBracketsRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, QoreValue(), $4)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     | exp_n '[' RANGE ']'                 {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
         parse_error(*loc, "illegal range without start or end expressions; at least start or end must be given for a range");
         $$ = (new QoreSquareBracketsRangeOperatorNode(loc, $1, QoreValue(), QoreValue()));
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
     | exp_n '[' exp ']'                   {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col);
@@ -6429,12 +6576,13 @@ exp_n:
         if (!$$) {
             $$ = (new QoreSquareBracketsOperatorNode(loc, $1, $3));
         }
+        ParseNode::bindSemanticPolicy($$, @2.semantic_policy);
     }
-    | exp_n '{' exp '}'                   { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
-    | exp_n '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); }
-    | exp_n DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); }
-    | exp_n DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2.first_line, @2.first_col, $1, $2); }
+    | exp_n '{' exp '}'                   { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
+    | exp_n DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2.first_line, @2.first_col, $1, $2); ParseNode::bindSemanticPolicy($$, @2.semantic_policy); }
     ;
 
 // adjacent strings are concatenated; the rule is left-recursive so that the parser's stack does not grow with
@@ -6452,20 +6600,21 @@ string:
     ;
 
 scalar:
-    QFLOAT        { $$ = $1; }
-    | INTEGER     { $$ = $1; }
-    | CHAR_LITERAL { $$ = QoreValue::makeChar(static_cast<unsigned>($1)); }
-    | string      { $$ = $1; }
-    | DATETIME    { $$ = $1; }
-    | NUMBER      { $$ = $1; }
-    | TOK_NOTHING { $$.bits = 0; }
-    | TOK_NULL    { $$ = (&Null); }
-    | TOK_TRUE    { $$ = (true); }
-    | TOK_FALSE   { $$ = (false); }
+    QFLOAT        { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | INTEGER     { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | CHAR_LITERAL { $$ = QoreValue::makeChar(static_cast<unsigned>($1)); ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | string      { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | DATETIME    { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | NUMBER      { $$ = $1; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | TOK_NOTHING { $$.bits = 0; ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | TOK_NULL    { $$ = (&Null); ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | TOK_TRUE    { $$ = (true); ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
+    | TOK_FALSE   { $$ = (false); ParseNode::bindSemanticPolicy($$, @$.semantic_policy); }
     | ELLIPSES    {
         $$ = (new QoreEllipsesNode(
             qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col))
         );
+        ParseNode::bindSemanticPolicy($$, @$.semantic_policy);
     }
     ;
 

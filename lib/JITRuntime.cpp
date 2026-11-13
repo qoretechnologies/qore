@@ -1013,7 +1013,7 @@ extern "C" DLLEXPORT double qore_rt_to_float(uint64_t val) {
 
 extern "C" DLLEXPORT int64_t qore_rt_to_bool(uint64_t val) {
     QoreValue v = fromBits(val);
-    return v.getAsBool() ? 1 : 0;
+    return LexicalSemanticPolicy::getAsBoolDefault(v) ? 1 : 0;
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_is_null_or_nothing(uint64_t val) {
@@ -1526,11 +1526,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_find_mode(uint64_t exp_bits, uint64_t find
         if (!rv->isNothing()) {
             if (!lrv) {
                 lrv = new QoreListNode(autoTypeInfo);
-                lrv->push(rv.release(), xsink);
-                lrv->push(result.takeReferencedValue(), xsink);
+                qore_list_private::pushCanonical(*lrv, rv.release(), xsink);
+                qore_list_private::pushCanonical(*lrv, result.takeReferencedValue(), xsink);
                 rv = lrv;
             } else {
-                lrv->push(result.takeReferencedValue(), xsink);
+                qore_list_private::pushCanonical(*lrv, result.takeReferencedValue(), xsink);
             }
         } else {
             rv = result.takeReferencedValue();
@@ -2076,9 +2076,12 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak(LocalVar* var, uint64_t
     @param desc the description of the lvalue in a type error: "<lvalue>", or "<foreach lvalue assignment>" for the
     variable of a foreach loop, as the AST interpreter describes them
 */
-static uint64_t qore_rt_coerce_value_impl(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
         ExceptionSink* xsink, bool normalize_weak_refs, const char* desc = "<lvalue>") {
-    ti = qore_substitute_type_params_if_needed(ti);
+    // As in the IR local entry, closed and untyped values need no receiver-dependent substitution.
+    if (QoreTypeInfo::hasType(ti) && ti->getContainsTypeParameterCache() != 0) {
+        ti = qore_substitute_type_params_if_needed(ti);
+    }
     QoreValue val = fromBits(value);
     ValueHolder weak_eval_holder(xsink);
     if (normalize_weak_refs) {
@@ -2686,7 +2689,7 @@ static QoreValue qore_rt_build_selector_range_values(int64 start, int64 stop, bo
                 && qore_check_cancel(xsink, "negative offset range selector")) {
             return QoreValue();
         }
-        rv->push(QoreValue(i), xsink);
+        qore_list_private::pushCanonical(**rv, QoreValue(i), xsink);
         if (*xsink || i == stop) {
             break;
         }
@@ -2720,7 +2723,7 @@ static QoreValue qore_rt_build_selector_range(const QoreValue& seq, QoreValue st
         int64 seq_size;
         bool has_range = QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, effective_start,
             effective_stop, seq_size, start, stop,
-            static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
+            false, negative_offsets, xsink);
         if (*xsink) {
             return QoreValue();
         }
@@ -2770,7 +2773,7 @@ static int qore_rt_selector_range_bounds(const QoreValue& seq, const QoreValue& 
         int64 seq_size;
         bool has_range = QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, effective_start,
             effective_stop, seq_size, first, second,
-            static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
+            false, negative_offsets, xsink);
         if (*xsink) {
             return -1;
         }
@@ -2849,7 +2852,8 @@ static QORE_ALWAYS_INLINE int qore_rt_add_selected_value(const QoreValue& result
             if (fold) {
                 fold->add(entry->getTypeInfo());
             }
-            const_cast<QoreListNode*>(result.get<const QoreListNode>())->push(entry.release(), xsink);
+            qore_list_private::pushCanonical(*const_cast<QoreListNode*>(result.get<const QoreListNode>()),
+                entry.release(), xsink);
             return *xsink ? -1 : 0;
         }
 
@@ -2921,7 +2925,7 @@ static int qore_rt_apply_list_selector(const QoreValue& result, const QoreValue&
     if (negative_offsets && (start < 0 || stop < 0)) {
         int64 seq_size;
         if (!QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, start, stop, seq_size, first, second,
-                static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink)) {
+                false, negative_offsets, xsink)) {
             return *xsink ? -1 : 0;
         }
         if (*xsink) {
@@ -2993,7 +2997,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
                     } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, n.getTypeInfo())) {
                         vcommon = false;
                     }
-                    ret->push(n.refSelf(), xsink);
+                    qore_list_private::pushCanonical(**ret, n.refSelf(), xsink);
                     if (*xsink) {
                         return toBits(QoreValue());
                     }
@@ -3006,7 +3010,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
                 } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, entry->getTypeInfo())) {
                     vcommon = false;
                 }
-                ret->push(entry.release(), xsink);
+                qore_list_private::pushCanonical(**ret, entry.release(), xsink);
                 if (*xsink) {
                     return toBits(QoreValue());
                 }
@@ -3806,7 +3810,7 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
     if (!module_qualified) {
         const qore_ns_private* found_ns = nullptr;
         if (Var* var = qore_root_ns_private::runtimeFindGlobalVar(
-                *pp->RootNS, full_path.c_str(), found_ns)) {
+                *pp->RootNS, full_path.c_str(), found_ns, LexicalSemanticPolicy{})) {
             return toBits(qore_rt_eval_runtime_var(var, xsink));
         }
         if (*xsink) {
@@ -3815,7 +3819,7 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
 
         found_ns = nullptr;
         if (const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
-                *pp->RootNS, full_path.c_str(), found_ns)) {
+                *pp->RootNS, full_path.c_str(), found_ns, LexicalSemanticPolicy{})) {
             return toBits(ce->getReferencedValue());
         }
     }
@@ -3828,7 +3832,7 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
     if (!module_qualified) {
         const qore_ns_private* found_ns = nullptr;
         if (const QoreEnumDecl* ed = qore_root_ns_private::runtimeFindEnum(
-                *pp->RootNS, resolved_class_path, found_ns)) {
+                *pp->RootNS, resolved_class_path, found_ns, LexicalSemanticPolicy{})) {
             if (const QoreEnumMember* member = ed->findMember(var_name)) {
                 return toBits(QoreValue::makeEnum(member));
             }
@@ -4106,7 +4110,7 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     if (!hd) {
         // Try direct hashdecl lookup by path
         const QoreNamespace* pns = nullptr;
-        hd = pgm->findHashDecl(resolve_path, pns);
+        hd = qore_program_private::get(*pgm)->findHashDeclCanonical(resolve_path, pns);
     }
     if (hd) {
         if (inner.isNothing() && or_nothing) {
@@ -4375,7 +4379,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_method_call_ref_aot(QoreAOTCo
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, resolved_class_path, found_ns);
+        *pp->RootNS, resolved_class_path, found_ns, LexicalSemanticPolicy{});
     if (!qc) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
             "cannot resolve class '%s' for method call reference '%s()'",
@@ -5045,7 +5049,7 @@ extern "C" DLLEXPORT void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_
     if (value_val.needsRef()) {
         value_val.refSelf();
     }
-    hash->setKeyValue(key_str.c_str(), value_val, xsink);
+    qore_hash_private::setKeyValueCanonical(*hash, key_str.c_str(), value_val, xsink);
     // Do NOT discard key_val — the caller (JIT/IR) manages the key's lifetime.
     // Discarding here causes a double-free since the key is also cleaned up by
     // the JIT function's exit cleanup or the IR value map cleanup mechanism.
@@ -5586,7 +5590,7 @@ extern "C" DLLEXPORT double qore_rt_load_self_getter_float_typed_aot(QoreAOTCont
 extern "C" DLLEXPORT int64_t qore_rt_load_self_getter_bool_typed_aot(QoreAOTContext* ctx, const char* member_name,
         const char* return_type_path, ExceptionSink* xsink) {
     return qore_rt_load_self_getter_native<int64_t>(member_name, xsink,
-        [](QoreValue value) { return value.getAsBool(); }, [ctx, return_type_path, xsink]() {
+        [](QoreValue value) { return LexicalSemanticPolicy::getAsBoolDefault(value); }, [ctx, return_type_path, xsink]() {
             return qore_rt_accept_return_statement_nothing_by_type_path(ctx, return_type_path, xsink);
         });
 }
@@ -5865,14 +5869,14 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
         QoreListNode* l = list_val.get<QoreListNode>();
         if (l->reference_count() > 1) {
             ReferenceHolder<QoreListNode> copy(l->copy(), xsink);
-            copy->push(push_val.refSelf(), xsink);
+            qore_list_private::pushCanonical(**copy, push_val.refSelf(), xsink);
             if (xsink && *xsink) {
                 return toBits(QoreValue());
             }
             // the copy of a list held through an opaque reference is held through one (see qore_value_with_copy())
             return toBits(qore_value_with_copy(list_val, copy.release()));
         }
-        l->push(push_val.refSelf(), xsink);
+        qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
         if (xsink && *xsink) {
             return toBits(QoreValue());
         }
@@ -5886,7 +5890,7 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
         element_type = qore_substitute_type_params_if_needed(element_type);
         ReferenceHolder<QoreListNode> l(
             new QoreListNode(element_type ? element_type : autoTypeInfo), xsink);
-        l->push(push_val.refSelf(), xsink);
+        qore_list_private::pushCanonical(**l, push_val.refSelf(), xsink);
         if (xsink && *xsink) {
             return toBits(QoreValue());
         }
@@ -5918,7 +5922,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_push_in_place(uint64_t list_bits,
             list_val.getTypeName());
         return toBits(QoreValue());
     }
-    list_val.get<QoreListNode>()->push(fromBits(val_bits).refSelf(), xsink);
+    qore_list_private::pushCanonical(*list_val.get<QoreListNode>(), fromBits(val_bits).refSelf(), xsink);
     return xsink && *xsink ? toBits(QoreValue()) : list_bits;
 }
 
@@ -6096,7 +6100,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, const
         } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
             vcommon = false;
         }
-        if (list->push(v, xsink)) {
+        if (qore_list_private::pushCanonical(**list, v, xsink)) {
             return toBits(QoreValue());
         }
     }
@@ -6156,7 +6160,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, c
         } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
             vcommon = false;
         }
-        hash->setKeyValue(key_str.c_str(), val, xsink);
+        qore_hash_private::setKeyValueCanonical(**hash, key_str.c_str(), val, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
@@ -6254,7 +6258,7 @@ __attribute__((noinline, cold)) bool qore_rt_builtin_function_call(const char* q
         return false;
     }
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
-    args->push(val.refSelf(), xsink);
+    qore_list_private::pushCanonical(**args, val.refSelf(), xsink);
     ValueHolder result(func->evalFunction(nullptr, *args, pgm, rc_get_current_ref(), xsink), xsink);
     if (*xsink) {
         return false;
@@ -6570,7 +6574,7 @@ static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* v
         if (unique_keys) {
             hp->setKeyValueKnownAbsent(keys[i], val, xsink);
         } else {
-            hash->setKeyValue(keys[i], val, xsink);
+            qore_hash_private::setKeyValueCanonical(**hash, keys[i], val, xsink);
         }
         if (*xsink) {
             return toBits(QoreValue());
@@ -7321,7 +7325,7 @@ static int64_t qore_rt_hash_key_truthy_impl(uint64_t hash_val, const char* key,
     }
 
     if (!result.hasNode()) {
-        return result.getAsBool() ? 1 : 0;
+        return LexicalSemanticPolicy::getAsBoolDefault(result) ? 1 : 0;
     }
 
     result.refSelf();
@@ -7330,7 +7334,7 @@ static int64_t qore_rt_hash_key_truthy_impl(uint64_t hash_val, const char* key,
     if (*xsink) {
         return 0;
     }
-    bool truthy = result.getAsBool();
+    bool truthy = LexicalSemanticPolicy::getAsBoolDefault(result);
     result.discard(xsink);
     return truthy ? 1 : 0;
 }
@@ -7724,7 +7728,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
             }
             h = stored.get<QoreHashNode>();
         }
-        h->setKeyValue(key, val.refSelf(), xsink);
+        qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
         // LValueHelper::doHashLValue() including hashdecl error behavior.
@@ -7736,7 +7740,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
             new_h->deref(xsink);
             return toBits(QoreValue());
         }
-        new_h->setKeyValue(key, val.refSelf(), xsink);
+        qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink);
         if (!*xsink) {
             qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
         }
@@ -7782,7 +7786,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             }
             h = stored.get<QoreHashNode>();
         }
-        h->setKeyValue(key, val.refSelf(), xsink);
+        qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
         // LValueHelper::doHashLValue() including hashdecl error behavior.
@@ -7796,7 +7800,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             new_h->deref(xsink);
             return toBits(QoreValue());
         }
-        new_h->setKeyValue(key, val.refSelf(), xsink);
+        qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink);
         if (!*xsink) {
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
         }
@@ -9159,7 +9163,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_scale_int(uint64_t list_val, int64_t s
                     if (xsink || !has_next) break;
                     ValueHolder iv(h.getValue(&xsink), &xsink);
                     if (xsink) break;
-                    result->push(iv->getAsBigInt() * scale, &xsink);
+                    qore_list_private::pushCanonical(**result, iv->getAsBigInt() * scale, &xsink);
                 }
                 if (!xsink) return toBits(result.release());
                 // On exception, fall through (exception already set in thread-local xsink)
@@ -9202,7 +9206,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_scale_float(uint64_t list_val, double 
                     if (xsink || !has_next) break;
                     ValueHolder iv(h.getValue(&xsink), &xsink);
                     if (xsink) break;
-                    result->push(iv->getAsFloat() * scale, &xsink);
+                    qore_list_private::pushCanonical(**result, iv->getAsFloat() * scale, &xsink);
                 }
                 if (!xsink) return toBits(result.release());
                 // On exception, fall through (exception already set in thread-local xsink)
@@ -9245,7 +9249,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_offset_int(uint64_t list_val, int64_t 
                     if (xsink || !has_next) break;
                     ValueHolder iv(h.getValue(&xsink), &xsink);
                     if (xsink) break;
-                    result->push(iv->getAsBigInt() + offset, &xsink);
+                    qore_list_private::pushCanonical(**result, iv->getAsBigInt() + offset, &xsink);
                 }
                 if (!xsink) return toBits(result.release());
                 // On exception, fall through (exception already set in thread-local xsink)
@@ -9288,7 +9292,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_offset_float(uint64_t list_val, double
                     if (xsink || !has_next) break;
                     ValueHolder iv(h.getValue(&xsink), &xsink);
                     if (xsink) break;
-                    result->push(iv->getAsFloat() + offset, &xsink);
+                    qore_list_private::pushCanonical(**result, iv->getAsFloat() + offset, &xsink);
                 }
                 if (!xsink) return toBits(result.release());
                 // On exception, fall through (exception already set in thread-local xsink)
@@ -9332,7 +9336,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_square_int(uint64_t list_val) {
                     ValueHolder iv(h.getValue(&xsink), &xsink);
                     if (xsink) break;
                     int64_t val = iv->getAsBigInt();
-                    result->push(val * val, &xsink);
+                    qore_list_private::pushCanonical(**result, val * val, &xsink);
                 }
                 if (!xsink) return toBits(result.release());
                 // On exception, fall through (exception already set in thread-local xsink)
@@ -9376,7 +9380,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_square_float(uint64_t list_val) {
                     ValueHolder iv(h.getValue(&xsink), &xsink);
                     if (xsink) break;
                     double val = iv->getAsFloat();
-                    result->push(val * val, &xsink);
+                    qore_list_private::pushCanonical(**result, val * val, &xsink);
                 }
                 if (!xsink) return toBits(result.release());
                 // On exception, fall through (exception already set in thread-local xsink)
@@ -9629,7 +9633,7 @@ static uint64_t qore_rt_hash_map_two_keys_impl(uint64_t list_val, const char* ke
             return toBits(QoreValue());
         }
         type_state = qore_common_type_fold(type_state, mapped.getTypeInfo(), static_cast<int64_t>(i));
-        result->setKeyValue(key_string.c_str(), mapped.refSelf(), xsink);
+        qore_hash_private::setKeyValueCanonical(**result, key_string.c_str(), mapped.refSelf(), xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
@@ -9666,7 +9670,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_select_positive_int(uint64_t list_val) {
     for (size_t i = 0; i < sz; ++i) {
         int64_t val = l->retrieveEntry(i).getAsBigInt();
         if (val > 0) {
-            result->push(val, nullptr);
+            qore_list_private::pushCanonical(**result, val, nullptr);
         }
     }
     return toBits(result.release());
@@ -9700,7 +9704,7 @@ static uint64_t qore_rt_select_hash_key_positive_int_impl(uint64_t list_val,
             return toBits(QoreValue());
         }
         if (value.getAsBigInt() > 0) {
-            result->push(elem.refSelf(), xsink);
+            qore_list_private::pushCanonical(**result, elem.refSelf(), xsink);
         }
     }
     return toBits(result.release());
@@ -9729,7 +9733,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_select_positive_float(uint64_t list_val) {
     for (size_t i = 0; i < sz; ++i) {
         double val = l->retrieveEntry(i).getAsFloat();
         if (val > 0.0) {
-            result->push(val, nullptr);
+            qore_list_private::pushCanonical(**result, val, nullptr);
         }
     }
     return toBits(result.release());
@@ -9746,7 +9750,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_select_nonzero_int(uint64_t list_val) {
     for (size_t i = 0; i < sz; ++i) {
         int64_t val = l->retrieveEntry(i).getAsBigInt();
         if (val != 0) {
-            result->push(val, nullptr);
+            qore_list_private::pushCanonical(**result, val, nullptr);
         }
     }
     return toBits(result.release());
@@ -9763,7 +9767,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_select_nonzero_float(uint64_t list_val) {
     for (size_t i = 0; i < sz; ++i) {
         double val = l->retrieveEntry(i).getAsFloat();
         if (val != 0.0) {
-            result->push(val, nullptr);
+            qore_list_private::pushCanonical(**result, val, nullptr);
         }
     }
     return toBits(result.release());
@@ -9781,7 +9785,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_select_scale_positive_int(uint64
     for (size_t i = 0; i < sz; ++i) {
         int64_t val = l->retrieveEntry(i).getAsBigInt();
         if (val > 0) {
-            result->push(val * scale, nullptr);
+            qore_list_private::pushCanonical(**result, val * scale, nullptr);
         }
     }
     return toBits(result.release());
@@ -9798,7 +9802,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_select_scale_positive_float(uint
     for (size_t i = 0; i < sz; ++i) {
         double val = l->retrieveEntry(i).getAsFloat();
         if (val > 0.0) {
-            result->push(val * scale, nullptr);
+            qore_list_private::pushCanonical(**result, val * scale, nullptr);
         }
     }
     return toBits(result.release());
@@ -9815,7 +9819,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_select_offset_positive_int(uint6
     for (size_t i = 0; i < sz; ++i) {
         int64_t val = l->retrieveEntry(i).getAsBigInt();
         if (val > 0) {
-            result->push(val + offset, nullptr);
+            qore_list_private::pushCanonical(**result, val + offset, nullptr);
         }
     }
     return toBits(result.release());
@@ -9832,7 +9836,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_select_offset_positive_float(uin
     for (size_t i = 0; i < sz; ++i) {
         double val = l->retrieveEntry(i).getAsFloat();
         if (val > 0.0) {
-            result->push(val + offset, nullptr);
+            qore_list_private::pushCanonical(**result, val + offset, nullptr);
         }
     }
     return toBits(result.release());
@@ -9849,7 +9853,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_select_square_positive_int(uint6
     for (size_t i = 0; i < sz; ++i) {
         int64_t val = l->retrieveEntry(i).getAsBigInt();
         if (val > 0) {
-            result->push(val * val, nullptr);
+            qore_list_private::pushCanonical(**result, val * val, nullptr);
         }
     }
     return toBits(result.release());
@@ -9866,7 +9870,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_select_square_positive_float(uin
     for (size_t i = 0; i < sz; ++i) {
         double val = l->retrieveEntry(i).getAsFloat();
         if (val > 0.0) {
-            result->push(val * val, nullptr);
+            qore_list_private::pushCanonical(**result, val * val, nullptr);
         }
     }
     return toBits(result.release());
@@ -14313,7 +14317,7 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
     qore_program_private* pp = ctx->pgm ? qore_program_private::get(*ctx->pgm) : nullptr;
     if (pp && pp->RootNS) {
         const qore_ns_private* vns = nullptr;
-        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, ctx->global_names[idx].c_str(), vns);
+        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, ctx->global_names[idx].c_str(), vns, LexicalSemanticPolicy{});
         if (var) {
             slot.store(var, std::memory_order_release);
             if (trace_slot()) {
@@ -15746,7 +15750,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
                 return false;
             }
             // note that no exception can occur here
-            rvh->setKeyValue(mem.c_str(), n, xsink);
+            qore_hash_private::setKeyValueCanonical(**rvh, mem.c_str(), n, xsink);
             if (*xsink) {
                 return true;
             }
@@ -15778,7 +15782,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         // access checks + multi-class internal data + scan tracking).
         ReferenceHolder<QoreListNode> key_list(new QoreListNode(autoTypeInfo), xsink);
         if (for_each_key([&](const QoreValue& key_val) -> bool {
-            key_list->push(key_val.refSelf(), xsink);
+            qore_list_private::pushCanonical(**key_list, key_val.refSelf(), xsink);
             if (*xsink) {
                 return true;
             }
@@ -15878,8 +15882,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
                     p = l->getReferencedEntry(ind);
                     push = true;
                 } else {
-                    push = !is_range
-                            || (runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
+                    push = !is_range;
                 }
                 if (push) {
                     if (!iter_i) {
@@ -15889,7 +15892,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
                             && !QoreTypeInfo::matchCommonType(vtype, p.getTypeInfo())) {
                         vcommon = false;
                     }
-                    v->push(p, nullptr);
+                    qore_list_private::pushCanonical(**v, p, nullptr);
                 }
                 ++iter_i;
                 return false;
@@ -15910,7 +15913,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
                 if (!holder) {
                     holder = new QoreListNode(autoTypeInfo);
                 }
-                holder->push(ve, xsink);
+                qore_list_private::pushCanonical(**holder, ve, xsink);
                 if (*xsink) {
                     return QoreValue();
                 }
@@ -16031,7 +16034,7 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         return QoreValue();
     }
 
-    bool broken_list_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
+    bool broken_list_range = false;
     bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
     int64 start = 0;
     int64 stop = 0;
@@ -16051,7 +16054,7 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
                 }
                 ++d;
                 while (d--) {
-                    v->push(QoreValue(), xsink);
+                    qore_list_private::pushCanonical(**v, QoreValue(), xsink);
                     if (*xsink) {
                         return QoreValue();
                     }
@@ -16687,9 +16690,9 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
             QoreListNode* l = lvh.getValue().get<QoreListNode>();
             // the list takes the reference held for the value, as the AST interpreter hands the value over
             if (inst->binary_mut_op == LVBinaryMutOp::Push) {
-                l->push(rhs_holder.release(), xsink);
+                qore_list_private::pushCanonical(*l, rhs_holder.release(), xsink);
             } else {
-                l->insert(rhs_holder.release(), xsink);
+                qore_list_private::insertCanonical(*l, rhs_holder.release(), xsink);
             }
             break;
         }
@@ -16816,7 +16819,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
                     if (replacement_val.isNothing()) {
                         removed_list = vl->splice(offset, length);
                     } else {
-                        removed_list = vl->splice(offset, length, replacement_val, xsink);
+                        removed_list = qore_list_private::replace(*vl, offset, length, replacement_val, false, xsink);
                     }
                 }
             } else if (vt == NT_STRING) {
@@ -16867,7 +16870,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
                     if (replacement_val.isNothing()) {
                         res = vl->extract(offset, length);
                     } else {
-                        res = vl->extract(offset, length, replacement_val, xsink);
+                        res = qore_list_private::replace(*vl, offset, length, replacement_val, true, xsink);
                     }
                 }
             } else if (vt == NT_STRING) {
@@ -18722,7 +18725,7 @@ extern "C" DLLEXPORT void qore_rt_ref_foreach_record(uint64_t state_ptr, uint64_
     auto* state = reinterpret_cast<RefForeachState*>(state_ptr);
     QoreValue value = fromBits(value_bits);
     if (state->l_tlist) {
-        state->ln.get<QoreListNode>()->push(value.refSelf(), nullptr);
+        qore_list_private::pushCanonical(*state->ln.get<QoreListNode>(), value.refSelf(), nullptr);
     } else {
         state->ln.discard(nullptr);
         state->ln = value.refSelf();
@@ -18754,7 +18757,7 @@ extern "C" DLLEXPORT void qore_rt_ref_foreach_finalize(uint64_t state_ptr, int64
         size_t result_size = result->size();
         size_t orig_size = state->l_tlist->size();
         for (size_t i = result_size; i < orig_size; ++i) {
-            result->push(state->l_tlist->getReferencedEntry(i), nullptr);
+            qore_list_private::pushCanonical(*result, state->l_tlist->getReferencedEntry(i), nullptr);
         }
     }
 
@@ -20443,7 +20446,7 @@ extern "C" DLLEXPORT int64_t qore_rt_load_object_getter_bool_aot(
         const char* member_name, const char* return_type_path, ExceptionSink* xsink) {
     return qore_rt_load_object_getter_native_aot<int64_t>(
         ctx, slot, base_bits, member_name, return_type_path, xsink,
-        [](QoreValue value) { return value.getAsBool(); });
+        [](QoreValue value) { return LexicalSemanticPolicy::getAsBoolDefault(value); });
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
@@ -20640,8 +20643,8 @@ extern "C" DLLEXPORT int64_t qore_rt_object_member_set_get_bool_aot(
     return qore_rt_object_member_set_get_native_aot<int64_t>(
         ctx, slot, base_bits, args, nargs, member_name, value_param, return_type_path, xsink,
         NT_BOOLEAN,
-        [](const LValueHelper& helper) { return helper.getAsBool(); },
-        [](QoreValue value) { return value.getAsBool(); });
+        [](const LValueHelper& helper) { return LexicalSemanticPolicy::getAsBoolDefault(helper.getValue()); },
+        [](QoreValue value) { return LexicalSemanticPolicy::getAsBoolDefault(value); });
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
@@ -21403,7 +21406,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
             has_value = !v.get<const BinaryNode>()->empty();
             break;
         case NT_BOOLEAN:
-            has_value = v.getAsBool();
+            has_value = LexicalSemanticPolicy::getAsBoolDefault(v);
             break;
         case NT_INT:
             has_value = v.getAsBigInt() != 0;

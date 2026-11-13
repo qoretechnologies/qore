@@ -222,6 +222,42 @@ static void qore_mark_weak_assignment_sources(const QoreValue& expr) {
     }
 }
 
+int QoreAssignmentOperatorNode::parseInitMode(QoreValue& val, QoreParseContext& parse_context,
+        AssignmentMode mode) {
+    int err = parseInitIntern(parse_context, mode);
+    if (err || ident || !getSemanticPolicy().needsFilter()) {
+        return err;
+    }
+    // makeSpecialization() transfers the operands and deletes this parse-only node.
+    const bool saved_broken_int = broken_int;
+    const bool saved_ident = ident;
+    const QoreTypeInfo* saved_type = ti;
+    QoreAssignmentOperatorNode* replacement;
+    switch (mode) {
+        case AssignmentMode::Weak:
+            replacement = static_cast<QoreAssignmentOperatorNode*>(
+                makeSpecialization<LexicalAssignmentOperatorNode<QoreWeakAssignmentOperatorNode,
+                    AssignmentMode::Weak>>());
+            break;
+        case AssignmentMode::Opaque:
+            replacement = static_cast<QoreAssignmentOperatorNode*>(
+                makeSpecialization<LexicalAssignmentOperatorNode<QoreOpaqueAssignmentOperatorNode,
+                    AssignmentMode::Opaque>>());
+            break;
+        default:
+            replacement = static_cast<QoreAssignmentOperatorNode*>(
+                makeSpecialization<LexicalAssignmentOperatorNode<QoreAssignmentOperatorNode,
+                    AssignmentMode::Normal>>());
+            break;
+    }
+    replacement->broken_int = saved_broken_int;
+    replacement->ident = saved_ident;
+    replacement->ti = saved_type;
+    replacement->setParseAnalysis(parse_context.analysis);
+    val = replacement;
+    return 0;
+}
+
 int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode) {
     // the operator's spelling, used in diagnostics
     const char* op_name = mode == AssignmentMode::Weak
@@ -669,6 +705,17 @@ bool qore_weak_assignment_source_made_unique(const QoreValue& right) {
 
 QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& needs_deref,
         AssignmentMode mode) const {
+    return evalInternImpl<false>(xsink, needs_deref, mode);
+}
+
+QoreValue QoreAssignmentOperatorNode::evalLexical(ExceptionSink* xsink, bool& needs_deref,
+        AssignmentMode mode) const {
+    return evalInternImpl<true>(xsink, needs_deref, mode);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreAssignmentOperatorNode::evalInternImpl(ExceptionSink* xsink,
+        bool& needs_deref, AssignmentMode mode) const {
     /* assign new value, this value gets referenced with the
         eval(xsink) call, so there's no need to reference it again
         for the variable assignment - however it does need to be
@@ -723,8 +770,13 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
     assert(!*xsink);
 
     // assign new value
-    if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, mode))
+    if constexpr (Lexical) {
+        if (v.assign(new_value.takeReferencedValue(), "<lvalue>", getSemanticPolicy(), !ident, mode)) {
+            return QoreValue();
+        }
+    } else if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, mode)) {
         return QoreValue();
+    }
 
     // reference return value if necessary
     return ref_rv ? v.getReferencedValue() : QoreValue();

@@ -113,21 +113,16 @@
     and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
     the class and its subclasses (\c METHOD-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR for a private variant), as documented.
 
-    @par No-Op Builtin Variants Are Not Called With Strict Arguments
-    With @ref Qore::PO_STRICT_ARGS or @ref Qore::PO_REQUIRE_TYPES (as with @ref modern "%modern"), @ref NOOP variants
-    are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and one with no value at run time, for
-    example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR instead of returning a constant.
-
     @par Debugger Callbacks Run With the Cancellation Deferred
     The notification methods of a @ref Qore::DebugProgram "DebugProgram" run with the cancellation of the thread
     deferred, so a thread that is cancelled or interrupted while it is stopped in the debugger stays stopped until the
     debugger resumes it (issue #5794).
 
-    @par No-Op Builtin Variants Are Not Called at Run Time With Strict Arguments
+    @par No-Op Builtin Variants Are Not Called With Strict Arguments
     With @ref Qore::PO_REQUIRE_TYPES or @ref Qore::PO_STRICT_ARGS (as with @ref modern "%modern"), the builtin variants
-    flagged @ref NOOP are no longer resolved at run time, as at parse time: the no-op calls, for example
-    <tt>chr()</tt> of an unassigned member, raise \c RUNTIME-OVERLOAD-ERROR instead of returning a constant value.
-    The most common cases keep their results with regular variants:
+    flagged @ref NOOP are not called: an argument of type @ref nothing is a \c PARSE-TYPE-ERROR, and a no-op call at run
+    time, for example <tt>chr()</tt> of an unassigned member, raises \c RUNTIME-OVERLOAD-ERROR; common cases keep their
+    results with regular variants:
     - <tt>length()</tt> and <tt>strlen()</tt> of @ref nothing return \c 0;
     - <tt>sort()</tt>, <tt>sort_descending()</tt>, <tt>sort_stable()</tt> and <tt>sort_descending_stable()</tt> of
       no value (such as \c keys of an unassigned hash) return no value; as these calls are resolved at run time, a
@@ -249,8 +244,12 @@
     A child process created with @ref Qore::fork() "fork()" gives up the database connections that it inherits and
     opens its own; continuing a transaction of the parent raises \c DATASOURCE-FORK-ERROR.  See @ref datasource_fork.
 
-    @par Binary Modules Implement Module API 2.1
-    Every external binary module must be rebuilt for module API 2.1, which registers its metadata with a
+    @par Compatibility Settings Are Bound to Parsed Code
+    @ref lexical_compatibility_options "Compatibility semantics" are saved with parsed code, so changing
+    @ref Qore::Program options affects newly parsed operations without changing existing code.
+
+    @par Binary Modules Implement Module API 2.2
+    Every external binary module must be rebuilt for module API 2.2, which registers its metadata with a
     \c {name}_qore_module_desc() function, reports initialization errors as exceptions and covers all public ABI
     changes of %Qore 3.0; a module built for another module API is not found by its feature name, and the
     \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
