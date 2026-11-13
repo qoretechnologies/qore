@@ -4035,24 +4035,35 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
     // frame has, and a handler that assigns or removes a local releases the value it replaces right away (qore#5942).
     // The storage released is the storage that the function has once it is lowered: code lowered after a site can
     // run before it, and a site creates no storage of its own, which every later flush of the function's statements
-    // would rotate.  A local without reload storage borrows its cache from the variable, as before.  The locals
-    // released are reloaded eagerly after the handlers: code can read a local's native cache without the stale check
-    // (fused local operations), and the reference that backed the cache was released.
-    llvm::IRBuilderBase::InsertPoint saved_ip = builder->saveIP();
-    for (const HandlerSite& site : handler_sites) {
+    // would rotate.  A local without a reload tracker is left to the invalidation of the caches after the handlers,
+    // as before.  The locals released are reloaded eagerly after the handlers: code can read a local's native cache
+    // without the stale check (fused local operations), and the reference that backed the cache was released.
+    // the sites are taken from the member, which is left empty on any exit
+    std::vector<HandlerSite> sites;
+    sites.swap(handler_sites);
+    // restores the builder's insertion point on any exit
+    llvm::IRBuilderBase::InsertPointGuard insert_point_guard(*builder);
+    for (const HandlerSite& site : sites) {
         builder->SetInsertPoint(site.call);
         std::vector<const void*> released = releaseLocalReloadStorage(module);
         if (!site.reload || released.empty()) {
             continue;
         }
+        // a recorded call is never the terminator of its block: the block that runs the handlers ends with the branch
+        // of endPendingHandlerRun(), and every block of the lowered function has a terminator, so the call has a next
+        // instruction; a block without one would get the reloads at its end, after the call
         llvm::Instruction* next = site.call->getNextNode();
         assert(next);
-        builder->SetInsertPoint(next);
+        if (next) {
+            builder->SetInsertPoint(next);
+        } else {
+            builder->SetInsertPoint(site.call->getParent());
+        }
         for (const void* key : released) {
             // only a local whose cache was backed by its tracker is reloaded, into its cache and its tracker, which
             // the release left NOTHING, so that nothing is rotated through its deferred slot; reloadLocalFromRuntime()
             // would create the storage that a local lacks, after the exit cleanup of the function that releases it
-            // was emitted.  A local with only a deferred slot borrows its cache from the variable, as before.
+            // was emitted.  A local without a tracker is left to the invalidation of the caches after the handlers.
             auto tracker_it = local_reload_trackers.find(key);
             auto alloca_it = local_allocas.find(key);
             if (tracker_it == local_reload_trackers.end() || alloca_it == local_allocas.end()) {
@@ -4064,8 +4075,6 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
             markLocalCacheFresh(key, llvm_func);
         }
     }
-    builder->restoreIP(saved_ip);
-    handler_sites.clear();
 }
 
 void QoreIRToLLVM::publishLocalsForHandlers(llvm::Module& module) {
