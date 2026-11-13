@@ -1878,8 +1878,9 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         return -1;
     }
 
-    // check for accessible variants
-    if (qc) {
+    // check for accessible variants: only of a method (a closure created in a class has the class but its variant is
+    // not a method variant)
+    if (qc && func->getClass()) {
         const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
         ClassAccess va = mv->getAccess();
         if ((va > Public && !class_ctx) || (va == Internal
@@ -10059,9 +10060,7 @@ QoreValue UserClosureFunction::evalClosureNamed(const QoreClosureBase& closure_b
     const AbstractQoreFunctionVariant* variant = nullptr;
     QoreClosureTypeContextHelper type_context(&closure_base);
     const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
-    // the closure runs in the class context that created it, which is also the context in which its variant is
-    // accessible (a closure of a class is not a method that code outside of the class cannot call)
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, class_ctx, pgm,
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, nullptr, pgm,
         closure_type_context ? closure_type_context->receiver_type_info : nullptr, nullptr, 0, arg_names, {},
         &closure_base);
     if (*xsink) {

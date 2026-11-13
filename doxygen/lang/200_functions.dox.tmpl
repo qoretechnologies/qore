@@ -259,9 +259,10 @@ cl(count: 2, text: "boxes");    # "boxes x 2"
     Other calls with named arguments must resolve to a known signature at parse time: method calls through a
     receiver without a declared class type (such as \c auto, \c object, or a class with a \c methodGate() method
     and no method of the given name) are rejected with \c NAMED-CALL-NOT-SUPPORTED; use positional arguments or give
-    the target an explicit type that allows parse-time resolution. A method call through a receiver declared with an or-nothing class type (<tt>*Class</tt>) binds the
-    named arguments with the signature of the method in \c Class; the method is still dispatched at runtime. Builtin functions and methods accept named arguments only
-    when their variant has opted in with the @ref NAMED_ARGS "NAMED_ARGS" code flag.
+    the target an explicit type that allows parse-time resolution. A method call through a receiver declared with an
+    or-nothing class type (<tt>*Class</tt>) binds the named arguments with the signature of the method in \c Class;
+    the method is still dispatched at runtime. Builtin functions and methods accept named arguments only when their
+    variant has opted in with the @ref NAMED_ARGS "NAMED_ARGS" code flag.
 
     When the target has a single variant, an argument whose type is only known at runtime (for example an \c auto
     value, or a <tt>*string</tt> value for an \c auto parameter) is bound by name at parse time and type-checked at

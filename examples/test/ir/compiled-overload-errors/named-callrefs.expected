@@ -35,6 +35,13 @@ missing: RUNTIME-OVERLOAD-ERROR: no variant matching '<anonymous closure>(label:
 not callable: REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
 inherited: C::m(int count, string label) count=12 label="d" tag="obj"
 inherited in class: C::m(string label, float count) label="e" count=13.5 tag="obj"
+override: E::m(int count, string label) count=14 label="o"
+object closure unknown name: RUNTIME-OVERLOAD-ERROR: no variant matching '<anonymous closure>(n: integer, pfx: string)' can be found; the following variants were tested:
+   <anonymous closure>(int n, string prefix = "p")
+object closure bad type named: RUNTIME-OVERLOAD-ERROR: no variant matching '<anonymous closure>(n: string)' can be found; the following variants were tested:
+   <anonymous closure>(int n, string prefix = "p")
+object closure bad type positional: RUNTIME-OVERLOAD-ERROR: no variant matching '<anonymous closure>(string)' can be found; the following variants were tested:
+   <anonymous closure>(int n, string prefix = "p")
 closure ref: r=3
 closure ref after: z=3
 builtin named: abc
@@ -44,5 +51,7 @@ deleted object positional: OBJECT-ALREADY-DELETED: cannot call a method on an ob
 deleted object named: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
 orphan closure positional: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
 orphan closure named: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+orphan class closure positional: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+orphan class closure named: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
 background: f(int count, string label) count=11 label="bg"
 background call: bg2

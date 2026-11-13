@@ -42,6 +42,12 @@ class C {
     }
 }
 
+# a subclass that overrides a method
+class E inherits C {
+    string m(int count, string label) { return sprintf("E::m(int count, string label) count=%y label=%y", count,
+        label); }
+}
+
 # a subclass: references to methods of its objects that it inherits are resolved when the call is made
 class D inherits C {
     # a reference to a method of the object that is inherited by its class
@@ -122,6 +128,16 @@ sub calls() {
     code dir = d.inheritedRef();
     t("inherited in class", string sub () { return dir(count: 13.5, label: "e"); });
 
+    # an overriding method of the class of the object
+    E e();
+    code emr = \e.m();
+    t("override", string sub () { return emr(label: "o", count: 14); });
+
+    # a closure created in a class called with arguments that cannot be bound, named and positional
+    t("object closure unknown name", string sub () { return oc(n: 1, pfx: "x"); });
+    t("object closure bad type named", string sub () { return oc(n: "x"); });
+    t("object closure bad type positional", string sub () { return oc("x"); });
+
     # a reference argument in a function (the IR tier in jit mode), through a closure
     {
         int z = 1;
@@ -160,6 +176,18 @@ calls();
     }
     t("orphan closure positional", string sub () { return orphan(1, "x"); });
     t("orphan closure named", string sub () { return orphan(label: "x", count: 1); });
+
+    # a closure whose parameter has a class of the deleted Program as its type
+    code orphan2;
+    {
+        Program child(PO_NEW_STYLE);
+        child.parse("class Foo {} code sub make() { return string sub (*Foo f, int n) { return sprintf(\"%d\", n); }; }",
+            "child2");
+        orphan2 = child.callFunction("make");
+        delete child;
+    }
+    t("orphan class closure positional", string sub () { return orphan2(NOTHING, 1); });
+    t("orphan class closure named", string sub () { return orphan2(n: 1); });
 }
 
 # a named call in a background thread
