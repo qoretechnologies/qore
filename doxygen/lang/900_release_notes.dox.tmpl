@@ -1688,6 +1688,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the @ref astparserintro "astparser" module parses the explicit type arguments of a generic function call that
+      contain an or-nothing type or a nested callable type, such as \c id<code<*hash<auto>(int)>>(c), so that
+      \c qdx and the documentation builds accept it (issue #6024)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash
