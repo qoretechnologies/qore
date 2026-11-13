@@ -589,14 +589,19 @@ public:
     DLLLOCAL QoreValue exec(QoreObject* o, const char* cstr, const qore_class_private* ctx, ExceptionSink* xsink)
             const;
 
-    //! evaluates a named call of a method of an object resolved at run time by parameter name
-    /** @param o the object
-        @param m the method, or nullptr to look it up by name in the class of the object
+    //! evaluates a named call of a method of an object resolved at run time by parameter name (qore#5990)
+    /** the names are bound to the parameters of the variants of \a bind_m, and the method is then called with the
+        arguments at those positions as a call with positional arguments is
+
+        @param o the object
+        @param bind_m the method of the receiver's static type, whose variants the names are bound to, or nullptr for
+        the method of the class of the object
+        @param dispatch_m the method called, or nullptr to look it up by name in the class of the object
         @param cstr the name of the method
         @param ctx the class context of the call
     */
-    DLLLOCAL QoreValue execNamed(QoreObject* o, const QoreMethod* m, const char* cstr, const qore_class_private* ctx,
-            RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execNamed(QoreObject* o, const QoreMethod* bind_m, const QoreMethod* dispatch_m,
+            const char* cstr, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL const QoreClass* getClass() const {
         return qc;

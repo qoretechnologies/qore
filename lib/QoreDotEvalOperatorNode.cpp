@@ -171,6 +171,12 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 if (m->parseArgs(parse_context, func, nullptr) && !err) {
                     err = -1;
                 }
+                // a call resolved at run time by parameter name binds the names to the variants of the method of the
+                // receiver's static type (qore#5990), which is therefore saved for the call; it is still dispatched
+                // on the class of the object
+                if (m->getRuntimeArgNames() && !m->getMethod()) {
+                    m->parseSetClassAndMethod(nqc, meth);
+                }
                 if (readonly_receiver
                     && check_readonly_receiver_method_call(loc, mname,
                         static_cast<const MethodVariantBase*>(m->getVariant()), func)
@@ -352,6 +358,12 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     }
     if (m->parseArgs(parse_context, func, nullptr) && !err) {
         err = -1;
+    }
+    // a call resolved at run time by parameter name binds the names to the variants of the method of the receiver's
+    // static type (qore#5990), which is therefore saved also for an abstract method; it is still dispatched on the
+    // class of the object
+    if (m->getRuntimeArgNames() && !m->getMethod()) {
+        m->parseSetClassAndMethod(qc, meth);
     }
     if (readonly_receiver
         && check_readonly_receiver_method_call(loc, mname, static_cast<const MethodVariantBase*>(m->getVariant()),

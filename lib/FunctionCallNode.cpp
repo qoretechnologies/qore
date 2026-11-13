@@ -453,7 +453,7 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
             // a named call resolved at run time by parameter name has no variant; a call with a variant pays nothing
             // for it
             if (!variant && runtime_arg_names) {
-                return execNamed(o, method, c_str, ctx, rc, xsink);
+                return execNamed(o, method, method, c_str, ctx, rc, xsink);
             }
             ReferenceHolder<QoreListNode> args_copy(xsink);
             return qore_method_private::evalTmpArgs(*method, xsink, rc, o, getEvalTmpArgs(args_copy), ctx, variant,
@@ -464,12 +464,13 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
                 reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst);
         }
         return runtime_arg_names
-            ? execNamed(o, method, c_str, ctx, rc, xsink)
+            ? execNamed(o, method, method, c_str, ctx, rc, xsink)
             : qore_method_private::eval(*method, xsink, rc, o, args, ctx, nullptr, nullptr, explicit_inst);
     }
     // the method is looked up by name in the class of the object
     if (runtime_arg_names) {
-        return execNamed(o, nullptr, c_str, ctx, rc, xsink);
+        // the names are bound with the method of the receiver's static type, if known (see execNamed())
+        return execNamed(o, method, nullptr, c_str, ctx, rc, xsink);
     }
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
@@ -493,8 +494,14 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
 
 // a named call resolved at run time by parameter name; outside of exec(), whose calls with positional arguments are
 // hot
-__attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(QoreObject* o, const QoreMethod* m,
-        const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
+/* qore#5990: the names are bound to the parameters of the variants of the method of the receiver's static (declared)
+   type, and the call is then made with the arguments at those positions as the same call with positional arguments
+   is: dispatched on the class of the object, so that an override is called whatever the names of its parameters
+   (unless the call names the class of the method, as Base::m() does)
+*/
+__attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(QoreObject* o, const QoreMethod* bind_m,
+        const QoreMethod* dispatch_m, const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
     assert(runtime_arg_names);
     assert(!variant);
     if (!o->isValid()) {
@@ -502,27 +509,76 @@ __attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(Qore
             o->getClassName(), c_str);
         return QoreValue();
     }
-    if (!m) {
-        // the method of the class of the object, which inherits or overrides the method that the call was parsed
-        // with; its variants are bound to the arguments by name
-        m = qore_class_private::get(*o->getClass())->getMethodForEval(c_str, o->getProgram(), ctx, xsink);
+    // the method of the class of the object, which inherits or overrides the method that the call was parsed with
+    if (!dispatch_m || !bind_m) {
+        const QoreMethod* w = qore_class_private::get(*o->getClass())->getMethodForEval(c_str, o->getProgram(), ctx,
+            xsink);
         if (*xsink) {
             return QoreValue();
         }
-        if (!m) {
+        if (!w) {
             xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined",
                 o->getClassName(), c_str);
             return QoreValue();
         }
+        if (!dispatch_m) {
+            dispatch_m = w;
+        }
+        // a call restored without the method of its static type binds the names to the method of the object's class
+        if (!bind_m) {
+            bind_m = w;
+        }
     }
-    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+
+    // the arguments in source order, evaluated
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    ReferenceHolder<QoreListNode> args_copy(xsink);
+    const QoreListNode* call_args;
     if (tmp_args) {
-        ReferenceHolder<QoreListNode> args_copy(xsink);
-        return qore_method_private::evalNamed(*m, xsink, rc, o, getEvalTmpArgs(args_copy), true, ctx, nullptr,
-            explicit_inst, *runtime_arg_names);
+        call_args = getEvalTmpArgs(args_copy);
+    } else {
+        eval_args.assignEval(args);
+        if (*xsink) {
+            return QoreValue();
+        }
+        call_args = *eval_args;
     }
-    return qore_method_private::evalNamed(*m, xsink, rc, o, args, false, ctx, nullptr, explicit_inst,
-        *runtime_arg_names);
+
+    // the variant of the static type that the names select, and the arguments at the positions of its parameters
+    const qore_class_private* bind_cls = qore_class_private::get(*bind_m->getClass());
+    const qore_class_private* class_ctx = ctx;
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*bind_m->getClass(), class_ctx)) {
+        class_ctx = nullptr;
+    }
+    const QoreFunction* bind_func = qore_method_private::get(*bind_m)->getFunction();
+    QoreTypeParamInstantiation type_param_inst;
+    bool content_dependent = false;
+    QoreListNode* bound_args = nullptr;
+    const AbstractQoreFunctionVariant* bound_variant = bind_func->runtimeFindVariantIntern<true, false>(xsink,
+        call_args, class_ctx, qore_get_object_receiver_type_info(o), &type_param_inst,
+        getExplicitTypeParamInstantiation(), &content_dependent, runtime_arg_names, &bound_args, true);
+    ReferenceHolder<QoreListNode> bound_holder(bound_args, xsink);
+    if (!bound_variant) {
+        assert(*xsink);
+        return QoreValue();
+    }
+    assert(bound_args);
+    // the variant that the names select must be accessible, as for a call of it (see
+    // CodeEvaluationHelper::findVariant())
+    {
+        const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(bound_variant);
+        ClassAccess va = mv->getAccess();
+        if ((va > Public && !class_ctx) || (va == Internal
+                && !qore_class_private::get(*mv->getClass())->equal(*bind_cls))) {
+            xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
+                mv->className(), bind_func->getName(), mv->getSignature()->getSignatureText());
+            return QoreValue();
+        }
+    }
+
+    // the call with the arguments at their positions, resolved as for a call with positional arguments
+    return qore_method_private::evalTmpArgs(*dispatch_m, xsink, rc, o, *bound_holder, ctx, nullptr, nullptr,
+        getExplicitTypeParamInstantiation());
 }
 
 const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
@@ -944,7 +1000,8 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
         // a named call resolved at run time by parameter name binds its arguments by name to the variants of the
         // method of the object's class
         if (runtime_arg_names) {
-            return execNamed(self, nullptr, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, rc, xsink);
+            return execNamed(self, method, nullptr, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, rc,
+                xsink);
         }
         return qore_class_private::get(*self->getClass())->evalMethod(self, ns.ostr, args,
             class_ctx ? class_ctx : runtime_cls, rc, xsink);
@@ -956,10 +1013,11 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
         // an abstract method is implemented by the class of the object (see is_abstract, which an AOT-restored call
         // does not set)
         if (qore_method_private::get(*method)->isAbstract()) {
-            return execNamed(self, nullptr, method->getName(), class_ctx ? class_ctx : runtime_cls, rc, xsink);
+            return execNamed(self, method, nullptr, method->getName(), class_ctx ? class_ctx : runtime_cls, rc,
+                xsink);
         }
-        // an explicit call of the method of a class (Base::m()): its variants are bound to the arguments by name
-        return execNamed(self, method, method->getName(), nullptr, rc, xsink);
+        // an explicit call of the method of a class (Base::m()) is not dispatched on the class of the object
+        return execNamed(self, method, method, method->getName(), nullptr, rc, xsink);
     }
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);

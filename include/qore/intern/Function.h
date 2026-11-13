@@ -2353,12 +2353,15 @@ public:
 
     //! runtimeFindVariant() for a named call resolved by parameter name (NAMED) or a call with positional arguments,
     //! for user variants only (ONLY_USER) or all variants
+    /** @param bind_abstract for a named call (NAMED): abstract variants are candidates, as the selected variant is
+        only used to bind the arguments to the positions of its parameters (see AbstractMethodCallNode::execNamed())
+    */
     template <bool NAMED, bool ONLY_USER>
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariantIntern(ExceptionSink* xsink,
             const QoreListNode* args, const qore_class_private* class_ctx,
             const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
             const QoreTypeParamInstantiation* explicit_type_param_inst, bool* content_dependent,
-            const name_vec_t* arg_names, QoreListNode** named_bound_args) const;
+            const name_vec_t* arg_names, QoreListNode** named_bound_args, bool bind_abstract = false) const;
 
     // finds the best match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,

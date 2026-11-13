@@ -1,0 +1,22 @@
+base literal: B::sw(int count, string label) count=1 label="x"
+base literal float: B::sw(string label, float count) label="x" count=1.5
+virtual literal: C::sw(int n, string l) n=1 l="x"
+virtual runtime: C::sw(int n, string l) n=1 l="x"
+virtual runtime label first: C::sw(int n, string l) n=1 l="x"
+positional: C::sw(int n, string l) n=1 l="x"
+inherited: B::sw(string label, float count) label="x" count=1.5
+virtual one: C::one(int n, string l) n=1 l="x"
+virtual wrong types: RUNTIME-OVERLOAD-ERROR
+child names: C::one(int n, string l) n=1 l="x"
+child names literal: C::one(int n, string l) n=1 l="x"
+self: C::sw(int n, string l) n=1 l="x"
+self literal: C::sw(int n, string l) n=1 l="x"
+scoped: B::sw(int count, string label) count=1 label="x"
+default: C::sw(int n, string l) n=1 l="v"
+abstract literal: AI::am(int n, string l) n=1 l="x"
+abstract runtime: AI::am(int n, string l) n=1 l="x"
+abstract runtime float: AI::am(string l, float n) l="x" n=1.5
+abstract self: AI::am(int n, string l) n=1 l="x"
+implementation names: AI::am(int n, string l) n=1 l="x"
+loop: ["C::sw(int n, string l) n=0 l=\"l0\"", "AI::am(int n, string l) n=0 l=\"a0\"", "C::sw(int n, string l) n=1 l=\"l1\"", "AI::am(int n, string l) n=1 l=\"a1\"", "C::sw(int n, string l) n=2 l=\"l2\"", "AI::am(int n, string l) n=2 l=\"a2\""]
+background: C::sw(int n, string l) n=1 l="x"

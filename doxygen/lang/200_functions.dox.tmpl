@@ -277,13 +277,34 @@ auto l = "items";
 string str = show(label: l, count: n);
     @endcode
 
-    Calls of methods are resolved at runtime by parameter name in the same way: a call of a method of an object
-    binds the arguments to the variants of the method in the class of the object at runtime (so a variant that a
-    child class adds is a candidate, as for a call with positional arguments), a call of a method in the
-    class (with or without an explicit class name) to the variants of that method, and a static method call to the
-    variants of the static method; a variant that is not accessible where the call is made is not a candidate.  A
-    receiver declared with an or-nothing class type that has no value at runtime raises the error of the same call
-    with positional arguments.  For a call of a pseudo-method whose variant is resolved at runtime, the variants that
+    @anchor named_arguments_virtual_dispatch
+    The names of a call of a method of an object are bound to the parameters of the variants of the method in the
+    declared (static) type of the receiver (for a call of a method in the class, the class of the method making the
+    call), whether at parse time or at runtime; a variant of a parent class that the class overrides is not one of
+    them, whatever the names of its parameters, and a variant that is not accessible where the call is made is not a
+    candidate.  The call is then made with the arguments at the positions of the parameters of that variant exactly
+    as the same call with positional arguments is: it is dispatched to the class of the object, so an override is
+    called whatever the names of its parameters (a call with an explicit class name, such as <tt>Base::method()</tt>,
+    calls the method of that class, as with positional arguments).  A static method call binds the names to the
+    variants of the static method.  A receiver declared with an or-nothing class type that has no value at runtime
+    raises the error of the same call with positional arguments.
+    @code{.py}
+class Shape {
+    string draw(int width, string color) { return sprintf("shape %d %s", width, color); }
+}
+class Box inherits Shape {
+    string draw(int w, string c) { return sprintf("box %d %s", w, c); }
+}
+Shape s = new Box();
+# the names are those of Shape::draw(); Box::draw() is called, as for s.draw(2, "red")
+string str = s.draw(color: "red", width: 2);
+Box b();
+# the names are those of Box::draw()
+str = b.draw(w: 2, c: "red");
+    @endcode
+    Arguments whose types are known select the variant that matches them best, as for positional arguments (an
+    \c int argument matches an \c int parameter better than a \c float parameter); only arguments that two variants
+    match exactly as well are rejected as ambiguous.  For a call of a pseudo-method whose variant is resolved at runtime, the variants that
     the runtime resolution can select must have the same parameter names at the positions of the arguments; if
     another such variant has other parameter names at those positions, the call is rejected with
     \c NAMED-CALL-NOT-SUPPORTED; use positional arguments or give the argument an explicit type that has a value.

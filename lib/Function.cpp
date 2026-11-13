@@ -2350,6 +2350,44 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
     return desc;
 }
 
+//! the variants that a class overrides, for binding the arguments of a named call (qore#5990)
+/** the names of a named call are bound to the parameters of the variants of the receiver's static type: a variant of
+    a parent class that a class before it in the inheritance list overrides (a variant with the same parameter types)
+    is not one of them, whatever the names of its parameters
+*/
+class qore_named_override_filter {
+public:
+    //! adds the variants of a function that the iteration of the inheritance list has passed
+    DLLLOCAL void add(const QoreFunction* f) {
+        if (!f) {
+            return;
+        }
+        QoreFunctionIterator fi(*f);
+        while (fi.next()) {
+            if (const AbstractFunctionSignature* sig = fi.getVariant()->getSignature()) {
+                sigs.push_back(sig);
+            }
+        }
+    }
+
+    //! returns true if a variant that was added overrides \a v
+    DLLLOCAL bool overridden(const AbstractQoreFunctionVariant* v) const {
+        const AbstractFunctionSignature* sig = v->getSignature();
+        if (!sig) {
+            return false;
+        }
+        for (const AbstractFunctionSignature* s : sigs) {
+            if (s->compare(*sig, true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+private:
+    std::vector<const AbstractFunctionSignature*> sigs;
+};
+
 static bool skip_method_variant(const AbstractQoreFunctionVariant* v, const qore_class_private* class_ctx,
         bool internal_access) {
     assert(dynamic_cast<const MethodVariantBase*>(v));
@@ -3502,9 +3540,12 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantIntern(Except
         const QoreListNode* args, const qore_class_private* class_ctx,
         const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst,
         const QoreTypeParamInstantiation* explicit_type_param_inst, bool* content_dependent,
-        const name_vec_t* arg_names, QoreListNode** named_bound_args) const {
+        const name_vec_t* arg_names, QoreListNode** named_bound_args, bool bind_abstract) const {
     assert(NAMED == static_cast<bool>(arg_names));
+    assert(NAMED || !bind_abstract);
     constexpr bool only_user = ONLY_USER;
+    // abstract variants are skipped, except for binding the names of a named call (see bind_abstract)
+    const bool skip_abstract = !(NAMED && bind_abstract);
     if (type_param_inst) {
         type_param_inst->clear();
     }
@@ -3550,6 +3591,11 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantIntern(Except
 
     int cnt = 0;
 
+    // for a named call: the variants of the classes passed in the inheritance list, which override those of their
+    // parents (qore#5990)
+    [[maybe_unused]] std::conditional_t<NAMED, qore_named_override_filter, qore_no_named_positions> override_filter;
+    [[maybe_unused]] const QoreFunction* prev_aqf = nullptr;
+
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
         bool stop;
@@ -3557,9 +3603,13 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantIntern(Except
         if (!aqf) {
             break;
         }
+        if constexpr (NAMED) {
+            override_filter.add(prev_aqf);
+            prev_aqf = aqf;
+        }
 
         // issue #3070: skip abstract methods
-        if (last_class && static_cast<const MethodFunctionBase*>(aqf)->isAbstract()) {
+        if (skip_abstract && last_class && static_cast<const MethodFunctionBase*>(aqf)->isAbstract()) {
             continue;
         }
 
@@ -3576,8 +3626,15 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariantIntern(Except
             // skip if the variant is not accessible or abstract
             if (last_class
                 && (skip_method_variant(*i, class_ctx, internal_access)
-                    || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
+                    || (skip_abstract && static_cast<const MethodVariantBase*>(*i)->isAbstract()))) {
                     continue;
+            }
+            // a named call binds the names to the variants of the receiver's static type, of which a variant of a
+            // parent class that a class overrides is not one (qore#5990)
+            if constexpr (NAMED) {
+                if (last_class && override_filter.overridden(*i)) {
+                    continue;
+                }
             }
 
             // get runtime parse options
@@ -4217,7 +4274,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
     int named_callable_cnt = 0;
     int unsupported_cnt = 0;
     int varargs_only_cnt = 0;
+    // set if no variant is selected because another one matches the arguments exactly as well (a tie); otherwise a
+    // variant that matches worse leaves the selection to the resolution at run time, as for positional arguments
+    bool tie = false;
     NamedArgBindFailure best_failure;
+    // the variants of the classes passed in the inheritance list, which override those of their parents (qore#5990)
+    qore_named_override_filter override_filter;
+    const QoreFunction* prev_aqf = nullptr;
 
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
         bool stop;
@@ -4226,9 +4289,12 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             break;
         }
         assert(!aqf->vlist.empty());
+        override_filter.add(prev_aqf);
+        prev_aqf = aqf;
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+            if (last_class && (skip_method_variant(*i, class_ctx, internal_access)
+                    || override_filter.overridden(*i))) {
                 continue;
             }
 
@@ -4411,12 +4477,16 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 score_len = sig->numParams();
                 omitted_defaultable = cb.omitted_defaultable;
                 variant = *i;
+                tie = false;
                 best_type_param_inst = candidate_inst;
                 best_binding = std::move(cb);
             } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
                 if (variant_soft_match && variant) {
                     has_possible_match = true;
                 } else {
+                    if (pscore == score && variant_nperfect == nperfect) {
+                        tie = true;
+                    }
                     variant = nullptr;
                     pmatch = variant_pmatch;
                     // the match is ambiguous and is resolved at runtime: score_len keeps the length of the best
@@ -4698,7 +4768,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             all_known = QoreTypeInfo::hasType(t) && QoreTypeInfo::parseReturns(t, NT_NOTHING) == QTI_NOT_EQUAL
                 && args_with_value && i < args_with_value->size() && (*args_with_value)[i];
         }
-        if (!all_known) {
+        // qore#5990: arguments that match one variant better than the others (as an int matches an int parameter
+        // better than a float parameter) select it at run time, as positional arguments do
+        if (!all_known || !tie) {
             bind_at_runtime();
         }
     } else if (runtime_match && first_bound) {

@@ -2217,10 +2217,12 @@ public class NamedArgumentsTest inherits QUnit::Test {
             p.parse("sub f(...) {} f(a: 1);", "varargs-only");
         });
 
-        assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous", sub() {
+        # an int argument matches abs(int value) better than the other variants, so it selects it (qore#5990)
+        {
             Program p(PO_NEW_STYLE);
-            p.parse("abs(value: 1);", "ambiguous-builtin-named");
-        });
+            p.parse("auto sub t() { return abs(value: -1); }", "builtin-named-best-match");
+            assertEq(1, p.callFunction("t"));
+        }
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "Datasource::constructor\\(description: string\\)", sub() {
             Program p(PO_NEW_STYLE);

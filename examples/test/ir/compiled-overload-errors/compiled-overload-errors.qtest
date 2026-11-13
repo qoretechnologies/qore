@@ -30,6 +30,8 @@
       arguments converted for the variant that did not match
     - M4: a named call whose variant is resolved at run time binds its arguments by name to each candidate variant
       (functions; methods of objects, self calls and static methods: named-runtime-methods)
+    - qore#5990: a named call binds the names to the variants of the receiver's static type and is dispatched by
+      position to the class of the object like the same positional call (named-virtual-dispatch)
 
     The scripts next to the test run in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
     their output must be that of the AST interpreter, which the test runs first.  The output of the AST interpreter
@@ -39,7 +41,8 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
     public {
         #! the scripts
         const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins",
-            "assigned", "named", "named-runtime", "named-runtime-methods", "access-control", "or-nothing-casts");
+            "assigned", "named", "named-runtime", "named-runtime-methods",
+            "named-virtual-dispatch", "access-control", "or-nothing-casts");
     }
 
     private {
@@ -66,6 +69,7 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
         }
         addTestCase("named call binding conflict", \namedBindingConflictTest());
         addTestCase("named method call binding", \namedMethodBindingTest());
+        addTestCase("named call virtual dispatch", \namedVirtualDispatchTest());
         set_return_value(main());
     }
 
@@ -171,6 +175,54 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
             Program p2(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
             assertThrows("PARSE-TYPE-ERROR", "string", \p2.parse(), (decl + "int sub t(auto c, auto l) { "
                 "int i = C::s(label: l, count: c); return i; }\n", "named-static-return-type"));
+        }
+    }
+
+    #! qore#5990: the names of a named call are bound to the variants of the receiver's static type; the call is
+    #! dispatched by position to the class of the object, as the same call with positional arguments is
+    namedVirtualDispatchTest() {
+        string decl = "class B {\n"
+            "    string sw(int count, string label) { return \"B1\"; }\n"
+            "    string sw(string label, float count) { return \"B2\"; }\n"
+            "}\n"
+            "class C inherits B {\n"
+            "    string sw(int n, string l) { return \"C1\"; }\n"
+            "}\n";
+        {
+            # arguments whose types are known select the variant that matches them best; they were refused as
+            # ambiguous
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t() { B b = new C(); return b.sw(count: 1, label: \"x\"); }\n"
+                "string sub u() { B b(); return b.sw(count: 1, label: \"x\"); }\n", "named-virtual-literal");
+            assertEq("C1", p.callFunction("t"));
+            assertEq("B1", p.callFunction("u"));
+        }
+        {
+            # a receiver declared with the child class takes the names of the override, not those of the variant of
+            # the parent class that it overrides: the names "count" and "label" are those of the inherited
+            # B::sw(string label, float count) only
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t(auto i, auto s) { C c(); return c.sw(count: i, label: s); }\n",
+                "named-virtual-overridden-names");
+            assertEq("B2", p.callFunction("t", 1, "x"));
+            # with only the overridden variant, the names are unknown
+            Program p1(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-ARG-UNKNOWN", "one\\(count: auto, label: auto\\)", \p1.parse(), ("class B1 { string one(int count, "
+                "string label) { return \"B\"; } } class C1 inherits B1 { string one(int n, string l) { "
+                "return \"C\"; } } string sub t(auto i, auto s) { C1 c(); return c.one(count: i, label: s); }",
+                "named-virtual-overridden-only"));
+            Program p2(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p2.parse(decl + "string sub t(auto i, auto s) { C c(); return c.sw(n: i, l: s); }\n",
+                "named-virtual-override-names");
+            assertEq("C1", p2.callFunction("t", 1, "x"));
+        }
+        {
+            # arguments that match two variants exactly as well are still ambiguous
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous", \p.parse(),
+                ("class T { string tie(int a, string b) { return \"1\"; } "
+                "string tie(string b, int a) { return \"2\"; } } "
+                "string sub t() { T o(); return o.tie(a: 1, b: \"s\"); }", "named-virtual-tie"));
         }
     }
 
