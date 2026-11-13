@@ -4434,7 +4434,14 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     if (*xsink) {
         return QoreValue();
     }
-    return priv->sb.exec(xsink);
+    ValueHolder rv(priv->sb.exec(xsink), xsink);
+    // the end of the top-level code of a Program that a debugger ends is a cancellation point: a thread that the
+    // debugger ended while it raised another exception, which the code caught, has a cancellation request, which it
+    // raises here if the code ended with no statement or cancellation point after the catch (qore#5987)
+    if (!*xsink && priv->debugger_terminating.load(std::memory_order_relaxed)) {
+        qore_check_cancel(xsink, "end of the program's top-level code");
+    }
+    return *xsink ? QoreValue() : rv.release();
 }
 
 template <bool LexicalInvocation>

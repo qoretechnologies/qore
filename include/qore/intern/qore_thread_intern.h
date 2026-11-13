@@ -357,6 +357,16 @@ DLLLOCAL const QoreProgram* runtime_get_module_call_program();
 */
 DLLLOCAL unsigned qore_get_cancel_raise_count();
 
+//! Requests the cancellation of the current thread, scoped to a Program, as a cancellation of another thread
+/** Program::cancelThread() refuses the current thread; a debugger callback that ends the thread while it raises
+    another exception (the one that the callback was made for) makes the end of the thread stick with it: the next
+    cancellation point of the thread raises it, also when the program catches the other exception (qore#5987)
+
+    @param reason the reason of the cancellation, which ends the description of the exception that it raises
+    @param scope_pgm_id the Program whose code the request applies to (see QoreThreadList::cancelThread())
+*/
+DLLLOCAL void qore_request_current_thread_cancel(const char* reason, qore_program_id_t scope_pgm_id);
+
 //! Returns the location of the call stack frame of code being called, and clears the call site
 /** The location of a frame is the location of the call expression that called the code, set by the call site with
     QoreRcCallSiteHelper (or the equivalent stores of IR and native code); without one, it is the thread's current
