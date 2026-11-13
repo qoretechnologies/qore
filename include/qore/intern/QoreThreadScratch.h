@@ -32,6 +32,8 @@
 #ifndef _QORE_INTERN_QORETHREADSCRATCH_H
 #define _QORE_INTERN_QORETHREADSCRATCH_H
 
+// self-contained in libqore only: qore/Qore.h includes the internal declarations used here (qore_thread_intern.h)
+// only when _QORE_LIB_INTERN is defined
 #include <qore/Qore.h>
 
 #include <cassert>

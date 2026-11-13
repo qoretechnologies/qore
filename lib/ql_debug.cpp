@@ -18101,6 +18101,13 @@ static void ut_thread_scratch(UnitTestCounters& c) {
     typedef UtCountedScratch<1> Unregistered;
     typedef UtCountedScratch<2> Registered;
     typedef UtCountedScratch<3> TldDestructor;
+    typedef UtCountedScratch<4> AllocFails;
+    // the counters are static: each run of the unit tests in the process starts them again (the objects of the
+    // previous run were all released)
+    Unregistered::created = 0;
+    Registered::created = 0;
+    TldDestructor::created = 0;
+    AllocFails::created = 0;
 
     // a thread without thread data frees the object after each use; it sends QUIC datagrams too (their buffers are
     // freed after the send: run under valgrind, no memory is left)
@@ -18181,7 +18188,6 @@ static void ut_thread_scratch(UnitTestCounters& c) {
         "thread scratch: an object first used by the destructor of thread-local data is released");
 
 #ifdef DEBUG
-    typedef UtCountedScratch<4> AllocFails;
     // an object that cannot be allocated is reported, and is allocated by a later use
     bool failed_unregistered = false;
     std::thread fail_unregistered([&] () {
@@ -18196,8 +18202,10 @@ static void ut_thread_scratch(UnitTestCounters& c) {
 
     bool failed_registered = false;
     bool allocated_later = false;
+#ifdef __linux__
     int send_rc = 0;
     int send_errno = 0;
+#endif
     int recv_rc = 0;
     std::string recv_err;
     int recv_errno = 0;
@@ -18217,12 +18225,16 @@ static void ut_thread_scratch(UnitTestCounters& c) {
             socklen_t len = sizeof(addr);
             if (!::bind(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr))
                     && !getsockname(fd, reinterpret_cast<struct sockaddr*>(&addr), &len)) {
+#ifdef __linux__
+                // only sendmmsg() takes its buffers from the thread's scratch object; the send fails, so the socket
+                // has no datagram for the receive below
                 QuicPacketBatch batch;
                 static const uint8_t data[] = {'q', 'u', 'i', 'c'};
                 batch.addPacket(data, sizeof(data));
                 errno = 0;
                 send_rc = sendQuicPacketsBatch(fd, batch, reinterpret_cast<struct sockaddr*>(&addr), len);
                 send_errno = errno;
+#endif
                 ExceptionSink xsink;
                 recv_rc = qore_quic_test_recv_dispatch(fd, &xsink);
                 if (xsink) {

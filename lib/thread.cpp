@@ -1023,6 +1023,10 @@ public:
         assert(!trlist->prev);
         delete pcs;
         delete trlist;
+        // the program call stack and the thread resource list hold no Qore code to run, and the members destroyed
+        // after this body run none either, so no QoreThreadLocalObject is first used after the cleanups above; one
+        // that were would register a release that never runs
+        assert(exit_cleanups.empty());
     }
 
     //! runs the exit cleanups of the thread's QoreThreadLocalObject objects, last registered first
