@@ -6869,10 +6869,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof(uint64_t val_bits, const QoreTy
 // - a type resolved in a Program is owned by that Program (its namespaces or the global registries of complex types,
 //   which are not freed) or, for a path with a module reference, by the module's Program, which lives until the
 //   process exits, so it is valid as long as the Program is.
-// The resolved type keeps the type parameters of a generic class symbolic, so it is the same for every instantiation.
-// A type parameter of a generic function or method has no owner in its path: it is one of the signature of the
-// generic code that runs, so the type is resolved with the signature of the instantiation that runs, on every
-// evaluation, and is not cached (qore#6016).
+// The resolved type keeps the type parameters of a generic class or hashdecl symbolic, so it is the same for every
+// instantiation.  A type parameter of a generic function or method has no owner in its path: it is one of the
+// signature of the generic code that runs, so the type is resolved with the signature of the instantiation that runs,
+// on every evaluation; its cache entry only records that (qore#6016).
 // A path that cannot be resolved is not cached and is not an error for instanceof: no value is an instance of it (a
 // deferred placeholder that the resolver returns for an unknown class or hashdecl in a complex type is cached as any
 // other type).  QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE turns the cache off.
@@ -6882,24 +6882,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
     if (!pgm || !type_path || !*type_path) {
         return toBits(QoreValue(false));
     }
-    static constinit QoreEnvFlag cache_disabled_env("QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE");
-    // a path with a type parameter of the signature of the code that runs: resolved for its instantiation
-    if (qore_aot_type_path_has_signature_type_param(type_path) || cache_disabled_env.get()) {
+    // resolves the path; a path with a type parameter of the signature of the code that runs is resolved for the
+    // instantiation that runs
+    auto resolve = [pgm, type_path](bool signature_type_param) -> const QoreTypeInfo* {
         std::string error;
         QoreAOTTypeResolver resolver(pgm);
-        const QoreTypeInfo* ti;
-        if (qore_aot_type_path_has_signature_type_param(type_path)) {
+        if (signature_type_param) {
             const QoreTypeParamInstantiation* inst = runtime_get_type_param_instantiation();
-            ti = resolver.resolveForSignature(type_path, error, inst ? inst->owner : nullptr);
-        } else {
-            ti = resolver.resolve(type_path, error);
+            return resolver.resolveForSignature(type_path, error, inst ? inst->owner : nullptr);
         }
+        return resolver.resolve(type_path, error);
+    };
+    static constinit QoreEnvFlag cache_disabled_env("QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE");
+    if (cache_disabled_env.get()) {
+        const QoreTypeInfo* ti = resolve(qore_aot_type_path_has_signature_type_param(type_path));
         return ti ? qore_rt_instanceof(val_bits, ti) : toBits(QoreValue(false));
     }
     struct InstanceOfTypeCacheEntry {
         const char* type_path = nullptr;
         qore_program_id_t pgm_id = 0;
         const QoreTypeInfo* ti = nullptr;
+        //! true if the path has a type parameter of a signature: it is resolved on every evaluation
+        bool per_call = false;
     };
     static constexpr unsigned INSTANCEOF_TYPE_CACHE_BITS = 6;
     thread_local InstanceOfTypeCacheEntry cache[1u << INSTANCEOF_TYPE_CACHE_BITS];
@@ -6910,13 +6914,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
         ^ (static_cast<uint64_t>(pgm_id) * 0x9e3779b97f4a7c15ull)) * 0x9e3779b97f4a7c15ull;
     InstanceOfTypeCacheEntry& entry = cache[hash >> (64 - INSTANCEOF_TYPE_CACHE_BITS)];
     if (entry.type_path != type_path || entry.pgm_id != pgm_id) {
-        std::string error;
-        QoreAOTTypeResolver resolver(pgm);
-        const QoreTypeInfo* ti = resolver.resolve(type_path, error);
-        if (!ti) {
-            return toBits(QoreValue(false));
+        // the path is scanned for a signature type parameter only when its entry is made
+        if (qore_aot_type_path_has_signature_type_param(type_path)) {
+            entry = {type_path, pgm_id, nullptr, true};
+        } else {
+            const QoreTypeInfo* ti = resolve(false);
+            if (!ti) {
+                return toBits(QoreValue(false));
+            }
+            entry = {type_path, pgm_id, ti, false};
         }
-        entry = {type_path, pgm_id, ti};
+    }
+    if (entry.per_call) {
+        const QoreTypeInfo* ti = resolve(true);
+        return ti ? qore_rt_instanceof(val_bits, ti) : toBits(QoreValue(false));
     }
     return qore_rt_instanceof(val_bits, entry.ti);
 }
