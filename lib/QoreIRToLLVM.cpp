@@ -34282,6 +34282,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_thread_exit",
                     llvm::FunctionType::get(void_type, {ptr_type}, false));
             builder->CreateCall(helper, {xsink_arg});
+            // in a try statement: its landing pad runs the handlers of the scopes left (qore#5912); the statement's
+            // temporaries are released on the edge, as for a throw
+            if (inst->exception_target) {
+                auto it = block_map.find(inst->exception_target);
+                if (it != block_map.end()) {
+                    builder->CreateBr(getExceptionEdgeTarget(module, llvm_func, inst, it->second));
+                    return true;
+                }
+            }
             // Thread exit raises an exception; execute on_block_exit, uninstantiate locals and return
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST

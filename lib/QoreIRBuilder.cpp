@@ -1550,9 +1550,11 @@ QoreIRThrowInstruction* QoreIRBuilder::createRethrow(QoreIRBasicBlock* exception
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc) {
+QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc,
+        QoreIRBasicBlock* exception_target) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ThreadExit);
     inst->loc = loc;
+    inst->exception_target = exception_target;
     return inst;
 }
 

@@ -3279,7 +3279,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* thread_exit_stmt = dynamic_cast<const ThreadExitStatement*>(stmt)) {
-        builder.createThreadExit(thread_exit_stmt->loc);
+        // a thread_exit in a try statement unwinds through the try statement's landing pad, as an exception does:
+        // the handlers of the scopes that it leaves run there, and an exception that one of them raises is deleted by
+        // the try statement (CatchException, qore_catch_thread_exit()), as TryStatement::execImpl() does, instead of
+        // leaving the function (qore#5912)
+        QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
+        builder.createThreadExit(thread_exit_stmt->loc, handler);
         return true;
     }
     if (auto* break_stmt = dynamic_cast<const BreakStatement*>(stmt)) {
