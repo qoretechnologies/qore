@@ -21,12 +21,13 @@
     both \c True.  A char is now compared with every value but a string as an \c int with its code point is, and with
     a string as a one-character string, in every relational operator, as \c == and \c <=> compare it.
 
-    The script compares <tt>c'a'</tt> with dates, bools, \c NOTHING, \c NULL, binary values, chars, floats, ints
-    and strings with every relational, equality and comparison operator in both operand orders, beside the same
+    The script compares <tt>c'a'</tt> with dates, bools, \c NOTHING, \c NULL, binary values, chars, floats, ints and
+    strings with every relational, equality and comparison operator in both operand orders, beside the same
     comparisons of a control value (the int \c 97, or the string \c "a" for a string operand), with untyped and typed
-    operands; each function is called three times, in every execution mode and as qcc executables compiled with
-    \c -O0 and \c -O3 (see ExecModeOutputTest).  The expected output is the AST interpreter's, each of whose char
-    results must equal its control's, and the results of the dates are pinned.
+    operands, enums, constants folded at parse time and switch case operators; each function is called three times, in
+    every execution mode and as qcc executables compiled with \c -O0 and \c -O3 (see ExecModeOutputTest).  The
+    expected output is the AST interpreter's, each of whose char results must equal its control's, and the results of
+    the dates are pinned.
 */
 class CharRelationalComparisonTest inherits ExecModeOutputTest {
     public {
@@ -47,6 +48,23 @@ string sub typedChar(char c, date d) {
 string sub typedInt(int c, date d) {
     return sprintf("%y %y %y %y %y %y | %y %y %y %y", c < d, c <= d, c > d, c >= d, c == d, c <=> d, d < c, d <= c,
         d > c, d >= c);
+}
+
+# relational and equality case operators of a switch statement, with a date (cases are constants)
+string sub switchCases(auto v) {
+    string rv;
+    switch (v) { case > 1970-01-01T00:01:37Z: rv += "gt"; break; default: rv += "-"; }
+    switch (v) { case >= 1970-01-01T00:01:37Z: rv += " ge"; break; default: rv += " -"; }
+    switch (v) { case < 1970-01-01T00:01:38Z: rv += " lt"; break; default: rv += " -"; }
+    switch (v) { case <= 1970-01-01T00:01:37Z: rv += " le"; break; default: rv += " -"; }
+    switch (v) { case 1970-01-01T00:01:37Z: rv += " eq"; break; default: rv += " -"; }
+    switch (v) { case True: rv += " true"; break; default: rv += " -"; }
+    return rv;
+}
+
+enum E {
+    A = 97,
+    B = 98,
 }
 
 # (name, operand, control): the control is compared with the operand as the char must be
@@ -72,6 +90,14 @@ for (int i = 0; i < 3; ++i) {
     foreach list o in (Operands) {
         printf("%d %s char: %s control: %s\n", i, o[0], ops(c"a", o[1]), ops(o[2], o[1]));
     }
+    printf("%d enum-a char: %s control: %s\n", i, ops(c"a", E::A), ops(97, E::A));
+    printf("%d enum-b char: %s control: %s\n", i, ops(c"a", E::B), ops(97, E::B));
+    printf("%d folded char: %y control: %y\n", i, (c"a" < 1970-01-01T00:01:37Z, c"a" <= 1970-01-01T00:01:37Z,
+        c"a" > 1970-01-01T00:01:36Z, c"a" >= 1970-01-01T00:01:38Z, c"a" == 1970-01-01T00:01:37Z,
+        1970-01-01T00:01:38Z > c"a", c"a" <=> 1970-01-01T00:01:37Z, c"a" == True), (97 < 1970-01-01T00:01:37Z,
+        97 <= 1970-01-01T00:01:37Z, 97 > 1970-01-01T00:01:36Z, 97 >= 1970-01-01T00:01:38Z,
+        97 == 1970-01-01T00:01:37Z, 1970-01-01T00:01:38Z > 97, 97 <=> 1970-01-01T00:01:37Z, 97 == True));
+    printf("%d switch char: %s control: %s\n", i, switchCases(c"a"), switchCases(97));
     printf("%d typed char: %s control: %s\n", i, typedChar(c"a", 1970-01-01T00:01:37Z),
         typedInt(97, 1970-01-01T00:01:37Z));
     printf("%d typed-later char: %s control: %s\n", i, typedChar(c"a", 1970-01-01T00:01:38Z),
