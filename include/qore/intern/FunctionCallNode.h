@@ -455,6 +455,18 @@ public:
 
     DLLLOCAL int parseInitFinalizedCall(QoreValue& val, QoreParseContext& parse_context);
 
+    //! Parse-initializes this call as the replacement of another node and records its analysis on it
+    /** A node that replaces itself with this call (a namespace-qualified call parsed as a static method call, a
+        deferred AOT call) initializes it here instead of through ParseNode::parseInit(), which records the analysis
+        - the known return type, for example - only on the node it was called on.  Without it, code generation sees
+        no type for the call's value (qore#5977).
+    */
+    DLLLOCAL int parseInitReplacementCall(QoreValue& val, QoreParseContext& parse_context) {
+        int rc = parseInitFinalizedCall(val, parse_context);
+        setParseAnalysis(parse_context.analysis);
+        return rc;
+    }
+
     DLLLOCAL virtual const char* getName() const {
         return fe ? fe->getName() : c_str;
     }

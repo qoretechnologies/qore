@@ -10927,6 +10927,222 @@ static size_t qore_ir_elide_proven_return_checks(QoreIRFunction& func, size_t& c
     return elided;
 }
 
+//! Returns the constant that \a inst rebuilds from its entries, or nullptr (qore#5977)
+static const QoreIRRebuiltConstant* qore_ir_get_rebuilt_constant(const QoreIRInstruction& inst) {
+    const QoreIRRebuiltConstant* rebuilt = nullptr;
+    if (inst.opcode == QoreIROpcode::MakeList) {
+        rebuilt = &static_cast<const QoreIRMakeListInstruction&>(inst).rebuilt_constant;
+    } else if (inst.opcode == QoreIROpcode::MakeHash) {
+        rebuilt = &static_cast<const QoreIRMakeHashInstruction&>(inst).rebuilt_constant;
+    }
+    return rebuilt && rebuilt->isSet() ? rebuilt : nullptr;
+}
+
+//! Returns true if \a inst reads one element of the container \a value, its first operand, and nothing else of it
+/** These instructions take a reference of their own to the container (QoreIROperandHolder in the interpreter) and
+    return the element with a reference of its own, so they never consume, mutate or rely on the container being
+    unique: a shared constant serves them as well as a freshly built copy.
+*/
+static bool qore_ir_is_container_element_read(const QoreIRInstruction& inst, QoreIRValue value) {
+    switch (inst.opcode) {
+        case QoreIROpcode::HashDerefDynamic:
+        case QoreIROpcode::ListIndexDynamic:
+        case QoreIROpcode::HashKeyAccess:
+        case QoreIROpcode::ListIndexAccess:
+            break;
+        default:
+            return false;
+    }
+    if (inst.operands.empty() || inst.operands[0].id != value.id) {
+        return false;
+    }
+    for (size_t i = 1; i < inst.operands.size(); ++i) {
+        if (inst.operands[i].id == value.id) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Returns true if \a inst only computes a constant value, so it can be removed once its value is not used
+static bool qore_ir_is_removable_constant_definition(const QoreIRInstruction& inst) {
+    if (inst.exception_target) {
+        return false;
+    }
+    switch (inst.opcode) {
+        case QoreIROpcode::ConstInt:
+        case QoreIROpcode::ConstFloat:
+        case QoreIROpcode::ConstBool:
+        case QoreIROpcode::ConstBoolBoxed:
+        case QoreIROpcode::ConstChar:
+        case QoreIROpcode::ConstNothing:
+        case QoreIROpcode::ConstNull:
+        case QoreIROpcode::ConstString:
+        case QoreIROpcode::ConstDate:
+        case QoreIROpcode::ConstEnum:
+        case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
+            return true;
+        case QoreIROpcode::LoadConstant: {
+            // a value, not a reference to a runtime constant, whose load can run its initializer
+            const auto& load = static_cast<const QoreIRLoadConstantInstruction&>(inst);
+            return !load.node && !load.expr.needsEval();
+        }
+        default:
+            return false;
+    }
+}
+
+//! Loads the rebuilt constant containers that the fixed-aggregate scalar replacement left in place (qore#5977)
+/** QoreIRLowering::lowerConstant() rebuilds a constant container of at most qore_ir_max_rebuilt_constant_entries
+    entries from one operand per entry, because the scalar replacement can then remove it altogether.  It cannot
+    remove one that is read through a run-time key or index - <tt>Labels{enc}</tt> - so the container was built
+    again at every read, its keys included.  Such an instruction is replaced with a LoadConstant of the constant it
+    rebuilds, as a larger constant is lowered, when every use only reads an element of it
+    (qore_ir_is_container_element_read()): any other use (a store, a call argument, a return, a mutation) is left
+    alone, as it may rely on the container being a fresh one of its own.  An instruction that can raise (a typed
+    container whose entries must be checked) is also left alone, as its exception edge is part of the CFG.
+
+    The definitions of the operands that the replaced instructions alone used are removed, so that the entries are
+    not built anymore either.
+
+    @return the number of instructions replaced
+*/
+static size_t qore_ir_load_read_only_constant_containers(QoreIRFunction& func, size_t& check_count) {
+    if (q_env_is_set("QORE_DISABLE_IR_CONSTANT_CONTAINER_LOAD")) {
+        return 0;
+    }
+    bool have_candidate = false;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR constant container load discovery")) {
+                return 0;
+            }
+            if (qore_ir_get_rebuilt_constant(*inst)) {
+                have_candidate = true;
+                break;
+            }
+        }
+        if (have_candidate) {
+            break;
+        }
+    }
+    if (!have_candidate) {
+        return 0;
+    }
+
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+
+    // the instructions to replace are found first and replaced afterwards, as the uses refer to the instructions
+    std::vector<std::unique_ptr<QoreIRInstruction>*> replace;
+    for (const auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR constant container load analysis")) {
+                return 0;
+            }
+            if (inst->exception_target || !qore_ir_get_rebuilt_constant(*inst)) {
+                continue;
+            }
+            auto use_it = uses.find(inst->result.id);
+            if (use_it == uses.end() || use_it->second.empty()) {
+                continue;
+            }
+            std::unordered_set<const QoreIRInstruction*> users;
+            bool reads_only = true;
+            for (const QoreIRScalarUse& use : use_it->second) {
+                // a use is recorded for each operand that names the value, so a second use by the same instruction
+                // is a second operand
+                if (!users.insert(use.inst).second || !qore_ir_is_container_element_read(*use.inst, inst->result)) {
+                    reads_only = false;
+                    break;
+                }
+            }
+            if (reads_only) {
+                replace.push_back(&inst);
+            }
+        }
+    }
+    if (replace.empty()) {
+        return 0;
+    }
+
+    std::unordered_map<uint32_t, size_t> use_counts;
+    use_counts.reserve(uses.size());
+    for (const auto& [id, value_uses] : uses) {
+        use_counts.emplace(id, value_uses.size());
+    }
+    std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst.get());
+            }
+        }
+    }
+
+    // the operands no longer used by the replaced instructions
+    std::vector<QoreIRValue> released;
+    for (std::unique_ptr<QoreIRInstruction>* slot : replace) {
+        // the rewrite is completed even if cancellation is requested
+        if (++check_count % 100 == 0) {
+            (void)qore_check_cancel(nullptr, "IR constant container load");
+        }
+        QoreIRInstruction& old = **slot;
+        (void)qore_ir_visit_value_operands(old, [&released](QoreIRValue operand) {
+            if (operand.isValid()) {
+                released.push_back(operand);
+            }
+        });
+        auto load = std::make_unique<QoreIRLoadConstantInstruction>(nullptr, qore_ir_get_rebuilt_constant(old)->get());
+        load->loc = old.loc;
+        load->cached_start_line = old.cached_start_line;
+        load->result = old.result;
+        load->temp_scope_id = old.temp_scope_id;
+        // the value facts of the result (type, density, an owned reference that is never NOTHING) hold for the
+        // constant as well
+        definitions[load->result.id] = load.get();
+        *slot = std::move(load);
+    }
+
+    std::unordered_set<const QoreIRInstruction*> eliminated;
+    while (!released.empty()) {
+        if (++check_count % 100 == 0) {
+            (void)qore_check_cancel(nullptr, "IR constant container load");
+        }
+        QoreIRValue value = released.back();
+        released.pop_back();
+        auto count = use_counts.find(value.id);
+        if (count == use_counts.end() || !count->second || --count->second) {
+            continue;
+        }
+        auto def = definitions.find(value.id);
+        if (def == definitions.end() || eliminated.count(def->second)
+                || !qore_ir_is_removable_constant_definition(*def->second)) {
+            continue;
+        }
+        eliminated.insert(def->second);
+        (void)qore_ir_visit_value_operands(*def->second, [&released](QoreIRValue operand) {
+            if (operand.isValid()) {
+                released.push_back(operand);
+            }
+        });
+    }
+    if (!eliminated.empty()) {
+        for (const auto& block : func.blocks) {
+            auto& instructions = block->instructions;
+            instructions.erase(std::remove_if(instructions.begin(), instructions.end(),
+                [&eliminated](const std::unique_ptr<QoreIRInstruction>& inst) {
+                    return eliminated.count(inst.get()) != 0;
+                }), instructions.end());
+        }
+    }
+    return replace.size();
+}
+
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         bool enable_licm, const QoreIRFoldContext& fold_context) {
     QoreIROptimizationStats local_stats;
@@ -10963,6 +11179,8 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
     }
     local_stats.fixed_lists_scalarized = aggregate_stats.lists;
     local_stats.fixed_hashes_scalarized = aggregate_stats.hashes;
+    // the constant containers rebuilt for the scalar replacement that it left in place
+    local_stats.constant_containers_loaded = qore_ir_load_read_only_constant_containers(func, check_count);
     local_stats.local_value_facts_refined =
         qore_ir_refine_local_value_facts(func, cfg, check_count);
     QoreIRDenseListStats dense_list_stats =
