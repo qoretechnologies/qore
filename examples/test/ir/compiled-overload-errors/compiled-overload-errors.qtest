@@ -39,7 +39,7 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
     public {
         #! the scripts
         const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins", "assigned", "named",
-            "access-control", "or-nothing-casts", "override-returns");
+            "access-control", "or-nothing-casts", "override-returns", "generic-method-overrides");
     }
 
     private {
