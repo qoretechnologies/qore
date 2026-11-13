@@ -1708,12 +1708,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // value without corrupting that stack ownership contract.
             // Also handles RefForeach cleanup: record the current element, then write the
             // referenced list back with its unvisited elements unchanged, as break does.
-            if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING)) {
+            // the catch blocks that the return leaves are closed in their places among the cleanups (qore#6017)
+            if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES)) {
                 return false;
-            }
-            // Emit CatchCleanup for all active catch scopes before returning
-            for (int i = 0; i < catch_cleanup_depth; ++i) {
-                builder.createCatchCleanup(stmt->loc);
             }
             builder.createReturnNothing();
             return true;
@@ -1790,13 +1787,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Emit block cleanups for all active scopes (fires on_exit handlers,
         // clears lvar values, and writes back any enclosing ref foreach list with
-        // its unvisited elements unchanged).
-        if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING)) {
+        // its unvisited elements unchanged); the catch blocks that the return leaves are closed in their places
+        // among them, so the handlers of the blocks enclosing a catch block run after it is closed (qore#6017)
+        if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES)) {
             return false;
-        }
-        // Emit CatchCleanup for all active catch scopes before returning
-        for (int i = 0; i < catch_cleanup_depth; ++i) {
-            builder.createCatchCleanup(stmt->loc);
         }
         QoreIRReturnInstruction* ret = builder.createReturn(lowered);
         // every try statement that the return leaves can catch an exception that interrupts it (qore#5941)
@@ -3334,7 +3328,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRBasicBlock* target = nullptr;
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
-        int target_catch_depth = 0;
         QoreIRBasicBlock* target_exception_target = nullptr;
         QoreIRValue old_elem;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
@@ -3342,7 +3335,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 target = it->break_target;
                 target_cleanup_depth = it->cleanup_stack_depth;
                 target_temp_depth = it->temp_scope_depth;
-                target_catch_depth = it->catch_cleanup_depth;
                 target_exception_target = it->loop_exception_target;
                 old_elem = it->old_implicit_element;
                 break;
@@ -3354,13 +3346,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
         // since the loop started (matches AST mode's destruction ordering),
-        // releasing the temp scopes left on the way
-        if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_NONE, target_temp_depth, stmt->loc)) {
+        // releasing the temp scopes left on the way, and closing the catch blocks entered since the loop started
+        // in their places among them (qore#6017)
+        if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_CATCH_SCOPES, target_temp_depth, stmt->loc)) {
             return false;
-        }
-        // Emit CatchCleanup for catch scopes entered since the loop started
-        for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
-            builder.createCatchCleanup(stmt->loc);
         }
         // Restore $# for foreach loops before breaking out
         if (old_elem.isValid()) {
@@ -3379,14 +3368,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRBasicBlock* target = nullptr;
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
-        int target_catch_depth = 0;
         QoreIRBasicBlock* target_exception_target = nullptr;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->continue_target) {
                 target = it->continue_target;
                 target_cleanup_depth = it->cleanup_stack_depth;
                 target_temp_depth = it->temp_scope_depth;
-                target_catch_depth = it->catch_cleanup_depth;
                 target_exception_target = it->loop_exception_target;
                 break;
             }
@@ -3397,13 +3384,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
         // since the loop started (matches AST mode's destruction ordering),
-        // releasing the temp scopes left on the way
-        if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_NONE, target_temp_depth, stmt->loc)) {
+        // releasing the temp scopes left on the way, and closing the catch blocks entered since the loop started
+        // in their places among them (qore#6017)
+        if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_CATCH_SCOPES, target_temp_depth, stmt->loc)) {
             return false;
-        }
-        // Emit CatchCleanup for catch scopes entered since the loop started
-        for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
-            builder.createCatchCleanup(stmt->loc);
         }
         // Note: no need to pop $# here for foreach loops — the continue target
         // (latch_block) already calls PopImplicitElement before incrementing the
@@ -3868,6 +3852,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             rethrow_inst->synthetic = true;
             builder.setBlock(catch_entry_block);
         }
+        // the catch block is closed (CatchCleanup) in its place among the cleanups of a return, break or continue
+        // that leaves it, after its own blocks and its exception variable and before the blocks that enclose it
+        // (qore#6017)
+        {
+            BlockCleanupEntry catch_scope_entry;
+            catch_scope_entry.type = BlockCleanupEntry::CatchScope;
+            catch_scope_entry.loc = stmt->loc;
+            pushBlockCleanup(catch_scope_entry);
+        }
         LocalVar* catch_var = try_stmt->getCatchVar();
         if (catch_var) {
             maybeInsertNotNothingGuard(catch_inst->result, nullptr, catch_inst->loc, catch_var->getTypeInfo());
@@ -3899,12 +3892,16 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (catch_var) {
                 cleanup_stack.pop_back();
             }
+            assert(cleanup_stack.back().type == BlockCleanupEntry::CatchScope);
+            cleanup_stack.pop_back();
             return false;
         }
         --catch_cleanup_depth;
         if (catch_var) {
             cleanup_stack.pop_back();
         }
+        assert(cleanup_stack.back().type == BlockCleanupEntry::CatchScope);
+        cleanup_stack.pop_back();
         if (!blockHasTerminator(builder.getBlock())) {
             // Fallthrough path: uninstantiate catch_var before CatchCleanup so
             // the stack pop order matches the push order (LIFO invariant).
@@ -4452,6 +4449,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
 
 void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
     entry.temp_scope_depth = builder.getTempScopeDepth();
+    entry.open_scopes = scope_stack.size();
+    entry.open_catch_depth = catch_cleanup_depth;
+    entry.open_try_depth = try_catch_cleanup_depth_stack.size();
     cleanup_stack.push_back(entry);
 }
 
@@ -4480,14 +4480,20 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     // range and infinite-recurse (see 8fb555ac1 for the symmetric fix
     // on TryStatement / RefForeach).  The barrier's own `handler_start`
     // records the depth just above the Scope entry to protect.
-    size_t protected_scope_index = SIZE_MAX;
+    // Every barrier counts, not only the innermost one: a handler lowered inline can have another one lowered inline
+    // in it, and an exit in the inner one leaves both (qore#6017).  The entries between a barrier and its protected
+    // Scope entry belong to the blocks inside that scope that the exit running the handler has already left: their
+    // cleanups were emitted before the handler's code, so they are skipped, or their handlers would run twice and
+    // their catch blocks be closed twice.
+    std::vector<std::pair<size_t, size_t>> barriers;  // (protected Scope index, barrier index), innermost first
     for (size_t j = cleanup_stack.size(); j > target_depth; --j) {
         if (cleanup_stack[j - 1].type == BlockCleanupEntry::HandlerBarrier) {
             const size_t clamp_to = cleanup_stack[j - 1].handler_start;
             if (clamp_to > target_depth && clamp_to != 0) {
-                protected_scope_index = clamp_to - 1;
+                barriers.emplace_back(clamp_to - 1, j - 1);
+                // the entries below the protected scope are the next to look at
+                j = clamp_to;
             }
-            break;  // only the innermost barrier matters
         }
     }
     // A break or continue also leaves the temp scopes of the statements it is nested in: each one's temps are
@@ -4500,6 +4506,21 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         // Copy by value: lowerHandlersAtExit() can trigger cleanup_stack reallocation
         // (when inlining handler bodies that push to cleanup_stack), which would
         // invalidate a reference into the vector.
+        bool skip = false;
+        bool protected_scope = false;
+        for (const auto& b : barriers) {
+            if ((i - 1) > b.first && (i - 1) < b.second) {
+                skip = true;
+                break;
+            }
+            if ((i - 1) == b.first) {
+                protected_scope = true;
+                break;
+            }
+        }
+        if (skip) {
+            continue;
+        }
         const BlockCleanupEntry entry = cleanup_stack[i - 1];
         if (unwind_temp_depth != SIZE_MAX) {
             size_t entry_temp_depth = std::max(entry.temp_scope_depth, unwind_temp_depth);
@@ -4510,7 +4531,7 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         }
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
-                if ((i - 1) == protected_scope_index) {
+                if (protected_scope) {
                     // A non-local exit (a return) in the body of a handler of this scope that is being lowered
                     // inline: the handler itself has been dropped from the scope at runtime, and the handlers
                     // registered before it are still registered (see lowerHandlersAtExit()).  They still run, as in
@@ -4556,6 +4577,38 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // infinite re-inlining cycle.
                 // The handlers are dropped from the runtime scope one at a time before their inline code, and
                 // the scope is left after the last one; see lowerHandlersAtExit()
+                // The handlers run after this walk has left the blocks inside this one, with their scopes, catch
+                // blocks and try statements, so they are lowered with the state of this block: the landing pad of a
+                // try statement in a handler takes its scope depth from scope_stack, and would otherwise leave the
+                // try scope open at runtime when it catches an exception, so the scopes left later would be the
+                // wrong ones; a throw or a rethrow in a handler closes the catch blocks that catch_cleanup_depth
+                // counts above the try statement that catches it, and would otherwise close one that is already
+                // closed - in native code, the catch block of a caller (qore#6017)
+                assert(entry.open_scopes && entry.open_scopes <= scope_stack.size()
+                    && scope_stack[entry.open_scopes - 1] == entry.scope_id);
+                assert(entry.open_catch_depth <= catch_cleanup_depth
+                    && entry.open_try_depth <= try_catch_cleanup_depth_stack.size());
+                // restores the state of the exit on every way out, for the code that follows it in the lowering
+                struct HandlerStateRestore {
+                    std::vector<uint32_t>& scopes;
+                    std::vector<uint32_t> saved_scopes;
+                    int& catch_depth;
+                    int saved_catch_depth;
+                    std::vector<int>& try_depths;
+                    std::vector<int> saved_try_depths;
+                    ~HandlerStateRestore() {
+                        scopes.swap(saved_scopes);
+                        catch_depth = saved_catch_depth;
+                        try_depths.swap(saved_try_depths);
+                    }
+                } handler_state_restore{scope_stack,
+                    std::vector<uint32_t>(scope_stack.begin(), scope_stack.begin() + entry.open_scopes),
+                    catch_cleanup_depth, entry.open_catch_depth,
+                    try_catch_cleanup_depth_stack, std::vector<int>(try_catch_cleanup_depth_stack.begin(),
+                        try_catch_cleanup_depth_stack.begin() + entry.open_try_depth)};
+                scope_stack.swap(handler_state_restore.saved_scopes);
+                std::swap(catch_cleanup_depth, handler_state_restore.saved_catch_depth);
+                try_catch_cleanup_depth_stack.swap(handler_state_restore.saved_try_depths);
                 if (!lowerHandlersAtExit(is_error, error, entry.handler_start, handler_end,
                         /*barrier_depth=*/i, &entry)) {
                     return false;
@@ -4623,9 +4676,15 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 break;
             }
             case BlockCleanupEntry::HandlerBarrier:
-                // Sentinel — already handled by the pre-walk clamp above;
-                // the main loop's target_depth got raised past any barrier
-                // so we should never visit one here.  Guard anyway.
+                // Sentinel with no cleanup of its own: the barriers are handled by the pre-walk above, which marks
+                // the protected scopes and the entries that are skipped; a walk from the code of a handler visits
+                // the barriers below it here (qore#6017)
+                break;
+            case BlockCleanupEntry::CatchScope:
+                // the catch block is closed after its own blocks, before the blocks that enclose it (qore#6017)
+                if (flags & CF_CATCH_SCOPES) {
+                    builder.createCatchCleanup(entry.loc);
+                }
                 break;
         }
     }
