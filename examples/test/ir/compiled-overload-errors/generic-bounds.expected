@@ -1,0 +1,33 @@
+bounded assign: 42
+bounded arg: 2
+bounded or-nothing: 5
+bounded or-nothing nothing: -1
+class bound method: "derived"
+class bound up: "derived"
+unbounded return: 3
+unbounded return mismatch: RUNTIME-TYPE-ERROR
+unbounded assign: 4
+unbounded assign mismatch: RUNTIME-TYPE-ERROR
+function unbounded: 5
+function unbounded mismatch: RUNTIME-TYPE-ERROR
+function bounded: 101
+map bounded list: [2, 4]
+map unbounded list: [2, 4]
+map unbounded scalar: 6
+soft bound plus: "11"
+soft bound mismatch: RUNTIME-TYPE-ERROR
+soft bound int: 2
+class bound with type arguments: 8
+or-nothing keep: "derived"
+or-nothing keep nothing: null
+or-nothing receiver: "derived"
+or-nothing receiver nothing: null
+type parameter as type argument: 10
+type parameter as base type argument: 12
+compound plus bounded: 2.5
+compound minus bounded: 0.5
+compound times bounded: 3.0
+compound plus unbounded string: "a1"
+compound plus unbounded int: 3
+compound plus bounded list: [1, 2, 3]
+top: 4 "derived" 9 102 [6] [8]

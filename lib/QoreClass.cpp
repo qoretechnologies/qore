@@ -1006,6 +1006,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         raw_accepts_parameterized(old.raw_accepts_parameterized),
         raw_construction_defaults_to_auto(old.raw_construction_defaults_to_auto),
         type_params(old.type_params),
+        type_param_bound_types(old.type_param_bound_types),
         parameterized_vparents(old.parameterized_vparents),
         domain(old.domain),
         num_methods(old.num_methods),
@@ -1371,6 +1372,26 @@ int qore_class_private::initializeIntern() {
     // is empty when initializing classes (which can be done at any time during parsing)
     LVarStackBreakHelper lvar_stack_helper;
 
+    int bound_err = 0;
+    // the bounds of the type parameters are resolved before the methods' code is parsed: a value of a bounded type
+    // parameter has its bound in the class's code (qore#5774)
+    if (!type_params.empty() && type_param_bound_types.empty()) {
+        type_param_bound_types.assign(type_params.size(), nullptr);
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (!type_params[i].hasBound()) {
+                continue;
+            }
+            std::unique_ptr<QoreParseTypeInfo> pti(qore_parse_type_string_to_pti(type_params[i].getBoundType()));
+            if (!pti) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot parse bound type '%s' for generic class '%s' type "
+                    "parameter '%s'", type_params[i].getBoundType(), name.c_str(), type_params[i].name.c_str());
+                bound_err = -1;
+                continue;
+            }
+            type_param_bound_types[i] = QoreParseTypeInfo::resolveAny(pti.get(), loc, bound_err);
+        }
+    }
+
     // first resolve types in pending variants in all method signatures (incl. return types)
     // since abstract method functions are copied by reference from the normal list; this resolves all pending
     // method function signatures as well
@@ -1381,7 +1402,7 @@ int qore_class_private::initializeIntern() {
         i.second->priv->func->resolvePendingSignatures();
     }
 
-    int err = 0;
+    int err = bound_err;
 
     QoreProgram* pgm = getProgram();
     if (pgm && !sys && (qore_program_private::parseAddDomain(pgm, domain))) {

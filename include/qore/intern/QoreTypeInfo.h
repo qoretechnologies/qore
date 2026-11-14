@@ -211,6 +211,10 @@ public:
 
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e parseReturns(const QoreTypeInfo* ti, QoreTypeSpec t) {
+        // a value of a type parameter returns what its bound returns, or anything if it has none (qore#5774)
+        if (const QoreTypeInfo* src = getTypeParameterSourceType(ti)) {
+            ti = src;
+        }
         return ti && hasType(ti) ? ti->parseReturns(t) : QTI_WILDCARD;
     }
 
@@ -341,6 +345,15 @@ public:
             bool& may_not_match, bool& may_need_filter, qore_type_result_e& max_result,
             bool known_initial_assignment = false);
 
+    //! Returns the type that a value of a type parameter has in generic code, if \a ti is a type parameter
+    /** A value of a bounded type parameter (\c T: \c int) has its bound (an upper bound); a value of an unbounded one
+        can have any type, so it is a may-match checked at run time (\c auto); \c *T has the or-nothing type of its
+        bound (qore#5774)
+
+        @return the type, or nullptr if \a ti is not a type parameter
+    */
+    DLLLOCAL static const QoreTypeInfo* getTypeParameterSourceType(const QoreTypeInfo* ti);
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e runtimeTypeMatch(const QoreTypeInfo* first, const QoreTypeInfo* second) {
         //printd(5, "QoreTypeInfo::runtimeTypeMatch() %p '%s' (ht: %d) <=> %p '%s' (ht: %d)\n", first,
@@ -412,8 +425,11 @@ public:
     }
 
     // static version of method, checking for null pointer
+    /** false for a type parameter, whose value has a type known only when the code runs (qore#5774)
+    */
     DLLLOCAL static bool returnsSingle(const QoreTypeInfo* ti) {
-        return ti && hasType(ti) ? ti->return_vec.size() == 1 : false;
+        return ti && hasType(ti) ? ti->return_vec.size() == 1 && !ti->return_vec[0].spec.getTypeParameterTypeInfo()
+            : false;
     }
 
     // static version of method, checking for null pointer
@@ -1308,6 +1324,16 @@ protected:
     DLLLOCAL bool isType(qore_type_t t) const {
         if (return_vec.size() > 1)
             return false;
+        // a type parameter (and a wildcard) has no concrete type: it is not "nothing", which QoreTypeSpec::getType()
+        // gives for it to keep it apart from untyped auto/any (qore#5774)
+        switch (return_vec[0].spec.getTypeSpec()) {
+            case QTS_TYPEPARAM:
+            case QTS_WILDCARD:
+            case QTS_INITIALIZER_FILTER:
+                return false;
+            default:
+                break;
+        }
         return t == return_vec[0].spec.getType();
     }
 
@@ -1598,6 +1624,12 @@ public:
     DLLLOCAL bool isOrNothing() const {
         return or_nothing;
     }
+
+    //! Returns the bound of the type parameter (its upper bound), or nullptr if it has none or it is not resolved
+    /** the bound of a type parameter of a function or method is resolved with its signature, that of a class with the
+        class (qore_class_private::initializeIntern()); a type parameter of a hashdecl has none here (qore#5774)
+    */
+    DLLLOCAL const QoreTypeInfo* getBoundTypeInfo() const;
 
 protected:
     const QoreClass* owner_class = nullptr;

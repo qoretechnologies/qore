@@ -2780,6 +2780,10 @@ public:
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
+    //! the resolved bounds of the type parameters (nullptr for a parameter without one), resolved when the class is
+    //! initialized (see initializeIntern()); a value of a bounded type parameter has its bound in the class's code
+    //! (qore#5774)
+    type_vec_t type_param_bound_types;
     std::vector<const QoreTypeInfo*> parameterized_vparents;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
@@ -3258,6 +3262,11 @@ public:
 
     DLLLOCAL const char* getTypeParamBoundType(size_t index) const {
         return index < type_params.size() ? type_params[index].getBoundType() : nullptr;
+    }
+
+    //! Returns the resolved bound of a type parameter (see initializeIntern()), or nullptr if it has none
+    DLLLOCAL const QoreTypeInfo* getTypeParamBoundTypeInfo(size_t index) const {
+        return index < type_param_bound_types.size() ? type_param_bound_types[index] : nullptr;
     }
 
     DLLLOCAL size_t getTypeParamRequiredCount() const {
