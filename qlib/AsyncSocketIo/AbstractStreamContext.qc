@@ -60,6 +60,9 @@ public class AbstractStreamContext {
     #! Send data on the stream
     /** @param data the binary payload to send
         @param end_stream if @ref True, signals end of stream after this data
+
+        @throw WEBSOCKET-CLOSING-ERROR \a data is a WebSocket data frame and a close frame was sent on the stream
+        before (see @ref sendWebSocketClose()); also raised by @ref sendDataWithTimeout() and @ref trySendData()
     */
     abstract sendData(binary data, bool end_stream = False);
 
@@ -102,6 +105,26 @@ public class AbstractStreamContext {
     */
     bool trySendData(binary data, bool end_stream = False) {
         sendData(data, end_stream);
+        return True;
+    }
+
+    #! Sends the close frame of a WebSocket connection on the stream, unless one was sent on it before
+    /** A WebSocket connection has one close frame, after which no data frame is sent (RFC 6455 section 5.5.1).
+        Transports whose streams have a WebSocket frame state that can send a close frame itself (HTTP/2 and HTTP/3)
+        override this to record the close frame with the frame state's: if a close frame was sent before, this one is
+        not sent, and data sent after it is refused with \c WEBSOCKET-CLOSING-ERROR; the close frame is never
+        refused for a full stream send buffer.  The default implementation calls @ref sendData() and returns
+        @ref True.
+
+        @param frame the encoded close frame
+        @param end_stream if @ref True, ends the stream after the frame (also if the frame is not sent)
+
+        @return @ref True if the frame was sent; @ref False if a close frame was sent on the stream before
+
+        @since AsyncSocketIo 1.0
+    */
+    bool sendWebSocketClose(binary frame, bool end_stream = False) {
+        sendData(frame, end_stream);
         return True;
     }
 

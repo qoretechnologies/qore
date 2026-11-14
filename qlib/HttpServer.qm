@@ -9586,13 +9586,18 @@ class SseEventSourceRun {
     }
 
     #! Called when the stream has ended; stops the source once, on a thread of the handler pool
+    /** The submitted code holds this object in a local variable: a closure does not keep the object of the method
+        that creates it alive, and the end of the stream can release every other reference to this object before the
+        pool runs the code
+    */
     end() {
         if (!claim()) {
             return;
         }
+        SseEventSourceRun run = self;
         try {
             submitter(sub () {
-                stopIntern();
+                run.stopIntern();
             });
         } catch (hash<ExceptionInfo> ex) {
             # the stop must still run once

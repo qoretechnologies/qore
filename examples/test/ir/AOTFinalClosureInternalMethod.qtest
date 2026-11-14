@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTFinalClosureInternalMethodTest
+
+#! a closure in a method of a final class calls a private:internal method of the class through self (qore#5975)
+/** The compiler resolves such a call itself; the loader of a qcc image looked the method up with
+    QoreClass::findMethod(), which does not find a private:internal method without the class context of the code that
+    calls it, so the call had no pre-resolved target and the program failed with AOT-AST-FALLBACK-ERROR.
+*/
+class AOTFinalClosureInternalMethodTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/AOTFinalClosureInternalMethod/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("AOT final class closure internal method", "1.0", \ARGV) {
+        addTestCase("AST calls the methods", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        list<string> lines = getAst().split("\n");
+        foreach string line in ("fi 1", "r2=[2, 3]", "r3=5", 'r4={a: 5}', 'r5="6"', "r6=7", "r7=8", "r8=9", "r9=10",
+                "r10=11", "r11=12", "r12=13", "r13=14", "GP::fp 1", "NI::fi 1", "NP::fp 1", "GU::fu 1",
+                "GS::f normal 1", "GS::sf static 2", "GO::ov int 1", "GO::ov string two", "IP::pm 3", "IC::sh 4",
+                "IP::pi 1", "IP::sh 2", "IQ::v 5", "IS::v 6", "KC::x normal 1", "KC::x normal 2") {
+            assertTrue((select lines, $1 == line).size() > 0, line);
+        }
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-final-closure-internal-method-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

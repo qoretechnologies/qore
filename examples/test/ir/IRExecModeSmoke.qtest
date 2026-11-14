@@ -5200,6 +5200,8 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
+        # the removed value is deliberate: its run-time handling is tested
+        script.file.write("%no-strict-parse-errors\n");
         script.file.write("int i;\n");
         script.file.write("remove i;\n");
         script.file.write("try {\n");

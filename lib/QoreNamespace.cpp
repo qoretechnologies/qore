@@ -5867,3 +5867,36 @@ bool QoreNamespaceEnumIterator::next() {
 const QoreEnumDecl& QoreNamespaceEnumIterator::get() const {
     return *priv->get();
 }
+
+void qore_ns_private::getTypeOwners(std::vector<QoreTypeOwner*>& owners) {
+    {
+        ClassListIterator i(classList);
+        while (i.next()) {
+            qore_class_private* priv = qore_class_private::get(*i.get());
+            if (priv && !priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    {
+        HashDeclListIterator i(hashDeclList);
+        while (i.next()) {
+            typed_hash_decl_private* priv = typed_hash_decl_private::get(*i.get());
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    {
+        EnumListIterator i(enumList);
+        while (i.next()) {
+            qore_enum_decl_private* priv = qore_enum_decl_private::get(*i.get());
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    for (auto& i : nsl.nsmap) {
+        qore_ns_private::get(*i.second)->getTypeOwners(owners);
+    }
+}

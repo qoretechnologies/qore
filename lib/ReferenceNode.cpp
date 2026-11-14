@@ -448,6 +448,7 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
     int err = 0;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
+        QoreParseContextFlagScope fs(parse_context, PF_LVALUE_NOT_READ);
         err = parse_init_value(lvexp, parse_context);
         operand_analysis = parse_context.analysis;
     }

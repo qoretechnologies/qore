@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes, or AOT
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class UnassignedTypedLvaluesTest
+
+#! lvalues of non-optional types without a value give the results of the AST interpreter in every mode and in AOT
+#! (qore#5937)
+/** The parse type of a read of an lvalue is its declared type, but the lvalue can have no value: a local that is not
+    assigned, or that delete or remove cleared, a member, a static or global variable, a hash key or a list element.
+    The compiled modes took such a value as one of the declared type: typed arithmetic gave 0 for NOTHING + NOTHING,
+    a list literal of such a value had the declared element type, and the AOT local facts took a local as assigned
+    across a delete.  A local read where no assignment can have run is a parse error with %strict-parse-errors (which
+    %modern implies) when its value is given where NOTHING is not accepted.
+*/
+class UnassignedTypedLvaluesTest inherits QUnit::Test {
+    public {
+        #! the probes whose output in every mode and as a qcc executable must be that of the AST interpreter
+        const Probes = ("values.q", "delete.q", "members.q", "variants.q", "operators.q", "scopes.q",
+            "strict-off.q");
+    }
+
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string dir = get_script_dir() + "/UnassignedTypedLvalues/";
+        hash<string, string> ast_out;
+    }
+
+    constructor() : Test("unassigned typed lvalues", "1.0", \ARGV) {
+        addTestCase("AST results", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        addTestCase("strict parse error in every mode and in AOT", \strictError());
+        set_return_value(main());
+    }
+
+    astReference() {
+        string out = getAst("values.q");
+        # 10 types x 6 uses x 4 lvalue kinds
+        assertEq(240, (select out.split("\n"), $1 =~ / => /).size(), out);
+        assertRegex("(?m)^local int plus => \\[null\\] list<nothing>$", out, out);
+        assertRegex("(?m)^member int plus => \\[null\\] list<nothing>$", out, out);
+        assertRegex("(?m)^static int plus => \\[null\\] list<nothing>$", out, out);
+        assertRegex("(?m)^branch int lit => \\[null\\] list<nothing>$", out, out);
+        assertRegex("(?m)^member float lit => \\[null\\] list<nothing>$", out, out);
+
+        out = getAst("delete.q");
+        assertRegex("(?m)^delete local => \\[null\\] list<nothing>$", out, out);
+        assertRegex("(?m)^remove via reference arg => \\[null\\] list<nothing>$", out, out);
+        assertRegex("(?m)^delete in loop after read => \\[2, null\\] list<auto>$", out, out);
+        assertRegex("(?m)^delete string local => \\[null, True\\] list<\\*bool>$", out, out);
+        assertRegex("(?m)^delete list element => \\[null\\] list<nothing>$", out, out);
+        assertRegex("(?m)^remove via reference local => \\[null\\] list<nothing>$", out, out);
+
+        out = getAst("members.q");
+        assertEq("[null] list<nothing>\n[null] list<nothing>\n[null] list<nothing>\nTrue bool\n", out);
+
+        out = getAst("variants.q");
+        assertRegex("(?m)^overloaded f\\(member int NOTHING\\) => RUNTIME-OVERLOAD-ERROR", out, out);
+        assertRegex("(?m)^f3\\(\\*int\\|string\\) member NOTHING => \"\\*int null\"$", out, out);
+
+        # the division of two int operands is the int division, which takes NOTHING as 0
+        out = getAst("operators.q");
+        assertRegex("(?m)^f0 => 0 integer$", out, out);
+        assertRegex("(?m)^f21 => 0 integer$", out, out);
+        assertRegex("(?m)^f22 => \\[0, 1\\] list<int>$", out, out);
+        assertRegex("(?m)^f2 => null nothing$", out, out);
+        assertRegex("(?m)^f13 => 0.0 float$", out, out);
+        assertRegex("(?m)^member / 2 => 0 integer$", out, out);
+        assertRegex("(?m)^global / 2 => 0 integer$", out, out);
+        assertRegex("(?m)^branch local / 2 => 0 integer$", out, out);
+
+        out = getAst("scopes.q");
+        assertEq("for init => 7 integer\nmap declaration => [1, 1] list<int>\non_exit after delete => 1 integer\n",
+            out);
+
+        assertEq("RUNTIME-TYPE-ERROR\n", getAst("strict-off.q"));
+    }
+
+    sourceModes() {
+        foreach string probe in (Probes) {
+            string expected = getAst(probe);
+            foreach string mode in ("ir", "jit", "tiered") {
+                assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, dir + probe)),
+                    probe + " " + mode);
+            }
+        }
+    }
+
+    compiled() {
+        foreach string probe in (Probes) {
+            string expected = getAst(probe);
+            foreach string level in ("-O0", "-O3") {
+                TmpDir tmp("qore-unassigned-typed-lvalues-");
+                string exe = tmp.path + "/probe";
+                run((qcc_bin, level, "-o", exe, dir + probe));
+                assertEq(expected, run((exe, "-b", "--enable-debug")), probe + " qcc " + level);
+            }
+        }
+    }
+
+    strictError() {
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            hash<ExecModeHarness::ModeRunResult> r = runFailing((qore_bin, "-b", "--exec-mode=" + mode,
+                dir + "strict.q"));
+            assertNeq(0, r.rc, mode);
+            assertRegex("PARSE-TYPE-ERROR: local variable 'x' cannot have been assigned where it is read", r.out,
+                mode);
+            assertRegex("%strict-parse-errors", r.out, mode);
+        }
+        TmpDir tmp("qore-unassigned-typed-lvalues-");
+        hash<ExecModeHarness::ModeRunResult> r = runFailing((qcc_bin, "-O0", "-o", tmp.path + "/strict",
+            dir + "strict.q"));
+        assertNeq(0, r.rc, "qcc");
+        assertRegex("PARSE-TYPE-ERROR: local variable 'x' cannot have been assigned where it is read", r.out, "qcc");
+    }
+
+    private string getAst(string probe) {
+        if (!exists ast_out{probe}) {
+            ast_out{probe} = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", dir + probe));
+        }
+        return ast_out{probe};
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    private string command(list<string> args) {
+        return "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(args));
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+
+    #! runs a command that is expected to fail before it runs any code (no native code is checked)
+    private hash<ExecModeHarness::ModeRunResult> runFailing(list<string> args) {
+        return ExecModeHarness::run_command(command(args));
+    }
+}

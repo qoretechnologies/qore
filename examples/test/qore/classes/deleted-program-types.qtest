@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the probes and bounded.qr run in child processes that set their own --exec-mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT code using the types of a deleted Program, and Program deletion
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class DeletedProgramTypesTest
+
+#! Values whose types name a class, hashdecl or enum of a deleted Program stay usable (qore#5790)
+/** A value can have a type derived from the types of another Program's class, hashdecl or enum (a generic object
+    \c Box<*Foo>, a hash of the concrete hashdecl \c HBox<*Foo>, \c list<*Foo>, \c hash<string, *Foo>,
+    \c list<Color>), and a class or hashdecl imported from another Program uses that Program's types; those types were
+    freed with their Program, and the next type check of such a value read freed memory (a debug build aborted, a
+    release build crashed or raised wrong errors).  A destroyed declaration whose types are still named by a derived
+    type is now kept with its types (matching no value then, and NOTHING where the type accepts it), and an imported
+    copy keeps its source.  A destroyed declaration that a surviving declaration names directly (a hash of a hashdecl
+    or an object whose member type is \c *Foo, returned from the Program; an imported hashdecl) is kept while such a
+    declaration exists, and the reflection API can reference a retired declaration again.
+
+    The probes (deleted-program-types/probes.q) run at the top level and in a child Program, in each execution mode in
+    a child process, at the IR tier and promoted to native code with tiered execution, and as qcc-compiled executables
+    (-O0, -O3); deleted-program-types/reflection.q runs in each execution mode.  deleted-program-types/bounded.qr
+    (debug builds) checks that the declarations kept are bounded per destroyed declaration over repeated Program
+    generations, that declarations naming each other are freed with their Program, that a declaration named only by a
+    surviving value is freed with the value, and that declarations naming each other whose values survive their
+    Program are freed with the values.
+*/
+class DeletedProgramTypesTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Expected = "null\n"
+            "RUNTIME-OVERLOAD-ERROR\n"
+            "\"hash<DeletedProgramTypesHBox<*object<Foo>>>\"\n"
+            "RUNTIME-TYPE-ERROR\n"
+            "[2, \"list<*object<Foo>>\"]\n"
+            "RUNTIME-TYPE-ERROR\n"
+            "RUNTIME-TYPE-ERROR\n"
+            "\"list<object<Foo>>\"\n"
+            "[1, \"hash<string, *object<Foo>>\"]\n"
+            "RUNTIME-TYPE-ERROR\n"
+            "[1, \"list<enum<Color>>\"]\n"
+            "RUNTIME-TYPE-ERROR\n"
+            "[1, null]\n"
+            "RUNTIME-TYPE-ERROR\n"
+            "null\n"
+            "RUNTIME-TYPE-ERROR\n"
+            "u: 1\n"
+            "t: PROGRAM-ERROR\n"
+            "v: PROGRAM-ERROR\n"
+            "u: 2\n"
+            "[1, null]\n"
+            "RUNTIME-TYPE-ERROR\n";
+    }
+
+    public {
+        #! the output of deleted-program-types/reflection.q
+        const ExpectedReflection = "ol: list<*object<Foo>>\n"
+            "ol element: *object<Foo>\n"
+            "ol += NOTHING: 2\n"
+            "ol fullType: \"list<*object<Foo>>\"\n"
+            "hl: list<*hash<HD>>\n"
+            "hl element: *hash<HD>\n"
+            "hl += NOTHING: 2\n"
+            "hl fullType: \"list<*hash<HD>>\"\n"
+            "cl: list<enum<Color>>\n"
+            "cl element: enum<Color>\n"
+            "cl += NOTHING: RUNTIME-TYPE-ERROR\n"
+            "cl fullType: \"list<enum<Color>>\"\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probes;
+    }
+
+    constructor() : QUnit::Test("DeletedProgramTypes", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        probes = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "deleted-program-types" + DirSep
+            + "probes.q");
+
+        addTestCase("values with types of a deleted Program are usable in every mode", \testModes());
+        foreach string mode in (ExecModes) {
+            addTestCase("the declarations kept are bounded: " + mode, sub () { testBounded(mode); });
+        }
+        addTestCase("a reflection type of a retired declaration leaves it retired", \testReflection());
+        foreach string mode in (ExecModes) {
+            addTestCase("the declarations of module Programs are freed in order at the end: " + mode,
+                sub () { testModuleTeardown(mode); });
+        }
+        foreach string mode in (ExecModes) {
+            addTestCase("a module that loads a native module at run time is deleted first: " + mode,
+                sub () { testRuntimeLoad(mode); });
+        }
+        foreach string mode in (("ast", "jit")) {
+            addTestCase("modules that load each other and a native module at run time are deleted first: " + mode,
+                sub () { testRuntimeLoadCycle(mode); });
+        }
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-deleted-program-types-");
+        # the probes at the top level, and in a child Program whose source is the same file
+        string top = tmp.path + DirSep + "top.q";
+        writeFile(top, probes + "\nprint(probes() + \"\\n\");\n");
+        string probes_file = tmp.path + DirSep + "probes.q";
+        writeFile(probes_file, probes);
+        string child = tmp.path + DirSep + "child.q";
+        writeFile(child, sprintf("%%modern\nProgram p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS "
+            "| PO_STRONG_ENCAPSULATION);\np.parse(ReadOnlyFile::readTextFile(%y), \"probes\");\n"
+            "print(p.callFunction(\"probes\") + \"\\n\");\n", probes_file));
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string file in (top, child) {
+            string label = basename(file);
+            foreach string mode in (ExecModes) {
+                assertEq(Expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)),
+                    sprintf("%s: %s", label, mode));
+            }
+            # tiered execution kept at the IR tier, and promoted to native code
+            assertEq(Expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), label + ": tiered, IR tier");
+            assertEq(Expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+                "--jit-jit-threshold=1 %s 2>&1", env, qore_bin, file)), label + ": tiered, promoted");
+
+            foreach string opt in (("-O0", "-O3")) {
+                string exe = file + opt;
+                string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                    file));
+                assertTrue(is_file(exe), sprintf("%s: qcc %s compiled the executable: %s", label, opt, out));
+                assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                    libqore_dir, exe)), sprintf("%s: qcc %s", label, opt));
+            }
+        }
+    }
+
+    testReflection() {
+        foreach string mode in (ExecModes) {
+            assertEq(ExpectedReflection, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s "
+                "%s/deleted-program-types/reflection.q 2>&1", libqore_dir, libqore_dir, qore_bin, mode,
+                get_script_dir())), mode);
+        }
+    }
+
+    testBounded(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_retired_type_declarations() is only built with DEBUG");
+        }
+        int status;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s "
+            "%s/deleted-program-types/bounded.qr 2>&1", libqore_dir, libqore_dir, qore_bin, mode, get_script_dir()),
+            \status);
+        assertEq(0, status, out);
+        list<string> lines = (map $1, out.split("\n"), $1 =~ /: /);
+        assertEq(6, lines.size(), out);
+        foreach string line in (lines) {
+            assertRegex(": ok$", line, line);
+        }
+    }
+
+    #! A module that shares classes with the modules it requires ends the process cleanly (qore#5790)
+    /** The library cleanup deletes the Programs of the modules in turn.  A declaration that survived the deletion of
+        another Program, as a member of a group of declarations that name each other, and that keeps references to the
+        declarations that it names, must keep them until it is freed itself: the end of the process freed a
+        declaration of the module (the output stream class of a class that the group kept) while the group still named
+        it, and the next group sweep read it (a debug libqore asserts, valgrind reports an invalid read, and a release
+        build crashed at exit depending on the memory; the load path of the run decides if the AOT modules (qlib's
+        .qmod files, with the module Program that the library cleanup deletes) or their sources are loaded).
+    */
+    testModuleTeardown(string mode) {
+        int status;
+        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s/deleted-program-types/module-teardown.qr 2>&1", libqore_dir,
+            libqore_dir, qore_bin, mode, get_script_dir()), \status);
+        assertEq(0, status, out);
+        # warnings of the load path (ex: a stale AOT module) can precede the output
+        assertRegex("(^|\n)ok\n$", out);
+    }
+
+    #! A module that loads a native module at run time is deleted before it (qore#5790)
+    /** Util's get_file_from_sftp() loads the ssh2 module from the module's own Program, which imports the declarations
+        of the loaded module.  The load is not in the load context of the module, so the module was not recorded as
+        requiring the native module, which the library cleanup deletes first: the declarations that the module's
+        Program imported named types that were freed, and the teardown of its Program read them (a debug libqore
+        asserts, valgrind reports an invalid read, and a release build crashed at exit depending on the memory).
+        RuntimeLoadTest is compiled into an AOT module here and loads the yaml module.
+    */
+    testRuntimeLoad(string mode) {
+        runRuntimeLoad(mode, ("RuntimeLoadTest",), "runtime-load.qr", "1");
+    }
+
+    #! Modules that load each other, and a native module, at run time are deleted before it (qore#5790)
+    /** The modules require each other, so there is no module that no other one requires: the cycle is broken at one of
+        its modules, not at the native module that the modules in it require
+    */
+    testRuntimeLoadCycle(string mode) {
+        runRuntimeLoad(mode, ("RuntimeLoadCycleA", "RuntimeLoadCycleB"), "runtime-load-cycle.qr", "2");
+    }
+
+    private runRuntimeLoad(string mode, list<string> modules, string script, string expected) {
+        TmpDir tmp("qore-runtime-load-");
+        string dir = get_script_dir() + DirSep + "deleted-program-types";
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        # the modules are compiled with the module path of the run
+        foreach string name in (modules) {
+            string qmod = tmp.path + DirSep + name + ".qmod";
+            int status;
+            string out = backquote(sprintf("%s %s --module -o %s %s/%s.qm 2>&1", env, qcc_bin, qmod, dir, name),
+                \status);
+            assertEq(0, status, out);
+            assertTrue(is_file(qmod), "the AOT module was compiled: " + out);
+        }
+
+        string path = tmp.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        int status;
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 %s "
+            "--exec-mode=%s %s/%s 2>&1", env, path, qore_bin, mode, dir, script), \status);
+        assertEq(0, status, out);
+        # warnings of the load path (ex: a stale AOT module) can precede the output
+        assertRegex("(^|\n)" + expected + "\n$", out);
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}

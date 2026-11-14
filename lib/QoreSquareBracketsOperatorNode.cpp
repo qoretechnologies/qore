@@ -109,6 +109,9 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
 
         parse_context.typeInfo = nullptr;
         QoreParseContextAnalysisHelper ah(parse_context);
+        // the key or index is read also when the lvalue operand of the reference, delete or remove operator is not
+        // (qore#5937)
+        QoreParseContextFlagScope key_read(parse_context, PF_LVALUE_NOT_READ, QoreParseContextFlagScope::Clear());
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }

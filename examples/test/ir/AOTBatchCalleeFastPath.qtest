@@ -350,6 +350,8 @@ printf(\"%s\\n\", caller());
 
 string sub unassignedScriptCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int sub leaf(int x) {
     return x + 1;
@@ -382,6 +384,8 @@ printf(\"%s\\n\", caller());
 
 string sub selfRecursiveUnassignedScriptCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int sub rec(int x) {
     if (x <= 0) {
@@ -397,6 +401,8 @@ printf(\"%s\\n\", rec(1));
 
 string sub selfMethodUnassignedScriptCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 class SelfUnassigned {
     final int add(int x) {
@@ -609,6 +615,8 @@ nothing sub cross_bump(reference<int> value) {
 
 string sub crossFileMainCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 class CrossSpeculativeOverride inherits CrossSpeculativeLeaf {
     int affine(int value) {
@@ -712,6 +720,8 @@ int sub main() {
 
 string sub crossFileUnassignedMainCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int sub main() {
     int value;
