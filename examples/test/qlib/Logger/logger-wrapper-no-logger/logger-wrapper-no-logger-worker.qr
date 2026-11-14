@@ -4,7 +4,8 @@
 
 # the checks of logger-wrapper-no-logger.qtest: prints one "name=result" line per check
 
-%requires ../../../../../qlib/Logger.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Logger
 
 #! returns the result of each is*Enabled() method of the wrapper, or the error that it raised
 string sub levels(LoggerWrapper w) {
