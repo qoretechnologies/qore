@@ -22,7 +22,7 @@ class GenericLocalReferenceTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("GenericLocalReference", "1.0", \ARGV) {
-        foreach string fixture in ("parameters",) {
+        foreach string fixture in ("values", "background", "controls", "parameters", "programs", "aot-local") {
             string worker_name = fixture;
             foreach string mode in (ExecModeHarness::ExecModes) {
                 string execution_mode = mode;

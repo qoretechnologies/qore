@@ -4627,7 +4627,7 @@ static const QoreTypeInfo* resolve_parse_ref_target_type(const char* ref_type_pa
             "resolved parse-reference type '%s' is not a reference type", ref_type_path);
         return nullptr;
     }
-    return QoreTypeInfo::getUniqueReturnComplexReference(ref_ti);
+    return qore_substitute_type_params_if_needed(QoreTypeInfo::getUniqueReturnComplexReference(ref_ti));
 }
 
 //! AOT: create a reference to a local variable from slot index

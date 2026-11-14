@@ -2779,6 +2779,14 @@ bool thread_closure_var_on_stack(const ClosureVarValue* cvv) {
     return tlpd->cvstack.hasCvv(cvv);
 }
 
+ClosureVarValue* thread_instantiate_closure_var(const LocalVar* local, const QoreTypeInfo* runtimeTypeInfo,
+        QoreValue& nval, bool assign) {
+    // Binding can allocate. Finish it before changing the variable stack or transferring the initial value.
+    ClosureVarValue* cvv = local->createClosureValue(runtimeTypeInfo, nval, assign);
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    return tlpd->cvstack.instantiateNew(cvv, tlpd->getNextVarOrder());
+}
+
 void thread_instantiate_closure_var(ClosureVarValue* cvar) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)
