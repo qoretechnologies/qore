@@ -60,6 +60,11 @@ DLLLOCAL Sequence classIDSeq(1);
 // class IDs can be allocated in a child process created with fork() (see QoreForkHandlers.h)
 static QoreForkThreadLock class_id_fork_handler(classIDSeq, QFLR_LEAF, "class_ids");
 
+uint64_t qore_class_next_allocation_id() {
+    static std::atomic<uint64_t> seq{0};
+    return seq.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 static std::atomic<uint64_t> qore_method_dispatch_epoch{1};
 
 uint64_t qore_get_method_dispatch_epoch() {

@@ -2211,43 +2211,37 @@ public class NamedArgumentsTest inherits QUnit::Test {
             p.parse("sub t() { code c = sub (int a) {}; c(z: 1); }", "call-reference-unknown");
             p.callFunction("t");
         });
-        # a reference node resolves the method with the first object that it is evaluated with; for an object of
-        # another class it refers to the method of that object's class by name: a class without it whose methodGate()
-        # method handles it takes the arguments by position only, a class without either has no such method (in the
-        # interpreted and JIT modes; AOT code resolves the method of each object when the reference is created)
+        # a reference node resolves the method for the class of each object when the reference is created
+        # (qore#6062): for an object of a subclass that inherits the method, it refers to the method by name; a class
+        # without the method cannot be referred to, whether or not it has a methodGate() method
         {
             Program p(PO_NEW_STYLE);
             p.parse("class HasFoo { string foo(int count, string label) { return sprintf('%d %s', count, label); } }
+class HasChild inherits HasFoo {}
 class GateFoo { string methodGate(string m, auto a, auto b) { return sprintf('gate %s %y %y', m, a, b); } }
 class NoFoo {}
 class GateChild inherits GateFoo {}
 code sub foo_ref(object o) { return \\o.foo(); }
 HasFoo has_foo();
-GateFoo gate_foo();
-NoFoo no_foo();
-GateChild gate_child();
+HasChild has_child();
 code hf = foo_ref(has_foo);
-code gf = foo_ref(gate_foo);
-code nf = foo_ref(no_foo);
-code cf = foo_ref(gate_child);
+code cf = foo_ref(has_child);
 string sub has_named() { return hf(label: 'h', count: 1); }
-string sub gate_positional() { return gf(1, 'g'); }
-string sub gate_named() { return gf(label: 'g', count: 1); }
-string sub missing_named() { return nf(label: 'n', count: 1); }
-string sub inherited_gate_named() { return cf(label: 'c', count: 1); }
-string sub inherited_gate_positional() { return cf(1, 'c'); }", "method-gate-reference");
+string sub inherited_named() { return cf(label: 'c', count: 2); }
+string sub inherited_positional() { return cf(3, 'c'); }
+code sub gate_ref() { return foo_ref(new GateFoo()); }
+code sub missing_ref() { return foo_ref(new NoFoo()); }
+code sub inherited_gate_ref() { return foo_ref(new GateChild()); }", "method-gate-reference");
             p.run();
             assertEq("1 h", p.callFunction("has_named"));
-            assertEq("gate foo 1 \"g\"", p.callFunction("gate_positional"));
-            assertThrows("NAMED-CALL-NOT-SUPPORTED", "GateFoo::foo\\(\\) with named arguments", \p.callFunction(),
-                "gate_named");
-            assertThrows("METHOD-DOES-NOT-EXIST", "no method NoFoo::foo\\(\\) has been defined", \p.callFunction(),
-                "missing_named");
-            # a methodGate() method is not inherited (a positional call of the subclass's object raises the same error)
-            assertThrows("METHOD-DOES-NOT-EXIST", "no method GateChild::foo\\(\\) has been defined", \p.callFunction(),
-                "inherited_gate_named");
-            assertThrows("METHOD-DOES-NOT-EXIST", "no method GateChild::foo\\(\\) has been defined", \p.callFunction(),
-                "inherited_gate_positional");
+            assertEq("2 c", p.callFunction("inherited_named"));
+            assertEq("3 c", p.callFunction("inherited_positional"));
+            assertThrows("OBJECT-METHOD-REFERENCE-ERROR", "GateFoo::foo\\(\\): unknown method", \p.callFunction(),
+                "gate_ref");
+            assertThrows("OBJECT-METHOD-REFERENCE-ERROR", "NoFoo::foo\\(\\): unknown method", \p.callFunction(),
+                "missing_ref");
+            assertThrows("OBJECT-METHOD-REFERENCE-ERROR", "GateChild::foo\\(\\): unknown method", \p.callFunction(),
+                "inherited_gate_ref");
         }
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {
