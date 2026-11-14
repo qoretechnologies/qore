@@ -97,6 +97,12 @@
     as it does when it adds the value at the end (ex: \c list&lt;int&gt; for <tt>1 + l</tt> for a \c list&lt;int&gt;
     \c l); it gave a \c list&lt;auto&gt;, so a value of another type could be assigned to an element of the result.
 
+    @par Type-Safe Hashes Are Not Hashes With a Specific Value Type
+    Assigning a type-safe hash to a @ref hash_complex_type "hash with a declared value type" such as
+    <tt>hash&lt;string, string&gt;</tt> is an error also when every member has that type, which 2.2.1 allowed for a
+    hash with another reference by copying it; @ref cast "cast<>" still converts it (see
+    @ref hashdecl_type_compatibility).
+
     @par Child Class Methods Must Return a Type Compatible With the Parent Class Method
     A child class method variant that overrides a parent class variant, or that a call typed against the parent class
     can select, must return the parent class variant's type or a narrower one, or the class raises a
