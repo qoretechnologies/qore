@@ -1568,6 +1568,15 @@ static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
     }
 }
 
+//! returns the quotient of a division by a positive divisor rounded down (toward negative infinity)
+/** A negative dividend a is divided as ~a (-a - 1, which is not negative), and the quotient is complemented back:
+    floor(a / b) = ~(~a / b); one unsigned division by a constant, with no remainder or branch.
+*/
+static inline int64_t floorDiv(int64_t a, int64_t b) {
+    uint64_t sign = static_cast<uint64_t>(a >> 63);
+    return static_cast<int64_t>(((static_cast<uint64_t>(a) ^ sign) / static_cast<uint64_t>(b)) ^ sign);
+}
+
 static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
         int64_t index, ExceptionSink* xsink) {
     if (array->IsNull(index)) {
@@ -1670,10 +1679,13 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     secs = val / 1000000;
                     us = val % 1000000;
                     break;
-                case arrow::TimeUnit::NANO:
-                    secs = val / 1000000000;
-                    us = (val % 1000000000) / 1000;
+                case arrow::TimeUnit::NANO: {
+                    // rounded down to the microsecond, as an export rounds a date down to the time unit (qore#6102)
+                    int64_t micros = floorDiv(val, 1000);
+                    secs = micros / 1000000;
+                    us = micros % 1000000;
                     break;
+                }
             }
             return DateTimeNode::makeAbsolute(zone, secs, us);
         }
@@ -1859,12 +1871,6 @@ __attribute__((noinline, cold)) static arrow::Status arrowTimeOverflow(const Dat
     QoreStringValueHelper str(dt);
     return arrow::Status::Invalid(dt->isRelative() ? "the duration " : "the date ", str->c_str(),
         " cannot be stored in ", unit, " in an int64");
-}
-
-//! returns the quotient of a division rounded down (toward negative infinity)
-static inline int64_t floorDiv(int64_t a, int64_t b) {
-    int64_t q = a / b;
-    return (a % b < 0) ? q - 1 : q;
 }
 
 static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
@@ -2391,7 +2397,9 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
                         case arrow::TimeUnit::SECOND: overflow = __builtin_mul_overflow(val, 1000000, &val); break;
                         case arrow::TimeUnit::MILLI:  overflow = __builtin_mul_overflow(val, 1000, &val); break;
                         case arrow::TimeUnit::MICRO:  break;
-                        case arrow::TimeUnit::NANO:   val /= 1000; break;
+                        // rounded down to the microsecond, as an export rounds a date down to the time unit
+                        // (qore#6102)
+                        case arrow::TimeUnit::NANO:   val = floorDiv(val, 1000); break;
                     }
                     if (overflow && !out_of_range) {
                         out_of_range = true;

@@ -42,6 +42,27 @@ class DataFrameDurationExportTest inherits QUnit::Test {
             DataFrame::DataFrame df = timestampFrame((d,));
             assertThrows("DATAFRAME-IO-ERROR", \df.toArrowIpc(), (), sprintf("%y", d));
         }
+        # a timestamp in nanoseconds before 1970 with a part of a microsecond is rounded down on import, in a column
+        # and in a list: -1234567000 ns is exported, and patched to -1234567500 ns
+        date expected = 1969-12-31T23:59:58.765432Z;
+        foreach bool nested in ((False, True)) {
+            DataFrame::DataFrame df = nested
+                ? DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+                    "v": ((1969-12-31T23:59:58.765433Z,),),
+                }, {
+                    "v": {"schema": {"kind": "list", "nullable": False, "children": (
+                        {"name": "item", "kind": "timestamp", "time_unit": "ns", "timezone": "UTC",
+                            "nullable": True},
+                    )}},
+                }))
+                : timestampFrame((1969-12-31T23:59:58.765433Z,));
+            string hex = make_hex_string(df.toArrowIpc());
+            assertEq(1, (hex =~ x/(a8006ab6ffffffff)/g).size(), "the value in the IPC data");
+            binary patched = parse_hex_string(replace(hex, "a8006ab6ffffffff", "b4fe69b6ffffffff"));
+            auto v = DataFrame::DataFrame::fromArrowIpc(patched).getColumn("v")[0];
+            date imported = nested ? v[0] : v;
+            assertTrue(imported == expected, sprintf("%s: %y", nested ? "list" : "column", imported));
+        }
     }
 
     #! dates and durations in lists, which are not range-checked when they are stored, raise an error when they do
