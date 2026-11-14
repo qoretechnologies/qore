@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ConvertAPI REST Connection",
+          "message": "ConvertAPI REST接続"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ConvertAPI file conversion REST API",
+          "message": "ConvertAPIファイル変換REST APIへの接続"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ConvertAPI](https://www.convertapi.com) file conversion REST API.\n\nConvertAPI converts files between more than 300 format pairs, including:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF and images\n- PDF to images, office formats, text and PDF/A\n- PDF tools: merge, split, compress, protect, OCR, watermark and more",
+          "message": "[ConvertAPI](https://www.convertapi.com)のファイル変換REST APIへの接続です。\n\nConvertAPIは300を超える形式の組み合わせでファイルを変換します。たとえば次のとおりです。\n- Officeドキュメント、スプレッドシート、プレゼンテーションとPDFの相互変換\n- WebページやHTMLからPDFや画像への変換\n- PDFから画像、Office形式、テキスト、PDF/Aへの変換\n- PDFツール: 結合、分割、圧縮、保護、OCR、透かしなど"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Token",
+          "message": "APIトークンの取得方法"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Sign up or log in at https://www.convertapi.com/a\n2. Open the **Authentication** page of your account\n3. Copy an API token (or create a new one) and paste it into the **API Token** field\n\n**Note:** each conversion consumes conversion credits; check your remaining balance in your ConvertAPI account.",
+          "message": "1. https://www.convertapi.com/a で登録またはログイン\n2. アカウントの **Authentication** ページを開く\n3. APIトークンをコピー（または新規作成）し、**APIトークン** フィールドに貼り付けます\n\n**注意:** 変換のたびに変換クレジットが消費されます。残りの残高はConvertAPIアカウントで確認できます。"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "APIトークン"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ConvertAPI API token",
+          "message": "ConvertAPI APIトークン"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ConvertAPI API token used for authentication; it is sent as a bearer token.\n\nCreate or copy an API token on the [Authentication page](https://www.convertapi.com/a/authentication) of your ConvertAPI account.",
+          "message": "認証に使用するConvertAPI APIトークン。ベアラートークンとして送信されます。\n\nAPIトークンは、ConvertAPIアカウントの[Authenticationページ](https://www.convertapi.com/a/authentication)で作成またはコピーできます。"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "リージョン"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The ConvertAPI region that processes the requests",
+          "message": "リクエストを処理するConvertAPIのリージョン"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The ConvertAPI region whose servers process the requests; the connection URL is derived from it.",
+          "message": "リクエストを処理するサーバーがあるConvertAPIのリージョン。接続URLはこの値から決まります。"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.display_name": {
+          "source": "Global",
+          "message": "グローバル"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.desc": {
+          "source": "The global API endpoint https://v2.convertapi.com (the default)",
+          "message": "グローバルAPIエンドポイント https://v2.convertapi.com（デフォルト）"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "European Union",
+          "message": "欧州連合"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "The API endpoint https://eu-v2.convertapi.com",
+          "message": "APIエンドポイント https://eu-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.display_name": {
+          "source": "United Kingdom",
+          "message": "イギリス"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.desc": {
+          "source": "The API endpoint https://uk-v2.convertapi.com",
+          "message": "APIエンドポイント https://uk-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "United States",
+          "message": "アメリカ合衆国"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "The API endpoint https://us-v2.convertapi.com",
+          "message": "APIエンドポイント https://us-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.display_name": {
+          "source": "Canada",
+          "message": "カナダ"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.desc": {
+          "source": "The API endpoint https://ca-v2.convertapi.com",
+          "message": "APIエンドポイント https://ca-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.display_name": {
+          "source": "Asia",
+          "message": "アジア"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.desc": {
+          "source": "The API endpoint https://as-v2.convertapi.com",
+          "message": "APIエンドポイント https://as-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.display_name": {
+          "source": "Australia",
+          "message": "オーストラリア"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.desc": {
+          "source": "The API endpoint https://au-v2.convertapi.com",
+          "message": "APIエンドポイント https://au-v2.convertapi.com"
+        }
+      }
+    }
+  }
+}

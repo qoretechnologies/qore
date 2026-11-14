@@ -16,6 +16,7 @@
 %requires ClickFunnelsRestClient
 %requires CloseRestClient
 %requires ConstantContactRestClient
+%requires ConvertApiRestClient
 %requires DeelRestClient
 %requires FreshBooksRestClient
 %requires FreshsalesRestClient
@@ -54,6 +55,7 @@ class SaasRestClientOptionsNarrowedCallerHashTest inherits QUnit::Test {
         addTestCase("ClickFunnelsRestClientBase::getOptions() with narrowed headers", \clickFunnels());
         addTestCase("CloseRestClientBase::getOptions() with narrowed headers", \close());
         addTestCase("ConstantContactRestClientBase::getOptions() with narrowed headers", \constantContact());
+        addTestCase("ConvertApiRestClientBase::getOptions() with narrowed headers", \convertApi());
         addTestCase("DeelRestClientBase::getOptions() with narrowed headers", \deel());
         addTestCase("FreshBooksRestClientBase::getOptions() with narrowed headers", \freshBooks());
         addTestCase("FreshsalesRestClientBase::getOptions() with narrowed headers", \freshsales());
@@ -134,6 +136,12 @@ class SaasRestClientOptionsNarrowedCallerHashTest inherits QUnit::Test {
         hash<auto> opts = getOpts({"apikey": "k"});
         assertEq("hash<string, int>", opts.headers.fullType());
         assertEq({"X-Count": 1, "Authorization": "Bearer k"}, ConstantContactRestClientBase::getOptions(opts).headers);
+    }
+
+    convertApi() {
+        hash<auto> opts = getOpts({"apikey": "k"});
+        assertEq("hash<string, int>", opts.headers.fullType());
+        assertEq({"X-Count": 1, "Authorization": "Bearer k"}, ConvertApiRestClientBase::getOptions(opts).headers);
     }
 
     deel() {

@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.display_name": {
+          "source": "ConvertAPI REST Connection",
+          "message": "ConvertAPI REST-Verbindung"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.short_desc": {
+          "source": "A connection to the ConvertAPI file conversion REST API",
+          "message": "Eine Verbindung zur ConvertAPI REST-API für Dateikonvertierung"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.desc": {
+          "source": "A connection to the [ConvertAPI](https://www.convertapi.com) file conversion REST API.\n\nConvertAPI converts files between more than 300 format pairs, including:\n- Office documents, spreadsheets and presentations to and from PDF\n- Web pages and HTML to PDF and images\n- PDF to images, office formats, text and PDF/A\n- PDF tools: merge, split, compress, protect, OCR, watermark and more",
+          "message": "Eine Verbindung zur [ConvertAPI](https://www.convertapi.com) REST-API für Dateikonvertierung.\n\nConvertAPI konvertiert Dateien zwischen mehr als 300 Formatpaaren, darunter:\n- Office-Dokumente, Tabellen und Präsentationen von und nach PDF\n- Webseiten und HTML nach PDF und in Bilder\n- PDF in Bilder, Office-Formate, Text und PDF/A\n- PDF-Tools: zusammenführen, aufteilen, komprimieren, schützen, OCR, Wasserzeichen und mehr"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.title": {
+          "source": "How to Get Your API Token",
+          "message": "So erhalten Sie Ihren API-Token"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.message.c2V0dXAtMQ.content": {
+          "source": "1. Sign up or log in at https://www.convertapi.com/a\n2. Open the **Authentication** page of your account\n3. Copy an API token (or create a new one) and paste it into the **API Token** field\n\n**Note:** each conversion consumes conversion credits; check your remaining balance in your ConvertAPI account.",
+          "message": "1. Registrieren Sie sich oder melden Sie sich an unter https://www.convertapi.com/a\n2. Öffnen Sie die Seite **Authentication** Ihres Kontos\n3. Kopieren Sie ein API-Token (oder erstellen Sie ein neues) und fügen Sie es in das Feld **API-Token** ein\n\n**Hinweis:** Jede Konvertierung verbraucht Konvertierungs-Credits; Ihr verbleibendes Guthaben sehen Sie in Ihrem ConvertAPI-Konto."
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.display_name": {
+          "source": "API Token",
+          "message": "API-Token"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.short_desc": {
+          "source": "ConvertAPI API token",
+          "message": "ConvertAPI API-Token"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.YXBpa2V5.desc": {
+          "source": "The ConvertAPI API token used for authentication; it is sent as a bearer token.\n\nCreate or copy an API token on the [Authentication page](https://www.convertapi.com/a/authentication) of your ConvertAPI account.",
+          "message": "Das ConvertAPI API-Token zur Authentifizierung; es wird als Bearer-Token gesendet.\n\nErstellen oder kopieren Sie ein API-Token auf der [Authentication-Seite](https://www.convertapi.com/a/authentication) Ihres ConvertAPI-Kontos."
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.short_desc": {
+          "source": "The ConvertAPI region that processes the requests",
+          "message": "Die ConvertAPI-Region, die die Anfragen verarbeitet"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.desc": {
+          "source": "The ConvertAPI region whose servers process the requests; the connection URL is derived from it.",
+          "message": "Die ConvertAPI-Region, deren Server die Anfragen verarbeiten; die Verbindungs-URL wird daraus abgeleitet."
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.display_name": {
+          "source": "Global",
+          "message": "Global"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmdsb2JhbA.desc": {
+          "source": "The global API endpoint https://v2.convertapi.com (the default)",
+          "message": "Der globale API-Endpunkt https://v2.convertapi.com (der Standardwert)"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.display_name": {
+          "source": "European Union",
+          "message": "Europäische Union"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmV1.desc": {
+          "source": "The API endpoint https://eu-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://eu-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.display_name": {
+          "source": "United Kingdom",
+          "message": "Vereinigtes Königreich"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVr.desc": {
+          "source": "The API endpoint https://uk-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://uk-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.display_name": {
+          "source": "United States",
+          "message": "Vereinigte Staaten"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOnVz.desc": {
+          "source": "The API endpoint https://us-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://us-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.display_name": {
+          "source": "Canada",
+          "message": "Kanada"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmNh.desc": {
+          "source": "The API endpoint https://ca-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://ca-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.display_name": {
+          "source": "Asia",
+          "message": "Asien"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmFz.desc": {
+          "source": "The API endpoint https://as-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://as-v2.convertapi.com"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.display_name": {
+          "source": "Australia",
+          "message": "Australien"
+        },
+        "connection.Q29udmVydEFwaVJlc3RDbGllbnQ.scheme.Q29udmVydEFwaVJlc3RDb25uZWN0aW9u.option.cmVnaW9u.allowed_values.c3RyaW5nOmF1.desc": {
+          "source": "The API endpoint https://au-v2.convertapi.com",
+          "message": "Der API-Endpunkt https://au-v2.convertapi.com"
+        }
+      }
+    }
+  }
+}

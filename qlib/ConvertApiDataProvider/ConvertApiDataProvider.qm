@@ -1,0 +1,403 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ConvertApiDataProvider module definition
+
+/*  ConvertApiDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) ConvertApiRestClient
+%requires json
+
+module ConvertApiDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for ConvertAPI file conversion";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new ConvertApiDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ConvertApiDataProvider::AppName,
+            "presentation_source_locale": "en",
+            "display_name": "ConvertAPI",
+            "short_desc": "ConvertAPI file conversion and PDF processing platform",
+            "desc": "[ConvertAPI](https://www.convertapi.com) converts files between more than 300 format pairs "
+                "and processes PDF files.\n\n"
+                "**Conversions**:\n"
+                "- Office documents, spreadsheets and presentations to and from PDF\n"
+                "- Web pages and HTML to PDF\n"
+                "- PDF to images, office formats, text and PDF/A\n"
+                "- Images, e-books, CAD drawings, e-mail messages and archives\n"
+                "- PDF tools: merge, split, compress, protect, OCR, watermark and more\n\n"
+                "**Actions**: `convert-file` runs any converter by its source and destination formats; the other "
+                "actions are shortcuts for common conversions.",
+            "scheme": "convertapi",
+            "logo": ConvertApiDataProvider::ConvertApiLogo,
+            "logo_file_name": "convertapi-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Documents,),
+        });
+
+        # ============================================================
+        # Generic Actions
+        # ============================================================
+
+        # convert-file
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConvertApiDataProvider::AppName,
+            "path": "/convert-file",
+            "action": "convert-file",
+            "display_name": "Convert a File",
+            "short_desc": "Convert files with any ConvertAPI converter",
+            "desc": "Converts files with any ConvertAPI converter, given by its source and destination formats.\n\n"
+                "**Formats**: select the `from` format first; the `to` list then shows the destination formats of "
+                "the converters for that source format.\n\n"
+                "**Input**: a `file` or a source `url`; converters that take several files (such as `pdf` to "
+                "`merge`) take `files` or `urls`, and a few converters take their input in `parameters` instead, "
+                "for example `data` to `qrcode` with `{\"Data\": \"https://www.convertapi.com\"}`.\n\n"
+                "**Parameters**: when both formats are selected, the parameters of the converter are added as "
+                "typed options, as ConvertAPI describes them; parameters can also be given in `parameters` by "
+                "their ConvertAPI names, which the `get-converter-info` action lists.\n\n"
+                "**Output**: the output files are returned as `FileData`, or as download URLs if `store_file` is "
+                "`True`.",
+            "action_code": DPAT_API,
+
+            # the formats select the converter, whose parameters are added as typed options when both are given
+            "data_dependent_options": True,
+
+            # the formats first, as the destination formats depend on the source format, then the input, then the
+            # converter parameters and the output options
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertRequestDataType::Fields{"from",}, {
+                    "structural_determinate": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertRequestDataType::Fields{"to",}, {
+                    "structural_determinate": True,
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertRequestDataType::Fields{"file", "url", "files", "urls"},
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertRequestDataType::Fields{"parameters",}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertRequestDataType::Fields - ("from", "to", "file", "url", "files", "urls",
+                    "parameters"),
+            ),
+            "output_type": ConvertApiConversionDataProviderBase::ResponseType,
+            "groups": ("Conversion",),
+        });
+
+        # get-converter-info
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConvertApiDataProvider::AppName,
+            "path": "/get-converter-info",
+            "action": "get-converter-info",
+            "display_name": "Get Converter Information",
+            "short_desc": "Get the description and parameters of a converter",
+            "desc": "Returns the description and the parameters of a ConvertAPI converter, given by its source and "
+                "destination formats.\n\n"
+                "Use it to find the parameter names and allowed values for the `parameters` field of the "
+                "`convert-file` action.",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiGetConverterInfoRequestDataType::Fields),
+            "output_type": ConvertApiGetConverterInfoDataProvider::ResponseType,
+            "groups": ("Converters",),
+        });
+
+        # ============================================================
+        # Office Actions
+        # ============================================================
+
+        # convert-word-to-pdf
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConvertApiDataProvider::AppName,
+            "path": "/convert-word-to-pdf",
+            "action": "convert-word-to-pdf",
+            "display_name": "Convert Word to PDF",
+            "short_desc": "Convert a Word document (DOC or DOCX) to PDF",
+            "desc": "Converts a Word document (`doc` or `docx`) to PDF with the layout of the original document.\n\n"
+                "Supports page ranges, protected documents, bookmarks from headings and PDF/A output.",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertWordToPdfRequestDataType::Fields{"file", "url", "PageRange"}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertWordToPdfRequestDataType::Fields - ("file", "url", "PageRange"),
+            ),
+            "output_type": ConvertApiConversionDataProviderBase::ResponseType,
+            "groups": ("Office",),
+        });
+
+        # convert-excel-to-pdf
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConvertApiDataProvider::AppName,
+            "path": "/convert-excel-to-pdf",
+            "action": "convert-excel-to-pdf",
+            "display_name": "Convert Excel to PDF",
+            "short_desc": "Convert an Excel workbook (XLS or XLSX) to PDF",
+            "desc": "Converts an Excel workbook (`xls` or `xlsx`) to PDF.\n\n"
+                "Convert all worksheets, the active worksheet or a worksheet by name; fit sheets to the page "
+                "width and create PDF/A output.",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertExcelToPdfRequestDataType::Fields{"file", "url"}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertExcelToPdfRequestDataType::Fields - ("file", "url"),
+            ),
+            "output_type": ConvertApiConversionDataProviderBase::ResponseType,
+            "groups": ("Office",),
+        });
+
+        # convert-powerpoint-to-pdf
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConvertApiDataProvider::AppName,
+            "path": "/convert-powerpoint-to-pdf",
+            "action": "convert-powerpoint-to-pdf",
+            "display_name": "Convert PowerPoint to PDF",
+            "short_desc": "Convert a PowerPoint presentation (PPT or PPTX) to PDF",
+            "desc": "Converts a PowerPoint presentation (`ppt` or `pptx`) to PDF.\n\n"
+                "Supports slide ranges, hidden slides, speaker notes and PDF/A output.",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertPowerPointToPdfRequestDataType::Fields{"file", "url", "PageRange"}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertPowerPointToPdfRequestDataType::Fields - ("file", "url", "PageRange"),
+            ),
+            "output_type": ConvertApiConversionDataProviderBase::ResponseType,
+            "groups": ("Office",),
+        });
+
+        # ============================================================
+        # Web Actions
+        # ============================================================
+
+        # convert-html-to-pdf
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConvertApiDataProvider::AppName,
+            "path": "/convert-html-to-pdf",
+            "action": "convert-html-to-pdf",
+            "display_name": "Convert HTML to PDF",
+            "short_desc": "Convert a web page or an HTML file to PDF",
+            "desc": "Converts a web page or an HTML file to PDF.\n\n"
+                "- A source `url` is rendered as a web page in a browser, with its scripts, styles and images\n"
+                "- A `file` is converted as an HTML document\n\n"
+                "Supports page size, orientation, margins, the CSS media type and a delay for pages that load "
+                "content late.",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertHtmlToPdfRequestDataType::Fields{"url", "file"}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertHtmlToPdfRequestDataType::Fields - ("url", "file"),
+            ),
+            "output_type": ConvertApiConversionDataProviderBase::ResponseType,
+            "groups": ("Web",),
+        });
+
+        # ============================================================
+        # PDF Actions
+        # ============================================================
+
+        # convert-pdf-to-image
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConvertApiDataProvider::AppName,
+            "path": "/convert-pdf-to-image",
+            "action": "convert-pdf-to-image",
+            "display_name": "Convert PDF to Images",
+            "short_desc": "Convert the pages of a PDF to JPG, PNG, TIFF or WebP images",
+            "desc": "Converts the pages of a PDF to images: one image file for each page, or one multi-page TIFF "
+                "file.\n\n"
+                "Choose the image `format` and resolution, and optionally a page range; the other options "
+                "depend on the format.",
+            "action_code": DPAT_API,
+
+            # the image formats take different parameters, so the options depend on the format
+            "data_dependent_options": True,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertPdfToImageRequestDataType::Fields{"file", "url"}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertPdfToImageRequestDataType::Fields{"format",}, {
+                    "structural_determinate": True,
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiConvertPdfToImageRequestDataType::Fields - ("file", "url", "format"),
+            ),
+            "output_type": ConvertApiConversionDataProviderBase::ResponseType,
+            "groups": ("PDF",),
+        });
+
+        # merge-pdf
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConvertApiDataProvider::AppName,
+            "path": "/merge-pdf",
+            "action": "merge-pdf",
+            "display_name": "Merge PDF Files",
+            "short_desc": "Merge several PDF files into one PDF",
+            "desc": "Merges several PDF files into one PDF, in the order given.\n\n"
+                "Give the PDF files in `files` or their URLs in `urls`; optionally add a bookmark for each "
+                "merged file.",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiMergePdfRequestDataType::Fields{"files", "urls"}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiMergePdfRequestDataType::Fields - ("files", "urls"),
+            ),
+            "output_type": ConvertApiConversionDataProviderBase::ResponseType,
+            "groups": ("PDF",),
+        });
+
+        # compress-pdf
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ConvertApiDataProvider::AppName,
+            "path": "/compress-pdf",
+            "action": "compress-pdf",
+            "display_name": "Compress PDF",
+            "short_desc": "Compress a PDF to reduce its size",
+            "desc": "Compresses a PDF to reduce its size, for example for e-mail or web publishing.\n\n"
+                "Choose a `Preset` from lossless compression to low-resolution images for the smallest files.",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiCompressPdfRequestDataType::Fields{"file", "url", "Preset"}, {
+                    "preselected": True,
+                },
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ConvertApiCompressPdfRequestDataType::Fields - ("file", "url", "Preset"),
+            ),
+            "output_type": ConvertApiConversionDataProviderBase::ResponseType,
+            "groups": ("PDF",),
+        });
+    };
+}
+
+/** @mainpage ConvertApiDataProvider Module
+
+    @tableofcontents
+
+    @section convertapidataproviderintro ConvertApiDataProvider Module Introduction
+
+    The %ConvertApiDataProvider module provides a data provider API for the
+    <a href="https://www.convertapi.com">ConvertAPI</a> file conversion platform.
+
+    To use this module, use \c "%requires ConvertApiDataProvider" in your code.
+
+    All the public symbols in the module are defined in the ConvertApiDataProvider namespace.
+
+    The main classes are:
+    - @ref ConvertApiDataProvider::ConvertApiDataProvider "ConvertApiDataProvider":
+      the root data provider for ConvertAPI
+    - @ref ConvertApiDataProvider::ConvertApiDataProviderFactory "ConvertApiDataProviderFactory":
+      the data provider factory for ConvertAPI
+
+    The actions are:
+    |!Action|!Converter|!Description
+    |\c convert-file|any|converts files with any converter, given by its source and destination formats
+    |\c get-converter-info|-|returns the description and the parameters of a converter
+    |\c convert-word-to-pdf|<tt>docx</tt> to <tt>pdf</tt>|converts a Word document to PDF
+    |\c convert-excel-to-pdf|<tt>xlsx</tt> to <tt>pdf</tt>|converts an Excel workbook to PDF
+    |\c convert-powerpoint-to-pdf|<tt>pptx</tt> to <tt>pdf</tt>|converts a PowerPoint presentation to PDF
+    |\c convert-html-to-pdf|<tt>html</tt> to <tt>pdf</tt>|converts a web page or an HTML file to PDF
+    |\c convert-pdf-to-image|<tt>pdf</tt> to <tt>jpg</tt>, <tt>png</tt>, <tt>tiff</tt> or <tt>webp</tt>|converts \
+        the pages of a PDF to images
+    |\c merge-pdf|<tt>pdf</tt> to <tt>merge</tt>|merges several PDF files into one PDF
+    |\c compress-pdf|<tt>pdf</tt> to <tt>compress</tt>|compresses a PDF
+
+    The source and destination formats of the \c convert-file and \c get-converter-info actions offer the
+    converters of the ConvertAPI \c info endpoint as reference data (\c source_formats and
+    \c destination_formats); the converter list is cached for one hour.
+
+    The options of the \c convert-file action depend on the formats: when both are given, the parameters of the
+    converter are added as typed options, built from ConvertAPI's description of the converter in the \c info
+    endpoint (see @ref ConvertApiDataProvider::ConvertApiConverterParameters "ConvertApiConverterParameters"), which
+    is cached for one hour.  A request is checked with the same types, and its converter parameters can be given in
+    their own fields or in \c parameters.  The shortcut actions type all the parameters of their converters, except
+    those that the module sets itself (the input, the output and the authentication); the options of
+    \c convert-pdf-to-image depend on the image format, as the image converters take different parameters.
+
+    The actions are written by hand rather than generated from ConvertAPI's OpenAPI description
+    (<tt>https://v2.convertapi.com/info/openapi</tt>, one operation for each of more than 300 converters): the module
+    offers a generic action for every converter and a curated set of shortcut actions with typed options, and the
+    description declares the \c File parameter as binary data, although ConvertAPI also takes a URL in it, which
+    generated actions could not offer.
+
+    The connection's \c region option selects the ConvertAPI region that processes the requests (see
+    @ref ConvertApiRestClient::ConvertApiRestClientBase::RegionUrls).
+
+    The output files of a conversion are returned in the \c Files list of the response: as binary \c FileData by
+    default, or as a download \c Url when \c store_file is \c True.
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+%requires ConvertApiDataProvider
+
+ConvertApiDataProvider convertapi({"convertapirestclient_options": {"apikey": ENV.CONVERTAPI_TOKEN}});
+hash<auto> result = convertapi.getChildProviderEx("convert-file").doRequest({
+    "from": "docx",
+    "to": "pdf",
+    "url": "https://cdn.convertapi.com/public/files/demo.docx",
+    "PageRange": "1-2",
+});
+File f();
+f.open2("demo.pdf", O_CREAT | O_WRONLY | O_TRUNC);
+f.write(result.Files[0].FileData);
+    @endcode
+
+    @section convertapidataproviderrelnotes Release Notes
+
+    @subsection convertapidataproviderv1_0 ConvertApiDataProvider v1.0
+    - initial release
+*/
+
