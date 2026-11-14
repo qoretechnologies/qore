@@ -2731,6 +2731,8 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
         // inline into the function, which then owns those locals' lifecycle as it does for any other local
         std::unordered_set<const void*> own_locals;
         std::vector<const QoreIRFunction*> pending;
+        // each handler function once: they can be shared (#6087)
+        std::unordered_set<const QoreIRFunction*> visited_handlers;
         pending.push_back(&func);
         while (!pending.empty()) {
             const QoreIRFunction* f = pending.back();
@@ -2742,7 +2744,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                     }
                     if (inst_ptr->opcode == QoreIROpcode::OnBlockExit) {
                         const auto* obe = static_cast<const QoreIROnBlockExitInstruction*>(inst_ptr.get());
-                        if (obe->handler_ir) {
+                        if (obe->handler_ir && visited_handlers.insert(obe->handler_ir.get()).second) {
                             pending.push_back(obe->handler_ir.get());
                         }
                         continue;
@@ -12238,6 +12240,8 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
         llvm::Module& module, std::string& error) {
     QoreIRToLLVM nested_lowering(ctx);
     nested_lowering.setSymbolName(name);
+    // the native functions of the handlers are shared with the nested function's handlers (#6087)
+    nested_lowering.shared_obe_handler_fns = &getObeHandlerFns();
     if (aot_mode) {
         // the nested function shares the AOT context of the function being lowered: its slot tables
         nested_lowering.setAOTMode(aot_slots);
@@ -35028,8 +35032,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return false;
             }
             // the handler body is a native function of its own in this module, emitted once for each handler
+            // function, which the handlers of the function and of its handlers can share (#6087)
             llvm::Function* handler_fn;
             {
+                auto& obe_handler_fns = getObeHandlerFns();
                 auto i = obe_handler_fns.find(sinst->handler_ir.get());
                 if (i != obe_handler_fns.end()) {
                     handler_fn = i->second;

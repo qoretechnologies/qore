@@ -2252,6 +2252,15 @@ private:
     unsigned obe_handler_count = 0;
     //! The native functions emitted for the on_block_exit handlers of the function being lowered, by handler IR
     std::unordered_map<const QoreIRFunction*, llvm::Function*> obe_handler_fns;
+    //! The native functions of the handlers of the function whose handler or helper this lowering lowers, if any
+    /** A handler function can be shared by the handlers of a function and of its handlers (#6087): it is emitted
+        once in the module.
+    */
+    std::unordered_map<const QoreIRFunction*, llvm::Function*>* shared_obe_handler_fns = nullptr;
+    //! Returns the native functions emitted for the handlers in the module (see shared_obe_handler_fns)
+    std::unordered_map<const QoreIRFunction*, llvm::Function*>& getObeHandlerFns() {
+        return shared_obe_handler_fns ? *shared_obe_handler_fns : obe_handler_fns;
+    }
 
     //! Lowers an IR function that the function being lowered uses to a native function of its own in the module
     /** Used for the helpers of background expressions and the bodies of on_block_exit handlers.  The nested function

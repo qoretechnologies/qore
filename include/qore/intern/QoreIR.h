@@ -3641,7 +3641,7 @@ public:
     }
 
     //! Constructor for deserialized case (no AST statement available)
-    QoreIROnBlockExitInstruction(obe_type_e n_obe_type, std::unique_ptr<QoreIRFunction> n_handler_ir)
+    QoreIROnBlockExitInstruction(obe_type_e n_obe_type, std::shared_ptr<QoreIRFunction> n_handler_ir)
             : QoreIRInstruction(QoreIROpcode::OnBlockExit, inst_class_id), obe_type(n_obe_type),
               handler_ir(std::move(n_handler_ir)) {
     }
@@ -3651,7 +3651,13 @@ public:
     obe_type_e obe_type = OBE_Unconditional;
     //! Compiled handler body; required for IR/JIT/AOT execution.
     //! Missing handler IR is a lowering/metadata error, not an AST fallback.
-    std::unique_ptr<QoreIRFunction> handler_ir;
+    /** Shared: the instructions of the copies of a handler's statement that its enclosing handlers' bodies give
+        when they are lowered both inline and out of line have one handler function, as its code is the same
+        (QoreIRLowering::compileBlockHandlerIRs(), #6087).  A walk of the handlers of a function that visits each
+        handler function once must therefore remember the ones it has visited, or it takes time exponential in the
+        nesting of the handlers.
+    */
+    std::shared_ptr<QoreIRFunction> handler_ir;
     //! Transient scope ownership used by transforms that may split a function.
     /** A zero value means that ownership metadata is unavailable. This field
      *  is intentionally not part of the persistent IR format.
@@ -4679,7 +4685,11 @@ public:
 
     //! Return the implicit argv/self contexts required by this function.
     //! Opaque AST callbacks and closure captures are handled conservatively.
-    ContextUsage getContextUsage(const LocalVar* argvid, const LocalVar* selfid) const;
+    /** @param visited_handlers the handler functions already walked, which are skipped (handler functions can be
+        shared, #6087); null for a walk of its own
+    */
+    ContextUsage getContextUsage(const LocalVar* argvid, const LocalVar* selfid,
+            std::unordered_set<const QoreIRFunction*>* visited_handlers = nullptr) const;
 
     //! Returns true if all body locals are IR-only (managed by LLVM allocas,
     //! never accessed via thread-local stack).  When true, callers can skip
