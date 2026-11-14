@@ -6010,7 +6010,9 @@ void QoreIRToLLVM::emitExceptionExitCatchUnwind(llvm::Module& module) {
     // closes nothing more.  A throw or rethrow statement leaving the frame closes such a catch block itself (see
     // QoreIRLowering::catchScopesClosedByThrow()), and a synthetic rethrow leaving the frame is in none (such a catch
     // block has no blocks or statements of its own exception paths), so their exits do not call it
-    if (!catch_depth_saved) {
+    // only a function with such a catch block whose statements can raise needs it (see
+    // QoreIRFunction::catch_exit_unwind)
+    if (!catch_depth_saved || !current_ir_func || !current_ir_func->catch_exit_unwind) {
         return;
     }
     auto helper = module.getOrInsertFunction("qore_rt_catch_unwind",

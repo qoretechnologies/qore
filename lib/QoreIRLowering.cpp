@@ -1695,10 +1695,15 @@ void QoreIRLowering::emitCatchCloseForThrow(const QoreProgramLocation* loc) {
     gets an exception edge to it, and the exit itself is code of its own, in an exception region of the frame too.  A
     catch block whose statements are all simple ones, with no blocks, locals or handlers that an exception leaves, has
     none: a throw, rethrow or assertion in it closes it, after releasing its catch variable, before it raises the
-    exception (catchScopesClosedByThrow()), and one that a call raises (or a thread_exit) closes it at runtime where
-    the exception lands in the frame (a landing pad, the handlers of a scope: #5969) or where it leaves the frame
-    (QoreIRInterpreter::execute()'s unwind and the exception exits of native code), before the locals of the frame are
-    released.
+    exception (catchScopesClosedByThrow()).  When a call raises an exception in it (or it runs a thread_exit), the
+    exception path of an enclosing block (see lowerStatementBlock()), the landing pad of an enclosing try statement
+    or another catch block's exit block releases its catch variable and closes it; with none of them, where the
+    exception leaves the frame (QoreIRInterpreter::execute()'s unwind and the exception exits of native code), the
+    catch block is closed before the frame's locals are released, and its catch variable is released with them.  A
+    block with handlers and no exception path of its own (no locals in the blocks in it, and no exception region
+    around it) closes the catch block before its handlers run (the scope's catch scope close, #5969), but its catch
+    variable, which holds the exception's information, is released only after them, with the frame's locals: the
+    objects of the exception's argument are destroyed after those handlers, unlike in the AST interpreter.
 */
 static bool qore_ir_catch_block_needs_exit(const StatementBlock* block) {
     if (block->hasOnBlockExit()) {
@@ -1716,6 +1721,42 @@ static bool qore_ir_catch_block_needs_exit(const StatementBlock* block) {
                 && !dynamic_cast<const DebugStatement*>(stmt)) {
             return true;
         }
+    }
+    return false;
+}
+
+//! Returns true if a statement of a catch block without an exit block can raise an exception that leaves it without
+//! closing it (#5968)
+/** A break, continue or return without a value closes it, as do a throw or rethrow statement with arguments that need
+    no evaluation, which close it before raising (QoreIRLowering::catchScopesClosedByThrow()); a return of a value
+    that needs no evaluation raises nothing.
+*/
+static bool qore_ir_simple_catch_block_can_raise(const StatementBlock* block) {
+    for (const AbstractStatement* stmt : block->getStatements()) {
+        if (!stmt || dynamic_cast<const BreakStatement*>(stmt) || dynamic_cast<const ContinueStatement*>(stmt)) {
+            continue;
+        }
+        if (auto* ret = dynamic_cast<const ReturnStatement*>(stmt)) {
+            QoreValue expr = ret->getExpression();
+            if (!expr || !expr.needsEval()) {
+                continue;
+            }
+            return true;
+        }
+        if (auto* thr = dynamic_cast<const ThrowStatement*>(stmt)) {
+            if (!thr->getArgs().needsEval()) {
+                continue;
+            }
+            return true;
+        }
+        if (auto* rethr = dynamic_cast<const RethrowStatement*>(stmt)) {
+            QoreValue args = rethr->getArgs();
+            if (!args || args.isNothing() || !args.needsEval()) {
+                continue;
+            }
+            return true;
+        }
+        return true;
     }
     return false;
 }
@@ -4122,6 +4163,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             anchor_catch_stack.push_back({catch_exit_block, catch_cleanup_depth, {}, false});
         }
         catch_exit_stack.push_back({catch_exit_block != nullptr, catch_var});
+        // the exception exits of native code close a catch block without an exit block that a statement raising an
+        // exception, or a thread_exit, leaves with the frame (see QoreIRToLLVM::emitExceptionExitCatchUnwind())
+        if (!catch_exit_block && try_stmt->getCatchBlock()
+                && qore_ir_simple_catch_block_can_raise(try_stmt->getCatchBlock())) {
+            builder.getFunction()->catch_exit_unwind = true;
+        }
         // a catch block without an exit block whose statements' exceptions go to the exception path of an enclosing
         // block is left there, before that block's handlers and locals (see lowerStatementBlock())
         if (!catch_exit_block && try_stmt->getCatchBlock() && !anchor_catch_stack.empty()

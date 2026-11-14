@@ -1651,20 +1651,8 @@ struct QoreIRDebugNest {
     }
 };
 
-struct IRCatchEntry {
-    QoreException* caught;  // the caught exception
-    QoreException* saved;   // the previous td->catchException value
-    //! the number of scopes open when the catch block was entered (those that enclose the try statement): the
-    //! catch block is in every scope below that depth, and is left when one of them is (#5969)
-    size_t scope_depth;
-};
-
 struct IRCallFrame {
     std::vector<QoreValue> values;
-    //! the catch blocks open in the frame, innermost last (CatchException, CatchCleanup); pooled with the frame, and
-    //! reachable from the unwind of the frame, which closes those that an exception leaving the frame leaves before
-    //! the locals are released (#5968)
-    std::vector<IRCatchEntry> catch_exception_stack;
     IRCleanupSlots cleanup;
     // Remaining uses for borrowed SSA values. Indexed by value ID so hot
     // list-element reads avoid hash-table traffic; storage is pooled per frame.
@@ -7818,6 +7806,14 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_dismissed_exit(QoreIRDebugFrameStat
 }
 
 
+struct IRCatchEntry {
+    QoreException* caught;  // the caught exception
+    QoreException* saved;   // the previous td->catchException value
+    //! the number of scopes open when the catch block was entered (those that enclose the try statement): the
+    //! catch block is in every scope below that depth, and is left when one of them is (#5969)
+    size_t scope_depth;
+};
+
 //! Closes the catch blocks opened since the try statement of a catch block's exit block began (#5968)
 /** Returns false if \a inst is the CatchCleanup of no exit block, which closes the innermost catch block. */
 static QORE_INTERN_NOINLINE bool qore_ir_catch_exit_cleanup(const QoreIRFunction& func, const QoreIRInstruction* inst,
@@ -8267,7 +8263,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     };
     auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
-    auto& catch_exception_stack = frame.catch_exception_stack;
+    std::vector<IRCatchEntry> catch_exception_stack;
     // RAII cleanup for catch_exception_stack — ensures proper cleanup on all exit paths
     struct CatchStackCleanup {
         std::vector<IRCatchEntry>& stack;
@@ -8374,6 +8370,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 }
                 std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
             }
+        }
+        // the frame is left: the catch blocks that no scope closed are left with it (#5968)
+        if (scope_stack.empty()) {
+            qore_ir_close_catch_scopes(catch_exception_stack, 0, xsink);
         }
     };
 
@@ -9413,8 +9413,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         // the catch blocks that the exception leaves with the frame and that no scope closed (a catch block with
         // no exit block, in no scope: see the lowering of TryStatement) are left before the locals and values of the
-        // frame are released, as the AST interpreter leaves a catch block before the blocks around it (#5968)
-        qore_ir_close_catch_scopes(frame.catch_exception_stack, 0, xsink);
+        // frame are released, as the AST interpreter leaves a catch block before the blocks around it (#5968); done
+        // by fireScopeExits() with no scope left, which has the frame's catch stack
+        fireScopeExits(0);
         // handlers registered outside of any scope, if any, run as the remaining handlers of the frame
         if (!frame.on_block_exit_handlers.empty()) {
             executeOnBlockExitHandlers(frame.on_block_exit_handlers, xsink, &frame.locals_slot_cache.vector(),
