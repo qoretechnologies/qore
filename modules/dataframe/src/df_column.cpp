@@ -361,6 +361,21 @@ bool dataFrameIntDecimalSchema(const std::vector<const ColumnData*>& cols, bool&
     return true;
 }
 
+bool dataFrameIntDecimalTypes(const std::vector<const ColumnData*>& cols) {
+    bool any_int = false;
+    bool any_decimal = false;
+    for (const ColumnData* cd : cols) {
+        if (cd->type == ColumnType::INT64) {
+            any_int = true;
+        } else if (dataFrameIsDecimalColumn(*cd)) {
+            any_decimal = true;
+        } else {
+            return false;
+        }
+    }
+    return any_int && any_decimal;
+}
+
 QoreValue dataFrameDecimalValue(const ColumnData& cd, int64_t row, ExceptionSink* xsink) {
     if (cd.isNull(row)) {
         return QoreValue();

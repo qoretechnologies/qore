@@ -438,9 +438,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         const ColumnData& rk = *other->columns[right_key_indices[i]].data;
         ColumnType lt = lk.type;
         typed_keys[i] = lt == rk.type && lt != ColumnType::AUTO;
-        bool dec_has_schema;
-        QoreColumnarTypeDescriptor dec_schema;
-        if (!typed_keys[i] && dataFrameIntDecimalSchema({&lk, &rk}, dec_has_schema, dec_schema)) {
+        if (!typed_keys[i] && dataFrameIntDecimalTypes({&lk, &rk})) {
             typed_keys[i] = KEY_INT_AS_NUMBER;
         }
     }

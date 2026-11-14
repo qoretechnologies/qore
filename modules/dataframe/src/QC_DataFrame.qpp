@@ -809,7 +809,8 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
     that holds any value: an int and a float, or an int and a string, never match (cast a key column to match
     values of different types), while an int key column matches the ints of a column that holds any value, and an
     \c int64 key column the equal numbers of a decimal key column (the key column of a right or outer join of the
-    two is a decimal column, in which an \c int64 column counts as decimal(19, 0) and its ints are numbers).  A key
+    two is a decimal column, in which an \c int64 column counts as decimal(19, 0) and its ints are numbers, or,
+    beyond 38 digits, a column of the exact values with no schema, which cannot be exported).  A key
     column of a right or outer join whose left and right key columns differ in type holds any value, with no schema
     (a decimal and a float key column, for example), and cannot be exported to Arrow or Parquet (toArrowIpc() and
     writeParquet() raise \c DATAFRAME-IO-ERROR); one whose key columns have the same type gets a schema that holds

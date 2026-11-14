@@ -453,6 +453,10 @@ static inline bool dataFrameIsDecimalColumn(const ColumnData& cd) {
 DLLLOCAL bool dataFrameIntDecimalSchema(const std::vector<const ColumnData*>& cols, bool& has_schema,
         QoreColumnarTypeDescriptor& schema);
 
+//! Returns true if the columns are int64 and decimal columns, with at least one of each, with no scan of their
+//! cells (qore#6144)
+DLLLOCAL bool dataFrameIntDecimalTypes(const std::vector<const ColumnData*>& cols);
+
 //! Returns a value of a column merged into a decimal column (qore#6144): an int of an int64 column as a number,
 //! which holds it exactly, and any other value as it is, referenced
 DLLLOCAL QoreValue dataFrameDecimalValue(const ColumnData& cd, int64_t row, ExceptionSink* xsink);
