@@ -2608,6 +2608,9 @@ DLLLOCAL bool qore_program_has_module_lifetime(const QoreProgram* pgm);
 //! see qore_thread_intern.h
 DLLLOCAL bool qore_module_lifetime_active();
 
+//! Returns a new number for qore_class_private::allocation_id (never 0)
+DLLLOCAL uint64_t qore_class_next_allocation_id();
+
 class qore_class_private {
 public:
     template <bool Lexical, typename... Args>
@@ -5064,8 +5067,23 @@ public:
         //printd(5, "class '%s' set to final\n", qc.getName());
     }
 
+    //! Returns a number that identifies this allocation of the class data: no other class data, before or after, has it
+    /** A copy of a class (in another Program) has the class ID of the original, and the address of class data that has
+        been freed can be given to another class; this number is unique for each qore_class_private (QoreClass objects
+        that share the private data share it), so a cache keyed on it cannot take another class for one that it has
+        seen (see ParseObjectMethodReferenceNode::makeReference())
+    */
+    DLLLOCAL static uint64_t getAllocationId(const QoreClass& qc) {
+        return qc.priv->allocation_id;
+    }
+
 protected:
         DLLLOCAL ~qore_class_private();
+
+private:
+    //! the unique number of this allocation of the class (see getAllocationId()); the last member, so that adding it
+    //! does not move the others
+    const uint64_t allocation_id = qore_class_next_allocation_id();
 };
 
 //! Holds the Program that user code runs in while the calling thread runs it: the source Program of a class or the
