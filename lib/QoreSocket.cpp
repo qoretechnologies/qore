@@ -432,6 +432,64 @@ static int qore_socket_set_raw_error(int rc) {
 #endif
 }
 
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+std::atomic<int> qore_dbg_connect_error_after_so_error_read{0};
+
+namespace {
+//! The socket state that qore_dbg_connect_error_after_so_error_read models during one check of a connect
+struct QoreSocketDbgConnectFailure {
+    //! the descriptor whose connect fails after its pending error was read as 0
+    int fd;
+    //! the connect's error, pending in SO_ERROR until it is read
+    int err;
+};
+
+//! The connect that fails during the calling thread's check of a connect; fd < 0 if none
+/** Set and cleared within one call of qore_socket_check_connect_ready(), which reads it only in its own thread
+*/
+thread_local QoreSocketDbgConnectFailure qore_socket_dbg_connect_failure = {-1, 0};
+
+//! Ends the connect failure that the hook models when the check of the connect returns
+struct QoreSocketDbgConnectFailureScope {
+    DLLLOCAL ~QoreSocketDbgConnectFailureScope() {
+        qore_socket_dbg_connect_failure = {-1, 0};
+    }
+};
+}
+#endif
+
+//! Reads the pending error of a socket (SO_ERROR), which the read clears
+/** @return 0 if read (in @p val), QORE_SOCKET_ERROR with the error in errno (WSAGetLastError() on Windows) if not
+*/
+static int qore_socket_read_pending_error(int fd, int& val) {
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    if (qore_socket_dbg_connect_failure.fd >= 0 && qore_socket_dbg_connect_failure.fd == fd) {
+        // the connect's error is pending, as the kernel keeps it, until it is read
+        val = qore_socket_dbg_connect_failure.err;
+        qore_socket_dbg_connect_failure.err = 0;
+        return 0;
+    }
+#endif
+    val = 0;
+    socklen_t lon = sizeof(val);
+    return getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon);
+}
+
+//! Makes the zero-byte send that confirms the connection of a nonblocking connect
+/** @return 0 if sent, -1 with the error in errno (WSAGetLastError() on Windows) if not
+*/
+static int qore_socket_send_connect_probe(int fd) {
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    if (qore_socket_dbg_connect_failure.fd >= 0 && qore_socket_dbg_connect_failure.fd == fd) {
+        // as on Darwin: the connect's failure has marked the socket unable to send, which the send reports before it
+        // checks the pending error
+        errno = EPIPE;
+        return -1;
+    }
+#endif
+    return ::send(fd, nullptr, 0, 0);
+}
+
 // returns 0 = connected, 1 = still in progress, -1 = error with the connect's error in errno (WSAGetLastError() on
 // Windows)
 int qore_socket_confirm_connect(int fd) {
@@ -439,7 +497,7 @@ int qore_socket_confirm_connect(int fd) {
     // where poll() may report writable readiness before connect completion.
     unsigned loop = 0;
     while (true) {
-        int rc = ::send(fd, nullptr, 0, 0);
+        int rc = qore_socket_send_connect_probe(fd);
         if (!rc) {
             return 0;
         }
@@ -461,9 +519,8 @@ int qore_socket_confirm_connect(int fd) {
         // that was refused or that timed out, as the failure marks the socket unable to send before the send
         // checks the pending error), while the connect's own error is still pending in SO_ERROR
         int raw = sock_get_raw_error();
-        int val = 0;
-        socklen_t lon = sizeof(val);
-        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon) != QORE_SOCKET_ERROR && val) {
+        int val;
+        if (qore_socket_read_pending_error(fd, val) != QORE_SOCKET_ERROR && val) {
             raw = val;
         }
         qore_socket_set_raw_error(raw);
@@ -474,12 +531,13 @@ int qore_socket_confirm_connect(int fd) {
 // returns 0 = connected, 1 = still in progress, -1 = error with the connect's error in errno (WSAGetLastError() on
 // Windows)
 static int qore_socket_check_connect_ready(int fd) {
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    QoreSocketDbgConnectFailureScope dbg_failure_scope;
+#endif
     unsigned loop = 0;
     int val;
     while (true) {
-        val = 0;
-        socklen_t lon = sizeof(val);
-        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon) != QORE_SOCKET_ERROR) {
+        if (qore_socket_read_pending_error(fd, val) != QORE_SOCKET_ERROR) {
             break;
         }
         int e = sock_get_error();
@@ -501,6 +559,16 @@ static int qore_socket_check_connect_ready(int fd) {
         }
         return -1;
     }
+
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+    {
+        int err = qore_dbg_connect_error_after_so_error_read.load(std::memory_order_relaxed);
+        if (err) {
+            // the connect fails now, after its pending error was read as 0
+            qore_socket_dbg_connect_failure = {fd, err};
+        }
+    }
+#endif
 
     return qore_socket_confirm_connect(fd);
 }

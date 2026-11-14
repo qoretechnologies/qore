@@ -17144,6 +17144,201 @@ static QoreValue f_dbg_run_llvm_target_init_tests(const QoreListNode* params, Ru
 }
 #endif
 
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+//! A connect that fails after its pending error was read as 0 reports the connect's own error, never EPIPE (#6119)
+/** The check of a nonblocking connect reads the pending error (SO_ERROR), then confirms the connection with a
+    zero-byte send.  When the connect fails between the two system calls (refused, or timed out), Darwin fails the
+    send with EPIPE, as the failure marks the socket unable to send before the send checks the pending error, and the
+    connect was reported as "Broken pipe" (seen in ut_manager_new_connection_closed_before_reservation() on macOS).
+    The hook qore_dbg_connect_error_after_so_error_read makes this interleaving happen at every check, on every
+    platform: the send fails with EPIPE, and the connect's error stays pending until it is read.  Each case connects
+    to a listening socket, which the connect reaches without the hook (checked first), so the failure the hook
+    models is the only one.
+*/
+class ConnectErrorAfterSoErrorReadTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runRealRefusal(c);
+        runInet(c);
+        runHappyEyeballs(c);
+        runUnix(c);
+    }
+
+private:
+    //! Makes every check of a connect in its scope fail with an error after the pending error was read as 0
+    struct HookHelper {
+        DLLLOCAL explicit HookHelper(int err) {
+            qore_dbg_connect_error_after_so_error_read.store(err, std::memory_order_relaxed);
+        }
+
+        DLLLOCAL ~HookHelper() {
+            qore_dbg_connect_error_after_so_error_read.store(0, std::memory_order_relaxed);
+        }
+
+        HookHelper(const HookHelper&) = delete;
+        HookHelper& operator=(const HookHelper&) = delete;
+    };
+
+    //! Checks the exception of a failed connect: the connect's error @p err is reported, not the send's EPIPE
+    static void checkError(UnitTestCounters& c, const char* what, int rc, QoreSocket& client, ExceptionSink& xsink,
+            int err) {
+        std::string w(what);
+        UT_ASSERT_EQ(c, -1, rc, (w + ": the connect fails").c_str());
+        UT_ASSERT(c, xsink.isException(), (w + ": the connect raises an exception").c_str());
+        UT_ASSERT(c, !client.isOpen(), (w + ": the socket is not open after the failed connect").c_str());
+        if (!xsink.isException()) {
+            return;
+        }
+        QoreStringValueHelper ex_err(xsink.getExceptionErr());
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        printf("  %s: %s: %s\n", what, ex_err->c_str(), desc->c_str());
+        UT_ASSERT(c, !strcmp(ex_err->c_str(), "SOCKET-CONNECT-ERROR"),
+            (w + ": the error is SOCKET-CONNECT-ERROR: " + ex_err->c_str()).c_str());
+        UT_ASSERT(c, strstr(desc->c_str(), strerror(err)) != nullptr,
+            (w + ": the description has the connect's error (" + strerror(err) + "): " + desc->c_str()).c_str());
+        UT_ASSERT(c, !strstr(desc->c_str(), strerror(EPIPE)),
+            (w + ": the description does not have the send's error (" + strerror(EPIPE) + "): "
+                + desc->c_str()).c_str());
+        xsink.clear();
+    }
+
+    //! Listens on a loopback address; returns the port or -1
+    static int listenInet(QoreSocket& listener, const char* addr, int family, const char* port,
+            ExceptionSink& xsink) {
+        int rc = listener.bindINET(addr, port, true, family, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener.listen(8);
+        }
+        if (rc || xsink) {
+            xsink.clear();
+            return -1;
+        }
+        return listener.getPort();
+    }
+
+    //! A connect refused by the system reports ECONNREFUSED without the hook
+    static void runRealRefusal(UnitTestCounters& c) {
+        UtClosedPort port_holder;
+        int port = port_holder.port();
+        UT_ASSERT(c, port > 0, "connect error: a loopback port with no listener is held");
+        if (port <= 0) {
+            return;
+        }
+        ExceptionSink xsink;
+        QoreSocket client;
+        int rc = client.connectINET("127.0.0.1", port, 30000, &xsink);
+        checkError(c, "connect error: refused by the system", rc, client, xsink, ECONNREFUSED);
+    }
+
+    //! The check of the nonblocking connect of one address
+    static void runInet(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        QoreSocket listener;
+        int port = listenInet(listener, "127.0.0.1", AF_INET, "0", xsink);
+        UT_ASSERT(c, port > 0, "connect error: the IPv4 listener listens");
+        if (port <= 0) {
+            return;
+        }
+        {
+            QoreSocket client;
+            int rc = client.connectINET("127.0.0.1", port, 30000, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect error: the connect to the IPv4 listener succeeds without the hook");
+            xsink.clear();
+        }
+        HookHelper hook(ECONNREFUSED);
+        QoreSocket client;
+        int rc = client.connectINET("127.0.0.1", port, 30000, &xsink);
+        checkError(c, "connect error: IPv4 connect refused after its pending error was read", rc, client, xsink,
+            ECONNREFUSED);
+    }
+
+    //! Happy Eyeballs: every attempt fails after its pending error was read; the attempts' error is reported
+    /** localhost is resolved to the IPv6 and the IPv4 loopback addresses where both are configured, each with an
+        attempt of its own, and each attempt is checked and given up before the error is raised; where only one is
+        configured, the one attempt is
+    */
+    static void runHappyEyeballs(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        QoreSocket listener4;
+        int port = listenInet(listener4, "127.0.0.1", AF_INET, "0", xsink);
+        UT_ASSERT(c, port > 0, "connect error: the Happy Eyeballs IPv4 listener listens");
+        if (port <= 0) {
+            return;
+        }
+        std::string service = std::to_string(port);
+        // a listener on the IPv6 loopback address of the port, if the system has one: localhost is connected to
+        // then, else 127.0.0.1, so that every attempt reaches a listener
+        QoreSocket listener6;
+        bool v6 = listenInet(listener6, "::1", AF_INET6, service.c_str(), xsink) == port;
+        const char* host = v6 ? "localhost" : "127.0.0.1";
+        printf("  connect error: Happy Eyeballs: IPv6 loopback listener: %s; target: %s\n", v6 ? "yes" : "no", host);
+        {
+            QoreSocket client;
+            int rc = client.connectINET2(host, service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect error: the Happy Eyeballs connect succeeds without the hook");
+            xsink.clear();
+        }
+        // a connect that times out is reported as such
+        HookHelper hook(ETIMEDOUT);
+        QoreSocket client;
+        int rc = client.connectINET2(host, service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
+        checkError(c, "connect error: Happy Eyeballs attempts time out after their pending error was read", rc,
+            client, xsink, ETIMEDOUT);
+    }
+
+    //! The check of the connect of a UNIX socket
+    static void runUnix(UnitTestCounters& c) {
+        // a short path: the length of a UNIX socket path is limited
+        char dir[] = "/tmp/qore-ut-connect-XXXXXX";
+        bool made = mkdtemp(dir) != nullptr;
+        UT_ASSERT(c, made, "connect error: the UNIX socket directory is made");
+        if (!made) {
+            return;
+        }
+        std::string path = std::string(dir) + "/s";
+        struct DirCleanup {
+            const char* dir;
+            const std::string& path;
+            DLLLOCAL ~DirCleanup() {
+                unlink(path.c_str());
+                rmdir(dir);
+            }
+        } cleanup{dir, path};
+
+        ExceptionSink xsink;
+        QoreSocket listener;
+        int rc = listener.bindUNIX(path.c_str(), SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener.listen(8);
+        }
+        UT_ASSERT(c, !rc && !xsink, "connect error: the UNIX socket listener listens");
+        if (rc || xsink) {
+            xsink.clear();
+            return;
+        }
+        {
+            QoreSocket client;
+            rc = client.connectUNIX(path.c_str(), SOCK_STREAM, 0, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect error: the connect to the UNIX socket succeeds without the hook");
+            xsink.clear();
+        }
+        HookHelper hook(ECONNREFUSED);
+        QoreSocket client;
+        rc = client.connectUNIX(path.c_str(), SOCK_STREAM, 0, &xsink);
+        checkError(c, "connect error: UNIX socket connect refused after its pending error was read", rc, client,
+            xsink, ECONNREFUSED);
+    }
+};
+
+//! Debug-only: runs the unit tests of the error that a failed connect reports (#6119)
+static QoreValue f_dbg_run_connect_error_tests(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ConnectErrorAfterSoErrorReadTest::run(c);
+    return make_unit_test_result(c, xsink);
+}
+#endif
+
 #ifdef DEBUG
 extern qore_classid_t CID_HTTP1CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
@@ -22497,6 +22692,10 @@ void init_debug_functions(QoreNamespace& qns) {
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_llvm_target_init_tests", f_dbg_run_llvm_target_init_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+#ifndef _Q_WINDOWS
+    qns.addBuiltinVariant("dbg_run_connect_error_tests", f_dbg_run_connect_error_tests, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+#endif
     qns.addBuiltinVariant("dbg_run_http1_duplex_tests", f_dbg_run_http1_duplex_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_poll_close_before_open_state", f_dbg_poll_close_before_open_state, QCF_NO_FLAGS,

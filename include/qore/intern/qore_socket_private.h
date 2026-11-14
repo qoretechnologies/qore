@@ -4837,6 +4837,19 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_no_immediate_check;
     loopback connection has only after connect() has returned (see SocketConnectInetHappyEyeballsPollState::continuePoll())
 */
 DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_check;
+
+#ifndef _Q_WINDOWS
+//! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0
+/** For the C++ unit tests of the error that a failed connect reports (issue #6119): makes the interleaving of
+    Darwin deterministic on every platform.  The check of a nonblocking connect reads the pending error (SO_ERROR),
+    then confirms the connection with a zero-byte send; when the connect fails between the two, Darwin fails the send
+    with EPIPE, as the failure marks the socket unable to send, while the connect's error is still pending.  With this
+    set, every check of a connect whose pending error is read as 0 behaves so: the send fails with EPIPE and does not
+    reach the system, and the next read of the pending error returns this error, once.  It is process-wide, as a
+    connect is checked in an I/O thread: the C++ unit tests run one after the other, so no other connect sees it.
+*/
+DLLLOCAL extern std::atomic<int> qore_dbg_connect_error_after_so_error_read;
+#endif
 #endif
 
 #endif
