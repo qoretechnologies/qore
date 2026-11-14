@@ -1808,16 +1808,16 @@ DataFrame DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_O
     @endcode
 
     The values column must hold numbers: an \c int64 or \c float64 column, or a column that holds any value whose
-    cells are numbers (a decimal column, for example).  The rows are grouped by the exact index and columns values
-    (two floats or dates that differ, even by a microsecond, make two rows or columns), which must be scalars; the
-    index column of the result holds their string forms (with an \c int64 index column and a \c string columns
-    column, the index column of the result is an \c int64 column), and the columns values give the names of the
-    other columns.  A row with a null index or columns value is left out, and a null value is not aggregated; a cell
-    with no value is null.
+    cells are numbers (a decimal column, for example), or only null cells.  The rows are grouped by the exact index
+    and columns values (two floats or absolute dates that differ, even by a microsecond, make two rows or columns;
+    relative dates of the same length, such as \c 1D and \c 24h, make one), which must be scalars; the index column
+    of the result holds their string forms (with an \c int64 index column and a \c string columns column, the index
+    column of the result is an \c int64 column), and the columns values give the names of the other columns.  A row
+    with a null index or columns value is left out, and a null value is not aggregated; a cell with no value is null.
 
     @throw DATAFRAME-ERROR if the values column does not hold numbers, if an index or columns value is not a scalar,
-    if two columns values or a columns value and the index column have the same name, or if \a agg_func is not
-    \c "sum" or \c "mean"
+    if two index values of different types have the same string form, if two columns values or a columns value and
+    the index column have the same name, or if \a agg_func is not \c "sum" or \c "mean"
 */
 DataFrame DataFrame::pivot(string index_col, string columns_col, string values_col, *string agg_func) [flags=RET_VALUE_ONLY] {
     std::string func = agg_func ? dataFrameStdString(agg_func) : "sum";

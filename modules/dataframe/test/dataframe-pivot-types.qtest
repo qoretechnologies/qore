@@ -23,6 +23,7 @@ class DataFramePivotTypesTest inherits QUnit::Test {
         addTestCase("index columns of any type", \indexTest());
         addTestCase("exact keys and labels", \keyTest());
         addTestCase("null cells", \nullTest());
+        addTestCase("decimal values with an int index", \decimalTest());
         addTestCase("keys that are not scalars and duplicate names", \errorTest());
         set_return_value(main());
     }
@@ -80,6 +81,23 @@ class DataFramePivotTypesTest inherits QUnit::Test {
         assertEq(("k", "1", "2"), ints.pivot("k", "c", "v").columnNames(), "int columns values");
     }
 
+    #! decimal values with an int index, which make an int index column in the result
+    decimalTest() {
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "k": (1, 1, 2),
+            "c": ("x", "x", "y"),
+            "v": (1.25n, 2.5n, 4n),
+        }, {
+            "v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}},
+        }));
+        foreach string agg in (("sum", "mean")) {
+            DataFrame::DataFrame wide = df.pivot("k", "c", "v", agg);
+            assertEq((1, 2), wide.getColumn("k"), agg + ": int index");
+            assertEq((agg == "sum" ? 3.75 : 1.875, NOTHING), wide.getColumn("x"), agg + ": x");
+            assertEq((NOTHING, 4.0), wide.getColumn("y"), agg + ": y");
+        }
+    }
+
     #! a row with a null index or columns cell is left out, and a null value is not aggregated
     nullTest() {
         DataFrame::DataFrame df({"k": ("a", NOTHING, "", "a", "a"), "c": ("x", "x", "x", NOTHING, "x"),
@@ -96,10 +114,17 @@ class DataFramePivotTypesTest inherits QUnit::Test {
             .filter("v", "is_null", NOTHING);
         assertEq((NOTHING,), all_null.pivot("k", "c", "v").getColumn("x"), "only null values");
         # the int64/string path: a row with a null columns cell makes no index row
-        DataFrame::DataFrame ints({"k": (1, 2, NOTHING), "c": ("x", NOTHING, "y"), "v": (1, 2, 4)});
+        DataFrame::DataFrame ints({"k": (1, 2, NOTHING, 1), "c": ("x", NOTHING, "y", "x"), "v": (1, 2, 4, NOTHING)});
         DataFrame::DataFrame wide = ints.pivot("k", "c", "v");
         assertEq((1,), wide.getColumn("k"), "int index: rows");
         assertEq(("k", "x"), wide.columnNames(), "int index: columns");
+        assertEq((1.0,), ints.pivot("k", "c", "v", "mean").getColumn("x"), "int index: mean");
+        # a values column with only null cells, of any type
+        DataFrame::DataFrame empty({"k": (), "c": (), "v": ()});
+        assertEq(0, empty.pivot("k", "c", "v").numRows(), "an empty frame");
+        DataFrame::DataFrame null_strings = (new DataFrame::DataFrame({"k": (1, 1), "c": ("x", "x"),
+            "v": ("a", NOTHING)})).filter("v", "is_null", NOTHING);
+        assertEq((NOTHING,), null_strings.pivot("k", "c", "v").getColumn("x"), "a string column of null cells");
     }
 
     #! an index or columns value that is not a scalar, or two values with the same column name, raise an error
@@ -112,6 +137,9 @@ class DataFramePivotTypesTest inherits QUnit::Test {
         assertThrows("DATAFRAME-ERROR", \index_name.pivot(), ("k", "c", "v"), "a column named as the index");
         # the int64/string path
         DataFrame::DataFrame int_index({"k": (1, 2), "c": ("x", "k"), "v": (1, 2)});
+        # index values of different types with the same string form
+        DataFrame::DataFrame mixed({"k": (c'z', 1, 1.0), "c": ("x", "x", "x"), "v": (1, 2, 3)});
+        assertThrows("DATAFRAME-ERROR", \mixed.pivot(), ("k", "c", "v"), "1 and 1.0 in the index");
         assertThrows("DATAFRAME-ERROR", \int_index.pivot(), ("k", "c", "v"), "int index: a column named as the index");
     }
 }

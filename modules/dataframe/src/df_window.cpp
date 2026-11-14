@@ -370,8 +370,33 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
     const ColumnData& col_cd = *columns[col_ci].data;
     const ColumnData& val_cd = *columns[val_ci].data;
 
-    if (idx_cd.type == ColumnType::INT64 && col_cd.type == ColumnType::STRING
-            && (val_cd.type == ColumnType::FLOAT64 || val_cd.type == ColumnType::INT64)) {
+    // the values are aggregated as numbers: an int or float column, or a column that holds any value whose cells are
+    // numbers (a decimal column, for example); any other column has no sum or mean, unless all its cells are null
+    // (qore#6099)
+    if (val_cd.type != ColumnType::FLOAT64 && val_cd.type != ColumnType::INT64) {
+        bool numbers = true;
+        for (int64_t i = 0; numbers && i < n_rows; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "checking DataFrame pivot values")) {
+                return nullptr;
+            }
+            if (!val_cd.isNull(i)) {
+                if (val_cd.type != ColumnType::AUTO) {
+                    numbers = false;
+                } else {
+                    qore_type_t t = val_cd.auto_data[i].getType();
+                    numbers = t == NT_INT || t == NT_FLOAT || t == NT_NUMBER;
+                }
+            }
+        }
+        if (!numbers) {
+            xsink->raiseException("DATAFRAME-ERROR", "pivot values column '%s' must hold numbers to be aggregated "
+                "with '%s'; its type is '%s'", values_col.c_str(), agg_func.c_str(), columnTypeName(val_cd.type));
+            return nullptr;
+        }
+    }
+
+    // a column that is not an int or float column has only numbers or null cells here; its cells are read as floats
+    if (idx_cd.type == ColumnType::INT64 && col_cd.type == ColumnType::STRING) {
         std::vector<int64_t> unique_indices;
         std::unordered_map<int64_t, size_t> index_map;
         std::vector<std::string> unique_cols;
@@ -420,7 +445,8 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
             // a null value is not aggregated: it counts neither for the sum nor for the mean (qore#6099)
             if (!val_cd.isNull(i)) {
                 sums[pos] += val_cd.type == ColumnType::FLOAT64 ? val_cd.float_data(i)
-                    : static_cast<double>(val_cd.int_data[i]);
+                    : (val_cd.type == ColumnType::INT64 ? static_cast<double>(val_cd.int_data[i])
+                        : val_cd.auto_data[i].getAsFloat());
                 ++counts[pos];
             }
         }
@@ -485,26 +511,6 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
         return df;
     }
 
-    // the values are aggregated as numbers: an int or float column, or a column that holds any value whose cells are
-    // numbers (a decimal column, for example); any other column has no sum or mean (qore#6099)
-    if (val_cd.type != ColumnType::FLOAT64 && val_cd.type != ColumnType::INT64) {
-        bool numbers = val_cd.type == ColumnType::AUTO;
-        for (int64_t i = 0; numbers && i < n_rows; ++i) {
-            if (i && !(i % 100) && qore_check_cancel(xsink, "checking DataFrame pivot values")) {
-                return nullptr;
-            }
-            if (!val_cd.isNull(i)) {
-                qore_type_t t = val_cd.auto_data[i].getType();
-                numbers = t == NT_INT || t == NT_FLOAT || t == NT_NUMBER;
-            }
-        }
-        if (!numbers) {
-            xsink->raiseException("DATAFRAME-ERROR", "pivot values column '%s' must hold numbers to be aggregated "
-                "with '%s'; its type is '%s'", values_col.c_str(), agg_func.c_str(), columnTypeName(val_cd.type));
-            return nullptr;
-        }
-    }
-
     // the rows are grouped by the exact values of the index and columns cells (a key that tells every two different
     // values apart: the bits of a float, the microseconds of a date), and labelled with their string forms; a row
     // with a null index or columns cell is left out, as in the int/string path above (qore#6099)
@@ -515,6 +521,8 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
     // the column names made so far, to raise an error for two values that make the same name
     std::unordered_map<std::string, std::string> col_names;
     col_names[index_col] = std::string();
+    // the labels of the index values of a column that holds any value, to raise an error for two that are the same
+    std::unordered_set<std::string> index_labels;
     // the result row and column of each row, or no_slot for a row that is left out, so that the keys are made once
     constexpr size_t no_slot = std::numeric_limits<size_t>::max();
     std::vector<size_t> row_ri(n_rows, no_slot);
@@ -557,6 +565,12 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
             return nullptr;
         }
         if (added) {
+            // values of different types in a column that holds any value can have the same label (1, 1.0 and "1")
+            if (idx_cd.type == ColumnType::AUTO && !index_labels.insert(label).second) {
+                xsink->raiseException("DATAFRAME-ERROR", "pivot index column '%s' has two values of different types "
+                    "whose string form is '%s'", index_col.c_str(), label.c_str());
+                return nullptr;
+            }
             unique_indices.push_back(std::move(label));
         }
 
