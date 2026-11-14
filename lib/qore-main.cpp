@@ -469,17 +469,16 @@ void qore_cleanup() {
     // left as they are (see qore_program_private::leaveForeignThreads()).  The Programs of the modules no longer need
     // module lifetime, and the Programs of the user modules, which delUser() deleted, are freed now, before the binary
     // modules are deleted
-    // a foreign thread runs module code that nothing will end: the modules, their Programs and the library are left as
-    // they are, reachable, until the process ends (see qore_program_private::leaveForeignThreads())
-    if (qore_foreign_threads_in_module_code.load(std::memory_order_acquire)) {
-        printd(5, "qore_cleanup() leaving the modules as they are: a foreign thread runs module code\n");
-        return;
+    // a foreign thread runs module code that nothing will end: the modules and their Programs are left as they are,
+    // reachable, until the process ends (see qore_program_private::leaveForeignThreads()); the other Programs are
+    // cleared as usual
+    const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire);
+    if (!modules_left) {
+        qore_release_module_program_pins();
+
+        // delete all loadable modules
+        QMM.cleanup();
     }
-
-    qore_release_module_program_pins();
-
-    // delete all loadable modules
-    QMM.cleanup();
 
     // the Programs that their owners keep beyond this point (ex: a module's Program with static storage duration,
     // deleted by a static destructor after this function has freed the types) have their data cleared now, while
@@ -493,7 +492,7 @@ void qore_cleanup() {
     // thread can be blocked in Qore code for as long as the process lives and uses the library's data (the types, the
     // system namespace, the thread data), so the library is not torn down any further; everything that remains is
     // reachable and is released with the process
-    if (qore_program_private::hasLeftPrograms()) {
+    if (modules_left || qore_program_private::hasLeftPrograms()) {
         printd(5, "qore_cleanup() leaving the library as it is: a Program was left for a foreign thread\n");
         return;
     }

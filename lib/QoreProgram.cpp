@@ -2118,7 +2118,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             } else if (!ptid) {
                 // no foreign thread can enter the Program from now on (see canEnterIntern()): the decision above is
                 // final, and is made before any of the Program's data is destroyed
-                foreign_teardown = qore_shutdown.load(std::memory_order_acquire);
+                foreign_teardown_tid = qore_shutdown.load(std::memory_order_acquire) ? q_gettid() : 0;
                 if (!ns_const) {
                     l = new QoreListNode(autoTypeInfo);
                     qore_root_ns_private::clearConstants(*RootNS, **l);

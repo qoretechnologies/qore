@@ -32,8 +32,17 @@ At the end of a process with such a thread, the destructors of the objects in th
 and their memory is not freed. A leak checker (valgrind) can report the values that the left Programs hold as lost
 once the library is not torn down, for a Program of a module.
 
+## Limits
+
+- A foreign thread that is blocked in Qore code outside any Program (a module API called directly) is not tracked: the
+  library is torn down under it as before.
+- The flag `qore_foreign_threads_in_module_code` is never reset; one foreign thread in module code leaves every module
+  Program, also if it is not blocked.
+- Objects of left Programs are not destroyed: a buffered stream that flushes only in its destructor does not flush.
+- A leak checker reports the values that the left Programs hold as lost (the library is not torn down then).
+
 ## Tests
 
-`program-cleanup-at-exit.qtest` (the test module `staticpgmcode`: a foreign thread blocked in its Program, in the Program
+`program-object-outlives-cleanup.qtest` (#6088); `program-cleanup-at-exit.qtest` (the test module `staticpgmcode`: a foreign thread blocked in its Program, in the Program
 of a user module, and a foreign thread that tries to enter a Program during its teardown), `AOTModuleForeignThread.qtest`
 (a compiled module).

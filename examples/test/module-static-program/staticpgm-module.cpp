@@ -228,25 +228,33 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     if (!xsink) {
         (*qph)->run(&xsink);
     }
-    // QORE_STATICPGM_FOREIGN_THREAD: a thread that this module does not tell the library about starts in the Program
-    // and blocks in Qore code that nothing ends, as a daemon thread of the Python module does when it waits in
-    // Queue::get() at the end of the process; the module returns when the thread is in the Qore call (the Program
-    // counts the thread), so the state at the end of the process does not depend on timing
+    // QORE_STATICPGM_FOREIGN_ENTRY: a foreign thread tries to enter the Program while it is cleaned up
     if (!xsink && getenv("QORE_STATICPGM_FOREIGN_ENTRY")) {
         qore_register_program_cleanup_callback(staticpgm_cleanup_callback);
     }
+    // QORE_STATICPGM_FOREIGN_THREAD: a foreign thread (registered with q_register_foreign_thread()) starts in the
+    // Program and blocks in Qore code that nothing ends, as a daemon thread of the Python module does when it waits in
+    // Queue::get() at the end of the process; the module returns when the thread is in the Qore call (the Program
+    // counts the thread), so the state at the end of the process does not depend on timing
     if (!xsink && getenv("QORE_STATICPGM_FOREIGN_THREAD")) {
-        std::thread([]() {
-            // the thread never ends: the exceptions it can raise before it blocks are reported with its sink
-            ExceptionSink thread_xsink;
-            if (q_register_foreign_thread() == QFT_ERROR) {
-                // let the module init return, it fails the test with the missing thread
-                (*qph)->callFunction("foreign_release", nullptr, &thread_xsink);
-                return;
-            }
-            (*qph)->callFunction("foreign_block", nullptr, &thread_xsink);
-            thread_xsink.handleExceptions();
-        }).detach();
+        std::thread t;
+        try {
+            t = std::thread([]() {
+                // the thread never ends: the exceptions it can raise before it blocks are reported with its sink
+                ExceptionSink thread_xsink;
+                if (q_register_foreign_thread() == QFT_ERROR) {
+                    // let the module init return, it fails the test with the missing thread
+                    (*qph)->callFunction("foreign_release", nullptr, &thread_xsink);
+                    return;
+                }
+                (*qph)->callFunction("foreign_block", nullptr, &thread_xsink);
+                thread_xsink.handleExceptions();
+            });
+        } catch (const std::exception& e) {
+            xsink.raiseException("STATICPGM-ERROR", "cannot start the thread: %s", e.what());
+            return;
+        }
+        t.detach();
         (*qph)->callFunction("foreign_wait_ready", nullptr, &xsink);
     }
     // a foreign thread blocks in the Program, which then still runs code when the library is cleaned up: its code

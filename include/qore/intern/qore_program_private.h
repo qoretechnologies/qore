@@ -501,7 +501,7 @@ public:
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
     std::set<int> foreign_tids;  // the tids in tidmap of foreign threads
-    bool foreign_teardown = false; // true if the teardown at the end of the process refuses foreign threads; under plock
+    int foreign_teardown_tid = 0; // the TID of the thread whose teardown at the end of the process refuses other foreign threads; under plock
     unsigned thread_count = 0;   // number of threads currently running in this Program
     // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
     bool cancel_new_threads = false;
@@ -2029,7 +2029,10 @@ public:
     DLLLOCAL bool canEnterIntern(int tid) const {
         // once the teardown has found no foreign thread in the Program at the end of the process (foreign_teardown), none
         // can enter it: it is not waited for, and the data that it would use is destroyed meanwhile
-        if (foreign_teardown && tid == q_gettid() && q_thread_is_foreign()) {
+        // (the thread that performs the teardown, which can be a foreign thread itself, and the threads already in the
+        // Program are not refused)
+        if (foreign_teardown_tid && tid != foreign_teardown_tid && ptid != tid && tid == q_gettid()
+            && q_thread_is_foreign() && tidmap.find(tid) == tidmap.end()) {
             return false;
         }
         return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
