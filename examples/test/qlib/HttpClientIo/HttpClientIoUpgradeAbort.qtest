@@ -99,14 +99,17 @@ class UpgradeServer {
 
 public class HttpClientIoUpgradeAbortTest inherits QUnit::Test {
     constructor() : Test("HttpClientIoUpgradeAbortTest", "1.0") {
-        if (Option::HAVE_LIBRARY_DEBUGGING) {
-            addTestCase("an operation aborted after its 101 response was delivered reports the protocol switched",
-                \abortAfterDeliveryTest());
-        }
+        addTestCase("an operation aborted after its 101 response was delivered reports the protocol switched",
+            \abortAfterDeliveryTest());
         set_return_value(main());
     }
 
     abortAfterDeliveryTest() {
+        # the case is always registered, so that a build without library debugging skips it instead of having no
+        # cases, which fails the test (issue #6067)
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_poll_close_before_open_state() is only registered in a library-debug build");
+        }
         UpgradeServer server();
         on_exit server.stop();
 
