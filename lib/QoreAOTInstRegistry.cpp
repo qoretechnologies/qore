@@ -1342,10 +1342,12 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
         lv = ctx.resolveLocal(lname);
     }
     if (!lv && lname && *lname) {
+        // the type of a local of a handler or closure can name the type parameters of the generic function whose
+        // code it is in (qore#5885)
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
         const QoreTypeInfo* ti = (ltype && *ltype)
-            ? type_resolver.resolve(ltype, type_error) : nullptr;
+            ? type_resolver.resolveForSignature(ltype, type_error, qore_aot_get_type_param_owner()) : nullptr;
         qore_program_private* pp = qore_program_private::get(
             *(ctx.local_owner_pgm ? ctx.local_owner_pgm : ctx.pgm));
         lv = pp->createLocalVar(lname, ti);
@@ -3356,8 +3358,8 @@ static std::unique_ptr<QoreIRInstruction> readPlugin(
 // available, and firing no step otherwise, which is the designed behavior of code compiled ahead of time.
 static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
     // The AST statement pointer is not serializable and the source location rides on the base-instruction record;
-    // from format version 26, the nesting of the statement (#5816): its depth (u16) and its flags (u8), 0 for the
-    // instruction of a block
+    // from format version 26, the nesting of the statement (#5816): its depth (u16) and its flags (u8); for the
+    // instruction of a block, the depth of the statement that contains it if the block has locals (#5999), 0 otherwise
     auto* dbg = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
     ctx.writer.writeU16(dbg ? dbg->nest_depth : 0);
     ctx.writer.writeU8(dbg ? dbg->nest_flags : 0);

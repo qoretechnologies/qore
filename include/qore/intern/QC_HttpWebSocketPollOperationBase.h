@@ -335,7 +335,7 @@ public:
     DLLLOCAL void setHeartbeat(int64 ms) {
         heartbeat_interval_ms = ms;
         if (ms > 0 && last_recv_activity_ms == 0) {
-            last_recv_activity_ms = q_clock_getmillis();
+            last_recv_activity_ms = monotonicMs();
         }
     }
 
@@ -346,7 +346,7 @@ public:
     DLLLOCAL void setIdleTimeout(int64 ms) {
         idle_timeout_ms = ms;
         if (ms > 0 && last_recv_activity_ms == 0) {
-            last_recv_activity_ms = q_clock_getmillis();
+            last_recv_activity_ms = monotonicMs();
         }
     }
 
@@ -486,10 +486,11 @@ private:
     bool close_frame_queued = false;
     //! How long a close started by the server waits for the client's close frame (milliseconds, 0 = no wait)
     int64 close_timeout_ms = DefaultCloseTimeoutMs;
-    //! When a close started by the server stops waiting for the client's close frame (monotonic ms, 0 = not set)
-    /** Set when the server's close frame has been written
+    //! When a close started by the server stops waiting for the client's close frame (monotonic us, 0 = not set)
+    /** Set when the server's close frame has been written; in microseconds: a deadline in whole milliseconds, from a
+        truncated clock reading, ended the wait up to a millisecond before the close timeout
     */
-    int64 close_deadline_ms = 0;
+    int64 close_deadline_us = 0;
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
     //! Error information (ref'd or nullptr)
@@ -504,7 +505,7 @@ private:
     //! Send timeout in milliseconds (0 = no timeout)
     int64 send_timeout_ms = 0;
 
-    //! Timestamp when current send operation started (milliseconds since epoch)
+    //! Timestamp when current send operation started (milliseconds, monotonic clock; see monotonicMs())
     int64 send_op_start_ms = 0;
 
     //! Number of frames pushed during the current continuePoll() cycle
@@ -516,10 +517,20 @@ private:
     //! Idle timeout in milliseconds (0 = disabled); the connection is closed if no recv activity for this interval
     int64 idle_timeout_ms = 0;
 
-    //! Timestamp of last recv activity (milliseconds since epoch)
+    //! Returns the time of the monotonic clock in milliseconds, at least 1, for the heartbeat, idle and send timers
+    /** The timers measure intervals, which a step of the system clock must not change: a step forward closed idle
+        connections at once, and a step back suppressed the heartbeat and the idle close for the size of the step.
+        Never 0, as 0 marks a timestamp that is not set.
+    */
+    DLLLOCAL static int64 monotonicMs() {
+        int64 ms = q_clock_getmicros_monotonic() / 1000;
+        return ms > 0 ? ms : 1;
+    }
+
+    //! Timestamp of last recv activity (milliseconds, monotonic clock; see monotonicMs())
     int64 last_recv_activity_ms = 0;
 
-    //! Timestamp of last PING frame sent (milliseconds since epoch)
+    //! Timestamp of last PING frame sent (milliseconds, monotonic clock; see monotonicMs())
     /** Tracked separately from last_recv_activity_ms so outgoing PINGs do
         not mask peer silence on the recv side.
     */

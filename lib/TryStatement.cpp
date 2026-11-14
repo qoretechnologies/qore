@@ -59,6 +59,23 @@ static void qore_try_release_interrupted_return(ValueHolder& trv, ExceptionSink*
     }
 }
 
+//! Gives the value of a return in the try or catch block to the enclosing block
+/** A return in the try statement replaces a value that a return in the block that encloses the statement left, as
+    a return statement replaces it (ReturnStatement::execImpl()): in a handler of a block (on_exit, on_success,
+    on_error), which runs with the value of the return that left the block, the try statement's return gives the
+    return value, and the replaced value is released when the try statement ends (#5992)
+*/
+static void qore_try_give_return(int rc, ValueHolder& trv, QoreValue& return_value, ExceptionSink* xsink) {
+    if (rc == RC_RETURN && !*xsink) {
+        ValueHolder replaced(return_value, xsink);
+        return_value = trv.release();
+        return;
+    }
+    if (!trv->isNothing() && return_value.isNothing()) {
+        return_value = trv.release();
+    }
+}
+
 bool qore_catch_thread_exit(ExceptionSink* xsink) {
     if (!xsink || !xsink->isThreadExit()) {
         return false;
@@ -107,10 +124,7 @@ int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
         except->del(xsink);
     }
 
-    if (!trv->isNothing()) {
-        if (return_value.isNothing())
-            return_value = trv.release();
-    }
+    qore_try_give_return(rc, trv, return_value, xsink);
 
     return rc;
 }
@@ -149,10 +163,7 @@ int TryStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
         except->del(xsink);
     }
 
-    if (!trv->isNothing()) {
-        if (return_value.isNothing())
-            return_value = trv.release();
-    }
+    qore_try_give_return(rc_state, trv, return_value, xsink);
 
     return rc_state;
 }

@@ -517,6 +517,11 @@ static int qdfExecRowInsert(QoreObject* ds, const std::string& sql,
 /** Provides a column-oriented data structure with typed columns (float64, int64,
     string, bool, date), null/missing value support, and SQL-like operations.
 
+    The cells of a \c string column are stored and returned in UTF-8; a string in another encoding is converted when
+    it is stored, and one that cannot be converted raises \c DATAFRAME-ENCODING-ERROR (see @ref dataframeintro).
+    The cells of a \c date column are stored in microseconds since the epoch in an int64, and a date outside its
+    range raises \c DATAFRAME-DATE-RANGE-ERROR when it is stored.
+
     @par Example:
     @code{.py}
     %requires dataframe
@@ -905,8 +910,8 @@ DataFrame DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
     the time zone.  \c "in" and \c "not_in" compare the cell with each value of the list with \c "==".  A null cell
     matches only \c "is_null", \c "==" with a null value (\c NOTHING or \c NULL), and \c "in" or \c "not_in"
     according to whether the list holds a null value; a cell that is not null matches a null value only with
-    \c "!=".  \c "contains", \c "startswith" and \c "endswith" compare the cell as a string and match no cell of a
-    typed column that is not a \c string column.
+    \c "!=".  \c "contains", \c "startswith" and \c "endswith" compare the cell as a string with \a value converted
+    to the encoding of the cell, and match no cell of a typed column that is not a \c string column.
 
     @par Example:
     @code{.py}
@@ -997,7 +1002,12 @@ DataFrame DataFrame::takeRows(list<int> indices) [flags=RET_VALUE_ONLY] {
     DataFrame multi = df.sortBy(("dept", "salary"), (True, False));
     @endcode
 
+    Null values come last.  The cells of a column that holds any value are ordered as the \c <=> operator orders
+    them, and a NaN value of a \c float64 column or of a column that holds any value raises \c NAN-COMPARE-ERROR
+    when it is compared, as with the \c <=> operator.
+
     @throw DATAFRAME-COLUMN-ERROR if column not found
+    @throw NAN-COMPARE-ERROR if a NaN value is compared with another value
 
 */
 DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=RET_VALUE_ONLY] {
@@ -1018,6 +1028,18 @@ DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=
 
     Horizontal concat requires all inputs to have the same row count and rejects
     duplicate column names.
+
+    A vertical concat takes the columns of the first DataFrame; a DataFrame without one of them gives null values.
+    Columns of the same type keep it.  Columns that all have dense storage of the same element type (a \c float32 or
+    \c decimal128 column, or a timestamp column read from Parquet, for example) keep their element type and the
+    columnar schema of the first one, with the time unit \c "us" if their time units differ and the time zone
+    \c "UTC" if their time zones differ, so that an export keeps their values; columns of durations keep the schema
+    of the first one, with the time unit \c "us" if their time units differ; other columns are rebuilt from their
+    values with no columnar schema.  A column of durations (with a duration schema) with a date column of absolute
+    dates holds any value.  Columns of different types make the column that the column hash constructor makes of
+    their values as the columns return them (see @ref dataframeintro): a date column returns its dates in the local
+    time zone, so their string forms in a string column are in local time, and a date column without a duration
+    schema holds absolute dates, so a duration in it becomes the date that far from the epoch.
 
     A DataFrame may be given more than once, and other threads may use the same DataFrames at the same time.
 
@@ -1280,6 +1302,8 @@ nothing DataFrame::renameColumn(string old_name, string new_name) {
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened
+    @throw DATAFRAME-ENCODING-ERROR if the \c null_string option has a character that the default character
+    encoding cannot represent
     @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be read
     @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 
@@ -1509,7 +1533,8 @@ static DataFrame DataFrame::fromArrowIpc(binary data) [flags=RET_VALUE_ONLY] {
     assertEq(df.toRecords(), copy.toRecords());
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if Arrow serialization fails
+    @throw DATAFRAME-IO-ERROR if Arrow serialization fails, or a date or duration does not fit in an int64 of the
+    time unit of its column (a timestamp in nanoseconds after 2262 or before 1677, for example)
 */
 binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     return df->toArrowIpc(xsink);
@@ -1600,7 +1625,9 @@ static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> o
     df.writeParquet("/data/output.parquet", options);
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened for writing
+    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened for writing, or a date or
+    duration does not fit in an int64 of the time unit of its column (a timestamp in nanoseconds after 2262 or
+    before 1677, for example)
     @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be written
     @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 */
@@ -1782,6 +1809,18 @@ DataFrame DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_O
     DataFrame wide = df.pivot("name", "metric", "value");
     @endcode
 
+    The values column must hold numbers: an \c int64 or \c float64 column, or a column that holds any value whose
+    cells are numbers (a decimal column, for example), or only null cells.  The rows are grouped by the exact index
+    and columns values (two floats or absolute dates that differ, even by a microsecond, make two rows or columns;
+    relative dates of the same length, such as \c 1D and \c 24h, make one), which must be scalars; the index column
+    of the result holds their string forms, a relative date as its length in seconds (ex: \c "PT1.5S"), and with an
+    \c int64 index column and a \c string columns column, the index column of the result is an \c int64 column; the
+    columns values give the names of the other columns.  A row with a null index or columns value is left out, and a
+    null value is not aggregated; a cell with no value is null.
+
+    @throw DATAFRAME-ERROR if the values column does not hold numbers, if an index or columns value is not a scalar,
+    if two index values of different types have the same string form, if two columns values or a columns value and
+    the index column have the same name, or if \a agg_func is not \c "sum" or \c "mean"
 */
 DataFrame DataFrame::pivot(string index_col, string columns_col, string values_col, *string agg_func) [flags=RET_VALUE_ONLY] {
     std::string func = agg_func ? dataFrameStdString(agg_func) : "sum";
@@ -1830,6 +1869,11 @@ DataFrame DataFrame::melt(list<string> id_vars, *list<string> value_vars, *strin
     DataFrame df2 = df.withColumn("row_num", rn);
     @endcode
 
+    The rows of this and the other window functions (lag(), lead(), cumSum(), rollingMean()) are partitioned and
+    ordered by columns of any type as sortBy() orders them: null values come last and make a partition of their
+    own, and a NaN value raises \c NAN-COMPARE-ERROR when it is compared.
+
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<int> DataFrame::rowNumber(*hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->rowNumber(spec, xsink);
@@ -1842,6 +1886,7 @@ list<int> DataFrame::rowNumber(*hash<auto> spec) [flags=RET_VALUE_ONLY] {
     @param spec optional WindowSpec hash
     @return list of values (NOTHING at partition boundaries)
 
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<auto> DataFrame::lag(string column, int offset = 1, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->lag(dataFrameStdString(column), offset, spec, xsink);
@@ -1854,6 +1899,7 @@ list<auto> DataFrame::lag(string column, int offset = 1, *hash<auto> spec) [flag
     @param spec optional WindowSpec hash
     @return list of values (NOTHING at partition boundaries)
 
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<auto> DataFrame::lead(string column, int offset = 1, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->lead(dataFrameStdString(column), offset, spec, xsink);
@@ -1864,6 +1910,7 @@ list<auto> DataFrame::lead(string column, int offset = 1, *hash<auto> spec) [fla
     @param spec optional WindowSpec hash
     @return list of cumulative sums
 
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<auto> DataFrame::cumSum(string column, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->cumSum(dataFrameStdString(column), spec, xsink);
@@ -1875,6 +1922,7 @@ list<auto> DataFrame::cumSum(string column, *hash<auto> spec) [flags=RET_VALUE_O
     @param spec optional WindowSpec hash
     @return list of rolling mean values (NOTHING when window has no data)
 
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<auto> DataFrame::rollingMean(string column, int window_size, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->rollingMean(dataFrameStdString(column), static_cast<int64_t>(window_size), spec, xsink);
