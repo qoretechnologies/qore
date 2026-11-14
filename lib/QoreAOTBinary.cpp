@@ -14542,6 +14542,34 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             return true;
         };
 
+        // The counts of the function header have fixed widths in the AOT format; a count that does not fit
+        // would wrap and make the executable read a different slot table than was written, so the function
+        // is refused here instead (qore#6127)
+        auto checkCount = [&func, &error](size_t count, size_t limit, const char* what) -> bool {
+            if (count <= limit) {
+                return true;
+            }
+            error = "AOT cannot compile function '" + func.name + "': it has " + std::to_string(count)
+                + " " + what + ", but the AOT format supports at most " + std::to_string(limit)
+                + "; split the function into smaller functions";
+            return false;
+        };
+        constexpr size_t u16_max = std::numeric_limits<uint16_t>::max();
+        constexpr size_t u8_max = std::numeric_limits<uint8_t>::max();
+        if (!checkCount(std::max<size_t>(func.num_locals, func.slot_ids.locals.size()), u16_max,
+                    "local variable slots")
+                || !checkCount(std::max<size_t>(func.num_globals, func.slot_ids.globals.size()), u16_max,
+                    "global variable slots")
+                || !checkCount(std::max<size_t>(func.num_exprs, func.slot_ids.exprs.size()), u16_max,
+                    "expression slots")
+                || !checkCount(func.num_stmts, u16_max, "statement slots")
+                || !checkCount(func.slot_ids.regex_cases.size(), u16_max, "regex case slots")
+                || !checkCount(func.slot_ids.body_locals.size(), u16_max, "body local slots")
+                || !checkCount(std::max<size_t>(func.num_lv_path_insts, func.slot_ids.lv_path_insts.size()),
+                    u8_max, "lvalue path instructions (counting those of its handler functions)")) {
+            return false;
+        }
+
         // Function header
         writer.writeStringRef(func.name.c_str());
         writer.writeU16(static_cast<uint16_t>(func.num_locals));
@@ -14700,6 +14728,9 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 writer.writeStringRef(lvid.pattern_newstr.c_str());
                 writer.writeI64(lvid.pattern_options);
                 writer.writeU8(lvid.pattern_global);
+            }
+            if (!checkCount(lvid.steps.size(), u8_max, "steps in an lvalue path")) {
+                return false;
             }
             writer.writeU8(static_cast<uint8_t>(lvid.steps.size()));
             for (auto& step : lvid.steps) {
