@@ -212,7 +212,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
     // --- Phase 2b': Close deadline ---
     // A close started by the client ends when the server's close frame arrives; the deadline bounds the wait
     // for a server that does not answer
-    if (waitsForPeerClose() && close_deadline_ms && q_clock_getmicros_monotonic() / 1000 >= close_deadline_ms) {
+    if (waitsForPeerClose() && close_deadline_us && q_clock_getmicros_monotonic() >= close_deadline_us) {
         endClosed(1006, "close handshake timed out", xsink);
         return nullptr;
     }
@@ -327,8 +327,9 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
                 }
             }
         }
-        if (waitsForPeerClose() && close_deadline_ms) {
-            int64 close_remaining = close_deadline_ms - q_clock_getmicros_monotonic() / 1000;
+        if (waitsForPeerClose() && close_deadline_us) {
+            // rounded up, so the wake is not before the deadline
+            int64 close_remaining = (close_deadline_us - q_clock_getmicros_monotonic() + 999) / 1000;
             if (close_remaining < 1) {
                 close_remaining = 1;
             }

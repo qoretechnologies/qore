@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the release of temporaries at the end of a statement
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class BranchBlockTempReleaseTest
+
+#! The temporaries of a branch of ?:, ??, ?*, && and || and the arguments of a call that qcc folds are released in the
+#! order of the AST interpreter (#6080)
+/** Native code lowers the blocks of a function in layout order, and an operand of these operators that calls a
+    function in a try block continues in a block laid out after the operator's join block, which ends the statement:
+    a temporary that the statement releases when it ends (a receiver, or an argument of a call that qcc replaces with
+    the argument that it returns) was released when the next statement ended.  qcc also released the other arguments
+    of such a call when the statement ended instead of where the call returned.  BranchBlockTempRelease.q gives the
+    output of the AST interpreter in every execution mode and compiled with qcc.
+*/
+class BranchBlockTempReleaseTest inherits QUnit::Test {
+    public {
+        #! the output of each run of the cases of BranchBlockTempRelease.q with the AST interpreter
+        const Cases = "ternary-then: [\"~p\", \"after1\", \"~r\", \"after2\", \"~a\", \"~y\"] live=0
+ternary-else: [\"~q\", \"after1\", \"~r\", \"after2\", \"~b\", \"~y\"] live=0
+null-coalescing-rhs: [\"~a\", \"~q\", \"after1\", \"~r\", \"after2\", \"~b\", \"~y\"] live=0
+null-coalescing-lhs: [\"after1\", \"~r\", \"after2\", \"~y\"] live=0
+value-coalescing-0: [\"~a\", \"~q\", \"after1\", \"~r\", \"after2\", \"~b\", \"~y\"] live=0
+value-coalescing-1: [\"~a\", \"after1\", \"~r\", \"after2\", \"~y\"] live=0
+value-coalescing-2: [\"~a\", \"after1\", \"~r\", \"after2\", \"~y\"] live=0
+logical-or-0: [\"~a\", \"after1:1\", \"~r\", \"after2\", \"~y\"] live=0
+logical-or-1: [\"~a\", \"~b\", \"after1:1\", \"~r\", \"after2\", \"~y\"] live=0
+logical-or-2: [\"~a\", \"~b\", \"~c\", \"after1:1\", \"~r\", \"after2\", \"~y\"] live=0
+logical-or-3: [\"~a\", \"~b\", \"~c\", \"c\"] live=0
+logical-and-0: [\"~a\", \"after1:0\", \"~r\", \"after2\", \"~y\"] live=0
+logical-and-1: [\"~a\", \"~b\", \"after1:0\", \"~r\", \"after2\", \"~y\"] live=0
+logical-and-2: [\"~a\", \"~b\", \"~c\", \"after1:1\", \"~r\", \"after2\", \"~y\"] live=0
+logical-and-3: [\"~a\", \"~b\", \"~c\", \"c\"] live=0
+nested--1: [\"~d\", \"~z\", \"c\"] live=0
+nested-0: [\"~e\", \"after1\", \"~r\", \"after2\", \"~d\", \"~y\", \"~z\"] live=0
+nested-1: [\"~s\", \"~c\", \"after1\", \"~r\", \"after2\", \"~a\", \"~y\", \"~z\"] live=0
+nested-2: [\"~p\", \"~b\", \"after1\", \"~r\", \"after2\", \"~a\", \"~y\", \"~z\"] live=0
+nested-3: [\"~p\", \"~b\", \"~a\", \"~z\", \"c\"] live=0
+receiver: [\"~ao\", \"~a\", \"after1\", \"~y\", \"after2:aoy\"] live=0
+member-assignment-0: [\"after1\", \"after2\"] live=0
+member-assignment-1: [\"~ao\", \"~a\", \"after1\", \"after2\"] live=0
+member-assignment-2: [\"~ao\", \"~a\", \"after1\", \"~bo\", \"~b\", \"after2\"] live=0
+member-assignment-3: [\"~ao\", \"~a\", \"after1\", \"~bo\", \"~b\", \"c\"] live=0
+return-0: [\"~q\", \"~z\", \"got\", \"~b\", \"removed\"] live=0
+return-1: [\"~p\", \"~z\", \"got\", \"~a\", \"removed\"] live=0
+return-2: [\"~p\", \"~a\", \"~z\", \"c\"] live=0
+loop-0: [\"~q0\", \"~b0\", \"~w0\", \"c\"] live=0
+loop-1: [\"~q0\", \"s0\", \"~x0\", \"~z0\", \"t0:1\", \"~b0\", \"~w0\", \"~p1\", \"~a1\", \"~w1\", \"c\"] live=0
+loop-2: [\"~q0\", \"s0\", \"~x0\", \"~z0\", \"t0:1\", \"~b0\", \"~w0\", \"~p1\", \"s1\", \"~x1\", \"~z1\", \"t1:1\", \"~a1\", \"~w1\", \"~q2\", \"~b2\", \"~w2\", \"c\"] live=0
+loop-3: [\"~q0\", \"s0\", \"~x0\", \"~z0\", \"t0:1\", \"~b0\", \"~w0\", \"~p1\", \"s1\", \"~x1\", \"~z1\", \"t1:1\", \"~a1\", \"~w1\", \"~q2\", \"s2\", \"~x2\", \"~y2\", \"t2:1\", \"~b2\", \"~w2\", \"~p3\", \"~a3\", \"~w3\", \"c\"] live=0
+loop-4: [\"~q0\", \"s0\", \"~x0\", \"~z0\", \"t0:1\", \"~b0\", \"~w0\", \"~p1\", \"s1\", \"~x1\", \"~z1\", \"t1:1\", \"~a1\", \"~w1\", \"~q2\", \"s2\", \"~x2\", \"~y2\", \"t2:1\", \"~b2\", \"~w2\", \"~p3\", \"s3\", \"~x3\", \"~y3\", \"t3:1\", \"~a3\", \"~w3\"] live=0
+folded-and: [\"~a\", \"~b\", \"~z\", \"c\"] live=0
+folded-sum: [\"~a\", \"~b\", \"s:3\", \"~z\"] live=0
+folded-raise: [\"~a\", \"~b\", \"~z\", \"c\"] live=0
+";
+
+        #! the output of BranchBlockTempRelease.q, which runs its cases twice
+        const Expected = Cases + Cases;
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("BranchBlockTempReleaseTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/BranchBlockTempRelease.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the release of the temporaries of the branches of operators", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the release of the temporaries of the branches of operators", opt),
+                \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-branch-block-temp-release-");
+        string exe = tmp.path + DirSep + "branch-block-temp-release";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

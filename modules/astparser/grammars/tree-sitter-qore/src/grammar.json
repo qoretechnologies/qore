@@ -841,6 +841,10 @@
             },
             {
               "type": "STRING",
+              "value": "%no-strict-parse-errors"
+            },
+            {
+              "type": "STRING",
               "value": "%no-subroutine-defs"
             },
             {
@@ -850,6 +854,10 @@
             {
               "type": "STRING",
               "value": "%require-dollar"
+            },
+            {
+              "type": "STRING",
+              "value": "%strict-parse-errors"
             },
             {
               "type": "STRING",

@@ -11,6 +11,8 @@ string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
 string code = "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int effects;
 

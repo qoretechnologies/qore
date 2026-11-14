@@ -132,12 +132,18 @@ static std::shared_ptr<arrow::Buffer> wrapQoreBufferMemory(const uint8_t* data, 
 
 struct QoreParquetReadOptions {
     struct Filter {
+        //! the column name, in the default encoding, for the DataFrame filter
         std::string column;
         std::string op;
         QoreValue value;
+        //! the column name in UTF-8, the encoding of Arrow names, for the Arrow and Parquet lookups (qore#6100)
+        std::string arrow_column;
     };
 
+    //! the column names in the default encoding, for the DataFrame projection
     std::vector<std::string> columns;
+    //! the column names in UTF-8, the encoding of Arrow names, for the Arrow and Parquet lookups (qore#6100)
+    std::vector<std::string> arrow_columns;
     std::vector<int> row_groups;
     std::vector<Filter> filters;
     int64_t batch_size = 0;
@@ -277,6 +283,10 @@ static bool qoreParquetReadFilterHash(const QoreHashNode* filter, int64_t index,
             "Parquet option 'filters' entry " QLLD " key 'column' must not be empty", (int64)index);
         return false;
     }
+    // a column name is in the default encoding, and an Arrow name in UTF-8 (qore#6100)
+    if (dataFrameUtf8Bytes(out.column.data(), out.column.size(), QCS_DEFAULT, out.arrow_column, xsink)) {
+        return false;
+    }
 
     QoreValue op = filter->getKeyValue("op");
     if (op.getType() != NT_STRING) {
@@ -356,6 +366,14 @@ static bool qoreParquetReadOptions(const QoreHashNode* options, QoreParquetReadO
             || !qoreParquetReadIntListOption(options, "row_groups", parsed.row_groups, parsed.has_row_groups, xsink)
             || !qoreParquetReadFiltersOption(options, parsed.filters, parsed.has_filters, xsink)) {
         return false;
+    }
+    // a column name is in the default encoding, and an Arrow name in UTF-8 (qore#6100)
+    parsed.arrow_columns.resize(parsed.columns.size());
+    for (size_t i = 0; i < parsed.columns.size(); ++i) {
+        if (dataFrameUtf8Bytes(parsed.columns[i].data(), parsed.columns[i].size(), QCS_DEFAULT,
+                parsed.arrow_columns[i], xsink)) {
+            return false;
+        }
     }
 
     QoreValue batch_size = options->getKeyValue("batch_size");
@@ -517,9 +535,11 @@ static std::vector<int> qoreParquetColumnIndicesForNames(
                 }
                 available_names << value;
             }
-            xsink->raiseException("DATAFRAME-IO-ERROR",
-                "Parquet file has no top-level column '%s'; available columns: %s",
-                name.c_str(), available_names.str().c_str());
+            // the names are in UTF-8, the encoding of Arrow names (qore#6100)
+            QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+            desc->sprintf("Parquet file has no top-level column '%s'; available columns: %s", name.c_str(),
+                available_names.str().c_str());
+            xsink->raiseException("DATAFRAME-IO-ERROR", desc);
             return {};
         }
     }
@@ -532,7 +552,7 @@ static void qoreParquetAppendFilterColumns(std::vector<std::string>& names,
         if (i && !(i % 100) && qore_check_cancel(xsink, "adding Parquet filter columns")) {
             return;
         }
-        const std::string& name = filters[i].column;
+        const std::string& name = filters[i].arrow_column;
         if (std::find(names.begin(), names.end(), name) == names.end()) {
             names.push_back(name);
         }
@@ -639,8 +659,9 @@ static bool qoreParquetStringStatsMayMatch(const std::shared_ptr<parquet::Statis
         return true;
     }
     auto typed = std::static_pointer_cast<parquet::ByteArrayStatistics>(stats);
+    std::string min = parquet::ByteArrayToString(typed->min());
     return qoreParquetRangeMayMatch(
-        qoreParquetCompareStringBytes(parquet::ByteArrayToString(typed->min()), value),
+        qoreParquetCompareStringBytes(min, value),
         qoreParquetCompareStringBytes(parquet::ByteArrayToString(typed->max()), value),
         filter.op);
 }
@@ -827,10 +848,88 @@ static bool qoreParquetStatsMayMatchDecimal(const parquet::ColumnDescriptor* col
     }
 }
 
-static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
+//! returns true if the statistics of a column can exclude rows for a filter comparison with the given value
+/** A row group is skipped only if no cell of it can match the filter, which DataFrame::filter() evaluates on the
+    rows read as the core comparison operators compare the cell that the DataFrame gets and the value (qore#6061); so
+    the statistics are used only where they order the column's values as the core operators do for the value, which
+    is for the values with which DataFrame::filter() uses the typed comparison of the column: a value of the column's
+    own type (an absolute date for a date or timestamp column, a string for a string column, whose cells are in
+    UTF-8) and an int for a float column, and an int, which the core operators compare exactly, for a
+    decimal column
+
+    A timestamp column in nanoseconds is not pruned, as its cells are truncated to microseconds when they are read,
+    and a decimal column is pruned only with an int that it can hold, which its scale can be applied to exactly
+*/
+static bool qoreParquetStatsCanPrune(const arrow::DataType& type, QoreValue value) {
+    qore_type_t vt = value.getType();
+    switch (type.id()) {
+        case arrow::Type::BOOL:
+            return vt == NT_BOOLEAN;
+        // the statistics of a UINT32 or UINT64 column are ordered as unsigned values, but read as signed ones
+        case arrow::Type::INT8:
+        case arrow::Type::INT16:
+        case arrow::Type::INT32:
+        case arrow::Type::INT64:
+        case arrow::Type::UINT8:
+        case arrow::Type::UINT16:
+            return vt == NT_INT;
+        case arrow::Type::FLOAT:
+        case arrow::Type::DOUBLE:
+            return vt == NT_FLOAT || vt == NT_INT;
+        case arrow::Type::STRING:
+        case arrow::Type::LARGE_STRING:
+            return vt == NT_STRING;
+        case arrow::Type::DATE32:
+        case arrow::Type::TIMESTAMP: {
+            if (vt != NT_DATE) {
+                return false;
+            }
+            if (type.id() == arrow::Type::TIMESTAMP
+                    && static_cast<const arrow::TimestampType&>(type).unit() == arrow::TimeUnit::NANO) {
+                return false;
+            }
+            const DateTimeNode* dt = value.get<const DateTimeNode>();
+            if (dt->isRelative()) {
+                return false;
+            }
+            // the epoch microseconds of the date must fit in an int64
+            constexpr int64 max_seconds = std::numeric_limits<int64_t>::max() / 1000000 - 1;
+            int64 seconds = dt->getEpochSecondsUTC();
+            return seconds <= max_seconds && seconds >= -max_seconds;
+        }
+        case arrow::Type::DECIMAL128:
+        case arrow::Type::DECIMAL256: {
+            if (vt != NT_INT) {
+                return false;
+            }
+            // the int must have no more digits than the integer part of the column, or the rescaled value can
+            // overflow
+            const arrow::DecimalType& dec_type = static_cast<const arrow::DecimalType&>(type);
+            int int_digits = dec_type.precision() - dec_type.scale();
+            uint64_t magnitude = value.getAsBigInt() < 0
+                ? 0 - static_cast<uint64_t>(value.getAsBigInt())
+                : static_cast<uint64_t>(value.getAsBigInt());
+            int digits = 0;
+            while (magnitude) {
+                ++digits;
+                magnitude /= 10;
+            }
+            // a Decimal128 holds 38 digits
+            return digits <= int_digits && digits + dec_type.scale() <= 38;
+        }
+        default:
+            return false;
+    }
+}
+
+static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column, const arrow::DataType& type,
         const std::shared_ptr<parquet::Statistics>& stats,
-        int64_t row_count, const QoreParquetReadOptions::Filter& filter,
+        int64_t row_count, const QoreParquetReadOptions::Filter& orig_filter,
         ExceptionSink* xsink = nullptr) {
+    // the core operators compare an enum member as its value
+    const QoreParquetReadOptions::Filter filter{orig_filter.column, orig_filter.op,
+        orig_filter.value.isEnum() ? orig_filter.value.getEnumMember()->getValue() : orig_filter.value,
+        orig_filter.arrow_column};
     bool cmp_is_null = filter.value.isNullOrNothing();
     bool has_null_count = stats && stats->HasNullCount();
     int64_t null_count = has_null_count ? stats->null_count() : 0;
@@ -854,8 +953,9 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
                     && qore_check_cancel(xsink, "checking Parquet list filter statistics")) {
                 return true;
             }
-            QoreParquetReadOptions::Filter eq_filter{filter.column, "==", values->retrieveEntry(i)};
-            if (qoreParquetStatsMayMatch(column, stats, row_count, eq_filter, xsink)) {
+            QoreParquetReadOptions::Filter eq_filter{filter.column, "==", values->retrieveEntry(i),
+                filter.arrow_column};
+            if (qoreParquetStatsMayMatch(column, type, stats, row_count, eq_filter, xsink)) {
                 return true;
             }
         }
@@ -868,6 +968,9 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
         return false;
     }
     if (!stats || !stats->HasMinMax()) {
+        return true;
+    }
+    if (!qoreParquetStatsCanPrune(type, filter.value)) {
         return true;
     }
 
@@ -911,15 +1014,17 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
         case parquet::Type::INT64:
             return qoreParquetTypedStatsMayMatch<parquet::Int64Type>(stats, filter, filter.value.getAsBigInt());
         case parquet::Type::FLOAT: {
+            // a NaN cell, which the statistics leave out, matches != with any value
             double value = filter.value.getAsFloat();
-            if (std::isnan(value)) {
+            if (std::isnan(value) || filter.op == "!=") {
                 return true;
             }
-            return qoreParquetTypedStatsMayMatch<parquet::FloatType>(stats, filter, static_cast<float>(value));
+            // the cells are compared with the value as doubles, so the value is not rounded to a float
+            return qoreParquetTypedStatsMayMatch<parquet::FloatType>(stats, filter, value);
         }
         case parquet::Type::DOUBLE: {
             double value = filter.value.getAsFloat();
-            if (std::isnan(value)) {
+            if (std::isnan(value) || filter.op == "!=") {
                 return true;
             }
             return qoreParquetTypedStatsMayMatch<parquet::DoubleType>(stats, filter, value);
@@ -928,7 +1033,13 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
             if (filter.op == "contains" || filter.op == "startswith" || filter.op == "endswith") {
                 return true;
             }
-            QoreStringValueHelper str(filter.value);
+            // the core operators convert the value to the encoding of the cells, which is UTF-8 here
+            ExceptionSink conv_xsink;
+            QoreStringValueHelper str(filter.value, QCS_UTF8, &conv_xsink);
+            if (conv_xsink) {
+                conv_xsink.clear();
+                return true;
+            }
             return qoreParquetStringStatsMayMatch(stats, filter, dataFrameStdString(*str));
         }
         default:
@@ -937,16 +1048,23 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
 }
 
 static bool qoreParquetRowGroupMayMatch(const std::unique_ptr<parquet::arrow::FileReader>& reader,
-        int row_group, const QoreParquetReadOptions::Filter& filter, ExceptionSink* xsink) {
-    int column_index = qoreParquetUniqueLeafIndexForTopLevelName(reader, filter.column, xsink);
+        const arrow::Schema& schema, int row_group, const QoreParquetReadOptions::Filter& filter,
+        ExceptionSink* xsink) {
+    int column_index = qoreParquetUniqueLeafIndexForTopLevelName(reader, filter.arrow_column, xsink);
     if (*xsink || column_index < 0) {
+        return true;
+    }
+
+    // the Arrow type of the column gives the type of the DataFrame column that the rows are read into
+    std::shared_ptr<arrow::Field> field = schema.GetFieldByName(filter.arrow_column);
+    if (!field) {
         return true;
     }
 
     auto metadata = reader->parquet_reader()->metadata();
     std::unique_ptr<parquet::RowGroupMetaData> rg = metadata->RowGroup(row_group);
     std::unique_ptr<parquet::ColumnChunkMetaData> chunk = rg->ColumnChunk(column_index);
-    return qoreParquetStatsMayMatch(metadata->schema()->Column(column_index), chunk->statistics(),
+    return qoreParquetStatsMayMatch(metadata->schema()->Column(column_index), *field->type(), chunk->statistics(),
         rg->num_rows(), filter, xsink);
 }
 
@@ -978,6 +1096,10 @@ static std::vector<int> qoreParquetFilteredRowGroups(
     if (!options.has_filters || !options.use_statistics) {
         return row_groups;
     }
+    std::shared_ptr<arrow::Schema> schema;
+    if (!reader->GetSchema(&schema).ok() || !schema) {
+        return row_groups;
+    }
 
     std::vector<int> selected;
     selected.reserve(row_groups.size());
@@ -990,7 +1112,7 @@ static std::vector<int> qoreParquetFilteredRowGroups(
             if (f && !(f % 100) && qore_check_cancel(xsink, "checking Parquet row-group filter statistics")) {
                 return {};
             }
-            if (!qoreParquetRowGroupMayMatch(reader, row_groups[r], options.filters[f], xsink)) {
+            if (!qoreParquetRowGroupMayMatch(reader, *schema, row_groups[r], options.filters[f], xsink)) {
                 may_match = false;
                 break;
             }
@@ -1020,9 +1142,10 @@ static std::shared_ptr<arrow::Table> qoreParquetReorderTopLevelColumns(
         }
         int index = table->schema()->GetFieldIndex(names[i]);
         if (index < 0) {
-            xsink->raiseException("DATAFRAME-IO-ERROR",
-                "Parquet projection did not produce top-level column '%s'",
-                names[i].c_str());
+            // the name is in UTF-8, the encoding of Arrow names (qore#6100)
+            QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+            desc->sprintf("Parquet projection did not produce top-level column '%s'", names[i].c_str());
+            xsink->raiseException("DATAFRAME-IO-ERROR", desc);
             return nullptr;
         }
         if (std::find(indices.begin(), indices.end(), index) == indices.end()) {
@@ -1130,6 +1253,38 @@ static std::shared_ptr<arrow::DataType> bufferElementTypeToArrowType(QoreBufferE
         default:
             return nullptr;
     }
+}
+
+//! returns a column or field name, which is in the default encoding, in UTF-8, the encoding of Arrow names (qore#6100)
+static std::string arrowName(const std::string& name, ExceptionSink* xsink) {
+    std::string rv;
+    dataFrameUtf8Bytes(name.data(), name.size(), QCS_DEFAULT, rv, xsink);
+    return rv;
+}
+
+//! returns an Arrow name, which is in UTF-8, in the default encoding, the encoding of column names and hash keys
+//! (qore#6100)
+static std::string qoreName(const std::string& name, ExceptionSink* xsink) {
+    std::string rv;
+    dataFrameDefaultString(name, rv, xsink);
+    return rv;
+}
+
+//! returns an Arrow name in the default encoding with no copy when the default encoding is UTF-8, for the struct
+//! field names of each value (qore#6100)
+/** @param buf the string that holds the name when it is converted
+
+    @return the name in the default encoding (\a name or \a buf), or an empty string if a DATAFRAME-ENCODING-ERROR
+    exception was raised
+*/
+static const std::string& qoreNameRef(const std::string& name, std::string& buf, ExceptionSink* xsink) {
+    if (QCS_DEFAULT == QCS_UTF8) {
+        return name;
+    }
+    if (dataFrameConvertFromUtf8(name, QCS_DEFAULT, buf, xsink)) {
+        buf.clear();
+    }
+    return buf;
 }
 
 static QoreColumnarTypeDescriptor arrowTypeToColumnarDescriptor(const std::string& name,
@@ -1269,21 +1424,21 @@ static QoreColumnarTypeDescriptor arrowTypeToColumnarDescriptor(const std::strin
             return desc;
         }
         auto child = type->field(i);
-        desc.children.push_back(arrowTypeToColumnarDescriptor(child->name(), child->type(), child->nullable(),
-            xsink));
+        desc.children.push_back(arrowTypeToColumnarDescriptor(qoreName(child->name(), xsink), child->type(),
+            child->nullable(), xsink));
     }
     return desc;
 }
 
 static QoreColumnarTypeDescriptor arrowFieldToColumnarDescriptor(const std::shared_ptr<arrow::Field>& field,
         ExceptionSink* xsink) {
-    return arrowTypeToColumnarDescriptor(field->name(), field->type(), field->nullable(), xsink);
+    return arrowTypeToColumnarDescriptor(qoreName(field->name(), xsink), field->type(), field->nullable(), xsink);
 }
 
 static void setArrowColumnarSchema(ColumnData& data, const std::shared_ptr<arrow::Field>& field,
         ExceptionSink* xsink) {
     data.columnar_schema = arrowFieldToColumnarDescriptor(field, xsink);
-    data.columnar_schema.name = field->name();
+    data.columnar_schema.name = qoreName(field->name(), xsink);
     data.has_columnar_schema = !*xsink;
 }
 
@@ -1328,7 +1483,10 @@ static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
 
 static std::shared_ptr<arrow::Field> columnarDescriptorToArrowField(
         const QoreColumnarTypeDescriptor& desc, const std::string& fallback_name, ExceptionSink* xsink) {
-    std::string name = desc.name.empty() ? fallback_name : desc.name;
+    std::string name = arrowName(desc.name.empty() ? fallback_name : desc.name, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     auto type = columnarDescriptorToArrowType(desc, xsink);
     if (!type) {
         return nullptr;
@@ -1463,6 +1621,16 @@ static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
     }
 }
 
+//! returns the quotient of a division by a positive divisor rounded down (toward negative infinity)
+/** A negative dividend a is divided as ~a (-a - 1, which is not negative), and the quotient is complemented back:
+    floor(a / b) = ~(~a / b); one unsigned division (by a constant where it is inlined with a constant divisor, as
+    at every call here), with no remainder or branch.
+*/
+static inline int64_t floorDiv(int64_t a, int64_t b) {
+    uint64_t sign = static_cast<uint64_t>(a >> 63);
+    return static_cast<int64_t>(((static_cast<uint64_t>(a) ^ sign) / static_cast<uint64_t>(b)) ^ sign);
+}
+
 static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
         int64_t index, ExceptionSink* xsink) {
     if (array->IsNull(index)) {
@@ -1565,10 +1733,13 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     secs = val / 1000000;
                     us = val % 1000000;
                     break;
-                case arrow::TimeUnit::NANO:
-                    secs = val / 1000000000;
-                    us = (val % 1000000000) / 1000;
+                case arrow::TimeUnit::NANO: {
+                    // rounded down to the microsecond, as an export rounds a date down to the time unit (qore#6102)
+                    int64_t micros = floorDiv(val, 1000);
+                    secs = micros / 1000000;
+                    us = micros % 1000000;
                     break;
+                }
             }
             return DateTimeNode::makeAbsolute(zone, secs, us);
         }
@@ -1622,8 +1793,9 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     return QoreValue();
                 }
                 // a field name with a NUL character cannot be a hash key; the value cannot be read to a hash
-                const std::string& field_name = struct_type->field(i)->name();
-                if (QoreHashNode::checkKey(field_name.data(), field_name.size(), "DATAFRAME-IO-ERROR",
+                std::string name_buf;
+                const std::string& field_name = qoreNameRef(struct_type->field(i)->name(), name_buf, xsink);
+                if (*xsink || QoreHashNode::checkKey(field_name.data(), field_name.size(), "DATAFRAME-IO-ERROR",
                         "struct field name", xsink)) {
                     child_val.discard(xsink);
                     return QoreValue();
@@ -1703,17 +1875,36 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                 if (*xsink) {
                     return QoreValue();
                 }
-                QoreStringValueHelper key_str(*key_val);
+                // a hash key is in the default encoding; a key that it cannot represent raises
+                // DATAFRAME-ENCODING-ERROR, as a column or field name does (qore#6100)
+                std::string key_buf;
+                const char* key;
+                size_t key_len;
+                // a string read from Arrow is in UTF-8; a short string is stored in the value, with no string node
+                QoreStringDataHelper key_data(*key_val);
+                if (key_data && key_data.getEncoding() == QCS_UTF8 && QCS_DEFAULT == QCS_UTF8) {
+                    key = key_data.c_str();
+                    key_len = key_data.size();
+                } else {
+                    if (key_data && key_data.getEncoding() == QCS_UTF8) {
+                        dataFrameConvertFromUtf8(std::string(key_data.c_str(), key_data.size()), QCS_DEFAULT,
+                            key_buf, xsink);
+                    } else {
+                        QoreStringValueHelper key_str(*key_val, QCS_DEFAULT, xsink);
+                        key_buf = dataFrameStdString(*key_str);
+                    }
+                    key = key_buf.c_str();
+                    key_len = key_buf.size();
+                }
                 // a map key with a NUL character cannot be a hash key; the value cannot be read to a hash
-                if (QoreHashNode::checkKey(key_str->c_str(), key_str->size(), "DATAFRAME-IO-ERROR", "map key",
-                        xsink)) {
+                if (*xsink || QoreHashNode::checkKey(key, key_len, "DATAFRAME-IO-ERROR", "map key", xsink)) {
                     return QoreValue();
                 }
                 QoreValue item_val = arrowScalarToQore(items, start + i, xsink);
                 if (*xsink) {
                     return QoreValue();
                 }
-                hash->setKeyValue(key_str->c_str(), item_val, xsink);
+                hash->setKeyValue(key, item_val, xsink);
             }
             return hash.release();
         }
@@ -1746,6 +1937,14 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
         return QoreValue();
     }
     return new QoreStringNode(scalar_result.ValueOrDie()->ToString());
+}
+
+//! returns the error of a date or duration that does not fit in an int64 of the given time unit, out of line, as it
+//! is rare
+__attribute__((noinline, cold)) static arrow::Status arrowTimeOverflow(const DateTimeNode* dt, const char* unit) {
+    QoreStringValueHelper str(dt);
+    return arrow::Status::Invalid(dt->isRelative() ? "the duration " : "the date ", str->c_str(),
+        " cannot be stored in ", unit, " in an int64");
 }
 
 static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
@@ -1807,14 +2006,30 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         case arrow::Type::DOUBLE:
             status = static_cast<arrow::DoubleBuilder*>(builder)->Append(val.getAsFloat());
             break;
-        case arrow::Type::STRING: {
-            QoreStringValueHelper str(val);
-            status = static_cast<arrow::StringBuilder*>(builder)->Append(str->c_str(), str->size());
-            break;
-        }
+        // an Arrow string is in UTF-8 (a hash key written as a map key, for example, is in the default encoding)
+        case arrow::Type::STRING:
         case arrow::Type::LARGE_STRING: {
-            QoreStringValueHelper str(val);
-            status = static_cast<arrow::LargeStringBuilder*>(builder)->Append(str->c_str(), str->size());
+            // a UTF-8 string, the usual value, is appended with no conversion and no call to QoreValue::getType()
+            auto append = [&](const char* data, size_t len) {
+                status = type->id() == arrow::Type::STRING
+                    ? static_cast<arrow::StringBuilder*>(builder)->Append(data, len)
+                    : static_cast<arrow::LargeStringBuilder*>(builder)->Append(data, len);
+            };
+            const QoreStringNode* node = val.isPointer() && val.getPtr()->getType() == NT_STRING
+                ? static_cast<const QoreStringNode*>(val.getPtr()) : nullptr;
+            if (node && node->getEncoding() == QCS_UTF8) {
+                append(node->c_str(), node->size());
+            } else if (val.isShortString()) {
+                // a short string is always in UTF-8
+                QoreStringDataHelper str(val);
+                append(str.c_str(), str.size());
+            } else {
+                QoreStringValueHelper str(val, QCS_UTF8, xsink);
+                if (*xsink) {
+                    return false;
+                }
+                append(str->c_str(), str->size());
+            }
             break;
         }
         case arrow::Type::BINARY: {
@@ -1854,29 +2069,43 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                 status = builder->AppendNull();
                 break;
             }
-            int64_t epoch = dt->getEpochSecondsUTC();
-            int64_t us = dt->getMicrosecond();
-            if (type->id() == arrow::Type::DATE32) {
-                status = static_cast<arrow::Date32Builder*>(builder)->Append(static_cast<int32_t>(epoch / 86400));
-            } else if (type->id() == arrow::Type::DATE64) {
-                status = static_cast<arrow::Date64Builder*>(builder)->Append(epoch * 1000 + us / 1000);
-            } else {
-                auto ts_type = std::static_pointer_cast<arrow::TimestampType>(type);
-                int64_t ts_val = 0;
-                switch (ts_type->unit()) {
+            // the microseconds since the epoch (or of a duration), with no overflow: a date or duration that does
+            // not fit in an int64 of the unit of the column raises an error instead of wrapping (qore#6102)
+            int64 micros;
+            // the unit in which the value does not fit, if it does not
+            const char* overflow = dt->getEpochMicrosecondsUTCChecked(micros) ? nullptr : "microseconds";
+            int64_t ts_val = 0;
+            if (!overflow) {
+                switch (type->id() == arrow::Type::TIMESTAMP
+                        ? std::static_pointer_cast<arrow::TimestampType>(type)->unit() : arrow::TimeUnit::MILLI) {
                     case arrow::TimeUnit::SECOND:
-                        ts_val = epoch;
+                        ts_val = floorDiv(micros, 1000000);
                         break;
                     case arrow::TimeUnit::MILLI:
-                        ts_val = epoch * 1000 + us / 1000;
+                        ts_val = floorDiv(micros, 1000);
                         break;
                     case arrow::TimeUnit::MICRO:
-                        ts_val = epoch * 1000000 + us;
+                        ts_val = micros;
                         break;
                     case arrow::TimeUnit::NANO:
-                        ts_val = epoch * 1000000000 + us * 1000;
+                        // a date after 2262 or before 1677 does not fit in an int64 of nanoseconds
+                        if (__builtin_mul_overflow(micros, static_cast<int64_t>(1000), &ts_val)) {
+                            overflow = "nanoseconds";
+                        }
                         break;
                 }
+            }
+            // one call of each builder, which is inlined
+            if (overflow) {
+                status = arrowTimeOverflow(dt, overflow);
+            } else if (type->id() == arrow::Type::DATE32) {
+                // the days since the epoch, rounded down for a date before 1970 that is not at midnight UTC
+                status = static_cast<arrow::Date32Builder*>(builder)->Append(
+                    static_cast<int32_t>(floorDiv(micros, 86400000000ll)));
+            } else if (type->id() == arrow::Type::DATE64) {
+                // the milliseconds since the epoch
+                status = static_cast<arrow::Date64Builder*>(builder)->Append(ts_val);
+            } else {
                 status = static_cast<arrow::TimestampBuilder*>(builder)->Append(ts_val);
             }
             break;
@@ -1888,24 +2117,33 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                 break;
             }
             auto dur_type = std::static_pointer_cast<arrow::DurationType>(type);
-            int64_t secs = dt->getRelativeSeconds();
-            int64_t us = dt->getRelativeMicroseconds();
+            // the whole duration in microseconds, with no overflow (qore#6102); a duration in seconds or
+            // milliseconds is truncated toward zero, as by DateTime::getRelativeSeconds()
+            int64 micros;
+            // the unit in which the value does not fit, if it does not
+            const char* overflow = dt->getEpochMicrosecondsUTCChecked(micros) ? nullptr : "microseconds";
             int64_t dv = 0;
-            switch (dur_type->unit()) {
-                case arrow::TimeUnit::SECOND:
-                    dv = secs;
-                    break;
-                case arrow::TimeUnit::MILLI:
-                    dv = secs * 1000 + us / 1000;
-                    break;
-                case arrow::TimeUnit::MICRO:
-                    dv = secs * 1000000 + us;
-                    break;
-                case arrow::TimeUnit::NANO:
-                    dv = secs * 1000000000 + us * 1000;
-                    break;
+            if (!overflow) {
+                switch (dur_type->unit()) {
+                    case arrow::TimeUnit::SECOND:
+                        dv = micros / 1000000;
+                        break;
+                    case arrow::TimeUnit::MILLI:
+                        dv = micros / 1000;
+                        break;
+                    case arrow::TimeUnit::MICRO:
+                        dv = micros;
+                        break;
+                    case arrow::TimeUnit::NANO:
+                        if (__builtin_mul_overflow(micros, static_cast<int64_t>(1000), &dv)) {
+                            overflow = "nanoseconds";
+                        }
+                        break;
+                }
             }
-            status = static_cast<arrow::DurationBuilder*>(builder)->Append(dv);
+            // one call of the builder, which is inlined
+            status = overflow ? arrowTimeOverflow(dt, overflow)
+                : static_cast<arrow::DurationBuilder*>(builder)->Append(dv);
             break;
         }
         case arrow::Type::DECIMAL128: {
@@ -1955,8 +2193,9 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                 auto child_field = struct_type->field(i);
                 // the value of a field is the value of the key of the field name in the hash; a field name with a NUL
                 // character cannot be a key, and would otherwise select the value of another key
-                const std::string& field_name = child_field->name();
-                if (QoreHashNode::checkKey(field_name.data(), field_name.size(), xsink)) {
+                std::string name_buf;
+                const std::string& field_name = qoreNameRef(child_field->name(), name_buf, xsink);
+                if (*xsink || QoreHashNode::checkKey(field_name.data(), field_name.size(), xsink)) {
                     return false;
                 }
                 if (!appendToArrowBuilder(struct_builder->child_builder(i).get(), child_field->type(),
@@ -2076,8 +2315,10 @@ static QoreBufferNode* tryArrowFixedWidthColumnToDenseBuffer(
     std::shared_ptr<arrow::Array> chunk = arr->chunk(0);
     std::shared_ptr<arrow::ArrayData> data = chunk->data();
     if (!data || data->buffers.size() < 2 || !data->buffers[1]) {
-        xsink->raiseException("DATAFRAME-IO-ERROR",
-            "Arrow column '%s' has no fixed-width data buffer", field->name().c_str());
+        // the name is in UTF-8, the encoding of Arrow names (qore#6100)
+        QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+        desc->sprintf("Arrow column '%s' has no fixed-width data buffer", field->name().c_str());
+        xsink->raiseException("DATAFRAME-IO-ERROR", desc);
         return nullptr;
     }
 
@@ -2236,17 +2477,35 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
         cd->type = ColumnType::DATE;
         cd->date_data.resize(n);
         auto ts_type = std::static_pointer_cast<arrow::TimestampType>(arrow_type);
+        // a timestamp in seconds or milliseconds can be outside the range of a date cell, an int64 of microseconds
+        // since the epoch; the first one is reported
+        bool out_of_range = false;
+        int64_t out_of_range_value = 0;
         if (!copyArrowChunks<arrow::TimestampArray>(arr, *cd, xsink, "converting Arrow timestamp column",
-                [ts_type](ColumnData& data, int64_t idx, const arrow::TimestampArray& chunk, int64_t i) {
+                [ts_type, &out_of_range, &out_of_range_value](ColumnData& data, int64_t idx,
+                        const arrow::TimestampArray& chunk, int64_t i) {
                     int64_t val = chunk.Value(i);
+                    bool overflow = false;
                     switch (ts_type->unit()) {
-                        case arrow::TimeUnit::SECOND: val *= 1000000; break;
-                        case arrow::TimeUnit::MILLI:  val *= 1000; break;
+                        case arrow::TimeUnit::SECOND: overflow = __builtin_mul_overflow(val, 1000000, &val); break;
+                        case arrow::TimeUnit::MILLI:  overflow = __builtin_mul_overflow(val, 1000, &val); break;
                         case arrow::TimeUnit::MICRO:  break;
-                        case arrow::TimeUnit::NANO:   val /= 1000; break;
+                        // rounded down to the microsecond, as an export rounds a date down to the time unit
+                        // (qore#6102)
+                        case arrow::TimeUnit::NANO:   val = floorDiv(val, 1000); break;
+                    }
+                    if (overflow && !out_of_range) {
+                        out_of_range = true;
+                        out_of_range_value = chunk.Value(i);
                     }
                     data.date_data[idx] = val;
                 }, [](ColumnData& data, int64_t idx) { data.date_data[idx] = 0; })) {
+            return nullptr;
+        }
+        if (out_of_range) {
+            QoreStringMaker desc("the timestamp " QLLD " %s after the epoch", (int64)out_of_range_value,
+                ts_type->unit() == arrow::TimeUnit::SECOND ? "seconds" : "milliseconds");
+            dataFrameRaiseDateRangeError(desc.c_str(), xsink);
             return nullptr;
         }
     } else {
@@ -2441,6 +2700,11 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             return nullptr;
         }
         ++column_index;
+        // a column name is in the default encoding, and an Arrow name in UTF-8
+        std::string arrow_name = arrowName(col.name, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
 
         const ColumnData& cd = *col.data;
         if (cd.has_columnar_schema) {
@@ -2472,7 +2736,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
         switch (cd.type) {
             case ColumnType::INT64: {
                 auto type = arrow::int64();
-                fields.push_back(arrow::field(col.name, type));
+                fields.push_back(arrow::field(arrow_name, type));
                 auto dense_arr = denseBufferToArrowArray(cd, type, col.name, xsink);
                 if (*xsink) {
                     return nullptr;
@@ -2508,7 +2772,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             }
             case ColumnType::FLOAT64: {
                 auto type = arrow::float64();
-                fields.push_back(arrow::field(col.name, type));
+                fields.push_back(arrow::field(arrow_name, type));
                 auto dense_arr = denseBufferToArrowArray(cd, type, col.name, xsink);
                 if (*xsink) {
                     return nullptr;
@@ -2543,7 +2807,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                 break;
             }
             case ColumnType::STRING: {
-                fields.push_back(arrow::field(col.name, arrow::utf8()));
+                fields.push_back(arrow::field(arrow_name, arrow::utf8()));
                 arrow::StringBuilder builder(pool);
                 if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
                         "error reserving Arrow string array", col.name)) {
@@ -2592,7 +2856,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             }
             case ColumnType::BOOL: {
                 auto type = arrow::boolean();
-                fields.push_back(arrow::field(col.name, type));
+                fields.push_back(arrow::field(arrow_name, type));
                 auto dense_arr = denseBufferToArrowArray(cd, type, col.name, xsink);
                 if (*xsink) {
                     return nullptr;
@@ -2628,7 +2892,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             }
             case ColumnType::DATE: {
                 auto ts_type = arrow::timestamp(arrow::TimeUnit::MICRO, "UTC");
-                fields.push_back(arrow::field(col.name, ts_type));
+                fields.push_back(arrow::field(arrow_name, ts_type));
                 auto dense_arr = denseBufferToArrowArray(cd, ts_type, col.name, xsink);
                 if (*xsink) {
                     return nullptr;
@@ -2744,7 +3008,7 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
     std::vector<std::string> read_columns;
     bool has_read_columns = read_options.has_columns;
     if (read_options.has_columns) {
-        read_columns = read_options.columns;
+        read_columns = read_options.arrow_columns;
         if (read_options.has_filters) {
             qoreParquetAppendFilterColumns(read_columns, read_options.filters, xsink);
             if (*xsink) {
@@ -2826,7 +3090,11 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
         }
 
         auto arrow_col = table->column(c);
-        std::string col_name = table->schema()->field(c)->name();
+        std::string col_name = qoreName(table->schema()->field(c)->name(), xsink);
+        if (*xsink) {
+            delete df;
+            return nullptr;
+        }
 
         auto cd = arrowColumnToDF(arrow_col, table->schema()->field(c), xsink);
         if (*xsink) {
@@ -2924,7 +3192,11 @@ QoreDataFrame* QoreDataFrame::fromArrowIpc(const BinaryNode* data,
         }
 
         auto arrow_col = table->column(c);
-        std::string col_name = table->schema()->field(c)->name();
+        std::string col_name = qoreName(table->schema()->field(c)->name(), xsink);
+        if (*xsink) {
+            delete df;
+            return nullptr;
+        }
 
         auto cd = arrowColumnToDF(arrow_col, table->schema()->field(c), xsink);
         if (*xsink) {

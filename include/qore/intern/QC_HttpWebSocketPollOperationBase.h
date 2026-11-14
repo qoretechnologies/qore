@@ -486,10 +486,11 @@ private:
     bool close_frame_queued = false;
     //! How long a close started by the server waits for the client's close frame (milliseconds, 0 = no wait)
     int64 close_timeout_ms = DefaultCloseTimeoutMs;
-    //! When a close started by the server stops waiting for the client's close frame (monotonic ms, 0 = not set)
-    /** Set when the server's close frame has been written
+    //! When a close started by the server stops waiting for the client's close frame (monotonic us, 0 = not set)
+    /** Set when the server's close frame has been written; in microseconds: a deadline in whole milliseconds, from a
+        truncated clock reading, ended the wait up to a millisecond before the close timeout
     */
-    int64 close_deadline_ms = 0;
+    int64 close_deadline_us = 0;
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
     //! Error information (ref'd or nullptr)

@@ -34,6 +34,7 @@
 #define _QORE_INTERN_QORE_ENUM_DECL_PRIVATE_H
 
 #include <qore/QoreEnumDecl.h>
+#include "qore/intern/QoreTypeOwner.h"
 
 #include <map>
 #include <string>
@@ -87,6 +88,7 @@ private:
 };
 
 class qore_enum_decl_private {
+    template <class> friend class QoreTypeOwnerOf;
     friend class qore_enum_member_iterator_private;
     friend class QoreEnumDecl;
     friend class QoreEnumMember;
@@ -103,6 +105,44 @@ public:
     DLLLOCAL qore_enum_decl_private(const qore_enum_decl_private& old, QoreEnumDecl* ed);
 
     DLLLOCAL ~qore_enum_decl_private();
+
+    // QoreTypeOwner (issue #5790)
+    DLLLOCAL const void* getTypeOwnerKey() const {
+        return nullptr;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeOwnerType() const;
+
+    DLLLOCAL const QoreTypeInfo* getTypeOwnerOrNothingType() const;
+
+    DLLLOCAL int getTypeOwnerReferenceCount() const {
+        return refs.reference_count();
+    }
+
+    DLLLOCAL bool isTypeOwnerSystem() const {
+        return sys && orig == this;
+    }
+
+    //! A retired enum keeps its members, which name no declaration
+    DLLLOCAL bool keepsTypeOwnerMembers() const {
+        return true;
+    }
+
+    DLLLOCAL void retireTypeOwner() {
+    }
+
+    DLLLOCAL void freeTypeOwner();
+
+    DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+    }
+
+    DLLLOCAL void refTypeOwner() {
+        ref();
+    }
+
+    DLLLOCAL void derefTypeOwner() {
+        deref();
+    }
 
     DLLLOCAL QoreEnumDecl* newEnumDecl(const char* n, const QoreTypeInfo* baseType);
 
@@ -166,10 +206,19 @@ public:
         refs.ROreference();
     }
 
+    //! returns the number of references to the declaration (for debugging; see dbg_enum_decl_reference_count())
+    DLLLOCAL int referenceCount() const {
+        return refs.reference_count();
+    }
+
     DLLLOCAL bool deref() {
         if (refs.ROdereference()) {
             assert(ed->priv == this);
-            delete ed;
+            // an enum whose types are still named is retired, with its members, as the type checks of its types
+            // compare values with them (issue #5790)
+            if (!qore_type_owner_released(&type_owner)) {
+                delete ed;
+            }
             return true;
         }
         return false;
@@ -322,6 +371,10 @@ protected:
             from_module = mod_name;
         }
     }
+
+public:
+    //! the declaration's QoreTypeOwner (issue #5790); the last member, so the layout of the others is not changed
+    QoreTypeOwnerOf<qore_enum_decl_private> type_owner{this};
 };
 
 class qore_enum_member_iterator_private {
