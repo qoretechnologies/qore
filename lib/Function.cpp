@@ -9555,24 +9555,31 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     const QoreParseOptions& caller_po = ceh->getCallerRuntimeParseOptions();
     // the Program making the call, before the call switches to the Program the variant runs in
     const QoreProgram* caller_pgm = getProgram();
-    UserVariantExecHelper uveh(this, ceh, xsink);
-    if (!uveh) {
-        return QoreValue();
-    }
-    // a call that entered a module's Program from another Program has the override of the crossing already;
-    // otherwise the override of the variant's code is set in the call's helper, and restored when this returns
-    CodeEvaluationPoOverrideBorrow po_override(*ceh);
-    if (po_override.get()) {
-        qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
-    }
+    QoreValue rv;
+    {
+        UserVariantExecHelper uveh(this, ceh, xsink);
+        if (!uveh) {
+            return QoreValue();
+        }
+        // a call that entered a module's Program from another Program has the override of the crossing already;
+        // otherwise the override of the variant's code is set in the call's helper, and restored when this returns
+        CodeEvaluationPoOverrideBorrow po_override(*ceh);
+        if (po_override.get()) {
+            qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
+        }
 
-    // This is a normal function/method call, not a closure invocation.  If the
-    // caller is a closure body, do not let its captured LocalVar* map shadow this
-    // callee's own closure-use locals when evalIntern() dispatches to AOT/JIT code.
-    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+        // This is a normal function/method call, not a closure invocation.  If the
+        // caller is a closure body, do not let its captured LocalVar* map shadow this
+        // callee's own closure-use locals when evalIntern() dispatches to AOT/JIT code.
+        ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
 
-    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : ceh->getClass(), ref_obj);
-    return qore_release_value_with_exception(evalIntern(name, uveh.getArgv(), self, xsink), xsink);
+        CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : ceh->getClass(), ref_obj);
+        rv = qore_release_value_with_exception(evalIntern(name, uveh.getArgv(), self, xsink), xsink);
+    }
+    // the helper's release of the parameters can raise an exception after the call gave its value, which is released
+    // here then, after the parameters, as the AST interpreter releases it: a caller takes no value with an exception
+    // (#6051)
+    return qore_release_value_with_exception(rv, xsink);
 }
 
 QoreValue UserVariantBase::evalWithoutHelper(const char* name, QoreObject* self, ExceptionSink* xsink,
@@ -9583,18 +9590,25 @@ QoreValue UserVariantBase::evalWithoutHelper(const char* name, QoreObject* self,
     QoreParseOptions caller_po = runtime_get_effective_program_parse_options();
     // the Program making the call, before the call switches to the Program the variant runs in
     const QoreProgram* caller_pgm = getProgram();
-    UserVariantExecHelper uveh(this, nullptr, xsink);
-    if (!uveh) {
-        return QoreValue();
+    QoreValue rv;
+    {
+        UserVariantExecHelper uveh(this, nullptr, xsink);
+        if (!uveh) {
+            return QoreValue();
+        }
+        RuntimeParseOptionsOverrideHelper po_override;
+        qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
+
+        // see eval()
+        ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+
+        CodeContextHelper cch(xsink, CT_USER, name, self, qc, ref_obj);
+        rv = qore_release_value_with_exception(evalIntern(name, uveh.getArgv(), self, xsink), xsink);
     }
-    RuntimeParseOptionsOverrideHelper po_override;
-    qore_set_user_call_runtime_po_override(po_override, uveh.getProgram(), this, &caller_po, caller_pgm);
-
-    // see eval()
-    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
-
-    CodeContextHelper cch(xsink, CT_USER, name, self, qc, ref_obj);
-    return qore_release_value_with_exception(evalIntern(name, uveh.getArgv(), self, xsink), xsink);
+    // the helper's release of the parameters can raise an exception after the call gave its value, which is released
+    // here then, after the parameters, as the AST interpreter releases it: a caller takes no value with an exception
+    // (#6051)
+    return qore_release_value_with_exception(rv, xsink);
 }
 
 QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreClosureBase& closure_base,
@@ -9611,26 +9625,33 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
     const QoreParseOptions& caller_po = ceh.getCallerRuntimeParseOptions();
     // the Program making the call, before the call switches to the Program the variant runs in
     const QoreProgram* caller_pgm = getProgram();
-    UserVariantExecHelper uveh(this, &ceh, xsink);
-    if (!uveh) {
-        return QoreValue();
+    QoreValue rv;
+    {
+        UserVariantExecHelper uveh(this, &ceh, xsink);
+        if (!uveh) {
+            return QoreValue();
+        }
+        // a call that entered a module's Program from another Program has the override of the crossing already;
+        // otherwise the override of the closure's code is set in the call's helper (see UserVariantBase::eval())
+        CodeEvaluationPoOverrideBorrow po_override(ceh);
+        if (po_override.get()) {
+            qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
+        }
+
+        CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
+
+        // UserVariantExecHelper above selects the final program/TLPD used by evalIntern().
+        // Captured CVVs must be installed after that point so VT_LOCAL_TS reference/lvalue
+        // lookups search the same cvstack that the closure body uses.
+        CVecInstantiator cvi(closure_base.getCvec(), xsink);
+        ThreadSafeLocalVarRuntimeEnvironmentHelper ch(&closure_base);
+
+        rv = qore_release_value_with_exception(evalIntern("<anonymous closure>", uveh.getArgv(), self, xsink), xsink);
     }
-    // a call that entered a module's Program from another Program has the override of the crossing already;
-    // otherwise the override of the closure's code is set in the call's helper (see UserVariantBase::eval())
-    CodeEvaluationPoOverrideBorrow po_override(ceh);
-    if (po_override.get()) {
-        qore_set_user_call_runtime_po_override(*po_override.get(), uveh.getProgram(), this, &caller_po, caller_pgm);
-    }
-
-    CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
-
-    // UserVariantExecHelper above selects the final program/TLPD used by evalIntern().
-    // Captured CVVs must be installed after that point so VT_LOCAL_TS reference/lvalue
-    // lookups search the same cvstack that the closure body uses.
-    CVecInstantiator cvi(closure_base.getCvec(), xsink);
-    ThreadSafeLocalVarRuntimeEnvironmentHelper ch(&closure_base);
-
-    return qore_release_value_with_exception(evalIntern("<anonymous closure>", uveh.getArgv(), self, xsink), xsink);
+    // the helper's release of the parameters can raise an exception after the call gave its value, which is released
+    // here then, after the parameters, as the AST interpreter releases it: a caller takes no value with an exception
+    // (#6051)
+    return qore_release_value_with_exception(rv, xsink);
 }
 
 void UserVariantBase::parseCommit() {
