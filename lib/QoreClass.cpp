@@ -2023,6 +2023,27 @@ static const QoreTypeInfo* qore_get_instantiated_object_type_info(const QoreClas
     return object_class->getTypeInfo(args);
 }
 
+// Constructor completion and its surrounding checks share the inline form of ExceptionSink's event test.
+// The public operator is out of line; these checks run for every object construction.
+static QORE_INTERN_ALWAYS_INLINE bool qore_constructor_has_event(const ExceptionSink* xsink) {
+    const qore_es_private* es = qore_es_private::get(*xsink);
+    return es->head || es->thread_exit;
+}
+
+//! Consumes the construction's object reference on the exceptional path (#6086).
+static QORE_INTERN_NOINLINE void qore_release_failed_construction(QoreObject* self, bool completed,
+        ExceptionSink* xsink) {
+    if (completed) {
+        // Argument cleanup failed after successful construction. Keep its exception primary while the completed
+        // object's ordinary release runs its destructor (unless the constructor published another reference).
+        self->deref(xsink);
+    } else {
+        // Preserve partial-construction cleanup: release native private data without executing the destructors
+        // of this class or its already-constructed base classes.
+        self->obliterate(xsink);
+    }
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const QoreClass* obj_cls,
@@ -2068,7 +2089,7 @@ QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(Le
     const QoreClass* object_class = obj_cls ? obj_cls : cls;
     const QoreTypeInfo* instantiated_type = qore_get_instantiated_object_type_info(object_class, object_type_info,
         xsink);
-    if (*xsink) {
+    if (qore_constructor_has_event(xsink)) {
         return nullptr;
     }
 
@@ -2092,6 +2113,8 @@ QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(Le
     // if we made at least one assignment, then scan the object for recursive references after all assignments
     bool need_scan = false;
 
+    bool constructor_completed = false;
+
     // instantiate members first
     initMembers(*self, need_scan, xsink);
 
@@ -2100,7 +2123,7 @@ QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(Le
         LValueHelper lvh(*self, xsink);
     }
 
-    if (!*xsink) {
+    if (!qore_constructor_has_event(xsink)) {
         // it's possible for constructor = 0 and variant != 0, when a class is instantiated to initialize a constant
         // and the matched variant is pending
         if (!constructor && !variant) {
@@ -2116,18 +2139,19 @@ QORE_INTERN_ALWAYS_INLINE QoreObject* qore_class_private::execConstructorImpl(Le
             if (!constructor) {
                 hm_method_t::const_iterator i = hm.find("constructor");
                 assert(i != hm.end());
-                i->second->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self, args, *bceal, rc, xsink, tmp_args);
+                constructor_completed = i->second->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self,
+                    args, *bceal, rc, xsink, tmp_args);
             } else
-                constructor->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self, args, *bceal, rc, xsink, tmp_args);
+                constructor_completed = constructor->priv->evalConstructorWithPolicy<Lexical>(policy, variant, self,
+                    args, *bceal, rc, xsink, tmp_args);
             printd(5, "qore_class_private::execConstructor() class: %p %s done\n", cls, name.c_str());
         }
     }
 
-    if (*xsink) {
-        // instead of executing the destructors for the superclasses that were already executed we call QoreObject::obliterate()
-        // which will clear out all the private data by running their dereference methods which must be OK
-        self->obliterate(xsink);
-        printd(5, "qore_class_private::execConstructor() this: %p %s::constructor() o: %p, exception in constructor, obliterating QoreObject and returning 0\n", this, name.c_str(), self);
+    if (qore_constructor_has_event(xsink)) {
+        qore_release_failed_construction(self, constructor_completed, xsink);
+        printd(5, "qore_class_private::execConstructor() this: %p %s::constructor() o: %p, exception during construction "
+            "or argument cleanup, releasing QoreObject and returning 0\n", this, name.c_str(), self);
         return nullptr;
     }
 
@@ -7920,43 +7944,45 @@ QoreValue UserMethodVariant::evalSynchronizedMethod(QoreObject* self, CodeEvalua
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE void BuiltinConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+QORE_INTERN_ALWAYS_INLINE bool BuiltinConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, qore_class_private::get(thisclass));
 
     if (constructorPreludeImpl<Lexical>({}, thisclass, ceh, self, bcl, bceal, xsink))
-        return;
+        return false;
 
     constructor(self, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+    return !qore_constructor_has_event(xsink);
 }
 
-void BuiltinConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
+bool BuiltinConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
-void BuiltinConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+bool BuiltinConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE void BuiltinExternalConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+QORE_INTERN_ALWAYS_INLINE bool BuiltinExternalConstructorValueVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     CodeContextHelper cch(xsink, CT_BUILTIN, "constructor", self, qore_class_private::get(thisclass));
 
     if (constructorPreludeImpl<Lexical>({}, thisclass, ceh, self, bcl, bceal, xsink))
-        return;
+        return false;
 
     constructor(*qmethod, ptr, self, ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+    return !qore_constructor_has_event(xsink);
 }
 
-void BuiltinExternalConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
+bool BuiltinExternalConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
-void BuiltinExternalConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+bool BuiltinExternalConstructorValueVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
 }
@@ -8003,11 +8029,11 @@ void UserConstructorVariant::setBCAList(BCAList* n_bcal) {
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE void UserConstructorVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
+QORE_INTERN_ALWAYS_INLINE bool UserConstructorVariant::evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     UserVariantExecHelper uveh(this, &ceh, xsink);
     if (!uveh)
-        return;
+        return false;
 
     CodeContextHelper cch(xsink, CT_USER, "constructor", self, qore_class_private::get(thisclass), false);
 
@@ -8025,8 +8051,11 @@ QORE_INTERN_ALWAYS_INLINE void UserConstructorVariant::evalConstructorImpl(Lexic
         ArgvContextHelper argv_helper(argv ? argv->listRefSelf() : nullptr, xsink);
     }
 
+    // Capture completion before argv and UVEH parameter cleanup can raise (#6086).
+    bool completed = false;
     if (!constructorPreludeImpl<Lexical>({}, thisclass, ceh, self, bcl, bceal, xsink)) {
-        evalIntern("constructor", uveh.getArgv(), 0, xsink).discard(xsink);
+        evalIntern("constructor", uveh.getArgv(), nullptr, xsink,
+            QoreConstructorCompletion{completed}).discard(xsink);
     }
 
     // uninstantiate argv
@@ -8034,14 +8063,15 @@ QORE_INTERN_ALWAYS_INLINE void UserConstructorVariant::evalConstructorImpl(Lexic
         signature.argvid->uninstantiate(xsink);
 
     // self uninstantiation now handled by SelfInstantiationHelper RAII above
+    return completed;
 }
 
-void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObject* self,
+bool UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<false>({}, thisclass, self, ceh, bcl, bceal, xsink);
 }
 
-void UserConstructorVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
+bool UserConstructorVariant::evalConstructor(LexicalSemanticPolicy policy, const QoreClass &thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
     return evalConstructorImpl<true>(policy, thisclass, self, ceh, bcl, bceal, xsink);
 }
@@ -8241,7 +8271,7 @@ void BuiltinCopyVariantBase::evalCopyImpl(LexicalSemanticPolicy policy, const Qo
 }
 
 template <bool Lexical>
-QORE_INTERN_ALWAYS_INLINE void ConstructorMethodFunction::evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant,
+QORE_INTERN_ALWAYS_INLINE bool ConstructorMethodFunction::evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant,
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
         RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {
     // setup call, save runtime position, and evaluate arguments; a temporary list gives its values to the call (see
@@ -8259,21 +8289,21 @@ QORE_INTERN_ALWAYS_INLINE void ConstructorMethodFunction::evalConstructorImpl(Le
         printd(5, "ConstructorMethodFunction::evalConstructor() %s variant=%p args=%p nargs=%d EXCEPTION in CEH\n",
             thisclass.getName(), static_cast<const void*>(variant), static_cast<const void*>(args),
             args ? static_cast<int>(args->size()) : 0);
-        return;
+        return false;
     }
 
-    if constexpr (Lexical) CONMV_const(variant)->evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
-    else CONMV_const(variant)->evalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    if constexpr (Lexical) return CONMV_const(variant)->evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    else return CONMV_const(variant)->evalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
 }
 
-void ConstructorMethodFunction::evalConstructor(
+bool ConstructorMethodFunction::evalConstructor(
         const AbstractQoreFunctionVariant* variant,
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
         RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {
     return evalConstructorImpl<false>({}, variant, thisclass, self, args, bcl, bceal, rc, xsink, tmp_args);
 }
 
-void ConstructorMethodFunction::evalConstructor(
+bool ConstructorMethodFunction::evalConstructor(
         LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant,
         const QoreClass& thisclass, QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal,
         RuntimeConfig& rc, ExceptionSink* xsink, bool tmp_args) const {

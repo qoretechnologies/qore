@@ -36,6 +36,7 @@
 #include <vector>
 
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
@@ -2395,6 +2396,30 @@ void QoreIRFunction::computeIROnlyLocals() {
                 }
             }
         }
+    }
+
+    // A constructor's written argument values belong to its parameter/argv cleanup, after the evaluator records
+    // successful body completion (#6086). If they lived only in the IR slot cache, execute() would release them
+    // before returning and an argument's destructor error would be mistaken for a failed constructor body.
+    // Read-only arguments and types that cannot hold destructible objects keep their existing classification.
+    if (const auto* ctor = dynamic_cast<const UserConstructorVariant*>(source_variant)) {
+        const UserSignature* sig = ctor->UserVariantBase::getUserSignature();
+        auto keep_written_argument = [&](const LocalVar* local) {
+            if (local && stored_locals.count(local) && QoreTypeInfo::needsScan(local->getTypeInfo())) {
+                ast_referenced_locals.insert(local);
+            }
+        };
+        size_t argument_count = 0;
+        for (LocalVar* local : sig->lv) {
+            if (++argument_count % 100 == 0
+                    && qore_check_cancel(nullptr, "IR constructor argument ownership analysis")) {
+                // Take the existing conservative AST-visible path below if compilation is cancelled.
+                unknown_node_found = true;
+                break;
+            }
+            keep_written_argument(local);
+        }
+        keep_written_argument(sig->argvid);
     }
 
     non_structured_ast_referenced_locals = ast_referenced_locals;
