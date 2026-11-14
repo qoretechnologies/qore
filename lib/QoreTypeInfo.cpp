@@ -3938,8 +3938,11 @@ public:
             assert(object);
             // The caller's receiver remains active until the constructor's call frame is installed. Use the
             // object being initialized explicitly, just as the canonical initMember() entry does.
+            // (an object of a class without type arguments gives those of the generic classes that it inherits:
+            // qore#6027)
+            const qore_object_private* opriv = qore_object_private::get(*object);
             target = qore_substitute_type_params_if_needed(declared_type,
-                qore_object_private::get(*object)->instantiated_type);
+                opriv->instantiated_type ? opriv->instantiated_type : opriv->theclass->getTypeInfo());
         }
         if (QoreTypeInfo::hasType(target)) {
             target->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, value, policy, lvhelper);

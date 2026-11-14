@@ -31,6 +31,10 @@ class GenericInheritedMemberInitTest inherits QUnit::Test {
 
         const Modes = ("ast", "ir", "jit", "tiered");
         const Programs = ("inherited",);
+
+        #! programs that %modern does not allow, which only the AST interpreter runs: %strict-bool-eval gives the
+        #! member initializers an initializer filter, which substitutes the type arguments itself
+        const AstPrograms = ("inherited-strict-boolean",);
     }
 
     constructor() : QUnit::Test("GenericInheritedMemberInitTest", "1.0", \ARGV) {
@@ -52,7 +56,7 @@ class GenericInheritedMemberInitTest inherits QUnit::Test {
     }
 
     testAst() {
-        foreach string name in (Programs) {
+        foreach string name in (Programs + AstPrograms) {
             string out = run(name, "ast");
             assertEq(expected(name), out, name + " ast");
             # the member types of the inherited instantiations, which the expected output holds, have no type parameter
