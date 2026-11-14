@@ -21527,7 +21527,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
-        if (!pred || !static_cast<bool>(*pred)) {
+        // only a terminal streaming operator without a predicate passes none; a stage's predicate is evaluated also
+        // when it is the constant NOTHING, which is false, as the AST interpreter does (qore#6071)
+        if (!pred) {
             return builder.createConstBool(true, pred_loc)->result;
         }
 
@@ -22881,7 +22883,9 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
-        if (!pred || !static_cast<bool>(*pred)) {
+        // only a terminal streaming operator without a predicate passes none; a stage's predicate is evaluated also
+        // when it is the constant NOTHING, which is false, as the AST interpreter does (qore#6071)
+        if (!pred) {
             return builder.createConstBool(true, pred_loc)->result;
         }
 
@@ -23481,8 +23485,11 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
 
     // the predicate runs with the element as the implicit argument and its index as the implicit element, which are
     // restored on every path (QoreFunctionalStreamingOperator::predicateMatches()); see lowerWithImplicitContext()
+    // takewhile and takeuntil evaluate their predicate also when it is NOTHING, which is false
+    // (QoreFunctionalStreamingOperator::predicateMatches()), where a terminal operator whose predicate is NOTHING has
+    // none (QoreStreamingOperatorNode::evalCommon()), as the AST interpreter does (qore#6071)
     auto lower_predicate = [&](QoreIRValue element_val, QoreIRValue index_val) -> QoreIRValue {
-        if (!op->hasPredicate()) {
+        if (!op->hasPredicate() && qore_streaming_kind_is_terminal(op->getKind())) {
             return builder.createConstBool(true, loc)->result;
         }
         return lowerWithImplicitContext(element_val, index_val, loc, stream_cleanup.get(), error,
