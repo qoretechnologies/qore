@@ -25,6 +25,7 @@ invoked: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"inner:RUNTIME-OVERLOAD-ERROR
 invoked_type: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"inner:RUNTIME-OVERLOAD-ERROR/DT-tt\", \"continued\", \"~z\", \"got\"] live=0
 handlers: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"exit\", \"error\", \"~z\", \"outer:RUNTIME-OVERLOAD-ERROR/DT-tt\"] live=0
 successful: [\"~q\", \"~z\", \"got\", \"~v\"] live=0
+zero_args: [\"~q\", \"~z\", \"outer:ZERO\"] live=0
 object_count: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"~z\", \"outer:RUNTIME-OVERLOAD-ERROR/DT-tt\"] live=0
 list_count: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"~z\", \"outer:RUNTIME-OVERLOAD-ERROR/DT-tt\"] live=0
 hash_count: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"~z\", \"outer:RUNTIME-OVERLOAD-ERROR/DT-tt\"] live=0
@@ -35,6 +36,7 @@ invoked: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"inner:RUNTIME-OVERLOAD-ERROR
 invoked_type: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"inner:RUNTIME-OVERLOAD-ERROR/DT-tt\", \"continued\", \"~z\", \"got\"] live=0
 handlers: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"exit\", \"error\", \"~z\", \"outer:RUNTIME-OVERLOAD-ERROR/DT-tt\"] live=0
 successful: [\"~q\", \"~z\", \"got\", \"~v\"] live=0
+zero_args: [\"~q\", \"~z\", \"outer:ZERO\"] live=0
 object_count: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"~z\", \"outer:RUNTIME-OVERLOAD-ERROR/DT-tt\"] live=0
 list_count: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"~z\", \"outer:RUNTIME-OVERLOAD-ERROR/DT-tt\"] live=0
 hash_count: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"~z\", \"outer:RUNTIME-OVERLOAD-ERROR/DT-tt\"] live=0
@@ -45,6 +47,7 @@ invoked: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"inner:RUNTIME-OVERLOAD-ERROR
 invoked_type: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"inner:RUNTIME-OVERLOAD-ERROR/DT-tt\", \"continued\", \"~z\", \"got\"] live=0
 handlers: [\"~v\", \"dthrow:tt\", \"~tt\", \"~q\", \"exit\", \"error\", \"~z\", \"outer:RUNTIME-OVERLOAD-ERROR/DT-tt\"] live=0
 successful: [\"~q\", \"~z\", \"got\", \"~v\"] live=0
+zero_args: [\"~q\", \"~z\", \"outer:ZERO\"] live=0
 ";
     }
     private {

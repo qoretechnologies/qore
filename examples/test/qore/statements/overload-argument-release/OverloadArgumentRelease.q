@@ -63,6 +63,11 @@ final class C {
         on_exit { log += "exit"; }
         { T q("q"); return first(tag(), new T("v"), new TT("tt")); }
     }
+    auto zero(*int x) { throw "ZERO"; }
+    auto zero(*string x) { throw "ZERO"; }
+    auto zero_args() {
+        T z("z"); { T q("q"); return zero(); }
+    }
     auto successful() {
         T z("z"); { T q("q"); return first(tag(), new T("v")); }
     }
@@ -70,7 +75,7 @@ final class C {
 C c();
 for (int repeat = 0; repeat < 3; ++repeat) {
     foreach string name in (("object_count", "list_count", "hash_count", "no_throw_count", "both_throw_count",
-            "type_reject", "invoked", "invoked_type", "handlers", "successful")) {
+            "type_reject", "invoked", "invoked_type", "handlers", "successful", "zero_args")) {
         log = ();
         try { auto r = call_object_method(c, name); log += "got"; }
         catch (hash<ExceptionInfo> ex) { log += "outer:" + chain(ex); }

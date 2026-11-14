@@ -7794,6 +7794,16 @@ static QORE_INTERN_ALWAYS_INLINE void qore_ir_close_catch_scopes(std::vector<IRC
     qore_ir_close_catch_scopes_pending(stack, scope_count, xsink);
 }
 
+//! Consumes the failed call's argument list and result before caller-local unwinding (#6098).
+/** Keep this exceptional cleanup out of the interpreter's hot dispatch function. */
+static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode* args, QoreValue result,
+        ExceptionSink* xsink) {
+    if (args) {
+        args->deref(xsink);
+    }
+    result.discard(xsink);
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -18390,8 +18400,7 @@ load_local_done:
 
                 if (xsink && *xsink) {
                     // The list still owns rejected arguments; release it before unwinding caller locals (#6098).
-                    arg_list = nullptr;
-                    res.discard(xsink);
+                    qore_ir_release_failed_method_call(arg_list.release(), res, xsink);
                     return returnAfterUnhandledException();
                 }
                 // Skip invalidation for built-in methods without reference arguments
