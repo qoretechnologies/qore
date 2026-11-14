@@ -3832,6 +3832,10 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
             if (!resolved_m) {
                 resolved_m = resolved_qc->findStaticMethod(method_name);
             }
+            if (!resolved_m && !is_pseudo) {
+                // a method of the class whatever its access, which the compiler checked (qore#5975)
+                resolved_m = qore_aot_find_named_method(resolved_qc, method_name);
+            }
         }
     }
     if (resolved_qc && resolved_m) {
