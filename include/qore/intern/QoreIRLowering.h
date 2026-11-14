@@ -367,6 +367,14 @@ public:
     QoreIRValue lowerContainerLiteral(const QoreValue& expr, std::string& error);
     QoreIRValue lowerContainerElement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
+    //! Returns true if a value can be NOTHING although its parse type does not accept NOTHING: a read of an lvalue
+    //! that may have no value, or +, - or * of two such values (qore#5937)
+    DLLLOCAL bool valueMayBeNothingDespiteType(const QoreValue& value) const;
+
+    //! Returns true if the typed operation (given by its int opcode) of the operands does not give the result of the
+    //! AST interpreter when an operand has no value, so the generic operation must be used (qore#5937)
+    DLLLOCAL bool typedOpNeedsNothingFallback(QoreIROpcode int_op, const QoreValue& left,
+        const QoreValue& right) const;
     QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
     QoreIRValue lowerElements(const QoreValue& expr, std::string& error);
@@ -570,6 +578,17 @@ private:
     bool ensureBuilderContext(std::string& error) const;
     QoreIRValue tryPluginLowering(const QoreValue& expr, std::string& error);
     QoreIRBasicBlock* createBlock(const std::string& prefix);
+    //! Continues lowering in the join block of an operator whose operands are lowered in blocks of their own (?:, ??,
+    //! ?*, &&, ||, a list of selectors), after laying it out after the blocks that the operands created
+    /** The native tiers lower the blocks of a function in layout order, and assign the temporaries of a block to the
+        temp scopes open when it is lowered: an operand that calls a function in a try block (or in a block with
+        local variables) continues in a block created after the join block, which holds the end of the statement
+        (its DiscardTemps), so a temporary that the statement releases at its end (a receiver, or an argument of a
+        call that qcc folds) was released only when the next statement ended (qore#6080), and its exception edges
+        had no mark of the statement's temp scope (qore#5997).  An if statement lays out its merge block in the same
+        way.
+    */
+    void setJoinBlock(QoreIRBasicBlock* join_block);
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);
     //! Gives the load of a variable that can hold a reference the exception target in effect, if any
@@ -1189,6 +1208,12 @@ private:
     unsigned* bg_helper_count = &bg_helper_count_own;
     //! The number of the background helper this lowering lowers, if any (see bg_helper)
     unsigned bg_helper_index = 0;
+
+    //! The handler functions compiled by the outermost lowering and the lowerings of the handlers nested in it
+    //! (see compileBlockHandlerIRs(), #6087)
+    struct HandlerIRCache;
+    //! Created by the first handler compiled; the lowerings of the handlers share their parent's
+    std::shared_ptr<HandlerIRCache> handler_ir_cache;
 
     //! Lowers a value that a background expression takes when the thread starts, while lowering its helper
     /** @param expr the expression to lower

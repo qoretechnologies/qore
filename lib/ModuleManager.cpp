@@ -1945,6 +1945,8 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     // a user module importing a binary module can hold objects of its classes, so it is deleted first; a module is
     // applied to a Program without the module manager's mutex, which the record takes (#5953)
     QMM.trySetUserBinaryModuleDependencyLocked(name.c_str());
+    // the module whose Program it is applied to at run time requires it too (qore#5790)
+    QMM.trySetModuleProgramBinaryDependencyLocked(tpgm, name.c_str());
 
     // Make sure getProgram() returns this Program when module_ns_init() is called.
     // A call-only context is not enough when a child Program loads a module from
@@ -3882,9 +3884,10 @@ QoreParseOptions qore_get_inherited_module_parse_options(const QoreParseOptions&
     @param p the Program loading the module, if any
     @param exclude the options the module does not inherit
     @param mask the module parse option mask
+    @param added if not nullptr, receives the restrictions that the mask adds and that are not inherited
 */
 static QoreParseOptions get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
-        const QoreModuleParseOptionMask& mask) {
+        const QoreModuleParseOptionMask& mask, QoreParseOptions* added = nullptr) {
     QoreParseOptions inherited;
     if (p) {
         QoreParseOptions parent_po = p->getParseOptions();
@@ -3894,8 +3897,33 @@ static QoreParseOptions get_masked_module_parse_options(QoreProgram* p, const Qo
             inherited |= PO_ENABLE_DEBUG;
         }
     }
+    if (added) {
+        *added = mask.add & ~(inherited & ~mask.strip);
+    }
     return mask.apply(inherited);
 }
+
+//! Clears the record of the restrictions that a module parse option mask added to a module's Program when the parse of
+//! the module's code ends, successfully or not
+/** The record is only used to name the mask in the errors of the module's own directives (see
+    qore_program_private_base::parseCheckModernConflict()); code parsed into the Program later is not the module's
+    code under the mask
+*/
+class QoreModuleMaskAddedClearHelper {
+public:
+    DLLLOCAL QoreModuleMaskAddedClearHelper(QoreProgram* pgm) : pgm(pgm) {
+    }
+
+    DLLLOCAL ~QoreModuleMaskAddedClearHelper() {
+        qore_program_private::setModuleMaskAddedParseOptions(*pgm, QoreParseOptions());
+    }
+
+    QoreModuleMaskAddedClearHelper(const QoreModuleMaskAddedClearHelper&) = delete;
+    QoreModuleMaskAddedClearHelper& operator=(const QoreModuleMaskAddedClearHelper&) = delete;
+
+private:
+    QoreProgram* pgm;
+};
 
 QoreParseOptions qore_get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
         const QoreModuleParseOptionMask& mask) {
@@ -3963,8 +3991,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     // parse options for the module: those inherited from the current program, if any, with the module parse option
     // mask applied, disabling style and types options already set with USER_MOD_PO
     const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
+    // the restrictions that the mask adds and that the module would not have without it
+    QoreParseOptions mask_added;
     QoreParseOptions parseOptions = USER_MOD_PO
-        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask);
+        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added);
+    mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
     QoreString modulePath(path);
     modulePath += QORE_DIR_SEP_STR;
@@ -3975,8 +4006,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, parseOptions);
+        // the restrictions that the mask added, named in the error of a directive that conflicts with them
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
     } else {
         pholder = mpgm = new QoreProgram(parseOptions);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
         mpgm->setScriptPath(modulePath.c_str());
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
@@ -4038,6 +4072,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
 
     {
         ModuleLoadMapHelper mlmh(feature, xsink);
+        // the module's own code is parsed under the mask in this block
+        QoreModuleMaskAddedClearHelper mask_added_clear(userModule->getProgram());
 
         // issue #3212: warning sink
         userModule->getProgram()->parsePending(moduleCode.c_str(), path, &xsink, &xsink, warning_mask);
@@ -4664,9 +4700,13 @@ int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModu
     // the mask can complete %modern (it can add parts of it, such as PO_STRONG_ENCAPSULATION), which cannot be in
     // effect with a compatibility option of the module that %modern does not allow (issue #5682); the mask is refused
     // before anything is changed
+    // the options that are checked are the ones that are applied: they are read once (the parse options of a Program
+    // are not locked against a concurrent change by C++ code, so they are not read again between the check and the
+    // change)
+    QoreParseOptions masked;
     if (mpgm && !mask.empty()) {
         QoreParseOptions current = mpgm->getParseOptions();
-        QoreParseOptions masked = mask.apply(current);
+        masked = mask.apply(current);
         if (qore_program_private_base::isModern(masked)
                 && (masked & qore_program_private_base::modernIncompatibleOptions())) {
             QoreStringNode* desc = new QoreStringNodeMaker("module '%s': the parse option mask cannot be applied: ",
@@ -4679,7 +4719,7 @@ int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModu
     }
     mi->addParseOptionMask(mask);
     if (mpgm && !mask.empty()) {
-        qore_program_private::forceReplaceParseOptions(*mpgm, mask.apply(mpgm->getParseOptions()));
+        qore_program_private::forceReplaceParseOptions(*mpgm, masked);
         qore_program_private::setAOTInheritedParseOptions(*mpgm,
             mask.apply(qore_program_private::getAOTInheritedParseOptions(*mpgm)));
     }
@@ -4924,15 +4964,21 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     // parse options for the module: those inherited from the current program, if any, with the module parse option
     // mask applied, disabling style and types options already set with USER_MOD_PO
     const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
+    // the restrictions that the mask adds and that the module would not have without it
+    QoreParseOptions mask_added;
     QoreParseOptions po = USER_MOD_PO
-        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask);
+        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added);
+    mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
     const char* td = p ? p->parseGetScriptDir() : nullptr;
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
+        // the restrictions that the mask added, named in the error of a directive that conflicts with them
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
     } else {
         pholder = mpgm = new QoreProgram(po);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
@@ -5005,6 +5051,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
 
     {
         ModuleLoadMapHelper mlmh(feature, xsink);
+        // the module's own code is parsed under the mask in this block
+        QoreModuleMaskAddedClearHelper mask_added_clear(mi->getProgram());
 
         // issue #3212: warning mask
         mi->getProgram()->parseFile(td, &xsink, &wsink, warning_mask);
@@ -5061,12 +5109,18 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     // parse options for the module: those inherited from the current program, if any, with the module parse option
     // mask applied, disabling style and types options already set with USER_MOD_PO
     const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
-    QoreParseOptions po = USER_MOD_PO | get_masked_module_parse_options(p, PO_REQUIRE_TYPES, load_mask);
+    // the restrictions that the mask adds and that the module would not have without it
+    QoreParseOptions mask_added;
+    QoreParseOptions po = USER_MOD_PO | get_masked_module_parse_options(p, PO_REQUIRE_TYPES, load_mask, &mask_added);
+    mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
+        // the restrictions that the mask added, named in the error of a directive that conflicts with them
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
     } else {
         pholder = mpgm = new QoreProgram(po);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
@@ -5106,6 +5160,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     {
         // run initialization unlocked
         ModuleLoadMapHelper mlmh(feature, xsink);
+        // the module's own code is parsed under the mask in this block
+        QoreModuleMaskAddedClearHelper mask_added_clear(mi->getProgram());
 
         mi->getProgram()->parse(src, path, &xsink, &wsink, warning_mask);
     }
@@ -5763,6 +5819,12 @@ void QoreModuleManager::delUser() {
     // and no other thread can enter module code from now on; those that are in it are waited for below
     qore_close_module_programs();
 
+    // a foreign thread runs module code that nothing will end: the modules are left as they are (see
+    // qore_cleanup() and qore_program_private::leaveForeignThreads())
+    if (qore_foreign_threads_in_module_code.load(std::memory_order_acquire)) {
+        return;
+    }
+
 #ifdef HAVE_SIGNAL_HANDLING
     // the signal handlers that module code set belong to the module's Program; the signal thread runs until the end of
     // the cleanup, so they are removed now: a handler entering a module's Program between the wait for its threads
@@ -5785,6 +5847,10 @@ void QoreModuleManager::delUser() {
         for (QoreUserModule* um : user_modules) {
             QoreProgram* pgm = um->getProgram();
             pgm->waitForTermination();
+            // a foreign thread that runs in the Program keeps its data (see qore_program_private::leaveForeignThreads())
+            if (qore_program_private::get(*pgm)->leaveForeignThreads()) {
+                continue;
+            }
             qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
         }
         qore_aot_clear_all_module_namespace_data(xsink);
@@ -5796,7 +5862,10 @@ void QoreModuleManager::delUser() {
         // opaque reference refers to schema objects, for example); breaking the cycle only when the owning module
         // is deleted would run the destructors of those objects after the programs of their classes are gone
         for (QoreUserModule* um : user_modules) {
-            qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+            // the targets of a Program that a foreign thread runs in are not destroyed under it
+            if (!qore_program_private::get(*um->getProgram())->leaveForeignThreads()) {
+                qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+            }
         }
         // AOT user modules are binary modules, deleted after all user modules in cleanup()
         qore_aot_clear_all_module_opaque_targets(xsink);
@@ -6141,17 +6210,52 @@ void QoreModuleManager::cleanup() {
             }
             return user ? CleanupRank::USER : CleanupRank::AOT;
         };
+        // true if the module requires itself, directly or indirectly
+        auto on_cycle = [&](const std::string& start) {
+            strset_t visited;
+            std::vector<std::string> work;
+            auto add_requires = [&](const std::string& name) {
+                auto ri = required_mods.find(name);
+                if (ri != required_mods.end()) {
+                    work.insert(work.end(), ri->second.begin(), ri->second.end());
+                }
+            };
+            add_requires(start);
+            while (!work.empty()) {
+                std::string name = std::move(work.back());
+                work.pop_back();
+                if (name == start) {
+                    return true;
+                }
+                if (visited.insert(name).second) {
+                    add_requires(name);
+                }
+            }
+            return false;
+        };
         // the module of the lowest rank that no module left requires; if every module left is required by another
-        // one, the modules left are in a cycle, which is broken at the module of the lowest rank
+        // one, the modules left are in a cycle, which is broken at the module of the lowest rank among the modules
+        // that are in a cycle (not one that the modules of a cycle require, like a native module that two modules
+        // that load each other at run time require, which must outlive them)
         module_map_t::iterator i = map.end();
         CleanupRank rank = CleanupRank::AOT;
         for (int pass = 0; pass < 2 && i == map.end(); ++pass) {
+            strset_t cycle_mods;
+            if (pass) {
+                for (module_map_t::iterator j = map.begin(), e = map.end(); j != e; ++j) {
+                    if (on_cycle(j->first)) {
+                        cycle_mods.insert(j->first);
+                    }
+                }
+            }
             for (module_map_t::iterator j = map.begin(), e = map.end(); j != e; ++j) {
                 if (!pass) {
                     auto di = dependents.find(j->first);
                     if (di != dependents.end() && di->second) {
                         continue;
                     }
+                } else if (!cycle_mods.empty() && cycle_mods.find(j->first) == cycle_mods.end()) {
+                    continue;
                 }
                 CleanupRank r = get_rank(j);
                 if (i == map.end() || r < rank) {

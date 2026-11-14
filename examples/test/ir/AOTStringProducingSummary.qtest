@@ -330,11 +330,13 @@ provider_file.write("%modern\n\n" + providerCode());
 provider_file.close();
 File consumer_file();
 consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
-consumer_file.write("%modern\n\n" + consumerCode());
+# the unassigned values are deliberate: their run-time handling is tested
+consumer_file.write("%modern\n%no-strict-parse-errors\n\n" + consumerCode());
 consumer_file.close();
 File combined_file();
 combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
-combined_file.write("%modern\n\n" + providerCode() + consumerCode() + "\nmain();\n");
+# the unassigned values are deliberate: their run-time handling is tested
+combined_file.write("%modern\n%no-strict-parse-errors\n\n" + providerCode() + consumerCode() + "\nmain();\n");
 combined_file.close();
 
 string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",

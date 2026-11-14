@@ -120,6 +120,9 @@ public class AsyncJobPoller {
         #! Sleeper closure (test seam): <tt>(timeout</tt> to) -> nothing
         code<nothing(timeout)> sleeper;
 
+        #! Clock closure (test seam): returns the current time that the deadline is measured with
+        code<date()> clock;
+
         #! Exception class raised when the overall timeout fires
         string error_class;
 
@@ -151,6 +154,7 @@ public class AsyncJobPoller {
         # every poll that needs to wait fails with "block missing return statement".  The member is
         # already typed, so the annotation adds nothing.
         sleeper = sub (timeout to) { Qore::usleep(int(to) * 1000); };
+        clock = \Qore::now_us();
     }
 
     #! Injects a custom sleeper closure (test seam)
@@ -163,6 +167,17 @@ public class AsyncJobPoller {
     */
     setSleeper(code<nothing(timeout)> s) {
         sleeper = s;
+    }
+
+    #! Injects a custom clock closure (test seam)
+    /** The overall timeout of @ref poll() is measured with this clock; by default it is
+        @ref Qore::now_us() "now_us()".  A test that advances a clock of its own in its status fetcher and
+        sleeper decides deterministically whether a fetch starts or ends before the deadline.
+
+        @param c closure returning the current time
+    */
+    setClock(code<date()> c) {
+        clock = c;
     }
 
     #! Polls the job until it reaches a terminal state or the timeout fires
@@ -194,17 +209,17 @@ public class AsyncJobPoller {
         if (overall_ms <= 0 || step <= 0) {
             throw error_class, "overall timeout and poll interval must be positive";
         }
-        date start = now_us();
+        date start = clock();
         *hash<auto> last_status;
         while (True) {
-            int elapsed_ms = get_duration_milliseconds(now_us() - start);
+            int elapsed_ms = get_duration_milliseconds(clock() - start);
             if (elapsed_ms >= overall_ms) {
                 throw error_class,
                     sprintf("%s did not reach a terminal state within %y", label, overall),
                     {"job_id": job_id, "last_status": last_status};
             }
             last_status = status_fetcher(job_id);
-            elapsed_ms = get_duration_milliseconds(now_us() - start);
+            elapsed_ms = get_duration_milliseconds(clock() - start);
             if (elapsed_ms >= overall_ms) {
                 throw error_class, sprintf("%s exceeded its polling deadline", label),
                     {"job_id": job_id, "last_status": last_status};

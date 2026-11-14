@@ -673,6 +673,16 @@ if (accepted) {
 
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
+    //! Sends the application's WebSocket close frame on an HTTP/2 stream, unless one was sent on it before
+    /** See Http2Session::sendStreamCloseFrame(); otherwise as sendHttp2StreamData()
+
+        @return 0 if the frame was sent, 1 if a close frame was sent on the stream before (only the end of the
+        stream is sent, if requested), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int sendHttp2StreamWebSocketClose(int32_t stream_id, const BinaryNode* data, bool end_stream,
+            ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
     //! Internal async-poll helper for HTTP/2 stream DATA reads.
     /** Public synchronous callers must use @ref readHttp2StreamData(), which
@@ -1389,6 +1399,17 @@ if (accepted) {
     */
     DLLEXPORT int submitQuicStreamData(int64_t session_id, int64_t stream_id,
         const void* data, size_t len, bool end_stream, ExceptionSink* xsink);
+
+    //! Sends the application's WebSocket close frame on an HTTP/3 stream, unless one was sent on it before
+    /** See QuicSession::sendStreamCloseFrame(); otherwise as submitQuicStreamData()
+
+        @return 0 if the frame was staged, 1 if a close frame was staged on the stream before (only the end of the
+        stream is sent, if requested), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int submitQuicStreamWebSocketClose(int64_t session_id, int64_t stream_id, const void* data, size_t len,
+        bool end_stream, ExceptionSink* xsink);
 
     //! Set InputStream for I/O thread streaming on a QUIC session stream
     /** @since %Qore 3.0

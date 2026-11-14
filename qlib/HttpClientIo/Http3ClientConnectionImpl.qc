@@ -107,6 +107,13 @@ public class Http3ClientConnection inherits HttpClientConnection {
         return poll_op.getSocket();
     }
 
+    #! Returns @ref True once the QUIC handshake of the connection has completed, also after it has closed
+    /** Does not block
+    */
+    bool isHandshakeComplete() {
+        return poll_op.isHandshakeComplete();
+    }
+
     #! Returns the QUIC session ID (0 if not yet connected)
     int getSessionId() {
         return poll_op.getSessionId();

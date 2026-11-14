@@ -1003,6 +1003,18 @@ class SetSelfFunctionCallNode : public SelfFunctionCallNode {
 public:
     DLLLOCAL SetSelfFunctionCallNode(const SelfFunctionCallNode& old, QoreListNode* n_args);
 
+    //! copies a background copy of a self call, with the object and the class of the copied call
+    /** A background expression nested in a background expression copies the copies that the outer one made, in the
+        thread of the outer one, which has no object of its own: the object of the starting code is the one that the
+        copied call holds (qore#5971)
+    */
+    DLLLOCAL SetSelfFunctionCallNode(const SetSelfFunctionCallNode& old, QoreListNode* n_args);
+
+    //! returns the object of the starting code that the copy holds
+    DLLLOCAL QoreObject* getSelf() const {
+        return self;
+    }
+
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;

@@ -36,12 +36,17 @@ if (DEFINED QORE_QCC_FORMAT_STAMP AND NOT "${QORE_QCC_FORMAT_STAMP}" STREQUAL ""
     file(TIMESTAMP "${QORE_QCC_FORMAT_STAMP}" _qcc_format_timestamp "%s" UTC)
 endif()
 
+include("${CMAKE_CURRENT_LIST_DIR}/QoreQmodPathUtils.cmake")
+
 # Flat modules have the same relative path in qlib and qlib-qmod. Split
 # modules likewise use <name>/<name>.qmod in both trees.
 file(GLOB_RECURSE _built_qmods LIST_DIRECTORIES false
     RELATIVE "${QORE_BUILD_QMOD_DIR}" "${QORE_BUILD_QMOD_DIR}/*.qmod")
 foreach(_rel IN LISTS _built_qmods)
     set(_qmod "${QORE_BUILD_QMOD_DIR}/${_rel}")
+    # a link is compared with the qmod by physical path: it may name the qmod otherwise (through a symbolic link, or
+    # on macOS by /private/tmp/... where CMake names it /tmp/...)
+    _qore_qmod_physical_path("${_qmod}" "${QORE_BUILD_QMOD_DIR}" _qmod_abs)
     set(_link "${QORE_SOURCE_QLIB_DIR}/${_rel}")
     get_filename_component(_link_dir "${_link}" DIRECTORY)
     get_filename_component(_name "${_link}" NAME_WE)
@@ -63,10 +68,8 @@ foreach(_rel IN LISTS _built_qmods)
             # only a link to this stale artifact is removed; a link into another build tree belongs to that tree
             if (IS_SYMLINK "${_link}")
                 file(READ_SYMLINK "${_link}" _current)
-                if (NOT IS_ABSOLUTE "${_current}")
-                    get_filename_component(_current "${_link_dir}/${_current}" ABSOLUTE)
-                endif()
-                if ("${_current}" STREQUAL "${_qmod}")
+                _qore_qmod_physical_path("${_current}" "${_link_dir}" _current)
+                if ("${_current}" STREQUAL "${_qmod_abs}")
                     file(REMOVE "${_link}")
                     math(EXPR _removed "${_removed} + 1")
                 endif()
@@ -78,10 +81,8 @@ foreach(_rel IN LISTS _built_qmods)
 
     if (IS_SYMLINK "${_link}")
         file(READ_SYMLINK "${_link}" _current)
-        if (NOT IS_ABSOLUTE "${_current}")
-            get_filename_component(_current "${_link_dir}/${_current}" ABSOLUTE)
-        endif()
-        if ("${_current}" STREQUAL "${_qmod}")
+        _qore_qmod_physical_path("${_current}" "${_link_dir}" _current)
+        if ("${_current}" STREQUAL "${_qmod_abs}")
             continue()
         endif()
         file(REMOVE "${_link}")

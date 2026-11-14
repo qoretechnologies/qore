@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-default-encoding-names.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+# test-exec-mode: children - the checks run in child qore processes whose default character encodings differ
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class DataFrameDefaultEncodingNamesTest
+
+#! Column names, struct field names and map keys are in UTF-8 in a Parquet file and in the default encoding in a
+#! DataFrame, and the null_string option of readCSV() is compared in the default encoding (qore#6100)
+class DataFrameDefaultEncodingNamesTest inherits QUnit::Test {
+    constructor() : Test("DataFrameDefaultEncodingNamesTest", "1.0", \ARGV) {
+        addTestCase("names across default encodings", \namesTest());
+        set_return_value(main());
+    }
+
+    namesTest() {
+        TmpDir tmp("dataframe-default-encoding-names");
+        string script = get_script_dir() + DirSep + "data" + DirSep + "default-encoding-names.q";
+        # the file is written with ISO-8859-1 and read with UTF-8 as the default encoding
+        hash<string, string> written = run("ISO-8859-1", script, "write", tmp.path);
+        hash<string, string> read = run("UTF-8", script, "read", tmp.path);
+        hash<string, string> read_iso = run("ISO-8859-1", script, "read-iso", tmp.path);
+        string iso = "636166e9";
+        string utf8 = "636166c3a9";
+        assertEq(iso, written."write-column", "a column name read back with ISO-8859-1");
+        assertEq(iso, written."write-key", "a hash key read back with ISO-8859-1");
+        assertEq(iso, written."write-map-key", "a map key read back with ISO-8859-1");
+        assertEq(iso, written."write-columns-option", "the columns option with ISO-8859-1");
+        assertEq(make_hex_string(binary("[\"h\"]:1")), written."write-filters-option",
+            "the filters option with ISO-8859-1");
+        assertEq(iso, written."write-ipc-column", "an Arrow IPC column name read back with ISO-8859-1");
+        assertEq(iso, written."write-ipc-map-key", "an Arrow IPC map key read back with ISO-8859-1");
+        assertEq(make_hex_string(binary("null")), written."csv-null", "a null string given in UTF-8");
+        assertEq(make_hex_string(binary("DATAFRAME-ENCODING-ERROR")), written."csv-null-euro",
+            "a null string that ISO-8859-1 cannot represent");
+        assertEq(make_hex_string(binary("null")), written."csv-null-short", "a null string that is a short string");
+        assertEq(make_hex_string(binary("found")), written."missing-column-desc",
+            "a column name from the file in an error message");
+        assertEq(utf8, read."read-column", "the column name in the file, read with UTF-8");
+        assertEq(utf8, read."read-key", "the hash key in the file, read with UTF-8");
+        assertEq(utf8, read."read-map-key", "the map key in the file, read with UTF-8");
+        assertEq(utf8, read."read-columns-option", "the columns option with UTF-8");
+        assertEq(utf8, read."read-ipc-column", "the Arrow IPC column name, read with UTF-8");
+        assertEq(utf8, read."read-ipc-map-key", "the Arrow IPC map key, read with UTF-8");
+        assertEq(make_hex_string(binary("DATAFRAME-ENCODING-ERROR")), read_iso."iso-euro-column",
+            "a column name that ISO-8859-1 cannot represent");
+        assertEq(make_hex_string(binary("DATAFRAME-ENCODING-ERROR")), read_iso."iso-euro-map-key",
+            "a map key that ISO-8859-1 cannot represent");
+    }
+
+    #! runs the child script with the given default encoding and returns its results
+    private hash<string, string> run(string encoding, string script, string mode, string dir) {
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string output = backquote(sprintf("QORE_CHARSET=%s %s %s %s %s 2>&1", encoding, qore, script, mode, dir));
+        hash<string, string> results;
+        foreach string line in (output.split("\n")) {
+            *list<*string> parts = (line =~ x/^([a-z-]+)=([0-9a-f]*)$/);
+            if (parts) {
+                results{parts[0]} = parts[1];
+            }
+        }
+        assertEq(make_hex_string(binary(encoding)), results.default, sprintf("the child's default encoding: %s",
+            output));
+        return results;
+    }
+}

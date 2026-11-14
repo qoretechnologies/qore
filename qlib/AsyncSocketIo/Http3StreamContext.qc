@@ -200,7 +200,8 @@ public class Http3StreamContext inherits AbstractStreamContext {
                 wake_callback();
             }
         }
-        int deadline = timeout_ms > 0 ? clock_getmillis() + timeout_ms : 0;
+        # the deadline is on the monotonic clock: a step of the system clock does not change the wait
+        int deadline = timeout_ms > 0 ? clock_get_monotonic_us() / 1000 + timeout_ms : 0;
         while (sock.submitQuicStreamData(session_id, stream_id, data, end_stream) == 1) {
             # the data already queued must be sent before the stream can drain
             if (wake_callback) {
@@ -208,7 +209,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
             }
             int wait_ms = -1;
             if (deadline) {
-                wait_ms = deadline - clock_getmillis();
+                wait_ms = deadline - clock_get_monotonic_us() / 1000;
                 if (wait_ms <= 0) {
                     throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the send buffer did not drain within %d "
                         "ms; %d bytes were not sent", stream_id, timeout_ms, data.size());
@@ -220,6 +221,29 @@ public class Http3StreamContext inherits AbstractStreamContext {
         if (end_stream) {
             ended = True;
         }
+    }
+
+    #! Sends the close frame of a WebSocket connection on the stream, unless one was sent on it before
+    /** See @ref Qore::Socket::submitQuicStreamWebSocketClose() "Socket::submitQuicStreamWebSocketClose()"
+
+        @param frame the encoded close frame
+        @param end_stream if @ref True, ends the stream after the frame (also if the frame is not sent)
+
+        @return @ref True if the frame was sent; @ref False if a close frame was sent on the stream before
+
+        @since AsyncSocketIo 1.0
+    */
+    bool sendWebSocketClose(binary frame, bool end_stream = False) {
+        on_exit {
+            if (wake_callback) {
+                wake_callback();
+            }
+        }
+        int rc = sock.submitQuicStreamWebSocketClose(session_id, stream_id, frame, end_stream);
+        if (end_stream) {
+            ended = True;
+        }
+        return !rc;
     }
 
     #! Flush pending HTTP/3 writes for this session through the async I/O controller

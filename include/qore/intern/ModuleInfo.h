@@ -951,6 +951,27 @@ public:
         trySetUserBinaryModuleDependency(name);
     }
 
+    //! Records that the module whose own Program is \a pgm requires the binary module \a name, which was applied to it
+    /** A module that loads another module at run time (ex: Util's get_file_from_sftp() loads the ssh2 module, which
+        the module's Program imports the declarations of) is not in the load context of its module any more, so the
+        dependency is not recorded by trySetUserBinaryModuleDependency(); the module is deleted before the module that
+        it loaded, as the module Program names the declarations of the loaded module (qore#5790).  Does nothing if
+        \a pgm is not the Program of a module.
+        @param pgm the Program that the module was applied to
+        @param name the name of the module that was applied to it
+    */
+    DLLLOCAL void trySetModuleProgramBinaryDependencyLocked(const QoreProgram* pgm, const char* name) {
+        AutoLocker al(mutex);
+        for (module_map_t::const_iterator i = map.begin(), e = map.end(); i != e; ++i) {
+            if (i->second->getModuleProgram() == pgm) {
+                if (strcmp(i->first, name)) {
+                    binary_user_dep_map.addDep(name, i->first);
+                }
+                return;
+            }
+        }
+    }
+
     DLLLOCAL void trySetUserModule(const char* name) {
         md_map_t::iterator i = md_map.find(name);
         if (i == md_map.end()) {
