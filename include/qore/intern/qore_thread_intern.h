@@ -2896,10 +2896,17 @@ public:
 
     //! Sets the stack size of threads created with these attributes
     /** The stack of each thread is this size for its code: the static TLS that the C library places on the stack
-        (see q_thread_stack_tls_size()) is added to it
+        (see q_thread_stack_tls_size()) is added to it; a total below the platform's minimum (PTHREAD_STACK_MIN,
+        ex: 128 KB on Linux aarch64) is raised to the minimum, so the thread gets at least the requested size
     */
     DLLLOCAL int setstacksize(size_t ssize) {
-        int rc = pthread_attr_setstacksize(&attr, ssize + q_thread_stack_tls_size());
+        size_t total = ssize + q_thread_stack_tls_size();
+#ifdef PTHREAD_STACK_MIN
+        if (total < static_cast<size_t>(PTHREAD_STACK_MIN)) {
+            total = static_cast<size_t>(PTHREAD_STACK_MIN);
+        }
+#endif
+        int rc = pthread_attr_setstacksize(&attr, total);
         if (!rc) {
             requested_stack_size = ssize;
         }
