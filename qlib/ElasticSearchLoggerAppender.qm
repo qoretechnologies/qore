@@ -656,7 +656,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         # (or its Program) alive; if the appender is deleted first, the call throws OBJECT-ALREADY-DELETED
         ElasticSearchLoggerAppender wself;
         wself := self;
-        flushTimerId = AsyncIoController::addTimer(now_us() + milliseconds(flushIntervalMs), sub () {
+        flushTimerId = AsyncIoController::addTimerDelay(milliseconds(flushIntervalMs), sub () {
             try {
                 wself.flushTimerCallback(generation);
             } catch (hash<ExceptionInfo> ex) {

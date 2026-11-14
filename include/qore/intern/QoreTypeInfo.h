@@ -4709,6 +4709,19 @@ DLLLOCAL const QoreTypeInfo* qore_get_object_receiver_type_info(const QoreObject
 //! Returns the current generic receiver type for type-parameter substitution
 DLLLOCAL const QoreTypeInfo* qore_get_current_receiver_type_info();
 
+//! qore_substitute_type_params_if_needed(), always inlined
+/** For the call paths where the compiler inlined qore_substitute_type_params_if_needed() (the coercion of a value to
+    the type of a parameter, a local variable or a return value): whether it does so otherwise depends on the size of
+    the whole single compilation unit, which the code of the calls that give the references of their temporary
+    arguments to the callee changed (issue #5882)
+*/
+static QORE_INTERN_ALWAYS_INLINE const QoreTypeInfo* qore_substitute_type_params_if_needed_inline(
+        const QoreTypeInfo* ti) {
+    return qore_type_contains_type_parameter(ti)
+        ? qore_substitute_type_params(ti, qore_get_current_receiver_type_info())
+        : ti;
+}
+
 //! Type info for typed callable types: code<ReturnType(ParamTypes...)>
 /** This class represents a callable type with specified return type and parameter types.
     It supports:
