@@ -12982,7 +12982,15 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     inst->helper_ir = std::move(helper);
     inst->helper_params = std::move(params);
     inst->owned_params = std::move(state.params);
-    inst->helper_uses_self = state.uses_self;
+    // the object is checked when the thread starts only when the expression is a call of a method of the object, as
+    // the AST interpreter runs only that thread with the object as its context; a call elsewhere in the expression
+    // checks it when it is made (qore#5973)
+    if (state.uses_self) {
+        const SelfFunctionCallNode* root_call = dynamic_cast<const SelfFunctionCallNode*>(
+            op->getExp().getInternalNode());
+        inst->helper_uses_self = root_call && (!root_call->getMethod() || !root_call->getMethod()->isStatic())
+            ? QBHS_CHECKED : QBHS_HELD;
+    }
     if (!exception_stack.empty()) {
         inst->exception_target = exception_stack.back();
     }

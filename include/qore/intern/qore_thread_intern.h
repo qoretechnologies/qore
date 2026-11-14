@@ -285,6 +285,21 @@ struct QoreBackgroundHelperCode {
     QoreAOTContext* aot_ctx = nullptr;
 };
 
+//! how the thread of a background helper uses the object of the code that starts it
+/** The thread holds the object while it runs when the expression calls methods of the object.  The AST interpreter
+    runs the thread with the object as its context, and so checks that the object has not been deleted when the thread
+    starts, only when the expression is a call of a method of the object; a call elsewhere in the expression checks the
+    object when it is made, so the expression runs until then (qore#5973).
+*/
+enum QoreBackgroundHelperSelf : uint8_t {
+    //! the thread does not use the object
+    QBHS_NONE = 0,
+    //! the expression is a call of a method of the object: the thread checks the object when it starts
+    QBHS_CHECKED = 1,
+    //! the expression calls methods of the object elsewhere: each call checks the object
+    QBHS_HELD = 2,
+};
+
 //! Starts a thread evaluating a background expression with its helper (QoreIRBackgroundInstruction)
 /** The starting code has evaluated the values that the expression takes when the thread starts.  The new thread
     instantiates the helper's parameters with them, runs the helper and releases its value, as the AST interpreter's
@@ -294,13 +309,13 @@ struct QoreBackgroundHelperCode {
     @param params the helper's parameters
     @param values the value of each parameter, borrowed: the thread takes references of its own
     @param num the number of parameters and values
-    @param uses_self true if the thread runs with the object of the starting code, which it holds while it runs
+    @param self_mode how the thread uses the object of the starting code
     @param xsink for exceptions raised starting the thread
 
     @return the TID of the new thread, or NOTHING if an exception was raised
 */
 DLLLOCAL QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const QoreValue* values, size_t num, bool uses_self, ExceptionSink* xsink);
+        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink);
 
 //! Runs a background helper in the thread started by do_op_background_helper(), with its parameters instantiated
 /** Defined with the JIT runtime, which owns the native calling conventions.

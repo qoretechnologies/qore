@@ -22366,7 +22366,7 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
 
 //! starts a background helper thread with the values given by native or interpreted starting code
 static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const uint64_t* values, int nvalues, bool uses_self, ExceptionSink* xsink) {
+        const uint64_t* values, int nvalues, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink) {
     assert(nvalues >= 0);
     std::vector<QoreValue> vals;
     vals.reserve(nvalues);
@@ -22377,7 +22377,7 @@ static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& cod
     const QoreProgramLocation* loc = get_runtime_location();
     QoreProgramLocationHelper loc_helper(loc ? loc : &loc_builtin);
     return toBits(do_op_background_helper(code, params, vals.empty() ? nullptr : vals.data(), vals.size(),
-        uses_self, xsink));
+        self_mode, xsink));
 }
 
 QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& inst, const QoreValue* values,
@@ -22414,8 +22414,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
     QoreBackgroundHelperCode code;
     code.aot_fn = helper_fn;
     code.aot_ctx = ctx;
+    // the mode is a QoreBackgroundHelperSelf value of the instruction that the native code was compiled from
+    assert(uses_self >= QBHS_NONE && uses_self <= QBHS_HELD);
     return qore_background_helper_start(code, params.empty() ? nullptr : params.data(), values, nvalues,
-        uses_self != 0, xsink);
+        static_cast<QoreBackgroundHelperSelf>(uses_self), xsink);
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_throwing(

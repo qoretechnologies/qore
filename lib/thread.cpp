@@ -2044,6 +2044,11 @@ private:
 
 public:
     QoreObject* obj = nullptr;
+    //! true if the thread checks that \a obj has not been deleted when it starts (see QoreBackgroundHelperSelf)
+    /** Always for a background call of a method of the object; the thread of a helper whose calls through self are
+        elsewhere in the expression holds the object without checking it, as each call checks it (qore#5973)
+    */
+    bool check_obj = true;
     const qore_class_private* class_ctx;
 
     QoreValue fc;
@@ -2133,10 +2138,10 @@ public:
 
     //! creates the parameters of a thread evaluating a background expression with its helper
     /** @param n_helper the helper and the values of its parameters
-        @param uses_self true if the helper calls methods of the object of the starting code, which the thread then
-        holds while it runs
+        @param self_mode how the helper uses the object of the starting code: when it calls methods of the object, the
+        thread holds it while it runs
     */
-    DLLLOCAL BGThreadParams(std::unique_ptr<BGThreadHelper>&& n_helper, bool uses_self, int t,
+    DLLLOCAL BGThreadParams(std::unique_ptr<BGThreadHelper>&& n_helper, QoreBackgroundHelperSelf self_mode, int t,
             std::vector<QoreObject*>&& n_closure_objs, std::unique_ptr<QoreInheritedSandbox>&& n_sandbox,
             ExceptionSink* xsink)
         : helper(std::move(n_helper)), pgm(getProgram()), closure_objs(std::move(n_closure_objs)),
@@ -2157,10 +2162,13 @@ public:
 
         // the object is held for the thread's duration, as for a background call of a method of the object
         // (issue #2653: only when a method of the object is called)
-        if (uses_self && call_obj) {
+        if (self_mode != QBHS_NONE && call_obj) {
             obj = call_obj;
             obj->realRef();
             call_obj = nullptr;
+            // the object is checked when the thread starts only for a call of a method of the object, as with the
+            // AST interpreter; the calls of a larger expression check it when they are made (qore#5973)
+            check_obj = self_mode == QBHS_CHECKED;
         }
 
         if (call_obj) {
@@ -7226,7 +7234,7 @@ namespace {
 
                 {
                     CodeContextHelper cch(&xsink, CT_NEWTHREAD, "background operator",
-                        btp->getContextObject(), btp->class_ctx);
+                        btp->getContextObject(), btp->class_ctx, btp->check_obj);
                     QoreInternalCallStackLocationHelper stack_loc(*btp->loc, "<background operator>", CT_NEWTHREAD);
                     // save runtime location of thread creation call
                     td->runtime_loc = btp->loc;
@@ -7441,7 +7449,7 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
 }
 
 QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const QoreValue* values, size_t num, bool uses_self, ExceptionSink* xsink) {
+        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink) {
     if (q_check_background_start_allowed(xsink)) {
         return QoreValue();
     }
@@ -7488,7 +7496,7 @@ QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar
         return QoreValue();
     }
 
-    BGThreadParams* tp = new BGThreadParams(std::move(helper), uses_self, tid, closure_capture.takeObjects(),
+    BGThreadParams* tp = new BGThreadParams(std::move(helper), self_mode, tid, closure_capture.takeObjects(),
         std::move(sandbox), xsink);
     if (*xsink) {
         tp->cleanup(xsink);

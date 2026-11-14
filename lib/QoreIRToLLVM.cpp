@@ -11956,7 +11956,7 @@ bool QoreIRToLLVM::emitBackgroundHelper(const QoreIRBackgroundInstruction* bg_in
         auto helper_throwing = module.getOrInsertFunction("qore_rt_background_helper_aot_throwing", ft);
         *result_out = emitMaybeInvoke(helper, helper_throwing,
             {aot_ctx_arg, helper_fn, slots_ptr, values_array, nvalues_val,
-             llvm::ConstantInt::get(i32_type, bg_inst->helper_uses_self ? 1 : 0), xsink_arg},
+             llvm::ConstantInt::get(i32_type, bg_inst->helper_uses_self), xsink_arg},
             module, llvm_func, bg_inst);
         return true;
     }

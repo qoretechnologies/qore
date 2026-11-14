@@ -47,6 +47,9 @@
 #include <qore/Qore.h>
 #include <qore/intern/QoreTypeInfo.h>
 
+//! how the thread of a background helper uses the object of the starting code (defined in qore_thread_intern.h)
+enum QoreBackgroundHelperSelf : uint8_t;
+
 class LocalVar;
 class Var;
 class VarRefNode;
@@ -2811,10 +2814,11 @@ public:
     std::vector<LocalVar*> helper_params;
     //! Helper only: the parameters that hold values other than the starting code's local variables
     std::vector<std::unique_ptr<LocalVar, QoreIROwnedLocalVarDeleter>> owned_params;
-    //! Helper only: true if the new thread runs with the object of the starting code, for calls of its methods
-    /** The object is held for the thread's duration, as with a background call of a method of the object.
+    //! Helper only: how the new thread uses the object of the starting code, for calls of its methods
+    /** The object is held for the thread's duration, as with a background call of a method of the object; it is
+        checked when the thread starts only when the expression is such a call (qore#5973).
     */
-    bool helper_uses_self = false;
+    QoreBackgroundHelperSelf helper_uses_self = static_cast<QoreBackgroundHelperSelf>(0);
 };
 
 //! @name Inline call-state cache publication
