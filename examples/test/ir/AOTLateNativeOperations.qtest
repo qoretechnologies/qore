@@ -149,7 +149,9 @@ int sub maybeDeleted(bool restore, int value) {
 }
 
 int sub optionalOperation(*int value) {
-    return lateOptionalPair(value)[0] - lateOptionalPair(value)[1];
+    # one operand of an or-nothing type and one that has a value: the operator is specialized to native arithmetic
+    # (two operands that may both have no value give NOTHING, not 0, and are not specialized; qore#5889)
+    return lateOptionalPair(value)[0] - 7;
 }
 
 int sub main() {

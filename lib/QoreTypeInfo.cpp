@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreRuntimeDiagnostic.h"
+#include "qore/intern/QoreArithmeticParseType.h"
 #include <qore/QoreRWLock.h>
 #include <optional>
 #include <unordered_set>
@@ -746,6 +747,15 @@ public:
         return by_type.size();
     }
 
+    //! Returns true if an entry of a cache names one of the given types
+    bool hasType(const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
+        if (empty.load(std::memory_order_acquire)) {
+            return false;
+        }
+        std::lock_guard<std::mutex> lock(m);
+        return (ti1 && by_type.count(ti1)) || (ti2 && by_type.count(ti2));
+    }
+
     //! Evicts the entries that name a dead type from every cache that registered one
     /** @param release receives what the caches removed, to be released by the caller after the lock is released
     */
@@ -922,6 +932,596 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
     }
 }
 
+//! The class, hashdecl and enum declarations retired and not freed yet (issue #5790; see QoreTypeOwner), guarded by
+//! ctl
+static std::vector<QoreTypeOwner*> retired_type_owners;
+//! true once library cleanup frees the retired declarations: no declaration is retired anymore
+/** Read without the lock first: a Program held at static scope can be deleted by a static destructor after library
+    cleanup, when the containers above can already have been destroyed
+*/
+static std::atomic<bool> type_owner_cleanup{false};
+
+//! Returns true if a derived type or a generic cache entry names the types of the declaration; the caller holds ctl
+static bool type_owner_derived(const QoreTypeOwner* o) {
+    const void* key = o->getTypeOwnerKey();
+    const QoreTypeInfo* t1 = o->getTypeOwnerType();
+    const QoreTypeInfo* t2 = o->getTypeOwnerOrNothingType();
+    if ((key && derived_type_keys.count(key)) || (t1 && derived_type_keys.count(t1))
+            || (t2 && derived_type_keys.count(t2))) {
+        return true;
+    }
+    // a generic cache entry is keyed by the types it names (ex: hash<HD<*Foo>>)
+    return qore_generic_cache_registry().hasType(t1, t2);
+}
+
+#ifdef DEBUG
+namespace {
+//! the declarations that are not freed, for the assertions of the bookkeeping of the declarations that name each other
+struct QoreTypeOwnerRegistry {
+    std::mutex m;
+    std::set<const QoreTypeOwner*> live;
+};
+
+// not destroyed: declarations are freed at library cleanup and at static destruction
+QoreTypeOwnerRegistry& type_owner_registry() {
+    static QoreTypeOwnerRegistry* registry = new QoreTypeOwnerRegistry;
+    return *registry;
+}
+}
+
+QoreTypeOwner::QoreTypeOwner() {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.insert(this);
+}
+
+QoreTypeOwner::~QoreTypeOwner() {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.erase(this);
+}
+
+bool qore_type_owner_is_live(const QoreTypeOwner* owner) {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    return r.live.count(owner) > 0;
+}
+
+namespace {
+//! the types that are not freed
+struct QoreTypeInfoRegistry {
+    std::mutex m;
+    std::set<const QoreTypeInfo*> live;
+};
+
+// not destroyed: types are freed at library cleanup and at static destruction
+QoreTypeInfoRegistry& type_info_registry() {
+    static QoreTypeInfoRegistry* registry = new QoreTypeInfoRegistry;
+    return *registry;
+}
+}
+
+void qore_type_info_created(const QoreTypeInfo* ti) {
+    QoreTypeInfoRegistry& r = type_info_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.insert(ti);
+}
+
+void qore_type_info_destroyed(const QoreTypeInfo* ti) {
+    QoreTypeInfoRegistry& r = type_info_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.erase(ti);
+}
+
+bool qore_type_info_is_live(const QoreTypeInfo* ti) {
+    QoreTypeInfoRegistry& r = type_info_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    return r.live.count(ti) > 0;
+}
+#endif
+
+//! A group of declarations that survived the deletion of their Program together; guarded by ctl (see QoreTypeOwner)
+struct QoreTypeOwnerGroup {
+    //! the members
+    std::vector<QoreTypeOwner*> members;
+    //! the number of live members
+    size_t live = 0;
+    //! the number of holds since the last sweep (type_owner_group_hold())
+    size_t holds_since_sweep = 0;
+};
+
+//! The groups not collected yet, guarded by ctl
+static std::set<QoreTypeOwnerGroup*> type_owner_groups;
+
+//! References the declarations that a declaration names, if they are known, except the members of its group; the
+//! caller holds ctl
+static void type_owner_count_names(QoreTypeOwner* o) {
+    if (o->type_owner_names_counted || !o->type_owner_names_known) {
+        return;
+    }
+    for (QoreTypeOwner* n : o->type_owner_names) {
+        if (o->type_owner_group && n->type_owner_group == o->type_owner_group) {
+            continue;
+        }
+        n->refTypeOwner();
+        o->type_owner_refs.push_back(n);
+    }
+    o->type_owner_names_counted = true;
+}
+
+//! Marks the declarations that a declaration kept until library cleanup names, which are retired, not freed; the
+//! caller holds ctl
+static void type_owner_mark_forever_names(QoreTypeOwner* o) {
+    // transitively: a declaration marked so is retired, and a retired hashdecl keeps what it names in turn
+    std::vector<QoreTypeOwner*> work;
+    work.push_back(o);
+    while (!work.empty()) {
+        QoreTypeOwner* m = work.back();
+        work.pop_back();
+        if (!m->type_owner_names_known || !m->keepsTypeOwnerMembers()) {
+            continue;
+        }
+        for (QoreTypeOwner* n : m->type_owner_names) {
+            if (!n->type_owner_forever_named) {
+                n->type_owner_forever_named = true;
+                work.push_back(n);
+            }
+        }
+    }
+}
+
+//! Gives the references to the declarations that a declaration names to \a release_list; the caller holds ctl
+/** The caller releases them after the lock is released (type_owner_release())
+*/
+static void type_owner_uncount_names(QoreTypeOwner* o, std::vector<QoreTypeOwner*>& release_list) {
+    if (!o->type_owner_names_counted) {
+        return;
+    }
+    o->type_owner_names_counted = false;
+    release_list.insert(release_list.end(), o->type_owner_refs.begin(), o->type_owner_refs.end());
+    o->type_owner_refs.clear();
+}
+
+//! Returns true if a member of a group that is not retired is referenced other than by its own hold for the group;
+//! the caller holds ctl (a retired member names the members that it keeps without references: they are marked)
+static bool type_owner_group_referenced(const QoreTypeOwner* m) {
+    return !m->type_owner_retired && m->getTypeOwnerReferenceCount() > (m->type_owner_group_hold ? 1 : 0);
+}
+
+//! Returns the members of a group that its live members, or the members referenced otherwise, name, transitively,
+//! with those roots; the caller holds ctl
+static std::set<QoreTypeOwner*> type_owner_group_reach(QoreTypeOwnerGroup* g) {
+    std::set<QoreTypeOwner*> reach;
+    std::vector<QoreTypeOwner*> work;
+    for (QoreTypeOwner* m : g->members) {
+        if (m->type_owner_group_live || type_owner_group_referenced(m)) {
+            work.push_back(m);
+        }
+    }
+    while (!work.empty()) {
+        QoreTypeOwner* m = work.back();
+        work.pop_back();
+        if (!reach.insert(m).second) {
+            continue;
+        }
+        // a retired declaration keeps what it names until library cleanup itself (type_owner_mark_forever_names())
+        if (m->type_owner_retired || !m->type_owner_names_known) {
+            continue;
+        }
+        for (QoreTypeOwner* n : m->type_owner_names) {
+            // a declaration that a member of a group names must not be freed while the member exists: its references
+            // are held for the member, except those of the members of the group itself
+            assert(qore_type_owner_is_live(n));
+            if (n->type_owner_group == g) {
+                work.push_back(n);
+            }
+        }
+    }
+    return reach;
+}
+
+//! Releases the members of a group with live members that no live or referenced member names anymore; the caller
+//! holds ctl
+/** A member that is reached keeps its hold; the others leave the group, and their holds are given to
+    \a release_list, to be released by the caller after the lock is released
+*/
+static void type_owner_group_sweep(QoreTypeOwnerGroup* g, const std::set<QoreTypeOwner*>& reach,
+        std::vector<QoreTypeOwner*>& release_list) {
+    std::vector<QoreTypeOwner*> members;
+    members.swap(g->members);
+    for (QoreTypeOwner* m : members) {
+        if (reach.count(m)) {
+            g->members.push_back(m);
+            continue;
+        }
+        m->type_owner_group = nullptr;
+        if (m->type_owner_group_hold) {
+            m->type_owner_group_hold = false;
+            release_list.push_back(m);
+        }
+    }
+}
+
+//! A member of a group with live members that was released holds a reference to itself for the group; the caller
+//! holds ctl
+/** The group is swept (type_owner_group_sweep()) when the holds since the last sweep reach half the number of its
+    members (at the first hold for a group of up to three members), so the cost of a sweep, which is proportional to
+    the size of the group, is paid by as many holds and the cost of a release is constant on average however large the
+    group, and a member that no live or referenced member reaches anymore is released after a bounded number of holds
+*/
+static void type_owner_group_hold(QoreTypeOwnerGroup* g, QoreTypeOwner* owner,
+        std::vector<QoreTypeOwner*>& release_list) {
+    owner->refTypeOwner();
+    owner->type_owner_group_hold = true;
+    if (++g->holds_since_sweep < std::max<size_t>(1, g->members.size() / 2)) {
+        return;
+    }
+    g->holds_since_sweep = 0;
+    type_owner_group_sweep(g, type_owner_group_reach(g), release_list);
+}
+
+//! Collects a group whose last live member was released; the caller holds ctl
+/** A member that is referenced again (beyond its hold: ex: by the reflection API) becomes a live member again, and its
+    hold is given to \a release_list (the release of that reference decides it again); if there is none, the group is
+    dissolved and the holds of its members are given to \a release_list, to be released by the caller after the lock
+    is released, which frees the members that nothing references then (or retires the marked ones)
+*/
+static void type_owner_collect_group(QoreTypeOwnerGroup* g, std::vector<QoreTypeOwner*>& release_list) {
+    for (QoreTypeOwner* m : g->members) {
+        if (type_owner_group_referenced(m)) {
+            m->type_owner_group_live = true;
+            ++g->live;
+            if (m->type_owner_group_hold) {
+                m->type_owner_group_hold = false;
+                release_list.push_back(m);
+            }
+        }
+    }
+    if (g->live) {
+        return;
+    }
+    for (QoreTypeOwner* m : g->members) {
+        m->type_owner_group = nullptr;
+        m->type_owner_group_live = false;
+        if (m->type_owner_group_hold) {
+            m->type_owner_group_hold = false;
+            release_list.push_back(m);
+        }
+    }
+    type_owner_groups.erase(g);
+    delete g;
+}
+
+namespace {
+//! The releases of the current thread that wait for the release being made (type_owner_release())
+struct QoreTypeOwnerReleaseQueue {
+    bool active = false;
+    std::vector<QoreTypeOwner*> pending;
+};
+
+//! Marks the queue of the thread active while it is drained, also if a release throws
+class QoreTypeOwnerReleaseQueueHelper {
+public:
+    DLLLOCAL QoreTypeOwnerReleaseQueueHelper(QoreTypeOwnerReleaseQueue& q) : q(q) {
+        q.active = true;
+    }
+
+    DLLLOCAL ~QoreTypeOwnerReleaseQueueHelper() {
+        q.active = false;
+    }
+
+private:
+    QoreTypeOwnerReleaseQueue& q;
+};
+}
+
+static thread_local QoreTypeOwnerReleaseQueue type_owner_release_queue;
+
+//! Releases references to declarations; the caller does not hold ctl
+/** A release can free a declaration whose destructor releases others in turn: they are queued and released here, so a
+    chain of declarations is freed without recursion
+*/
+static void type_owner_release(std::vector<QoreTypeOwner*>& release_list) {
+    if (release_list.empty()) {
+        return;
+    }
+    QoreTypeOwnerReleaseQueue& q = type_owner_release_queue;
+    if (q.active) {
+        q.pending.insert(q.pending.end(), release_list.begin(), release_list.end());
+        return;
+    }
+    QoreTypeOwnerReleaseQueueHelper qh(q);
+    std::vector<QoreTypeOwner*> work;
+    work.swap(release_list);
+    while (!work.empty()) {
+        for (QoreTypeOwner* o : work) {
+            o->derefTypeOwner();
+        }
+        work.clear();
+        work.swap(q.pending);
+    }
+}
+
+bool qore_type_owner_released(QoreTypeOwner* owner) {
+    if (type_owner_cleanup.load(std::memory_order_acquire) || owner->isTypeOwnerSystem()) {
+        return false;
+    }
+    std::vector<QoreTypeOwner*> release_list;
+    bool rv;
+    {
+        AutoLocker al(ctl);
+        // a reference taken meanwhile in another thread (ex: by the reflection API) decides when it is released
+        if (owner->hasTypeOwnerReferences()) {
+            return true;
+        }
+        if (owner->type_owner_retired) {
+            // a reference taken to the declaration while it was being retired was released; the retiring thread
+            // decides
+            return true;
+        }
+        bool derived = owner->type_owner_forever_named || type_owner_derived(owner);
+        QoreTypeOwnerGroup* g = owner->type_owner_group;
+        if (g && owner->type_owner_group_live) {
+            owner->type_owner_group_live = false;
+            --g->live;
+            if (!derived) {
+                if (g->live) {
+                    // live members can name it: it is kept for the group until a sweep finds that none does
+                    type_owner_group_hold(g, owner, release_list);
+                    rv = true;
+                    goto release;
+                }
+                // the last live member: the group is collected unless a member is referenced again; this
+                // declaration is freed then (it is not referenced: checked above)
+                type_owner_collect_group(g, release_list);
+                if (owner->type_owner_group_live) {
+                    // a reference to it was taken meanwhile in another thread: it is live again, and that reference
+                    // decides it when it is released
+                    rv = true;
+                } else if (owner->type_owner_group) {
+                    // a referenced member keeps the group, and this one is kept for it
+                    type_owner_group_hold(g, owner, release_list);
+                    rv = true;
+                } else {
+                    rv = false;
+                }
+                goto release;
+            }
+        } else if (!derived) {
+            // a declaration that other declarations name directly is referenced by them; only a derived type, which
+            // is never freed before library cleanup, can name the types of a declaration without a reference
+            return false;
+        }
+        owner->type_owner_retired = true;
+        // no other thread frees it while it is retired without the lock
+        owner->type_owner_retiring = true;
+        retired_type_owners.push_back(owner);
+        // a retired declaration that keeps its members keeps what they name until library cleanup, without
+        // references, which would keep them whole: they are retired when they are released; marked now, while the
+        // lock decides them
+        if (owner->keepsTypeOwnerMembers()) {
+            type_owner_mark_forever_names(owner);
+        }
+    }
+    // the caches drop the entries built on the types; the derived types are retired, as their addresses are kept
+    qore_purge_derived_types(owner->getTypeOwnerKey(), owner->getTypeOwnerType(), owner->getTypeOwnerOrNothingType());
+    owner->retireTypeOwner();
+    {
+        AutoLocker al(ctl);
+        owner->type_owner_retiring = false;
+        // what it names is marked (above), or it names nothing (a retired class keeps no members)
+        type_owner_uncount_names(owner, release_list);
+        // the references taken and released by other code from now on never bring its count to zero, so the
+        // declaration is decided only at library cleanup
+        owner->refTypeOwner();
+        owner->type_owner_retirement_ref = true;
+        // a group whose last live member was this one is collected; otherwise, the members that only it kept are
+        // released
+        QoreTypeOwnerGroup* g = owner->type_owner_group;
+        if (g && !g->live) {
+            type_owner_collect_group(g, release_list);
+        }
+    }
+    rv = true;
+release:
+    type_owner_release(release_list);
+    return rv;
+}
+
+void qore_type_owner_destroyed(QoreTypeOwner* owner) {
+    if (type_owner_cleanup.load(std::memory_order_acquire)) {
+        // at library cleanup (or after it, at static destruction), the declarations that this one referenced are
+        // released directly: the lock and the release queue may be gone; no other thread decides then
+        if (owner->type_owner_names_counted) {
+            owner->type_owner_names_counted = false;
+            std::vector<QoreTypeOwner*> refs;
+            refs.swap(owner->type_owner_refs);
+            for (QoreTypeOwner* n : refs) {
+                n->derefTypeOwner();
+            }
+        }
+        return;
+    }
+    std::vector<QoreTypeOwner*> release_list;
+    {
+        AutoLocker al(ctl);
+        type_owner_uncount_names(owner, release_list);
+        // a member of a group is freed only when the group has been collected, unless it is deleted with its class
+        // object (qore_class_private::deref() with in_del): it leaves its group then
+        QoreTypeOwnerGroup* g = owner->type_owner_group;
+        if (g) {
+            auto i = std::find(g->members.begin(), g->members.end(), owner);
+            assert(i != g->members.end());
+            g->members.erase(i);
+            if (owner->type_owner_group_live) {
+                --g->live;
+            }
+            owner->type_owner_group = nullptr;
+            if (!g->live) {
+                type_owner_collect_group(g, release_list);
+            }
+        }
+    }
+    type_owner_release(release_list);
+}
+
+void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreTypeInfo* ti, const QoreTypeOwner* self) {
+    if (!ti) {
+        return;
+    }
+    // a declaration names the types of its members by pointer: the owner of a type that it names must outlive it, or
+    // be kept by a reference or retired (QoreTypeOwnerBatch)
+    assert(qore_type_info_is_live(ti));
+    QoreTypeOwner* o = nullptr;
+    if (dynamic_cast<const QoreClassTypeInfo*>(ti)) {
+        const QoreClass* qc = QoreTypeInfo::getReturnClass(ti);
+        if (qc) {
+            qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(qc));
+            if (priv && !priv->type_owner.isTypeOwnerSystem()) {
+                o = &priv->type_owner;
+            }
+        }
+    } else if (dynamic_cast<const QoreHashDeclTypeInfo*>(ti)) {
+        const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti);
+        if (hd) {
+            typed_hash_decl_private* priv = typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd));
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                o = &priv->type_owner;
+            }
+        }
+    } else if (dynamic_cast<const QoreEnumTypeInfo*>(ti)) {
+        const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(ti);
+        if (ed) {
+            qore_enum_decl_private* priv = qore_enum_decl_private::get(*const_cast<QoreEnumDecl*>(ed));
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                o = &priv->type_owner;
+            }
+        }
+    }
+    if (o && o != self) {
+        names.push_back(o);
+    }
+}
+
+QoreTypeOwnerBatch::QoreTypeOwnerBatch(qore_ns_private& ns) {
+    // after library cleanup, declarations are freed when their last reference is released
+    if (type_owner_cleanup.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::set<QoreTypeOwner*> seen;
+    std::vector<QoreTypeOwner*> all;
+    ns.getTypeOwners(all);
+    owners.reserve(all.size());
+    for (QoreTypeOwner* o : all) {
+        if (seen.insert(o).second) {
+            o->refTypeOwner();
+            owners.push_back(o);
+        }
+    }
+    // what each declaration names is taken now, while every type is valid; a declaration whose names are counted
+    // (one that survived another Program sharing it) keeps them
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : owners) {
+        if (!o->type_owner_names_counted) {
+            o->type_owner_names.clear();
+            o->getTypeOwnerNames(o->type_owner_names);
+            o->type_owner_names_known = true;
+        }
+    }
+}
+
+QoreTypeOwnerBatch::~QoreTypeOwnerBatch() {
+    if (owners.empty()) {
+        return;
+    }
+    std::vector<QoreTypeOwner*> release_list;
+    {
+        AutoLocker al(ctl);
+        // the declarations that something other than this batch still references survive the Program, and so do
+        // the hashdecls retired below (derived types name their types), which keep their members; each one keeps
+        // what it names with a reference, and a declaration of the Program kept so survives in turn; the others are
+        // destroyed together and do not keep each other
+        std::set<QoreTypeOwner*> batch(owners.begin(), owners.end());
+        std::set<QoreTypeOwner*> survivors;
+        std::vector<QoreTypeOwner*> work;
+        for (QoreTypeOwner* o : owners) {
+            if (o->getTypeOwnerReferenceCount() > 1) {
+                survivors.insert(o);
+                work.push_back(o);
+            } else if (o->keepsTypeOwnerMembers() && (o->type_owner_forever_named || type_owner_derived(o))) {
+                // a hashdecl retired below keeps what it names until library cleanup
+                type_owner_mark_forever_names(o);
+            }
+        }
+
+        while (!work.empty()) {
+            QoreTypeOwner* o = work.back();
+            work.pop_back();
+            if (o->type_owner_names_counted) {
+                continue;
+            }
+            for (QoreTypeOwner* n : o->type_owner_names) {
+                if (batch.count(n) && survivors.insert(n).second) {
+                    work.push_back(n);
+                }
+            }
+        }
+        // the survivors whose names are not counted yet (declarations that survived another Program sharing them
+        // already belong to it) and that name or are named by another one form a group, in which they name each
+        // other without references
+        std::set<QoreTypeOwner*> linked;
+        for (QoreTypeOwner* o : survivors) {
+            if (o->type_owner_names_counted || o->type_owner_group || !o->type_owner_names_known) {
+                continue;
+            }
+            for (QoreTypeOwner* n : o->type_owner_names) {
+                if (n != o && survivors.count(n) && !n->type_owner_names_counted && !n->type_owner_group) {
+                    linked.insert(o);
+                    linked.insert(n);
+                }
+            }
+        }
+        QoreTypeOwnerGroup* g = nullptr;
+        for (QoreTypeOwner* o : linked) {
+            if (!g) {
+                g = new QoreTypeOwnerGroup;
+                type_owner_groups.insert(g);
+            }
+            g->members.push_back(o);
+            o->type_owner_group = g;
+            o->type_owner_group_live = true;
+            ++g->live;
+        }
+        for (QoreTypeOwner* o : survivors) {
+            type_owner_count_names(o);
+        }
+        // a declaration destroyed with the Program no longer keeps what it named as a survivor of another Program;
+        // one that is a member of a group of another Program's survivors is released below like the others, but the
+        // group can keep it (type_owner_group_hold()) with the names that it lists: it keeps its references to them,
+        // which it gives up when it is freed (qore_type_owner_destroyed()) or retired, as the names that a group
+        // sweeps are read while it exists
+        for (QoreTypeOwner* o : owners) {
+            if (!survivors.count(o) && !o->type_owner_group) {
+                type_owner_uncount_names(o, release_list);
+            }
+        }
+    }
+    type_owner_release(release_list);
+    for (QoreTypeOwner* o : owners) {
+        o->derefTypeOwner();
+    }
+}
+
+size_t qore_retired_type_owner_count() {
+    AutoLocker al(ctl);
+    return retired_type_owners.size();
+}
+
+size_t qore_type_owner_group_count() {
+    AutoLocker al(ctl);
+    return type_owner_groups.size();
+}
+
 void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
     std::set<const QoreTypeInfo*> dead;
     if (ti1) {
@@ -943,6 +1543,46 @@ void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const 
 }
 
 void delete_qore_types() {
+    // the retired class, hashdecl and enum declarations are freed first, as their destructors purge their types
+    // from the caches deleted below; from now on, a declaration whose last reference is released is freed
+    {
+        std::vector<QoreTypeOwner*> owners;
+        std::vector<QoreTypeOwner*> holds;
+        {
+            AutoLocker al(ctl);
+            type_owner_cleanup.store(true, std::memory_order_release);
+            owners.swap(retired_type_owners);
+            // the groups not collected yet are dissolved, and the holds of their members released below
+            for (QoreTypeOwnerGroup* g : type_owner_groups) {
+                for (QoreTypeOwner* m : g->members) {
+                    m->type_owner_group = nullptr;
+                    m->type_owner_group_live = false;
+                    if (m->type_owner_group_hold) {
+                        m->type_owner_group_hold = false;
+                        holds.push_back(m);
+                    }
+                }
+                delete g;
+            }
+            type_owner_groups.clear();
+        }
+        for (QoreTypeOwner* o : holds) {
+            o->derefTypeOwner();
+        }
+        for (QoreTypeOwner* o : owners) {
+            // the retirement reference is released: a declaration that is still referenced otherwise (ex: by a
+            // reflection object of a Program deleted later) is freed when its last reference is released, as the
+            // cleanup flag is set
+            if (o->type_owner_retirement_ref) {
+                o->type_owner_retirement_ref = false;
+                o->derefTypeOwner();
+            } else if (!o->hasTypeOwnerReferences() && !o->type_owner_retiring) {
+                // one that another thread is retiring is freed when its last reference is released
+                o->freeTypeOwner();
+            }
+        }
+    }
+
     // dereference global default values
     NullString->deref();
     piNumber->deref();
@@ -1517,6 +2157,47 @@ static q_return_vec_t make_type_parameter_return_vec(const QoreTypeParameterType
     return rv;
 }
 
+const QoreTypeInfo* QoreTypeParameterTypeInfo::getBoundTypeInfo() const {
+    if (owner_signature) {
+        return owner_signature->getTypeParameterBoundTypeInfo(index);
+    }
+    if (owner_class) {
+        return qore_class_private::get(*owner_class)->getTypeParamBoundTypeInfo(index);
+    }
+    return nullptr;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getTypeParameterSourceType(const QoreTypeInfo* ti) {
+    if (!ti || ti->return_vec.size() > 2) {
+        return nullptr;
+    }
+    const QoreTypeParameterTypeInfo* tp = ti->return_vec[0].spec.getTypeParameterTypeInfo();
+    if (!tp) {
+        return nullptr;
+    }
+    bool or_nothing = false;
+    if (ti->return_vec.size() > 1) {
+        // *T: the type parameter and NOTHING (see make_type_parameter_return_vec())
+        if (ti->return_vec[1].spec.getTypeSpec() != QTS_TYPE || ti->return_vec[1].spec.getType() != NT_NOTHING) {
+            return nullptr;
+        }
+        or_nothing = true;
+    }
+    const QoreTypeInfo* bound = tp->getBoundTypeInfo();
+    if (!bound) {
+        return autoTypeInfo;
+    }
+    // a bound that accepts values with a conversion (softint, number, softlist<...>) accepts type arguments that it
+    // converts (C<string> for T: softint), but a value bound to T is not converted, so its type is only known at run
+    // time
+    for (auto& i : bound->getAcceptSpecs()) {
+        if (i.map) {
+            return autoTypeInfo;
+        }
+    }
+    return or_nothing ? get_or_nothing_type(bound) : bound;
+}
+
 QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const QoreClass* owner, size_t n_index, const char* name,
         bool n_or_nothing, const QoreTypeParameterTypeInfo* value_type)
         : QoreTypeInfo(
@@ -1974,6 +2655,10 @@ private:
 QoreExternalTypeDeclRefs::QoreExternalTypeDeclRefs(const QoreTypeInfo* ti) {
     // nothing is allocated for a type without declarations, such as a builtin type
     std::unique_ptr<qore_type_decl_refs_private> p;
+    // the references are taken under the type lock: a declaration reached through a type can be a member of a group
+    // of declarations of a deleted Program, whose collection and sweeps read the references of its members under the
+    // lock (issue #5790)
+    AutoLocker al(ctl);
     qore_type_decl_refs_private::add(p, ti, 0);
     priv = p.release();
 }
@@ -2355,14 +3040,30 @@ QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str) {
     }
     --close_pos;  // Point to the closing '>'
 
+    // a complex type followed by a parameter list is the callable signature of a nested code<> type whose return type
+    // is complex (ex: "hash<auto>()" in "code<hash<auto>()>"): it is kept as a single opaque name, as above, so that
+    // the outer code<> handler parses the return type and the parameters; parsing it as the complex type would drop
+    // the parameter list (#6022)
+    {
+        size_t next = close_pos + 1;
+        while (next < str.size() && isspace(str[next])) {
+            ++next;
+        }
+        if (next < str.size() && str[next] == '(') {
+            return new QoreParseTypeInfo(strdup(str.c_str()), or_nothing);
+        }
+    }
+
     // Extract base type and subtype content
     std::string base_type = str.substr(0, angle_pos);
     std::string subtype_content = str.substr(angle_pos + 1, close_pos - angle_pos - 1);
 
-    // Parse subtypes (split on commas, respecting nested brackets)
+    // Parse subtypes (split on commas, respecting nested brackets and the parameter lists of callable signatures,
+    // ex: the commas in "code<int(string, bool)>")
     parse_type_vec_t subtypes;
     std::string current;
     int angle_depth = 0;
+    int paren_depth = 0;
     for (size_t i = 0; i <= subtype_content.size(); ++i) {
         char c = i < subtype_content.size() ? subtype_content[i] : '\0';
         if (c == '<') {
@@ -2371,7 +3072,14 @@ QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str) {
         } else if (c == '>') {
             --angle_depth;
             current += c;
-        } else if ((c == ',' || c == '\0') && angle_depth == 0) {
+        } else if (c == '(') {
+            ++paren_depth;
+            current += c;
+        } else if (c == ')') {
+            --paren_depth;
+            current += c;
+        } else if ((c == ',' && angle_depth == 0 && paren_depth == 0) || c == '\0') {
+            // the last subtype is kept also if its brackets are unbalanced, so that its resolution reports it
             // Trim whitespace
             while (!current.empty() && isspace(current.back())) current.pop_back();
             while (!current.empty() && isspace(current.front())) current.erase(0, 1);
@@ -2498,6 +3206,133 @@ static const QoreTypeInfo* parse_and_resolve_type_string(const char* type_str, c
     if (!pti) return nullptr;
 
     return QoreParseTypeInfo::resolveAndDelete(pti, loc, err);
+}
+
+// trims leading and trailing whitespace
+static void qore_trim_type_component(std::string& str) {
+    while (!str.empty() && isspace(str.back())) {
+        str.pop_back();
+    }
+    size_t i = 0;
+    while (i < str.size() && isspace(str[i])) {
+        ++i;
+    }
+    str.erase(0, i);
+}
+
+//! Splits the callable signature "ReturnType(ParamTypes...)" of a code<> type (#6022)
+/** The parameter list is the first one outside angle brackets, as the return type can be a callable type with a
+    parameter list of its own (ex: "code<*hash<auto>()>()"), and ends at its matching parenthesis, after which only
+    whitespace is allowed; the parameters are split at the commas outside angle brackets and parentheses, so that a
+    nested callable's parameters stay with it; a "..." at the end of the last parameter (alone or after its type) makes
+    the callable variadic, so that the "..." of a nested callable does not.  Empty parameters are skipped.
+
+    @param sig the signature
+    @param return_type the return type string (trimmed; empty if none)
+    @param params the parameter type strings (trimmed)
+    @param varargs set to true if the callable is variadic
+    @param error the error message if the signature is malformed
+
+    @return true if the signature is well formed, false (with @a error set) if not
+*/
+static bool qore_split_code_signature(const char* sig, std::string& return_type, std::vector<std::string>& params,
+        bool& varargs, std::string& error) {
+    params.clear();
+    varargs = false;
+
+    const char* open = nullptr;
+    int angle_depth = 0;
+    for (const char* p = sig; *p; ++p) {
+        if (*p == '<') {
+            ++angle_depth;
+        } else if (*p == '>') {
+            --angle_depth;
+        } else if (*p == '(' && !angle_depth) {
+            open = p;
+            break;
+        }
+    }
+    if (!open) {
+        error = "expected format 'ReturnType(ParamTypes...)' with parentheses";
+        return false;
+    }
+
+    // the matching closing parenthesis
+    const char* close = nullptr;
+    int paren_depth = 0;
+    angle_depth = 0;
+    for (const char* p = open; *p; ++p) {
+        if (*p == '<') {
+            ++angle_depth;
+        } else if (*p == '>') {
+            --angle_depth;
+        } else if (*p == '(') {
+            ++paren_depth;
+        } else if (*p == ')' && !--paren_depth) {
+            close = p;
+            break;
+        }
+    }
+    if (!close) {
+        error = "missing closing parenthesis";
+        return false;
+    }
+    if (angle_depth) {
+        error = "unbalanced angle brackets in the parameter list";
+        return false;
+    }
+    for (const char* p = close + 1; *p; ++p) {
+        if (!isspace(*p)) {
+            error = std::string("unexpected text '") + p + "' after the parameter list";
+            return false;
+        }
+    }
+
+    return_type.assign(sig, open - sig);
+    qore_trim_type_component(return_type);
+
+    std::string current;
+    angle_depth = 0;
+    paren_depth = 0;
+    for (const char* p = open + 1; p <= close; ++p) {
+        char c = (p == close) ? '\0' : *p;
+        if (c == '<') {
+            ++angle_depth;
+        } else if (c == '>') {
+            --angle_depth;
+        } else if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')') {
+            --paren_depth;
+        }
+        if (angle_depth < 0 || paren_depth < 0) {
+            error = "unbalanced angle brackets or parentheses in the parameter list";
+            return false;
+        }
+        if ((c == ',' || !c) && !angle_depth && !paren_depth) {
+            qore_trim_type_component(current);
+            if (!current.empty()) {
+                params.push_back(current);
+            }
+            current.clear();
+        } else {
+            current += c;
+        }
+    }
+
+    // a "..." at the end of the last parameter makes the callable variadic
+    if (!params.empty()) {
+        std::string& last = params.back();
+        if (last.size() >= 3 && !last.compare(last.size() - 3, 3, "...")) {
+            varargs = true;
+            last.erase(last.size() - 3);
+            qore_trim_type_component(last);
+            if (last.empty()) {
+                params.pop_back();
+            }
+        }
+    }
+    return true;
 }
 
 // Helper function to build the typed callable type name
@@ -3337,7 +4172,7 @@ qore_type_result_e QoreTypeSpec::matchReturnType(qore_type_t t) const {
     return matchType(t);
 }
 
-static bool type_spec_accept_object(const QoreClass& type_class, const QoreClass& object_class, bool& priv_error) {
+static QORE_INTERN_ALWAYS_INLINE bool type_spec_accept_object(const QoreClass& type_class, const QoreClass& object_class, bool& priv_error) {
     assert(!priv_error);
 
     bool priv;
@@ -3406,9 +4241,125 @@ bool QoreTypeInfo::mayFoldContainerValueTo(const QoreTypeInfo* target_ti, const 
     return target_elem && source_elem && qore_container_value_may_convert_to(target_elem, source_elem);
 }
 
+namespace {
+// Default internal entries have canonical semantics, including when entered from a legacy native callback.
+// Explicit lexical entries carry their value through recursive checks without changing a shared type.
+struct DefaultTypeMatchPolicy {
+    qore_type_result_e value(const QoreTypeInfo* ti, const QoreValue& n, bool fold) const {
+        return fold ? QoreTypeInfo::runtimeAcceptsValueOrFold(ti, n) : QoreTypeInfo::runtimeAcceptsValue(ti, n);
+    }
+
+    qore_type_result_e spec(const QoreTypeSpec& spec, const QoreValue& n, bool exact, bool fold) const {
+        return spec.runtimeAcceptsValue(n, exact, fold);
+    }
+};
+
+struct LexicalTypeMatchPolicy {
+    LexicalSemanticPolicy policy;
+
+    qore_type_result_e value(const QoreTypeInfo* ti, const QoreValue& n, bool fold) const {
+        return QoreTypeInfo::runtimeAcceptsValue(ti, n, policy, fold);
+    }
+
+    qore_type_result_e spec(const QoreTypeSpec& spec, const QoreValue& n, bool exact, bool fold) const {
+        return spec.runtimeAcceptsValue(n, exact, fold, policy);
+    }
+};
+
+
+struct DefaultTypeFilterPolicy : DefaultTypeMatchPolicy {
+    QoreHashNode* hash(const TypedHashDecl* hd, const QoreHashNode* value, ExceptionSink* xsink) const {
+        return typed_hash_decl_private::get(*hd)->newHashFromType(value, xsink);
+    }
+
+    int push(QoreListNode& list, QoreValue value, ExceptionSink* xsink) const {
+        return qore_list_private::pushCanonical(list, value, xsink);
+    }
+
+    bool retype(QoreValue& value, const QoreTypeInfo* ti, ExceptionSink* xsink) const {
+        return QoreTypeInfo::retypeValue(value, ti, xsink);
+    }
+
+    void assignment(const QoreTypeInfo* ti, const char* desc, QoreValue& value, ExceptionSink* xsink) const {
+        QoreTypeInfo::acceptAssignment(ti, desc, value, xsink);
+    }
+
+    int assign(LValueHelper& lvh, QoreValue value, const char* desc) const {
+        return lvh.assign(value, desc);
+    }
+
+    void input(const QoreTypeInfo& ti, ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
+            const char* param_name, QoreValue& n, LValueHelper* lvhelper) const {
+        ti.acceptInputIntern(xsink, arg_type, obj, param_num, param_name, n, lvhelper);
+    }
+
+    bool brokenSoftTypes() const {
+        return false;
+    }
+
+    void map(const QoreAcceptSpec& accept, QoreValue& n, ExceptionSink* xsink) const {
+        accept.map(n, xsink);
+    }
+};
+
+struct LexicalTypeFilterPolicy : LexicalTypeMatchPolicy {
+    QoreHashNode* hash(const TypedHashDecl* hd, const QoreHashNode* value, ExceptionSink* xsink) const {
+        return typed_hash_decl_private::get(*hd)->newHashFromType(value, xsink, policy);
+    }
+
+    int push(QoreListNode& list, QoreValue value, ExceptionSink* xsink) const {
+        return qore_list_private::get(list)->push(value, xsink, policy);
+    }
+
+    bool retype(QoreValue& value, const QoreTypeInfo* ti, ExceptionSink* xsink) const {
+        return QoreTypeInfo::retypeValue(value, ti, xsink, policy);
+    }
+
+    void assignment(const QoreTypeInfo* ti, const char* desc, QoreValue& value, ExceptionSink* xsink) const {
+        QoreTypeInfo::acceptAssignment(ti, desc, value, xsink, policy);
+    }
+
+    int assign(LValueHelper& lvh, QoreValue value, const char* desc) const {
+        return lvh.assign(value, desc, policy);
+    }
+
+    explicit LexicalTypeFilterPolicy(LexicalSemanticPolicy value) : LexicalTypeMatchPolicy{value} {
+    }
+
+    void input(const QoreTypeInfo& ti, ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
+            const char* param_name, QoreValue& n, LValueHelper* lvhelper) const {
+        ti.acceptInputIntern(xsink, arg_type, obj, param_num, param_name, n, policy, lvhelper);
+    }
+
+    bool brokenSoftTypes() const {
+        return policy.brokenSoftTypes();
+    }
+
+    void map(const QoreAcceptSpec& accept, QoreValue& n, ExceptionSink* xsink) const {
+        if (accept.lexical_map) {
+            accept.lexical_map(n, xsink, policy);
+        } else {
+            accept.map(n, xsink);
+        }
+    }
+};
+}
+
+void qore_lexical_soft_bool_filter(QoreValue& value, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    discard(value.assign(policy.getAsBool(value)), xsink);
+}
+
 bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const char* arg_type,
         bool obj, int param_num, const char* param_name, QoreValue& n, LValueHelper* lvhelper, QoreHashNode* h,
         bool& err) const {
+    return acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper,
+        h, err, DefaultTypeFilterPolicy{});
+}
+
+template <typename FilterPolicy>
+bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const char* arg_type,
+        bool obj, int param_num, const char* param_name, QoreValue& n, LValueHelper* lvhelper, QoreHashNode* h,
+        bool& err, FilterPolicy policy) const {
     assert(!err);
     const QoreTypeInfo* ti = h->getValueTypeInfo();
     // a container whose value type is accepted without a check is taken as it is; a value type with the same
@@ -3419,6 +4370,12 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
     }
     if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
             && !qore_container_value_may_convert_to(u.ti, ti)) {
+        return false;
+    }
+    // a hash with a hashdecl type is not a hash with a specific value type, as for the selection of a variant
+    // (runtimeAcceptsValue()): its member values are not folded into the value type (folding the values of a hash
+    // with no other reference would break the member types of its hashdecl) (issue #5916)
+    if (h->getHashDecl()) {
         return false;
     }
 
@@ -3448,8 +4405,8 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
         hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(i)->i);
         QoreValue hn(ha.swap(QoreValue()));
 
-        if (QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, hn) == QTI_NOT_EQUAL
-                && !QoreTypeInfo::retypeValue(hn, u.ti, xsink)) {
+        if (policy.value(u.ti, hn, true) == QTI_NOT_EQUAL
+                && !policy.retype(hn, u.ti, xsink)) {
             ha.swap(hn);
             err = true;
             if (xsink && *xsink) {
@@ -3458,7 +4415,7 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
             }
             return true;
         }
-        u.ti->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, hn, lvhelper);
+        policy.input(*u.ti, xsink, arg_type, obj, param_num, param_name, hn, lvhelper);
         ha.swap(hn);
         if (xsink && *xsink) {
             err = true;
@@ -3474,6 +4431,14 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
 bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const char* arg_type,
         bool obj, int param_num, const char* param_name, QoreValue& n, LValueHelper* lvhelper, QoreListNode* l,
         bool& err) const {
+    return acceptInputComplexListImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper,
+        l, err, DefaultTypeFilterPolicy{});
+}
+
+template <typename FilterPolicy>
+bool QoreTypeSpec::acceptInputComplexListImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const char* arg_type,
+        bool obj, int param_num, const char* param_name, QoreValue& n, LValueHelper* lvhelper, QoreListNode* l,
+        bool& err, FilterPolicy policy) const {
     const QoreTypeInfo* ti = l->getValueTypeInfo();
     // a container whose value type is accepted without a check is taken as it is; a value type with the same
     // signature that the target still validates (date for date<absolute> or date<relative>) is folded and checked
@@ -3512,8 +4477,8 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     // now we have to fold the value types into our type
     for (size_t i = 0; i < l->size(); ++i) {
         QoreValue ln(lp->takeExists(i));
-        if (QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, ln) == QTI_NOT_EQUAL
-                && !QoreTypeInfo::retypeValue(ln, u.ti, xsink)) {
+        if (policy.value(u.ti, ln, true) == QTI_NOT_EQUAL
+                && !policy.retype(ln, u.ti, xsink)) {
             lp->swap(i, ln);
             err = true;
             if (xsink && *xsink) {
@@ -3522,7 +4487,7 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
             }
             return true;
         }
-        u.ti->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, ln, lvhelper);
+        policy.input(*u.ti, xsink, arg_type, obj, param_num, param_name, ln, lvhelper);
         lp->swap(i, ln);
         if (xsink && *xsink) {
             err = true;
@@ -3535,8 +4500,9 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     return true;
 }
 
+template <typename FilterPolicy>
 static bool qore_type_materialize_iterator_to_list(ExceptionSink* xsink, QoreValue& n, LValueHelper* lvhelper,
-        const QoreTypeInfo* value_type, bool& err) {
+        const QoreTypeInfo* value_type, bool& err, FilterPolicy policy) {
     if (n.getType() != NT_OBJECT) {
         return false;
     }
@@ -3568,7 +4534,7 @@ static bool qore_type_materialize_iterator_to_list(ExceptionSink* xsink, QoreVal
             err = true;
             return true;
         }
-        if (list->push(value, xsink)) {
+        if (policy.push(**list, value, xsink)) {
             err = true;
             if (xsink && *xsink) {
                 xsink->appendLastDescription(" (while materializing iterator element %lu into type 'list<%s>')",
@@ -3631,9 +4597,73 @@ static bool qore_value_unchanged_by_conversion(const QoreValue& orig, const Qore
     return orig.isEqualHard(conv);
 }
 
-bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, q_type_map_t map,
+bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
         LValueHelper* lvhelper) const {
+    return acceptInputImpl(xsink, typeInfo, accept, arg_type, obj, param_num, param_name, n, lvhelper,
+        DefaultTypeFilterPolicy{});
+}
+
+namespace {
+//! Carries only a declaration's initializer coercion; the expression and storage retain their original metadata.
+class QoreInitializerFilterTypeInfo : public QoreTypeInfo {
+public:
+    QoreInitializerFilterTypeInfo(const QoreTypeInfo* declared_type, LexicalSemanticPolicy policy,
+            bool instance_member)
+            : QoreTypeInfo(QoreTypeInfo::getName(declared_type),
+                q_accept_vec_t{{QoreInitializerFilterTypeSpec(this), nullptr}}, q_return_vec_t{{NT_ALL}}),
+              declared_type(declared_type), policy(policy), instance_member(instance_member) {
+        // Generic substitution belongs to the lexical conversion entry below. The ordinary initialization
+        // sequence still substitutes its one type pointer, as before, without detecting a descriptor first.
+        setContainsTypeParameterCache(false);
+    }
+
+    void filter(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num, const char* param_name,
+            QoreValue& value, LValueHelper* lvhelper) const {
+        // Instance initialization already installs the object's constructor context. Hashdecl specialization
+        // rebinds the descriptor to its substituted member type before any default is evaluated.
+        const QoreTypeInfo* target = declared_type;
+        if (instance_member) {
+            const QoreObject* object = runtime_get_stack_object();
+            assert(object);
+            // The caller's receiver remains active until the constructor's call frame is installed. Use the
+            // object being initialized explicitly, just as the canonical initMember() entry does.
+            // (an object of a class without type arguments gives those of the generic classes that it inherits:
+            // qore#6027)
+            const qore_object_private* opriv = qore_object_private::get(*object);
+            target = qore_substitute_type_params_if_needed(declared_type,
+                opriv->instantiated_type ? opriv->instantiated_type : opriv->theclass->getTypeInfo());
+        }
+        if (QoreTypeInfo::hasType(target)) {
+            target->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, value, policy, lvhelper);
+        } else if (target != autoTypeInfo) {
+            QoreTypeInfo::stripTypeInfo(value, xsink, lvhelper);
+        }
+    }
+
+private:
+    const QoreTypeInfo* declared_type;
+    const LexicalSemanticPolicy policy;
+    const bool instance_member;
+
+    bool canConvertToScalarImpl() const override {
+        return false;
+    }
+};
+}
+
+std::shared_ptr<const QoreTypeInfo> qore_make_initializer_filter(const QoreTypeInfo* type_info,
+        LexicalSemanticPolicy policy, bool instance_member) {
+    if (!policy.needsFilter() || !QoreTypeInfo::hasType(type_info)) {
+        return {};
+    }
+    return std::make_shared<QoreInitializerFilterTypeInfo>(type_info, policy, instance_member);
+}
+
+template <typename FilterPolicy>
+bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
+        const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
+        LValueHelper* lvhelper, FilterPolicy policy) const {
     bool priv_error = false;
     bool ok = false;
 
@@ -3641,6 +4671,13 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
 
     qore_type_t t = n.getType();
     switch (typespec) {
+        case QTS_INITIALIZER_FILTER:
+            // Delegate before the ordinary mapping-filter annotation: diagnostics describe the actual target,
+            // at the existing initializer filter point, with its existing holder and exception sink still alive.
+            static_cast<const QoreInitializerFilterTypeInfo*>(u.ti)->filter(xsink, arg_type, obj, param_num,
+                param_name, n, lvhelper);
+            return true;
+
         case QTS_CLASS: {
             if (t == NT_OBJECT) {
                 const QoreObject* obj = n.get<const QoreObject>();
@@ -3722,8 +4759,8 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 }
                 QoreHashNode* h = n.get<QoreHashNode>();
                 bool err = false;
-                ok = acceptInputComplexHash(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h,
-                    err);
+                ok = acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h,
+                    err, policy);
                 if (err) {
                     return true;
                 }
@@ -3734,8 +4771,8 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 }
                 QoreHashNode* h = n.get<WeakHashReferenceNode>()->get();
                 bool err = false;
-                ok = acceptInputComplexHash(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h,
-                    err);
+                ok = acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h,
+                    err, policy);
                 if (err) {
                     return true;
                 }
@@ -3751,8 +4788,8 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 }
                 QoreListNode* l = n.get<QoreListNode>();
                 bool err = false;
-                ok = acceptInputComplexList(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, l,
-                    err);
+                ok = acceptInputComplexListImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, l,
+                    err, policy);
             } else if (n.getType() == NT_WEAKREF_LIST) {
                 // a weak reference to a list is accepted like the list it refers to, as for a weak reference to a
                 // hash above
@@ -3762,20 +4799,20 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 }
                 QoreListNode* l = n.get<WeakListReferenceNode>()->get();
                 bool err = false;
-                ok = acceptInputComplexList(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, l,
-                    err);
+                ok = acceptInputComplexListImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, l,
+                    err, policy);
                 if (err) {
                     return true;
                 }
             } else if (typespec == QTS_COMPLEXLIST) {
                 bool err = false;
-                ok = qore_type_materialize_iterator_to_list(xsink, n, lvhelper, u.ti, err);
+                ok = qore_type_materialize_iterator_to_list(xsink, n, lvhelper, u.ti, err, policy);
                 if (err) {
                     return true;
                 }
             } else if (typespec == QTS_COMPLEXSOFTLIST) {
                 // see if value matches
-                if (QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, n) > 0) {
+                if (policy.value(u.ti, n, true) > 0) {
                     ok = true;
                 }
             }
@@ -3828,14 +4865,14 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                     // replaces the value hands the old one to LValueHelper::saveTemp(), which defers the
                     // dereference to the helper's destructor, so this pointer is still backed by a live reference
                     // at the comparison below and its address cannot have been reused
-                    auto assign_back = [target_ti = u.ti](LValueHelper& lvh) {
+                    auto assign_back = [target_ti = u.ti, policy](LValueHelper& lvh) {
                         QoreValue val = lvh.getReferencedValue();
                         if (val.isNothing()) {
                             return;
                         }
                         const AbstractQoreNode* orig = val.getInternalNode();
                         lvh.setTypeInfo(target_ti);
-                        if (!lvh.assign(val, "<reference>") && orig && lvh.getInternalNode() == orig) {
+                        if (!policy.assign(lvh, val, "<reference>") && orig && lvh.getInternalNode() == orig) {
                             // the identical node is still in place, so the set of objects reachable from the
                             // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
                             // entire reachable object graph on every reference argument binding
@@ -3858,7 +4895,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                                 // type rejects raises the same error as for a variable that can be written, and only
                                 // a value that the conversion changes has to be written back
                                 ValueHolder conv(val->refSelf(), xsink);
-                                QoreTypeInfo::acceptAssignment(u.ti, "<reference>", *conv, xsink);
+                                policy.assignment(u.ti, "<reference>", *conv, xsink);
                                 if (!*xsink) {
                                     needs_write = !qore_value_unchanged_by_conversion(*val, *conv);
                                 }
@@ -3937,8 +4974,8 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
 
     if (ok) {
         assert(!priv_error);
-        if (map) {
-            map(n, xsink);
+        if (accept.map) {
+            policy.map(accept, n, xsink);
             if (xsink && *xsink) {
                 xsink->appendLastDescription(" (while converting types for type '%s')",
                     QoreTypeInfo::getName(&typeInfo));
@@ -3977,6 +5014,7 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_PARAMCLASS:
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
+        case QTS_INITIALIZER_FILTER:
             return u.ti == other.u.ti;
         case QTS_HARDREF:
              return true;
@@ -3990,7 +5028,19 @@ bool QoreTypeSpec::operator!=(const QoreTypeSpec& other) const {
    return !(*this == other);
 }
 
+
 qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold) const {
+    return runtimeAcceptsValueImpl(n, exact, fold, DefaultTypeMatchPolicy{});
+}
+
+qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool exact, bool fold,
+        LexicalSemanticPolicy policy) const {
+    return runtimeAcceptsValueImpl(n, exact, fold, LexicalTypeMatchPolicy{policy});
+}
+
+template <typename MatchPolicy>
+qore_type_result_e QoreTypeSpec::runtimeAcceptsValueImpl(const QoreValue& n, bool exact, bool fold,
+        MatchPolicy policy) const {
     qore_type_t ot = n.getType();
     // issue #2928 we must ensure that each typespec only access its own data in the union
     switch (typespec) {
@@ -4167,9 +5217,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 }
             }
             if (typespec == QTS_COMPLEXSOFTLIST) {
-                qore_type_result_e rv = fold
-                    ? QoreTypeInfo::runtimeAcceptsValueOrFold(u.ti, n)
-                    : QoreTypeInfo::runtimeAcceptsValue(u.ti, n);
+                qore_type_result_e rv = policy.value(u.ti, n, fold);
                 if (rv > 0) {
                     // do not return an exact match if we have to convert to a list
                     if (rv == QTI_IDENT) {
@@ -4276,8 +5324,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreValue& n) const {
         if (rv != QTI_NOT_EQUAL)
             return rv;
     }
-    // SQL NULL is converted, as the values of the other types that the type converts are
-    return acceptsBrokenSoftNull(n) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+    return QTI_NOT_EQUAL;
 }
 
 qore_type_result_e QoreTypeInfo::runtimeAcceptsValueOrFold(const QoreValue& n) const {
@@ -4287,14 +5334,27 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValueOrFold(const QoreValue& n) c
             return rv;
         }
     }
-    // SQL NULL is converted, as the values of the other types that the type converts are
-    return acceptsBrokenSoftNull(n) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+    return QTI_NOT_EQUAL;
+}
+
+qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreTypeInfo* ti, const QoreValue& n,
+        LexicalSemanticPolicy policy, bool fold) {
+    if (!hasType(ti)) {
+        return QTI_WILDCARD;
+    }
+    for (auto& t : ti->accept_vec) {
+        qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, fold, policy);
+        if (rv != QTI_NOT_EQUAL) {
+            return rv;
+        }
+    }
+    return ti->acceptsBrokenSoftNull(n, policy) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
 }
 
 // returns the list or hash that a call argument is or refers to, if any, and whether its element type is untyped,
 // as the element type of a container built at runtime without a declared element type is; a hashdecl hash is a
 // declared structure, not generic data, and is left to the hashdecl rules
-static void qore_get_call_arg_container(const QoreValue& n, const QoreListNode*& l, const QoreHashNode*& h,
+static QORE_INTERN_ALWAYS_INLINE void qore_get_call_arg_container(const QoreValue& n, const QoreListNode*& l, const QoreHashNode*& h,
         bool& untyped) {
     l = nullptr;
     h = nullptr;
@@ -4325,17 +5385,18 @@ static void qore_get_call_arg_container(const QoreValue& n, const QoreListNode*&
 // checks every element of an untyped container against the element type of a typed container parameter type, as
 // QoreTypeSpec::acceptInputComplexList()/acceptInputComplexHash() will when the argument is bound; returns false
 // at the first element that is not accepted, otherwise lowers quality to the worst element match
+template <typename MatchPolicy>
 static bool qore_call_arg_elements_accepted(const QoreTypeInfo* elem_ti, const QoreListNode* l,
-        const QoreHashNode* h, int& quality, bool& content_dependent) {
+        const QoreHashNode* h, int& quality, bool& content_dependent, MatchPolicy policy) {
     // a hash element is converted to a hashdecl element type by QoreTypeInfo::retypeValue(), which checks its keys
     // as it builds the typed hash; as for a typed container whose elements may be converted, the match is decided by
     // the type here and the conversion reports a key that does not belong to the hashdecl
     bool elem_hashdecl = QoreTypeInfo::getTypedHash(elem_ti);
     // likewise, an object is materialized into a list<T> element type if it is an iterator, which binding finds out
     bool elem_list = QoreTypeInfo::getComplexListValueType(elem_ti);
-    auto check = [elem_ti, elem_hashdecl, elem_list, &quality, &content_dependent] (const QoreValue& v) -> bool {
+    auto check = [elem_ti, elem_hashdecl, elem_list, &quality, &content_dependent, policy] (const QoreValue& v) -> bool {
         int elem_quality;
-        if (QoreTypeInfo::runtimeAcceptsCallArg(elem_ti, v, elem_quality, content_dependent) == QTI_NOT_EQUAL) {
+        if (QoreTypeInfo::runtimeAcceptsCallArgImpl(elem_ti, v, elem_quality, content_dependent, policy) == QTI_NOT_EQUAL) {
             if (!(elem_hashdecl && v.getType() == NT_HASH) && !(elem_list && v.getType() == NT_OBJECT)) {
                 return false;
             }
@@ -4384,13 +5445,24 @@ static int qore_typed_container_quality(const QoreTypeInfo* ti, const QoreListNo
 
 qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n, int& quality,
         bool& content_dependent) {
+    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent, DefaultTypeMatchPolicy{});
+}
+
+qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n, int& quality,
+        bool& content_dependent, LexicalSemanticPolicy policy) {
+    return runtimeAcceptsCallArgImpl(ti, n, quality, content_dependent, LexicalTypeMatchPolicy{policy});
+}
+
+template <typename MatchPolicy>
+qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArgImpl(const QoreTypeInfo* ti, const QoreValue& n, int& quality,
+        bool& content_dependent, MatchPolicy policy) {
     const QoreListNode* l;
     const QoreHashNode* h;
     bool untyped;
     qore_get_call_arg_container(n, l, h, untyped);
     // empty untyped containers keep the rule of issue #2647, and empty typed containers have no elements to check
     if ((!l && !h) || (l ? l->empty() : h->empty()) || !hasType(ti)) {
-        qore_type_result_e rv = runtimeAcceptsValueOrFold(ti, n);
+        qore_type_result_e rv = policy.value(ti, n, true);
         quality = qore_typed_container_quality(ti, l, h, untyped, rv);
         return rv;
     }
@@ -4423,7 +5495,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
             if (elem_ti) {
                 content_dependent = true;
                 int elem_quality = QTI_IDENT;
-                if (qore_call_arg_elements_accepted(elem_ti, l, h, elem_quality, content_dependent)) {
+                if (qore_call_arg_elements_accepted(elem_ti, l, h, elem_quality, content_dependent, policy)) {
                     quality = elem_quality;
                     return QTI_AMBIGUOUS;
                 }
@@ -4432,7 +5504,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
             if (is_softlist_catch_all(t)) {
                 continue;
             }
-            qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
+            qore_type_result_e rv = policy.spec(t.spec, n, t.exact, true);
             if (rv != QTI_NOT_EQUAL) {
                 quality = rv;
                 return rv;
@@ -4443,7 +5515,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
         // a typed container: the type decides, except where the verdict depends on the elements, which are then
         // checked as binding will convert them; the result and its quality are those of the type, so a call that
         // binding accepts selects the variant it selected without the check
-        qore_type_result_e rv = t.spec.runtimeAcceptsValue(n, t.exact, true);
+        qore_type_result_e rv = policy.spec(t.spec, n, t.exact, true);
         if (rv == QTI_NOT_EQUAL) {
             continue;
         }
@@ -4459,7 +5531,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
             // (issue #5782)
             if (vti != elem_ti && !QoreTypeInfo::acceptsInputUnchecked(elem_ti, vti)) {
                 bool may_not_match = false;
-                if ((rv == QTI_AMBIGUOUS && t.spec.runtimeAcceptsValue(n, t.exact) == QTI_NOT_EQUAL)
+                if ((rv == QTI_AMBIGUOUS && policy.spec(t.spec, n, t.exact, false) == QTI_NOT_EQUAL)
                         || (QoreTypeInfo::parseAccepts(elem_ti, vti, may_not_match) && may_not_match)) {
                     check_elem_ti = elem_ti;
                 }
@@ -4468,7 +5540,7 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
         if (check_elem_ti) {
             content_dependent = true;
             int elem_quality = QTI_IDENT;
-            if (!qore_call_arg_elements_accepted(check_elem_ti, l, h, elem_quality, content_dependent)) {
+            if (!qore_call_arg_elements_accepted(check_elem_ti, l, h, elem_quality, content_dependent, policy)) {
                 continue;
             }
         }
@@ -4479,9 +5551,8 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsCallArg(const QoreTypeInfo* ti, c
     return QTI_NOT_EQUAL;
 }
 
-bool QoreTypeInfo::acceptsBrokenSoftNull(const QoreValue& n) const {
-    return n.getType() == NT_NULL && brokenSoftNullImpl()
-        && runtime_get_parse_options().hasAny(QoreParseOptions::BROKEN_SOFT_TYPES);
+bool QoreTypeInfo::acceptsBrokenSoftNull(const QoreValue& n, LexicalSemanticPolicy policy) const {
+    return policy.brokenSoftTypes() && n.getType() == NT_NULL && brokenSoftNullImpl();
 }
 
 void QoreTypeInfo::doNonNumericWarning(const QoreProgramLocation* loc, const char* preface) const {
@@ -4512,27 +5583,6 @@ void QoreTypeInfo::doNonStringError(const QoreProgramLocation* loc, const char* 
     parseException(*loc, "INVALID-OPERATION", desc);
 }
 
-void QoreTypeInfo::stripTypeInfo(QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper) {
-    // strips complex typeinfo for an assignment to an untyped lvalue
-    switch (n.getType()) {
-        case NT_HASH: {
-            if (lvhelper) {
-                map_get_plain_hash_lvalue(n, xsink, lvhelper);
-            } else {
-                map_get_plain_hash(n, xsink);
-            }
-            break;
-        }
-        case NT_LIST: {
-            if (lvhelper) {
-                map_get_plain_list_lvalue(n, xsink, lvhelper);
-            } else {
-                map_get_plain_list(n, xsink);
-            }
-            break;
-        }
-    }
-}
 
 const QoreTypeInfo* QoreTypeInfo::getHardReference(const QoreTypeInfo* ti) {
     if (!hasType(ti)) {
@@ -4658,6 +5708,16 @@ static int qore_check_parse_type_arg_bound(const QoreProgramLocation* loc, const
         return 0;
     }
 
+    // a bound that names its own generic type (class Self<T: Self<int>>) is checked again while it is resolved here;
+    // the check in progress decides it with the bound resolved, so a nested check of the same bound is not made,
+    // which would never end (qore#5774)
+    thread_local std::vector<const char*> bounds_in_check;
+    if (std::find(bounds_in_check.begin(), bounds_in_check.end(), bound_type) != bounds_in_check.end()) {
+        return 0;
+    }
+    bounds_in_check.push_back(bound_type);
+    ON_BLOCK_EXIT([] () { bounds_in_check.pop_back(); });
+
     int err = 0;
     std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
     if (!bound_pti) {
@@ -4687,6 +5747,15 @@ static bool qore_runtime_type_arg_satisfies_bound(const char* bound_type, const 
     if (!bound_type || !*bound_type) {
         return true;
     }
+
+    // as in qore_check_parse_type_arg_bound(): a bound that names its own generic type is decided by the check in
+    // progress, not checked again while it is resolved (qore#5774)
+    thread_local std::vector<const char*> bounds_in_check;
+    if (std::find(bounds_in_check.begin(), bounds_in_check.end(), bound_type) != bounds_in_check.end()) {
+        return true;
+    }
+    bounds_in_check.push_back(bound_type);
+    ON_BLOCK_EXIT([] () { bounds_in_check.pop_back(); });
 
     std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
     if (!bound_pti) {
@@ -5235,38 +6304,15 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
 
         const char* sig_str = subtypes[0]->cscope->ostr;
 
-        // Find the opening parenthesis to split return type from params
-        // Handle complex return types like hash<string, int> by tracking angle bracket depth
-        const char* paren_open = nullptr;
-        int angle_depth = 0;
-        for (const char* p = sig_str; *p; ++p) {
-            if (*p == '<') {
-                ++angle_depth;
-            } else if (*p == '>') {
-                --angle_depth;
-            } else if (*p == '(' && angle_depth == 0) {
-                paren_open = p;
-                break;
+        // split the signature into the return type and the parameter types (see qore_split_code_signature())
+        std::string return_type_str;
+        std::vector<std::string> param_strs;
+        bool has_varargs;
+        {
+            std::string error;
+            if (!qore_split_code_signature(sig_str, return_type_str, param_strs, has_varargs, error)) {
+                return nullptr;
             }
-        }
-        if (!paren_open) {
-            return nullptr;
-        }
-
-        // Find closing parenthesis
-        const char* paren_close = strrchr(sig_str, ')');
-        if (!paren_close || paren_close < paren_open) {
-            return nullptr;
-        }
-
-        // Extract return type string
-        std::string return_type_str(sig_str, paren_open - sig_str);
-        // Trim whitespace
-        while (!return_type_str.empty() && isspace(return_type_str.back())) {
-            return_type_str.pop_back();
-        }
-        while (!return_type_str.empty() && isspace(return_type_str.front())) {
-            return_type_str.erase(0, 1);
         }
         // If the subtype was flagged as or-nothing (a leading `*` on the
         // callable's return type — e.g. `code<*Foo(string)>`), getSubTypes
@@ -5296,69 +6342,20 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         }
         // If empty or "nothing", returnType stays nullptr (means nothing return)
 
-        // Extract parameter types string
-        std::string params_str(paren_open + 1, paren_close - paren_open - 1);
-
-        // Check for varargs
-        bool has_varargs = false;
-        size_t dotdotdot_pos = params_str.rfind("...");
-        if (dotdotdot_pos != std::string::npos) {
-            has_varargs = true;
-            // Remove "..." from params_str
-            params_str = params_str.substr(0, dotdotdot_pos);
-            // Trim trailing comma and whitespace
-            while (!params_str.empty() && (isspace(params_str.back()) || params_str.back() == ',')) {
-                params_str.pop_back();
-            }
-        }
-
-        // Parse parameter types
+        // Resolve the parameter types
         type_vec_t param_types;
-        if (!params_str.empty()) {
-            // Split on commas, handling nested angle brackets and parentheses
-            std::string current_param;
-            int param_angle_depth = 0;
-            int param_paren_depth = 0;
-            for (size_t i = 0; i <= params_str.size(); ++i) {
-                char c = i < params_str.size() ? params_str[i] : '\0';
-                if (c == '<') {
-                    ++param_angle_depth;
-                    current_param += c;
-                } else if (c == '>') {
-                    --param_angle_depth;
-                    current_param += c;
-                } else if (c == '(') {
-                    ++param_paren_depth;
-                    current_param += c;
-                } else if (c == ')') {
-                    --param_paren_depth;
-                    current_param += c;
-                } else if ((c == ',' || c == '\0') && param_angle_depth == 0 && param_paren_depth == 0) {
-                    // Trim whitespace from current_param
-                    while (!current_param.empty() && isspace(current_param.back())) {
-                        current_param.pop_back();
-                    }
-                    while (!current_param.empty() && isspace(current_param.front())) {
-                        current_param.erase(0, 1);
-                    }
-                    if (!current_param.empty()) {
-                        // reject parameter names and any other trailing text after the type; the parse-time
-                        // path (resolveSubtype()) raises a PARSE-TYPE-ERROR for the same input
-                        std::string trailing;
-                        if (code_sig_type_trailing_text(current_param, trailing)) {
-                            return nullptr;
-                        }
-                        const QoreTypeInfo* param_type = qore_get_type_from_string_intern(current_param.c_str());
-                        if (!param_type) {
-                            return nullptr;
-                        }
-                        param_types.push_back(param_type);
-                    }
-                    current_param.clear();
-                } else {
-                    current_param += c;
-                }
+        for (const std::string& current_param : param_strs) {
+            // reject parameter names and any other trailing text after the type; the parse-time path
+            // (resolveSubtype()) raises a PARSE-TYPE-ERROR for the same input
+            std::string trailing;
+            if (code_sig_type_trailing_text(current_param, trailing)) {
+                return nullptr;
             }
+            const QoreTypeInfo* param_type = qore_get_type_from_string_intern(current_param.c_str());
+            if (!param_type) {
+                return nullptr;
+            }
+            param_types.push_back(param_type);
         }
 
         return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
@@ -5673,32 +6670,21 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         // Use getName() to get the full type string including angle brackets and parentheses
         const char* sig_str = subtypes[0]->getName();
 
-        // Find the opening parenthesis to split return type from params
-        const char* paren_open = strchr(sig_str, '(');
-        if (!paren_open) {
-            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid callable signature '%s'; " \
-                "expected format 'ReturnType(ParamTypes...)' with parentheses", getName(), sig_str);
-            err = -1;
-            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
-        }
-
-        // Find closing parenthesis
-        const char* paren_close = strrchr(sig_str, ')');
-        if (!paren_close || paren_close < paren_open) {
-            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid callable signature '%s'; " \
-                "missing closing parenthesis", getName(), sig_str);
-            err = -1;
-            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
-        }
-
-        // Extract return type string
-        std::string return_type_str(sig_str, paren_open - sig_str);
-        // Trim whitespace
-        while (!return_type_str.empty() && isspace(return_type_str.back())) {
-            return_type_str.pop_back();
-        }
-        while (!return_type_str.empty() && isspace(return_type_str.front())) {
-            return_type_str.erase(0, 1);
+        // split the signature into the return type and the parameter types (see qore_split_code_signature(), as
+        // resolveRuntimeSubtype() does): the return type can be a callable type with a parameter list of its own
+        // (ex: code<*hash<auto>()> in code<code<*hash<auto>()>()>), and a nested callable's parameters and "..." stay
+        // with it (#6022)
+        std::string return_type_str;
+        std::vector<std::string> param_strs;
+        bool has_varargs;
+        {
+            std::string error;
+            if (!qore_split_code_signature(sig_str, return_type_str, param_strs, has_varargs, error)) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid callable signature '%s'; %s",
+                    getName(), sig_str, error.c_str());
+                err = -1;
+                return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
+            }
         }
 
         // Resolve return type
@@ -5712,64 +6698,15 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         }
         // If empty or "nothing", returnType stays nullptr (means nothing return)
 
-        // Extract parameter types string
-        std::string params_str(paren_open + 1, paren_close - paren_open - 1);
-
-        // Check for varargs
-        bool has_varargs = false;
-        size_t dotdotdot_pos = params_str.rfind("...");
-        if (dotdotdot_pos != std::string::npos) {
-            has_varargs = true;
-            // Remove "..." from params_str
-            params_str = params_str.substr(0, dotdotdot_pos);
-            // Trim trailing comma and whitespace
-            while (!params_str.empty() && (isspace(params_str.back()) || params_str.back() == ',')) {
-                params_str.pop_back();
-            }
-        }
-
-        // Parse parameter types
+        // Resolve the parameter types
         type_vec_t param_types;
-        if (!params_str.empty()) {
-            // Split on commas, handling nested angle brackets
-            std::string current_param;
-            int angle_depth = 0;
-            int paren_depth = 0;
-            for (size_t i = 0; i <= params_str.size(); ++i) {
-                char c = i < params_str.size() ? params_str[i] : '\0';
-                if (c == '<') {
-                    ++angle_depth;
-                    current_param += c;
-                } else if (c == '>') {
-                    --angle_depth;
-                    current_param += c;
-                } else if (c == '(') {
-                    ++paren_depth;
-                    current_param += c;
-                } else if (c == ')') {
-                    --paren_depth;
-                    current_param += c;
-                } else if ((c == ',' || c == '\0') && angle_depth == 0 && paren_depth == 0) {
-                    // Trim whitespace from current_param
-                    while (!current_param.empty() && isspace(current_param.back())) {
-                        current_param.pop_back();
-                    }
-                    while (!current_param.empty() && isspace(current_param.front())) {
-                        current_param.erase(0, 1);
-                    }
-                    if (!current_param.empty()) {
-                        // Use the helper to properly parse and resolve complex types
-                        const QoreTypeInfo* param_type = parse_and_resolve_type_string(current_param.c_str(), loc, err);
-                        if (err) {
-                            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
-                        }
-                        param_types.push_back(param_type);
-                    }
-                    current_param.clear();
-                } else {
-                    current_param += c;
-                }
+        for (const std::string& current_param : param_strs) {
+            // Use the helper to properly parse and resolve complex types
+            const QoreTypeInfo* param_type = parse_and_resolve_type_string(current_param.c_str(), loc, err);
+            if (err) {
+                return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
             }
+            param_types.push_back(param_type);
         }
 
         return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
@@ -5985,7 +6922,15 @@ QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti
                             xsink));
                     }
                 },
-                true
+                true,
+                [vti] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                    if (n.getType() != NT_LIST || n.get<const QoreListNode>()->getValueTypeInfo() != vti) {
+                        QoreValue val{};
+                        n.swap(val);
+                        n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val,
+                            xsink, policy));
+                    }
+                }
             },
             {
                 NT_LIST,
@@ -5993,6 +6938,12 @@ QoreComplexSoftListTypeInfo::QoreComplexSoftListTypeInfo(const QoreTypeInfo* vti
                     QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink));
+                }, false,
+                [vti] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                    QoreValue val{};
+                    n.swap(val);
+                    n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink,
+                        policy));
                 }
             },
             {
@@ -6034,7 +6985,16 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
                             break;
                     }
                 },
-                true
+                true,
+                [vti] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                    if (!n.isNothing()
+                            && (n.getType() != NT_LIST || n.get<const QoreListNode>()->getValueTypeInfo() != vti)) {
+                        QoreValue val{};
+                        n.swap(val);
+                        n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val,
+                            xsink, policy));
+                    }
+                }
             },
             {
                 NT_LIST,
@@ -6042,6 +7002,12 @@ QoreComplexSoftListOrNothingTypeInfo::QoreComplexSoftListOrNothingTypeInfo(const
                     QoreValue val{};
                     n.swap(val);
                     n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink));
+                }, false,
+                [vti] (QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+                    QoreValue val{};
+                    n.swap(val);
+                    n.assign(qore_list_private::newComplexListFromValue(qore_get_complex_list_type(vti), val, xsink,
+                        policy));
                 }
             },
             {
@@ -6093,54 +7059,48 @@ void map_get_plain_list(QoreValue& n, ExceptionSink* xsink) {
 // when the container is unique, copies when it is shared.  Same semantics as
 // the strip in LValueHelper::assign(), which keeps its own inline version
 // because it runs under the lvalue lock and must defer derefs via saveTemp().
-void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink) {
-    if (ti == anyTypeInfo || ti == autoNoNarrowTypeInfo) {
-        if (val.getType() == NT_HASH) {
-            map_get_plain_hash(val, xsink);
-        } else if (val.getType() == NT_LIST) {
-            map_get_plain_list(val, xsink);
+void q_apply_no_narrow_hash_type(QoreValue& val, ExceptionSink* xsink) {
+    if (val.getType() != NT_HASH) {
+        return;
+    }
+    QoreHashNode* h = val.get<QoreHashNode>();
+    qore_hash_private* hp = qore_hash_private::get(*h);
+    if (!hp->getHashDecl() && hp->complexTypeInfo == autoHashTypeInfo) {
+        return;
+    }
+    if (!h->is_unique()) {
+        QoreHashNode* copy = h->copy();
+        qore_hash_private* cp = qore_hash_private::get(*copy);
+        if (cp->getHashDecl()) {
+            cp->setHashDecl(nullptr);
         }
-    } else if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
-        if (val.getType() != NT_HASH) {
-            return;
+        cp->complexTypeInfo = autoHashTypeInfo;
+        AbstractQoreNode* old = val.assign(copy);
+        discard(old, xsink);
+    } else {
+        if (hp->getHashDecl()) {
+            hp->setHashDecl(nullptr);
         }
-        QoreHashNode* h = val.get<QoreHashNode>();
-        qore_hash_private* hp = qore_hash_private::get(*h);
-        if (!hp->getHashDecl() && hp->complexTypeInfo == autoHashTypeInfo) {
-            return;
-        }
-        if (!h->is_unique()) {
-            QoreHashNode* copy = h->copy();
-            qore_hash_private* cp = qore_hash_private::get(*copy);
-            if (cp->getHashDecl()) {
-                cp->setHashDecl(nullptr);
-            }
-            cp->complexTypeInfo = autoHashTypeInfo;
-            AbstractQoreNode* old = val.assign(copy);
-            discard(old, xsink);
-        } else {
-            if (hp->getHashDecl()) {
-                hp->setHashDecl(nullptr);
-            }
-            hp->complexTypeInfo = autoHashTypeInfo;
-        }
-    } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
-        if (val.getType() != NT_LIST) {
-            return;
-        }
-        QoreListNode* l = val.get<QoreListNode>();
-        qore_list_private* lp = qore_list_private::get(*l);
-        if (lp->complexTypeInfo == autoListTypeInfo) {
-            return;
-        }
-        if (!l->is_unique()) {
-            QoreListNode* copy = l->copy();
-            qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
-            AbstractQoreNode* old = val.assign(copy);
-            discard(old, xsink);
-        } else {
-            lp->complexTypeInfo = autoListTypeInfo;
-        }
+        hp->complexTypeInfo = autoHashTypeInfo;
+    }
+}
+
+void q_apply_no_narrow_list_type(QoreValue& val, ExceptionSink* xsink) {
+    if (val.getType() != NT_LIST) {
+        return;
+    }
+    QoreListNode* l = val.get<QoreListNode>();
+    qore_list_private* lp = qore_list_private::get(*l);
+    if (lp->complexTypeInfo == autoListTypeInfo) {
+        return;
+    }
+    if (!l->is_unique()) {
+        QoreListNode* copy = l->copy();
+        qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
+        AbstractQoreNode* old = val.assign(copy);
+        discard(old, xsink);
+    } else {
+        lp->complexTypeInfo = autoListTypeInfo;
     }
 }
 
@@ -6616,8 +7576,9 @@ const QoreTypeInfo* QoreTypeInfo::getComplexBufferValueType(const QoreTypeInfo* 
 // int -> float, ...) still take place; an element that cannot be accepted fails the retype, and the
 // caller reports the type error.  An element that is accepted only through such a conversion is converted
 // too: cast<list<list<softint>>>() of a list<list<string>> gave a list<list<softint>> holding strings.
+template <typename FilterPolicy>
 static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_ti, const char* key,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, FilterPolicy policy) {
     // auto and auto! element types accept any value without narrowing it
     if (!elem_ti || elem_ti == autoTypeInfo || elem_ti == autoNoNarrowTypeInfo) {
         return true;
@@ -6645,25 +7606,36 @@ static bool qore_retype_element_accepted(QoreValue& v, const QoreTypeInfo* elem_
     // an element that is accepted only through a conversion (a soft type given a string, a float given an int, ...)
     // is converted as an assignment converts it; only an element that already has the type is left as it is, or
     // the container would be stamped with an element type that its element does not have
-    qore_type_result_e rv = QoreTypeInfo::runtimeAcceptsValue(elem_ti, v);
+    qore_type_result_e rv = policy.value(elem_ti, v, false);
     if (rv == QTI_IDENT || (rv != QTI_NOT_EQUAL && QoreTypeInfo::superSetOf(elem_ti, v.getTypeInfo()))) {
         return true;
     }
     if (key) {
-        QoreTypeInfo::acceptInputKey(elem_ti, key, v, xsink);
+        policy.input(*elem_ti, xsink, "key", false, -1, key, v, nullptr);
     } else {
-        QoreTypeInfo::acceptAssignment(elem_ti, "<list element>", v, xsink);
+        policy.assignment(elem_ti, "<list element>", v, xsink);
     }
     if (xsink && *xsink) {
         return false;
     }
     // with parse exceptions disabled there is no xsink to report through; the caller turns a false
     // return into a type error of its own
-    return QoreTypeInfo::runtimeAcceptsValue(elem_ti, v) != QTI_NOT_EQUAL;
+    return policy.value(elem_ti, v, false) != QTI_NOT_EQUAL;
 }
 
 bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
         ExceptionSink* xsink) {
+    return retypeValueImpl(v, target_ti, xsink, DefaultTypeFilterPolicy{});
+}
+
+bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    return retypeValueImpl(v, target_ti, xsink, LexicalTypeFilterPolicy{policy});
+}
+
+template <typename FilterPolicy>
+bool QoreTypeInfo::retypeValueImpl(QoreValue& v, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink, FilterPolicy policy) {
     // retyping only mutates a value when the declared type can actually reshape the runtime value.  A soft
     // complex-auto container (hash<auto>/list<auto> and their "*..." or-nothing variants) accepts any element
     // type and preserves the runtime value type — it never mutates — so treat it like plain "auto" and return
@@ -6686,7 +7658,7 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
             return true;
         }
         // the element type can be a hashdecl of another Program (a member type of a hashdecl from a deleted Program)
-        QoreHashNode* coerced = typed_hash_decl_private::get(*hd)->newHashFromType(src, xsink);
+        QoreHashNode* coerced = policy.hash(hd, src, xsink);
         if (!coerced || (xsink && xsink->isException())) {
             if (coerced) {
                 coerced->deref(xsink);
@@ -6719,8 +7691,8 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
                 }
                 hash_assignment_priv ha(*qore_hash_private::get(*h), *qhi_priv::get(hi)->i);
                 QoreValue cur(ha.swap(QoreValue()));
-                if (!QoreTypeInfo::retypeValue(cur, inner_h_vt, xsink)
-                        || !qore_retype_element_accepted(cur, inner_h_vt, hi.getKey(), xsink)) {
+                if (!policy.retype(cur, inner_h_vt, xsink)
+                        || !qore_retype_element_accepted(cur, inner_h_vt, hi.getKey(), xsink, policy)) {
                     ha.swap(cur);
                     return false;
                 }
@@ -6753,8 +7725,8 @@ bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
                     return false;
                 }
                 QoreValue cur = lp->swap(i, QoreValue());
-                if (!QoreTypeInfo::retypeValue(cur, inner_l_vt, xsink)
-                        || !qore_retype_element_accepted(cur, inner_l_vt, nullptr, xsink)) {
+                if (!policy.retype(cur, inner_l_vt, xsink)
+                        || !qore_retype_element_accepted(cur, inner_l_vt, nullptr, xsink, policy)) {
                     lp->swap(i, cur);
                     return false;
                 }
@@ -6778,6 +7750,13 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
         return QTI_IDENT;
     }
     */
+    // a value of a type parameter (in generic code) has its bound, or any type if it has none (a may-match checked at
+    // run time), unless the target is a type parameter, which matches it by identity (qore#5774)
+    if (second && first && !first->return_vec.empty() && !first->return_vec[0].spec.getTypeParameterTypeInfo()) {
+        if (const QoreTypeInfo* src = getTypeParameterSourceType(second)) {
+            second = src;
+        }
+    }
     if (first == autoTypeInfo) {
         // If parameter is auto and argument is untyped (also auto),
         // require runtime matching so specific types can be preferred
@@ -7049,8 +8028,52 @@ bool QoreTypeInfo::outputSuperSetOf(const QoreTypeInfo* t) const {
     return true;
 }
 
+bool QoreTypeInfo::outputAccepts(const QoreTypeInfo* t) const {
+    for (auto& ti : t->return_vec) {
+        bool found = false;
+        for (auto& i : return_vec) {
+            bool may_not_match = false;
+            bool may_need_filter = false;
+            if (i.spec.match(ti.spec, may_not_match, may_need_filter) != QTI_NOT_EQUAL && !may_not_match
+                && !may_need_filter) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
         const char* param_name, QoreValue& n, LValueHelper* lvhelper, q_lvalue_vts_e vts) const {
+    acceptInputInternImpl(xsink, arg_type, obj, param_num, param_name, n, lvhelper, vts, DefaultTypeFilterPolicy{});
+}
+
+void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
+        const char* param_name, QoreValue& n, LexicalSemanticPolicy policy, LValueHelper* lvhelper,
+        q_lvalue_vts_e vts) const {
+    acceptInputInternImpl(xsink, arg_type, obj, param_num, param_name, n, lvhelper, vts,
+        LexicalTypeFilterPolicy{policy});
+}
+
+void QoreTypeInfo::acceptInputParam(const QoreTypeInfo* ti, int param_num, const char* param_name, QoreValue& n,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    if (hasType(ti)) {
+        if (ti->acceptsRuntimeValueWithoutFilter(n)) {
+            return;
+        }
+        ti->acceptInputIntern(xsink, "parameter", false, param_num, param_name, n, policy);
+    } else if (ti != autoTypeInfo) {
+        stripTypeInfo(n, xsink);
+    }
+}
+
+template <typename FilterPolicy>
+void QoreTypeInfo::acceptInputInternImpl(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
+        const char* param_name, QoreValue& n, LValueHelper* lvhelper, q_lvalue_vts_e vts, FilterPolicy policy) const {
     // CRITICAL FIX Phase 2: Prioritize complex hash/list handlers for optional types
     // For optional types (return_vec.size() > 1), we need to ensure complex hash/list
     // handlers are tried BEFORE hashdecl handlers to prevent incorrect routing.
@@ -7067,7 +8090,7 @@ void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type,
                 q_typespec_t spec_type = t.spec.getTypeSpec();
                 if (spec_type == QTS_COMPLEXHASH || spec_type == QTS_COMPLEXLIST ||
                     spec_type == QTS_COMPLEXSOFTLIST) {
-                    if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
+                    if (t.spec.acceptInputImpl(xsink, *this, t, arg_type, obj, param_num, param_name, n, lvhelper, policy)) {
                         return;
                     }
                 }
@@ -7077,7 +8100,7 @@ void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type,
                 q_typespec_t spec_type = t.spec.getTypeSpec();
                 if (spec_type != QTS_COMPLEXHASH && spec_type != QTS_COMPLEXLIST &&
                     spec_type != QTS_COMPLEXSOFTLIST) {
-                    if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
+                    if (t.spec.acceptInputImpl(xsink, *this, t, arg_type, obj, param_num, param_name, n, lvhelper, policy)) {
                         return;
                     }
                 }
@@ -7089,12 +8112,12 @@ void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type,
 
     // Normal routing for non-optional or non-complex types
     for (auto& t : getAcceptSpecs()) {
-        if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
+        if (t.spec.acceptInputImpl(xsink, *this, t, arg_type, obj, param_num, param_name, n, lvhelper, policy)) {
             return;
         }
     }
     // with %broken-soft-types, a non-optional soft scalar type converts SQL NULL to its zero or empty value
-    if (acceptsBrokenSoftNull(n)) {
+    if (policy.brokenSoftTypes() && n.getType() == NT_NULL && brokenSoftNullImpl()) {
         discard(n.assign(getDefaultQoreValueImpl()), xsink);
         return;
     }
@@ -7162,4 +8185,277 @@ bool QoreParseTypeInfo::paramTypesIdentical(
     }
     // Both untyped (nullptr): identical
     return true;
+}
+
+namespace {
+// a result of an arithmetic operator that has no parse type here (a buffer, or SQL NULL)
+constexpr qore_type_t QORE_ARITH_UNTYPED = -1;
+
+// a value type that can be the value of an operand, with the type of the member of the operand type that gives it
+struct qore_arith_value_t {
+    qore_type_t type;
+    //! the type of the member: a type of values of this value type only (ex: hash<X>), or nullptr if it is not known
+    //! more precisely than the base type
+    const QoreTypeInfo* member;
+};
+
+// the member type of an operand type for its values of one value type, if a value of the member type has that type
+// itself: a base type, a hash type, a hashdecl, a class or a list type, but not a soft list type (ex: softlist<int>),
+// whose values are lists of another type
+const QoreTypeInfo* qore_arith_member_type(const QoreTypeSpec& spec) {
+    switch (spec.getTypeSpec()) {
+        case QTS_TYPE:
+        case QTS_CLASS:
+        case QTS_HASHDECL:
+        case QTS_COMPLEXHASH:
+        case QTS_COMPLEXLIST:
+            return spec.getTypeInfo();
+        default:
+            return nullptr;
+    }
+}
+
+// the value types that can be the value of an operand of the given type, as their runtime type codes, with the member
+// types that give them
+// returns false if the type does not restrict them: then every type is possible
+bool qore_arith_value_types(const QoreTypeInfo* ti, std::vector<qore_arith_value_t>& types) {
+    if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || ti == autoNoNarrowTypeInfo || ti == anyTypeInfo) {
+        return false;
+    }
+    for (const QoreReturnSpec& r : ti->return_vec) {
+        qore_type_t t = r.spec.getType();
+        if (t == NT_ALL || t < 0) {
+            return false;
+        }
+        const QoreTypeInfo* member = t == NT_NOTHING ? nothingTypeInfo : qore_arith_member_type(r.spec);
+        bool found = false;
+        for (qore_arith_value_t& v : types) {
+            if (v.type == t) {
+                found = true;
+                // two members of one value type: the value type is not known more precisely
+                if (v.member != member) {
+                    v.member = nullptr;
+                }
+                break;
+            }
+        }
+        if (!found) {
+            types.push_back({t, member});
+        }
+    }
+    return !types.empty();
+}
+
+// every value type, for an operand whose type does not restrict its values
+const std::vector<qore_arith_value_t>& qore_arith_all_value_types() {
+    static const std::vector<qore_arith_value_t> all = {
+        {NT_NOTHING, nothingTypeInfo}, {NT_INT, nullptr}, {NT_FLOAT, nullptr}, {NT_NUMBER, nullptr},
+        {NT_STRING, nullptr}, {NT_DATE, nullptr}, {NT_BOOLEAN, nullptr}, {NT_BINARY, nullptr}, {NT_LIST, nullptr},
+        {NT_HASH, nullptr}, {NT_OBJECT, nullptr}, {NT_NULL, nullptr}, {NT_BUFFER, nullptr},
+    };
+    return all;
+}
+
+bool qore_arith_is_int(qore_type_t t) {
+    return t == NT_INT || t == NT_CHAR;
+}
+
+// the runtime result type of the operator for operand values of the given types, mirroring the evalImpl() of each
+// operator (QorePlusOperatorNode, QoreMinusOperatorNode, QoreMultiplicationOperatorNode)
+qore_type_t qore_arith_runtime_result(QoreArithParseOp op, qore_type_t lt, qore_type_t rt) {
+    if (lt == NT_BUFFER || rt == NT_BUFFER) {
+        return QORE_ARITH_UNTYPED;
+    }
+    switch (op) {
+        case QoreArithParseOp::Plus:
+            if (lt == NT_LIST || rt == NT_LIST) {
+                return NT_LIST;
+            }
+            if (lt == NT_STRING || rt == NT_STRING) {
+                return NT_STRING;
+            }
+            if (lt == NT_DATE || rt == NT_DATE) {
+                return NT_DATE;
+            }
+            if (lt == NT_NUMBER || rt == NT_NUMBER) {
+                return NT_NUMBER;
+            }
+            if (lt == NT_FLOAT || rt == NT_FLOAT) {
+                return NT_FLOAT;
+            }
+            if (qore_arith_is_int(lt) || qore_arith_is_int(rt)) {
+                return NT_INT;
+            }
+            if (lt == NT_HASH) {
+                return NT_HASH;
+            }
+            if (lt == NT_OBJECT) {
+                return rt == NT_HASH ? NT_HASH : NT_OBJECT;
+            }
+            if (rt == NT_HASH || rt == NT_OBJECT) {
+                return rt;
+            }
+            if (lt == NT_BINARY || rt == NT_BINARY) {
+                return NT_BINARY;
+            }
+            return NT_NOTHING;
+
+        case QoreArithParseOp::Minus:
+            if (rt == NT_NOTHING) {
+                // the left value itself
+                if (lt == NT_NULL) {
+                    return QORE_ARITH_UNTYPED;
+                }
+                return qore_arith_is_int(lt) ? NT_INT : lt;
+            }
+            if (lt == NT_DATE || rt == NT_DATE) {
+                return NT_DATE;
+            }
+            if (lt == NT_NUMBER || rt == NT_NUMBER) {
+                return NT_NUMBER;
+            }
+            if (lt == NT_FLOAT || rt == NT_FLOAT) {
+                return NT_FLOAT;
+            }
+            if (qore_arith_is_int(lt) || qore_arith_is_int(rt)) {
+                return NT_INT;
+            }
+            if (lt == NT_HASH && (rt == NT_LIST || rt == NT_STRING)) {
+                return NT_HASH;
+            }
+            return NT_NOTHING;
+
+        case QoreArithParseOp::Divide:
+            // QoreDivisionOperatorNode::doDivision()
+            if (lt == NT_NUMBER || rt == NT_NUMBER) {
+                return NT_NUMBER;
+            }
+            if (qore_arith_is_int(lt) && qore_arith_is_int(rt)) {
+                return NT_INT;
+            }
+            return NT_FLOAT;
+
+        case QoreArithParseOp::Multiply:
+            if (lt == NT_DATE || rt == NT_DATE) {
+                return NT_DATE;
+            }
+            if (lt == NT_NUMBER || rt == NT_NUMBER) {
+                return NT_NUMBER;
+            }
+            if (lt == NT_FLOAT || rt == NT_FLOAT) {
+                return NT_FLOAT;
+            }
+            if (qore_arith_is_int(lt) || qore_arith_is_int(rt)) {
+                return NT_INT;
+            }
+            return NT_NOTHING;
+    }
+    assert(false);
+    return QORE_ARITH_UNTYPED;
+}
+
+// the parse type of a runtime result type, or nullptr if it has none here
+const QoreTypeInfo* qore_arith_result_type(qore_type_t t) {
+    switch (t) {
+        case NT_INT: return bigIntTypeInfo;
+        case NT_FLOAT: return floatTypeInfo;
+        case NT_NUMBER: return numberTypeInfo;
+        case NT_STRING: return stringTypeInfo;
+        case NT_DATE: return dateTypeInfo;
+        case NT_BOOLEAN: return boolTypeInfo;
+        case NT_BINARY: return binaryTypeInfo;
+        case NT_LIST: return autoListTypeInfo;
+        case NT_HASH: return autoHashTypeInfo;
+        case NT_OBJECT: return objectTypeInfo;
+        default: return nullptr;
+    }
+}
+
+bool qore_arith_is_container(qore_type_t t) {
+    return t == NT_LIST || t == NT_HASH || t == NT_OBJECT;
+}
+}
+
+QoreArithParseResult qore_arith_parse_result_type(QoreArithParseOp op, const QoreTypeInfo* lti,
+        const QoreTypeInfo* rti, const QoreTypeInfo*& result, bool& single,
+        qore_arith_container_rule_t container_rule) {
+    result = nullptr;
+    std::vector<qore_arith_value_t> lv, rv;
+    bool lk = qore_arith_value_types(lti, lv);
+    bool rk = qore_arith_value_types(rti, rv);
+    const std::vector<qore_arith_value_t>& lvals = lk ? lv : qore_arith_all_value_types();
+    const std::vector<qore_arith_value_t>& rvals = rk ? rv : qore_arith_all_value_types();
+    single = lk && rk && lv.size() == 1 && rv.size() == 1;
+
+    // the result types with the value types that they are types of
+    std::vector<std::pair<qore_type_t, const QoreTypeInfo*>> types;
+    bool has_nothing = false;
+    bool container = false;
+    for (const qore_arith_value_t& l : lvals) {
+        for (const qore_arith_value_t& r : rvals) {
+            qore_type_t t = qore_arith_runtime_result(op, l.type, r.type);
+            if (t == NT_NOTHING) {
+                has_nothing = true;
+                continue;
+            }
+            const QoreTypeInfo* ti = qore_arith_result_type(t);
+            if (!ti) {
+                return QoreArithParseResult::Untyped;
+            }
+            if (qore_arith_is_container(t)) {
+                container = true;
+                // the container that the operator gives for the members, if it is known more precisely (ex: the
+                // left hash of hash<X> - string has the type of the left operand)
+                if (container_rule) {
+                    const QoreTypeInfo* member_ti = container_rule(l.type, l.member, r.type, r.member);
+                    if (member_ti && QoreTypeInfo::isType(member_ti, t)) {
+                        ti = member_ti;
+                    }
+                }
+            }
+            std::pair<qore_type_t, const QoreTypeInfo*> entry(t, ti);
+            if (std::find(types.begin(), types.end(), entry) == types.end()) {
+                types.push_back(entry);
+            }
+        }
+    }
+    // a result of a value type with the base type of the value type takes every value of the value type, so the other
+    // result types of the value type are not needed
+    std::vector<qore_type_t> base_types;
+    for (const auto& e : types) {
+        if (e.second == qore_arith_result_type(e.first)) {
+            base_types.push_back(e.first);
+        }
+    }
+    types.erase(std::remove_if(types.begin(), types.end(), [&base_types](const std::pair<qore_type_t,
+            const QoreTypeInfo*>& e) {
+        return e.second != qore_arith_result_type(e.first)
+            && std::find(base_types.begin(), base_types.end(), e.first) != base_types.end();
+    }), types.end());
+    // the members are ordered so that a value of each result type is taken by its own member: a union takes a value
+    // with its first member that accepts it, and a float accepts an int by converting it, so an int result type comes
+    // before a float result type (ex: union<int, float> for *float + int, not union<float, int>, which made 2.0 of 2)
+    static const std::vector<qore_type_t> order = {
+        NT_INT, NT_FLOAT, NT_NUMBER, NT_STRING, NT_DATE, NT_BOOLEAN, NT_BINARY, NT_LIST, NT_HASH, NT_OBJECT,
+    };
+    std::stable_sort(types.begin(), types.end(), [](const std::pair<qore_type_t, const QoreTypeInfo*>& a,
+            const std::pair<qore_type_t, const QoreTypeInfo*>& b) {
+        return std::find(order.begin(), order.end(), a.first) < std::find(order.begin(), order.end(), b.first);
+    });
+    type_vec_t result_types;
+    result_types.reserve(types.size());
+    for (const auto& e : types) {
+        result_types.push_back(e.second);
+    }
+    result = result_types.empty() ? nothingTypeInfo : qore_get_union_type(result_types, has_nothing);
+    return container ? QoreArithParseResult::Container : QoreArithParseResult::Scalar;
+}
+
+bool qore_arith_container_rule_matches(const QoreTypeInfo* rule_ti, const QoreTypeInfo* arith_ti) {
+    for (qore_type_t t : {NT_LIST, NT_HASH, NT_OBJECT}) {
+        if (QoreTypeInfo::isType(arith_ti, t)) {
+            return QoreTypeInfo::isType(rule_ti, t);
+        }
+    }
+    return false;
 }

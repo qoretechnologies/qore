@@ -160,9 +160,11 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     }
 
     #! Sets the callback invoked when the stream has ended
-    /** The async I/O controller calls it exactly once on a thread of its handler pool when the stream has ended
-        for any reason: a disconnect by the client, the end of a stream that the producer closed, a connection
-        error, or the removal of the listener or a stop of the controller (see @ref takeCloseCallback()).
+    /** The callback is called exactly once when the stream has ended for any reason: by the async I/O controller, on a
+        thread of its handler pool, for a disconnect by the client, the end of a stream that the producer closed, a
+        connection error, or the removal of the listener or a stop of the controller (see @ref takeCloseCallback());
+        or, for a client dropped because its data would exceed its bound, on the thread that queued the data, before
+        \c SSE-CLIENT-OVERFLOW is raised.
     */
     setCloseCallback(*code<nothing()> cb) {
         lockState("setCloseCallback");
@@ -179,7 +181,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns the callback invoked when the stream has ended and clears it, so that it is called at most once
     /** The async I/O controller takes the callback on every path that ends the stream: a disconnect, a connection
-        error, and the removal of the listener or a stop of the controller.
+        error, and the removal of the listener or a stop of the controller; a stream whose client is dropped for its
+        bound takes it itself, before it ends, and runs it on the thread that queued the data.
     */
     *code<nothing()> takeCloseCallback() {
         lockState("takeCloseCallback");
@@ -483,14 +486,38 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
                 # logging must not change the outcome
             }
         }
-        # the controller ends the operation and runs the close callback, which reports the end of the stream; the
-        # socket is closed even if the state lock cannot be taken, so that the client is dropped in any case
+        # the end of the stream is reported here, on the thread that queued the data, before the stream is aborted: the
+        # callback is taken first, so that the controller, which ends the operation once the socket is closed, finds
+        # none, and the client has been dropped and deregistered when the exception is raised (a callback run by the
+        # controller could still be running then)
+        *code<nothing()> end_cb;
         try {
-            abort();
+            # the callback is taken and the stream ended in one locked section (as abort() does)
+            lockState("queueIntern");
+            on_exit m.unlock();
+            end_cb = remove close_callback;
+            state = STATE_DISCONNECTED;
+            notifier.notify();
         } catch (hash<ExceptionInfo> ex) {
+            # the state lock could not be taken: the controller reports the end
+        }
+        # the socket is closed even if the state lock could not be taken, so that the client is dropped in any case
+        try {
+            sock.close();
+        } catch () {
+        }
+        if (end_cb) {
             try {
-                sock.close();
-            } catch () {
+                end_cb();
+            } catch (hash<ExceptionInfo> ex) {
+                # the end of the stream is reported; the exception raised is the overflow, and this one is logged
+                if (cb) {
+                    try {
+                        cb(sprintf("http1 SSE stream: the close callback of the dropped client raised %s: %s",
+                            ex.err, ex.desc));
+                    } catch () {
+                    }
+                }
             }
         }
         throw SseClientOverflowErr, msg;

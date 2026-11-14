@@ -99,3 +99,17 @@ printf("%s\n", (new E()).m());
 hash<HE> he();
 printf("%s\n", he.c());
 printf("%s\n", KC());
+# defaults that are constants of typed containers and of a hashdecl, at the top level and in a function (#5918)
+const TL = cast<list<int>>((1, 2));
+const TH = <HD>{"a": 7};
+code ccl = string sub (list<int> l = TL, hash<HD> hd = TH, int i = N::K) {
+    return sprintf("%s %y %s %y %d", l.fullType(), l, hd.fullType(), hd, i);
+};
+printf("%s\n", ccl());
+string sub f6() {
+    code cl = string sub (list<int> l = TL, hash<HD> hd = TH) {
+        return sprintf("f6 %s %y %s %y", l.fullType(), l, hd.fullType(), hd);
+    };
+    return cl();
+}
+printf("%s\n", f6());

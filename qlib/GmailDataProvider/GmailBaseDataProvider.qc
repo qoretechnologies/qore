@@ -106,7 +106,7 @@ public class GmailBaseDataProvider inherits GoogleDataProvider::GoogleApiParentD
         @see getChildProviderEx()
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
-        if (*GoogleDataProviderBase rv = GoogleApiParentDataProvider::getChildProviderImpl(name)) {
+        if (*AbstractDataProvider rv = GoogleApiParentDataProvider::getChildProviderImpl(name)) {
             return rv;
         }
         if (*Class cls = ChildMap{name}) {

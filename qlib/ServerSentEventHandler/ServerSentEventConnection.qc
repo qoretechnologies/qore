@@ -163,9 +163,9 @@ public class ServerSentEventConnection {
                 sse_conn.queueRawString(msg);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == HttpServerAsyncIo::SseClientOverflowErr) {
-                    # the client has been dropped: the connection is deregistered now, on every HTTP version (an
-                    # HTTP/1.x stream reports its end later, from the I/O controller; a connection already
-                    # deregistered is ignored)
+                    # the client has been dropped: the drop reported the end of its stream on this thread, which
+                    # deregistered the connection; this covers a stream whose end callback was not set yet (a drop
+                    # while the connection is set up), and a connection already deregistered is ignored
                     handler.deregisterConnection(cid);
                 }
                 rethrow;

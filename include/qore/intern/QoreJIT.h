@@ -841,12 +841,23 @@ public:
     */
     void joinAbandonedCompileThread();
 
+    //! Releases the LLVM execution engine, its code and the caches (see shutdown())
+    void releaseEngine();
+
+    //! Releases the engine if shutdown() left it to a compile thread that has been joined since (see exitQuickly())
+    void releaseDeferredEngine();
+
+    //! Calls releaseDeferredEngine(); an error leaves the engine to the operating system
+    void releaseDeferredEngineNoThrow() noexcept;
+
     //! Stop compilation and release the LLVM execution engine.
     /** Every UserVariantBase that can call a published native entry point must already be destroyed
         before this function is called.
 
-        The engine is not released if stopBackgroundCompiler() left a detached compile running: it cannot be destroyed
-        under an active compile, and the process is exiting.
+        The engine is not released here if stopBackgroundCompiler() left a detached compile running: it cannot be
+        destroyed under an active compile.  It is released when the process ends with qore_fork_child_quick_exit() and
+        the thread has ended (exitQuickly()), which deregisters the EH frames of the compiled code before \c exit()
+        (qore#5842); if the thread still runs then, the process ends with \c _exit().
     */
     void shutdown();
     void setDeoptPolicy(DeoptPolicy policy);
@@ -911,6 +922,37 @@ public:
     //! Release the compilation mutex after a successful tryAcquireCompileLock().
     void releaseCompileLock();
 
+    //! Releases the native code that \a owner owns: a Program when it is torn down, or a generic specialization
+    /** Each module added to the JIT is a code unit with a resource tracker of its own, owned by the Programs (or the
+        specialization) whose functions it defines and by the units that link to its symbols; a unit that no owner
+        and no other unit references any more is removed from the JIT, with its symbols and its code (qore#5772).
+
+        It must be called only when no code of \a owner can run any more: by the teardown of a Program once no thread
+        runs in it, its background compiles are drained and its code is deleted, and when the last reference to a
+        specialization is released.  The units are removed at once if no compile holds the compilation lock, and
+        otherwise by the compile when it releases the lock, so that the call never waits for a compile.
+
+        @param owner the Program or the specialization; nullptr does nothing
+    */
+    void releaseCodeOwner(const void* owner) noexcept;
+
+    //! Returns the owner of the native code of \a func: the specialization or the Program that owns it
+    static const void* getCodeOwner(const QoreIRFunction& func);
+
+#ifdef DEBUG
+    //! For tests: the number of code units in the JIT, once the pending releases are processed
+    size_t dbgGetCodeUnitCount();
+
+    //! Test hook: returns the number of entries of the GDB JIT interface's list (qore#5772)
+    /** Each linked object of the JIT is registered there while the debugger support is enabled, and unregistered when
+        its code is removed (see QoreGdbJitDeregistrationPlugin in QoreJIT.cpp)
+    */
+    size_t dbgGetDebuggerEntryCount();
+
+    //! For tests: the number of compiled functions that can be looked up
+    size_t dbgGetCompiledFunctionCount() const;
+#endif
+
     //! Returns true in a child process created with fork() while another thread of the parent was compiling
     /** The JIT compiles nothing in such a child; see forkChild()
     */
@@ -924,6 +966,7 @@ public:
     */
     void lockCompileForTest() {
         compile_mutex.lock();
+        setHoldsCompileLock(true);
     }
 
     //! For tests: starts the background compilation thread
@@ -982,6 +1025,21 @@ public:
     */
     int dbgContinueBgCompile(int64_t timeout_ms);
 
+    //! Where a held compile that stopBackgroundCompiler() abandons ends, for a test (qore#5842)
+    enum class DbgFinishAbandoned {
+        //! it stays held, and the process ends with _exit()
+        None,
+        //! it is let go when it is abandoned, and shutdown() waits for its thread: the engine is released there
+        Shutdown,
+        //! it is let go at the end of the process (exitQuickly()), which waits for its thread: the engine is released
+        //! there
+        Exit,
+    };
+
+    //! Test hook: a held compile that stopBackgroundCompiler() abandons ends before the process does, as an abandoned
+    //! compile can, at the given point (qore#5842)
+    void dbgFinishAbandonedCompile(DbgFinishAbandoned where);
+
     //! For tests: waits until a Program teardown waits for the in-progress background compile
     /** Only a teardown that has to wait counts: one that finds the compile in the LLVM phase detaches it and does
         not wait.  The count of such waits is reset when this returns true.
@@ -1007,9 +1065,14 @@ public:
     //! Enqueue a function for background JIT compilation.
     //! The function stays at IR tier until compilation finishes in the background.
     //! Safe to call from any thread, including during tiered execution.
+    /** @param queued called once the work is queued, before a synchronous compile is waited for
+        (QORE_JIT_SYNC_COMPILE), and not called if the work is refused; the teardown of the work's Programs drains or
+        detaches queued work
+    */
     void enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
             void* deopt_counter, const std::vector<BatchCallee>* callees = nullptr,
-            std::shared_ptr<QoreIRFunction> owned_ir_func = nullptr);
+            std::shared_ptr<QoreIRFunction> owned_ir_func = nullptr,
+            const std::function<void()>& queued = std::function<void()>());
 
     //! Wait for all pending background compilations to complete.
     //! Used during shutdown, and after every enqueue when syncBgCompile() is set.
@@ -1055,6 +1118,76 @@ private:
     std::unordered_set<std::string> defined_batch_symbols;
     //! The ABI of each defined fast entry; a later batch can only call one whose ABI matches its own analysis
     std::unordered_map<std::string, std::string> defined_fast_entry_abi;
+
+    //! A module added to the JIT: removing its tracker removes its symbols and frees its code (qore#5772)
+    struct CodeUnit {
+        //! the tracker that the module was added with
+        llvm::orc::ResourceTrackerSP rt;
+        //! the symbols that the unit defines and that are recorded in compiled_functions, defined_batch_symbols,
+        //! defined_fast_entry_abi and symbol_units
+        std::vector<std::string> symbols;
+        //! the units whose symbols this unit's code links to; each is referenced by this unit
+        std::vector<CodeUnit*> deps;
+        //! the owners and the units that reference this unit; protected by cache_mutex
+        unsigned refs = 0;
+    };
+    //! The unit that defines each recorded symbol; protected by cache_mutex
+    std::unordered_map<std::string, CodeUnit*> symbol_units;
+    //! The units that each owner (a Program or a specialization) references; protected by cache_mutex
+    std::unordered_map<const void*, std::vector<CodeUnit*>> owner_units;
+    //! The owner references released while a compile held compile_mutex; protected by cache_mutex, processed under
+    //! compile_mutex (see processPendingCodeReleasesLocked())
+    std::vector<CodeUnit*> pending_unit_unrefs;
+    //! Every unit in the JIT; protected by cache_mutex
+    std::unordered_set<CodeUnit*> code_units;
+
+    //! Returns the names of the functions that \a module declares and links to: those defined by other units
+    static std::vector<std::string> getLinkedSymbols(const llvm::Module& module);
+
+    //! Records a module added to the JIT as a code unit; compile_mutex must be held
+    /** @param rt the tracker that the module was added with
+        @param linked the symbols that the module declares (see getLinkedSymbols())
+        @param symbols the symbols that the unit defines and that were recorded
+        @param owners the owners of the functions that the unit defines; nullptr entries are ignored, and a unit
+        without an owner stays in the JIT
+    */
+    void addCodeUnitLocked(llvm::orc::ResourceTrackerSP rt, const std::vector<std::string>& linked,
+            std::vector<std::string> symbols, const std::vector<const void*>& owners) noexcept;
+
+    //! Makes \a owner an owner of the unit that defines \a symbol, if it is recorded; cache_mutex must be held
+    void addCodeOwnerLocked(const std::string& symbol, const void* owner);
+
+    //! Drops the references released by releaseCodeOwner() and removes the units that are no longer referenced
+    /** compile_mutex must be held; called before the lock is released
+    */
+    //! @return true if the queue was taken and processed, false if nothing was taken (empty, abandoned, no memory)
+    bool processPendingCodeReleasesLocked() noexcept;
+
+    //! Releases the units that each acquisition of compile_mutex leaves pending when the lock is released
+    class CompileLockScope {
+    public:
+        //! marks the calling thread as the holder of compile_mutex, which \a lock owns
+        CompileLockScope(QoreJIT& jit, std::unique_lock<std::mutex>& lock);
+        //! processes the pending releases, releases the lock, and processes the releases added meanwhile
+        ~CompileLockScope();
+        CompileLockScope(const CompileLockScope&) = delete;
+        CompileLockScope& operator=(const CompileLockScope&) = delete;
+
+    private:
+        QoreJIT& jit;
+        std::unique_lock<std::mutex>& lock;
+    };
+
+    //! Processes the releases that a thread added while another held compile_mutex; called after releasing it
+    /** A thread that releases code while another holds the lock only queues the release; each thread that releases
+        the lock checks the queue again, so a release queued just before is processed
+    */
+    void processPendingCodeReleasesAfterUnlock() noexcept;
+
+    //! True if the calling thread holds compile_mutex (a releaser then only queues; see releaseCodeOwner())
+    static bool holdsCompileLock();
+    //! Marks or unmarks the calling thread as the holder of compile_mutex
+    static void setHoldsCompileLock(bool holds);
     //! true once initialize() has run; protected by compile_mutex
     bool init_done = false;
     //! the result of initialize(); protected by compile_mutex
@@ -1098,11 +1231,13 @@ private:
         Assumes compile_mutex is held.
 
         @param name the symbol of the function's standard entry
+        @param owner the owner of the function's code (see getCodeOwner()), which becomes an owner of the unit that
+        defines the entry
         @param error set to the reason when the defined entry cannot be looked up
 
         @return 1 if the entry is now cached, 0 if it is not defined and must be compiled, -1 on error
     */
-    int adoptDefinedFunction(const std::string& name, std::string& error);
+    int adoptDefinedFunction(const std::string& name, const void* owner, std::string& error);
 
     //! Background compilation work item
     struct BgCompileWork {
@@ -1178,6 +1313,10 @@ private:
         process ends with \c _exit() if the thread still runs at the end (see exitQuickly()).
     */
     std::atomic<bool> bg_thread_abandoned{false};
+    //! shutdown() did not release the engine, as a compile ran in it (bg_thread_abandoned); it is released by
+    //! releaseDeferredEngine(), which exitQuickly() calls after it has joined the finished compile thread; the join of
+    //! the atexit() handler (joinAbandonedCompileThread()) does not release it
+    std::atomic<bool> shutdown_deferred{false};
 
     //! true once the compile thread has left its loop: it touches nothing of the JIT or LLVM any more
     std::atomic<bool> bg_thread_done{false};
@@ -1238,6 +1377,9 @@ private:
     unsigned dbg_bg_hold_exits = 0;
     //! the number of Program teardowns that waited for the in-progress compile; protected by bg_queue_mutex
     unsigned dbg_bg_teardown_waits = 0;
+    //! where a held compile that stopBackgroundCompiler() abandons ends (see dbgFinishAbandonedCompile()); protected
+    //! by bg_queue_mutex
+    DbgFinishAbandoned dbg_finish_abandoned = DbgFinishAbandoned::None;
     //! for each hold point, the function whose compile stops there, all if empty; protected by bg_queue_mutex
     std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Install) + 1];
     //! the name of the in-progress compile's root function up to the "@"; protected by bg_queue_mutex

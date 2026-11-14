@@ -31,6 +31,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include <qore/QoreEnumDecl.h>
 
 #include "qore/intern/qore_string_private.h"
@@ -160,7 +161,7 @@ int QoreStringNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink)
 
 bool qore_string_get_as_bool(const char* str, size_t len) {
     // check if we should do perl-style boolean evaluation
-    if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
+    if (qore_get_native_semantic_policy().strictBoolean()) {
         return q_strtod(str);
     }
     if (len == 1 && str[0] == '0') {

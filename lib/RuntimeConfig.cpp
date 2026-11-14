@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreThreadList.h"
@@ -178,12 +179,31 @@ void RuntimeConfig::setReturnTypeInfo(const QoreTypeInfo* return_type_info) {
     implRef().return_type_info = return_type_info;
 }
 
+// Public flags occupy the low bits; adding a flag must keep this projection disjoint.
+static_assert(((QCF_NOOP | QCF_USES_EXTRA_ARGS | QCF_CONSTANT_INTERN | QCF_DEPRECATED | QCF_RET_VALUE_ONLY
+    | QCF_RUNTIME_NOOP | QCF_ABSTRACT_OVERRIDE_ALL | QCF_NAMED_ARGS | QCF_NO_SIDE_EFFECTS | QCF_DETERMINISTIC
+    | QCF_NO_DOMAIN_THROW | QCF_HOST_PORTABLE | QCF_OWN_PROGRAM_STATE | QCF_CURRENT_THREAD_ONLY | QCF_MODULE_OWNED)
+    & LexicalSemanticPolicy::NativeMask) == 0);
+
 q_rt_flags_t RuntimeConfig::getRuntimeFlags() const {
-    return implRef().rtflags;
+    return implRef().rtflags & ~LexicalSemanticPolicy::NativeMask;
 }
 
 void RuntimeConfig::setRuntimeFlags(q_rt_flags_t flags) {
-    implRef().rtflags = flags;
+    auto& state = implRef().rtflags;
+    state = (state & LexicalSemanticPolicy::NativeMask) | (flags & ~LexicalSemanticPolicy::NativeMask);
+}
+
+q_rt_flags_t QoreRuntimeFlags::get(const RuntimeConfig& rc) {
+    return rc.implRef().rtflags;
+}
+
+void QoreRuntimeFlags::set(RuntimeConfig& rc, q_rt_flags_t flags) {
+    rc.implRef().rtflags = flags;
+}
+
+LexicalSemanticPolicy qore_get_native_semantic_policy() {
+    return LexicalSemanticPolicy::fromNativeFlags(QoreRuntimeFlags::get(rc_get_tls_ref()));
 }
 
 int RuntimeConfig::getElement() const {
@@ -218,7 +238,7 @@ RuntimeConfig rc_get_current() {
     rc.setLocation(tls_rc.getLocation());
     rc.setStatement(tls_rc.getStatement());
     rc.setParseOptions(tls_rc.getParseOptions());
-    rc.setRuntimeFlags(tls_rc.getRuntimeFlags());
+    QoreRuntimeFlags::set(rc, QoreRuntimeFlags::get(tls_rc));
     rc.setElement(tls_rc.getElement());  // element is now stored in tl_runtime_config
     rc.setThreadLocalProgramData(get_thread_local_program_data());
     QoreObject* obj = nullptr;
@@ -238,7 +258,7 @@ RuntimeConfig rc_get_parse_time() {
     // Other fields are left as defaults (nullptr/0)
     rc.setProgram(getProgram());
     rc.setParseOptions(rc_get_tls_ref().getParseOptions());
-    rc.setRuntimeFlags(rc_get_tls_ref().getRuntimeFlags());
+    QoreRuntimeFlags::set(rc, QoreRuntimeFlags::get(rc_get_tls_ref()));
     // tlpd may be available during parsing, but we don't require it
     rc.setThreadLocalProgramData(get_thread_local_program_data());
     return rc;
@@ -299,7 +319,7 @@ RuntimeConfig& rc_get_current_ref() {
 void rc_sync_to_thread(const RuntimeConfig& rc) {
     // Update runtime location/statement if changed
     update_runtime_statement_location(rc.getStatement(), rc.getLocation(), rc.getParseOptions());
-    rc_get_tls_ref().setRuntimeFlags(rc.getRuntimeFlags());
+    QoreRuntimeFlags::set(rc_get_tls_ref(), QoreRuntimeFlags::get(rc));
     // Note: Other fields (pgm, tlpd, obj, cls) are typically managed via
     // RAII helpers like ProgramThreadCountContextHelper and ObjectSubstitutionHelper
     // and should not be modified directly here to avoid breaking invariants.

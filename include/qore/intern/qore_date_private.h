@@ -35,6 +35,7 @@
 #define QORE_QORE_DATE_PRIVATE_H
 
 #include <cmath>
+#include <limits>
 
 // note: this implementation does not yet take into account leap seconds,
 //       even if this information is available in the zoneinfo data
@@ -811,6 +812,31 @@ public:
         return epoch * 1000000 + us;
     }
 
+    //! gets the microseconds if they fit in an int64; us is in [0, 1000000)
+    DLLLOCAL bool getEpochMicrosecondsUTCChecked(int64& rv) const {
+        // the microseconds of the seconds in this range (-9223372036853 to 9223372036853) always fit, with no
+        // overflow check; the range is checked with one unsigned comparison
+        if ((uint64_t)epoch + 9223372036853ull <= 18446744073706ull) {
+            rv = epoch * 1000000 + us;
+            return true;
+        }
+        // the seconds times a million can overflow where the sum does not, at the start of the range, so a negative
+        // epoch with microseconds is computed as (epoch + 1) * 1000000 - (1000000 - us)
+        int64 e = epoch;
+        int64 u = us;
+        if (e < 0 && u > 0) {
+            ++e;
+            u -= 1000000;
+        }
+        // rv is set only if the value fits, as documented
+        int64 t;
+        if (__builtin_mul_overflow(e, (int64)1000000, &t) || __builtin_add_overflow(t, u, &t)) {
+            return false;
+        }
+        rv = t;
+        return true;
+    }
+
     DLLLOCAL int64 getEpochMillisecondsUTC() const {
         return epoch * 1000 + (us / 1000);
     }
@@ -1120,6 +1146,23 @@ public:
         return getRelativeMicroseconds() / 1000;
     }
 
+    //! gets the microseconds of getRelativeMicroseconds() if they fit in an int64
+    /** The sum is computed in 128 bits, as parts of different signs can make a sum that fits from terms that do not
+    */
+    DLLLOCAL bool getRelativeMicrosecondsChecked(int64& rv) const {
+        __int128 sum = (__int128)us + (__int128)second * MICROSECS_PER_SEC
+            + (__int128)minute * MICROSECS_PER_MINUTE
+            + (__int128)hour * MICROSECS_PER_HOUR
+            + (__int128)day * MICROSECS_PER_AVG_DAY
+            + (__int128)month * MICROSECS_PER_MAX_MONTH
+            + (__int128)year * MICROSECS_PER_AVG_YEAR;
+        if (sum < (__int128)std::numeric_limits<int64>::min() || sum > (__int128)std::numeric_limits<int64>::max()) {
+            return false;
+        }
+        rv = (int64)sum;
+        return true;
+    }
+
     DLLLOCAL int64 getRelativeMicroseconds() const {
         return (int64)us + (int64)second * MICROSECS_PER_SEC
             + (int64)minute*  MICROSECS_PER_MINUTE
@@ -1377,6 +1420,10 @@ public:
 
     DLLLOCAL int64 getEpochMicrosecondsUTC() const {
         return relative ? d.rel.getRelativeMicroseconds() : d.abs.getEpochMicrosecondsUTC();
+    }
+
+    DLLLOCAL bool getEpochMicrosecondsUTCChecked(int64& rv) const {
+        return relative ? d.rel.getRelativeMicrosecondsChecked(rv) : d.abs.getEpochMicrosecondsUTCChecked(rv);
     }
 
     DLLLOCAL int getDayNumber() const {

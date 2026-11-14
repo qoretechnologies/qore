@@ -306,10 +306,11 @@ output type opened then takes about 11 s, because it builds most of that graph.
   as well (`StabilityAiDataProvider` does this for media responses).
 - **A test reading `output_type` from a generated definition reads the callback instead**, or the operation's
   `getResponseType()`; the catalog resolves the callback for everything else.
-- `examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest` finds every module in the tree that
-  constructs an action set or registers another module's, fails if one does not opt in, and compares the output
-  types, options and metadata of every action built eagerly (`RestSchemaActionSet::setEagerResponseTypes()`) and
-  on first use. A new application is covered without being listed.
+- `examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-<n>.qtest` (`RestSchemaModuleLazyTypes.qc`)
+  finds every module in the tree that constructs an action set or registers another module's, fails if one does
+  not opt in, and compares the output types, options and metadata of every action built eagerly
+  (`RestSchemaActionSet::setEagerResponseTypes()`) and on first use, an eighth of the modules in each part. A new
+  application is covered without being listed.
 
 Building a type on first use is only correct because a schema's types do not depend on the order in which they
 are built. Types and fields are cached per requiredness variant (mandatory and "or nothing"), and each variant is

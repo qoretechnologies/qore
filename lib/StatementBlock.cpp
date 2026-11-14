@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/ReturnStatement.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -325,7 +326,7 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                         }
                         if (type == OBE_Error) {
                             if (qore_es_private::get(obe_xsink)->rethrown) {
-                                xsink->clear();
+                                qore_es_private::clearForRethrow(*xsink);
                             }
                         }
                     }
@@ -333,7 +334,9 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                     // that all on_(exit|error) statements are executed even if exceptions are thrown
                     if (obe_xsink) {
                         xsink->assimilate(obe_xsink);
-                        if (!error)
+                        // a thread_exit is not an exception: the block's on_error handlers do not run after it, as
+                        // when the block raises it itself (#5893)
+                        if (!error && xsink->isException())
                             error = true;
                     }
                 }
@@ -467,7 +470,7 @@ LocalVar* pop_local_var(bool set_unassigned) {
       // record the state before discarding it: the reset exists so the next parse of the same
       // signature starts clean, but IR lowering runs afterwards and still needs the answer
       rc->parseFinalizeAssigned();
-      rc->parseUnassigned();
+      rc->parseSetAssignedState(false, false);
    }
    printd(5, "pop_local_var(): popping var %s\n", rc->getName());
    updateVStack(vnode->next);
@@ -534,6 +537,7 @@ int StatementBlock::parseInitIntern(QoreParseContext& parse_context, statement_l
     int err = 0;
 
     for (statement_list_t::iterator i = start, l = statement_list.last(), e = statement_list.end(); i != e; ++i) {
+        i.node->data = ReturnStatement::bindDeclarationPolicy(*i);
         if ((*i)->parseInit(parse_context) && !err) {
             err = -1;
         }
@@ -563,6 +567,8 @@ int StatementBlock::parseInitImpl(QoreParseContext& parse_context) {
     printd(4, "StatementBlock::parseInitImpl(b=%p, oflag=%p)\n", this, parse_context.oflag);
 
     BlockStartHelper bsh(parse_context);
+    // the local variables declared in the block are created anew each time it runs (qore#5937)
+    ParseStatementBlockScopeHelper block_scope;
 
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_TOP_LEVEL);
@@ -824,12 +830,19 @@ void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
     if (!lv_list) {
         // v2 path: no parse() was called, so lvars was never created.
         // Create an LVList from the AOT context locals so doTopLevelInstantiation() works.
+        // Only the locals of the top-level block itself are the Program's: the locals of the blocks in it (the body
+        // locals of the context) are instantiated by the code of their blocks, as in the code that was parsed, and a
+        // closure-bound one that the Program instantiated was found by the instantiation of its block, which then
+        // pushed no variable of its own, so that the closures of all iterations of a loop shared it (#5869)
+        std::unordered_set<const LocalVar*> body_locals(ctx->all_body_locals.begin(), ctx->all_body_locals.end());
+        std::vector<LocalVar*> top_locals;
         for (int i = 0; i < ctx->num_locals; ++i) {
-            if (ctx->locals[i]) {
+            if (ctx->locals[i] && !body_locals.count(ctx->locals[i])) {
                 ctx->locals[i]->setTopLevel();
+                top_locals.push_back(ctx->locals[i]);
             }
         }
-        lvars = new LVList(ctx->locals, ctx->num_locals);
+        lvars = new LVList(top_locals.data(), static_cast<int>(top_locals.size()));
         return;
     }
     // Update the LVList entries from the AOT context
@@ -1212,8 +1225,10 @@ int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const 
         return_value = ir_return_value;
         return 0;
     }
-    // If IR execution raised an exception, propagate it
+    // If IR execution raised an exception, propagate it; a return that an exception raised after it (by the destructor
+    // of a local) leaves the value it returns to be released here (#6029)
     if (*xsink) {
+        ir_return_value.discard(xsink);
         return 0;
     }
     // IR execution failed without raising an exception.  This path only
@@ -1424,20 +1439,98 @@ void NarrowedTypeHelper::mergeAndApply() {
     }
 }
 
-static void qore_set_lvar_parse_assigned(LocalVar* lvar, bool assigned) {
-    if (assigned) {
-        lvar->parseAssigned();
-    } else {
-        lvar->parseUnassigned();
+namespace {
+//! the number of deferred parse scopes on the current thread; see parse_get_deferred_depth()
+thread_local int qore_parse_deferred_depth = 0;
+//! true if the code being parsed is directly in a deferred scope; see parse_in_deferred_expression()
+thread_local bool qore_parse_in_deferred_expression = false;
+//! the effects of the on_exit, on_success and on_error blocks of each statement block being parsed on the current
+//! thread, innermost last: the variable, and whether it may be assigned or cleared
+struct qore_block_exit_effect_t {
+    LocalVar* lvar;
+    bool assigned;
+    bool cleared;
+};
+thread_local std::vector<std::vector<qore_block_exit_effect_t>> qore_parse_block_exit_effects;
+//! the sequence of changes of the assignment state of local variables; one for all threads, as a top-level local
+//! variable of a Program can be parsed on more than one thread (each parse holds the parse lock of its Program)
+std::atomic<uint64_t> qore_parse_assignment_seq(0);
+}
+
+uint64_t parse_next_assignment_seq() {
+    return ++qore_parse_assignment_seq;
+}
+
+uint64_t parse_get_assignment_seq() {
+    return qore_parse_assignment_seq.load();
+}
+
+int parse_get_deferred_depth() {
+    return qore_parse_deferred_depth;
+}
+
+bool parse_in_deferred_expression() {
+    return qore_parse_in_deferred_expression;
+}
+
+int parse_get_decl_deferred_depth() {
+    // a variable declared directly in a deferred scope keeps its value when the scope's code runs again, as one
+    // declared before it does
+    return qore_parse_in_deferred_expression && qore_parse_deferred_depth
+        ? qore_parse_deferred_depth - 1
+        : qore_parse_deferred_depth;
+}
+
+ParseDeferredScopeHelper::ParseDeferredScopeHelper() : old_in_expression(qore_parse_in_deferred_expression) {
+    ++qore_parse_deferred_depth;
+    qore_parse_in_deferred_expression = true;
+}
+
+ParseDeferredScopeHelper::~ParseDeferredScopeHelper() {
+    assert(qore_parse_deferred_depth > 0);
+    --qore_parse_deferred_depth;
+    qore_parse_in_deferred_expression = old_in_expression;
+}
+
+ParseStatementBlockScopeHelper::ParseStatementBlockScopeHelper()
+        : old_in_expression(qore_parse_in_deferred_expression) {
+    qore_parse_in_deferred_expression = false;
+    qore_parse_block_exit_effects.emplace_back();
+}
+
+ParseStatementBlockScopeHelper::~ParseStatementBlockScopeHelper() {
+    assert(!qore_parse_block_exit_effects.empty());
+    // the on_exit, on_success and on_error blocks of the block run when it exits, after its code (the code after the
+    // block follows them)
+    for (const qore_block_exit_effect_t& effect : qore_parse_block_exit_effects.back()) {
+        if (effect.assigned) {
+            effect.lvar->parseMayBeAssigned();
+        }
+        if (effect.cleared) {
+            effect.lvar->parseUnassigned();
+        }
+    }
+    qore_parse_block_exit_effects.pop_back();
+    qore_parse_in_deferred_expression = old_in_expression;
+}
+
+void parse_add_block_exit_effect(LocalVar* lvar, bool assigned, bool cleared) {
+    if (!qore_parse_block_exit_effects.empty()) {
+        qore_parse_block_exit_effects.back().push_back({lvar, assigned, cleared});
     }
 }
 
+AssignedStateHelper::assigned_state_t AssignedStateHelper::getState(const LocalVar* lvar) {
+    return {lvar->isAssigned(), lvar->mayBeAssigned()};
+}
+
 void AssignedStateHelper::saveState() {
+    saved_seq = parse_get_assignment_seq();
     saved_states.clear();
     VNode* vnode = getVStack();
     while (vnode) {
         if (vnode->lvar) {
-            saved_states.push_back({vnode->lvar, vnode->lvar->isAssigned()});
+            saved_states.push_back({vnode->lvar, getState(vnode->lvar)});
         }
         vnode = vnode->nextSearch();
     }
@@ -1445,7 +1538,7 @@ void AssignedStateHelper::saveState() {
 
 void AssignedStateHelper::restoreState() {
     for (const auto& entry : saved_states) {
-        qore_set_lvar_parse_assigned(entry.first, entry.second);
+        entry.first->parseSetAssignedState(entry.second.assigned, entry.second.may_be_assigned);
     }
 }
 
@@ -1453,7 +1546,7 @@ void AssignedStateHelper::recordBranchAndRestore() {
     state_map_t branch;
     branch.reserve(saved_states.size());
     for (const auto& entry : saved_states) {
-        branch.push_back({entry.first, entry.first->isAssigned()});
+        branch.push_back({entry.first, getState(entry.first)});
     }
     branch_states.push_back(std::move(branch));
     restoreState();
@@ -1469,24 +1562,62 @@ void AssignedStateHelper::mergeAndApply() {
     }
 
     for (const auto& saved_entry : saved_states) {
+        // assigned on every path after the merge if assigned in every branch; may be assigned if it may be in any
+        // branch, or if a branch does not record the variable
         bool assigned_in_all_branches = true;
+        bool may_be_assigned = false;
         for (const auto& branch : branch_states) {
             bool found = false;
-            bool assigned = false;
             for (const auto& branch_entry : branch) {
                 if (branch_entry.first == saved_entry.first) {
                     found = true;
-                    assigned = branch_entry.second;
+                    if (!branch_entry.second.assigned) {
+                        assigned_in_all_branches = false;
+                    }
+                    if (branch_entry.second.may_be_assigned) {
+                        may_be_assigned = true;
+                    }
                     break;
                 }
             }
-            if (!found || !assigned) {
+            if (!found) {
                 assigned_in_all_branches = false;
-                break;
+                may_be_assigned = true;
             }
         }
-        qore_set_lvar_parse_assigned(saved_entry.first, assigned_in_all_branches);
+        saved_entry.first->parseSetAssignedState(assigned_in_all_branches, may_be_assigned);
     }
+}
+
+void AssignedStateHelper::applyChangesSinceSave() {
+    for (const auto& entry : saved_states) {
+        LocalVar* lvar = entry.first;
+        if (lvar->parseAssignedSince(saved_seq)) {
+            lvar->parseSetAssignedState(lvar->isAssigned(), true);
+        }
+        if (lvar->parseClearedSince(saved_seq)) {
+            lvar->parseSetAssignedState(false, lvar->mayBeAssigned());
+        }
+    }
+}
+
+void AssignedStateHelper::recordChangesAsBlockExitEffects() const {
+    for (const auto& entry : saved_states) {
+        bool assigned = entry.first->parseAssignedSince(saved_seq);
+        bool cleared = entry.first->parseClearedSince(saved_seq);
+        if (assigned || cleared) {
+            parse_add_block_exit_effect(entry.first, assigned, cleared);
+        }
+    }
+}
+
+void AssignedStateHelper::mergeLoopAndApply() {
+    for (const auto& entry : saved_states) {
+        LocalVar* lvar = entry.first;
+        lvar->parseSetAssignedState(entry.second.assigned && lvar->isAssigned(),
+            entry.second.may_be_assigned || lvar->mayBeAssigned());
+    }
+    applyChangesSinceSave();
 }
 
 void AssignedStateHelper::markSavedUnassigned() {

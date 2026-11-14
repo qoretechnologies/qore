@@ -31,7 +31,7 @@ public class KatanaWatchSalesOrderDeletedDataProvider inherits KatanaWebhookEven
     string getEndpoint() { return "sales_orders"; }
     string getEventName() { return EVENT_SO_DELETED; }
     *string getTargetStatus() { return NOTHING; }
-    *string getTimestampField() { return "deleted_at"; }
+    string getTimestampField() { return "deleted_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaSalesOrderDataType();

@@ -28,9 +28,87 @@
     information.
 */
 
+#include <qore/intern/LexicalReflection.h>
 #include "qore_reflection.h"
 #include "QC_ConstructorMethodVariant.h"
 #include "QC_Class.h"
+
+// Both entries share the reflection authority checks; only the final invocation differs.
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue ConstructorMethodVariant_call_VV_impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, v->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
+    const QoreClass* cls = mv->getClass();
+    if (check_constructor(caller, cls, v->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, cls, v->pgm, xsink)) {
+        return QoreValue();
+    }
+
+    // the constructor variant must be allowed by the caller and the class's Program
+    if (reflection_check_variant_call(caller, v->variant, cls->getName(), "constructor", v->pgm, xsink)) {
+        return QoreValue();
+    }
+    if constexpr (Lexical) return qore_lexical_reflection_construct(policy, *cls, mv, args, nullptr, xsink);
+    else return cls->execConstructorVariant(mv, args, xsink);
+}
+
+static QoreValue ConstructorMethodVariant_call_VV_lexical(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    return ConstructorMethodVariant_call_VV_impl<true>(qore_get_native_semantic_policy(), self, v, args, runtime_cfg, xsink);
+}
+
+static QoreValue ConstructorMethodVariant_call_VV(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue ConstructorMethodVariant_callArgs_nl_impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, const QoreListNode* argv) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, v->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
+    const QoreClass* cls = mv->getClass();
+    if (check_constructor(caller, cls, v->pgm, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, cls, v->pgm, xsink)) {
+        return QoreValue();
+    }
+
+    // the constructor variant must be allowed by the caller and the class's Program
+    if (reflection_check_variant_call(caller, v->variant, cls->getName(), "constructor", v->pgm, xsink)) {
+        return QoreValue();
+    }
+    if constexpr (Lexical) return qore_lexical_reflection_construct(policy, *cls, mv, argv, nullptr, xsink);
+    else return cls->execConstructorVariant(mv, argv, xsink);
+}
+
+static QoreValue ConstructorMethodVariant_callArgs_nl_lexical(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    const QoreListNode* argv = get_param_value(args, 0).get<const QoreListNode>();
+    return ConstructorMethodVariant_callArgs_nl_impl<true>(qore_get_native_semantic_policy(), self, v, args, runtime_cfg, xsink, argv);
+}
+
+static QoreValue ConstructorMethodVariant_callArgs_nl(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+static const QoreLexicalMethodRegistrationHelper::Entry lexical_entries_ConstructorMethodVariant[] = {
+    {reinterpret_cast<q_method_t>(ConstructorMethodVariant_call_VV), reinterpret_cast<q_method_t>(ConstructorMethodVariant_call_VV_lexical)},
+    {reinterpret_cast<q_method_t>(ConstructorMethodVariant_callArgs_nl), reinterpret_cast<q_method_t>(ConstructorMethodVariant_callArgs_nl_lexical)},
+};
+
+
 
 //! The class for %Qore class constructor method variants
 /**
@@ -67,29 +145,7 @@ object v = m.call(arg1, arg2);
     @see callArgs()
 */
 object ConstructorMethodVariant::call(...) {
-    // the privileges of the calling code, captured before switching to the class's Program
-    QoreReflectionCaller caller;
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, v->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
-    const QoreClass* cls = mv->getClass();
-    if (check_constructor(caller, cls, v->pgm, xsink)) {
-        return QoreValue();
-    }
-    // a class that a user module does not export cannot be used by a caller its export boundary applies to
-    if (reflection_check_class_export(caller, cls, v->pgm, xsink)) {
-        return QoreValue();
-    }
-
-    // the constructor variant must be allowed by the caller and the class's Program
-    if (reflection_check_variant_call(caller, v->variant, cls->getName(), "constructor", v->pgm, xsink)) {
-        return QoreValue();
-    }
-    return cls->execConstructorVariant(mv, args, xsink);
+    return ConstructorMethodVariant_call_VV_impl<false>({}, self, v, args, runtime_cfg, xsink);
 }
 
 //! calls the given constructor method with the given object and returns the object created
@@ -110,27 +166,8 @@ object v = m.callArgs((arg1, arg2));
     @see call()
 */
 object ConstructorMethodVariant::callArgs(*softlist argv) {
-    // the privileges of the calling code, captured before switching to the class's Program
-    QoreReflectionCaller caller;
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, v->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
-    const QoreClass* cls = mv->getClass();
-    if (check_constructor(caller, cls, v->pgm, xsink)) {
-        return QoreValue();
-    }
-    // a class that a user module does not export cannot be used by a caller its export boundary applies to
-    if (reflection_check_class_export(caller, cls, v->pgm, xsink)) {
-        return QoreValue();
-    }
-
-    // the constructor variant must be allowed by the caller and the class's Program
-    if (reflection_check_variant_call(caller, v->variant, cls->getName(), "constructor", v->pgm, xsink)) {
-        return QoreValue();
-    }
-    return cls->execConstructorVariant(mv, argv, xsink);
+    return ConstructorMethodVariant_callArgs_nl_impl<false>({}, self, v, args, runtime_cfg, xsink, argv);
 }
+
+
+//! @qppinit: QoreLexicalMethodRegistrationHelper lexical_registration(lexical_entries_ConstructorMethodVariant);

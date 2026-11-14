@@ -1,0 +1,230 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+/*  The result of an aborted operation whose owner is shutting down is pushed to its result queue, without a worker,
+    and its onComplete() is not called.
+
+    The result of an operation whose abort() runs on a callback worker is delivered with abort()'s work item, after
+    abort() returns (see asyncio_abort_before_result.qtest).  When the item is not run (its owner is shutting down when
+    it is queued, or while it waits in the queue) or the owner begins to shut down while abort() runs, the result is
+    still pushed to the result queue, as it was when it was delivered on its own, and onComplete() is not called, as
+    an onComplete() queued as an item of its own would have been discarded.  A result whose item is discarded on the
+    I/O thread must not wait for a worker.
+
+    The test runs the callback dispatcher with a single worker, which an abort() that blocks holds, so that the
+    abort() of another operation waits in the queue.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoAbortDiscardTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A poll operation that waits for its notifier until it is canceled, whose abort() blocks until it is released
+class AbortBlockingOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! decremented when abort() has started
+        Counter entered(1);
+        #! abort() returns when an item is pushed
+        Queue release();
+        #! incremented when onComplete() is called
+        Counter completed();
+    }
+
+    private {
+        EventNotifier notifier;
+        bool polled = False;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return polled ? "waiting" : "new";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        polled = True;
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+
+    abort() {
+        entered.dec();
+        release.get(HangGuard);
+    }
+
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        completed.inc();
+    }
+}
+
+class AsyncIoAbortDiscardTest inherits QUnit::Test {
+    private {
+        #! the operation whose abort() holds the dispatcher's only worker
+        *AbortBlockingOperation holder;
+        *Queue<hash<SocketPollResultInfo>> holder_rq;
+        string holder_owner;
+    }
+
+    constructor() : Test("AsyncIoAbortDiscardTest", "1.0") {
+        holder_owner = sprintf("abort-discard-holder-%d", getpid());
+        addTestCase("the abort of an operation whose owner is shutting down is discarded on the I/O thread with its "
+            "result pushed", \testDiscardOnIoThread());
+        addTestCase("an owner flush while the abort of an operation is queued pushes its result",
+            \testDrainedByOwnerFlush());
+        addTestCase("an owner shutdown that begins while abort() runs prevents onComplete()",
+            \testShutdownDuringAbort());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            # one worker, which the abort() of the holder holds; set before the dispatcher is created
+            AsyncIoController::setMaxCallbackWorkers(1);
+        }
+        set_return_value(main());
+    }
+
+    #! Holds the dispatcher's only worker with the abort() of an operation
+    private holdWorker() {
+        EventNotifier n();
+        holder = new AbortBlockingOperation(n);
+        holder_rq = new Queue<hash<SocketPollResultInfo>>();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": holder,
+            "owner": holder_owner,
+            "to": -1s,
+            "resultQueue": holder_rq,
+        });
+        assertTrue(AsyncIoController::waitForProcessing(HangGuard), "the holder is submitted");
+        assertEq(1, AsyncIoController::cancelByOwner(holder_owner), "the holder is canceled");
+        assertEq(0, holder.entered.waitForZero(HangGuard), "the holder's abort() holds the worker");
+    }
+
+    #! Releases the dispatcher's worker
+    private releaseWorker() {
+        if (holder) {
+            holder.release.push(True);
+            assertTrue(exists holder_rq.get(HangGuard), "the holder's result is delivered");
+            remove holder;
+            remove holder_rq;
+        }
+    }
+
+    #! Submits an operation with a result queue, and returns the queue once the operation waits for its notifier
+    /** The first step of the operation runs on a worker; the state event that it reports is pushed by the I/O thread
+        when it has the step's result, so the operation is then registered and no step of it is in flight: a cancel
+        then aborts it at once, and does not wait for a step that the held worker would never run
+    */
+    private Queue<hash<SocketPollResultInfo>> submitOp(AbortBlockingOperation op, EventNotifier n, string owner) {
+        Queue<hash<SocketPollResultInfo>> rq();
+        Queue<hash<SocketPollStateInfo>> sq();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": -1s,
+            "resultQueue": rq,
+            "stateQueue": sq,
+        });
+        assertEq("waiting", sq.get(HangGuard).state, "the operation waits for its notifier");
+        return rq;
+    }
+
+    private checkHooks() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for dbg_async_io_mark_owner_shutting_down()");
+        }
+    }
+
+    testDiscardOnIoThread() {
+        checkHooks();
+        string owner = sprintf("abort-discard-io-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        AbortBlockingOperation op(n);
+        on_exit op.release.push(True);
+        Queue<hash<SocketPollResultInfo>> rq = submitOp(op, n, owner);
+        holdWorker();
+        on_exit releaseWorker();
+
+        call_function("dbg_async_io_mark_owner_shutting_down", owner, True);
+        on_exit call_function("dbg_async_io_mark_owner_shutting_down", owner, False);
+        # the I/O thread discards the abort() item of the operation: its result is pushed there, while the only
+        # worker is held
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        hash<SocketPollResultInfo> r = rq.get(HangGuard);
+        assertTrue(r.canceled, "the result is pushed without a worker");
+        assertEq(op, r.spop);
+
+        call_function("dbg_async_io_mark_owner_shutting_down", owner, False);
+        releaseWorker();
+        AsyncIoController::flushCallbacks();
+        assertEq(1, op.entered.getCount(), "the discarded abort() was not called");
+        assertEq(0, op.completed.getCount(), "onComplete() was not called");
+    }
+
+    testDrainedByOwnerFlush() {
+        checkHooks();
+        string owner = sprintf("abort-discard-drain-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        AbortBlockingOperation op(n);
+        on_exit op.release.push(True);
+        Queue<hash<SocketPollResultInfo>> rq = submitOp(op, n, owner);
+        holdWorker();
+        on_exit releaseWorker();
+
+        # the abort() item waits in the queue behind the holder
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        assertEq(0, rq.size(), "no result before abort()");
+        # the mark drains the owner's queued items: the result is pushed on this thread
+        call_function("dbg_async_io_mark_owner_shutting_down", owner, True);
+        on_exit call_function("dbg_async_io_mark_owner_shutting_down", owner, False);
+        assertEq(1, rq.size(), "the drained abort() item pushed the result");
+        hash<SocketPollResultInfo> r = rq.get(HangGuard);
+        assertTrue(r.canceled, "the result reports the cancellation");
+
+        call_function("dbg_async_io_mark_owner_shutting_down", owner, False);
+        releaseWorker();
+        AsyncIoController::flushCallbacks();
+        assertEq(1, op.entered.getCount(), "the drained abort() was not called");
+        assertEq(0, op.completed.getCount(), "onComplete() was not called");
+    }
+
+    testShutdownDuringAbort() {
+        checkHooks();
+        string owner = sprintf("abort-discard-during-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        AbortBlockingOperation op(n);
+        on_exit op.release.push(True);
+        Queue<hash<SocketPollResultInfo>> rq = submitOp(op, n, owner);
+
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        assertEq(0, op.entered.waitForZero(HangGuard), "abort() has started");
+        call_function("dbg_async_io_mark_owner_shutting_down", owner, True);
+        on_exit call_function("dbg_async_io_mark_owner_shutting_down", owner, False);
+        op.release.push(True);
+        hash<SocketPollResultInfo> r = rq.get(HangGuard);
+        assertTrue(r.canceled, "the result is pushed after abort()");
+        # the delivery has finished with the abort() item
+        AsyncIoController::flushCallbacks();
+        assertEq(0, op.completed.getCount(), "onComplete() is not called once the owner is shutting down");
+    }
+}

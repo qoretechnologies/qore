@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ConnectionProvider
+%requires RestClient
+%requires Logger
+
+%exec-class AbstractRestConnectionTest
+
+#! A client that is not a RestClient, as a connection that inherits AbstractRestConnection can return
+class TestApiHelper {
+    public {
+        string url;
+    }
+
+    constructor(string url) {
+        self.url = url;
+    }
+}
+
+#! A REST connection whose get() returns another client than a RestClient
+class TestApiConnection inherits RestClient::AbstractRestConnection {
+    public {
+        const ConnectionScheme = cast<hash<ConnectionSchemeInfo>>(RestConnection::ConnectionScheme + {
+            "cls": Class::forName("TestApiConnection"),
+        });
+    }
+
+    constructor(string name, string desc, string url, hash<auto> attributes = {}, hash<auto> options = {})
+            : AbstractRestConnection(name, desc, url, attributes, options) {
+    }
+
+    TestApiHelper get(bool connect = True, *hash<auto> rtopts) {
+        return new TestApiHelper(real_url);
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! Tests for RestClient::AbstractRestConnection (issue #5838)
+/** RestConnection's behavior is in AbstractRestConnection, whose get() returns an object of any class, so a
+    connection whose client is not a RestClient inherits all of it without overriding get() with a type that
+    RestConnection::get() does not accept
+*/
+class AbstractRestConnectionTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AbstractRestConnection", "1.0") {
+        addTestCase("RestConnection is unchanged", \restConnection());
+        addTestCase("a subclass with another client", \otherClient());
+        addTestCase("the poll ping of a subclass with another client", \pollPing());
+        set_return_value(main());
+    }
+
+    restConnection() {
+        RestConnection conn("test", "test", "rest://127.0.0.1:1", NOTHING, {"headers": {"X-Test": "a"}});
+        assertEq(True, conn instanceof AbstractRestConnection, "RestConnection inherits AbstractRestConnection");
+        RestClient rc = conn.get(False);
+        assertEq("RestClient", rc.className(), "get() returns a RestClient");
+        assertEq({"X-Test": "a"}, conn.real_opts.headers, "the options are processed");
+        # the scheme constant is inherited, so both class names give it
+        assertEq(RestConnection::ConnectionScheme.options, AbstractRestConnection::ConnectionScheme.options);
+        assertEq("RestConnection", conn.getConnectionSchemeInfo().cls.getName());
+    }
+
+    otherClient() {
+        TestApiConnection conn("api", "test", "rest://127.0.0.1:1", NOTHING, {
+            "headers": {"X-Test": "b"},
+            "connect_timeout": 5000,
+        });
+        # RestConnection's option processing applies
+        assertEq({"X-Test": "b"}, conn.real_opts.headers, "the headers option is kept");
+        assertEq(5000, conn.real_opts.connect_timeout, "a RestConnection option is accepted");
+        assertEq(RestConnection::ConnectionScheme.options, conn.getConnectionSchemeInfo().options,
+            "the connection has the options of a REST connection");
+        assertEq("rest", conn.getType(), "the connection type is that of a REST connection");
+
+        # get() returns the subclass's client, also through a call typed against the base class
+        AbstractRestConnection base = conn;
+        object client = base.get(False);
+        assertEq("TestApiHelper", client.className(), "get() returns the subclass's client");
+
+        # the poll operations keep the default RestClient
+        assertEq(True, conn.getPollImpl() instanceof RestClient, "the poll client is a RestClient");
+
+        # OAuth2 is available as for a RestConnection
+        assertEq(Type::Hash, conn.getOAuth2Options().type(), "the OAuth2 options are available");
+        assertEq(False, conn.needsAuth(), "no authentication is needed without credentials");
+    }
+
+    #! the poll operations of the ping accept a connection that is not a RestConnection
+    pollPing() {
+        TestApiConnection conn("api", "test", "rest://127.0.0.1:1", NOTHING, {
+            "ping_method": "GET",
+            "ping_path": "/api/public/info",
+        });
+        Logger logger("test");
+        AbstractPollOperation op = conn.startPollConnect(logger);
+        on_exit op.abort();
+        assertEq(True, op instanceof AbstractPollOperation, "the poll ping starts");
+    }
+}

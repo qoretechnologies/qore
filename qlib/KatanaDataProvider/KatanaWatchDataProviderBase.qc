@@ -111,7 +111,7 @@ public class KatanaWatchDataProviderBase inherits KatanaDataProviderBase,
     #! Returns the timestamp field on records used to advance \c last_check.
     /** Defaults to \c updated_at. Subclasses watching for \c created may override.
     */
-    *string getTimestampField() {
+    string getTimestampField() {
         return "updated_at";
     }
 

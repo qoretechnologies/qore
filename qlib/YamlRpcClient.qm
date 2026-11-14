@@ -46,6 +46,8 @@ module YamlRpcClient {
         ConnectionSchemeCache::registerScheme("yamlrpc", YamlRpcConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("yamlrpcs", YamlRpcConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage YamlRpcClient Module

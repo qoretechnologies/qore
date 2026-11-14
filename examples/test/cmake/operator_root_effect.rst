@@ -11,9 +11,10 @@ cast, including a most-derived object with a separate lvalue subobject.
 The native fixture includes the actual internal operator classes. Its concrete
 test subclasses supply the unrelated abstract interfaces; parsing and background
 copying are explicitly unsupported by the fixture. The runner extracts the
-unchanged hidden default ``AbstractQoreNode::parseInit`` implementation because
-``SimpleQoreNode`` requires it when linking an internal-header consumer.
-The fixture never calls it. No operator implementation is copied or replaced.
+hidden default ``AbstractQoreNode::parseInit`` implementation and the lexical
+parse policy helpers and debug entry TLS referenced by inline ``ParseNode::parseInit`` because the
+node vtables require them when linking an internal-header consumer. The fixture
+never calls them. No operator implementation is copied or replaced.
 
 Coverage includes all four templates with plain, direct lvalue, indirect lvalue,
 and multiple-inheritance cross-cast layouts. Each runs with a nothing value,
@@ -40,6 +41,8 @@ an isolated header overlay as a negative control. With GCC, the old source must
 fail with exactly eight address diagnostics; Clang has no such diagnostic for
 the old bodies, so the negative control is skipped with it. With any compiler,
 the corrected source must compile silently and pass 449 native checks. The
+Clang probe disables the unrelated mixed-override-annotation warning of the
+internal headers; full builds retain their own warning policy. The
 program targets the build's platform version (``CMAKE_OSX_DEPLOYMENT_TARGET`` on
 macOS) and takes the include directories of the third-party headers that the
 internal headers include from the build's CMake cache (see

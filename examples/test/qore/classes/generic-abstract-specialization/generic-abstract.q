@@ -73,7 +73,7 @@ printf("nested: %y\n", l2.ab());
 Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
 try {
     p.parse("class Box2<T> { abstract T ab(); abstract string f(T x); }\n"
-        "class Bad inherits Box2<string> { int ab() { return 1; } string f(int x) { return \"\"; } }\n"
+        "class Bad inherits Box2<string> { string ab() { return \"\"; } string f(int x) { return \"\"; } }\n"
         "Bad b();\n", "neg");
     printf("negative: no error\n");
 } catch (hash<ExceptionInfo> ex) {
@@ -84,9 +84,21 @@ try {
 Program p2(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
 try {
     p2.parse("class Box3<T> { abstract T ab(); abstract string f(T x); }\n"
-        "class Bad3 inherits Box3<int> { *int ab() { return 1; } string f(*int x) { return \"\"; } }\n"
+        "class Bad3 inherits Box3<int> { int ab() { return 1; } string f(*int x) { return \"\"; } }\n"
         "Bad3 b();\n", "neg2");
     printf("negative or-nothing: no error\n");
 } catch (hash<ExceptionInfo> ex) {
     printf("negative or-nothing: %s: %d unimplemented\n", ex.err, (ex.desc =~ x/(\* abstract)/g).size());
+}
+
+# negative: an implementation that returns another type than the specialization's is refused (issue #5838)
+foreach string impl in (("int ab() { return 1; }", "*int ab() { return 1; }")) {
+    Program p3(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    try {
+        p3.parse("class Box4<T> { abstract T ab(); }\n"
+            "class Bad4 inherits Box4<" + (impl =~ /^\*/ ? "int" : "string") + "> { " + impl + " }\n", "neg3");
+        printf("negative return type: no error\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("negative return type: %s\n", ex.err);
+    }
 }

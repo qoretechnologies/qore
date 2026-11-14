@@ -194,6 +194,10 @@ public:
     */
     DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
 
+    //! Records on the stream's frame state that the application sends its close frame itself; see
+    //! ChannelAction::markFrameStateCloseSent()
+    DLLLOCAL int markFrameStateCloseSent(int64_t stream_id, ExceptionSink* xsink);
+
     //! Installs a WebSocket frame-state decoder on a CONNECT stream's action
     /** Attaches a WebSocketStreamFrameState to the ChannelAction already
         registered for @a stream_id.  The install drains items buffered in
@@ -367,6 +371,13 @@ public:
         return inner_op ? inner_op->getAddressFamily() : AF_UNSPEC;
     }
 
+    //! Returns true once the QUIC handshake has completed, also after the connection has closed
+    /** Can be called from any thread
+    */
+    DLLLOCAL bool isHandshakeComplete() const {
+        return inner_op && inner_op->isHandshakeComplete();
+    }
+
     DLLLOCAL bool isQuicSessionOpen() const {
         if (!inner_op) {
             return false;
@@ -457,6 +468,11 @@ protected:
 private:
     //! Inner C++ QUIC client poll operation (ref'd)
     SocketQuicClientPollOperation* inner_op;
+
+#ifdef DEBUG
+    //! True if the test hook held the responses during the last read pass; I/O thread only (issue #5839)
+    bool dbg_read_pass_held = false;
+#endif
 
     //! The socket object (ref'd)
     QoreSocketObject* sock_obj;

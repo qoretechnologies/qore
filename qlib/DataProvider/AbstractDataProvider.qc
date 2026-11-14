@@ -2940,18 +2940,19 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
+        @throw UPSERT-RECORD-ERROR an element of \a recs is not a hash
     */
     *list<string> upsertRecordsBulk(list<auto> recs, *hash<auto> upsert_options) {
-        on_error {
-            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
-            }
-        }
+        # a failed upsert raises the error the provider raised, as for every other record shape: it is not a create
+        # error (an on_error block copied from createRecordsBulk() wrapped it as CREATE-RECORD-ERROR, so the same
+        # upsert raised another code by the shape of its records)
         # an empty list is no records, not a single record with no value
         hash<auto> h = {};
         foreach auto rec in (recs) {
             if (rec.typeCode() != NT_HASH) {
-                throw "CREATE-RECORD-ERROR", sprintf("Each record must be a hash; got type %y instead", rec.fullType());
+                # an upsert's input error, not a create's
+                throw "UPSERT-RECORD-ERROR", sprintf("Each record to upsert must be a hash; got type %y instead",
+                    rec.fullType());
             }
             if (!h) {
                 h = map {$1: ()}, keys rec;
@@ -4966,7 +4967,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since DataProvider 3.5
     */
-    static bool setGenericApiCallChildBuilder(code<*AbstractDataProvider(object)> builder) {
+    static bool setGenericApiCallChildBuilder(code<*AbstractDataProvider(object)> builder) [dom=PROCESS_CONTROL] {
         # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
         AbstractDataProvider::checkNotSandboxed("set the generic API call child builder");
         if (cb_build_generic_api_call_child) {
@@ -4983,7 +4984,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since DataProvider 3.5
     */
-    static clearGenericApiCallChildBuilder() {
+    static clearGenericApiCallChildBuilder() [dom=PROCESS_CONTROL] {
         AbstractDataProvider::checkNotSandboxed("clear the generic API call child builder");
         delete cb_build_generic_api_call_child;
     }
@@ -6193,7 +6194,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @note after this call, callbacks cannot be changed
     */
-    static bool setDynamicValueCallbacks() {
+    static bool setDynamicValueCallbacks() [dom=PROCESS_CONTROL] {
         AbstractDataProvider::checkNotSandboxed("lock the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
             return !exists cb_resolve_value;
@@ -6787,7 +6788,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @note after this call, callbacks cannot be changed
     */
-    static bool setDynamicValueCallbacks(code value_needs_resolution, code resolve_value) {
+    static bool setDynamicValueCallbacks(code value_needs_resolution, code resolve_value) [dom=PROCESS_CONTROL] {
         # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
         AbstractDataProvider::checkNotSandboxed("set the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
@@ -6822,7 +6823,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             code<auto(string, string, *hash<auto>)> expand,
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
-            *code<auto(string, string, *hash<auto>)> list_values) {
+            *code<auto(string, string, *hash<auto>)> list_values) [dom=PROCESS_CONTROL] {
         # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
         AbstractDataProvider::checkNotSandboxed("set the template callbacks");
         if (template_callbacks_locked) {
@@ -6842,7 +6843,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @since DataProvider 3.3
     */
-    static clearTemplateCallbacks() {
+    static clearTemplateCallbacks() [dom=PROCESS_CONTROL] {
         AbstractDataProvider::checkNotSandboxed("clear the template callbacks");
         template_callbacks_locked = False;
         delete cb_expand_template;

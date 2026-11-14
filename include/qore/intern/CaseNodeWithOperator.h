@@ -49,6 +49,9 @@ private:
     op_log_func_t op_func;
 
 public:
+    DLLLOCAL static CaseNodeWithOperator* makeEquality(const QoreProgramLocation* loc, QoreValue v,
+        StatementBlock* code, LexicalSemanticPolicy policy);
+
     DLLLOCAL CaseNodeWithOperator(const QoreProgramLocation* loc, QoreValue v, StatementBlock* c, op_log_func_t op);
 
     DLLLOCAL ~CaseNodeWithOperator() {}

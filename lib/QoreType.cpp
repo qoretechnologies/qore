@@ -81,11 +81,11 @@ bool compareHard(const AbstractQoreNode* l, const AbstractQoreNode* r, Exception
 // convert values to do the conversion
 // false = equal, true = not equal
 bool compareSoft(const AbstractQoreNode* l, const AbstractQoreNode* r, ExceptionSink *xsink) {
-   return !QoreLogicalEqualsOperatorNode::softEqual(QoreValue(l), QoreValue(r), xsink);
+   return !QoreLogicalEqualsOperatorNode::softEqualNative(QoreValue(l), QoreValue(r), xsink);
 }
 
 bool q_compare_soft(const QoreValue l, const QoreValue r, ExceptionSink *xsink) {
-   return !QoreLogicalEqualsOperatorNode::softEqual(QoreValue(l), QoreValue(r), xsink);
+   return !QoreLogicalEqualsOperatorNode::softEqualNative(QoreValue(l), QoreValue(r), xsink);
 }
 
 int testObjectClassAccess(const QoreObject* obj, const QoreClass* shouldbeclass) {

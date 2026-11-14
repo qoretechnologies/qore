@@ -60,7 +60,9 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         if (qc) {
             ReferenceHolder<> holder(this, nullptr);
             const QoreTypeInfo* object_type_info = parse_context.typeInfo;
-            val = new ScopedObjectCallNode(loc, qc, takeArgs(), object_type_info);
+            val = qore_make_function_call<ScopedObjectCallNode>(getSemanticPolicy(), loc, qc, takeArgs(),
+                object_type_info);
+            ParseNode::bindSemanticPolicy(val, getSemanticPolicy());
             parse_context.typeInfo = nullptr;
             parse_context.analysis.clear();
             if (parse_init_value(val, parse_context) && !err) {
@@ -80,7 +82,7 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 err = -1;
             }
             parse_context.typeInfo = returnTypeInfo;
-            val = new NewComplexHashNode(loc, parse_context.typeInfo, takeArgs());
+            val = qore_make_new_complex<NewComplexHashNode>(getSemanticPolicy(), loc, parse_context.typeInfo, takeArgs());
             return err;
         }
     }
@@ -95,7 +97,7 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 err = -1;
             }
             parse_context.typeInfo = returnTypeInfo;
-            val = new NewHashDeclNode(loc, hd, takeArgs(), runtime_check);
+            val = qore_make_new_complex<NewHashDeclNode>(getSemanticPolicy(), loc, hd, takeArgs(), runtime_check);
             return err;
         }
     }
@@ -112,7 +114,7 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             QoreValue arg{};
             qore_hash_private::parseInitHashInitialization(loc, parse_context, args, arg, err);
             parse_context.typeInfo = returnTypeInfo;
-            val = new NewHashDeclNode(loc, hashdecl_path.c_str(), returnTypeInfo, takeArgs());
+            val = qore_make_new_complex<NewHashDeclNode>(getSemanticPolicy(), loc, hashdecl_path.c_str(), returnTypeInfo, takeArgs());
             return err;
         }
     }
@@ -128,7 +130,7 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 err = -1;
             }
             parse_context.typeInfo = returnTypeInfo;
-            val = new NewComplexListNode(loc, parse_context.typeInfo, new_args);
+            val = qore_make_new_complex<NewComplexListNode>(getSemanticPolicy(), loc, parse_context.typeInfo, new_args);
             return err;
         }
     }
@@ -196,6 +198,15 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 }
 
 QoreValue NewHashDeclNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(needs_deref, xsink);
+}
+
+QoreValue NewHashDeclNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue NewHashDeclNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
     const TypedHashDecl* resolved_hd = hd;
     if (!resolved_hd) {
         QoreProgram* pgm = getProgram();
@@ -219,7 +230,17 @@ QoreValue NewHashDeclNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) con
             return QoreValue();
         }
     }
-    return typed_hash_decl_private::get(*resolved_hd)->newHash(args, runtime_check, xsink);
+    if constexpr (Lexical) {
+        return typed_hash_decl_private::get(*resolved_hd)->newHash(args, runtime_check, xsink, getSemanticPolicy());
+    } else {
+        return typed_hash_decl_private::get(*resolved_hd)->newHash(args, runtime_check, xsink);
+    }
+}
+
+QoreValue NewComplexHashNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return qore_hash_private::newComplexHash(
+        needs_substitution ? qore_substitute_type_params_if_needed(typeInfo) : typeInfo, args, xsink,
+        getSemanticPolicy());
 }
 
 QoreValue NewComplexHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -227,6 +248,12 @@ QoreValue NewComplexHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) 
     // instantiation that is running, as for VarRefNewObjectNode::constructValue()
     return qore_hash_private::newComplexHash(
         needs_substitution ? qore_substitute_type_params_if_needed(typeInfo) : typeInfo, args, xsink);
+}
+
+QoreValue NewComplexListNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return qore_list_private::newComplexList(
+        needs_substitution ? qore_substitute_type_params_if_needed(typeInfo) : typeInfo, args, xsink,
+        getSemanticPolicy());
 }
 
 QoreValue NewComplexListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

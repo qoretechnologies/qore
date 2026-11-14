@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exits of blocks with handlers
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HandlerTerminatedExitTest
+
+#! The exits of a block after a handler lowered inline that throws are not lowered (#6030)
+/** A return, break or continue lowers the on_exit handlers of the blocks that it leaves inline, last registered
+    first: when one of them ended in a throw, the lowering went on lowering the next handlers and the exit after the
+    throw, code that cannot be reached, and a local declared in such a handler left a value without a definition in
+    native code, so that qcc failed to compile the function ("missing LLVM value for IR value").  The handlers that the
+    exit has not run still run on the exception path, as in the AST interpreter.  HandlerTerminatedExit.q gives the
+    output of the AST interpreter in every execution mode and compiled with qcc.
+*/
+class HandlerTerminatedExitTest inherits QUnit::Test {
+    public {
+        #! the output of HandlerTerminatedExit.q with the AST interpreter
+        const Expected = "g1: [\"ix\", \"ox\", \"~g1-a\", \"~g1-z\", \"caught:G1-INNER\"]
+g1: [\"ix\", \"ox\", \"~g1-a\", \"~g1-z\", \"caught:G1-INNER\"]
+g2: [\"ix0\", \"ox0\", \"ix1\", \"ox1\", \"~g2-z\", \"caught:G2\"]
+g2: [\"ix0\", \"ox0\", \"ix1\", \"ox1\", \"~g2-z\", \"caught:G2\"]
+g3: [\"ix0\", \"ox0\", \"caught:G3\"]
+g3: [\"ix0\", \"ox0\", \"caught:G3\"]
+g4: [\"ix\", \"ox\", \"~g4-z\", \"caught:G4\"]
+g4: [\"ix\", \"ox\", \"~g4-z\", \"caught:G4\"]
+r1: [\"ix\", \"ox\", \"~r1-z\", \"~r1-rv\", \"caught:R1\"]
+r1: [\"ix\", \"ox\", \"~r1-z\", \"~r1-rv\", \"caught:R1\"]
+r3: [\"ix0\", \"~r3-rv0\", \"catch:R3\", \"after\", \"~r3-z\"]
+r3: [\"ix0\", \"~r3-rv0\", \"catch:R3\", \"after\", \"~r3-z\"]
+r2: [\"ix\", \"ox\", \"~r2-z\", \"~r2-rv\"]
+r2: [\"ix\", \"ox\", \"~r2-z\", \"~r2-rv\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("HandlerTerminatedExitTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/HandlerTerminatedExit.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the exits after a handler that throws", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the exits after a handler that throws", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-terminated-exit-");
+        string exe = tmp.path + DirSep + "handler-terminated-exit";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

@@ -35,6 +35,9 @@
 
 class QoreSpliceOperatorNode : public LValueOperatorNode {
 public:
+    DLLLOCAL static QoreSpliceOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue lvalue, QoreValue offset, QoreValue length, QoreValue replacement);
+
     DLLLOCAL QoreSpliceOperatorNode(const QoreProgramLocation* loc,
                                     QoreValue n_lvalue_exp, QoreValue n_offset_exp,
                                     QoreValue n_length_exp, QoreValue n_new_exp) :
@@ -76,7 +79,7 @@ public:
         if (*xsink) {
             return nullptr;
         }
-        return new QoreSpliceOperatorNode(get_runtime_location(), n_lv.release(), n_of.release(), n_ln.release(),
+        return create(getSemanticPolicy(), get_runtime_location(), n_lv.release(), n_of.release(), n_ln.release(),
             n_nw.release());
     }
 
@@ -102,6 +105,8 @@ protected:
 
     DLLLOCAL static QoreString splice_str;
 
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL ~QoreSpliceOperatorNode() {

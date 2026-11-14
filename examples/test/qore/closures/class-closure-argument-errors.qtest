@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ClassClosureArgumentErrorsTest
+
+#! A closure created in a class (also a private method's closure and one of a generic class) is called with arguments
+#! that its variant does not accept
+/** The call of a closure created in a class has the class, and the variant search of a call checked the access of the
+    variant that it found as that of a method whenever the call had a class, reading the closure's variant as a method
+    variant; the check is made only for a method.  The calls give the errors of the closure's signature, and the calls
+    with matching arguments run with the closure's object.
+*/
+class ClassClosureArgumentErrorsTest inherits QUnit::Test {
+    constructor() : Test("ClassClosureArgumentErrorsTest", "1.0") {
+        addTestCase("closures of a class", \testClassClosures());
+        addTestCase("closure of a private method", \testPrivateClosure());
+        addTestCase("closure of a generic class", \testGenericClosure());
+        set_return_value(main());
+    }
+
+    testClassClosures() {
+        ClosureClassArgs c();
+        code oc = c.objectClosure();
+        code ic = c.itemClosure();
+        assertEq("n=1 prefix=\"p\" tag=\"obj\"", oc(1));
+        assertEq("n=2 prefix=\"q\" tag=\"obj\"", call_function_args(oc, (2, "q")));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "closure>\\(string\\)", oc, "x");
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "closure>\\(integer, integer\\)", oc, (1, 2));
+        auto none;
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "closure>\\(nothing\\)", oc, none);
+
+        # an object that has been deleted is no value for a parameter that requires an object
+        ClosureArgItem gone();
+        delete gone;
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "closure>\\(nothing, integer\\)", ic, (gone, 1));
+        assertEq("n=3 it=0", c.optItemClosure()(gone, 3));
+    }
+
+    testPrivateClosure() {
+        ClosureClassArgs c();
+        code pc = c.getPrivateClosure();
+        assertEq("priv n=1", pc(1));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "closure>\\(string\\)", pc, "x");
+    }
+
+    testGenericClosure() {
+        ClosureGenericArgs<int> g();
+        code gc = g.c();
+        assertEq("x=1", gc(1));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "closure>\\(string\\)", gc, "str");
+    }
+}
+
+class ClosureArgItem {}
+
+class ClosureClassArgs {
+    private {
+        string tag = "obj";
+    }
+
+    code objectClosure() {
+        return string sub (int n, string prefix = "p") { return sprintf("n=%y prefix=%y tag=%y", n, prefix, tag); };
+    }
+
+    code itemClosure() {
+        return string sub (ClosureArgItem it, int n) { return sprintf("n=%y", n); };
+    }
+
+    code optItemClosure() {
+        return string sub (*ClosureArgItem it, int n) { return sprintf("n=%y it=%y", n, it.typeCode()); };
+    }
+
+    code getPrivateClosure() {
+        return privateClosure();
+    }
+
+    private code privateClosure() {
+        return string sub (int n) { return sprintf("priv n=%y", n); };
+    }
+}
+
+class ClosureGenericArgs<T> {
+    code c() {
+        return string sub (T x) { return sprintf("x=%y", x); };
+    }
+}

@@ -36,6 +36,8 @@
 #include "qore/intern/qore_string_private.h"
 class QoreLogicalNotEqualsOperatorNode : public QoreLogicalEqualsOperatorNode {
 public:
+    DLLLOCAL static QoreLogicalNotEqualsOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+            QoreValue left, QoreValue right);
     DLLLOCAL QoreLogicalNotEqualsOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)
             : QoreLogicalEqualsOperatorNode(loc, left, right) {
     }

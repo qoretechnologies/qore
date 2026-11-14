@@ -1,0 +1,491 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket frames received over TCP, HTTP/2 and HTTP/3 (QUIC) connections
+
+/*  WebSocketFrameHeaderLimit.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5878: a WebSocket frame was buffered whole before its declared length was checked against the maximum
+    size, so a peer that announced a huge frame made the receiver buffer it until memory ran out; a length near 2^64
+    wrapped the size arithmetic.  A frame is now rejected on its header: a data frame over the limit with 1009, its
+    payload discarded as it arrives; a control frame over 125 bytes, a reserved opcode or a length with its top bit
+    set with 1002, after which the connection ends.  The cases that announce a 1 GiB frame and send only a part of
+    it wait forever without the fix; a message at the limit is accepted.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketFrameHeaderLimitTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! the declared length of the frame: far more than the maximum message size (16 MiB)
+const Announced = 1024 * 1024 * 1024;
+
+#! the part of the payload sent
+const Sent = 1000;
+
+#! the maximum message size of the "/small" handler
+const SmallLimit = 1000;
+
+#! Returns a frame header with the given first byte and declared length, masked as a client's
+binary sub frame_header(int b0, int len) {
+    binary h = binary(chr(b0));
+    if (len < 126) {
+        h += binary(chr(0x80 | len));
+    } else if (len < 65536) {
+        h += <fe> + len.encodeMsb(2);
+    } else {
+        h += <ff> + len.encodeMsb(8);
+    }
+    return h + <01020304>;
+}
+
+#! Returns a masked client frame with the given first byte and payload
+binary sub client_frame(int b0, binary payload) {
+    binary h = frame_header(b0, payload.size());
+    # the payload masked with the key 01020304
+    binary masked;
+    for (int i = 0; i < payload.size(); ++i) {
+        masked += binary(chr((payload[i] ^ (i % 4 + 1)) & 0xff));
+    }
+    return h + masked;
+}
+
+#! Returns the header of a binary frame announcing @ref Announced bytes, with a masking key if @p masked
+binary sub huge_frame_header(bool masked) {
+    binary h = <82>;
+    h += binary(masked ? <ff> : <7f>);
+    h += Announced.encodeMsb(8);
+    if (masked) {
+        h += <01020304>;
+    }
+    return h;
+}
+
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self);
+    }
+}
+
+#! Hands the test each response stream that the server sets up, so that the test writes raw bytes to it
+class PushHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        Queue streams();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none", "heartbeat": 0}) {
+    }
+
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http2SseStream rv = ServerSentEventHandler::setupAsyncSseConnectionHttp2(sock, cx, hdr,
+            cid, stream_id, wake_callback);
+        streams.push({"proto": "h2", "sock": sock, "stream_id": stream_id, "wake": wake_callback});
+        return rv;
+    }
+
+    HttpServerAsyncIo::Http3SseStream setupAsyncSseConnectionHttp3(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int session_id, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http3SseStream rv = ServerSentEventHandler::setupAsyncSseConnectionHttp3(sock, cx, hdr,
+            cid, session_id, stream_id, wake_callback);
+        streams.push({"proto": "h3", "sock": sock, "session_id": session_id, "stream_id": stream_id,
+            "wake": wake_callback});
+        return rv;
+    }
+}
+
+class WebSocketFrameHeaderLimitTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        PushHandler push_handler();
+        int ws_port;
+        int tls_port;
+    }
+
+    constructor() : QUnit::Test("WebSocketFrameHeaderLimit", "1.0") {
+        addTestCase("HTTP/1.1 server: a frame over the limit is rejected on its header", \testHttp1Server());
+        addTestCase("HTTP/1.1 client: a frame over the limit is rejected on its header", \testHttp1Client(),
+            "header");
+        addTestCase("HTTP/1.1 client: the payload of a rejected frame is discarded, and the close read after it",
+            \testHttp1Client(), "full");
+        addTestCase("HTTP/1.1 client: a control frame over 125 bytes is a protocol error", \testHttp1Client(),
+            "protocol");
+        addTestCase("HTTP/1.1 client: a frame length with its top bit set is a protocol error", \testHttp1Client(),
+            "length");
+        addTestCase("HTTP/1.1 client: a reserved opcode is a protocol error", \testHttp1Client(), "opcode");
+        addTestCase("HTTP/2 frame state: the fragments of a message are limited on the next fragment's header",
+            \testFrameStateFragments());
+        addTestCase("ws_read_message(): a length with its top bit set is an error", \testReadMessageLength());
+        addTestCase("HTTP/1.1 server: a control frame over 125 bytes is a protocol error", \testHttp1Protocol(),
+            "control");
+        addTestCase("HTTP/1.1 server: a frame length with its top bit set is a protocol error",
+            \testHttp1Protocol(), "length");
+        addTestCase("HTTP/1.1 server: a reserved opcode is a protocol error", \testHttp1Protocol(), "opcode");
+        addTestCase("HTTP/1.1 server: the fragments of a message are limited on the next fragment's header",
+            \testHttp1Fragments());
+        addTestCase("HTTP/1.1 server: a message at the limit is accepted", \testHttp1AtLimit());
+        addTestCase("HTTP/2 frame state: a control frame over 125 bytes is a protocol error",
+            \testFrameStateProtocol(), "h2");
+        addTestCase("HTTP/3 frame state: a frame length with its top bit set is a protocol error",
+            \testFrameStateProtocol(), "h3");
+        addTestCase("HTTP/2 frame state: a frame over the limit is rejected on its header", \testFrameState(),
+            "h2");
+        addTestCase("HTTP/3 frame state: a frame over the limit is rejected on its header", \testFrameState(),
+            "h3");
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setHandler("ws", "/ws", NOTHING, new EchoHandler(), NOTHING, False);
+        # a handler whose messages are limited to SmallLimit bytes
+        server.setHandler("small", "/small", NOTHING, new EchoHandler({"max_message_size": SmallLimit}), NOTHING,
+            False);
+        server.setDefaultHandler("sse", push_handler);
+        ws_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    #! The server closes with 1009 when a client announces a frame over the limit, without waiting for its payload
+    testHttp1Server() {
+        Socket s();
+        on_exit s.close();
+        s.connect("localhost:" + ws_port);
+        s.sendHTTPMessage("GET", "/ws", "1.1", {
+            "Host": "localhost:" + ws_port,
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        });
+        assertEq(101, s.readHTTPHeader(HangGuard).status_code, "the WebSocket handshake succeeds");
+        # a client frame is masked
+        s.send(huge_frame_header(True) + binary(strmul("x", Sent)));
+        hash<WsMsgInfo> h = ws_read_message(s, HangGuard);
+        assertEq(WSOP_Close, h.op, "the server closes the connection");
+        assertEq(WSCC_MessageTooBig, h.close, "with 1009 (Message Too Big)");
+    }
+
+    #! The client rejects a server's frame on its header
+    /** @param mode \c "header": a frame announcing 1 GiB, of which 1000 bytes are sent: the client closes with 1009
+        at once; \c "full": a frame over the limit sent whole, then the server's close, which the client reads after
+        discarding the payload; \c "protocol": a PING announcing 1 GiB: the client closes with 1002 and ends the
+        connection without waiting for the server's close
+    */
+    testHttp1Client(string mode) {
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Queue server_frames();
+        background sub () {
+            try {
+                *Socket s = listener.accept(HangGuard);
+                listener.close();
+                on_exit s.close();
+                hash<auto> hdr = s.readHTTPHeader(HangGuard);
+                s.send(sprintf("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                    "Sec-WebSocket-Accept: %s\r\n\r\n", ws_get_response_key(hdr."sec-websocket-key")));
+                # server frames are not masked
+                switch (mode) {
+                    case "header":
+                        s.send(<827f> + Announced.encodeMsb(8) + binary(strmul("x", Sent)));
+                        server_frames.push({"frame": ws_read_message(s, HangGuard)});
+                        break;
+                    case "full": {
+                        int len = 17 * 1024 * 1024;
+                        s.send(<827f> + len.encodeMsb(8));
+                        binary chunk = binary(strmul("x", 1024 * 1024));
+                        for (int i = 0; i < 17; ++i) {
+                            s.send(chunk);
+                        }
+                        s.send(ws_encode_message(WSCC_MessageTooBig.encodeMsb(2), WSOP_Close));
+                        server_frames.push({"frame": ws_read_message(s, HangGuard)});
+                        break;
+                    }
+                    case "protocol":
+                        # a PING announcing 1 GiB
+                        s.send(<897f> + Announced.encodeMsb(8) + binary(strmul("x", Sent)));
+                        server_frames.push({"frame": ws_read_message(s, HangGuard)});
+                        break;
+                    case "length":
+                        # a length with its top bit set
+                        s.send(<827f> + <ffffffffffffffff> + binary(strmul("x", Sent)));
+                        server_frames.push({"frame": ws_read_message(s, HangGuard)});
+                        break;
+                    case "opcode":
+                        # opcode 3 is reserved
+                        s.send(<837f> + Announced.encodeMsb(8) + binary(strmul("x", Sent)));
+                        server_frames.push({"frame": ws_read_message(s, HangGuard)});
+                        break;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                server_frames.push({"err": ex.err, "desc": ex.desc});
+            }
+        }();
+
+        Queue closed();
+        *WebSocketClient wsc;
+        wsc = new WebSocketClient(sub (*data msg) {
+            if (!exists msg) {
+                closed.push(wsc.getCloseCode());
+            }
+        }, {"url": sprintf("ws://127.0.0.1:%d/", port), "http_version": "1.1"});
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        hash<auto> r = server_frames.get(HangGuard);
+        assertNothing(r.err, "the raw server got a frame from the client");
+        assertEq(WSOP_Close, r.frame.op, "the client closes the connection");
+        int expected = (mode == "header" || mode == "full") ? WSCC_MessageTooBig : WSCC_ProtocolError;
+        assertEq(expected, r.frame.close, sprintf("with %d", expected));
+        if (mode != "header") {
+            # "full": after discarding the payload, the client reads the server's close; "protocol": the client
+            # ends the connection with 1002 once its close frame is written
+            assertEq(expected, closed.get(HangGuard), sprintf("the client reports the close code %d", expected));
+        }
+    }
+
+    #! ws_read_message() rejects a 64-bit length with its most significant bit set
+    testReadMessageLength() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        background sub () {
+            try {
+                *Socket s = listener.accept(HangGuard);
+                on_exit s.close();
+                s.send(<827f> + <ffffffffffffffff>);
+                # waits for the reader to close the connection
+                s.recv(1, HangGuard);
+            } catch () {
+            }
+        }();
+        Socket s();
+        on_exit s.close();
+        s.connect(sprintf("127.0.0.1:%d", port));
+        assertThrows("WEBSOCKET-FRAME-ERROR", \ws_read_message(), (s, HangGuard, 1024));
+    }
+
+    #! Opens a raw HTTP/1.1 WebSocket connection to a path
+    private openRaw(Socket s, string path) {
+        s.connect("localhost:" + ws_port);
+        s.sendHTTPMessage("GET", path, "1.1", {
+            "Host": "localhost:" + ws_port,
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        });
+        assertEq(101, s.readHTTPHeader(HangGuard).status_code, "the WebSocket handshake succeeds");
+    }
+
+    #! A control frame over 125 bytes, a length with its top bit set, or a reserved opcode closes with 1002 on the
+    #! frame's header
+    testHttp1Protocol(string what) {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/ws");
+        switch (what) {
+            case "control":
+                # a PING announcing 1 GiB
+                s.send(frame_header(0x89, Announced) + binary(strmul("x", Sent)));
+                break;
+            case "length":
+                # a one-byte text fragment, then a continuation whose length has its top bit set: the size of the
+                # message would wrap
+                s.send(client_frame(0x01, binary("a")));
+                s.send(<80ff> + <ffffffffffffffff> + <01020304> + binary(strmul("x", Sent)));
+                break;
+            case "opcode":
+                # opcode 3 is reserved
+                s.send(frame_header(0x83, Announced) + binary(strmul("x", Sent)));
+                break;
+        }
+        hash<WsMsgInfo> h = ws_read_message(s, HangGuard);
+        assertEq(WSOP_Close, h.op, "the server closes the connection");
+        assertEq(WSCC_ProtocolError, h.close, "with 1002 (Protocol Error)");
+        # and ends it at once, without waiting for the client's close frame, which it could not read
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, HangGuard));
+    }
+
+    #! A fragmented message over the limit is rejected on the header of the fragment that takes it over
+    testHttp1Fragments() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/small");
+        # a first fragment under the limit, then only the header of a continuation that takes the message over it
+        s.send(client_frame(0x02, binary(strmul("a", SmallLimit - 100))));
+        s.send(frame_header(0x80, 200));
+        hash<WsMsgInfo> h = ws_read_message(s, HangGuard);
+        assertEq(WSOP_Close, h.op, "the server closes the connection");
+        assertEq(WSCC_MessageTooBig, h.close, "with 1009 (Message Too Big)");
+    }
+
+    #! A message of exactly the limit is accepted
+    testHttp1AtLimit() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/small");
+        binary msg = binary(strmul("m", SmallLimit));
+        s.send(client_frame(0x82, msg));
+        hash<WsMsgInfo> h = ws_read_message(s, HangGuard);
+        assertEq(WSOP_Binary, h.op, "the message is echoed");
+        assertEq(msg, h.msg, "the whole message is echoed");
+    }
+
+    #! The frame state rejects a fragmented message on the header of the fragment that takes it over the limit
+    testFrameStateFragments() {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            sprintf("https://127.0.0.1:%d/", tls_port), "GET", "/", {"Accept": "text/event-stream"});
+        on_exit stream.cancel();
+        hash<auto> st = push_handler.streams.get(HangGuard);
+        Queue q();
+        stream.installFrameState(q);
+        # a first fragment of 10 MiB (under the 16 MiB limit), then only the header of a continuation of 10 MiB
+        int frag = 10 * 1024 * 1024;
+        binary data = <027f> + frag.encodeMsb(8) + binary(strmul("a", frag)) + <007f> + frag.encodeMsb(8);
+        st.sock.sendHttp2StreamData(st.stream_id, data, False);
+        if (st.wake) {
+            st.wake();
+        }
+        hash<auto> e = q.get(HangGuard);
+        assertEq("error", e.type, "the frame state reports an error");
+        assertEq(WSCC_MessageTooBig, e.code, "with 1009 (Message Too Big)");
+    }
+
+    #! The frame state rejects a protocol error on the frame's header
+    testFrameStateProtocol(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            sprintf("https://127.0.0.1:%d/", tls_port), "GET", "/", {"Accept": "text/event-stream"});
+        on_exit stream.cancel();
+        hash<auto> st = push_handler.streams.get(HangGuard);
+        Queue q();
+        stream.installFrameState(q);
+        # a server frame is not masked: on HTTP/2 a PING announcing 1 GiB, on HTTP/3 a length with its top bit set
+        binary data = proto == "h2"
+            ? <897f> + Announced.encodeMsb(8) + binary(strmul("x", Sent))
+            : <827f> + <ffffffffffffffff> + binary(strmul("x", Sent));
+        if (proto == "h2") {
+            st.sock.sendHttp2StreamData(st.stream_id, data, False);
+        } else {
+            st.sock.submitQuicStreamData(st.session_id, st.stream_id, data, False);
+        }
+        if (st.wake) {
+            st.wake();
+        }
+        hash<auto> e = q.get(HangGuard);
+        assertEq("error", e.type, "the frame state reports an error");
+        assertEq(WSCC_ProtocolError, e.code, "with 1002 (Protocol Error)");
+    }
+
+    #! The frame state of a stream reports 1009 when a frame over the limit is announced, without waiting for its
+    #! payload; the same frame state decodes the WebSocket messages of HTTP/2 and HTTP/3 clients and servers
+    testFrameState(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            sprintf("https://127.0.0.1:%d/", tls_port), "GET", "/", {"Accept": "text/event-stream"});
+        on_exit stream.cancel();
+        hash<auto> st = push_handler.streams.get(HangGuard);
+        Queue q();
+        stream.installFrameState(q);
+        binary data = huge_frame_header(False) + binary(strmul("x", Sent));
+        if (proto == "h2") {
+            st.sock.sendHttp2StreamData(st.stream_id, data, False);
+        } else {
+            st.sock.submitQuicStreamData(st.session_id, st.stream_id, data, False);
+        }
+        if (st.wake) {
+            st.wake();
+        }
+        hash<auto> e = q.get(HangGuard);
+        assertEq("error", e.type, "the frame state reports an error");
+        assertEq(WSCC_MessageTooBig, e.code, "with 1009 (Message Too Big)");
+    }
+}

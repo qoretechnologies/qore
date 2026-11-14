@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalInferredResultsTest
+
+#! Result builders validate already evaluated subclass values without applying an ambient native policy.
+class LexicalInferredResultsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LexicalInferredResults", "1.0", \ARGV) {
+        foreach bool strict in (False, True) {
+            addTestCase(sprintf("subclass result validation, strict=%y", strict), \results(), (strict,));
+        }
+        set_return_value(main());
+    }
+
+    private results(bool strict) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+        if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        p.parse('class Base {}
+            class Derived inherits Base {}
+            list<bool> sub sample() {
+                list<Base> source = (new Derived(), new Derived());
+                list<auto> results = ((map $1, source), (map $1, source, True),
+                    (select source, True), (take 2, source), source[0..1], source[1..0]);
+                list<bool> checked;
+                int index = 0;
+                foreach list<Base> values in (results) {
+                    push checked, values.size() == 2;
+                    push checked, values[0] === source[index == 5 ? 1 : 0];
+                    push checked, values[1] === source[index == 5 ? 0 : 1];
+                    ++index;
+                }
+                return checked;
+            }', "inferred-result-validation");
+        list<bool> expected = map True, (1..18);
+        assertEq(expected, p.callFunction("sample"), "all result builders retain both subclass objects");
+        if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        assertEq(expected, p.callFunction("sample"), "validation survives Program option mutation");
+    }
+}

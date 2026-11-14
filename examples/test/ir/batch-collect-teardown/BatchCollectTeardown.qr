@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A batch JIT compile of a function of Program B that collects the code of a function of Program A, or the IR
+# interpreter's effect analysis of that function, keeps A's teardown from freeing that code until it is done (issue
+# #5874): A is deleted in another thread while the collection is held after it has taken its hold of A.  Then a second
+# Program A2 is deleted while one of its threads runs, and a function of B2 that calls a function of A2 is first
+# called after A2's teardown has marked A2: the holds of A2 are refused, and the call does not read A2's code.  Needs a
+# debug libqore (dbg_hold_batch_collection()); see BatchCollectTeardown.qtest.
+
+const DefSrc = "
+# g calls h: collecting g reads the call of h, whose function A frees with its namespaces
+int sub h(int x) { return x + 1; }
+int sub g(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += h(i); } return s; }
+sub export_to(Program t) { t.importFunction(\"g\", \"g_a\"); }
+# keeps a thread in the Program until q gets a value
+sub block(Queue q, Queue started) { started.push(True); q.get(); }
+code sub get_block() { return \\block(); }
+";
+
+# callf(0) does not call g, so its result does not depend on whether A is deleted when it runs; its batch collects g
+const CallerSrc = "
+int sub callf(int x) { return x ? g_a(x) : 1; }
+";
+
+ExecMode mode = EM_TIERED;
+foreach string a in (QORE_ARGV) {
+    switch (a) {
+        case "--exec-mode=ast": mode = EM_AST; break;
+        case "--exec-mode=ir": mode = EM_IR; break;
+        case "--exec-mode=jit": mode = EM_JIT; break;
+    }
+}
+# the code of g is read by a batch collection when callf is compiled (JIT and tiered execution, with the tier
+# thresholds of the test) and by the effect analysis when callf is interpreted (IR and tiered execution); the AST
+# interpreter reads neither
+bool compiles = mode != EM_AST;
+
+#! creates Program A (with the definitions) and Program B (with callf, which calls A's g); returns (A, B)
+list<Program> sub make_programs() {
+    Program a(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    a.setExecMode(mode);
+    a.parse(DefSrc, "def");
+    # g runs once, so it has IR when callf is analyzed
+    a.callFunction("g", 2);
+    Program b(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    b.setExecMode(mode);
+    a.callFunction("export_to", b);
+    b.parse(CallerSrc, "caller");
+    return (a, b);
+}
+
+(Program a, Program b) = make_programs();
+
+if (compiles) {
+    dbg_hold_batch_collection("callf");
+}
+
+Queue results();
+# the first call of callf compiles it, and its batch collection is held after it has held A
+background sub () {
+    try {
+        results.push(sprintf("result: %d", b.callFunction("callf", 0)));
+    } catch (hash<ExceptionInfo> ex) {
+        results.push(sprintf("result: %s", ex.err));
+    }
+}();
+
+string held = compiles ? sprintf("%y", dbg_wait_batch_collection_held(60000)) : "n/a";
+
+Queue deleted();
+# A is deleted while the collection is held: its teardown waits for the collection's hold
+background sub () {
+    delete a;
+    deleted.push(True);
+}();
+
+string waited = compiles ? sprintf("%y", dbg_wait_teardown_compile_hold(10000)) : "n/a";
+string continued = compiles ? sprintf("%y", dbg_continue_batch_collection(60000)) : "n/a";
+deleted.get();
+printf("collection held: %s\n", held);
+printf("teardown waited for the collection: %s\n", waited);
+printf("collection continued: %s\n", continued);
+printf("%s\n", results.get());
+
+# a hold of a Program that its teardown has marked is refused: A2's teardown is held after its cleanup callback, a
+# thread enters A2 (as threads can until the teardown marks it), and the teardown marks A2 and waits for the thread
+(Program a2, Program b2) = make_programs();
+code block = a2.callFunction("get_block");
+Queue release();
+Queue started();
+dbg_hold_program_teardown(a2);
+Queue deleted2();
+background sub () {
+    delete a2;
+    deleted2.push(True);
+}();
+bool teardown_held = dbg_wait_program_teardown_held(60000);
+# a failed step is printed, and the threads are still let go, so that the script ends
+Queue returned();
+background sub () {
+    try {
+        block(release, started);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s\n", ex.err, ex.desc);
+        started.push(False);
+    }
+    returned.push(True);
+}();
+started.get();
+# returns once the teardown has marked A2 and waits for the thread in it
+bool marked;
+try {
+    marked = dbg_continue_program_teardown(60000);
+} catch (hash<ExceptionInfo> ex) {
+    printf("%s: %s\n", ex.err, ex.desc);
+}
+if (compiles) {
+    dbg_count_batch_collection_refusals("callf");
+}
+string result2;
+try {
+    result2 = sprintf("%d", b2.callFunction("callf", 0));
+} catch (hash<ExceptionInfo> ex) {
+    result2 = ex.err;
+}
+string refused = compiles ? sprintf("%y", dbg_get_batch_collection_refusals() > 0) : "n/a";
+release.push(True);
+returned.get();
+deleted2.get();
+printf("teardown marked the Program: %y\n", teardown_held && marked);
+printf("holds refused after the teardown marked the Program: %s\n", refused);
+printf("result after the teardown marked the Program: %s\n", result2);

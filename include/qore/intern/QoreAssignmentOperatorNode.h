@@ -51,10 +51,17 @@ protected:
 
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode);
 
+    DLLLOCAL int parseInitMode(QoreValue& val, QoreParseContext& parse_context, AssignmentMode mode);
+
+    DLLLOCAL QoreValue evalLexical(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalInternImpl(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
+
     DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, AssignmentMode::Normal);
+        return parseInitMode(val, parse_context, AssignmentMode::Normal);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -62,17 +69,24 @@ protected:
     }
 };
 
-//! returns true if a weak assignment from a variable of the given declared type makes the variable's container unique
-/** the variable must be declared with a type that can be a hash or a list and cannot be an object: the other
-    variables (untyped, object, scalar) are not touched, so that the weak assignment of an object, whose lifetime the
-    execution modes manage by the way the variable is accessed, is not changed (qore#5756)
+//! returns true if a variable of the given declared type can hold a hash or a list
+/** A variable declared with a type that excludes both (an int, a string, an object type) is never made unique by a
+    weak assignment and is not touched (qore#5847)
 */
-static inline bool qore_weak_assignment_source_made_unique(const QoreTypeInfo* ti) {
-    return QoreTypeInfo::hasType(ti)
-        && QoreTypeInfo::parseReturns(ti, NT_OBJECT) == QTI_NOT_EQUAL
-        && (QoreTypeInfo::parseReturns(ti, NT_HASH) != QTI_NOT_EQUAL
-            || QoreTypeInfo::parseReturns(ti, NT_LIST) != QTI_NOT_EQUAL);
+static inline bool qore_weak_source_type_may_hold_container(const QoreTypeInfo* ti) {
+    return !QoreTypeInfo::hasType(ti)
+        || QoreTypeInfo::parseReturns(ti, NT_HASH) != QTI_NOT_EQUAL
+        || QoreTypeInfo::parseReturns(ti, NT_LIST) != QTI_NOT_EQUAL;
 }
+
+//! returns true if the right side of a weak assignment is a variable whose container the assignment makes unique
+/** the right side must be a variable (a local, closure-bound, thread-safe, global or thread-local variable, or a class
+    static variable), whatever its declared type: a weak reference then always designates the variable's own
+    container, never one that the variable shares with a literal of the program or another variable.  A value that
+    is not a hash or a list (an object, a scalar, NOTHING) and a weak reference held by the variable are left as they
+    are (qore#5756, qore#5847)
+*/
+DLLLOCAL bool qore_weak_assignment_source_made_unique(const QoreValue& right);
 
 class QoreWeakAssignmentOperatorNode : public QoreAssignmentOperatorNode {
 OP_COMMON
@@ -87,7 +101,7 @@ public:
 
 protected:
     DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, AssignmentMode::Weak);
+        return parseInitMode(val, parse_context, AssignmentMode::Weak);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -114,11 +128,71 @@ public:
 
 protected:
     DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, AssignmentMode::Opaque);
+        return parseInitMode(val, parse_context, AssignmentMode::Opaque);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         return evalIntern(xsink, needs_deref, AssignmentMode::Opaque);
+    }
+};
+
+//! Selected during parse initialization; canonical assignment nodes keep their original execution entry.
+// Concrete bases also make every lexical operator visible to the IR operand-slot coverage scan.
+
+class LexicalAssignmentOperatorNode : public QoreAssignmentOperatorNode {
+public:
+    using QoreAssignmentOperatorNode::QoreAssignmentOperatorNode;
+
+    DLLLOCAL QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = copyBackgroundExplicit<LexicalAssignmentOperatorNode>(xsink);
+        if (copy) {
+            copy->broken_int = broken_int;
+            copy->ident = ident;
+        }
+        return copy;
+    }
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(xsink, needs_deref, AssignmentMode::Normal);
+    }
+};
+
+class LexicalWeakAssignmentOperatorNode : public QoreWeakAssignmentOperatorNode {
+public:
+    using QoreWeakAssignmentOperatorNode::QoreWeakAssignmentOperatorNode;
+
+    DLLLOCAL QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = copyBackgroundExplicit<LexicalWeakAssignmentOperatorNode>(xsink);
+        if (copy) {
+            copy->broken_int = broken_int;
+            copy->ident = ident;
+        }
+        return copy;
+    }
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(xsink, needs_deref, AssignmentMode::Weak);
+    }
+};
+
+class LexicalOpaqueAssignmentOperatorNode : public QoreOpaqueAssignmentOperatorNode {
+public:
+    using QoreOpaqueAssignmentOperatorNode::QoreOpaqueAssignmentOperatorNode;
+
+    DLLLOCAL QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = copyBackgroundExplicit<LexicalOpaqueAssignmentOperatorNode>(xsink);
+        if (copy) {
+            copy->broken_int = broken_int;
+            copy->ident = ident;
+        }
+        return copy;
+    }
+
+protected:
+    DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(xsink, needs_deref, AssignmentMode::Opaque);
     }
 };
 

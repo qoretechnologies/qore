@@ -43,6 +43,8 @@
 %requires(reexport) ConnectionProvider
 
 module DbDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "2.5";
     desc = "User module providing a data provider API for databases";
     author = "David Nichols <david@qore.org>";
@@ -527,12 +529,18 @@ mv.doRequest({"concurrent": True});
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - code that a @ref Qore::SandboxManager "SandboxManager" governs cannot open a datasource from a connection string
+      given as the \c datasource option: \c PERMISSION-DENIED; it uses the datasources that the host's datasource
+      lookup provides; @ref DbDataProvider::DbDataProviderBase::setDatasourceLookup() "setDatasourceLookup()" and
+      @ref DbDataProvider::DbDataProviderBase::setTableLookup() "setTableLookup()" declare the \c PROCESS domain
     - a where hash with a SqlUtil operator, such as from \c op_gt(), \c op_between(), \c op_in(), \c op_not(),
       \c op_clt() or \c wop_or(), in a search, update or delete of a table or a search of a view is a SqlUtil where
       clause, evaluated by SqlUtil with its own semantics; such a search raised \c INVALID-MEMBER or
       \c DATA-PROVIDER-EXPRESSION-ERROR
     - a search whose statement failed when the iterator was made, such as for a table that no longer exists, left the
       transaction lock that the statement acquired; the lock is now released, as it is when the iterator is destroyed
+    - a bulk or shaped create of a table row whose key already exists raises \c DUPLICATE-RECORD, as a single-record
+      create does; it raised \c CREATE-RECORD-ERROR
     - added read-only providers for views and materialized views: the \c views child of a database data provider
       lists the database's views, and the \c materialized-views child, present only on databases that support
       materialized views, lists its materialized views; views were listed as tables on PostgreSQL, where they could
@@ -756,7 +764,7 @@ public hashdecl DbVendorInfo {
 
     @since %DbDataProvider 2.4
 */
-public sub registerDbVendorApp(hash<DbVendorInfo> vendor) {
+public sub registerDbVendorApp(hash<DbVendorInfo> vendor) [dom=PROCESS_CONTROL] {
     # build allowed driver values from vendor capabilities
     # NOTE: we do not check dbi_get_driver_list() here because DBI drivers may not be loaded yet
     # at module init time; driver availability is validated at connection creation time

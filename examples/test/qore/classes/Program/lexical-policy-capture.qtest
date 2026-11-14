@@ -1,0 +1,574 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - background AST copies and thread joining
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalPolicyCaptureTest
+
+#! A later token or pending source must not choose an earlier operation's compatibility policy.
+class LexicalPolicyCaptureTest inherits QUnit::Test {
+    private {
+        const Base = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_ENABLE_DEBUG | PO_NO_CHILD_PO_RESTRICTIONS;
+    }
+
+    constructor() : QUnit::Test("LexicalPolicyCaptureTest", "1.0", \ARGV) {
+        addTestCase("if condition before body directive", \condition(), ("if",));
+        addTestCase("while condition before body directive", \condition(), ("while",));
+        addTestCase("for condition before body directive", \condition(), ("for",));
+        addTestCase("pending default expressions", \defaults());
+        addTestCase("background expression copies", \backgroundCopy());
+        addTestCase("reusable background method arguments", \backgroundMethods());
+        addTestCase("reusable background static method arguments", \backgroundStaticMethods());
+        addTestCase("background assignment copies", \backgroundAssignment());
+        addTestCase("background cast copies", \backgroundCasts());
+        addTestCase("background construction copies", \backgroundConstruction());
+        addTestCase("background push copies", \backgroundMutation(), ("push",));
+        addTestCase("background unshift copies", \backgroundMutation(), ("unshift",));
+        addTestCase("switch before case directive", \switchPolicy());
+        addTestCase("assert condition after directive", \assertCondition());
+        addTestCase("infix operator after directive", \infix());
+        addTestCase("slice operator after directive", \slice());
+        addTestCase("do-while condition after body directive", \doWhile());
+        addTestCase("for condition after initializer directive", \forCondition());
+        addTestCase("implied constructor after directive", \impliedConstructor(), ("values",));
+        addTestCase("keyword constructor after directive", \impliedConstructor(), ("push",));
+        addTestCase("constructor parentheses after directive", \impliedConstructor(), ("",));
+        addTestCase("background compound assignment copies", \backgroundCompoundAssignment());
+        addTestCase("background destructuring, replacement, hashes and instanceof", \backgroundConversions());
+        addTestCase("foreach and case token policy", \conversionDirectives());
+        addTestCase("typed constants keep declaration policy", \constantDeclarations());
+        addTestCase("background hash builders retain narrowing and policy", \backgroundHashBuilders());
+        addTestCase("hash literal conversion belongs to its delimiter", \hashDelimiter());
+        addTestCase("boolean and soft-type filters are independent", \independentFilters());
+        foreach string kind in ("member", "static", "hashdecl") {
+            foreach bool keyword in (False, True) {
+                addTestCase(sprintf("%s constructor token, keyword=%y", kind, keyword),
+                    \memberConstructor(), (kind, keyword));
+            }
+        }
+        addTestCase("eager and deferred streaming predicates", \streamingPredicates());
+        set_return_value(main());
+    }
+
+    private condition(string kind) {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            string initial = strict ? "%strict-bool-eval\n" : "%perl-bool-eval\n";
+            string changed = strict ? "%perl-bool-eval\n" : "%strict-bool-eval\n";
+            string header = kind == "for" ? "for (; v;)" : kind + " (v)";
+            p.parse("int sub sample() { auto v = (1,2);\n" + header + " {\n" + changed
+                + "return 1; } int sentinel = 0;\n" + initial + "return 0; }", "condition-capture");
+            assertEq(strict ? 0 : 1, p.callFunction("sample"), "the condition precedes the body directive");
+            if (strict) {
+                p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            } else {
+                p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+            assertEq(strict ? 0 : 1, p.callFunction("sample"), "the captured condition survives mutation");
+        }
+    }
+
+    private defaults() {
+        foreach bool final_strict in (False, True) {
+            Program p(Base | PO_STRICT_BOOLEAN_EVAL);
+            p.parsePending("bool sub strict_default(bool v = !!\"text\") { return v; }", "same-label");
+            p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parsePending("bool sub normal_default(bool v = !!\"text\") { return v; }", "same-label");
+            if (final_strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parseCommit();
+            assertEq(False, p.callFunction("strict_default"), "strict default keeps its source policy");
+            assertEq(True, p.callFunction("normal_default"), "zero default policy is not absence");
+        }
+    }
+
+    private backgroundCopy() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse("auto sub sample(auto v) { Queue q();\n"
+                "int tid = background q.push((!!v, (select (1,), v).size(), (map $1, (1,), v).size(),\n"
+                "    v && True, v || False, v ? True : False, v ?: \"fallback\",\n"
+                "    v == True, v != True, (count v, (1,2)), (count (takewhile v, (1,2)))));\n"
+                "on_exit thread_join(tid);\n"
+                "return q.get(30s); }", "background-policy");
+            if (strict) {
+                p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            } else {
+                p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+            assertEq((!strict, strict ? 0 : 1, strict ? 0 : 1, !strict, !strict, !strict, strict ? "fallback" : (1,2),
+                !strict, strict, strict ? 0 : 2, strict ? 0 : 2), p.callFunction("sample", (1,2)),
+                "copied operations retain their source policy in another thread");
+        }
+    }
+
+    private backgroundMethods() {
+        foreach bool strict in (False, True) {
+            foreach bool dynamic in (False, True) {
+                Program p(Base);
+                if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                p.parse('auto sub opaque(auto value) { return value; }
+                    class Target {
+                        list<auto> take(int i, softbool value) { return (i, value); }
+                    }
+                    auto sub sample(Program program) {
+                        Target typed(); auto untyped = opaque(typed); Queue q();
+                        auto untyped_program = opaque(program); Queue native();
+                        auto value = opaque("text");
+                        thread_join(background map q.push(' + (dynamic ? "untyped" : "typed")
+                        + '.take($1, value)), (1, 2, 3));
+                        thread_join(background map native.push(' + (dynamic ? "untyped_program" : "program")
+                        + '.callFunction("inlist", True, ({"value": $1},))), (1, 2, 3));
+                        return ((q.get(-1), q.get(-1), q.get(-1)),
+                            (native.get(-1), native.get(-1), native.get(-1)));
+                    }', "reusable-background-method-policy");
+                if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                Program destination(Base);
+                assertEq((((1, !strict), (2, !strict), (3, !strict)), (!strict, !strict, !strict)),
+                    p.callFunction("sample", destination),
+                    "reused arguments retain declaration policy and native methods forward invocation policy");
+            }
+        }
+    }
+
+    private backgroundStaticMethods() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('class Target {
+                    static list<auto> take(int i, softbool value) { return (i, value); }
+                    static nothing fail(int i) { throw "STATIC-BACKGROUND-ERROR", "static background", i; }
+                }
+                auto sub sample() {
+                    Queue q();
+                    thread_join(background q.push(map Target::take(value: "text", i: 7), (1, 2)));
+                    return q.get(-1);
+                }
+                int sub fail() { return background map Target::fail(9), (1, 2); }
+                ', "reusable-background-static-policy");
+            if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            assertEq(((7, !strict), (7, !strict)), p.callFunction("sample"),
+                "static copies keep named positions and policy");
+            Queue events();
+            auto subscription = p.subscribeThreadEvents(events, <ProgramThreadEventOptions>{"events": PTE_FINISHED});
+            on_exit p.unsubscribeThreadEvents(subscription.id);
+            thread_join(p.callFunction("fail"));
+            hash<ProgramThreadEvent> finished = events.get(30s);
+            assertEq("EXCEPTION", finished.outcome);
+            assertEq("STATIC-BACKGROUND-ERROR", finished.error.err);
+            assertEq(9, finished.error.arg);
+            assertNothing(finished.cleanup_error, "no secondary exception while releasing the copied arguments");
+            assertEq(((7, !strict), (7, !strict)), p.callFunction("sample"),
+                "calls still use their parsed policy after the failure");
+        }
+    }
+
+    private backgroundAssignment() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('auto sub opaque(auto v) { return v; }
+                class Target { public { softbool value; } }
+                auto sub sample() {
+                    Target target();
+                    Queue q();
+                    int tid = background q.push(target.value = opaque("text"));
+                    on_exit thread_join(tid);
+                    return q.get(30s);
+                }', "background-assignment-policy");
+            if (strict) {
+                p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            } else {
+                p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+            assertEq(!strict, p.callFunction("sample"), "assignment copy keeps its conversion entry");
+        }
+    }
+
+    private backgroundCasts() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('auto sub opaque(auto v) { return v; }
+                hashdecl Converted { softbool value; }
+                auto sub sample() {
+                    auto value = opaque("text");
+                    Queue q();
+                    int tid = background q.push((cast<bool>(value),
+                        cast<list<softbool>>((value,))[0],
+                        cast<hash<string, softbool>>({"value": value}).value,
+                        cast<Converted>({"value": value}).value));
+                    on_exit thread_join(tid);
+                    return q.get(30s);
+                }', "background-cast-policy");
+            if (strict) {
+                p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            } else {
+                p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+            assertEq((!strict, !strict, !strict, !strict), p.callFunction("sample"),
+                "cast copies retain their conversion entries");
+        }
+    }
+
+    private backgroundConstruction() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('hashdecl Converted { softbool value; }
+                auto sub sample(auto value) {
+                    Queue q();
+                    int tid = background q.push((
+                        (new list<softbool>(value))[0],
+                        (new hash<string, softbool>({"value": value})).value,
+                        (new hash<Converted>({"value": value})).value));
+                    on_exit thread_join(tid);
+                    return q.get(30s);
+                }', "background-construction-policy");
+            if (strict) {
+                p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            } else {
+                p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+            assertEq((!strict, !strict, !strict), p.callFunction("sample", "text"),
+                "construction copies retain the conversion entry and captured arguments");
+        }
+    }
+
+    private backgroundMutation(string operation) {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('class Target { public { list<softbool> values; } }
+                auto sub sample(auto value) {
+                    Target target();
+                    Queue q();
+                    int tid = background q.push((' + operation + ' target.values, value));
+                    on_exit thread_join(tid);
+                    return q.get(30s)[0];
+                }', "background-list-mutation-policy");
+            if (strict) {
+                p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            } else {
+                p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+            assertEq(!strict, p.callFunction("sample", "text"), "mutation copy retains its conversion entry");
+        }
+    }
+
+    private impliedConstructor(string name) {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (!strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            string directive = strict ? "%strict-bool-eval\n" : "%perl-bool-eval\n";
+            string expression = name == "" ? "list<softbool> values\n" + directive + "(opaque(\"text\"))"
+                : "list<softbool>\n" + directive + name + "(opaque(\"text\"))";
+            p.parse("auto sub opaque(auto v) { return v; }\n"
+                "auto sub sample() { return (" + expression + ")[0]; }", "implied-constructor-policy");
+            assertEq(!strict, p.callFunction("sample"), "constructor conversion belongs to its opening parenthesis");
+            if (strict) {
+                p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            } else {
+                p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+            assertEq(!strict, p.callFunction("sample"), "constructor selection survives Program option mutation");
+        }
+    }
+
+    private memberConstructor(string kind, bool keyword) {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (!strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            string directive = strict ? "%strict-bool-eval\n" : "%perl-bool-eval\n";
+            string name = keyword ? "push" : "values";
+            string declaration = keyword ? "list<softbool>\n" + directive + name + "(opaque(\"text\"));"
+                : "list<softbool> values\n" + directive + "(opaque(\"text\"));";
+            string source = "auto sub opaque(auto v) { return v; }\n";
+            if (kind == "hashdecl") {
+                source += "hashdecl Target { " + declaration + " }\n"
+                    "auto sub sample() { hash<Target> target(); return target." + name + "[0]; }";
+            } else {
+                source += "class Target { public { " + (kind == "static" ? "static " : "")
+                    + declaration + " } }\n"
+                    "auto sub sample() { Target target(); return "
+                    + (kind == "static" ? "Target::" : "target.") + name + "[0]; }";
+            }
+            p.parse(source, "member-constructor-token");
+            assertEq(!strict, p.callFunction("sample"), "the constructor belongs to its opening token");
+            if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            assertEq(!strict, p.callFunction("sample"), "constructor policy survives Program mutation");
+        }
+    }
+
+    private streamingPredicates() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.disableParseOptions(new ParseOptions("no-any-operator"));
+            p.parse('auto sub sample(auto predicate) {
+                auto values = (1, 2, 3);
+                return ((first predicate, values), (any (predicate), values), (all predicate, values),
+                    (count predicate, values), (takewhile predicate, values), (takeuntil predicate, values),
+                    (count (takewhile predicate, values)), (first (takeuntil predicate, values)));
+            }', "streaming-predicate-policy");
+            auto expected = strict ? (NOTHING, False, False, 0, (), (1,2,3), 0, 1)
+                : (1, True, True, 3, (1,2,3), (), 3, NOTHING);
+            foreach int mutation in (0, 1) {
+                assertEq(expected, p.callFunction("sample", "text"), "string predicate");
+                assertEq(expected, p.callFunction("sample", (1,2)), "list predicate");
+                assertEq((1, True, True, 3, (1,2,3), (), 3, NOTHING),
+                    p.callFunction("sample", True), "true scalar predicate");
+                assertEq((NOTHING, False, False, 0, (), (1,2,3), 0, 1),
+                    p.callFunction("sample", False), "false scalar predicate");
+                if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+        }
+    }
+
+    private backgroundCompoundAssignment() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('class Target { public { list<softbool> values; } }
+                auto sub sample(auto value) {
+                    Target target();
+                    Queue q();
+                    int tid = background q.push(target.values += value);
+                    on_exit thread_join(tid);
+                    return q.get(30s)[0];
+                }', "background-compound-assignment-policy");
+            if (strict) {
+                p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            } else {
+                p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+            assertEq(!strict, p.callFunction("sample", "text"), "compound assignment copy keeps its conversion entry");
+        }
+    }
+
+    private backgroundConversions() {
+        foreach bool strict in (False, True) {
+            foreach bool broken in (False, True) {
+                Program p(Base);
+                ParseOptions soft("broken-soft-types");
+                if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                if (broken) p.setParseOptions(soft);
+                p.parse('class Target { public {
+                        softbool a; softbool b;
+                        list<softbool> values = (False, False);
+                        hash<string, softbool> literal;
+                        hash<string, softbool> mapped;
+                        hash<string, softbool> selected;
+                    } }
+                    auto sub sample(auto value, auto null_value) {
+                        Target target();
+                        Queue q();
+                        int tid = background q.push(((target.a, target.b) = (value, value),
+                            (splice target.values, 0, 1, value), (extract target.values, 1, 1, value),
+                            (target.literal = {"value": value}),
+                            (target.mapped = map {"value": value}, (1,)),
+                            (target.selected = map {"value": value}, (1,), True),
+                            (null_value instanceof softint)));
+                        on_exit thread_join(tid);
+                        auto result = q.get(30s);
+                        return (target.a, target.b, target.values[0], target.values[1],
+                            target.literal.value, target.mapped.value, target.selected.value, result[6]);
+                    }', "background-conversion-policy");
+                if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                if (broken) p.disableParseOptions(soft);
+                else p.setParseOptions(soft);
+                assertEq((!strict, !strict, !strict, !strict, !strict, !strict, !strict, broken),
+                    p.callFunction("sample", "text", NULL), "background copies preserve independent policies");
+            }
+        }
+    }
+
+    private independentFilters() {
+        foreach bool strict in (False, True) {
+            foreach bool broken in (False, True) {
+                Program p(Base);
+                ParseOptions soft("broken-soft-types");
+                if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                if (broken) p.setParseOptions(soft);
+                p.parse('auto sub sample(auto text, auto null_value) {
+                    softbool value = text;
+                    auto integer;
+                    try { softint converted = null_value; integer = converted; }
+                    catch (hash<ExceptionInfo> ex) { integer = ex.err; }
+                    return (value, integer);
+                }', "independent-filter-policies");
+                if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                if (broken) p.disableParseOptions(soft);
+                else p.setParseOptions(soft);
+                assertEq((!strict, broken ? 0 : "RUNTIME-TYPE-ERROR"), p.callFunction("sample", "text", NULL),
+                    "each filter retains only its own compatibility bit");
+            }
+        }
+    }
+
+    private backgroundHashBuilders() {
+        foreach string operation in ("map", "select") {
+            foreach bool strict in (False, True) {
+                Program p(Base);
+                if (!strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                string directive = strict ? "%strict-bool-eval\n" : "%perl-bool-eval\n";
+                string expr = 'map {"value": value}, (1,)' + (operation == "select" ? ", True" : "");
+                p.parse('class Target { public { hash<string, softbool> value; } }
+                    auto sub sample(auto value) {
+                        Target target(); Queue q();
+                        int tid = background q.push(target.value =
+                    ' + "\n" + directive + expr + ');
+                        on_exit thread_join(tid);
+                        q.get(30s);
+                        return target.value.value;
+                    }', "background-hash-builder-policy");
+                assertEq(!strict, p.callFunction("sample", "text"),
+                    "builder conversion retains its narrower type when copied for background execution");
+            }
+        }
+    }
+
+    private hashDelimiter() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            string directive = strict ? "%perl-bool-eval\n" : "%strict-bool-eval\n";
+            p.parse('auto sub sample(auto value) {
+                hash<string, softbool> result = {
+                ' + "\n" + directive + '"value": value}; return result.value;
+            }', "hash-delimiter-policy");
+            assertEq(!strict, p.callFunction("sample", "text"),
+                "hash builder conversion belongs to its opening delimiter, before the key's directive");
+        }
+    }
+
+    private conversionDirectives() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            string initial = strict ? "%strict-bool-eval\n" : "%perl-bool-eval\n";
+            string changed = strict ? "%perl-bool-eval\n" : "%strict-bool-eval\n";
+            p.parse("auto sub opaque(auto value) { return value; }\n"
+                "auto sub loop() { foreach softbool value in (opaque((\"text\",))) {\n"
+                + changed + "return value; } return False; }\n" + initial
+                + "auto sub equality() { switch (opaque((1, 2))) { case ==\n"
+                + changed + "True: return True; default: return False; } }", "conversion-token-policy");
+            assertEq(!strict, p.callFunction("loop"), "foreach conversion belongs to the keyword");
+            assertEq(!strict, p.callFunction("equality"), "case equality belongs to the comparison token");
+        }
+    }
+
+    private constantDeclarations() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            string changed = strict ? "%perl-bool-eval\n" : "%strict-bool-eval\n";
+            p.parsePending("const softbool Root =\n" + changed + "sprintf(\"%s\", \"text\");\n",
+                "constant-initializer-policy");
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            else p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parsePending('namespace Values { const softbool Value = sprintf("%s", "text"); }
+                class ValuesClass { public { const softbool Value = sprintf("%s", "text"); } }
+                auto sub sample() { return (Root, Values::Value, ValuesClass::Value); }', "constant-declarations");
+            if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parseCommit();
+            assertEq((!strict, !strict, !strict), p.callFunction("sample"),
+                "constant conversion belongs to its declaration, independent of initializer tokens and commit policy");
+        }
+    }
+
+    private switchPolicy() {
+        foreach bool broken in (False, True) {
+            Program p(Base);
+            if (broken) p.setParseOptions(PO_BROKEN_LOOP_STATEMENT);
+            string initial = broken ? "%broken-loop-statement\n" : "%correct-loop-statement\n";
+            string changed = broken ? "%correct-loop-statement\n" : "%broken-loop-statement\n";
+            p.parse("int sub sample() { int n = 0; for (int i = 0; i < 2; ++i) { switch (i) {\n"
+                + changed + "case 0: continue;\n" + initial
+                + "default: break; } ++n; } return n; }", "switch-policy");
+            assertEq(broken ? 2 : 1, p.callFunction("sample"), "switch policy belongs to the switch keyword");
+            if (broken) {
+                p.disableParseOptions(PO_BROKEN_LOOP_STATEMENT);
+            } else {
+                p.setParseOptions(PO_BROKEN_LOOP_STATEMENT);
+            }
+            assertEq(broken ? 2 : 1, p.callFunction("sample"), "switch capture survives Program option mutation");
+        }
+    }
+
+    private assertCondition() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (!strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            string directive = strict ? "%strict-bool-eval\n" : "%perl-bool-eval\n";
+            p.parse("int sub sample(auto v) { @assert(\n" + directive
+                + "v); return 1; }\n"
+                "list<auto> sub lazy(auto v) { int messages = 0;\n"
+                "    try { @assert(v, ++messages); } catch (hash<ExceptionInfo> ex) {\n"
+                "        return (ex.err, messages); } return (\"ok\", messages); }", "assert-condition");
+            foreach int mutation in (0, 1) {
+                auto result;
+                try {
+                    result = p.callFunction("sample", (1,2));
+                } catch (hash<ExceptionInfo> ex) {
+                    result = ex.err;
+                }
+                assertEq(strict ? "ASSERTION-ERROR" : 1, result,
+                    sprintf("assertion consumes the condition's policy, mutation %d", mutation));
+                assertEq(("ok", 0), p.callFunction("lazy", True), "passing scalar skips the message");
+                assertEq(("ASSERTION-ERROR", 1), p.callFunction("lazy", False), "failed scalar evaluates message once");
+                assertEq(strict ? ("ASSERTION-ERROR", 1) : ("ok", 0), p.callFunction("lazy", "text"),
+                    "message is lazy under the captured lexical policy");
+                if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+        }
+    }
+
+    private infix() {
+        foreach bool strict in (False, True) {
+            Program p(Base);
+            if (!strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            string directive = strict ? "%strict-bool-eval\n" : "%perl-bool-eval\n";
+            p.parse("bool sub sample() { auto v = (1,2); return v\n" + directive
+                + "|| False; }", "infix-policy");
+            assertEq(!strict, p.callFunction("sample"), "the logical operator follows the directive");
+        }
+    }
+
+    private slice() {
+        Program p(Base);
+        p.parse("auto sub sample() { list<*int> v = (1,2); return v\n"
+            "%broken-list-range\n[0..3]; }", "slice-policy");
+        assertEq((1, 2, NOTHING, NOTHING), p.callFunction("sample"), "the slice operator follows the directive");
+    }
+
+    private doWhile() {
+        Program p(Base);
+        p.parse("int sub sample() { auto v = (1,2); int n = 0; do {\n"
+            "%strict-bool-eval\n"
+            "++n; if (n == 2) break; } while (v); return n; }", "do-condition");
+        assertEq(1, p.callFunction("sample"), "do-while conversion belongs to its trailing condition");
+    }
+
+    private forCondition() {
+        Program p(Base);
+        p.parse("int sub sample() { auto v = (1,2); int n = 0; for (int i = 0;\n"
+            "%strict-bool-eval\n"
+            "v; ++i) { ++n; if (n == 2) break; } return n; }", "for-condition");
+        assertEq(0, p.callFunction("sample"), "for condition has its own token context");
+    }
+}

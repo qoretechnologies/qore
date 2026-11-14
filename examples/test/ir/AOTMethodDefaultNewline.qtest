@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT code generation and linking, and the reader of the AOT image
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTMethodDefaultNewlineTest
+
+#! Regression test for qore#6026: a method whose default argument has a newline in a compiled program or module
+/** The reference to a method variant in AOT metadata is "<method>\n<variant class>\n<signature text>", and the
+    signature text has the default values of the parameters.  The parts were split at the last newline, so a newline
+    in a default string split the reference inside the signature text: the class path was wrong, and its lookup
+    crashed the program at load (a parse lookup without a current Program).  The class reference of a class of a
+    module has a newline of its own ("@qore-module:<module>\n<path>"), so the reference is split after it.
+*/
+class AOTMethodDefaultNewlineTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        #! the classes and calls of both cases; each call prints its result on a line
+        const Classes = "class C {
+    string m(string s = \"c\\nfoo\") {
+        return sprintf(\"m(%y)\", s);
+    }
+
+    # a default that looks like the module part of a class reference
+    string tricky(string s = \"x\\n@qore-module:Fake\\nC\\n\") {
+        return sprintf(\"tricky(%y)\", s);
+    }
+
+    static string s(string v = \"s\\nbar\\n\") {
+        return sprintf(\"s(%y)\", v);
+    }
+
+    # a call of another method of the class in a compiled method body
+    string self_call() {
+        return m();
+    }
+}
+";
+        const Calls = "list<string> sub calls() {
+    C c();
+    return (c.m(), c.tricky(), C::s(), c.self_call(), c.m(\"given\"));
+}
+";
+        #! the output of calls(): %y prints the newlines of the strings as they are
+        const Expected = "m(\"c\nfoo\")\ntricky(\"x\n@qore-module:Fake\nC\n\")\ns(\"s\nbar\n\")\nm(\"c\nfoo\")\n"
+            "m(\"given\")\n";
+    }
+
+    constructor() : QUnit::Test("AOTMethodDefaultNewlineTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a compiled program calls methods whose default strings have newlines", \programTest());
+        addTestCase("an AOT module's methods whose default strings have newlines are called", \moduleTest());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("the parts of a method variant reference are found", \splitTest());
+        }
+
+        set_return_value(main());
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    #! the parts of encoded method variant references, as the AOT loader reads them
+    /** A method called on a class of a module fails silently when its reference is split wrongly (the call falls back
+        to a dispatch by name), so the split is checked directly
+    */
+    splitTest() {
+        list<hash<auto>> refs = (
+            {"ref": "m\nC\nstring s = \"c\nfoo\"", "class": "C", "sig": "string s = \"c\nfoo\""},
+            {"ref": "m\n\nstring s = \"c\nfoo\n\"", "class": NOTHING, "sig": "string s = \"c\nfoo\n\""},
+            # the class reference of a class of a module has a newline after the module
+            {"ref": "m\n@qore-module:Mod\nNs::C\nstring s = \"a\nb\"", "class": "@qore-module:Mod\nNs::C",
+                "sig": "string s = \"a\nb\""},
+            {"ref": "m\n@qore-module:Mod\nC\nint i", "class": "@qore-module:Mod\nC", "sig": "int i"},
+            # a default that looks like a class reference of a module
+            {"ref": "m\nC\nstring s = \"@qore-module:X\nY\n\"", "class": "C",
+                "sig": "string s = \"@qore-module:X\nY\n\""},
+            # the form without a class
+            {"ref": "m\nint i", "class": NOTHING, "sig": "int i"},
+        );
+        foreach hash<auto> r in (refs) {
+            hash<auto> parts = call_function("dbg_aot_split_method_ref", r.ref);
+            assertEq({"method": "m", "class": r."class", "sig": r.sig}, parts, sprintf("%y", r.ref));
+        }
+    }
+
+    programTest() {
+        # only a missing qcc skips the case; a failure of a qcc that runs fails it
+        if (system(sprintf("LD_LIBRARY_PATH=%s %s --version >/dev/null 2>&1", libqore_dir, qcc_bin))) {
+            testSkip("qcc is not available: " + qcc_bin);
+        }
+        TmpDir tmp("qore-aot-default-newline-");
+        string src = writeFile(tmp.path + "/t.q", "%modern\n" + Classes + Calls
+            + "# a call of a method at the top level of the program\n"
+            + "C c();\n"
+            + "printf(\"%s\\n\", c.m());\n"
+            + "map printf(\"%s\\n\", $1), calls();\n");
+        string expected = "m(\"c\nfoo\")\n" + Expected;
+        assertEq(expected, run(sprintf("%s -b %s", qore_bin, src)), "interpreter baseline");
+
+        string bin = tmp.path + "/t";
+        string out = run(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s", libqore_dir, libqore_dir, qcc_bin,
+            bin, src));
+        assertTrue(is_file(bin), "compiled: " + out);
+        assertEq(expected, run(sprintf("LD_LIBRARY_PATH=%s %s -b", libqore_dir, bin)),
+            "the compiled program prints what the interpreter prints");
+    }
+
+    moduleTest() {
+        TmpDir tmp("qore-aot-default-newline-mod-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string qm = writeFile(src_dir + "/AOTDefNl.qm", "%modern
+module AOTDefNl {
+    version = \"1.0\";
+    desc = \"qore#6026 regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTDefNl {
+public " + Classes + "public " + Calls + "}
+");
+        string script = writeFile(tmp.path + "/run.qr", "%requires AOTDefNl
+# calls of the module's methods in the script, and in the module's own compiled code
+AOTDefNl::C c();
+printf(\"%s\\n\", c.m());
+printf(\"%s\\n\", AOTDefNl::C::s());
+map printf(\"%s\\n\", $1), AOTDefNl::calls();
+");
+        string expected = "m(\"c\nfoo\")\ns(\"s\nbar\n\")\n" + Expected;
+
+        string qmod = qmod_dir + "/AOTDefNl.qmod";
+        string out = run(sprintf("QORE_LIBDIR=%s %s -b --compile-module --output %s %s", libqore_dir, qore_bin, qmod,
+            qm));
+        assertTrue(is_file(qmod), "compiled the module: " + out);
+
+        string cmd = "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s";
+        assertEq(expected, run(sprintf(cmd, libqore_dir, src_dir, qore_bin, script)), "source module");
+        assertEq(expected, run(sprintf(cmd, libqore_dir, qmod_dir, qore_bin, script)), "AOT module");
+    }
+}

@@ -29,6 +29,7 @@
     information.
 */
 
+#include <cstdint>
 #include <qore/Qore.h>
 #include <qore/WebSocketFrameCodec.h>
 
@@ -53,38 +54,14 @@ void WebSocketFrameDecoder::appendData(const void* data, size_t len) {
 }
 
 size_t WebSocketFrameDecoder::getFrameSize() const {
-    size_t avail = buffer.size() - read_pos;
-    if (avail < 2) {
+    WsFrameHeader h;
+    // a frame with an invalid length, or one too large to hold in memory, never completes: a receiver rejects it on
+    // its header, so no size computed from it can wrap (issue #5878)
+    if (!peekHeader(h) || h.invalid_length || h.payload_len > static_cast<uint64_t>(SIZE_MAX) - h.header_size) {
         return 0;
     }
-
-    const uint8_t* buf = buffer.data() + read_pos;
-    bool masked = (buf[1] & 0x80) != 0;
-    uint64_t payload_len = buf[1] & 0x7F;
-    size_t header_size = 2;
-
-    if (payload_len == 126) {
-        if (avail < 4) {
-            return 0;
-        }
-        payload_len = (static_cast<uint64_t>(buf[2]) << 8) | buf[3];
-        header_size = 4;
-    } else if (payload_len == 127) {
-        if (avail < 10) {
-            return 0;
-        }
-        payload_len = 0;
-        for (int i = 0; i < 8; ++i) {
-            payload_len = (payload_len << 8) | buf[2 + i];
-        }
-        header_size = 10;
-    }
-
-    if (masked) {
-        header_size += 4;
-    }
-
-    size_t total = header_size + static_cast<size_t>(payload_len);
+    size_t avail = buffer.size() - read_pos;
+    size_t total = h.header_size + static_cast<size_t>(h.payload_len);
     if (avail < total) {
         return 0;
     }
@@ -176,6 +153,58 @@ WsFrame WebSocketFrameDecoder::nextFrame(ExceptionSink* xsink) {
 
 size_t WebSocketFrameDecoder::bufferedBytes() const {
     return buffer.size() - read_pos;
+}
+
+bool WebSocketFrameDecoder::peekHeader(WsFrameHeader& header) const {
+    size_t avail = buffer.size() - read_pos;
+    if (avail < 2) {
+        return false;
+    }
+    const uint8_t* buf = buffer.data() + read_pos;
+    uint64_t payload_len = buf[1] & 0x7F;
+    size_t header_size = 2;
+    if (payload_len == 126) {
+        if (avail < 4) {
+            return false;
+        }
+        payload_len = (static_cast<uint64_t>(buf[2]) << 8) | buf[3];
+        header_size = 4;
+    } else if (payload_len == 127) {
+        if (avail < 10) {
+            return false;
+        }
+        payload_len = 0;
+        for (int i = 0; i < 8; ++i) {
+            payload_len = (payload_len << 8) | buf[2 + i];
+        }
+        header_size = 10;
+    }
+    if (buf[1] & 0x80) {
+        header_size += 4;
+    }
+    if (avail < header_size) {
+        return false;
+    }
+    header.opcode = static_cast<WsOpcode>(buf[0] & 0x0F);
+    header.fin = (buf[0] & 0x80) != 0;
+    header.payload_len = payload_len;
+    header.header_size = header_size;
+    // the most significant bit of a 64-bit length must be 0 (RFC 6455 section 5.2) (issue #5878)
+    header.invalid_length = (payload_len >> 63) != 0;
+    return true;
+}
+
+size_t WebSocketFrameDecoder::discardBytes(size_t len) {
+    size_t avail = buffer.size() - read_pos;
+    size_t n = len < avail ? len : avail;
+    read_pos += n;
+    if (read_pos == buffer.size()) {
+        buffer.clear();
+        read_pos = 0;
+    } else {
+        compact();
+    }
+    return n;
 }
 
 void WebSocketFrameDecoder::clear() {

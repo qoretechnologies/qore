@@ -165,8 +165,12 @@ printf(\"%d\\n\", total);
             + "    result += TieredBackgroundInitRunner::hot(2);\n"
             + "}\n"
             + "printf(\"RESULT=%d\\n\", result);\n";
+        # QORE_JIT_SYNC_COMPILE=1 makes the enqueueing thread wait until the background compile has finished; the
+        # compile (and therefore the LLVM initialization) still runs on the background compiler thread.  Without it,
+        # the loop can end before the compile does under load, and the compile is then detached at shutdown and
+        # never promoted.
         string output = runScript(code, "tiered", "--jit-ir-threshold=1 --jit-jit-threshold=2",
-            "QORE_JIT_TIMING=1");
+            "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_TIMING=1");
         assertTrue(output =~ /RESULT=30000/, "tiered module workload completed: " + output);
         *list<string> enqueued = (output =~ x/(\[BG-JIT\] enqueued compilation of 'hot@)/g);
         assertEq(1, enqueued.size(), "hot function was enqueued exactly once: " + output);

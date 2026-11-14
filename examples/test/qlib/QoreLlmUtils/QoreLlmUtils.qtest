@@ -41,11 +41,6 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         m.lock();
         on_exit m.unlock();
-        *hash<auto> held;
-        # a held reply reports when the handler has finished, so that a test can wait for it deterministically
-        on_exit if (held.done) {
-            held.done.push(True);
-        }
         hash<auto> parsed = body.val() ? parse_json(body) : {};
         push requests, {
             "path": cx.raw_path,
@@ -72,7 +67,6 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
         }
         # a reply held by a gate is sent only when the test opens the gate
         if (resp.gate) {
-            held = resp;
             resp.gate.get(600s);
         }
         int code = resp.code ?? 200;
@@ -1414,10 +1408,26 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     providerRepairDeadlineTest() {
         checkGeminiModule();
         Queue gate();
-        Queue handler_done();
         # the first answer arrives after 2 s and needs a repair; the repair is never answered, so only a timeout
-        # ends it: the call's deadline (4 s after it started), not a 4 s timeout of the repair's own
-        installGeminiHandler({
+        # ends it: the call's deadline (4 s after it started), not a 4 s timeout of the repair's own.  The deadline
+        # can end the call before the server has read the repair (a loaded host), so this case has a server of its
+        # own and stops it before it ends: a request read later would otherwise reach a later case's handler
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelWarn()),
+            "debug": False,
+        });
+        int server_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        bool released;
+        # releases the held reply and stops the server; stop() waits for every request in progress to finish
+        code release = sub () {
+            if (!released) {
+                released = True;
+                gate.push(True);
+                server.stop();
+            }
+        };
+        on_exit release();
+        FakeGeminiLlmHandler handler({
             "/v1beta/models/gemini-2.5-flash:generateContent": {
                 "sequence": (
                     {
@@ -1431,13 +1441,14 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                             "usageMetadata": {"totalTokenCount": 100},
                         },
                     },
-                    geminiTextResponse("never") + {"gate": gate, "done": handler_done},
+                    geminiTextResponse("never") + {"gate": gate},
                 ),
             },
         });
+        server.setHandler("gemini-llm", "/", MimeTypeJson, handler);
         LlmBackend llm(<LlmBackendConfig>{
             "mode": "gemini",
-            "url": "http://localhost:" + port,
+            "url": "http://localhost:" + server_port,
             "model": "gemini-2.5-flash",
             "api_key": "gemini-test-key",
             "max_retries": 0,
@@ -1462,10 +1473,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             # the repair's timeout may end the call or leave the malformed answer: either way it ends in time
         }
         date elapsed = now_us() - start;
-        # release the held repair reply and wait until the handler has finished
-        gate.push(True);
-        handler_done.get(60s);
-        assertEq(2, gemini_handler.requests.size(), "the repair was sent");
+        # release the held repair reply and stop the server: every request that reached it has been handled
+        release();
+        assertEq(2, handler.requests.size(), "the repair was sent");
         # a fresh 4 s timeout for the repair would end the call after about 6 s
         assertTrue(elapsed < 5s, sprintf("the call ended at its deadline: %y", elapsed));
         assertTrue(elapsed >= 3900ms, sprintf("and not before: %y", elapsed));
@@ -1542,7 +1552,27 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     providerPerCallRequestTimeoutTest() {
         checkGeminiModule();
         Queue gate();
-        installGeminiHandler({
+        # the deadline can end the call after its request was sent but before the server has read it (a loaded
+        # host); the server then hands the request to whichever handler is installed when it reads it.  On the
+        # shared server that would be the handler of a later case, which would answer it with that case's first
+        # reply and leave the later case its second one, so this case has a server of its own, and stops it before
+        # it looks at what reached the handler: once it has stopped, no request is left in flight anywhere
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelWarn()),
+            "debug": False,
+        });
+        int server_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        bool released;
+        # releases the held reply and stops the server; stop() waits for every request in progress to finish
+        code release = sub () {
+            if (!released) {
+                released = True;
+                gate.push(True);
+                server.stop();
+            }
+        };
+        on_exit release();
+        FakeGeminiLlmHandler handler({
             "/v1beta/models/gemini-2.5-flash:generateContent": {
                 "code": 200,
                 # the reply is held until the call has ended, so only a deadline can end the call
@@ -1556,9 +1586,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                 },
             },
         });
+        server.setHandler("gemini-llm", "/", MimeTypeJson, handler);
         LlmBackend llm(<LlmBackendConfig>{
             "mode": "gemini",
-            "url": "http://localhost:" + port,
+            "url": "http://localhost:" + server_port,
             "model": "gemini-2.5-flash",
             "api_key": "gemini-test-key",
             # longer than any test run: only the per-call timeout can end the call
@@ -1575,16 +1606,11 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             timeout_ex = ex;
         }
-        # the call has ended: the held reply is released.  A request that reached the handler holds the handler's
-        # lock until the handler has finished, so taking the lock waits for it; the deadline can also end the call
-        # before the request is sent (a loaded host), and then no handler runs, so none is waited for
-        gate.push(True);
-        list<hash<auto>> requests;
-        {
-            gemini_handler.m.lock();
-            on_exit gemini_handler.m.unlock();
-            requests = gemini_handler.requests;
-        }
+        # the call has ended: the held reply is released and the server stopped, so every request that reached it
+        # has been handled; the deadline can also end the call before the request is sent or read, and then no
+        # handler runs
+        release();
+        list<hash<auto>> requests = handler.requests;
         assertNeq(NOTHING, timeout_ex,
             "the call-local deadline aborts the delayed provider request");
         if (!timeout_ex) {

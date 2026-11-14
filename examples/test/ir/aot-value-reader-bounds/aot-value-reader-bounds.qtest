@@ -24,6 +24,9 @@ class AOTValueReaderBoundsTest inherits QUnit::Test {
     }
 
     valueReaderTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the C++ value reader unit tests are only in debug builds");
+        }
         hash<auto> result = call_function("dbg_run_aot_value_reader_tests");
         assertEq(0, result.fail_count, sprintf("%d of %d native assertions failed: %y", result.fail_count,
             result.test_count, result.failures));

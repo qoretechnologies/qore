@@ -55,8 +55,10 @@ public const EVENT_SSE_CONNECTED = "sse-connected-event";
 
     The @ref ServerSentEventClient::ServerSentEventClient "ServerSentEventClient" class includes support for running in sandboxed
     Program objects with the following parse options set:
-    - \c PO_NO_PROCESS_CONTROL: in this case the \c "yield" option is required in
-      @ref ServerSentEventClient::ServerSentEventClient::constructor() "ServerSentEventClient::constructor()"
+    - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, the \c "yield" option is not required in
+      @ref ServerSentEventClient::ServerSentEventClient::constructor() "ServerSentEventClient::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
 */
 public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionProvider::OptionHelper,
         DataProvider::DelayedObservable {
@@ -181,7 +183,8 @@ ServerSentEventClient sse(\event(), {
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c yield: an options @ref closure "closure" or @ref call_reference "call reference" for yielding the
             current thread's execution to another thread (default value: \c thread_yield());
-            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context
+            required if @ref Qore::PO_NO_PROCESS_CONTROL is set in the current execution context and the module is
+            loaded by its path
         - \c asyncapi: a string URL or file path to an AsyncAPI schema to load for automatic validation of
           deserialized event data
         - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object to use for automatic

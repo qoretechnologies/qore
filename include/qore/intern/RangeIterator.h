@@ -51,6 +51,12 @@ private:
 
 public:
     DLLLOCAL RangeIterator(int64 start, int64 stop, int64 step, const QoreValue v, ExceptionSink* xsink)
+        : RangeIterator(start, stop, step, v, qore_get_native_semantic_policy().brokenRange(), xsink) {
+    }
+
+    //! AST operations supply their captured endpoint policy; the iterator retains the resolved bounds.
+    DLLLOCAL RangeIterator(int64 start, int64 stop, int64 step, const QoreValue v, bool broken_range,
+            ExceptionSink* xsink)
         : QoreIteratorBase(),
             m_start(start),
             m_stop(stop),
@@ -64,7 +70,7 @@ public:
                 "(value passed: " QLLD ")", step);
         }
         // issue #4031
-        if (runtime_get_parse_options() & PO_BROKEN_RANGE) {
+        if (broken_range) {
             if (m_increasing) {
                 ++m_stop;
             } else {

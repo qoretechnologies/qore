@@ -120,7 +120,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** @param autostop if @ref True "True", the I/O thread will automatically stop when all
         operations complete (after a 2-second grace period to avoid unnecessary stop/restart cycles)
     */
-    setAutostop(bool autostop = True) {
+    setAutostop(bool autostop = True) [dom=PROCESS_CONTROL] {
         Qore::AsyncIoController::setAutostop(auto_stop: autostop);
     }
 
@@ -356,7 +356,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Sets the logger for the controller
     /** @param logger the logger to use for diagnostic output, or @ref nothing to disable logging
     */
-    setLogger(*LoggerInterface logger) {
+    setLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         LoggerWrapper::setLogger(logger);
         Qore::AsyncIoController::setLogger(logger: logger);
     }
@@ -370,7 +370,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         @param max_workers maximum worker count; \c 0 means automatic sizing
     */
-    setMaxCallbackWorkers(int max_workers = 0) {
+    setMaxCallbackWorkers(int max_workers = 0) [dom=PROCESS_CONTROL] {
         Qore::AsyncIoController::setMaxCallbackWorkers(max_workers: max_workers);
     }
 

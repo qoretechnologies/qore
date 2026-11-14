@@ -525,7 +525,13 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 logArgs(LoggerLevel::LevelInfo, fmt, argv);
             },
         });
-        on_error bulk.discard();
+        on_error {
+            bulk.discard();
+            # a duplicate row raises DUPLICATE-RECORD, as createRecordImpl() does
+            if (table.isDuplicateRowError($1)) {
+                rethrow "DUPLICATE-RECORD", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
         bulk.queueData(recs);
         bulk.flush();
         return recs + rh;
@@ -551,7 +557,13 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 logArgs(LoggerLevel::LevelInfo, fmt, argv);
             },
         });
-        on_error bulk.discard();
+        on_error {
+            bulk.discard();
+            # a duplicate row raises DUPLICATE-RECORD, as createRecordImpl() does
+            if (table.isDuplicateRowError($1)) {
+                rethrow "DUPLICATE-RECORD", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
+            }
+        }
         bulk.queueData(recs);
         bulk.flush();
         return AbstractDataProcessor::convertShape(recs, shape, DataProviderShape::HashOfLists)[0] + rh;

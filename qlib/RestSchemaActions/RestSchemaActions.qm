@@ -38,6 +38,8 @@
 %requires yaml
 
 module RestSchemaActions {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "user module for registering data provider app actions from REST schemas";
     author = "Qore Technologies <info@qoretechnologies.com>";

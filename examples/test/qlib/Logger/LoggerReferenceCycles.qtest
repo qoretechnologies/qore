@@ -39,8 +39,10 @@ class CountedAppender inherits LoggerAppenderWithLayout {
     processEventImpl(int type, auto params) {
     }
 
-    post(LoggerEvent event) {
+    bool post(LoggerEvent event) {
         events += event;
+        # the event is posted
+        return True;
     }
 }
 

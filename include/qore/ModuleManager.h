@@ -54,11 +54,13 @@
 
     @since %Qore 3.0: 2.1, which covers all public ABI changes made during %Qore 3.0 development after module API 2.0
     was introduced; modules built with the 2.0 headers are refused
-    @since %Qore 3.0: 2.2, which adds QoreModuleInfo::cmd_caller_aware, QoreModuleCommandRestrictions and
+    @since %Qore 3.0: 2.2, which adds the source-compatible callback invocation slots for lexical semantics in
+    ResolvedCallReferenceNode; modules built with the 2.1 headers are refused
+    @since %Qore 3.0: 2.3, which adds QoreModuleInfo::cmd_caller_aware, QoreModuleCommandRestrictions and
     QoreModuleCommandContext (a module command handler judges the code that issues a command); modules built with the
-    2.1 headers are refused
+    2.2 headers are refused
 */
-#define QORE_MODULE_API_MINOR 2
+#define QORE_MODULE_API_MINOR 3
 
 #define QORE_MODULE_COMPAT_API_MAJOR QORE_MODULE_API_MAJOR  //!< the major number of the earliest recommended Qore module API
 #define QORE_MODULE_COMPAT_API_MINOR QORE_MODULE_API_MINOR  //!< the minor number of the earliest recommended Qore module API
@@ -206,14 +208,14 @@ struct QoreModuleInfo {
         module.
 
         @warning the module API version is validated only after the description function has filled in the struct; a
-        library that implements module API 2.1 or earlier creates a struct without this field, so a module that such a
+        library that implements module API 2.2 or earlier creates a struct without this field, so a module that such a
         library may load (by an explicit path, or by a file name without the API suffix) sets it only if
-        is_module_api_supported(2, 2) is true; the library then refuses the module for its API version without the
+        is_module_api_supported(2, 3) is true; the library then refuses the module for its API version without the
         write
 
         @see QoreModuleCommandContext
 
-        @since %Qore 3.0 (module API 2.2)
+        @since %Qore 3.0 (module API 2.3)
     */
     bool cmd_caller_aware = false;
 };
@@ -251,7 +253,7 @@ class ExceptionSink;
     @see QoreModuleCommandContext
     @see QoreModuleInfo::cmd_caller_aware
 
-    @since %Qore 3.0 (module API 2.2)
+    @since %Qore 3.0 (module API 2.3)
 */
 class QoreModuleCommandRestrictions {
 public:
@@ -322,7 +324,7 @@ public:
         Call it on a thread that Qore knows, from the module function, before the function hands work to another
         thread (pass a copy of the result).
 
-        @since %Qore 3.0 (module API 2.2)
+        @since %Qore 3.0 (module API 2.3)
     */
     DLLEXPORT static QoreModuleCommandRestrictions getCallerRestrictions();
 
@@ -350,7 +352,7 @@ static void my_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
 }
     @endcode
 
-    @since %Qore 3.0 (module API 2.2)
+    @since %Qore 3.0 (module API 2.3)
 */
 class QoreModuleCommandContext : public QoreModuleCommandRestrictions {
 public:
@@ -487,10 +489,31 @@ public:
         by qcc as <tt>&lt;name&gt;_qore_module_desc</tt>); the descriptor is invoked, validated and
         routed through the standard module registration path, skipping the filesystem
         search and dlopen that the normal loader uses.
+
+        A statically registered module is never library code, whatever \a path is given: a path in a directory of
+        the process-wide module path does not make it trusted, as its code is linked into the program, not loaded
+        from that directory.  It is checked as a load of the same module by path from outside the module path, for
+        the code that calls the registration:
+        - that is the %Qore code running in the calling thread, also when it registers the module into another
+          Program (for example through a native function that it calls); a native host that calls this function
+          with no %Qore code running is trusted, unless \a tpgm has a sandbox manager (see
+          QoreProgram::setSandboxManager()), whose code is then the caller; parse options that restrict a functional
+          domain in \a tpgm do not make such a call untrusted, as for a load by path;
+        - when that code is not trusted (code that a sandbox governs, or whose parse options restrict a functional
+          domain), the module cannot have the name of a module in the process-wide module path
+          (\c LOAD-MODULE-ERROR), and with a name of its own it is recorded as chosen by that code: it is used only
+          by code with the same sandbox (or, with no sandbox, by the code of the same Program), and a later
+          registration or load of that name by other code is refused;
+        - when a module of that name is already loaded, it is attached to \a tpgm instead, as for a load of a feature
+          that is already loaded: a library module that is already loaded is attached also for code that is not
+          trusted, and a module that such code chose is refused to other code;
+        - registered while a library module that such code loaded is initialized, the module is governed by the
+          sandbox of that code, as a module loaded then by path.
+
         @param xsink if any errors occur, a Qore-language "LOAD-MODULE-ERROR" exception is raised here
         @param tpgm the target QoreProgram to register the module into; must be non-null
         @param desc_fn the module descriptor function pointer
-        @param path a label used for diagnostics; defaults to "<aot-static>"
+        @param path a label used for diagnostics; defaults to "<aot-static>"; it never makes the module library code
         @return 0 on success, -1 if an exception was raised
         @since %Qore 3.0
     */

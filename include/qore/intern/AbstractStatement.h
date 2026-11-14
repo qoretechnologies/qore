@@ -35,6 +35,7 @@
 
 #include <qore/common.h>
 #include "qore/intern/ParseWarnOptions.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
 
 #define RC_RETURN       1
 #define RC_BREAK        2
@@ -60,6 +61,9 @@
 //! parsing code that an operator or a foreach statement runs for each element with the element's index as the
 //! implicit element (\c $#); a \c $# parsed without it is unset (qore#5690)
 #define PF_IMPLICIT_ELEMENT      (1 << 14)
+//! parsing the operand of the reference (\\x), delete or remove operator, which does not read a variable that is the
+//! operand (qore#5937)
+#define PF_LVALUE_NOT_READ       (1 << 15)
 
 // all definitions in this file are private to the library and subject to change
 // forward references
@@ -75,6 +79,12 @@ class qore_program_private_base;
 class AbstractStatement {
 public:
     const QoreProgramLocation* loc;
+
+    //! Binds a condition's own source context before parse initialization (not the later body context).
+    DLLLOCAL void setSemanticPolicy(LexicalSemanticPolicy policy) {
+        semantic_policy = policy;
+        semantic_policy_bound = true;
+    }
     struct ParseWarnOptions pwo;
 
     DLLLOCAL AbstractStatement(qore_program_private_base* p);
@@ -164,6 +174,9 @@ public:
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
 protected:
+    //! Captured before publication; authority restrictions remain in the existing runtime option context.
+    LexicalSemanticPolicy semantic_policy;
+    bool semantic_policy_bound = false;
     QoreBreakpointList_t* breakpoints = nullptr;
     volatile bool breakpointFlag = false;  // fast access to check if breakpoints are non-empty
     bool in_try = false;  // in the body of a try statement of its function; see isInTry()

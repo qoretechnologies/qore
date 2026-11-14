@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class GenericUnusedSignatureTypesTest
+
+auto sub body_only<T = softint>() {
+    return new list<T>("23");
+}
+
+# A function-call default also uses T; direct new list<T>() defaults in qcc are covered by qore#5928.
+auto sub default_only<T = softint>(auto value = body_only<T>()) {
+    return value;
+}
+
+auto sub retry_body<T = string>(int value) {
+    return new list<T>("generic");
+}
+
+auto sub retry_body(nothing value) {
+    return "ordinary";
+}
+
+class GenericUnusedSignatureTypesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("GenericUnusedSignatureTypesTest", "1.0", \ARGV) {
+        addTestCase("type parameter used only by the body", \body());
+        addTestCase("type parameter used only by a default expression", \defaults());
+        addTestCase("generic binding retries an ordinary variant", \retry());
+        set_return_value(main());
+    }
+
+    private body() {
+        assertEq((23,), body_only(), "direct entry installs default type arguments");
+        assertEq((23,), call_function("body_only"), "runtime resolution installs default type arguments");
+    }
+
+    private defaults() {
+        assertEq((23,), default_only(), "direct default expression has its generic context");
+        assertEq((23,), call_function("default_only"), "runtime default expression has its generic context");
+    }
+
+    private retry() {
+        list<auto!> results;
+        int value = 1;
+        for (int i = 0; i < 2; ++i) {
+            push results, retry_body(value);
+            remove value;
+        }
+        assertEq((("generic",), "ordinary"), results, "a parse-time generic commitment retries after remove");
+        assertEq((23,), body_only(), "subsequent generic calls keep their context");
+    }
+}

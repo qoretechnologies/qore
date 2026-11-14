@@ -1,0 +1,5 @@
+m: 11
+n: 7
+item: special
+s: <3>
+issue example: PARSE-TYPE-ERROR: child class method D::m(softint i) returning string cannot overload parent class method B::m(int i) returning int

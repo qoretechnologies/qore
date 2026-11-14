@@ -36,6 +36,8 @@ class RuntimeConfig;
 
 class QoreValueCoalescingOperatorNode : public QoreBinaryOperatorNode<QoreOperatorNode> {
 public:
+    DLLLOCAL static QoreValueCoalescingOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+            QoreValue left, QoreValue right);
     DLLLOCAL QoreValueCoalescingOperatorNode(const QoreProgramLocation* loc, QoreValue e0, QoreValue e1)
             : QoreBinaryOperatorNode<QoreOperatorNode>(loc, e0, e1) {
     }
@@ -58,6 +60,9 @@ public:
     }
 
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalCommon(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
     static QoreString value_coalescing_str;
 
     const QoreTypeInfo* typeInfo = nullptr;

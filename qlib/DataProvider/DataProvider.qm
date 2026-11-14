@@ -49,6 +49,9 @@
 %endtry
 
 module DataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks), and starts
+    # the background threads of its asynchronous operations (ex: AbstractDataProvider::searchRecordsAsync())
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "3.12";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
@@ -1751,6 +1754,16 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       governs it (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"); code that a host governs
       with a sandbox only for its limits or interrupts, and that it allows uncontrolled APIs, may use the
       \c external_io apps (see @ref sandbox_uncontrolled_api)
+    - @ref DataProvider::AbstractDataProvider::upsertRecordsBulk() "AbstractDataProvider::upsertRecordsBulk()" with a
+      list of records raises the error the provider raised, as it does for every other shape of records; it wrapped
+      every failure as \c CREATE-RECORD-ERROR, so the same upsert raised another code by the shape of its records;
+      a record in the list that is not a hash raises \c UPSERT-RECORD-ERROR instead of \c CREATE-RECORD-ERROR
+    - the process-wide registration and setter APIs (factories, types, apps, actions, file APIs, discovery inventory
+      providers, webhook APIs, the global logger and options, template and dynamic value callbacks, the generic API
+      call builders, the scheme lookup callback, static initialization and shutdown handlers) declare the \c PROCESS
+      functional domain: a Program with @ref Qore::PO_NO_PROCESS_CONTROL cannot call them, and the module declares
+      the domain for its own code in its module declaration, as do the modules that register functionality with them
+      (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
     - added the @ref DataProvider::DataProviderAppInfo::external_io "external_io" and
       @ref DataProvider::DataProviderAppInfo::sandbox_aware "sandbox_aware" fields to
       @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo", which declare that an app does I/O that the
@@ -1783,6 +1796,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref DataProvider::DataProviderActionCatalog::checkModuleSandboxAccess()
       "DataProviderActionCatalog::checkModuleSandboxAccess()" and
       @ref DataProvider::DataProviderActionCatalog::initLoadedApps() "DataProviderActionCatalog::initLoadedApps()"
+    - fixed @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" for expressions
+      rendered with a template listing all of their arguments, such as \c map: an argument with a list value raised
+      \c RUNTIME-OVERLOAD-ERROR, and a missing argument was described with the default value of the first argument
+      instead of its own
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

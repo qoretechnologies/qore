@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires json
+
+%exec-class GenericStaticCallListTest
+
+#! Tests static calls of generic class instantiations separated by commas (qore#6037)
+/** Two such calls in a list or an argument list were parsed as one expression, with no error, as the type arguments
+    of the first call ran on to the second one.  The checks are in generic-static-call-list-worker.qr, which is run in
+    each execution mode and as a program compiled with qcc; every run must give the results below.  Type arguments
+    that are not closed before the method name are still refused with a parse error.
+*/
+class GenericStaticCallListTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes
+        const Expected = {
+            "plain-pair": "[1, \"x\"]",
+            "same-instantiation": "[1, \"x\"]",
+            "other-instantiations": "[1, \"x\"]",
+            "three": "[1, 2, \"z\"]",
+            "argument-list": "\"1 \\\"x\\\"\"",
+            "generic-then-plain": "[1, \"x\"]",
+            "nested-type-args": "[1, 2]",
+            "callable-type-arg": "[1, 2]",
+            "method-type-args": "[\"id:1\", \"id:2\"]",
+            "method-type-args-string": "[\"id:\\\"a\\\"\", \"id:1\"]",
+            "method-type-args-then-call": "[\"typed:1\", 2]",
+            "call-then-method-type-args": "[1, \"typed:2\"]",
+            "new-with-call": "1",
+            "cast-with-call": "[1, 2]",
+            "new-with-comparison": "1",
+            "cast-with-comparison": "3",
+            "root-qualified-method-type-args": "[\"id:1\", \"id:2\"]",
+            "root-qualified": "[1, \"y\"]",
+            "or-nothing-type-arg": "[null, 5]",
+            "nested-call": "[\"in\", 7]",
+            "operator": "3",
+        };
+
+        #! malformed calls that must be refused, with the error each gives
+        const Refused = {
+            "unclosed type argument in a list": {
+                "src": "(Holder<list<int>::echo(1), Holder<int>::echo(2))",
+                "error": "PARSE-EXCEPTION: unterminated type specification in static method call",
+            },
+            "unclosed type argument": {
+                "src": "Holder<list<int>::echo(1)",
+                "error": "PARSE-EXCEPTION: unterminated type specification in static method call",
+            },
+            "unclosed method type argument": {
+                "src": "(Holder<int>::typed<list<int>(1), Holder<int>::echo(2))",
+                "error": "PARSE-EXCEPTION: unterminated type specification in static method call",
+            },
+            # the type arguments of Holder end at their first '>', and the second one is an operator without operand
+            "extra closing bracket": {
+                "src": "(Holder<int>>::echo(1), 2)",
+                "error": "PARSE-EXCEPTION: syntax error, unexpected '>'",
+            },
+        };
+
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("GenericStaticCallListTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+        addTestCase("malformed calls are refused", \testRefused());
+        addTestCase("the locations of the tokens after a call", \testLocations());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-generic-static-call-list-");
+        string exe = tmp.path + DirSep + "generic-static-call-list";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
+            qcc_bin, exe, getWorker()));
+        assertTrue(is_file(exe), "compiled program: " + compile_out);
+        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+    }
+
+    testRefused() {
+        TmpDir tmp("qore-generic-static-call-refused-");
+        foreach hash<auto> i in (Refused.pairIterator()) {
+            string path = tmp.path + DirSep + "refused.q";
+            File f();
+            f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.printf("%%modern\nclass Holder<T> {\n    static auto echo(auto v) {\n        return v;\n    }\n"
+                "    static auto typed<U>(U v) {\n        return v;\n    }\n}\nprintf(\"%%y\\n\", %s);\n", i.value.src);
+            f.close();
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug %s 2>&1", libqore_dir, qore_bin,
+                path));
+            assertTrue(out.find(i.value.error) >= 0, sprintf("%s: %y in %y", i.key, i.value.error, out));
+        }
+    }
+
+    #! the location of an error after a call that the scanner cut back or scanned again is its own
+    testLocations() {
+        TmpDir tmp("qore-generic-static-call-loc-");
+        hash<string, string> lines = {
+            "cut": "auto l = (Holder<int>::echo(1), Holder<int>::echo(2)); auto x = unknown_fn();",
+            "rescan": "auto c = (new Cell<int>(Holder<string>::echo(1))); auto y = unknown_fn();",
+        };
+        foreach hash<auto> i in (lines.pairIterator()) {
+            # each line in a file of its own, so that an error of one does not hide the other
+            string path = tmp.path + DirSep + i.key + ".q";
+            File f();
+            f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.printf("%%modern\nclass Holder<T> {\n    static auto echo(auto v) {\n        return v;\n    }\n}\n"
+                "class Cell<T> {\n    constructor(auto v) {\n    }\n}\n%s\n", i.value);
+            f.close();
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --enable-debug --diag-format=json %s 2>&1",
+                libqore_dir, qore_bin, path));
+            list<auto> diags = parse_json(out);
+            assertEq(1, diags.size(), sprintf("%s: one diagnostic in %y", i.key, out));
+            assertEq(11, diags[0].startLine, i.key + ": line");
+            assertEq(i.value.find("unknown_fn"), diags[0].startColumn, i.key + ": column");
+        }
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "generic-static-call-list-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

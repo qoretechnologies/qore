@@ -49,6 +49,8 @@ module SGLangRestClient {
         QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
             new QoreRagUtils::SGLangEmbedderFactory());
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage SGLangRestClient Module

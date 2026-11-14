@@ -1,0 +1,217 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 client connections and the re-poll of their async I/O poll operations
+
+/*  Http2ClientStreamingBatch.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    After a read, an HTTP/2 client delivers the buffered data of a limited number of streaming responses (16), and
+    the data of the others stays in the session.  This test guards the behaviour that the data past the batch is
+    delivered without any more data arriving on the connection (see #5955).  The async I/O controller polls the
+    operation again at once while the socket reports pending data (QoreSocketObject::hasPendingData()): while a
+    streaming stream has buffered data (Http2Session::hasStreamData()), and also while nghttp2 has output to send
+    (Http2Session::wantWrite()), which data received from the server causes.  Either re-poll delivers the data, so the
+    test does not guard the hasStreamData() re-poll specifically: it passes without it, as the wantWrite() re-polls
+    after a read deliver the data as well.
+
+    Debug hooks (library-debug builds only) lower the batch to one stream, hold the data of the streams in the session
+    until it has all arrived, and report when a pass left no data in the session.  With hasStreamData(), the passes
+    made while data is held deliver it as soon as the hold is released; the data of another stream, sent after the
+    release, makes sure that a read follows the release in any case.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class Http2ClientStreamingBatchTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 30s;
+
+#! the streaming responses whose data is held; with a batch of one stream, the pass after the hold finds them all
+const Streams = 6;
+
+#! A response body that sends one chunk, then the chunks that the test gives it, and ends when the test says so
+class HeldBody inherits InputStream {
+    private {
+        Queue input;
+        *binary chunk;
+    }
+
+    constructor(Queue input, *string chunk) {
+        self.input = input;
+        if (chunk) {
+            self.chunk = binary(chunk);
+        }
+    }
+
+    *binary read(int limit) {
+        if (chunk) {
+            binary rv = remove chunk;
+            return rv;
+        }
+        # the rest of the body waits for the test, so no data arrives on the connection meanwhile
+        auto v = input.get(HangGuard);
+        return v.typeCode() == NT_BINARY ? v : NOTHING;
+    }
+
+    int peek() {
+        return chunk ? chunk[0] : -1;
+    }
+}
+
+class StreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the input of the body of each stream, by the stream's number in the test
+        hash<string, Queue> inputs;
+        Mutex m();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string n = hdr.path.split("/").last();
+        # the trigger stream sends nothing until the test gives it data
+        return makeResponse(200, new HeldBody(getInput(n), n == "trigger" ? NOTHING : "chunk " + n),
+            {"Content-Type": MimeTypeOctetStream});
+    }
+
+    Queue getInput(string n) {
+        AutoLock al(m);
+        return inputs{n} ?? (inputs{n} = new Queue());
+    }
+}
+
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+public class Http2ClientStreamingBatchTest inherits QUnit::Test {
+    constructor() : Test("Http2ClientStreamingBatchTest", "1.0") {
+        addTestCase("HTTP/2: the data of streaming responses past the batch is delivered", \batchTest());
+        set_return_value(main());
+    }
+
+    batchTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the drain hooks are only registered in a library-debug build");
+        }
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("streaming-batch", LoggerLevel::getLevelInfo())});
+        on_exit server.stop();
+        StreamHandler handler();
+        server.setHandler("stream", "/stream", NOTHING, handler);
+        server.setHandler("ok", "/ok", NOTHING, new OkHandler());
+        string url = sprintf("https://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port);
+        server.waitForAsyncIo();
+        # the bodies end once the test is done, whatever its result
+        on_exit {
+            map handler.getInput(string($1)).push(True), xrange(Streams);
+            handler.getInput("trigger").push(True);
+        }
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "connect_timeout": HangGuard,
+            "request_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        # the connection is made before the hold
+        assertEq(200, mgr.requestAsync(url, "GET", "/ok").get(HangGuard).status_code, "the first request");
+        # a stream whose data, sent after the hold, starts the read that finds the held data: the data of another
+        # stream than the held ones, so that it is not buffered with their data
+        HttpClientStreamHandle trigger = mgr.acquireStream(url);
+        on_exit {
+            try {
+                trigger.cancel();
+            } catch () {
+            }
+        }
+        trigger.startStreaming("GET", "/stream/trigger", NOTHING, False);
+        auto th = trigger.readData(HangGuard);
+        assertEq(200, th.status_code, "the trigger stream's response starts");
+
+        # the drain limit of the read pass keeps its default, so that no response it leaves makes it poll again
+        call_function("dbg_http2_client_streaming_batch", 1);
+        on_exit call_function("dbg_http2_client_streaming_batch", 0);
+        call_function("dbg_http_client_hold_outputs", True);
+        on_exit call_function("dbg_http_client_hold_outputs", False);
+
+        list<HttpClientStreamHandle> streams = map mgr.acquireStream(url), xrange(Streams);
+        on_exit {
+            foreach HttpClientStreamHandle stream in (streams) {
+                try {
+                    stream.cancel();
+                } catch () {
+                }
+            }
+        }
+        foreach HttpClientStreamHandle stream in (streams) {
+            stream.startStreaming("GET", "/stream/" + $#, NOTHING, False);
+        }
+        # the held count is that of the completed responses (the headers of the streams) and of the streams with data
+        assertTrue(call_function("dbg_http_client_wait_held_outputs", 2 * Streams, HangGuard),
+            "the headers and the data of the streams arrive while they are held");
+        call_function("dbg_http_client_hold_outputs", False);
+        # a read follows the release in any case: the trigger stream's data is the only data that arrives on the
+        # connection meanwhile (a request would cause more reads, each of which delivered the data of one more stream)
+        handler.getInput("trigger").push(binary("go"));
+        # the data of all the streams leaves the session before the test reads any: a read reports the consumed data
+        # to the server, and the frames sent for that wake the operation as well
+        bool delivered = call_function("dbg_http2_client_wait_streaming_delivered", HangGuard);
+        assertTrue(delivered, "the passes after the release deliver the data of all the streams");
+        if (!delivered) {
+            # the reads below would each wait for the hang guard
+            return;
+        }
+
+        foreach HttpClientStreamHandle stream in (streams) {
+            assertEq("chunk " + $#, readChunk(stream), sprintf("stream %d: the data arrives", $#));
+        }
+        assertEq("go", readChunk(trigger), "the trigger stream's data arrives");
+        assertEq(1, mgr.getStats().total_connections, "the requests are made on one connection");
+    }
+
+    #! Returns the first chunk of the body of a streaming response, after its headers
+    private string readChunk(HttpClientStreamHandle stream) {
+        while (True) {
+            auto d = stream.readData(HangGuard);
+            if (d.typeCode() == NT_BINARY || d.typeCode() == NT_STRING) {
+                return d.toString();
+            }
+            if (d.typeCode() != NT_HASH || !d.status_code) {
+                return sprintf("unexpected: %y", d);
+            }
+        }
+    }
+}

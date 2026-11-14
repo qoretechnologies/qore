@@ -84,7 +84,7 @@ public class SharePointListsDataProvider inherits SharePointDataProviderBase {
         return RecordType.getFields();
     }
 
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         string path = getSiteBasePath(search_options) + "/lists?" + ListSelect + "&$top=" + MaxPageSize;
         list<hash<auto>> all = getAllPages(path);
@@ -371,7 +371,7 @@ public class SharePointColumnsDataProvider inherits SharePointDataProviderBase {
         return RecordType.getFields();
     }
 
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         list<hash<auto>> cols = (search_options.writable_only ?? False)
             ? getListColumns(search_options)

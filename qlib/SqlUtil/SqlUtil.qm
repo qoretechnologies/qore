@@ -47,6 +47,8 @@ module SqlUtil {
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code waits before restarting a transaction with sleep() (RestartableTransaction)
+    domains = "PROCESS_CONTROL";
 }
 
 # version history is included below in the docs
@@ -154,6 +156,13 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - @ref SqlUtil::SqlUtilColumnField::setDefaultValue() "SqlUtilColumnField::setDefaultValue()" returns the object,
+      as @ref DataProvider::AbstractDataField::setDefaultValue() "AbstractDataField::setDefaultValue()" does
+    - code that a @ref Qore::SandboxManager "SandboxManager" governs cannot open a database connection from a
+      connection string or a serialized configuration
+      (@ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
+      @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()", datasource deserialization):
+      \c PERMISSION-DENIED; it uses the datasources that its host provides
     - @ref SqlUtil::AbstractTable::dropCommit() "AbstractTable::dropCommit()" commits each statement of the drop on
       its own, so a partitioned table that its driver drops one partition per statement stays within the database's
       lock limits however many partitions it has
@@ -473,6 +482,16 @@ module SqlUtil {
       divergent tables; tables are processed in foreign-key dependency order
     - fixed the foreign constraint DDL of Oracle, MySQL, SQL Server, Firebird and SQLite to keep quoted and renamed
       column names on both sides of the constraint
+    - fixed the @ref SqlUtil::AbstractTable::UpsertInsertFirst "UpsertInsertFirst" and
+      @ref SqlUtil::AbstractTable::UpsertInsertOnly "UpsertInsertOnly" upsert strategies, which took a conflict
+      with a unique key other than the upsert key for an existing row: the row was dropped without an error and
+      reported as verified or unchanged.  Such a conflict now raises the database's exception, as with the other
+      strategies, and no other row is changed.  This applies to databases without a native merge, such as SQLite,
+      MySQL and Firebird, and to PostgreSQL before 9.5
+    - fixed an @ref SqlUtil::AbstractTable::UpsertInsertFirst "UpsertInsertFirst" upsert of a row whose columns
+      are all upsert key columns, which raised an SQL error when the row existed
+    - fixed @ref SqlUtil::AbstractTable::UpsertAuto "UpsertAuto", which inserted first into a table with rows and
+      updated first in an empty table, the opposite of what it is documented to do
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -7726,12 +7745,12 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
     /** The callback continues to receive the string configuration, including for data that also contains the
         structured configuration used by the default deserializer.
     */
-    public sub sqlutil_register_ds_deserializer(*code new_ds_get) {
+    public sub sqlutil_register_ds_deserializer(*code new_ds_get) [dom=PROCESS_CONTROL] {
         ds_get = new_ds_get;
     }
 
     #! registers a closure or call reference taking a string type and string datasource configuration that will return an AbstractDatasource
-    public sub sqlutil_register_ds_serializer(*code new_ds_do) {
+    public sub sqlutil_register_ds_serializer(*code new_ds_do) [dom=PROCESS_CONTROL] {
         ds_do = new_ds_do;
     }
 
@@ -7741,6 +7760,11 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
             return ds_get(type, config);
         }
 
+        # a deserialized configuration opens a connection of its own: sandboxed code may use only the datasources that
+        # the host provides
+        if (SandboxManager::isSandboxed()) {
+            throw "PERMISSION-DENIED", "code that a sandbox governs cannot open a database connection from a connection string or configuration; use a datasource that the host provides";
+        }
         switch (type) {
             case "DatasourcePool":
                 return new DatasourcePool(structured_config ?? config);
@@ -7793,7 +7817,7 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         }
 
         #! Caches the given table unless another thread cached one first; returns the table in the cache
-        static AbstractTable put(string dsdesc, string name, AbstractTable t) {
+        static AbstractTable put(string dsdesc, string name, AbstractTable t) [dom=PROCESS_CONTROL] {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
             *AbstractTable cached = TableCache::cache{dsdesc}{name};
@@ -7804,7 +7828,7 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         }
 
         #! Discards cached tables; see @ref SqlUtil::sqlutil_clear_table_cache() "sqlutil_clear_table_cache()"
-        static clear(*string dsdesc, *string name) {
+        static clear(*string dsdesc, *string name) [dom=PROCESS_CONTROL] {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
 
@@ -7864,7 +7888,7 @@ sqlutil_register_table_resolver(\MyTableRegistry::getTable());
 
         @since %SqlUtil 3.2.0
     */
-    public sub sqlutil_register_table_resolver(*code new_table_resolve) {
+    public sub sqlutil_register_table_resolver(*code new_table_resolve) [dom=PROCESS_CONTROL] {
         table_resolve = new_table_resolve;
     }
 
@@ -7937,7 +7961,7 @@ sqlutil_clear_table_cache(ds, "my_table");
 
         @since %SqlUtil 3.2.0
     */
-    public sub sqlutil_clear_table_cache(*AbstractDatasource ds, *string name) {
+    public sub sqlutil_clear_table_cache(*AbstractDatasource ds, *string name) [dom=PROCESS_CONTROL] {
         TableCache::clear(ds ? AbstractSqlUtilBase::makeDatasourceDesc(ds) : NOTHING, name);
     }
 

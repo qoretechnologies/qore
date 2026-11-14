@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# A module whose init raises an exception with typed containers of its own types, for AotTypedContainerTypes.q
+
+%new-style
+%require-types
+%strict-args
+public hashdecl TypeIdSameHash { int x = 1; }
+public class TypeIdSameClass {}
+public hashdecl TypeIdOnlyHash { int x = 1; }
+public class TypeIdOnlyClass {}
+module TypeIdFailMod {
+    version = "1.0"; desc = "a module whose init raises an exception"; author = "Qore Technologies, s.r.o."; url = "https://qore.org"; license = "MIT";
+    init = sub () {
+        throw "FAIL-INIT", "x", {
+            "lsame": cast<list<hash<TypeIdSameHash>>>((<TypeIdSameHash>{},)),
+            "osame": cast<list<object<TypeIdSameClass>>>(()),
+            "lonly": cast<list<hash<TypeIdOnlyHash>>>((<TypeIdOnlyHash>{},)),
+            "honly": cast<hash<string, hash<TypeIdOnlyHash>>>({"a": <TypeIdOnlyHash>{}}),
+            "oonly": cast<list<*object<TypeIdOnlyClass>>>((NOTHING,)),
+            "nested": cast<list<list<hash<TypeIdOnlyHash>>>>(((<TypeIdOnlyHash>{},),)),
+            "union": cast<list<union<int, hash<TypeIdOnlyHash>>>>((1,)),
+        };
+    };
+}

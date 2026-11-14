@@ -114,11 +114,10 @@ public namespace EdifactUtil {
 
         #! Creates the data provider
         constructor(*hash<auto> opts) {
-            if (opts.cache_dir) {
-                setenv("QORE_EDIFACT_DIRCACHE", opts.cache_dir);
-            }
-
             hash<auto> load_opts = {};
+            if (opts.cache_dir) {
+                load_opts.cache_dir = opts.cache_dir;
+            }
             if (opts.dir) {
                 load_opts.dir = opts.dir;
             }

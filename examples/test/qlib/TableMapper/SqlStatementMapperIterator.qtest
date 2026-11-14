@@ -123,10 +123,10 @@ class FakeDatasource inherits Qore::SQL::AbstractDatasource {
 # Actually we don't need real table. Just a FakeSQLStatement returned from getRowIterator()
 class FakeAbstractTable inherits SqlUtil::AbstractTable {
     constructor() : SqlUtil::AbstractTable(new FakeDatasource(), "foo_table") {}
-    AbstractIterator getRowIterator(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
-    AbstractIterator getRowIteratorNoExec(hash<auto> h) { return new FakeSQLStatement(); }
-    AbstractIterator getStatement(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
-    AbstractIterator getStatementNoExec(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
+    Qore::SQL::AbstractSQLStatement getRowIterator(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
+    Qore::SQL::AbstractSQLStatement getRowIteratorNoExec(hash<auto> h) { return new FakeSQLStatement(); }
+    Qore::SQL::AbstractSQLStatement getStatement(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
+    Qore::SQL::AbstractSQLStatement getStatementNoExec(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
 
     string getRenameSqlImpl(string new_name) {}
     AbstractPrimaryKey getPrimaryKeyImpl(auto a) {}

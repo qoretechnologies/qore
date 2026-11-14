@@ -48,6 +48,8 @@ module LemlistRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("lemlist", LemlistRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage LemlistRestClient Module

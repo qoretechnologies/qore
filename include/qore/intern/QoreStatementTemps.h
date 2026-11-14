@@ -32,6 +32,8 @@
 #ifndef _QORE_INTERN_QORESTATEMENTTEMPS_H
 #define _QORE_INTERN_QORESTATEMENTTEMPS_H
 
+#include "qore/intern/LexicalSemanticPolicy.h"
+
 #include <unordered_map>
 #include <type_traits>
 #include <memory>
@@ -260,7 +262,7 @@ public:
 
     @return 0 if the condition was evaluated, -1 if an exception was raised
 */
-template <typename... RcArgs>
+template <bool StrictBoolean, typename... RcArgs>
 DLLLOCAL int qore_eval_condition(const QoreValue& cond, bool& result, ExceptionSink* xsink, RcArgs&... rc) {
     QoreStatementTempScope temps(xsink);
     {
@@ -268,7 +270,11 @@ DLLLOCAL int qore_eval_condition(const QoreValue& cond, bool& result, ExceptionS
         if (*xsink) {
             return -1;
         }
-        result = val->getAsBool();
+        if constexpr (StrictBoolean) {
+            result = LexicalSemanticPolicy::getAsBoolStrict(*val);
+        } else {
+            result = LexicalSemanticPolicy::getAsBoolDefault(*val);
+        }
     }
     temps.release();
     return *xsink ? -1 : 0;

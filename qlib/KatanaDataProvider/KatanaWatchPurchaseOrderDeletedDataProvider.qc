@@ -28,7 +28,7 @@ public class KatanaWatchPurchaseOrderDeletedDataProvider inherits KatanaWebhookE
     string getEndpoint() { return "purchase_orders"; }
     string getEventName() { return EVENT_PO_DELETED; }
     *string getTargetStatus() { return NOTHING; }
-    *string getTimestampField() { return "deleted_at"; }
+    string getTimestampField() { return "deleted_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaPurchaseOrderDataType();

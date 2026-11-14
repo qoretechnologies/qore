@@ -35,6 +35,9 @@
 class QoreListAssignmentOperatorNode : public QoreBinaryLValueOperatorNode {
 OP_COMMON
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL int parseInitIntern(QoreParseContext& parse_context);
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 

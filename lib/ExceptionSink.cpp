@@ -144,6 +144,11 @@ ExceptionSink::operator bool () const {
     return priv->head || priv->thread_exit;
 }
 
+QoreValue qore_release_value_with_exception_intern(QoreValue rv, ExceptionSink* xsink) {
+    rv.discard(xsink);
+    return QoreValue();
+}
+
 void ExceptionSink::overrideLocation(const QoreProgramLocation& loc) {
     //printd(5, "ExceptionSink::overrideLocation() loc: %p: %s:%d\n", &loc, loc.getFileValue(), loc.start_line);
     QoreException* w = priv->head;

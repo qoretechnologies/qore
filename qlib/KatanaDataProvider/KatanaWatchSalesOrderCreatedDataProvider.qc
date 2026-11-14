@@ -29,7 +29,7 @@ public class KatanaWatchSalesOrderCreatedDataProvider inherits KatanaWebhookEven
     string getEndpoint() { return "sales_orders"; }
     string getEventName() { return EVENT_SO_CREATED; }
     *string getTargetStatus() { return NOTHING; }
-    *string getTimestampField() { return "created_at"; }
+    string getTimestampField() { return "created_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaSalesOrderDataType();

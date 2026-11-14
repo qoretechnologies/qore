@@ -461,7 +461,7 @@ issueParseCmd()` and `issueRuntimeCmd()`; the replay of a compiled program's com
 
 | What the handler gets | Where it comes from |
 |---|---|
-| `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (a `%push-parse-options` block); none for code of a library module (a module found in a module directory, not chosen by a path of the loading code; `qore_program_private::library_module`, `qore_module_load_is_library()`) whether it issues the command at run time or in a `%module-cmd` directive of its source: library code is judged by the sandbox only, as module code is everywhere (the parse options of the module's Program, such as `PO_NO_FILESYSTEM`, are only what it inherited from the code that loads it); a module that code chose by a path of its own is judged by that code's restrictions; for other `%module-cmd` directives the options in force at the directive and those of the code that runs the parse; for a replayed command also the options that were in force at the directive when the program was compiled (recorded since AOT format v29; the options the program is declared with before that), and for a library module loaded compiled only those |
+| `getParseOptions()` | the restricting parse options of the issuing code: its effective run-time options (a `%push-parse-options` block); none for code of a library module (a module found in a module directory, not chosen by a path of the loading code; `qore_program_private::library_module`, `qore_module_load_is_library()`) whether it issues the command at run time or in a `%module-cmd` directive of its source: library code is judged by the sandbox only, as module code is everywhere (the parse options of the module's Program, such as `PO_NO_FILESYSTEM`, are only what it inherited from the code that loads it); a module that code chose by a path of its own is judged by that code's restrictions; for other `%module-cmd` directives the options in force at the directive and those of the code that runs the parse; for a replayed command also the options that were in force at the directive when the program was compiled (recorded since AOT format v37; the options the program is declared with before that), and for a library module loaded compiled only those |
 | `isSandboxed()` | a sandbox governs the issuing code, or it runs in a sandboxed Program (`qore_caller_is_sandboxed()`) |
 | `getOrigin()` | `MC_PARSE`, `MC_RUNTIME`, `MC_REPLAY` |
 
@@ -505,8 +505,8 @@ Audit checklist for a module with a command handler:
 - [ ] a command with process-wide effect is refused for every restricted issuer
 - [ ] nothing in the handler reads `getProgram()->getParseOptions()` to decide whether the issuer may do something
 - [ ] the restrictions are copied (not the context pointer) when another thread continues the command
-- [ ] the descriptor sets `cmd_caller_aware` only if `is_module_api_supported(2, 2)` when a library that implements
-  module API 2.1 or earlier may load the module (the API version is validated only after the descriptor has filled in
+- [ ] the descriptor sets `cmd_caller_aware` only if `is_module_api_supported(2, 3)` when a library that implements
+  module API 2.2 or earlier may load the module (the API version is validated only after the descriptor has filled in
   the struct, which such a library creates without the field)
 
 Audit checklist for library module code (a Qore-language module in a module directory, or a binary module) that issues

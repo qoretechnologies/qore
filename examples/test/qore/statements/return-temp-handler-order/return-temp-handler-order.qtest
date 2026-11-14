@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the release of a return statement's temporaries
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ReturnTempHandlerOrderTest
+
+#! The values that a return statement's expression reads are released before the handlers of its blocks run (#6003)
+/** A return statement whose expression reads a value from a variable, a member or a container, such as
+    \c "return a.n", kept that value until the function returned in the IR interpreter and in native code, after the
+    on_exit and on_success handlers of the blocks that the statement leaves: a handler that replaced the value
+    released it at the end of the handler or later instead of at the assignment.  The AST interpreter releases the
+    temporaries of the statement when it ends, before the handlers run.  ReturnTempHandlerOrder.q gives the output of
+    the AST interpreter in every execution mode and compiled with qcc.
+*/
+class ReturnTempHandlerOrderTest inherits QUnit::Test {
+    public {
+        #! the output of ReturnTempHandlerOrder.q with the AST interpreter
+        const Expected = "s1-0: [\"~s1-a0\", \"s:s1-b0\", \"~s1-b0\", \"s-end\", \"x:s1-as\", \"~s1-as\", \"r:s1-b0\"]
+s1-1: [\"s:s1-a1\", \"~s1-a1\", \"s-end\", \"x:s1-as\", \"~s1-as\", \"r:s1-a1\"]
+s2: [\"~s2-g\", \"x\", \"r:s2-g\"]
+s3: [\"~s3-c\", \"x\", \"~s3-a\", \"~s3-c2\", \"r:s3-c\"]
+s4: [\"~s4-a\", \"x\", \"~s4-a2\", \"r:s4-a\"]
+s5: [\"~s5-a\", \"s\", \"~s5-a2\", \"r:s5-a\"]
+s6: [\"~s6-a\", \"x\", \"~s6-a2\", \"r:s6-a\"]
+s7: [\"~s7-a\", \"x\", \"r:4\"]
+s8: [\"~s8-a\", \"r:s8-a\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("ReturnTempHandlerOrderTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/ReturnTempHandlerOrder.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the release of a return statement's temporaries before the handlers", \modeTest(),
+                (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the release of a return statement's temporaries before the handlers", opt),
+                \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-return-temp-handler-order-");
+        string exe = tmp.path + DirSep + "return-temp-handler-order";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

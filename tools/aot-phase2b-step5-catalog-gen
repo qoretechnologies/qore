@@ -162,7 +162,7 @@ list<hash<auto>> sub phase_categories() {
                 "qore_rt_call_fast_with_target", "qore_rt_call_with_args",
                 "qore_rt_call_ref_fast", "qore_rt_instanceof",
                 "qore_rt_instanceof_by_type_path", "qore_rt_background_self_call",
-                "qore_rt_background_self_call_aot", "qore_rt_regex_op_by_pattern",
+                "qore_rt_background_self_call_aot_v2", "qore_rt_regex_op_by_pattern",
                 "qore_rt_regex_op_with_operand", "qore_rt_regex_op_with_operand_aot",
                 "qore_rt_get_regex_case_aot", "qore_rt_switch_regex_match",
                 "qore_rt_switch_case_match",

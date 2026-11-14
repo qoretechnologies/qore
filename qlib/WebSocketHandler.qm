@@ -138,6 +138,18 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - a connection closed because a message was larger than the maximum message size is reported with its close code
+      1009 (Message Too Big) and reason, on HTTP/1.1, HTTP/2 and HTTP/3: added
+      @ref WebSocketHandler::WebSocketConnection::getCloseCode() "WebSocketConnection::getCloseCode()" and
+      @ref WebSocketHandler::WebSocketConnection::getCloseReason() "WebSocketConnection::getCloseReason()", which
+      return the close's status code and reason, also in
+      @ref WebSocketHandler::WebSocketConnection::connectionClosed() "connectionClosed()"; a fragmented message is
+      checked against the limit as its fragments arrive; the \c max_message_size option is documented as it applies
+      (0 means the built-in limit of 16 MiB, which HTTP/2 and HTTP/3 connections always use); on HTTP/2 and HTTP/3,
+      a heartbeat that finds the stream's send buffer full (the client is still reading earlier data) no longer
+      closes the connection without a close code, the answer to the client's close frame waits for the send buffer
+      to drain instead of being dropped, and a close frame received before the processing of the frames stops (on an
+      error, or when a send times out and drops the client) still gives the connection's close code (issue #5861)
     - added @ref WebSocketHandler::WebSocketHandler::messageReceived() "WebSocketHandler::messageReceived()", a hook
       called once for each inbound message, before the connection's
       @ref WebSocketHandler::WebSocketConnection::gotMessage() "gotMessage()", so a handler can meter messages; an
@@ -469,6 +481,13 @@ public class WebSocketConnection {
     private:internal {
         #! The socket used by the server for this connection
         Socket sock;
+
+        #! the status code with which the connection was closed; 0 if not closed (issue #5861)
+        int close_code = 0;
+        #! the reason with which the connection was closed (issue #5861)
+        string close_reason = "";
+        #! protects @ref close_code and @ref close_reason
+        Mutex close_info_lock();
 
         #! Frames that couldn't be sent due to backpressure, awaiting retry
         /** @since WebSocketHandler 2.5
@@ -850,12 +869,16 @@ public class WebSocketConnection {
     }
 
     #! Flushes frames buffered on @ref channel to the transport; @ref send_lock must be held
-    /** Only meaningful once direct sends are enabled; a no-op otherwise.
+    /** Only meaningful once direct sends are enabled, unless \a before_direct_send is set; a no-op otherwise.
+
+        @param before_direct_send flushes the frames also before direct sends are enabled, once the transport is
+        set: for a close frame, which no frame may follow (see @ref answerStreamClose() and
+        @ref startStreamClose())
 
         @since WebSocketHandler 2.8
     */
-    private flushBufferedFramesLocked() {
-        if (!direct_send_enabled || (!async_ws_poll_op && !stream_ctx)) {
+    private flushBufferedFramesLocked(bool before_direct_send = False) {
+        if ((!direct_send_enabled && !before_direct_send) || (!async_ws_poll_op && !stream_ctx)) {
             return;
         }
         # a backpressure drop in sendDirectLocked() closes the channel; tryRecv() still
@@ -999,11 +1022,56 @@ public class WebSocketConnection {
     }
 
     #! This method is called when the connection is closed
-    /** Called by the @ref WebSocketHandler::WebSocketHandler "WebSocketHandler"
+    /** Called by the @ref WebSocketHandler::WebSocketHandler "WebSocketHandler"; getCloseCode() and getCloseReason()
+        return the status code and reason with which the connection was closed
 
         The implementation in this class is empty; implement this method in a subclass to provide custom behavior
     */
     connectionClosed() {
+    }
+
+    #! Returns the status code with which the connection was closed (RFC 6455 section 7.4)
+    /** On HTTP/2 and HTTP/3, the code of the first close of the connection: that of the close frame received from the
+        client, or of the close that the server started; on HTTP/1.1, the code of the close frame received from the
+        client (which answers a close that the server started with the same code as a rule), or
+        @ref WebSocketUtil::WSCC_AbnormalClosure "WSCC_AbnormalClosure" (1006) when the client did not answer.  For
+        example @ref WebSocketUtil::WSCC_MessageTooBig "WSCC_MessageTooBig" (1009) when a message was larger than the
+        maximum message size, whether the server or the client received it.  Can be called in connectionClosed().
+
+        @return the close status code; 0 if the connection has not been closed or no code is known
+
+        @since WebSocketHandler 2.8
+    */
+    int getCloseCode() {
+        AutoLock al(close_info_lock);
+        return close_code;
+    }
+
+    #! Returns the reason with which the connection was closed
+    /** The reason of the first close of the connection (on HTTP/1.1, of the close frame received from the client; when
+        it answers a close that the server started with the same code and no reason, the server's), or a description
+        of the error that closed the connection; see getCloseCode().  Can be called in connectionClosed().
+
+        @return the close reason; an empty string if none
+
+        @since WebSocketHandler 2.8
+    */
+    string getCloseReason() {
+        AutoLock al(close_info_lock);
+        return close_reason;
+    }
+
+    #! Records the status code and reason with which the connection was closed; the first close recorded is kept
+    /** @note Internal API — not intended for use by subclasses.
+
+        @since WebSocketHandler 2.8
+    */
+    setCloseInfo(int code, *string reason) {
+        AutoLock al(close_info_lock);
+        if (!close_code && code) {
+            close_code = code;
+            close_reason = reason ?? "";
+        }
     }
 
     #! Returns @ref True if the connection is closing or closed: no message can be sent on it any more
@@ -1058,11 +1126,32 @@ public class WebSocketConnection {
         if (close_frame_queued) {
             return;
         }
-        flushBufferedFramesLocked();
+        # the frames buffered before direct sends were enabled precede the close frame too: a message that is too
+        # big can be received while the handler is still setting up the connection (issue #5957)
+        flushBufferedFramesLocked(True);
         close_frame_queued = True;
+        # the server starts the close: its code is the connection's close code (issue #5861)
+        setCloseInfo(code, reason);
         *WebSocketStreamProcessor proc = stream_processor;
         if (proc) {
             proc.startClose(code, reason);
+        }
+    }
+
+    #! Records that the WebSocket frame state of the HTTP/2 or HTTP/3 stream sent the connection's close frame
+    /** The frame state closes the connection itself for an error in the client's frames; no data frame may follow
+        its close frame (RFC 6455 section 5.5.1), so a message sent afterwards raises \c WEBSOCKET-CLOSING-ERROR, and
+        the frames still buffered before direct sends were enabled are discarded.  A send that the stream refuses
+        before this is called raises the same error.
+
+        @note Internal API — not intended for use by subclasses.
+
+        @since WebSocketHandler 2.8
+    */
+    noteStreamCloseSent() {
+        AutoLock al(send_lock);
+        close_frame_queued = True;
+        while (pollDataImmediate()) {
         }
     }
 
@@ -1080,18 +1169,32 @@ public class WebSocketConnection {
         @since WebSocketHandler 2.8
     */
     bool answerStreamClose(AsyncSocketIo::AbstractStreamContext ctx, int code) {
-        AutoLock al(send_lock);
-        if (close_frame_queued) {
-            return False;
+        # the flag is set under the send lock, after any send in progress, and no data frame is sent after it; the
+        # answer is sent outside the lock, so that a wait for the stream's send buffer does not block the senders
+        {
+            AutoLock al(send_lock);
+            if (close_frame_queued) {
+                return False;
+            }
+            # the frames sent before the answer are written before it, also those buffered before direct sends were
+            # enabled: the client's close frame can arrive while the handler is still setting up the connection
+            # (between the registration of its stream listener and enableDirectSend()), and enableDirectSend() would
+            # write them after the answer and the end of the stream (issue #5957)
+            flushBufferedFramesLocked(True);
+            close_frame_queued = True;
         }
-        close_frame_queued = True;
         try {
             # a close frame without a status code (1005) is answered with one without a status code: 1005 is never
-            # sent (RFC 6455 section 7.4.1)
-            ctx.sendData(ws_encode_message(code == WSCC_NoStatusRcvd ? binary() : code.encodeMsb(2), WSOP_Close),
-                True);
+            # sent (RFC 6455 section 7.4.1); the answer is sent as the stream's close frame, which is never refused
+            # for a full send buffer (the answer and the end of the stream were dropped then, issue #5861), and
+            # which is not sent if the stream's frame state sent a close frame before (issue #6077); the stream is
+            # ended either way
+            ctx.sendWebSocketClose(ws_encode_message(code == WSCC_NoStatusRcvd ? binary() : code.encodeMsb(2),
+                WSOP_Close), True);
         } catch (hash<ExceptionInfo> ex) {
-            # the client may have ended the stream already
+            # the client may have ended the stream already, or does not read; the handler's cleanup ends the stream
+            # (see WebSocketHandler::finishConnection())
+            handler.logDebug("H2/H3 WebSocket close answer not sent: %s: %s", ex.err, ex.desc);
         }
         return True;
     }
@@ -1719,6 +1822,12 @@ class WebSocketStreamProcessor {
             close_timer = remove close_timer_id;
             cb = remove done_callback;
         }
+        # on the thread that processes the frames (which holds process_mutex), the frames not read yet are read for
+        # the client's close frame before the end of the stream reports the close code (connectionClosed() runs on
+        # another thread once the done callback has run); another thread does not take the frames from it
+        if (process_mutex.lockOwner()) {
+            recordReceivedClose(wsc.getStreamContext());
+        }
         if (close_timer) {
             try {
                 AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
@@ -1783,8 +1892,13 @@ class WebSocketStreamProcessor {
             binary body = (code == WSCC_NoStatusRcvd || code == WSCC_AbnormalClosure)
                 ? binary()
                 : code.encodeMsb(2) + reason.toBinary();
-            ctx.sendDataWithTimeout(ws_encode_message(body, WSOP_Close),
-                get_duration_milliseconds(handler.getSendTimeout()));
+            # the stream's close frame, which is never refused for a full send buffer; a close frame that the
+            # stream's frame state sent before ends the close: no second one is sent (issue #6077)
+            if (!ctx.sendWebSocketClose(ws_encode_message(body, WSOP_Close))) {
+                handler.logDebug("H2/H3 WebSocket close frame not sent: the connection sent a close frame before");
+                markClosedOnce();
+                return;
+            }
         } catch (hash<ExceptionInfo> ex) {
             # the client does not read, or it has ended the stream: the stream is not closed cleanly
             handler.logDebug("H2/H3 WebSocket close frame not sent: %s: %s", ex.err, ex.desc);
@@ -1937,6 +2051,9 @@ class WebSocketStreamProcessor {
                     # (RFC 6455 section 5.5.1); either way both close frames have then been exchanged, and the
                     # server closes the connection at once, which ends the stream (RFC 8441 section 5, RFC 9220
                     # section 3)
+                    # the client starts the close, or answers the server's: the first close recorded is the
+                    # connection's (issue #5861)
+                    wsc.setCloseInfo(frame.code ?? WSCC_NoStatusRcvd, frame.reason);
                     bool answer;
                     {
                         AutoLock cl(close_lock);
@@ -1961,6 +2078,11 @@ class WebSocketStreamProcessor {
                     handler.logError("H2/H3 WebSocket frame-state error: %y: %y",
                         frame.code ?? WSCC_ProtocolError,
                         frame.reason ?? "");
+                    # the frame state closed the connection with this code, for example 1009 for a message that is
+                    # too big; the application reads it in connectionClosed() (issue #5861)
+                    wsc.setCloseInfo(frame.code ?? WSCC_ProtocolError, frame.reason);
+                    # the frame state sent its close frame: no data frame follows it (issue #6077)
+                    wsc.noteStreamCloseSent();
                     markClosedOnce();
                     return;
                 }
@@ -2025,6 +2147,35 @@ class WebSocketStreamProcessor {
             }
             handler.logError("H2/H3 WebSocket stream error: %s: %s", ex.err, ex.desc);
             markClosedOnce();
+        }
+    }
+
+    #! Records the code and reason of a close frame that the client sent before the processing of the frames stopped
+    /** Called by @ref markClosedOnce() when the stream is closed on the thread that processes its frames before it has
+        read them all, for example when a send in @ref WebSocketConnection::gotMessage() "gotMessage()" fails because
+        the client ended the connection, or times out and drops the client: the client's close frame, which tells why,
+        may have arrived meanwhile, and its code is the connection's close code (issue #5861).  The data frames before
+        it are discarded, as the stream is closed.
+
+        @param ctx the stream context, if any
+    */
+    private recordReceivedClose(*AsyncSocketIo::AbstractStreamContext ctx) {
+        if (!ctx) {
+            return;
+        }
+        try {
+            while (*hash<auto> frame = ctx.readFrame()) {
+                if (frame.type == "close") {
+                    wsc.setCloseInfo(frame.code ?? WSCC_NoStatusRcvd, frame.reason);
+                    return;
+                }
+                if (frame.type == "error") {
+                    wsc.setCloseInfo(frame.code ?? WSCC_ProtocolError, frame.reason);
+                    return;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            handler.logDebug("H2/H3 WebSocket close frame not read: %s: %s", ex.err, ex.desc);
         }
     }
 
@@ -2102,7 +2253,7 @@ class WebSocketStreamProcessor {
         *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
         if (ctx) {
             try {
-                ctx.sendData(ws_encode_message("", WSOP_Close));
+                ctx.sendWebSocketClose(ws_encode_message("", WSOP_Close));
             } catch () {}
         }
     }
@@ -2235,7 +2386,16 @@ class WebSocketStreamProcessor {
         *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
         if (ctx) {
             try {
-                ctx.sendData(ws_encode_message(msg, WSOP_Ping));
+                # a PING is not queued while the stream's send buffer is over its backpressure threshold: the client
+                # has not yet read the data sent before, which it may still be reading, so it is not known to be gone.
+                # The PING counts as sent, so a client that sends nothing is still closed once it has missed
+                # MaxMissedHeartbeats of them (see handleHeartbeatTimer()); a client that reads so slowly that the
+                # buffer stays full for that many heartbeat intervals, and sends nothing, is closed as well.  Closing
+                # the stream for a PING that did not fit ended a connection whose client was reading a large message,
+                # without a close code (issue #5861).
+                if (!ctx.trySendData(ws_encode_message(msg, WSOP_Ping))) {
+                    handler.logDebug("H2/H3 WebSocket heartbeat PING not sent: the stream's send buffer is full");
+                }
             } catch (hash<ExceptionInfo> ex) {
                 handler.logError("H2/H3 WebSocket heartbeat send error: %s: %s",
                     ex.err, ex.desc);
@@ -2329,12 +2489,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         */
         date close_timeout = DefaultCloseTimeout;
 
-        #! Maximum WebSocket message size in bytes (0 = unlimited)
-        /** Messages (including fragmented message accumulation) exceeding this limit will
-            cause the connection to be closed with status code 1009 (Message Too Big).  The limit also applies to
-            a message after it is decompressed by the permessage-deflate extension; when it is not set, the
-            decompressed size is limited by
-            @ref WebSocketUtil::PerMessageDeflateExtension::DefaultMaxMessageSize "PerMessageDeflateExtension::DefaultMaxMessageSize".
+        #! Maximum WebSocket message size in bytes (0 = the built-in limits)
+        /** Limits the size of a frame (with HTTP/1.1, also of the fragments of a message as they arrive) and of a
+            message after it is decompressed by the permessage-deflate extension; 0 (the default) means the built-in
+            limit of 16 MiB for frames, and
+            @ref WebSocketUtil::PerMessageDeflateExtension::DefaultMaxMessageSize "DefaultMaxMessageSize" for
+            decompressed messages.  HTTP/2 and HTTP/3 connections always limit a message to 16 MiB.  A message
+            over the limit closes the connection with status code 1009 (Message Too Big), which
+            @ref WebSocketConnection::getCloseCode() "WebSocketConnection::getCloseCode()" returns in
+            @ref WebSocketConnection::connectionClosed() "connectionClosed()"
 
             @since WebSocketHandler 2.5
         */
@@ -2485,7 +2648,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                     max_message_size = int(h.value);
                     if (max_message_size < 0) {
                         throw "WEBSOCKETHANDLER-OPTION-ERROR", sprintf("Option %y value %d is negative; expecting "
-                            "non-negative value (0 = unlimited)", h.key, max_message_size);
+                            "non-negative value (0 = the built-in limits)", h.key, max_message_size);
                     }
                     break;
                 }
@@ -2570,8 +2733,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         heartbeat = seconds;
     }
 
-    #! Returns the maximum WebSocket message size in bytes (0 = unlimited)
-    /** @return the maximum message size in bytes; 0 means unlimited
+    #! Returns the maximum WebSocket message size in bytes (0 = the built-in limits)
+    /** See the \c max_message_size option of the handler
+
+        @return the maximum message size in bytes; 0 means the built-in limits (16 MiB for frames)
 
         @since WebSocketHandler 2.5
     */
@@ -2579,8 +2744,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         return max_message_size;
     }
 
-    #! Sets the maximum WebSocket message size in bytes (0 = unlimited)
-    /** @param size the maximum message size in bytes; 0 means unlimited
+    #! Sets the maximum WebSocket message size in bytes (0 = the built-in limits)
+    /** See the \c max_message_size option of the handler
+
+        @param size the maximum message size in bytes; 0 means the built-in limits (16 MiB for frames)
 
         @since WebSocketHandler 2.5
     */
@@ -2838,6 +3005,20 @@ handler.setCloseTimeout(2s);
         rwl.readLock();
         on_exit rwl.readUnlock();
         return keys ch;
+    }
+
+    #! Called on HTTP/2 and HTTP/3 once the stream listener of a connection is registered, before direct sends
+    /** Frames of the client can be delivered from this point, and a message sent by the connection is buffered until
+        direct sends are enabled.  The default implementation does nothing; a test can hold the setup of the
+        connection here.
+
+        @param wsc the connection
+
+        @note Internal API — not intended for use by subclasses.
+
+        @since WebSocketHandler 2.8
+    */
+    private streamListenerRegistered(WebSocketConnection wsc) {
     }
 
     #! called from the HTTP server after the handleRequest() method indicates that a dedicated connection should be established
@@ -3122,6 +3303,7 @@ handler.setCloseTimeout(2s);
             logError("WebSocketHandler: NO register_stream_listener callback for cid %y "
                 "(h2=%y h3=%y) — frames will not be delivered!", cid, is_http2, is_http3);
         }
+        streamListenerRegistered(wsc);
         # Enables direct sends and atomically drains any data queued before that point (for
         # example from getConnectionImpl() or registered()).  register_stream_listener()
         # above replays a missed stream-data notification inline, and the I/O controller can
@@ -3266,6 +3448,12 @@ handler.setCloseTimeout(2s);
             string cid) {
         # Clear async WebSocket poll op resources
         if (ws_poll_op) {
+            # the connection's close code and reason, for connectionClosed() (issue #5861)
+            try {
+                wsc.setCloseInfo(ws_poll_op.getCloseCode(), ws_poll_op.getCloseReason());
+            } catch (hash<ExceptionInfo> ex) {
+                logError("exception reading the WebSocket close code: %s", get_exception_string(ex));
+            }
             try {
                 wsc.setWsPollOp();
             } catch (hash<ExceptionInfo> ex) {

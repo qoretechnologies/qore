@@ -35,6 +35,8 @@
 %requires json
 
 module FreshBooksDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "User module providing a data provider API for FreshBooks accounting and invoicing";
     author = "Qore Technologies <info@qoretechnologies.com>";

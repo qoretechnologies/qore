@@ -1262,6 +1262,19 @@ DLLEXPORT void q_enforce_stack_size_on_primary_thread(size_t max_size, size_t pr
 */
 DLLEXPORT bool q_active_exception();
 
+//! Returns a description of functional domains for error messages
+/** Each domain is given by the name of its \c DOM_* constant with the parse option that restricts it, or that it
+    requires, ex: <tt>PROCESS_CONTROL (restricted by PO_NO_PROCESS_CONTROL), NETWORK (restricted by
+    PO_NO_NETWORK)</tt>, as in the messages of libqore that refuse a call for its functional domains
+
+    @param dom the functional domain bits (\c QDOM_*)
+
+    @return the description; empty if \a dom has no domain bits
+
+    @since %Qore 3.0
+*/
+DLLEXPORT std::string q_describe_functional_domains(int64 dom);
+
 //! Add the given module to the module blacklist
 /** @param name the name of the module
     @param msg the message that will be included in any exception when the module is attempted to be loaded

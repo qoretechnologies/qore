@@ -432,6 +432,26 @@ struct pgmloc_vec_t : public std::vector<QoreProgramLocation*> {
 
 class qore_program_private;
 
+#ifdef DEBUG
+//! test hook: called with the Program's lock held when its teardown waits for a batch JIT compile's hold (qore#5874)
+DLLLOCAL void qore_program_dbg_teardown_waits_for_compile_hold();
+//! test hook: holds the next batch collection or effect analysis of the named root function after it has held a
+//! Program other than the root function's (qore#5874); "collection" below means either
+DLLLOCAL void qore_dbg_hold_batch_collection(const char* func);
+//! test hook: waits until the armed batch collection is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_batch_collection_held(int64 timeout_ms);
+//! test hook: waits until a Program's teardown waits for a batch collection's hold; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_teardown_compile_hold(int64 timeout_ms);
+//! test hook: lets the held batch collection continue; returns false if it did not continue before the timeout
+DLLLOCAL bool qore_dbg_continue_batch_collection(int64 timeout_ms);
+//! test hook: counts the holds refused to the collections of the named root function until the count is read
+DLLLOCAL void qore_dbg_count_batch_collection_refusals(const char* func);
+//! test hook: returns the number of holds refused since qore_dbg_count_batch_collection_refusals() and disarms it
+DLLLOCAL int64 qore_dbg_get_batch_collection_refusals();
+//! test hook: records a hold refused to the collection of \a root (a function name with its unique suffix)
+DLLLOCAL void qore_dbg_batch_collection_refused(const std::string& root);
+#endif
+
 class qore_program_private_base {
     friend class QoreProgramAccessHelper;
 
@@ -480,6 +500,8 @@ public:
     // for the thread counter, used only with plock
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
+    std::set<int> foreign_tids;  // the tids in tidmap of foreign threads
+    int foreign_teardown_tid = 0; // the TID of the thread whose teardown at the end of the process refuses other foreign threads; under plock
     unsigned thread_count = 0;   // number of threads currently running in this Program
     // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
     bool cancel_new_threads = false;
@@ -503,6 +525,8 @@ public:
     */
     ptid_map_t deferred_derefs;
     unsigned thread_waiting = 0; // number of threads waiting on all threads to terminate or parsing to complete
+    //! batch JIT compiles that read the Program's code (see tryHoldForCompile()); protected by plock
+    unsigned compile_holds = 0;
     unsigned parse_count = 0;    // recursive parse count
     // thread with the parse lock; atomic because parsingLocked() reads it without plock,
     // while lockParsing()/unlockParsing() write it under plock
@@ -934,12 +958,30 @@ public:
         the functionality the module's code uses, as parsing the module's source does (see qore_aot_module_init_v3())
     */
     QoreParseOptions aot_used_dom;
+    //! the functional domains that a user module declares in its module header (\c domains), which its Program does
+    //! not inherit from the Program loading it when the module is library code (see setModuleOwnDomains())
+    int64 module_own_dom = QDOM_DEFAULT;
+    //! the domains of \c module_own_dom that apply, as the module is library code (see setModuleOwnDomains()): the
+    //! module's own code may use the functionality of these domains for any caller, also when a call is resolved at
+    //! run time (see qore_relieve_module_declared_domains())
+    int64 module_trusted_dom = QDOM_DEFAULT;
+    //! the restrictions that a user module header adds to the module's Program while its header is parsed
+    //! (MOD_HEADER_PO), which do not apply to the functional domains declared on user code (see
+    //! qore_program_private::parseDeniedDomains())
+    int64 mod_header_dom = QDOM_DEFAULT;
+    //! true while the init and del closures of the module header are parse-initialized (see
+    //! qore_program_private::parseAddDomain())
+    bool mod_header_closure_init = false;
 
     //! the restrictions that an AOT module Program inherited from the Program that loaded it
     /** source modules are parsed with these restrictions; AOT module code runs with them (see
         attachAOTEntryStatementBlock())
     */
     QoreParseOptions aot_inherited_po;
+    //! the restrictions that a module parse option mask added to the parse options of the Program of a user module
+    //! when it was created (see set_module_parse_option_mask() and load_module_masked()), named in the error of a
+    //! directive that conflicts with the %modern that they complete (issue #5682)
+    QoreParseOptions module_mask_added;
 
     std::string exec_class_name, script_dir, script_path, script_name, include_path;
 
@@ -1276,6 +1318,12 @@ public:
             assert(!(pwo.parse_options & modernIncompatibleOptions()));
             pwo.parse_options |= modernImpliedOptions();
         }
+        // %modern sets %strict-parse-errors, which %no-strict-parse-errors disables also with %modern
+        if (pwo.parse_options & QoreParseOptions::NO_STRICT_PARSE_ERRORS) {
+            pwo.parse_options &= ~QoreParseOptions::STRICT_PARSE_ERRORS;
+        } else if (isModern(pwo.parse_options)) {
+            pwo.parse_options |= QoreParseOptions::STRICT_PARSE_ERRORS;
+        }
     }
 
     DLLLOCAL bool hasModernParseOptions() const {
@@ -1508,6 +1556,9 @@ protected:
     DLLLOCAL void newProgram();
 
     DLLLOCAL void setDefines();
+
+    //! see setModuleOwnDomains()
+    DLLLOCAL int64 setModuleOwnDomainsIntern(int64 dom, bool apply);
 };
 
 class PreParseHelper {
@@ -1624,8 +1675,35 @@ private:
     DLLLOCAL ~QoreThreadEntryHandlers() = default;
 };
 
+//! A compiled del closure of a local module that a compiled script embeds (qcc -c, qore#6015)
+/** Held by the script's Program, which runs it when the Program is cleared, while the data of the Program exists, as
+    the module manager runs the del closure of a source module that a script loads
+*/
+class AOTScriptDelClosure {
+public:
+    DLLLOCAL virtual ~AOTScriptDelClosure() = default;
+
+    //! runs the closure once; exceptions are handled
+    DLLLOCAL virtual void run() = 0;
+};
+
 class qore_program_private : public qore_program_private_base {
 public:
+    //! the del closures of the local modules that a compiled script embeds, in the order that the compiler gave them
+    /** A module comes before the modules that it requires, as the closure of a module can use those (see qore#6015)
+    */
+    std::vector<std::unique_ptr<AOTScriptDelClosure>> aot_script_dels;
+
+    //! runs the del closures of the embedded local modules in their order, once
+    DLLLOCAL void runAOTScriptDelClosures() {
+        // a closure that runs can end up registering no other
+        std::vector<std::unique_ptr<AOTScriptDelClosure>> dels;
+        dels.swap(aot_script_dels);
+        for (auto& i : dels) {
+            i->run();
+        }
+    }
+
     //! set when the exit hooks of the Program have started to run; guarded by the exit hook registry's lock
     /** No hook can be registered for the Program afterwards (see qore_register_exit_hook())
     */
@@ -1691,6 +1769,23 @@ public:
 
     //! Unregisters a user variant of the Program's code when it is destroyed or moved to another Program
     DLLLOCAL void unregisterUserVariant(const UserVariantBase* v);
+
+    //! clears the data of the Programs that still exist when the library is cleaned up (qore#6045)
+    /** called by qore_cleanup() once no thread but the calling one can run Qore code and the modules have been
+        deleted, while the types, the thread data and the JIT engine still exist: a Program that its owner keeps
+        beyond that (ex: a module's Program with static storage duration, which a static destructor deletes after
+        the library has been cleaned up) has its data (global variables, constants) cleared here, so the Qore code
+        that its objects run when they are destroyed (their destructors) runs while the library can run it; the
+        owner's later deletion of the Program finds its data cleared (see waitForTerminationAndClear(), which clears
+        it only once)
+
+        No reference that the owner holds is released: each Program is held by a reference of its own while it is
+        cleared.  The Programs are cleared oldest first, and the registry is scanned again after each one, so a
+        Program that another one holds is cleared when that one releases it, and a Program created while the
+        Programs are cleared is cleared too.  No thread can be started by the code that runs then (see
+        qore_thread_start_closed).  Exceptions raised by the destructors are reported as unhandled exceptions.
+    */
+    DLLLOCAL static void clearRemainingPrograms();
 
 #ifdef DEBUG
     //! For tests: the number of Program objects that exist (created and not yet destroyed)
@@ -1928,6 +2023,11 @@ public:
         if (!canEnterIntern(tid)) {
             return false;
         }
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         ++tidmap[tid];
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
         if (!thread_count++) {
@@ -1942,7 +2042,20 @@ public:
         the Program, as those of the destructors run while it is in the Program (see enterWithoutContext()), must not
         fail while the Program's data is valid.  After the teardown (ptid is -1), no thread can enter it.
     */
+    DLLLOCAL bool foreignEntryRefusedIntern(int tid) const {
+        return foreign_teardown_tid && tid != foreign_teardown_tid && ptid != tid && tid == q_gettid()
+            && q_thread_is_foreign() && tidmap.find(tid) == tidmap.end();
+    }
+
+    //! see canEnterIntern()
     DLLLOCAL bool canEnterIntern(int tid) const {
+        // once the teardown has found no foreign thread in the Program at the end of the process (foreign_teardown), none
+        // can enter it: it is not waited for, and the data that it would use is destroyed meanwhile
+        // (the thread that performs the teardown, which can be a foreign thread itself, and the threads already in the
+        // Program are not refused)
+        if (foreignEntryRefusedIntern(tid)) {
+            return false;
+        }
         return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
     }
 
@@ -2060,10 +2173,16 @@ public:
         // declared before the lock, so that a transition is published after it is released
         ProgramThreadActivityPublisher activity;
         AutoLocker al(plock);
-        if (ptid) {
+        // a foreign thread is refused once the teardown at the end of the process has begun, as by canEnterIntern()
+        if (ptid || foreignEntryRefusedIntern(tid)) {
             xsink->raiseException("PROGRAM-ERROR", "the Program has already been deleted; its code cannot be "
                 "inherited");
             return -1;
+        }
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
         }
         ++tidmap[tid];
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
@@ -2097,6 +2216,11 @@ public:
                 "be accessed at runtime");
         }
 
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         ++tidmap[tid];
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2122,6 +2246,11 @@ public:
                 "cannot be accessed at runtime");
         }
 
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         ++tidmap[tid];
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2148,6 +2277,7 @@ public:
         assert(i != tidmap.end());
         if (!--i->second) {
             tidmap.erase(i);
+            foreign_tids.erase(tid);
             // a thread that still holds the parse lock releases its deferred references when it releases the lock
             if (parse_tid != tid) {
                 derefs = takeDeferredDerefs(tid, clear);
@@ -2216,6 +2346,62 @@ public:
         // grab program-level lock
         AutoLocker al(plock);
         return thread_count;
+    }
+
+    //! Returns the number of threads other than the calling thread that are foreign threads running in this Program
+    /** A foreign thread is a thread of another runtime (a daemon thread of the Python module, for example) registered
+        with q_register_foreign_thread(); called with plock held
+    */
+    DLLLOCAL unsigned getOtherForeignThreadCountIntern() const {
+        int tid = q_gettid();
+        unsigned count = 0;
+        for (int ftid : foreign_tids) {
+            if (ftid != tid) {
+                ptid_map_t::const_iterator i = tidmap.find(ftid);
+                if (i != tidmap.end()) {
+                    count += i->second;
+                }
+            }
+        }
+        return count;
+    }
+
+    //! Returns true if the Program of a module is left because a foreign thread runs in module code
+    /** A foreign thread that runs in module code is not counted in the Program of its module (the entries into the
+        Programs of the modules are counted by the thread, see qore_module_uncounted_entry()), so every Program of a
+        module is left; see leaveForeignThreads()
+    */
+    DLLLOCAL bool leaveForeignThreadsInModuleCode() const {
+        return qore_foreign_threads_in_module_code.load(std::memory_order_acquire)
+            && pwo.parse_options.hasAny(QoreParseOptions(PO_IN_MODULE));
+    }
+
+    //! keeps the Program allocated, and reachable by the library, for the rest of the process (see leaveForeignThreads())
+    /** The Program is not freed, so that a foreign thread that runs in it never finds it destroyed; it is held by a list
+        that lives as long as the process, so a leak checker finds it still reachable, not lost.  Called with plock held
+    */
+    DLLLOCAL void leaveAllocated();
+
+    //! Returns true if a Program has been left allocated (see leaveAllocated())
+    DLLLOCAL static bool hasLeftPrograms();
+
+    //! Returns true if the Program is left as it is because a foreign thread still runs in it
+    /** Once qore_cleanup() has waited for the threads of the library (qore_shutdown is set), a foreign thread can be
+        blocked in Qore code for as long as the process lives (a daemon thread of the Python module in Queue::get(),
+        for example): the deletion of the Program (see waitForTerminationAndClear()) does not wait for it, as that would
+        hang the end of the process (every python3 process with a blocked daemon thread, qore#6045), and the data that
+        the thread uses is not destroyed under it, so the Program is left as it is until the process ends.  The other
+        threads are waited for as before
+    */
+    DLLLOCAL bool leaveForeignThreads() {
+        if (!qore_shutdown.load(std::memory_order_acquire)) {
+            return false;
+        }
+        if (leaveForeignThreadsInModuleCode()) {
+            return true;
+        }
+        AutoLocker al(plock);
+        return getOtherForeignThreadCountIntern() > 0;
     }
 
     //! Claims parse ownership, which serializes namespace writers for this Program
@@ -2304,10 +2490,50 @@ public:
         ptid_map_t::iterator i = tidmap.find(tid);
         unsigned adj = (i != tidmap.end() ? i->second : 0);
 
-        while ((thread_count - adj) || parse_count) {
+        // a batch JIT compile that reads the Program's code holds it as well (see tryHoldForCompile())
+        // the foreign threads that remain at the end of the process are not waited for (see leaveForeignThreads())
+        while ((thread_count - adj - (qore_shutdown.load(std::memory_order_acquire)
+            ? getOtherForeignThreadCountIntern() : 0)) || parse_count || compile_holds) {
             ++thread_waiting;
+#ifdef DEBUG
+            if (compile_holds) {
+                qore_program_dbg_teardown_waits_for_compile_hold();
+            }
+#endif
             pcond.wait(plock);
             --thread_waiting;
+        }
+    }
+
+    //! Keeps the Program's teardown from freeing its code while a batch JIT compile or effect analysis reads it
+    /** A batch compile of a function collects the code of the functions that it calls (collectBatchCallees()), and
+        the IR interpreter's effect analysis walks the same code (refineInterpreterEffectSummary()), without running it
+        (qore#5874); see QoreProgramCodeHolds.  The hold makes the teardown wait (waitForAllThreadsToTerminateIntern())
+        until the batch is queued or the analysis is done; the teardown then drains or detaches a queued batch
+        (QoreJIT::waitForBgCompileQueue()).
+        Unlike entering the Program, the hold is not visible to its code: it is not a thread of the Program (no thread
+        map entry, thread count or activity event), so neither the Program's threads nor its debugger see it.  A thread
+        must therefore never start the teardown of a Program that it holds: unlike its own thread count, its hold is not
+        discounted, and the teardown would wait for itself (a holder runs no Qore code while it holds).
+
+        @return true if the hold was taken, false if its teardown has marked the Program (ptid): its code is not read
+        then; until then, the teardown waits for a hold taken (its first wait and the cleanup callback come before)
+    */
+    DLLLOCAL bool tryHoldForCompile() {
+        AutoLocker al(plock);
+        if (ptid) {
+            return false;
+        }
+        ++compile_holds;
+        return true;
+    }
+
+    //! Releases a hold taken with tryHoldForCompile()
+    DLLLOCAL void releaseCompileHold() {
+        AutoLocker al(plock);
+        assert(compile_holds);
+        if (!--compile_holds && thread_waiting) {
+            pcond.broadcast();
         }
     }
 
@@ -2435,7 +2661,10 @@ public:
         yy_scan_string(code, lexer);
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
-        yyparse(lexer);
+        {
+            LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+            yyparse(lexer);
+        }
         // the parser returns before the end of the input if its stack is exhausted
         qore_scanner_end_input(lexer);
 
@@ -2712,7 +2941,10 @@ public:
             yylex_init_extra(&state, &lexer);
             yyset_in(fp, lexer);
             // yyparse() will call endParsing() and restore old pgm position
-            yyparse(lexer);
+            {
+                LexicalParsePolicyHelper semantic_scope(&state.semantic_policy);
+                yyparse(lexer);
+            }
             // the parser returns before the end of the input if its stack is exhausted
             qore_scanner_end_input(lexer);
 
@@ -3736,6 +3968,19 @@ public:
             }
         }
         QoreParseOptions neg = (n_dom & ~QoreParseOptions::POSITIVE_OPTIONS);
+        // a closure of a module header is parse-initialized after the header with the options in effect where it was
+        // written: one written before the domains key still has the restrictions that the declaration removed for the
+        // rest of the module, the one inherited from the Program loading a module from the process-wide module path
+        // (setModuleOwnDomainsIntern()) and the header's own one (QoreUserModuleDefContextHelper), so they do not apply
+        // to it, whatever the order of the keys of the header, for functions, methods and classes (qore#5803)
+        // module_trusted_dom, module_own_dom and mod_header_dom are per Program and are not reset when its module is
+        // loaded: a container that the API provides for a module (loadApplyToUserModule()) and that is used for a
+        // second module, after a restriction has been added back to it, would give the second module's header closures
+        // the first module's relief; the API does not reuse a container so, and without restrictions added back the
+        // first declaration has removed these restrictions from the container's options for good
+        if (neg && mod_header_closure_init) {
+            neg &= ~QoreParseOptions(module_trusted_dom | (module_own_dom & mod_header_dom));
+        }
         if (neg && (neg & pwo.parse_options)) {
             rv |= (neg & pwo.parse_options);
             pend_dom |= neg;
@@ -4018,6 +4263,19 @@ public:
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* class_name, ExceptionSink* xsink) const;
 
+    //! Compiled metadata keeps canonical lookup semantics, including pending declarations and parse access guards.
+    DLLLOCAL const QoreClass* findClassCanonical(const char* path, ExceptionSink* xsink) const;
+    DLLLOCAL const TypedHashDecl* findHashDeclCanonical(const char* path, const QoreNamespace*& pns) const;
+    DLLLOCAL const QoreEnumDecl* findEnumCanonical(const char* path, const QoreNamespace*& pns) const;
+
+    template <bool Native>
+    DLLLOCAL const QoreClass* runtimeFindClassImpl(const char* path, ExceptionSink* xsink) const;
+    template <bool Native>
+    DLLLOCAL const TypedHashDecl* findHashDeclImpl(const char* path, const QoreNamespace*& pns) const;
+    template <bool Native>
+    DLLLOCAL const QoreEnumDecl* findEnumImpl(const char* path, const QoreNamespace*& pns) const;
+
+
     //! waits until no child Program copies the external data of this Program; plock must be held
     DLLLOCAL void waitForExternalDataCopiesIntern() {
         while (ext_copy_count) {
@@ -4249,6 +4507,14 @@ public:
 
     DLLLOCAL static bool runWithRegisteredPrograms(
             const std::vector<std::pair<const QoreProgram*, qore_program_id_t>>& pgms, const std::function<bool()>& f);
+
+    //! Explicit invocation policy for source-bound dynamic forwarding; the public C++ entry is canonical.
+    DLLLOCAL QoreValue callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool LexicalInvocation>
+    DLLLOCAL QoreValue callFunctionImpl(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;
@@ -4635,6 +4901,67 @@ public:
 
     DLLLOCAL static void setAOTInheritedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         pgm.priv->aot_inherited_po = po;
+    }
+
+    //! Records the restrictions that a module parse option mask added to the parse options of a module's Program
+    DLLLOCAL static void setModuleMaskAddedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
+        pgm.priv->module_mask_added = po;
+    }
+
+    //! Returns the restrictions that a module parse option mask added to the parse options of a module's Program
+    //! while its code is parsed (none otherwise)
+    DLLLOCAL static QoreParseOptions getModuleMaskAddedParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->module_mask_added;
+    }
+
+    //! Records the functional domains that a user module declares in its module header (\c domains)
+    /** If \a apply is true (the module is library code: see QoreModuleManager::isTrustedModulePath()), the Program no
+        longer has the restrictions of these domains, which it inherited from the Program loading it, nor their parse
+        defines, so the module's own code may use them; the code calling the module is still checked against its own
+        restrictions.
+
+        @return the restrictions that were removed
+    */
+    DLLLOCAL static int64 setModuleOwnDomains(QoreProgram& pgm, int64 dom, bool apply) {
+        return pgm.priv->setModuleOwnDomainsIntern(dom, apply);
+    }
+
+    //! Returns the functional domain bits of \a dom that the parse options of \a pgm do not allow, and records them
+    /** as parseAddDomain(); the restrictions that a module header adds for its own code do not apply to the domains
+        declared on user code (\a user_declared): the header's \c init and \c del closures may call user code that
+        declares a domain, which the code loading the module is checked for when it calls the module; a header closure
+        has the domains that the header declares, also when it is written before the domains key (see parseAddDomain())
+    */
+    DLLLOCAL static QoreParseOptions parseDeniedDomains(QoreProgram* pgm, int64 dom, int64 user_declared) {
+        QoreParseOptions denied = parseAddDomain(pgm, dom);
+        if (denied && user_declared && pgm->priv->mod_header_dom) {
+            denied &= ~QoreParseOptions(user_declared & pgm->priv->mod_header_dom & ~(dom & ~user_declared));
+        }
+        return denied;
+    }
+
+    //! Marks the parse initialization of the init and del closures of a module header (see parseAddDomain())
+    //! \return the previous value
+    DLLLOCAL static bool setModuleHeaderClosureInit(QoreProgram& pgm, bool on) {
+        bool prev = pgm.priv->mod_header_closure_init;
+        pgm.priv->mod_header_closure_init = on;
+        return prev;
+    }
+
+    //! Sets the restrictions that a user module header adds to the module's Program while its header is parsed
+    DLLLOCAL static void setModuleHeaderDomains(QoreProgram& pgm, int64 dom) {
+        pgm.priv->mod_header_dom = dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header (\c domains)
+    DLLLOCAL static int64 getModuleOwnDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_own_dom;
+    }
+
+    //! Returns the functional domains that a user module declares in its module header and that apply to it, as it is
+    //! library code
+    DLLLOCAL static int64 getModuleTrustedDomains(const QoreProgram& pgm) {
+        return pgm.priv->module_trusted_dom;
     }
 
     DLLLOCAL static QoreParseOptions getDomain(const QoreProgram& pgm) {

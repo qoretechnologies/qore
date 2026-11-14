@@ -123,9 +123,7 @@ f_dismiss_enclosing: [\"DE@145\", \"DE@144\", \"exit@144\"] rv=5
 
         #! the output of DebuggerExceptionEventsFunctions.q compiled ahead of time, by its argument
         /** the events are those of the AST interpreter; a dismissal ends the function, which returns no value
-            (temporary: https://github.com/qoretechnologies/qore/issues/5825), and the local of a block that has
-            handlers and no exception path of its own (f_dtor_order) is released when the frame ends, after the events
-            of the statements that contain the block (temporary: https://github.com/qoretechnologies/qore/issues/5867)
+            (temporary: https://github.com/qoretechnologies/qore/issues/5825)
         */
         const ExpectedFunctionsAot = {
             "run": "f_throw: [\"B@73\"]
@@ -145,7 +143,7 @@ f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@1
 f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\"]
 f_obe_normal_try: [\"ONT@194\", \"ONT@192\"]
 f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\"]
-f_dtor_order: [\"DO@224\", \"DO@223\", \"DO@220\", \"DO@219\", \"DTD@215\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DTD@215\", \"DO@220\", \"DO@219\"]
 f_empty: [\"EM@234\", \"EM@232\", \"EM@231\"]
 f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\"]
 f_break: [\"BR@253\", \"BR@251\", \"BR@250\"]
@@ -175,7 +173,7 @@ f_on_exit_closure: [\"BODY@175\", \"BODY@174\", \"BODY@173\", \"OC@166\", \"OC@1
 f_obe_normal: [\"ON@185\", \"ON@183\", \"ON@182\", \"exit@182\"]
 f_obe_normal_try: [\"ONT@194\", \"ONT@192\", \"exit@191\"]
 f_obe_normal_catch: [\"C0@202\", \"ONC@206\", \"ONC@204\", \"ONC@201\", \"exit@201\"]
-f_dtor_order: [\"DO@224\", \"DO@223\", \"DO@220\", \"DO@219\", \"exit@219\", \"DTD@215\", \"exit@215\"]
+f_dtor_order: [\"DO@224\", \"DO@223\", \"DTD@215\", \"exit@215\", \"DO@220\", \"DO@219\", \"exit@219\"]
 f_empty: [\"EM@234\", \"EM@232\", \"EM@231\", \"exit@231\"]
 f_catch_direct: [\"CD0@241\", \"CD@244\", \"CD@240\", \"CD@239\", \"exit@239\"]
 f_break: [\"BR@253\", \"BR@251\", \"BR@250\", \"exit@250\"]

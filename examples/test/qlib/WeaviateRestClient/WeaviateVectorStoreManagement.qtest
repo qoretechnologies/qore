@@ -24,7 +24,7 @@ class FakeWeaviateRest inherits WeaviateRestClient::WeaviateRestClientIo {
     constructor() : WeaviateRestClientIo({"url": "http://localhost:8080"}) {
     }
 
-    hash<auto> restGet(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restGet(string path, auto body, *hash<auto> hdr) {
         push requests, {"method": "GET", "path": path};
         int start = 0;
         if (path =~ /after=([^&]+)/) {
@@ -39,7 +39,7 @@ class FakeWeaviateRest inherits WeaviateRestClient::WeaviateRestClientIo {
         return <RestClient::RestResponseInfo>{"body": {"objects": objects[start .. start + 99]}, "status_code": 200};
     }
 
-    hash<auto> restDel(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
         push requests, {"method": "DELETE", "path": path};
         return <RestClient::RestResponseInfo>{"body": {}, "status_code": 204};
     }

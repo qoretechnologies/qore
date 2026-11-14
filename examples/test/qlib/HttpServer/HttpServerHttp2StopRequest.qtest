@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 connection teardown and GOAWAY delivery on HttpServer stop over sockets
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -49,6 +50,30 @@ class EarlyResponseHandler inherits AbstractHttpRequestHandler {
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return makeResponse(401, "early", {"Content-Type": "text/plain"});
+    }
+}
+
+#! blocks until the test releases it, then answers
+class BlockingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives the path of each request as it enters the handler
+        Queue entered();
+
+        #! requests return when this reaches zero
+        Counter release(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        entered.push(hdr.path);
+        release.waitForZero();
+        return makeResponse(200, "released", {"Content-Type": "text/plain"});
+    }
+
+    #! releases every blocked request; safe to call more than once
+    releaseAll() {
+        if (release.getCount()) {
+            release.dec();
+        }
     }
 }
 
@@ -175,6 +200,9 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         addTestCase("DATA for a cancelled body read is discarded", \cancelledBodyReadTest());
         addTestCase("a bounded body Queue receives the whole body", \boundedQueueTest());
         addTestCase("the connection window is credited for data on reset streams", \windowNotLostTest());
+        addTestCase("a stopping server sends GOAWAY(NO_ERROR) with the last processed stream", \stopGoawayTest());
+        addTestCase("a stopping server answers the streams in progress, then closes the connection",
+            \stopDrainTest());
         set_return_value(main());
     }
 
@@ -322,6 +350,14 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         and the last request could not send its body.
     */
     windowNotLostTest() {
+        # the lost credit is seen as the 65535 byte default connection window shrinking: the server keeps it for the
+        # case (a debug hook), as it raises its window otherwise
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_http2_default_connection_window", True);
+        }
+        on_exit if (Option::HAVE_LIBRARY_DEBUGGING) {
+            call_function("dbg_http2_default_connection_window", False);
+        }
         Socket s = connect();
         on_exit s.close();
 
@@ -461,10 +497,133 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         return rv;
     }
 
+    #! a server that stops tells its HTTP/2 clients which requests it processed (RFC 9113 section 6.8, qore#5899)
+    stopGoawayTest() {
+        HttpServer stopping(<HttpServerOptionInfo>{
+            "logger": new Logger("h2-stop-goaway-test", LoggerLevel::getLevelError()),
+        });
+        stopping.setHandler("size", "/size", NOTHING, new BodySizeHandler(), NOTHING, False);
+        int stop_port = stopping.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "http_version": "h2c",
+        }).port;
+        stopping.waitForAsyncIo();
+        on_exit delete stopping;
+
+        Socket s = connect(stop_port);
+        on_exit s.close();
+        # stream 1 is processed
+        sendRequest(s, 1, "/size", True);
+        list<hash<H2Frame>> frames = readResponse(s, 1);
+        assertEq(1, elements (select frames, $1.type == HEADERS && $1.sid == 1), "the request is answered");
+        # the server has processed every frame sent before the PING when it acknowledges it, and sent every frame of
+        # the stream before the acknowledgement, so no frame of the stream is mistaken for one sent at the stop
+        pingRoundTrip(s, "stopgoaw");
+
+        stopping.stop();
+
+        # the frames that the server sent until it closed the connection
+        frames = ();
+        *string end_err;
+        while (True) {
+            try {
+                push frames, readFrame(s);
+            } catch (hash<ExceptionInfo> ex) {
+                end_err = ex.err;
+                break;
+            }
+        }
+        # the server closes the connection after the GOAWAY (a receive timeout would mean that it did not)
+        assertEq("SOCKET-CLOSED", end_err, "the connection is closed");
+        list<hash<H2Frame>> goaways = select frames, $1.type == GOAWAY;
+        assertEq(1, goaways.size(), sprintf("one GOAWAY is sent: %y", (map $1.type, frames)));
+        if (goaways) {
+            binary p = goaways[0].payload;
+            int last_sid = ((get_byte(p, 0) & 0x7f) << 24) | (get_byte(p, 1) << 16) | (get_byte(p, 2) << 8)
+                | get_byte(p, 3);
+            int error_code = (get_byte(p, 4) << 24) | (get_byte(p, 5) << 16) | (get_byte(p, 6) << 8)
+                | get_byte(p, 7);
+            assertEq(1, last_sid, "the last processed stream");
+            assertEq(0, error_code, "NO_ERROR");
+        }
+    }
+
+    #! a server that stops drains its HTTP/2 connections: GOAWAY first, then the streams in progress are answered,
+    #! then the connection is closed (qore#5899)
+    stopDrainTest() {
+        BlockingHandler handler();
+        HttpServer stopping(<HttpServerOptionInfo>{
+            "logger": new Logger("h2-stop-drain-test", LoggerLevel::getLevelError()),
+            "drain_timeout": 60s,
+        });
+        on_exit {
+            handler.releaseAll();
+            stopping.stopImmediate();
+        }
+        stopping.setHandler("block", "/block", NOTHING, handler, NOTHING, False);
+        int stop_port = stopping.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "http_version": "h2c",
+        }).port;
+        stopping.waitForAsyncIo();
+
+        Socket s = connect(stop_port);
+        on_exit s.close();
+        sendRequest(s, 1, "/block", True);
+        assertEq("block", handler.entered.get(30s), "stream 1 reaches the handler");
+
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            stopping.stop();
+        }();
+
+        # the GOAWAY comes while stream 1 is still in the handler
+        hash<H2Frame> goaway;
+        while (True) {
+            hash<H2Frame> f = readFrame(s);
+            if (f.type == GOAWAY) {
+                goaway = f;
+                break;
+            }
+            assertFalse(f.sid == 1 && (f.type == HEADERS || f.type == DATA), "no response before the release");
+        }
+        binary p = goaway.payload;
+        int last_sid = ((get_byte(p, 0) & 0x7f) << 24) | (get_byte(p, 1) << 16) | (get_byte(p, 2) << 8)
+            | get_byte(p, 3);
+        assertEq(1, last_sid, "the stream in progress is the last one processed");
+        assertEq(1, stopped.getCount(), "stop() waits for the stream in progress");
+
+        # a stream opened after the GOAWAY is not processed
+        sendRequest(s, 3, "/block", True);
+
+        handler.releaseAll();
+        list<hash<H2Frame>> frames = ();
+        *string end_err;
+        while (True) {
+            try {
+                push frames, readFrame(s);
+            } catch (hash<ExceptionInfo> ex) {
+                end_err = ex.err;
+                break;
+            }
+        }
+        assertEq(1, elements (select frames, $1.sid == 1 && $1.type == HEADERS), "stream 1 is answered");
+        assertEq(1, elements (select frames, $1.sid == 1 && ($1.flags & END_STREAM)), "stream 1 ends");
+        assertEq(0, elements (select frames, $1.sid == 3 && ($1.type == HEADERS || $1.type == DATA)),
+            "stream 3 is not answered");
+        assertEq(0, elements (select frames, $1.type == GOAWAY), "a single GOAWAY is sent");
+        assertEq("SOCKET-CLOSED", end_err, "the connection is closed when its streams have ended");
+        assertEq(0, stopped.waitForZero(30s), "stop() ends");
+        assertEq(0, handler.entered.size(), "stream 3 never reaches the handler");
+    }
+
     #! connects and sends the connection preface
-    private Socket connect() {
+    private Socket connect(*int to_port) {
         Socket s();
-        s.connect(sprintf("127.0.0.1:%d", port), 10s);
+        s.connect(sprintf("127.0.0.1:%d", to_port ?? port), 10s);
         s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + frame(SETTINGS, 0, 0, binary()));
         return s;
     }

@@ -133,6 +133,16 @@ DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, 
 DLLLOCAL int sock_get_raw_error();
 
 class QoreSandboxManager;
+class QoreSocketObject;
+
+//! Waits until a client stream has no data buffered to be sent (HTTP/2, or HTTP/3 on the socket's first QUIC session)
+/** With HTTP/2, the data has been written to the connection; with HTTP/3, the peer has acknowledged it.
+
+    @return 0 if the stream has no data buffered to be sent (or the stream or the session is gone), 1 if the wait timed
+    out, -1 if an exception was raised (\c HTTP2-ERROR or \c QUIC-ERROR without a session)
+*/
+DLLLOCAL int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool http2, int64_t stream_id, int timeout_ms,
+        ExceptionSink* xsink);
 //! Returns a reference to the sandbox manager whose network policy applies to the calling thread, or nullptr
 /** Socket operations run on async I/O threads without a Program, so every operation that accesses the network
     resolves the manager on the thread that creates it and keeps it for its checks.

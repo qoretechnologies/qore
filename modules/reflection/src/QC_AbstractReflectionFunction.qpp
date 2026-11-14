@@ -407,17 +407,18 @@ list<string> AbstractReflectionFunction::getCodeFlagList() [flags=RET_VALUE_ONLY
     return get_code_flag_list(f->f->getCodeFlags());
 }
 
-//! returns the functional domain common to all variants for this function (for builtin functions only) as a bitfield of @ref functional_domain_constants
+//! returns the functional domain common to all variants for this function as a bitfield of @ref functional_domain_constants
 /** @par Example:
     @code{.py}
 int i = f.getDomain();
     @endcode
 
-    @return the functional domain common to all variants for this function (for builtin functions only) as a bitfield of @ref functional_domain_constants
+    @return the functional domain common to all variants for this function as a bitfield of @ref functional_domain_constants
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
-    @note user functions always return 0 here; a value is only returned by builtin functions
+    @note user functions return the functional domains that all their variants declare with an attribute list (see
+    @ref function_domains) since %Qore 3.0
 
     @since %Qore 0.9.5
 */
@@ -432,17 +433,18 @@ int AbstractReflectionFunction::getDomain() [flags=RET_VALUE_ONLY] {
     return f->f->getDomain();
 }
 
-//! returns a list of functional domain strings common to all variants for this function (for builtin functions only); an empty list is returned for user functions
+//! returns a list of functional domain strings common to all variants for this function
 /** @par Example:
     @code{.py}
 list<string> l = f.getDomainStringList();
     @endcode
 
-    @return a list of functional domain strings common to all variants for this function (for builtin functions only)
+    @return a list of functional domain strings common to all variants for this function
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
-    @note user functions always return an empty list here
+    @note user functions return the functional domains that all their variants declare with an attribute list (see
+    @ref function_domains) since %Qore 3.0
 
     @since %Qore 0.9.5
 */

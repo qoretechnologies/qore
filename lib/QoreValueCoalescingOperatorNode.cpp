@@ -33,6 +33,33 @@
 
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
+
+namespace {
+class StrictBooleanValueCoalescingOperatorNode : public QoreValueCoalescingOperatorNode {
+public:
+    using QoreValueCoalescingOperatorNode::QoreValueCoalescingOperatorNode;
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        return copyBackgroundExplicit<StrictBooleanValueCoalescingOperatorNode>(xsink);
+    }
+private:
+    QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(rc, needs_deref, xsink);
+    }
+};
+}
+
+QoreValueCoalescingOperatorNode* QoreValueCoalescingOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue left, QoreValue right) {
+    QoreValueCoalescingOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanValueCoalescingOperatorNode(loc, left, right)
+        : new QoreValueCoalescingOperatorNode(loc, left, right);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
+QoreValue QoreValueCoalescingOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(rc, needs_deref, xsink);
+}
+
 //#include <qore/intern/qore_program_private.h>
 
 QoreString QoreValueCoalescingOperatorNode::value_coalescing_str("value coalescing operator");
@@ -70,6 +97,10 @@ int QoreValueCoalescingOperatorNode::parseInitImpl(QoreValue& val, QoreParseCont
     int err = 0;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
+        // a variable that is the left operand itself may have no value: the operator gives the right operand then,
+        // as exists inspects it (qore#5937); with %new-style, a variable is a bareword until it is parsed
+        QoreParseContextFlagScope fs(parse_context, PF_EXISTENCE_CHECK,
+            left.getType() == NT_VARREF || left.getType() == NT_BAREWORD);
         err = parse_init_value(left, parse_context);
         left_analysis = parse_context.analysis;
     }
@@ -99,14 +130,14 @@ QoreValue QoreValueCoalescingOperatorNode::evalImpl(bool& needs_deref, Exception
     return evalImpl(rc, needs_deref, xsink);
 }
 
-QoreValue QoreValueCoalescingOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref,
-        ExceptionSink* xsink) const {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreValueCoalescingOperatorNode::evalCommon(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     {
         ValueEvalRefHolder arg(rc, left, xsink);
         if (*xsink)
         return QoreValue();
 
-        if (arg->getAsBool())
+        if (LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*arg))
         return arg.takeValue(needs_deref);
     }
 

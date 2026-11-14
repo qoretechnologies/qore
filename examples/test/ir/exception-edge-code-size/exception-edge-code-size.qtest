@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of exception edges
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ExceptionEdgeCodeSizeTest
+
+#! The native code of the exception edges of a statement is linear in the size of the statement (#5962)
+/** Each exception check of a statement in a try statement has an edge to the handler that releases the temporaries of
+    the temp scopes that the exception leaves, those registered up to the check.  Each edge released them all, also
+    those of the statements that had ended, so the code of a large statement (a switch with many cases in a try
+    statement) was quadratic in its size: DebugProgramControl::processCommand() took 17 s to compile.  The edges now
+    share their release code, and leave out the temporaries of the scopes that have ended.  The test compiles a
+    function with such a statement of 40 and of 80 cases, with the JIT and with qcc, and checks that the LLVM code of
+    the function grows linearly: the number of its instructions, which does not depend on timing.
+*/
+class ExceptionEdgeCodeSizeTest inherits QUnit::Test {
+    public {
+        #! the numbers of cases of the two functions compared
+        const Small = 40;
+        const Large = 80;
+        #! the largest ratio of the sizes of the two functions: a linear growth gives about 2, a quadratic one 4
+        const MaxRatio = 2.4;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("ExceptionEdgeCodeSizeTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("jit: the code of the exception edges of a large statement", \jitTest());
+        addTestCase("qcc: the code of the exception edges of a large statement", \aotTest());
+        set_return_value(main());
+    }
+
+    #! returns a script with the function 'big', whose try statement has a switch of the given number of cases
+    static string script(int n) {
+        string src = "%modern\nstring sub g(string a, string b) { return a + b; }\nstring sub big(int i) {\n"
+            "    string r;\n    try {\n        switch (i) {\n";
+        for (int c = 0; c < n; ++c) {
+            src += sprintf("            case %d: r = g(sprintf(\"a%%d\", i), sprintf(\"b%%d\", i)) + "
+                "g(sprintf(\"c%%d\", i), sprintf(\"d%%d\", i)); break;\n", c);
+        }
+        src += "        }\n    } catch (hash<ExceptionInfo> ex) {\n        r = ex.err;\n    }\n    return r;\n}\n"
+            "for (int k = 0; k < 3; ++k) {\n    printf(\"%s\\n\", big(k));\n}\n";
+        return src;
+    }
+
+    #! returns the number of instructions of the LLVM function whose name starts with the given prefix in a dump
+    static int count(string dump, string prefix) {
+        int n = 0;
+        bool in_fn = False;
+        foreach string line in (dump.split("\n")) {
+            if (line =~ /^define / && (line.find("@\"" + prefix) >= 0 || line.find("@" + prefix) >= 0)) {
+                in_fn = True;
+                continue;
+            }
+            if (in_fn && line =~ /^}/) {
+                in_fn = False;
+                continue;
+            }
+            if (in_fn && line =~ /^  / && line !~ /^\s*;/) {
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    #! returns the LLVM code that the JIT compiles for the script
+    string jitDump(TmpDir tmp, int n) {
+        string path = sprintf("%s%sbig-%d.q", tmp.path, DirSep, n);
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(script(n));
+        f.close();
+        return ExecModeHarness::run_any(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_JIT_OPT_LEVEL=0 "
+            "QORE_DUMP_LLVM_IR=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=jit %s", libqore_dir, libqore_dir,
+            qore_bin, path));
+    }
+
+    #! returns the LLVM code that qcc compiles for the script
+    string aotDump(TmpDir tmp, int n) {
+        string path = sprintf("%s%sbig-%d.q", tmp.path, DirSep, n);
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(script(n));
+        f.close();
+        string exe = sprintf("%s%sbig-%d", tmp.path, DirSep, n);
+        return ExecModeHarness::run_any(sprintf("QORE_DUMP_LLVM_IR=1 QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+            "%s -O0 -o %s %s", libqore_dir, libqore_dir, libqore_dir, qcc_bin, exe, path));
+    }
+
+    check(string mode, int small, int large) {
+        assertGt(0, small, mode + ": the function was compiled");
+        float ratio = large.toFloat() / small;
+        assertTrue(ratio < MaxRatio, sprintf("%s: %d instructions for %d cases, %d for %d (ratio %.2f; at most %.1f)",
+            mode, small, Small, large, Large, ratio, MaxRatio));
+    }
+
+    jitTest() {
+        TmpDir tmp("qore-exception-edge-code-size-");
+        check("jit", count(jitDump(tmp, Small), "big@"), count(jitDump(tmp, Large), "big@"));
+    }
+
+    aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("qore-exception-edge-code-size-");
+        check("qcc", count(aotDump(tmp, Small), "big_"), count(aotDump(tmp, Large), "big_"));
+    }
+}

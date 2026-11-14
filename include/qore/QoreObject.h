@@ -684,6 +684,9 @@ public:
 
     DLLLOCAL int getStatus() const;
 
+    //! Internal canonical boolean conversion, with the same lifetime lock as the public value API.
+    DLLLOCAL bool getAsBoolDefault() const;
+
     DLLLOCAL class KeyNode* getReferencedPrivateDataNode(qore_classid_t key);
 
     //! retrieves the private data pointer and clears it from the object's private data store, used when executing destructors

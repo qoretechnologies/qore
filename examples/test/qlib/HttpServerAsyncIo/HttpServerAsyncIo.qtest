@@ -149,6 +149,29 @@ class BodyCaptureTarget inherits HttpAsyncTarget {
     }
 }
 
+#! Target that answers during preparation, after a short delay, with a body larger than a socket can take at once
+class DelayedLargeResponseTarget inherits TestTarget {
+    public {
+        const BodySize = 16 * 1024 * 1024;
+        Queue prepared();
+    }
+
+    *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
+        prepared.push(True);
+        return <HttpRequestResultInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Length": string(BodySize),
+                "Connection": "keep-alive",
+            },
+            "body": strmul("x", BodySize).toBinary(),
+            "status_message": "OK",
+            "return_to_idle": True,
+            "response_delay": 50ms,
+        };
+    }
+}
+
 #! Target that rejects during preparation with server-enforced response pacing
 class DelayedPreparationTarget inherits TestTarget {
     public {
@@ -268,6 +291,7 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         addTestCase("SseEventFormat test", \sseEventFormatTest());
         addTestCase("Target class test", \targetClassTest());
         addTestCase("delayed preparation response", \delayedPreparationResponseTest());
+        addTestCase("a drain waits for a delayed response", \delayedResponseDrainTest());
         addTestCase("response delay guard for blocking bodies",
             \delayedStreamingResponseGuardTest());
         addTestCase("HttpIdlePollOperation basic test", \idlePollOperationBasicTest());
@@ -489,6 +513,45 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         sock.close();
     }
 
+    #! a drain counts a connection whose response waits for its delay until the response is sent (qore#5899)
+    delayedResponseDrainTest() {
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        DelayedLargeResponseTarget target();
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+        ctrl.addListener(server, target);
+
+        Socket client();
+        on_exit client.close();
+        client.connect("127.0.0.1:" + port, 10s);
+        client.send("GET /large HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertTrue(target.prepared.get(10s), "the request is prepared");
+
+        # the response is sent after its delay, and its send cannot end while the client reads nothing: the drain
+        # must wait for it all that time
+        ctrl.startDrain();
+        assertTrue(ctrl.isDraining());
+        assertFalse(ctrl.waitDrain(5s), "the drain waits for the delayed response that is being sent");
+
+        hash<auto> h = client.readHTTPHeader(30s);
+        assertEq(200, h.status_code, "the delayed response is sent");
+        assertEq("close", h.connection, "the response closes the connection");
+        int size = 0;
+        while (size < DelayedLargeResponseTarget::BodySize) {
+            size += client.recvBinary(0, 30s).size();
+        }
+        assertEq(DelayedLargeResponseTarget::BodySize, size, "the whole response is received");
+        assertTrue(ctrl.waitDrain(30s), "the drain ends when the delayed response has been sent");
+    }
+
     delayedPreparationResponseTest() {
         AsyncSocketIoController io_ctrl(False);
         on_exit io_ctrl.stop();
@@ -708,11 +771,15 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         server.bind("127.0.0.1:0");
         server.listen();
         on_exit server.close();
-        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
         # the connection is waiting to be accepted before the operation polls
         Socket client();
         client.connect("127.0.0.1:" + server.getSocketInfo().port);
         on_exit client.close();
+        # connect() returns when the client side of the TCP handshake completes, which under load can be before the
+        # listener has queued the connection: the listener is readable once it has, so the accept completes in the
+        # cycle that the test expects
+        assertTrue(server.isDataAvailable(5s), "the connection is waiting to be accepted");
+        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
         # disarms the hook if it did not fire
         on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
         call_function("dbg_poll_close_before_open_state", op, "ssl-handshake");
@@ -781,10 +848,14 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         server.bind("127.0.0.1:0");
         server.listen();
         on_exit server.close();
-        HttpAcceptPollOperation op(server, False);
         Socket client();
         client.connect("127.0.0.1:" + server.getSocketInfo().port);
         on_exit client.close();
+        # connect() returns when the client side of the TCP handshake completes, which under load can be before the
+        # listener has queued the connection: the listener is readable once it has, so the accept completes in the
+        # cycle that the test expects
+        assertTrue(server.isDataAvailable(5s), "the connection is waiting to be accepted");
+        HttpAcceptPollOperation op(server, False);
         # disarms the hook if it did not fire
         on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
         call_function("dbg_poll_close_before_open_state", op, "accept-complete");
@@ -836,10 +907,14 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         server.bind("127.0.0.1:0");
         server.listen();
         on_exit server.close();
-        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
         Socket client();
         client.connect("127.0.0.1:" + server.getSocketInfo().port);
         on_exit client.close();
+        # connect() returns when the client side of the TCP handshake completes, which under load can be before the
+        # listener has queued the connection: the listener is readable once it has, so the accept completes in the
+        # cycle that the test expects
+        assertTrue(server.isDataAvailable(5s), "the connection is waiting to be accepted");
+        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
         # disarms the hook if it did not fire
         on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
         call_function("dbg_poll_close_before_open_state", op, "release-current-op");

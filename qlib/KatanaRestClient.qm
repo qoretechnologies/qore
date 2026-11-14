@@ -49,6 +49,8 @@ module KatanaRestClient {
         ConnectionSchemeCache::registerScheme("katanarests",
             KatanaRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage KatanaRestClient Module

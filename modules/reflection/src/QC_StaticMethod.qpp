@@ -28,9 +28,89 @@
     information.
 */
 
+#include <qore/intern/LexicalReflection.h>
 #include "qore_reflection.h"
 #include "QC_StaticMethod.h"
 #include "QC_Class.h"
+
+// Both entries share the reflection authority checks; only the final invocation differs.
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue StaticMethod_call_VV_impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    // the privileges of the calling code, captured before switching to the method's Program
+    QoreReflectionCaller caller;
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the method's class and the variant selected for the arguments must be allowed by the caller and the
+    // method's Program
+    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, m->m->getClass(), m->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the access of the method's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
+    // the method ptr must be valid
+    if constexpr (Lexical) return qore_lexical_reflection_method(policy, nullptr, *m->m, m->m->getClass(), nullptr, args, xsink);
+    else return QoreObject::evalStaticMethod(*m->m, m->m->getClass(), args, xsink);
+}
+
+static QoreValue StaticMethod_call_VV_lexical(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    return StaticMethod_call_VV_impl<true>(qore_get_native_semantic_policy(), self, m, args, runtime_cfg, xsink);
+}
+
+static QoreValue StaticMethod_call_VV(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue StaticMethod_callArgs_C15_softlist_auto__impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, const QoreListNode* argv) {
+    // the privileges of the calling code, captured before switching to the method's Program
+    QoreReflectionCaller caller;
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, m->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the method's class and the variant selected for the arguments must be allowed by the caller and the
+    // method's Program
+    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
+        return QoreValue();
+    }
+    // a class that a user module does not export cannot be used by a caller its export boundary applies to
+    if (reflection_check_class_export(caller, m->m->getClass(), m->pgm, xsink)) {
+        return QoreValue();
+    }
+    // the access of the method's variants, for code that a sandbox governs or that is restricted
+    if (reflection_check_method_access(caller, m->m, xsink)) {
+        return QoreValue();
+    }
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
+    // the method ptr must be valid
+    if constexpr (Lexical) return qore_lexical_reflection_method(policy, nullptr, *m->m, m->m->getClass(), nullptr, argv, xsink);
+    else return QoreObject::evalStaticMethod(*m->m, m->m->getClass(), argv, xsink);
+}
+
+static QoreValue StaticMethod_callArgs_C15_softlist_auto__lexical(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    const QoreListNode* argv = get_param_value(args, 0).get<const QoreListNode>();
+    return StaticMethod_callArgs_C15_softlist_auto__impl<true>(qore_get_native_semantic_policy(), self, m, args, runtime_cfg, xsink, argv);
+}
+
+static QoreValue StaticMethod_callArgs_C15_softlist_auto_(QoreObject* self, QoreReflectionMethod* m, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+static const QoreLexicalMethodRegistrationHelper::Entry lexical_entries_StaticMethod[] = {
+    {reinterpret_cast<q_method_t>(StaticMethod_call_VV), reinterpret_cast<q_method_t>(StaticMethod_call_VV_lexical)},
+    {reinterpret_cast<q_method_t>(StaticMethod_callArgs_C15_softlist_auto_), reinterpret_cast<q_method_t>(StaticMethod_callArgs_C15_softlist_auto__lexical)},
+};
+
+
 
 //! This class provides information about %Qore static class methods
 /**
@@ -141,30 +221,7 @@ auto v = m.call(arg1, arg2);
     @see callArgs()
 */
 auto StaticMethod::call(...) {
-    // the privileges of the calling code, captured before switching to the method's Program
-    QoreReflectionCaller caller;
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, m->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // the method's class and the variant selected for the arguments must be allowed by the caller and the
-    // method's Program
-    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
-        return QoreValue();
-    }
-    // a class that a user module does not export cannot be used by a caller its export boundary applies to
-    if (reflection_check_class_export(caller, m->m->getClass(), m->pgm, xsink)) {
-        return QoreValue();
-    }
-    // the access of the method's variants, for code that a sandbox governs or that is restricted
-    if (reflection_check_method_access(caller, m->m, xsink)) {
-        return QoreValue();
-    }
-    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
-    // the method ptr must be valid
-    return QoreObject::evalStaticMethod(*m->m, m->m->getClass(), args, xsink);
+    return StaticMethod_call_VV_impl<false>({}, self, m, args, runtime_cfg, xsink);
 }
 
 //! calls the given method with the given arguments as a list
@@ -184,28 +241,8 @@ auto v = m.callArgs(argv);
     @see call()
 */
 auto StaticMethod::callArgs(*softlist<auto> argv) {
-    // the privileges of the calling code, captured before switching to the method's Program
-    QoreReflectionCaller caller;
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, m->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // the method's class and the variant selected for the arguments must be allowed by the caller and the
-    // method's Program
-    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
-        return QoreValue();
-    }
-    // a class that a user module does not export cannot be used by a caller its export boundary applies to
-    if (reflection_check_class_export(caller, m->m->getClass(), m->pgm, xsink)) {
-        return QoreValue();
-    }
-    // the access of the method's variants, for code that a sandbox governs or that is restricted
-    if (reflection_check_method_access(caller, m->m, xsink)) {
-        return QoreValue();
-    }
-    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
-    // the method ptr must be valid
-    return QoreObject::evalStaticMethod(*m->m, m->m->getClass(), argv, xsink);
+    return StaticMethod_callArgs_C15_softlist_auto__impl<false>({}, self, m, args, runtime_cfg, xsink, argv);
 }
+
+
+//! @qppinit: QoreLexicalMethodRegistrationHelper lexical_registration(lexical_entries_StaticMethod);

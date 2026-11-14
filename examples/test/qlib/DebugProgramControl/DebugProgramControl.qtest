@@ -33,6 +33,21 @@ class TestDebugProgramControl inherits DebugProgramControl {
         sentMessages = ();
         broadcastMessages = ();
     }
+
+    #! serializes local variables as a stopped thread sends them to the clients
+    public *hash<auto> testSerializeLocals(*hash<auto> lv) {
+        return serializeLocals(lv);
+    }
+
+    #! evaluates an expression with the given local variables
+    public auto testEvaluate(ProgramControl pgm, string expr, *hash<auto> lv) {
+        return evaluateExpression(pgm, expr, lv);
+    }
+
+    #! returns the value of a local variable root
+    public auto testLocalRootValue(ProgramControl pgm, string name, *hash<auto> lv) {
+        return getDebugRootValue(pgm, {"local": name}, lv, {}, NOTHING);
+    }
 }
 
 #! Holds a thread that stops right after it has found a connected client, before it registers as stopped
@@ -117,6 +132,7 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("breakpoint CRUD", \breakpointTests());
         addTestCase("thread stack", \threadStackTests());
         addTestCase("error handling", \errorHandlingTests());
+        addTestCase("unavailable local variables", \unavailableLocalTests());
         addTestCase("connection management", \connectionTests());
         addTestCase("shutdown", \shutdownTests());
         addTestCase("a thread stops with a client: it waits until it is resumed", \stopWithClientTest());
@@ -337,6 +353,31 @@ public class DebugProgramControlTest inherits QUnit::Test {
             assertEq(DebugResponseType::Error,ret.type);
             assertTrue(ret.result.err.find("DEBUG-HANDLER-ERROR") >= 0);
         }
+    }
+
+    # a local variable that the AOT-compiled code of its frame keeps in native code has no value in the result of
+    # get_local_vars() but "unavailable" (#5890): it is sent to the clients without a value, and an expression or a
+    # variable path that uses it raises an error instead of giving it a value
+    unavailableLocalTests() {
+        hash<auto> lv = {
+            "a": {"type": "local", "value": 1, "declaredType": "int"},
+            "x": {"type": "local", "unavailable": True, "declaredType": "int"},
+        };
+        *hash<auto> slv = dpc.testSerializeLocals(lv);
+        assertEq(AbstractDebugControl::serialize(1), slv.a.value);
+        assertTrue(slv.x.unavailable);
+        assertFalse(slv.x.hasKey("value"));
+        assertEq("int", slv.x.declaredType);
+
+        ProgramControl pgm = ProgramControl::getProgram();
+        assertEq(2, dpc.testEvaluate(pgm, "a + 1", lv));
+        # the name in a string and after a "." is not the variable
+        assertEq("x1", dpc.testEvaluate(pgm, "\"x\" + a", lv));
+        assertThrows("DEBUG-EVALUATE-ERROR", "local variable \"x\"", \dpc.testEvaluate(), (pgm, "x + 1", lv));
+        assertThrows("DEBUG-EVALUATE-ERROR", "local variable \"x\"", \dpc.testEvaluate(), (pgm, "a + x", lv));
+
+        assertEq(1, dpc.testLocalRootValue(pgm, "a", lv));
+        assertThrows("DEBUG-ERROR", "local variable \"x\"", \dpc.testLocalRootValue(), (pgm, "x", lv));
     }
 
     errorHandlingTests() {

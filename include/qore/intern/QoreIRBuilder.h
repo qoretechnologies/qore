@@ -258,6 +258,12 @@ public:
         QoreIRValue second, QoreIRValue third, const QoreProgramLocation* loc = nullptr);
     QoreIRExprInstruction* createExprOp(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
+    //! Checks the target of the call @a call before its arguments are evaluated (QoreIROpcode::CheckCallTarget)
+    /** An invalid @a target checks the current object, for a call through self (issue #5823): the code then does not
+        load self, which a fast entry of a method of the object does not have.
+    */
+    QoreIRExprInstruction* createCheckCallTarget(const QoreValue& call, QoreIRValue target,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
     QoreIRBackgroundInstruction* createBackground(QoreIRBackgroundKind kind, const std::string& name,
         const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc = nullptr);
@@ -316,7 +322,10 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRThrowInstruction* createRethrow(QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
-    QoreIRInstruction* createThreadExit(const QoreProgramLocation* loc = nullptr);
+    //! Emit a thread_exit statement; \a exception_target is the handler of a try statement that it leaves, whose
+    //! landing pad runs the handlers of the scopes left (qore#5912)
+    QoreIRInstruction* createThreadExit(const QoreProgramLocation* loc = nullptr,
+        QoreIRBasicBlock* exception_target = nullptr);
     QoreIRLandingPadInstruction* createLandingPad(size_t scope_depth, uint32_t try_scope_id = 0,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCatchException(const QoreProgramLocation* loc = nullptr);
@@ -394,6 +403,8 @@ public:
     //! Emit the end of a statement at the given depth for the debugger (QORE_IR_DEBUG_NEST_END), where a frame
     //! continues when a debugger dismisses an exception of the statement
     QoreIRInstruction* createDebugStatementEnd(uint16_t depth, const QoreProgramLocation* loc);
+    //! Emit the start of the exception path of a block whose statements are at the given depth (QORE_IR_DEBUG_NEST_UNWIND)
+    QoreIRInstruction* createDebugBlockUnwind(uint16_t depth, const QoreProgramLocation* loc);
     //! Emit a pending-exception check after cleanup code that can run destructors.
     QoreIRInstruction* createCheckException(const QoreProgramLocation* loc = nullptr);
     //! Emit the check of the value of a return statement against the declared return type (CheckReturnValue)

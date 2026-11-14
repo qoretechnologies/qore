@@ -39,6 +39,8 @@ module HttpServerUtil {
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code starts the background thread of a streamed response producer
+    domains = "THREAD_CONTROL";
 }
 
 /** @mainpage HttpServerUtil Module
@@ -134,6 +136,13 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "AbstractHttpRequestHandler::handleRequest()" is
+      declared to return <tt>union<hash<auto>, data></tt> and
+      @ref HttpServer::AbstractStreamRequest::getResponseHeaderMessageImpl() "AbstractStreamRequest::getResponseHeaderMessageImpl()"
+      \c hash<auto>, as the subclasses return (a child class method must return a type that the method it overrides
+      accepts: see @ref override_return_types); an inline request answered by
+      @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()" accepts a string or binary
+      response as the full path does (@ref HttpServer::AbstractHttpRequestHandler::makeResponseFromResult() "makeResponseFromResult()")
     - added the \c sse_max_buffer_size listener option
       (@ref HttpServer::HttpListenerOptionInfo::sse_max_buffer_size "HttpListenerOptionInfo::sse_max_buffer_size"),
       the bound of the data held for the client of each Server-Sent Events stream
@@ -196,7 +205,8 @@ module HttpServerUtil {
       @ref HttpServer::HttpServerManagedHeaderNames "HttpServerManagedHeaderNames";
       @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" now recognizes the header fields that it
       checks, sets, and removes in any case, so it no longer adds a second \c Connection, \c Date, or \c Server
-      field for a response with a field such as \c "date"
+      field for a response with a field such as \c "date"; its \c canonical_names argument skips the conversion for
+      headers whose names are already canonical
     - fixed listener lifecycle accounting for dedicated socket handlers so normally managed connections release their
       listener reference when \c startImpl() returns; previously only exceptions and externally managed completion
       callbacks released the reference, so normal WebSocket connection closures leaked the count and could leave the
@@ -1283,16 +1293,28 @@ public string sub http_get_charset_label(string encoding) {
 
 #! helper function for setting HTTP response headers
 /** The names of the response header fields in @ref HttpServerManagedHeaderNames are converted to their canonical
-    case with http_canonicalize_reply_header_names() before they are checked
+    case with http_canonicalize_reply_header_names() before they are checked, unless \a canonical_names is
+    @ref True
 
     Unless \a rv already has a \c Connection header, a \c "Connection: close" header is set if either \a rv or
     \a cx has a true \c close key, and \c "Connection: Keep-Alive" otherwise; \c cx.close is set for requests that
     require the connection to be closed after the response (see @ref httpserverutil_request_context)
+
+    @param s the socket of the connection
+    @param cx the request context
+    @param rv the response, whose \c hdr key is set to the response headers
+    @param server_string the value of the \c Server header, if the response has none; if not given,
+    @ref HttpServerString is used
+    @param canonical_names @ref True if the names of the fields in @ref HttpServerManagedHeaderNames in the headers
+    of \a rv already have their canonical case, for example because they were returned by
+    http_canonicalize_reply_header_names(), so that they are not converted again; with a name in another case, the
+    field is not recognized, and a second field of the same name can be added
 */
-public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
+public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string,
+        bool canonical_names = False) {
     # the headers are set in an "auto!" local, since a caller's header hash may be narrowed (e.g. hash<string, int>
     # for {"X-Api-Version": 2}) and would reject the string headers added here
-    *hash<auto!> hdr = http_canonicalize_reply_header_names(rv.hdr);
+    *hash<auto!> hdr = canonical_names ? rv.hdr : http_canonicalize_reply_header_names(rv.hdr);
     bool is_http2 = cx."header-info".http2 ?? False;
     if (!is_http2) {
         if (!hdr.Connection) {
@@ -1355,8 +1377,9 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
     }
 
     # a caller's literal response may be narrowed too (e.g. hash<string, int> for {"code": 204}) and would reject the
-    # "hdr" key; the response hashdecls declare the key, and keep their type
-    if (rv instanceof hash<HttpHandlerResponseInfo> || rv instanceof hash<HttpResponseInfo>) {
+    # "hdr" key; the response hashdecls declare the key, and keep their type; the response of the HTTP server, the
+    # most frequent caller, is a hash<HttpResponseInfo>, so it is checked first
+    if (rv instanceof hash<HttpResponseInfo> || rv instanceof hash<HttpHandlerResponseInfo>) {
         rv.hdr = hdr;
     } else {
         *hash<auto!> response = rv;
@@ -2648,7 +2671,7 @@ public class AbstractStreamRequest {
         # for HTTP/2
         rv.hdr = http_canonicalize_reply_header_names(rv.hdr);
         bool chunked = rv.hdr."Transfer-Encoding" == "chunked";
-        http_set_reply_headers(s, cx, \rv);
+        http_set_reply_headers(s, cx, \rv, NOTHING, True);
 
         # issue #4109: do not start async I/O with a HEAD request
         if (!chunked || hdr.method == "HEAD") {
@@ -2997,7 +3020,9 @@ private logChunk(bool send, int size) {
 
         @note this method is called after the message body has been received
     */
-    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+    # returns hash<auto>: a subclass returns a hash<HttpResponseInfo> or a hash<HttpHandlerResponseInfo> (RestHandler),
+    # which getResponseHeaderMessage() converts (issue #5838: a child class method's return type must be compatible)
+    private hash<auto> getResponseHeaderMessageImpl() {
         return <HttpResponseInfo>{
             "code": 501,
             "body": sprintf("default handler (%s) has no implementation", self.className()),
@@ -3927,10 +3952,14 @@ public class AbstractHttpRequestHandler {
           when the handler returns
         - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
 
-        @note the default implementation simply returns a 501 error code for all requests; reimplement this method in
-        a subclass to provide the required functionality
+        @note
+        - the default implementation simply returns a 501 error code for all requests; reimplement this method in
+          a subclass to provide the required functionality
+        - the return type is \c union<hash<auto>, data>: a subclass can return a @ref HttpResponseInfo hash or any
+          other hash with the keys above, or a string or binary value, which is sent as the message body of a \c 200
+          response (issue #5838: an overriding method must return a type that this one accepts)
     */
-    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+    union<hash<auto>, data> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return <HttpResponseInfo>{
             "code": 501,
             "body": sprintf("default handler (%s) has no implementation", self.className()),
@@ -4009,7 +4038,32 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @since HttpServerUtil 1.4
     */
     hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        return handleRequest(cx, hdr, body);
+        return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, body));
+    }
+
+    #! Returns the response for the value that handleRequest() returned
+    /** @param rv the value that handleRequest() returned: a response hash, or a string or binary message body for a
+        \c 200 response
+
+        @return the response hash; a \c "raw_response" key is removed
+
+        @throw HANDLER-ERROR the value is not a hash, string or binary value
+
+        @since HttpServerUtil 1.6
+    */
+    static hash<HttpResponseInfo> makeResponseFromResult(auto rv) {
+        switch (rv.typeCode()) {
+            case NT_HASH: {
+                hash<auto!> hrv = rv;
+                if (hrv.hasKey("raw_response")) {
+                    delete hrv."raw_response";
+                }
+                return cast<hash<HttpResponseInfo>>(hrv);
+            }
+            case NT_STRING:
+            case NT_BINARY: return <HttpResponseInfo>{"code": 200, "body": rv};
+        }
+        throw "HANDLER-ERROR", sprintf("handler returned type %s; expecting \"hash\"; value: %y", rv.type(), rv);
     }
 
     #! top-level request handling method
@@ -4025,20 +4079,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             if (trailers) {
                 cx.trailers = trailers;
             }
-            auto rv = handleRequest(cx, hdr, msg_body);
-            switch (rv.typeCode()) {
-                case NT_HASH: {
-                    hash<auto!> hrv = rv;
-                    if (hrv.hasKey("raw_response")) {
-                        delete hrv."raw_response";
-                    }
-                    return cast<hash<HttpResponseInfo>>(hrv);
-                }
-                case NT_STRING:
-                case NT_BINARY: return cast<hash<HttpResponseInfo>>(("code": 200, "body": rv));
-                default:
-                throw "HANDLER-ERROR", sprintf("handler returned type %s; expecting \"hash\"; value: %y", rv.type(), rv);
-            }
+            return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, msg_body));
         }
 
         AbstractStreamRequest req = getStreamRequestImpl(listener, s, cx, hdr, body);

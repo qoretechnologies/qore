@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalNativeForwardingTest
+
+class LexicalNativeForwardingTest inherits QUnit::Test {
+    private {
+        const Base = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS;
+        const Calls = {
+            "name": 'return call_function("range", 1, 2);',
+            "reference": 'return call_function(\range(), 1, 2);',
+            "name args": 'return call_function_args("range", (1, 2));',
+            "reference args": 'return call_function_args(\range(), (1, 2));',
+            "builtin name": 'return call_builtin_function("range", 1, 2);',
+            "builtin args": 'return call_builtin_function_args("range", (1, 2));',
+            "indirect forwarder": 'code forward = \call_function(); return forward("range", 1, 2);',
+            "nested forwarder": 'return call_function("call_function_args", "range", (1, 2));',
+            "format name": 'return call_function("sprintf", "%d");',
+            "format reference": 'return call_function(\sprintf(), "%d");',
+            "format name args": 'return call_function_args("sprintf", ("%d",));',
+            "format reference args": 'return call_function_args(\sprintf(), ("%d",));',
+            "format builtin": 'return call_builtin_function("sprintf", "%d");',
+            "format builtin args": 'return call_builtin_function_args("sprintf", ("%d",));',
+        };
+    }
+
+    constructor() : QUnit::Test("LexicalNativeForwarding", "1.0", \ARGV) {
+        foreach string name in (keys Calls) {
+            foreach bool legacy in (False, True) {
+                addTestCase(sprintf("%s: lexical legacy %y", name, legacy), \check(), (name, legacy));
+            }
+        }
+        foreach bool current_legacy in (False, True) {
+            addTestCase(sprintf("mixed callees and shared references: current legacy %y", current_legacy),
+                \boundaries(), (current_legacy,));
+        }
+        addTestCase("inline string function names", \inlineNames());
+        foreach bool strict in (False, True) {
+            foreach bool broken in (False, True) {
+                addTestCase(sprintf("public type APIs strict=%y broken=%y", strict, broken),
+                    \typeApis(), (strict, broken));
+            }
+        }
+        set_return_value(main());
+    }
+
+    private typeApis(bool strict, bool broken) {
+        Program p(Base);
+        ParseOptions soft("broken-soft-types");
+        if (!strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        if (broken) p.setParseOptions(soft);
+        p.parsePending('auto sub opaque(auto value) { return value; }
+            hashdecl Parent { softbool inherited = opaque("text"); }
+            hashdecl Target inherits Parent { softbool value; hash<string, list<softbool>> nested; }
+            hashdecl Number { softint value; }', "public-type-api-declarations");
+        if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        else p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        p.parsePending('%requires reflection
+            auto sub sample() {
+                Reflection::Type boolean("softbool");
+                Reflection::Type number("softint");
+                Reflection::TypedHash target("Target");
+                Reflection::TypedHash num("Number");
+                auto input = {"value": "text", "nested": {"values": ("text",)}};
+                auto ordinary = target.doCast(input);
+                auto overrides = target.doCastWithOverrides({"value": "0", "nested": {"values": ("0",)}}, input);
+                auto batch = target.doCastValues({"row": input}).row;
+                auto batch_override = target.doCastValuesWithOverrides({"row": {"value": "0"}}, {"row": input}).row;
+                list<auto!> result = (boolean.acceptsValue("text"), ordinary.value, ordinary.nested.values[0],
+                    overrides.value, overrides.nested.values[0], number.isAssignableFrom(NULL) > 0,
+                    ordinary.inherited, overrides.inherited, batch.value, batch.nested.values[0],
+                    batch.inherited, batch_override.value, batch_override.nested.values[0], batch_override.inherited);
+                try { push result, number.acceptsValue(NULL); }
+                catch (hash<ExceptionInfo> ex) { push result, ex.err; }
+                try { push result, num.doCast({"value": NULL}).value; }
+                catch (hash<ExceptionInfo> ex) { push result, ex.err; }
+                try { push result, num.doCastWithOverrides({"value": 1}, {"value": NULL}).value; }
+                catch (hash<ExceptionInfo> ex) { push result, ex.err; }
+                return result;
+            }', "public-type-api-policy");
+        p.parseCommit();
+        auto null_result = broken ? 0 : "RUNTIME-TYPE-ERROR";
+        auto expected = (!strict, !strict, !strict, !strict, !strict, broken,
+            strict, strict, !strict, !strict, strict, !strict, !strict, strict,
+            null_result, null_result, null_result);
+        assertEq(expected, p.callFunction("sample"), "native type APIs use the invoking source policy");
+        if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        if (broken) p.disableParseOptions(soft);
+        else p.setParseOptions(soft);
+        assertEq(expected, p.callFunction("sample"), "native type policy survives Program mutation");
+    }
+
+    private inlineNames() {
+        buffer<string> names = new buffer<string>(("range",));
+        foreach string expression in ('call_function(name, 0, 2)', 'call_function_args(name, (0, 2))',
+                'call_builtin_function(name, 0, 2)', 'call_builtin_function_args(name, (0, 2))') {
+            Program p(Base | PO_BROKEN_RANGE);
+            p.parse("auto sub sample(string name) { return " + expression + "; }", "inline-native-name");
+            assertEq((0, 1, 2), p.callFunction("sample", names[0]));
+            p.disableParseOptions(PO_BROKEN_RANGE);
+            assertEq((0, 1, 2), p.callFunction("sample", names[0]), "materialized name keeps invocation policy");
+        }
+    }
+
+    check(string name, bool legacy) {
+        Program p(Base);
+        int options = PO_BROKEN_RANGE | PO_BROKEN_SPRINTF;
+        if (legacy) p.setParseOptions(options);
+        p.parse("auto sub sample() { " + Calls{name} + " }", "lexical-forwarding-" + name);
+        auto expected = name.startsWith("format") ? (legacy ? "%d" : "0") : (legacy ? (1, 2) : (1,));
+        assertEq(expected, p.callFunction("sample"), "policy at the forwarding operation");
+        if (legacy) p.disableParseOptions(options);
+        else p.setParseOptions(options);
+        assertEq(expected, p.callFunction("sample"), "policy survives Program mutation");
+    }
+    boundaries(bool current_legacy) {
+        Program p(Base);
+        int options = PO_BROKEN_RANGE | PO_BROKEN_SPRINTF;
+        foreach string prefix in ("Default", "Legacy") {
+            if (prefix == "Legacy") p.setParseOptions(options);
+            p.parsePending(replace('
+namespace Prefix {
+    auto sub sample() { return (range(1, 2), sprintf("%d")); }
+    auto sub fail() { throw "FORWARDING-TARGET-ERROR"; }
+}
+auto sub Prefix_name(string name) { return call_function(name); }
+auto sub Prefix_reference(code cb) { return call_function(cb); }
+auto sub Prefix_shared(code cb) { return call_function(cb, 1, 2); }
+auto sub Prefix_restore(string kind) {
+    bool caught = False;
+    try {
+        if (kind == "lookup") call_function("MissingLexicalForwardingFunction");
+        else if (kind == "filter") call_function("abs", new Queue());
+        else call_function("Prefix::fail");
+    } catch (hash<ExceptionInfo> ex) {
+        caught = True;
+    }
+    return (caught, range(1, 2), sprintf("%d"));
+}
+', "Prefix", prefix), prefix + "-forwarding-boundaries");
+        }
+        p.disableParseOptions(options);
+        p.parseCommit();
+        # One reference, created under canonical options, is used at operations with both policies.
+        code shared = p.getCallReference("range");
+        if (current_legacy) p.setParseOptions(options);
+        foreach string caller in ("Default", "Legacy") {
+            auto caller_range = caller == "Legacy" ? (1, 2) : (1,);
+            string caller_format = caller == "Legacy" ? "%d" : "0";
+            assertEq(caller_range, p.callFunction(caller + "_shared", shared), "shared builtin reference " + caller);
+            foreach string callee in ("Default", "Legacy") {
+                auto expected = callee == "Legacy" ? ((1, 2), "%d") : ((1,), "0");
+                string name = callee + "::sample";
+                assertEq(expected, p.callFunction(caller + "_name", name), "name: " + caller + " to " + callee);
+                assertEq(expected, p.callFunction(caller + "_reference", p.getCallReference(name)),
+                    "reference: " + caller + " to " + callee);
+            }
+            foreach string failure in ("lookup", "filter", "callee") {
+                assertEq((True, caller_range, caller_format), p.callFunction(caller + "_restore", failure),
+                    "restoration after " + failure + " in " + caller);
+            }
+        }
+    }
+
+}

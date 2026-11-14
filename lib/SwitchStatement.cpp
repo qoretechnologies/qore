@@ -207,7 +207,7 @@ int SwitchStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
         }
 
         if (rc == RC_BREAK
-            || ((getProgram()->getParseOptions() & PO_BROKEN_LOOP_STATEMENT) != 0 && rc == RC_CONTINUE)) {
+            || (semantic_policy.brokenLoop() && rc == RC_CONTINUE)) {
             rc = 0;
         }
     }
@@ -250,7 +250,7 @@ int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
         }
 
         if (rc_state == RC_BREAK
-            || ((getProgram()->getParseOptions() & PO_BROKEN_LOOP_STATEMENT) != 0 && rc_state == RC_CONTINUE)) {
+            || (semantic_policy.brokenLoop() && rc_state == RC_CONTINUE)) {
             rc_state = 0;
         }
     }
@@ -430,6 +430,8 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
             // Record facts after this case block and restore for next case
             nth.recordBranchAndRestore();
             ash.recordBranchAndRestore();
+            // the next case block can follow this one when it falls through (qore#5937)
+            ash.applyChangesSinceSave();
         }
         w = w->next;
     }
@@ -462,6 +464,27 @@ void SwitchStatement::parseCommit(QoreProgram* pgm) {
         }
         w = w->next;
     }
+}
+
+namespace {
+class LexicalEqualityCaseNode : public CaseNodeWithOperator {
+public:
+    LexicalEqualityCaseNode(const QoreProgramLocation* loc, QoreValue value, StatementBlock* code,
+            LexicalSemanticPolicy policy)
+            : CaseNodeWithOperator(loc, value, code, QoreLogicalEqualsOperatorNode::softEqual), policy(policy) {
+    }
+    bool matches(QoreValue lhs, ExceptionSink* xsink) const override {
+        return QoreLogicalEqualsOperatorNode::softEqualLexical(lhs, val, xsink, policy);
+    }
+private:
+    const LexicalSemanticPolicy policy;
+};
+}
+
+CaseNodeWithOperator* CaseNodeWithOperator::makeEquality(const QoreProgramLocation* loc, QoreValue value,
+        StatementBlock* code, LexicalSemanticPolicy policy) {
+    return policy.strictBoolean() ? new LexicalEqualityCaseNode(loc, value, code, policy)
+        : new CaseNodeWithOperator(loc, value, code, QoreLogicalEqualsOperatorNode::softEqual);
 }
 
 CaseNodeWithOperator::CaseNodeWithOperator(const QoreProgramLocation* loc, QoreValue v, StatementBlock* c,

@@ -54,6 +54,20 @@ public class AbstractSseConnection {
 
         #! The callback that logs a warning, set with @ref setWarningCallback()
         *code<nothing(string)> warning_callback;
+
+        #! Callback run once when the stream has ended, whichever side ended it; see @ref setEndCallback()
+        *code<nothing()> end_callback;
+
+        #! Set when @ref notifyEnded() has already run the end callback
+        bool end_fired = False;
+    }
+
+    #! Reports the end of the stream if it has not been reported (see @ref setEndCallback())
+    /** A stream object that is destroyed can no longer be used, so its destruction is its end; this covers a stream
+        whose last reference is released before its end was reported, such as while it is being closed
+    */
+    destructor() {
+        notifyEnded();
     }
 
     #! Returns the underlying transport protocol
@@ -111,8 +125,63 @@ public class AbstractSseConnection {
         } catch (hash<ExceptionInfo> ex) {
             # teardown path: the transport is already gone
         }
+        # the end is reported also for a subclass whose close() does not report it, and before the callback, which
+        # can release the last reference to this object
+        notifyEnded();
         if (cb) {
             cb();
+        }
+    }
+
+    #! Sets the callback run once when the stream has ended, whichever side ended it
+    /** Unlike the peer-close callback (see @ref setPeerCloseCallback()), which reports only an end that the
+        transport detects, this callback also reports a stream that the server ends itself with @ref close() or
+        @ref abort(); the HTTP server uses it to report the end of the stream to the async target of the request
+        that set it up (see @ref HttpAsyncTarget::onPersistentRequestEnd()).
+
+        @param cb the callback; called at most once; if the stream has already ended, it is called at once on this
+        thread
+
+        @note the callback runs on the thread that ends the stream or reports its end, and can run with locks of that
+        thread held; it must not run user code there
+    */
+    setEndCallback(*code<nothing()> cb) {
+        {
+            AutoLock al(peer_close_mutex);
+            if (!end_fired) {
+                end_callback = cb;
+                return;
+            }
+        }
+        # the end reported before the callback was set is delivered now
+        if (cb) {
+            cb();
+        }
+    }
+
+    #! Runs the end callback exactly once; called when the stream has ended (see @ref setEndCallback())
+    /** The transports call it from @ref close() and @ref abort(), and @ref notifyPeerClosed() and the destructor call
+        it; repeated calls have no effect.  A subclass that implements a transport must call it at the start of its
+        @ref close() and @ref abort() (before anything that can release the last reference to the object), or a
+        stream that the server ends is reported only when its peer's close is detected or the object is destroyed.
+    */
+    private notifyEnded() {
+        *code<nothing()> cb;
+        {
+            AutoLock al(peer_close_mutex);
+            if (end_fired) {
+                return;
+            }
+            end_fired = True;
+            # the callback runs once, and is not kept: it can refer to objects that refer to this stream
+            cb = remove end_callback;
+        }
+        if (cb) {
+            # close(), abort() and the destructor never raise an exception because of the report of the end
+            try {
+                cb();
+            } catch () {
+            }
         }
     }
 
@@ -235,9 +304,10 @@ public class AbstractSseConnection {
     }
 
     #! Drops the client of a stream whose data would exceed its bound, and raises \c SSE-CLIENT-OVERFLOW
-    /** Logs a warning through the warning callback, aborts the stream, and reports its end as for any other end
-        (@ref notifyPeerClosed()); used by the multiplexed transports, whose streams learn about their end only from
-        an explicit notification.
+    /** Logs a warning through the warning callback, aborts the stream, and reports its end on the calling thread
+        (the peer-close callback, which it claims before the abort, so that a notification that the abort causes on
+        another thread does not report it first); used by the multiplexed transports, whose streams learn about their
+        end only from an explicit notification.
 
         @param len the size of the data that could not be queued
 
@@ -256,12 +326,31 @@ public class AbstractSseConnection {
         if (first) {
             warn(msg);
         }
+        # the end of the stream is reported here, on the thread that queued the data: the callback is claimed before
+        # the stream is aborted, so that a notification of the transport, which the abort can cause on another thread,
+        # finds it claimed, and the client has been dropped and deregistered when the exception is raised
+        *code<nothing()> cb;
+        {
+            AutoLock al(peer_close_mutex);
+            if (!peer_close_fired) {
+                peer_close_fired = True;
+                cb = remove peer_close_callback;
+            }
+        }
         try {
             abort();
         } catch (hash<ExceptionInfo> ex) {
             # the stream has already ended
         }
-        notifyPeerClosed();
+        if (cb) {
+            try {
+                cb();
+            } catch (hash<ExceptionInfo> ex) {
+                # the end of the stream is reported; the exception raised is the overflow, and this one is logged
+                warn(sprintf("%s SSE stream: the peer-close callback of the dropped client raised %s: %s",
+                    getProtocol(), ex.err, ex.desc));
+            }
+        }
         throw SseClientOverflowErr, msg;
     }
 

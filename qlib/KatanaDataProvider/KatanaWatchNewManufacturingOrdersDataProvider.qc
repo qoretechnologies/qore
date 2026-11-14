@@ -24,7 +24,7 @@ public class KatanaWatchNewManufacturingOrdersDataProvider inherits KatanaWatchD
     string getName() { return ProviderInfo.name; }
     string getEndpoint() { return "manufacturing_orders"; }
     string getEventName() { return EVENT_NEW_MOS; }
-    *string getTimestampField() { return "created_at"; }
+    string getTimestampField() { return "created_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaManufacturingOrderDataType();

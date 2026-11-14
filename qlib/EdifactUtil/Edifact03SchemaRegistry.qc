@@ -34,6 +34,7 @@ public namespace EdifactUtil {
         /** @param release the EDIFACT release (ex: "D01B")
             @param opts options:
                 - reload: ignore in-memory registry and reload
+                - cache_dir: the cache root directory (default: \c QORE_EDIFACT_DIRCACHE or \c ~/.qore/edifact)
                 - skip_cache_read: do not read from on-disk cache
                 - cache_only: load from cache only
                 - cache_error: how to handle cache parse/type errors (ignore, warn, error)
@@ -50,7 +51,7 @@ public namespace EdifactUtil {
                 return registry{release};
             }
 
-            EdifactDirectoryCache cache();
+            EdifactDirectoryCache cache(opts.cache_dir);
             *EdifactSchema schema;
             if (!opts.skip_cache_read) {
                 hash cache_opts = {

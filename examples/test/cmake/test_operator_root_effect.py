@@ -39,11 +39,22 @@ class OperatorRootEffectTest(unittest.TestCase):
             cls.addClassCleanup(temporary.cleanup)
             cls.output = Path(temporary.name)
         cls.receipts = []
-        body = re.search(r'^int AbstractQoreNode::parseInit\([^\n]*\{\n.*?^\}',
-            (ROOT / 'lib/AbstractQoreNode.cpp').read_text(), re.M | re.S)
+        source = (ROOT / 'lib/AbstractQoreNode.cpp').read_text()
+        body = re.search(r'^int AbstractQoreNode::parseInit\([^\n]*\{\n.*?^\}', source, re.M | re.S)
         if body is None:
             raise AssertionError('missing actual default parse implementation')
-        (cls.output / 'operator-base-parse.inc').write_text(body.group(0) + '\n')
+        # ParseNode's inline parseInit is another vtable entry of these internal-header fixtures. Its lexical
+        # helpers are hidden in libqore too, so include their real definitions, including their parse-only TLS.
+        policy = re.search(r'^static thread_local LexicalParsePolicyHelper\* current_lexical_parse_policy = nullptr;'
+            r'\n.*?^void ParseNode::bindSemanticPolicy\([^\n]*\{\n.*?^\}', source, re.M | re.S)
+        if policy is None:
+            raise AssertionError('missing actual lexical parse policy implementations')
+        debug_entry = re.search(r'^#ifndef NDEBUG\nthread_local const AbstractQoreNode\* qore_parse_init_entry'
+            r' = nullptr;\n#endif', (ROOT / 'lib/QoreLib.cpp').read_text(), re.M)
+        if debug_entry is None:
+            raise AssertionError('missing actual debug parse entry definition')
+        (cls.output / 'operator-base-parse.inc').write_text(body.group(0) + '\n' + policy.group(0) + '\n'
+            + debug_entry.group(0) + '\n')
         text = (ROOT / 'include' / HEADER).read_text()
         original, count = re.subn(r'        if constexpr \(std::is_convertible_v<const T\*, const LValueOperatorNode\*>\) \{\n'
             r'            return true;\n        \} else \{\n'
@@ -69,6 +80,10 @@ class OperatorRootEffectTest(unittest.TestCase):
         # This focused internal-header consumer checks the address diagnostic.
         # The RPM's normal compiler flags and complete package builds are separate gates.
         flags = shlex.split(os.environ.get('QORE_TEST_CXXFLAGS', '-O3 -g -DNDEBUG'))
+        # Clang diagnoses unrelated mixed override annotations in the internal headers by default. This probe
+        # checks the operator address diagnostic; the full build remains responsible for header warning policy.
+        if not is_gcc():
+            flags.append('-Wno-inconsistent-missing-override')
         # the program is linked with the build's libqore, so it targets its platform version, and the internal
         # headers include third-party headers from the build's include directories
         return [*COMPILER, *flags, *qore_build_flags.target_flags(BUILD), '-std=c++20', '-DHAVE_UNIX_CONFIG_H',

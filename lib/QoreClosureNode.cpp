@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreTypeInfo.h"
 
 static thread_local const QoreObject* closure_self_context = nullptr;
@@ -182,7 +183,7 @@ bool QoreClosureNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue QoreClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue QoreClosureNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     // Closures can be invoked on threads with no program context (e.g., AsyncIoController's
     // ioThread, ThreadPool workers). Ensure a tlpd exists before dispatch; capture CVVs are
@@ -192,10 +193,17 @@ QoreValue QoreClosureNode::execValue(const QoreListNode* args, ExceptionSink* xs
     return closure->exec(*this, pgm, args, 0, class_ctx, xsink);
 }
 
+QoreValue QoreClosureNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    // see dispatchValue()
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->execNamed(*this, pgm, args, arg_names, 0, class_ctx, xsink);
+}
+
 bool QoreClosureNode::getAsBoolImpl() const {
     // check if we should do perl-style boolean evaluation
-    QoreProgram* pgm = getProgram();
-    if (pgm && runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL))
+    if (qore_get_native_semantic_policy().strictBoolean())
         return false;
     return true;
 }
@@ -210,7 +218,7 @@ bool QoreObjectClosureNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue QoreObjectClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue QoreObjectClosureNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     QoreClosureSelfContextHelper csch(obj);
     // See QoreClosureNode::execValue above — capture CVVs are pushed after program-context
@@ -218,6 +226,16 @@ QoreValue QoreObjectClosureNode::execValue(const QoreListNode* args, ExceptionSi
     QoreProgram* pgm = obj->getProgram();
     ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
     return closure->exec(*this, pgm, args, obj, class_ctx, xsink);
+}
+
+QoreValue QoreObjectClosureNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    // see dispatchValue()
+    QoreClosureSelfContextHelper csch(obj);
+    QoreProgram* pgm = obj->getProgram();
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->execNamed(*this, pgm, args, arg_names, obj, class_ctx, xsink);
 }
 
 QoreObject* QoreObjectClosureNode::refSelfForBackground(ExceptionSink* xsink) const {

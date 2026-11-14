@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# The expressions that find and context evaluate per row (the result and where expressions of find, the where and
+# sort expressions of context) and their sources, with calls and casts at their root, whose operands must be evaluated
+# (AOTFindContextCallArgs.qtest, qore#5939)
+%modern
+
+class FindCallArgsObj {
+    public {
+        int v;
+    }
+
+    constructor(int v) {
+        self.v = v;
+    }
+
+    static int twice(int x) {
+        return x * 2;
+    }
+
+    #! a call with a local variable argument in a method
+    string localArg() {
+        hash<auto> q = {"a": (1, 2), "b": (3, 4)};
+        int m = 10;
+        return sprintf("%y", find find_call_args_plus1(m) in q where (%a == 2));
+    }
+}
+
+int sub find_call_args_plus1(int x) {
+    return x + 1;
+}
+
+hash<auto> sub find_call_args_rows(int n) {
+    return {"a": (1, 2, n), "b": (3, 4, 5)};
+}
+
+string sub find_call_args_find() {
+    hash<auto> q = {"a": (1, 2), "b": (3, 4)};
+    code c = int sub (int x) { return x - 1; };
+    list<string> out;
+    out += sprintf("builtin:%y", find abs(-5) in q where (%a == 1));
+    out += sprintf("user:%y", find find_call_args_plus1(%b) in q where (%a == 2));
+    out += sprintf("static:%y", find FindCallArgsObj::twice(%b) in q where (%a == 2));
+    out += sprintf("new:%y", (find new FindCallArgsObj(%b) in q where (%a == 2)).v);
+    out += sprintf("callref:%y", find c(%b) in q where (%a == 1));
+    out += sprintf("where:%y", find %b in q where (find_call_args_plus1(%a) == 3));
+    out += sprintf("where-root:%y", find %b in q where (boolean(find_call_args_plus1(%a) - 2)));
+    out += sprintf("source:%y", find %b in find_call_args_rows(9) where (%a == 9));
+    out += sprintf("first:%y", find first abs(%b - 10) in q where (%a > 0));
+    out += sprintf("cast:%y", find cast<int>(%b) in q where (%a == 2));
+    out += sprintf("method-local:%s", (new FindCallArgsObj(1)).localArg());
+    return out.join(" ");
+}
+
+string sub find_call_args_context() {
+    hash<auto> q = {"a": (1, 2, 3), "b": (6, 4, 5)};
+    list<string> out;
+    list<auto> l = ();
+    context (q) where (boolean(find_call_args_plus1(%a) % 2)) {
+        l += %b;
+    }
+    out += sprintf("where:%y", l);
+    l = ();
+    context (q) sortBy (abs(-%b)) {
+        l += %b;
+    }
+    out += sprintf("sort:%y", l);
+    l = ();
+    context (find_call_args_rows(7)) where (%a > 1) sortDescendingBy (find_call_args_plus1(%b)) {
+        l += %b;
+    }
+    out += sprintf("source:%y", l);
+    return out.join(" ");
+}
+
+printf("find %s\ncontext %s\n", find_call_args_find(), find_call_args_context());

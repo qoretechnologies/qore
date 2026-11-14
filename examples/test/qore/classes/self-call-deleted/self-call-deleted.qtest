@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of calls through self and their object checks
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SelfCallDeletedTest
+
+#! Regression test for issue #5823: a call through self on an object that has been deleted raises as in AST
+/** The compiled execution modes called a method of a final class or a final method through self (self.m(),
+    m()) directly, without checking the object: after "delete self", the method ran on the deleted object.  Calls
+    through self also evaluated arguments with side effects before raising OBJECT-ALREADY-DELETED, in closures created
+    in the method and in on_exit handlers too, and programs compiled with qcc named the method without its variant.
+
+    SelfCallDeleted.q makes calls through self and unqualified calls after "delete self" in a final class and in a
+    class that is not final (with a final method and a static method), with literal and function call arguments, in a
+    try block of the method, in closures and in an on_exit handler, and calls on a valid object; its output must be
+    the one in SelfCallDeleted.expected, which the AST interpreter prints, in every execution mode, on the IR tier and
+    in programs compiled with qcc -O0 and -O3.
+*/
+class SelfCallDeletedTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string fixture = get_script_dir() + "/SelfCallDeleted.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SelfCallDeleted.expected");
+        # calls through self in background expressions: the output is compared on stdout, as the exception that ends
+        # a background thread is printed on stderr with the time and the thread
+        string bg_fixture = get_script_dir() + "/SelfCallDeletedBackground.q";
+        string bg_expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SelfCallDeletedBackground.expected");
+    }
+
+    constructor() : QUnit::Test("self call on a deleted object", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("background, execution mode " + mode, sub () {
+                assertEq(bg_expected, ExecModeHarness::run_command(command(execution_mode, bg_fixture)).stdout);
+            });
+        }
+        addTestCase("background, qcc -O0", sub () { checkQcc(0, bg_fixture, bg_expected, True); });
+        addTestCase("background, qcc -O3", sub () { checkQcc(3, bg_fixture, bg_expected, True); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode, *string script) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode,
+            shellQuote(script ?? fixture));
+    }
+
+    #! compiles a fixture with qcc and compares the output of the program (only stdout if @a stdout_only)
+    private checkQcc(int opt, *string script, *string expected_output, *bool stdout_only) {
+        script = script ?? fixture;
+        expected_output = expected_output ?? expected;
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/self-call-deleted";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(script)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected_output, backquote(shellQuote(program) + (stdout_only ? " 2>/dev/null" : " 2>&1")));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

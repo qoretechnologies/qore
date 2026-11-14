@@ -49,6 +49,8 @@ module OpenSearchLoggerAppender {
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
     license = "MIT";
+    # the module's own code schedules its flush timer (AsyncIoController::addTimer(), MODULE_OWNED)
+    domains = "THREAD_CONTROL";
 }
 
 /** @mainpage OpenSearchLoggerAppender Module

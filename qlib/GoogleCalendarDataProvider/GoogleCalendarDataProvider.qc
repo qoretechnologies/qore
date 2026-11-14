@@ -74,7 +74,7 @@ public class GoogleCalendarDataProvider inherits GoogleDataProvider::GoogleApiPa
         @see getChildProviderEx()
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
-        if (*GoogleDataProviderBase rv = GoogleApiParentDataProvider::getChildProviderImpl(name)) {
+        if (*AbstractDataProvider rv = GoogleApiParentDataProvider::getChildProviderImpl(name)) {
             return rv;
         }
         if (*Class cls = childMap{name}) {

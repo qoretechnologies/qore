@@ -64,6 +64,11 @@ public:
     }
 
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
     const QoreTypeInfo* returnTypeInfo = nullptr;
 
     DLLLOCAL static QoreString unshift_str;
@@ -74,6 +79,24 @@ protected:
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return returnTypeInfo;
+    }
+};
+
+class LexicalQoreUnshiftOperatorNode : public QoreUnshiftOperatorNode {
+public:
+    using QoreUnshiftOperatorNode::QoreUnshiftOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = copyBackgroundExplicit<LexicalQoreUnshiftOperatorNode>(xsink);
+        if (copy) {
+            copy->returnTypeInfo = returnTypeInfo;
+        }
+        return copy;
+    }
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(needs_deref, xsink);
     }
 };
 

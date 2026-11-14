@@ -39,6 +39,8 @@ module MllpUtil {
         ConnectionSchemeCache::registerScheme("mllp", MllpConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("mllps", MllpConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage MllpUtil Module

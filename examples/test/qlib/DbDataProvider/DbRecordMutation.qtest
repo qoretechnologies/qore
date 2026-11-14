@@ -78,6 +78,9 @@ class DbRecordMutationTest inherits QUnit::Test {
         addTestCase("bounded delete rollback", \testBoundedDeleteRollback());
         addTestCase("mutation affected row counts", \testMutationAffectedRowCounts());
         addTestCase("caller transaction preservation", \testCallerTransactionPreservation());
+        addTestCase("a duplicate row is DUPLICATE-RECORD in every create path", \testCreateDuplicateRecord());
+        addTestCase("another constraint violation is CREATE-RECORD-ERROR in the bulk create paths",
+            \testCreateBulkConstraintError());
         addTestCase("exec SQL transaction ownership", \testExecSqlTransactionOwnership());
         addTestCase("bound record iterators", \testBoundRecordIterators());
         addTestCase("single record search transaction release", \testSingleRecordSearchReleasesTransaction());
@@ -189,6 +192,40 @@ class DbRecordMutationTest inherits QUnit::Test {
 
         ds.rollback();
         assertEq((1, 2, 3), map $1.id, getRows());
+    }
+
+    private testCreateDuplicateRecord() {
+        requireSqlite();
+        resetRows();
+
+        # the second row duplicates id 1; the first must not stay either
+        hash<auto> bulk = {"id": (4, 1), "group_name": ("c", "c"), "value": (40, 50)};
+        assertThrows("DUPLICATE-RECORD", \provider.createRecord(), {"id": 1, "group_name": "c", "value": 40});
+        assertThrows("DUPLICATE-RECORD", \provider.createRecordsBulk(), bulk);
+        assertThrows("DUPLICATE-RECORD", \provider.createRecordsShape(), (bulk, DataProviderShape::HashOfLists));
+        assertEq((1, 2, 3), map $1.id, getRows());
+        assertFalse(ds.currentThreadInTransaction());
+
+        # the driver's error is kept for the caller
+        try {
+            provider.createRecordsBulk(bulk);
+            fail("a duplicate bulk create succeeded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DUPLICATE-RECORD", ex.err);
+            assertRegex("^SQLITE3-", ex.desc);
+        }
+    }
+
+    private testCreateBulkConstraintError() {
+        requireSqlite();
+        resetRows();
+
+        # value is not null: not a duplicate row
+        hash<auto> bulk = {"id": (4, 5), "group_name": ("c", "c"), "value": (40, NULL)};
+        assertThrows("CREATE-RECORD-ERROR", \provider.createRecordsBulk(), bulk);
+        assertThrows("CREATE-RECORD-ERROR", \provider.createRecordsShape(), (bulk, DataProviderShape::HashOfLists));
+        assertEq((1, 2, 3), map $1.id, getRows());
+        assertFalse(ds.currentThreadInTransaction());
     }
 
     private testExecSqlTransactionOwnership() {

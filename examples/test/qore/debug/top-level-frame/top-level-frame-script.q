@@ -12,7 +12,8 @@
 
 #! true if the script runs as an AOT-compiled executable
 /** AOT-compiled top-level code is native code without step events, and an AOT-compiled function has a frame only when
-    it runs with a debugger attached (in the IR interpreter), so the executable skips the checks that need either
+    it runs with a debugger attached (in the IR interpreter), so the executable skips the checks that need either; it
+    checks instead that the frames of the calls that it makes directly cannot be accessed (#5890)
 */
 our bool aot = ARGV[0] == "aot";
 
@@ -146,6 +147,146 @@ public sub reenter() {
     }
 }
 
+# a call that AOT-compiled code makes directly to an AOT-compiled function has no frame of its own, as the function
+# keeps its local variables in native code: get_local_vars() and set_local_var_value() raise AOT-FRAME-ERROR for the
+# frame of such a call and for the frames after it (#5890)
+hash<auto> sub aot_frame0() {
+    int y = 2;
+    return get_local_vars(0);
+}
+
+sub aot_set_frame0() {
+    int y = 2;
+    set_local_var_value(0, "y", 3);
+}
+
+hash<auto> sub aot_frame1_callee() {
+    return get_local_vars(1);
+}
+
+hash<auto> sub aot_frame1() {
+    int y = 2;
+    return aot_frame1_callee();
+}
+
+# a closure of a child Program called in a new thread through functions that call each other directly in AOT-compiled
+# code: the thread's first entry into the child Program has a frame after that of the closure, which has no call of
+# its own on the call stack, so no frame after the call from the main Program is matched with a call (#5890)
+sub bg_h(code c) {
+    int hv = 1;
+    c();
+}
+
+sub bg_g(code c) {
+    int gv = 1;
+    bg_h(c);
+}
+
+sub bg_run(code c, Counter cnt) {
+    on_exit cnt.dec();
+    bg_g(c);
+}
+
+sub bg_check() {
+    Program bgchild(PO_NEW_STYLE | PO_ALLOW_DEBUGGER);
+    bgchild.parse("code sub getf() {
+    return sub () {
+        int cv = 1;
+        for (int i = 0; i < 2; ++i) {
+            printf(\"bg closure frame %d: %y\\n\", i, sort(keys get_local_vars(i)));
+        }
+    };
+}", "bgchild");
+    code cf = bgchild.callFunction("getf");
+    Counter cnt(1);
+    background bg_run(cf, cnt);
+    cnt.waitForZero();
+}
+
+# a call made through call_function() or a call reference has a frame of its own, also in AOT-compiled code, whose
+# native code keeps some of the variables of the function in native code, as qcc records for each variable (#5890):
+# get_local_vars() gives such a variable (q, hi, s, hh, and x and y, whose stores the optimizer removes) without a
+# value and with "unavailable" set instead of a value that the code does not use, and set_local_var_value() raises
+# AOT-FRAME-ERROR for it (hi, hh, and the parameter p, which the code does not assign, so get_local_vars() reads it)
+# instead of setting a value that the code does not see; the closure-bound variable (cap) and the variable passed by
+# reference (rv) are read and set as in interpreted code, also in AOT-compiled code; in a frame that runs in the
+# interpreter, as AOT-compiled code does with a debugger attached, every variable is read and set
+sub fr_inc(reference<int> r) {
+    ++r;
+}
+
+# prints the variables of a frame, but the code, the label and argv, which only interpreted frames have
+sub fr_print(string label, hash<auto> lv) {
+    list<string> l = map sprintf("%s=%s", $1.key, $1.value.unavailable ? "unavailable" : sprintf("%y", $1.value.value)),
+        lv.pairIterator(), $1.key != "argv" && $1.key != "c" && $1.key != "label";
+    printf("%s: %s\n", label, sort(l).join(" "));
+}
+
+sub fr_get(string label, int p, int q) {
+    q += 1;
+    int hi = p * 3;
+    string s = "x" + p;
+    hash<auto> hh = {"a": p};
+    int cap = p + 10;
+    code c = int sub () { return cap; };
+    int rv = p;
+    fr_inc(\rv);
+    int x = p;
+    int y = p * 2;
+    if (p > 1) {
+        y = 7;
+    }
+    fr_print(label, get_local_vars(0));
+    printf("%s actual: x=%d y=%d\n", label, x, y);
+}
+
+sub fr_set(string label, int p) {
+    int hi = p * 3;
+    hash<auto> hh = {"a": p};
+    int cap = p + 10;
+    code c = int sub () { return cap; };
+    int rv = p;
+    fr_inc(\rv);
+    foreach hash<auto> i in ({"hi": 100, "p": 5, "hh": {"b": 1}, "cap": 77, "rv": 33}.pairIterator()) {
+        try {
+            set_local_var_value(0, i.key, i.value);
+            printf("%s set %s: ok\n", label, i.key);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("%s set %s: %s\n", label, i.key, ex.err);
+        }
+    }
+    printf("%s after set: hi=%d p=%d hh=%y cap=%d c=%d rv=%d\n", label, hi, p, hh, cap, c(), rv);
+}
+
+sub frame_checks(string label) {
+    call_function(\fr_get(), label + " call_function", 2, 4);
+    code cr = \fr_get();
+    cr(label + " call ref", 2, 4);
+    call_function(\fr_set(), label, 2);
+}
+
+# makes the calls directly, without a debugger, and prints the codes of the exceptions raised
+sub aot_checks() {
+    try {
+        aot_frame0();
+        printf("aot frame 0: no exception\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("aot frame 0: %s\n", ex.err);
+    }
+    try {
+        aot_set_frame0();
+        printf("aot set frame 0: no exception\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("aot set frame 0: %s\n", ex.err);
+    }
+    try {
+        aot_frame1();
+        printf("aot frame 1: no exception\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("aot frame 1: %s\n", ex.err);
+    }
+}
+
 int top = 1;
 int ptop = 1;
 int dtop = 1;
@@ -153,12 +294,19 @@ int ctop = 1;
 StepDebugger debugger();
 ProgramControl pgm = ProgramControl::getProgram();
 
+# the frames of the calls made through call_function() and a call reference (see frame_checks())
+frame_checks("frame");
+
 # the calls of the top-level code
 if (!aot) {
     g("top", 42);
     printf("top: %d\n", top);
     pg("ptop", 42);
     printf("ptop: %d\n", ptop);
+} else {
+    aot_checks();
+    # the frame of the top-level code is accessible
+    printf("aot top: %y\n", get_local_vars(0).top.value);
 }
 
 debugger.addProgram(pgm);
@@ -170,6 +318,8 @@ if (!aot) {
 # the calls of the top-level code while the debugger is attached; called through call_function() so that an
 # AOT-compiled function is entered through its tiered entry, which runs it in the IR interpreter
 call_function("g", "ctop", 43);
+# the frames of the calls made while the debugger is attached, which run in the interpreter
+frame_checks("debugger frame");
 debugger.removeProgram(pgm);
 map printf("%s\n", $1), debugger.out;
 printf("dtop: %d\n", dtop);
@@ -205,3 +355,6 @@ if (!aot) {
     reentrant.parse("sub rf() { int rfl = 1; reenter(); } int rx = 1; rf();", "reentrant");
     reentrant.run();
 }
+
+# a closure of a child Program called in a new thread (see bg_check())
+bg_check();

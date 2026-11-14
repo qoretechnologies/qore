@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads, and AOT code generation and linking of closures of top-level code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AotTopLevelClosureLoopLocalTest
+
+#! Closures of top-level code that capture a local of a loop body (#5869)
+/** In the native code of top-level code compiled with qcc, the closures created in the iterations of a loop that
+    captured a local of the loop body shared one variable: the instructions of the top-level code had no closure flag,
+    so the variable was not popped at the end of the body, and the Program instantiated the locals of all blocks of the
+    top-level code as its own, so that the first iteration found one.  AotTopLevelClosureLoopLocal.q gives the output
+    of the AST interpreter in every execution mode and compiled with qcc.
+*/
+class AotTopLevelClosureLoopLocalTest inherits QUnit::Test {
+    public {
+        #! the output of AotTopLevelClosureLoopLocal.q with the AST interpreter
+        const Expected = "vals=[10, 11]
+vals2=[10, 11]
+vals3=[20, 21] vals=[10, 11]
+vals4=[5, 7, 9, \"w0\", \"w1\", \"0.0\", \"0.1\", \"1.0\", \"1.1\"]
+inc=[1, 101] [2, 102]
+nested=[101, 111] gs=[42, 0]
+shadowed=-1 sh=[0, 1]
+bg=[0, 7]
+plain=[null, null, null]
+top=2
+thread: top=2 tc=2 vals=[10, 11]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AotTopLevelClosureLoopLocalTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/AotTopLevelClosureLoopLocal.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": closures of loop locals of top-level code", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: closures of loop locals of top-level code", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-aot-toplevel-closure-loop-local-");
+        string exe = tmp.path + DirSep + "aot-toplevel-closure-loop-local";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

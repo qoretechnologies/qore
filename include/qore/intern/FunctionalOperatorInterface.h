@@ -36,6 +36,8 @@
 #include "qore/intern/AbstractIteratorHelper.h"
 #include "qore/intern/FunctionalOperator.h"
 
+#include <type_traits>
+
 class FunctionalOperatorInterface {
 public:
     DLLLOCAL virtual ~FunctionalOperatorInterface() {
@@ -162,5 +164,28 @@ public:
 
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 };
+
+//! A functional iterator of a generic operator, whose value type has the type arguments of the call (issue #5988)
+/** An operator in a generic callable that is iterated lazily (by select, take, a range...) gives the type of its
+    values with its type parameters substituted, as when it is evaluated
+*/
+template <class B>
+class QoreGenericValueTypeOperator : public B {
+public:
+    using B::B;
+
+    // some functional iterators give their value type in getValueType() itself
+    DLLLOCAL virtual const QoreTypeInfo* getValueType() const {
+        return qore_substitute_type_params_if_needed(B::getValueType());
+    }
+
+    DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
+        return qore_substitute_type_params_if_needed(B::getValueTypeImpl());
+    }
+};
+
+//! The functional iterator class B of an operator, or its substituting variant for a generic operator
+template <bool generic, class B>
+using QoreFunctionalOperatorFor = std::conditional_t<generic, QoreGenericValueTypeOperator<B>, B>;
 
 #endif

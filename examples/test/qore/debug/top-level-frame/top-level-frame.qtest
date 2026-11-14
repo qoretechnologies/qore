@@ -21,6 +21,11 @@
     reached as that of a child Program is, and the values set are those that the top-level code uses afterwards.  A
     Program whose top-level code runs again in a call that it makes has only the frame of its first entry.  The calls
     of functions, methods and closures that declare no local variables of their own have frames of their own as well.
+    The calls that AOT-compiled code makes directly to AOT-compiled functions have no frames: the AOT-compiled
+    executable checks that both functions raise AOT-FRAME-ERROR for them (#5890).  In the frames of the calls made
+    through call_function() and call references, which AOT-compiled functions have too, the variables that the native
+    code keeps in native code are unavailable or cannot be set there, and the others are read and set; with a debugger
+    attached, every variable is (#5890).
 */
 class TopLevelFrameTest inherits QUnit::Test {
     public {
@@ -51,8 +56,49 @@ class TopLevelFrameTest inherits QUnit::Test {
             "closure frame 2: " + TopLevelVars,
         );
 
+        #! the output of a closure of a child Program called in a new thread through functions that the main Program
+        #! calls, in every execution mode and in the AOT-compiled executable: frame 1 is counted in the child Program,
+        #! not matched with the calls of the functions (#5890)
+        const BgLines = (
+            "bg closure frame 0: [\"argv\", \"cv\", \"i\"]",
+            "bg closure frame 1: " + TopLevelVars,
+        );
+
+        #! the output of the frame checks of the script in a frame that has every variable on the stack: in every
+        #! execution mode, and with a debugger attached also in the AOT-compiled executable (#5890)
+        const FrameLines = (
+            "%s call_function: cap=12 hh={a: 2} hi=6 p=2 q=5 rv=3 s=\"x2\" x=2 y=7",
+            "%s call_function actual: x=2 y=7",
+            "%s call ref: cap=12 hh={a: 2} hi=6 p=2 q=5 rv=3 s=\"x2\" x=2 y=7",
+            "%s call ref actual: x=2 y=7",
+            "%s set hi: ok",
+            "%s set p: ok",
+            "%s set hh: ok",
+            "%s set cap: ok",
+            "%s set rv: ok",
+            "%s after set: hi=100 p=5 hh={b: 1} cap=77 c=77 rv=33",
+        );
+
+        #! the output of the frame checks of the script in the AOT-compiled executable without a debugger: the
+        #! variables that the native code assigns in native code are unavailable, and those that it does not read
+        #! again cannot be set (#5890)
+        const AotFrameLines = (
+            "frame call_function: cap=12 hh=unavailable hi=unavailable p=2 q=unavailable rv=3 s=unavailable "
+                "x=unavailable y=unavailable",
+            "frame call_function actual: x=2 y=7",
+            "frame call ref: cap=12 hh=unavailable hi=unavailable p=2 q=unavailable rv=3 s=unavailable "
+                "x=unavailable y=unavailable",
+            "frame call ref actual: x=2 y=7",
+            "frame set hi: AOT-FRAME-ERROR",
+            "frame set p: AOT-FRAME-ERROR",
+            "frame set hh: AOT-FRAME-ERROR",
+            "frame set cap: ok",
+            "frame set rv: ok",
+            "frame after set: hi=6 p=2 hh={a: 2} cap=77 c=77 rv=33",
+        );
+
         #! the output of the script
-        const Expected = (
+        const Expected = (map sprintf($1, "frame"), FrameLines) + (
             "top: call frame 2: " + TopLevelVars,
             "top: call frame 3: {}",
             "top: 42",
@@ -60,6 +106,7 @@ class TopLevelFrameTest inherits QUnit::Test {
             "ptop: 44",
             "ctop: call frame 2: " + TopLevelVars,
             "ctop: call frame 3: {}",
+        ) + (map sprintf($1, "debugger frame"), FrameLines) + (
             "step frame 1: " + TopLevelVars,
             "step frame 1 dtop: 7",
             "dtop: 7",
@@ -77,13 +124,19 @@ class TopLevelFrameTest inherits QUnit::Test {
             "reentrant frame 5: [\"child\", \"ctop\", \"debugger\", \"dtop\", \"pgm\", \"ptop\", \"rx\", \"top\"]",
             "reentrant frame 6: " + TopLevelVars,
             "reentrant frame 7: []",
-        );
+        ) + BgLines;
 
         #! the output of the AOT-compiled executable, which skips the checks of the calls without a debugger, of the
-        #! step callback and of the Program entered again (see the script)
-        const ExpectedAot = (
+        #! step callback and of the Program entered again (see the script); the calls that AOT-compiled code makes
+        #! directly to AOT-compiled functions have no frames, which cannot be accessed (#5890)
+        const ExpectedAot = AotFrameLines + (
+            "aot frame 0: AOT-FRAME-ERROR",
+            "aot set frame 0: AOT-FRAME-ERROR",
+            "aot frame 1: AOT-FRAME-ERROR",
+            "aot top: 1",
             "ctop: call frame 2: " + TopLevelVars,
             "ctop: call frame 3: {}",
+        ) + (map sprintf($1, "debugger frame"), FrameLines) + (
             "dtop: 1",
             "ctop: 43",
             "child frame 2 x: 1",
@@ -91,7 +144,7 @@ class TopLevelFrameTest inherits QUnit::Test {
             "child frame 3 top: 1",
             "child x: 43",
             "top: 44",
-        );
+        ) + BgLines;
     }
 
     private {

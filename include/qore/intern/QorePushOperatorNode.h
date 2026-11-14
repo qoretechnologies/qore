@@ -36,6 +36,11 @@
 #include "qore/intern/qore_string_private.h"
 class QorePushOperatorNode : public QoreUnshiftOperatorNode {
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL static QoreString push_str;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
@@ -62,6 +67,24 @@ public:
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
         return copyBackgroundExplicit<QorePushOperatorNode>(xsink);
+    }
+};
+
+class LexicalQorePushOperatorNode : public QorePushOperatorNode {
+public:
+    using QorePushOperatorNode::QorePushOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = copyBackgroundExplicit<LexicalQorePushOperatorNode>(xsink);
+        if (copy) {
+            copy->returnTypeInfo = returnTypeInfo;
+        }
+        return copy;
+    }
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(needs_deref, xsink);
     }
 };
 

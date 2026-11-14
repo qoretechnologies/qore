@@ -1,0 +1,39 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# A module whose init raises an exception with hashdecl values in its argument, for AotHashdeclHashValue.q (#5895)
+
+%new-style
+%require-types
+%strict-args
+
+#! a hashdecl of the module, which the Program does not have, as the module fails to load
+public hashdecl ThrowingInitHash5895 {
+    int x = 1;
+    int y = 3;
+}
+
+#! a class of the module, which the Program does not have either
+public class ThrowingInitClass5895 {
+}
+
+module ThrowingInit5895 {
+    version = "1.0";
+    desc = "a module whose init raises an exception";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        hash<CallStackInfo> cs = <CallStackInfo>{
+            "function": "f", "line": 1, "endline": 1, "file": "x", "source": "x", "offset": 0, "typecode": 0,
+            "type": "user", "lang": "Qore",
+        };
+        # a member with a default value removed, and a member set again after the others
+        hash<CallStackInfo> removed = cs - "start_column";
+        hash<CallStackInfo> reordered = cs - "line";
+        reordered.line = 5;
+        throw "THROWING-INIT", "init failed", {"removed": removed, "reordered": reordered,
+            "own": <ThrowingInitHash5895>{"x": 2}, "typed_list": cast<list<hash<string, int>>>(({"a": 1},)),
+            "objects": cast<list<object<ThrowingInitClass5895>>>(()),
+        };
+    };
+}

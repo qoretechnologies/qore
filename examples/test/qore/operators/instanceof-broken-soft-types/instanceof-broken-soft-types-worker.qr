@@ -1,0 +1,28 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# %modern code that calls instanceof checks of a %broken-soft-types module; run by instanceof-broken-soft-types.qtest
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires BrokenSoftTypesInstanceof
+
+hash<string, list> sub checks() {
+    # the same check in this %modern program: SQL NULL is not an instance of the non-optional soft types
+    auto v = NULL;
+    return {
+        "direct": BrokenSoftTypesInstanceof::check(),
+        "closure": BrokenSoftTypesInstanceof::checker()(),
+        "modern": (v instanceof softint, v instanceof softstring),
+    };
+}
+
+# called three times, so that the checks run again after their first call
+hash<string, list> first = checks();
+bool stable = True;
+for (int i = 0; i < 2; ++i) {
+    if (checks() != first) {
+        stable = False;
+    }
+}
+map printf("%s=%y\n", $1.key, $1.value), first.pairIterator();
+printf("stable=%y\n", stable);

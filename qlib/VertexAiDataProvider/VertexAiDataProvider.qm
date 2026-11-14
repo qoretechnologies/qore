@@ -32,6 +32,8 @@
 %requires RestClientIo
 
 module VertexAiDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "user module providing a data provider API for Google Vertex AI — "
         "Gemini :generateContent + Gecko :predict embeddings via regional "

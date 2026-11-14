@@ -129,6 +129,8 @@ DLLLOCAL int64 q_get_ir_innermost_instantiated_local_entries();
     reference that += does not take is released after the lvalue's locks.
 */
 DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
+DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink,
+    LexicalSemanticPolicy policy);
 DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
 //! Applies a step of a list of selectors for the IR interpreter (QoreIROpcode::ListSelectorStep)

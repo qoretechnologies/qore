@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation of pseudo-method calls on the values of named calls resolved at run time
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class AOTRuntimeNamedCallReturnTypeTest
+
+#! The value of a named call whose variant is resolved at run time keeps its return type in compiled code
+/** A named function call whose variant can only be resolved at run time (the names select different variants for
+    the types of the arguments' values) is replaced with a RuntimeNamedFunctionCallNode when it is parse-initialized.
+    The analysis of the call (its known return type, for one) was only recorded on the node that
+    ParseNode::parseInit() was called on, the replaced one, so code generation saw no type for the call's value: a
+    pseudo-method call on it, such as <tt>.size()</tt> on a returned string, was compiled to the generic dynamic
+    dispatch (qore_rt_dot_eval_pseudo_method_direct_aot) instead of the string helper
+    (qore_rt_pseudo_string_size_noguard) that the same call with positional arguments gets.
+
+    The shape assertions check the native code that the AOT compiler generates; the values are compared between every
+    execution mode and the AOT executable.
+*/
+class AOTRuntimeNamedCallReturnTypeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! the script: the variants of f() name their parameters differently, and the argument has no type at parse
+        #! time, so the named calls are resolved at run time
+        const Source = "%modern
+string sub f(int count, string label) { return sprintf(\"%d:%s\", count, label); }
+string sub f(string label, float count) { return sprintf(\"%s:%f\", label, count); }
+auto sub g(int count, string label) { return count ? sprintf(\"%d:%s\", count, label) : NOTHING; }
+auto sub g(string label, float count) { return sprintf(\"%s:%f\", label, count); }
+
+int sub namedSize(auto v) { return f(label: \"x\", count: v).size(); }
+int sub positionalSize(auto v) { return f(v, \"x\").size(); }
+auto sub namedAnySize(auto v) { auto r = g(label: \"x\", count: v); return r.size(); }
+
+printf(\"%y %y %y %y %y\\n\", namedSize(1), namedSize(1.5), positionalSize(2), namedAnySize(3), namedAnySize(0));
+";
+    }
+
+    constructor() : Test("AOTRuntimeNamedCallReturnTypeTest", "1.0") {
+        # the paths are made absolute, because the compiler runs in a temporary directory
+        qore_bin = AOTRuntimeNamedCallReturnTypeTest::absolutePath(ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qcc_bin = AOTRuntimeNamedCallReturnTypeTest::absolutePath(ENV.QORE_QCC_EXECUTABLE ?? ENV.QCC ?? ENV.QORE_QCC
+            ?? (libqore_dir + DirSep + "qcc"));
+        addTestCase("native shape", \testNativeShape());
+        addTestCase("values", \testValues());
+        set_return_value(main());
+    }
+
+    #! Returns \a path as an absolute path if it names a directory component, otherwise unchanged (a command name)
+    private static string absolutePath(string path) {
+        return path =~ /\// ? normalize_dir(path) : path;
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! Returns the LLVM IR of the function whose symbol contains \a name in an LLVM IR dump
+    private string functionIr(string dump, string name) {
+        int start = -1;
+        int pos = 0;
+        while (True) {
+            int i = dump.find("\ndefine ", pos);
+            if (i < 0) {
+                break;
+            }
+            int eol = dump.find("\n", i + 1);
+            if (dump.substr(i, eol - i).find(name) >= 0) {
+                start = i;
+                break;
+            }
+            pos = i + 1;
+        }
+        assertGt(-1, start, sprintf("the LLVM IR dump defines %s", name));
+        if (start < 0) {
+            return "";
+        }
+        int end = dump.find("\n}\n", start);
+        return end < 0 ? dump.substr(start) : dump.substr(start, end - start);
+    }
+
+    #! Compiles the script to an executable and returns the compiler output
+    private string compile(string dir, string env = "") {
+        return backquote(sprintf("cd %s && QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s -o rn rn.q 2>&1",
+            dir, libqore_dir, libqore_dir, libqore_dir, env, qcc_bin));
+    }
+
+    testNativeShape() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+            return;
+        }
+        TmpDir tmp("qore-aot-runtime-named-shape-");
+        write(tmp.path + "/rn.q", Source);
+        string dump = compile(tmp.path, "QORE_DUMP_LLVM_IR=1");
+
+        string named = functionIr(dump, "namedSize");
+        assertNeq(-1, named.find("qore_rt_pseudo_string_size_noguard"),
+            "the size of the string result of a named call resolved at run time is read with the string helper");
+        assertEq(-1, named.find("qore_rt_dot_eval_pseudo_method_direct_aot"),
+            "the size of the string result of a named call resolved at run time is not dispatched dynamically");
+
+        string positional = functionIr(dump, "positionalSize");
+        assertNeq(-1, positional.find("qore_rt_pseudo_string_size_noguard"),
+            "the size of the string result of a call with positional arguments is read with the string helper");
+
+        # a call whose variants return auto has no known type: the pseudo-method is dispatched at run time
+        string any = functionIr(dump, "namedAnySize");
+        assertEq(-1, any.find("qore_rt_pseudo_string_size_noguard"),
+            "the size of the value of a named call returning auto is not read with the string helper");
+    }
+
+    testValues() {
+        TmpDir tmp("qore-aot-runtime-named-values-");
+        write(tmp.path + "/rn.q", Source);
+        string expected = "3 10 3 3 0\n";
+        foreach string mode in (Modes) {
+            string cmd = sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s/rn.q 2>&1",
+                libqore_dir, libqore_dir, libqore_dir, qore_bin, mode, tmp.path);
+            assertEq(expected, backquote(cmd), "mode " + mode + ": " + cmd);
+        }
+        if (!is_file(qcc_bin)) {
+            return;
+        }
+        string out = compile(tmp.path);
+        assertTrue(is_file(tmp.path + "/rn"), "compiled the script: " + out);
+        out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s/rn 2>&1", libqore_dir, libqore_dir,
+            tmp.path));
+        assertEq(expected, out, "AOT executable");
+    }
+}

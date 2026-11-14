@@ -673,6 +673,16 @@ if (accepted) {
 
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
+    //! Sends the application's WebSocket close frame on an HTTP/2 stream, unless one was sent on it before
+    /** See Http2Session::sendStreamCloseFrame(); otherwise as sendHttp2StreamData()
+
+        @return 0 if the frame was sent, 1 if a close frame was sent on the stream before (only the end of the
+        stream is sent, if requested), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int sendHttp2StreamWebSocketClose(int32_t stream_id, const BinaryNode* data, bool end_stream,
+            ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
     //! Internal async-poll helper for HTTP/2 stream DATA reads.
     /** Public synchronous callers must use @ref readHttp2StreamData(), which
@@ -730,6 +740,18 @@ if (accepted) {
     */
     DLLLOCAL int sendHttp2StreamDataForAsyncPoll(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
+
+    //! Sends a WebSocket control frame (a pong or a close echo) of a stream's frame state on an HTTP/2 stream
+    /** A close frame and a pong are not refused for a full send buffer; see Http2Session::sendStreamControlFrame()
+        (issue #5900).  Safe on the I/O thread, as sendHttp2StreamDataForAsyncPoll().
+
+        @return 0 if the frame was buffered or kept, 1 if the frame was refused for a full buffer (a frame that is
+        not a pong or a close, or a stream's second close frame), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int sendHttp2StreamControlFrameForAsyncPoll(int32_t stream_id, const BinaryNode* data,
+            ExceptionSink* xsink);
 
     //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
     /** Handler thread calls this and returns immediately. The I/O thread reads from
@@ -857,6 +879,30 @@ if (accepted) {
         @return 0 on success, -1 if an exception was raised
     */
     DLLLOCAL int watchHttp2ResponseSend(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Sends a GOAWAY on the socket's server HTTP/2 session before the server closes the connection (qore#5899)
+    /** Does nothing if the socket has no server HTTP/2 session, or if a GOAWAY was sent already; the frame is written
+        without blocking on the I/O thread of the socket, and a caller on another thread waits for that; a caller on
+        an I/O thread or in a continuePoll worker only submits the frame, which the connection's poll operation writes
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int sendHttp2ShutdownGoaway(ExceptionSink* xsink);
+
+    //! Starts a graceful drain of the socket's server HTTP/2 session (qore#5899)
+    /** Submits a GOAWAY like sendHttp2ShutdownGoaway(); the streams open then are served to their end, and the
+        connection's poll operation closes the connection when none is left.  Does nothing if the socket has no
+        server HTTP/2 session.  Run on the I/O thread of the socket like sendHttp2ShutdownGoaway()
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int startHttp2Drain(ExceptionSink* xsink);
+
+    //! Returns true if a drain of the socket's HTTP/2 session was started and it has no open stream and nothing to write
+    DLLLOCAL bool isHttp2DrainComplete() const;
+
+    //! Returns true if the server drains the socket's connection (see Socket::drainHttpConnection())
+    DLLLOCAL bool isHttpDraining() const;
 
     //! Drains the transmission results of HTTP/2 responses watched with watchHttp2ResponseSend() (I/O thread only)
     /** @return (stream ID, sent) pairs; empty if there is no HTTP/2 session
@@ -1078,6 +1124,18 @@ if (accepted) {
     */
     DLLLOCAL int sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
+
+    //! Sends a WebSocket control frame (a pong or a close echo) of a stream's frame state on an HTTP/3 client stream
+    /** See QuicSession::sendStreamControlFrame() (issue #5900); safe on the I/O thread, as
+        sendQuicClientStreamDataForAsyncPoll().
+
+        @return 0 if the frame was staged or kept, 1 if the frame was refused (a frame that is not a pong or a close,
+        or a stream's second close frame), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int sendQuicClientStreamControlFrameForAsyncPoll(int64_t stream_id, const void* data, size_t len,
+        ExceptionSink* xsink);
 
     //! Mark a client-side HTTP/3 stream for incremental response body delivery
     /** Internal direct variant for callers that already serialized request submission on the
@@ -1341,6 +1399,17 @@ if (accepted) {
     */
     DLLEXPORT int submitQuicStreamData(int64_t session_id, int64_t stream_id,
         const void* data, size_t len, bool end_stream, ExceptionSink* xsink);
+
+    //! Sends the application's WebSocket close frame on an HTTP/3 stream, unless one was sent on it before
+    /** See QuicSession::sendStreamCloseFrame(); otherwise as submitQuicStreamData()
+
+        @return 0 if the frame was staged, 1 if a close frame was staged on the stream before (only the end of the
+        stream is sent, if requested), -1 on error (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int submitQuicStreamWebSocketClose(int64_t session_id, int64_t stream_id, const void* data, size_t len,
+        bool end_stream, ExceptionSink* xsink);
 
     //! Set InputStream for I/O thread streaming on a QUIC session stream
     /** @since %Qore 3.0

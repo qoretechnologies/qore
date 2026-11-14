@@ -353,13 +353,36 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
     }
 
+    // the assignment state of the variable at this read (qore#5937); the parse is one forward pass, so a read is
+    // proven unassigned only when no assignment parsed before it can have run, and no assignment parsed after it can
+    // run before it: the variable is not changed through a reference or by a closure, and no loop body, iterated
+    // expression or on_exit block lies between its declaration and the read
+    if (!new_decl && !is_assignment && (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) && ref.id) {
+        if (parse_context.pflag & PF_LVALUE_NOT_READ) {
+            // the reference, delete and remove operators do not read the variable, and a reference can assign it
+            read_state = qore_local_read_state_e::Unknown;
+        } else if (ref.id->isAssigned() || ref.id->isSelf()) {
+            // the self variable of a method has the object whenever the method runs; it is not assigned in the code
+            read_state = qore_local_read_state_e::Assigned;
+        } else if (type == VT_LOCAL && !ref.id->mayBeAssigned() && !ref.id->closureUse() && !ref.id->isTopLevel()
+                && parse_get_deferred_depth() <= ref.id->getDeclDeferredDepth()) {
+            // a top-level local of a program is also a variable of its functions and methods, which can assign or
+            // remove it whenever they are called, and whose code the parse does not see in the order it runs
+            read_state = qore_local_read_state_e::Unassigned;
+        } else {
+            read_state = qore_local_read_state_e::Unknown;
+        }
+    }
+
     // A declaration constrains a value but does not initialize it.  The flow-sensitive LocalVar
     // state is authoritative here: it is merged across branches by AssignedStateHelper, so this
-    // warning is emitted only when the read is not definitely preceded by an assignment.  `exists`
-    // is the intentional way to inspect that state and suppresses the warning through its parse flag.
-    if (!err && !new_decl && !is_assignment && !(parse_context.pflag & PF_EXISTENCE_CHECK)
-            && (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) && ref.id
-            && !ref.id->isAssigned()) {
+    // diagnostic is raised only when the read is not definitely preceded by an assignment.  `exists`
+    // is the intentional way to inspect that state and suppresses it through its parse flag.  A read that is proven
+    // unassigned where its value is used as a value of a type that does not accept NOTHING is a parse error with
+    // %strict-parse-errors; see qore_parse_check_unassigned_read()
+    if (!err && !new_decl && !is_assignment && !(parse_context.pflag & (PF_EXISTENCE_CHECK | PF_LVALUE_NOT_READ))
+            && read_state != qore_local_read_state_e::Assigned) {
+        assert(ref.id);
         const QoreTypeInfo* declared_type = ref.id->getTypeInfo();
         if (QoreTypeInfo::hasType(declared_type)
                 && QoreTypeInfo::parseReturns(declared_type, NT_NOTHING) == QTI_NOT_EQUAL) {
@@ -369,6 +392,8 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
             metadata.addFact("variable", ref.id->getName());
             metadata.addFact("declaredType", QoreTypeInfo::getName(declared_type));
             metadata.addFact("definitelyAssigned", "false");
+            metadata.addFact("assignmentState", read_state == qore_local_read_state_e::Unassigned
+                ? "unassigned" : "unknown");
             metadata.addSuggestion(QoreStringMaker("initialize %s before this read", ref.id->getName()).c_str());
             QoreStringNode* desc = new QoreStringNodeMaker("local variable '%s' with non-optional type '%s' "
                 "is read before it is definitely assigned; a declaration does not initialize the variable",
@@ -381,11 +406,20 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     return err;
 }
 
+template <typename... Args>
+static VarRefNewObjectNode* qore_make_var_ref_new(Args&&... args) {
+    LexicalSemanticPolicy policy;
+    LexicalParsePolicyHelper::capture(policy);
+    return !policy.isDefault()
+        ? new LexicalVarRefNewObjectNode(std::forward<Args>(args)...)
+        : new VarRefNewObjectNode(std::forward<Args>(args)...);
+}
+
 VarRefNewObjectNode* VarRefNode::globalMakeNewCall(QoreValue args) {
     assert(type == VT_GLOBAL || type == VT_THREAD_LOCAL);
     if (ref.var->hasTypeInfo()) {
         QoreParseTypeInfo* pti = ref.var->copyParseTypeInfo();
-        VarRefNewObjectNode* rv = new VarRefNewObjectNode(loc, takeName(), ref.var,
+        VarRefNewObjectNode* rv = qore_make_var_ref_new(loc, takeName(), ref.var,
             make_args(loc, args), pti ? nullptr : ref.var->getTypeInfo(), pti);
         deref();
         return rv;
@@ -525,8 +559,8 @@ int VarRefDeclNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_contex
 
 // for checking for new object calls
 AbstractQoreNode* VarRefDeclNode::makeNewCall(QoreValue args) {
-    VarRefNewObjectNode* rv = new VarRefNewObjectNode(loc, takeName(), typeInfo, takeParseTypeInfo(),
-        make_args(loc, args), type);
+    VarRefNewObjectNode* rv = qore_make_var_ref_new(loc, takeName(), typeInfo, takeParseTypeInfo(),
+        make_args(loc, args), static_cast<qore_var_t>(type));
     if (isReadOnlyDecl()) {
         rv->setReadOnlyDecl();
     }
@@ -793,12 +827,21 @@ QoreValue VarRefNewObjectNode::evalCallArg(ExceptionSink* xsink) const {
     return needs_deref ? v : v.refSelf();
 }
 
+QoreValue LexicalVarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(rc_get_current_ref(), needs_deref, xsink);
+}
+
 QoreValue VarRefNewObjectNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 
 QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(rc, needs_deref, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue VarRefNewObjectNode::evalImplInternal(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     ReferenceHolder<> value(xsink);
 
     const QoreTypeInfo* runtime_type_info = qore_substitute_type_params_if_needed(typeInfo);
@@ -807,23 +850,36 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
             assert(QoreTypeInfo::getUniqueReturnClass(runtime_type_info));
             // the location of this call is the location of the call stack frame of the constructor
             QoreRcCallSiteHelper call_site(rc, loc);
-            value = qore_class_private::execConstructor(
+            value = qore_class_private::execConstructorWithPolicy<Lexical>(getSemanticPolicy(),
                 *QoreTypeInfo::getUniqueReturnClass(runtime_type_info), rc, variant, args, xsink, runtime_type_info
             );
             break;
         }
 
         case VRN_HASHDECL:
-            value = typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info))
-                ->newHash(parse_args, runtime_check, xsink);
+            if constexpr (Lexical) {
+                value = typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info))
+                    ->newHash(parse_args, runtime_check, xsink, getSemanticPolicy());
+            } else {
+                value = typed_hash_decl_private::get(*QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info))
+                    ->newHash(parse_args, runtime_check, xsink);
+            }
             break;
 
         case VRN_COMPLEXHASH:
-            value = qore_hash_private::newComplexHash(runtime_type_info, parse_args, xsink);
+            if constexpr (Lexical) {
+                value = qore_hash_private::newComplexHash(runtime_type_info, parse_args, xsink, getSemanticPolicy());
+            } else {
+                value = qore_hash_private::newComplexHash(runtime_type_info, parse_args, xsink);
+            }
             break;
 
         case VRN_COMPLEXLIST:
-            value = qore_list_private::newComplexList(runtime_type_info, new_args, xsink);
+            if constexpr (Lexical) {
+                value = qore_list_private::newComplexList(runtime_type_info, new_args, xsink, getSemanticPolicy());
+            } else {
+                value = qore_list_private::newComplexList(runtime_type_info, new_args, xsink);
+            }
             break;
 
         case VRN_DYNAMIC_OBJECT: {
@@ -836,7 +892,7 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
                 return QoreValue();
             }
             QoreRcCallSiteHelper call_site(rc, loc);
-            value = qc->execConstructor(args, xsink);
+            value = qore_class_private::execConstructorWithPolicy<Lexical>(getSemanticPolicy(), *qc, rc, nullptr, args, xsink);
             break;
         }
 
@@ -857,7 +913,11 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
                     dynamic_hashdecl_name.c_str());
                 break;
             }
-            value = typed_hash_decl_private::get(*hd)->newHash(parse_args, runtime_check, xsink);
+            if constexpr (Lexical) {
+                value = typed_hash_decl_private::get(*hd)->newHash(parse_args, runtime_check, xsink, getSemanticPolicy());
+            } else {
+                value = typed_hash_decl_private::get(*hd)->newHash(parse_args, runtime_check, xsink);
+            }
             break;
         }
 
@@ -873,9 +933,42 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
     if (!lv)
         return QoreValue();
     AbstractQoreNode* rv;
-    lv.assign(rv = value.release());
+    if constexpr (Lexical) {
+        lv.assign(rv = value.release(), "<lvalue>", getSemanticPolicy());
+    } else {
+        lv.assign(rv = value.release());
+    }
     if (*xsink)
         return QoreValue();
     needs_deref = false;
     return QoreValue(rv);
+}
+
+int qore_parse_check_unassigned_read(QoreProgram* pgm, const QoreProgramLocation* loc, const QoreValue& expr,
+        const QoreTypeInfo* target_type, const char* target_desc) {
+    if (!expr.hasNode() || expr.getType() != NT_VARREF) {
+        return 0;
+    }
+    const VarRefNode* vrn = expr.get<const VarRefNode>();
+    // once the parse has raised an exception, the state of a variable can be a consequence of it: a declaration or an
+    // assignment whose type or value could not be parsed does not mark the variable assigned, so the error would not
+    // be proven (the code does not parse in any case)
+    if (vrn->getReadState() != qore_local_read_state_e::Unassigned
+            || !QoreTypeInfo::hasType(target_type)
+            || QoreTypeInfo::parseAcceptsReturns(target_type, NT_NOTHING)
+            || !parse_check_parse_option(QoreParseOptions::STRICT_PARSE_ERRORS)
+            || pgm->parseExceptionRaised()) {
+        return 0;
+    }
+    QoreStringMaker hint("assign '%s' before this use, or give %s an optional type if the absent value is "
+        "intentional", vrn->getName(), target_desc);
+    QoreDiagnosticMetadata metadata("UNINITIALIZED-LOCAL-READ", hint.c_str());
+    metadata.addFact("variable", vrn->getName());
+    metadata.addFact("targetType", QoreTypeInfo::getName(target_type));
+    metadata.addFact("assignmentState", "unassigned");
+    QoreStringNode* desc = new QoreStringNodeMaker("local variable '%s' cannot have been assigned where it is read, "
+        "so it gives NOTHING to %s, whose type '%s' does not accept NOTHING (%%strict-parse-errors)", vrn->getName(),
+        target_desc, QoreTypeInfo::getName(target_type));
+    qore_program_private::makeParseException(pgm, *loc, "PARSE-TYPE-ERROR", desc, metadata);
+    return -1;
 }

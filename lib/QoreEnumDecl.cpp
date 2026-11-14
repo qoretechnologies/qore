@@ -63,6 +63,7 @@ qore_type_t QoreTypeSpec::getType() const {
             return QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
+        case QTS_INITIALIZER_FILTER:
             // Keep type parameters distinct from untyped auto/any in internal type checks.
             return NT_NOTHING;
     }
@@ -179,6 +180,20 @@ qore_enum_decl_private::~qore_enum_decl_private() {
     for (auto* member : members) {
         delete member;
     }
+    qore_type_owner_destroyed(&type_owner);
+}
+
+const QoreTypeInfo* qore_enum_decl_private::getTypeOwnerType() const {
+    return typeInfo;
+}
+
+const QoreTypeInfo* qore_enum_decl_private::getTypeOwnerOrNothingType() const {
+    return orNothingTypeInfo;
+}
+
+void qore_enum_decl_private::freeTypeOwner() {
+    assert(!refs.reference_count());
+    delete ed;
 }
 
 QoreEnumDecl* qore_enum_decl_private::newEnumDecl(const char* n, const QoreTypeInfo* baseType) {

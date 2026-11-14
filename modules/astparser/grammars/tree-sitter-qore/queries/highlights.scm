@@ -101,6 +101,8 @@
   (#match? @constant "^[A-Z][A-Z0-9_]*[A-Z0-9]$"))
 
 (class_compatibility_attribute) @attribute
+(callable_attribute name: (identifier) @attribute)
+(callable_attribute value: (identifier) @constant)
 
 ; ==================== Keywords ====================
 

@@ -12,10 +12,10 @@ changes with it.  What a user sees for a module built for another API:
 - looked up by its feature name (`%requires`, `load_module("name")`), the loader tries only
   `<name>-api-<supported>.qmod` and `<name>.qmod`, so the module is not found; the `LOAD-MODULE-ERROR` then names each
   `<name>-api-<major>.<minor>.qmod` file of the feature with an unsupported API in the module path (flat and split
-  form; the API is read from the file name, the module is not loaded): "...; found '<path>' built for module API 2.1:
-  rebuild it for module API 2.2" (`qore_append_unsupported_api_modules()` in lib/ModuleManager.cpp);
+  form; the API is read from the file name, the module is not loaded): "...; found '<path>' built for module API <old>:
+  rebuild it for module API <current>" (`qore_append_unsupported_api_modules()` in lib/ModuleManager.cpp);
 - loaded by its path, its description function is read and the module is refused with "API mismatch, module supports
-  API 2.1, however only version 2.2 is supported".
+  API <old>, however only version <current> is supported".
 
 **Any change to the public headers that a module compiled with the previous headers would get wrong must increment
 `QORE_MODULE_API_MINOR`** (or `QORE_MODULE_API_MAJOR` for an incompatible redesign of the module interface), in the
@@ -48,12 +48,14 @@ Adding new exported functions, or new types that old modules do not use, needs n
   - the `QoreStackLocation` ABI (86ee672a22).
   - `QoreModuleInfo::ns`, through which a module registers the namespace that module teardown purges, with
     `QoreNamespace::purge()` (module namespace teardown, merged with this bump).
-- 2.2 (Qore 3.0): `QoreModuleInfo::cmd_caller_aware` (after `ns`), `QoreModuleCommandRestrictions` and
+- 2.2 (Qore 3.0, #5831): appends native callback dispatch entries to `ResolvedCallReferenceNode`; modules built
+  for the previous API are refused. See the lexical callback entries below.
+- 2.3 (Qore 3.0): `QoreModuleInfo::cmd_caller_aware` (after `ns`), `QoreModuleCommandRestrictions` and
   `QoreModuleCommandContext`, through which a module command handler judges the code that issues a command (#5699).
   The struct grew a field that a module writes in its description function, before the library can check its API, so
-  a 2.2 module loaded by a 2.1 library (whose struct has no such field) would write past it; a 2.2 module that such a
-  library may load sets the field only if `is_module_api_supported(2, 2)` is true.  2.1 libraries were already
-  installed in development images when the field was added, so the API was incremented and 2.1 modules are refused.
+  a 2.3 module loaded by a 2.2 library (whose struct has no such field) would write past it; a 2.3 module that such a
+  library may load sets the field only if `is_module_api_supported(2, 3)` is true.  2.2 libraries were already
+  installed in development images when the field was added, so the API was incremented and 2.2 modules are refused.
 
 ## Guard
 
@@ -99,7 +101,25 @@ Test: examples/test/cmake/test_stale_module_api_files.py.
   `override_dh_gencontrol`, so that a module package can depend on the module API it was built for.
 - examples/test/cmake/test_module_api_version.py checks that these name the API of the header.
 
-Test: examples/test/module-cpp-api/module-api/module-api-version.qtest, in every execution mode: apiold (declares the
-previous API, 2.1, built as `apiold-api-2.1.qmod`) is not found by its feature name and the error names its file, and is
-refused by its path with the API mismatch; apicur (the current headers) loads and reports 2.2; the hint names each file of a
+Test: examples/test/module-cpp-api/module-api/module-api-version.qtest, in every execution mode: apiold (declares API
+the preceding minor, built as `apiold-api-<previous>.qmod`) is not found by its feature name and the error names its file, and is refused by
+its path with the API mismatch; apicur (the current headers) loads and reports the current API; the hint names each file of a
 feature with an unsupported API in the flat and the split form and no other file.
+
+## Lexical callback entries (#5831)
+
+`ResolvedCallReferenceNode::invoke()` now calls the appended `dispatchValue()` slot. The base implementation
+scopes canonical native compatibility semantics and calls the module's existing `execValue()` override; an
+explicit source-bound invocation uses the appended `dispatchLexicalValue()` slot. Native subclass source does
+not need to change. Internal Qore references and closures place their existing execution bodies in the new
+ordinary slot, preserving one virtual dispatch and using their declaration-bound argument filters.
+
+The public vtable changes, so `QORE_MODULE_API_MINOR` is incremented in the same change. The assigned version is 2.2. `qore_mod_api_list` continues to contain only the current API, and older
+modules are refused by the existing API-mismatch path. Rebuild every external module against the new headers.
+No AOT serialization layout, opcode, or feature bit is added; the runtime identity changes.
+
+The same unpublished API 2.2 change adds an internal `AbstractCallReferenceNode::getSandboxBoundCallback()`
+slot. Its default returns no edge; the runtime sandbox wrapper exposes its borrowed, immutable callback through
+an override. Cycle scanning therefore identifies wrappers without RTTI name comparisons on ordinary callbacks.
+Existing native subclasses inherit the default unchanged. This slot also applies safely to unresolved call
+references; no data member or node type is added.

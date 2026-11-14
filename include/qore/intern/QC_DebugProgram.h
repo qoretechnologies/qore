@@ -110,12 +110,26 @@ private:
       // a debugger ends the thread, as when it ends the program, with THREAD-CANCELLED, which the thread raises at the
       // statement, function or event that the callback was made for; the other exceptions of the code of the
       // debugger do not change the program
-      // a thread that raises an exception already, such as the cancellation that the callback was made for, raises
-      // nothing more
-      if (xsink && !*xsink && xsink2.isException()) {
+      // a thread that raises an exception already, such as the exception that the callback was made for, cannot
+      // raise THREAD-CANCELLED as well, as the program could catch the other exception and keep running: the end of
+      // the thread is then requested as a cancellation of the thread scoped to the program, which the next
+      // cancellation point of the thread raises, whatever the order of the debugger's commands (qore#5987)
+      if (xsink && xsink2.isException()) {
          QoreValue err = xsink2.getExceptionErr();
          if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "THREAD-CANCELLED")) {
-            xsink->assimilate(xsink2);
+            if (!*xsink) {
+               xsink->assimilate(xsink2);
+            } else {
+               // a pending request (as the one with which terminateProgram() cancels the threads, or one of the host
+               // code, which is not scoped to the program) is kept as it is
+               if (!qore_is_thread_cancel_requested()) {
+                  QoreValue desc = xsink2.getExceptionDesc();
+                  qore_request_current_thread_cancel(desc.getType() == NT_STRING
+                     ? desc.get<const QoreStringNode>()->c_str() : nullptr, pgm->getProgramId());
+               }
+               // handled here: not reported as an unhandled exception of the thread
+               xsink2.clear();
+            }
          }
       }
       // a cancellation that arrived while the code of the debugger ran with the cancellation deferred, which it

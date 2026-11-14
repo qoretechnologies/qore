@@ -28,9 +28,83 @@
     information.
 */
 
+#include <qore/intern/LexicalReflection.h>
 #include "qore_reflection.h"
 #include "QC_PseudoMethodVariant.h"
 #include "QC_PseudoMethod.h"
+
+// Both entries share the reflection authority checks; only the final invocation differs.
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue PseudoMethodVariant_call_VAVV_impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, QoreValue val) {
+    // the privileges of the calling code
+    QoreReflectionCaller caller;
+    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
+    // a confusing exception
+    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
+    const QoreMethod* m = mv->getMethod();
+    if (check_pseudo_call(val, *m, xsink)) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> call_args(xsink);
+
+    // if there are arguments to pass
+    if (num_args(args) > 1) {
+        // create argument list by copying current list
+        call_args = args->copyListFrom(1);
+    }
+
+    // the variant must be allowed by the caller and the method's Program
+    if (reflection_check_variant_call(caller, v->variant, m->getClass()->getName(), m->getName(), v->pgm, xsink)) {
+        return QoreValue();
+    }
+    // pseudo-classes and pseudo-methods are always valid
+    if constexpr (Lexical) return qore_lexical_reflection_pseudo(policy, *m->getClass(), m, mv, val, *call_args, xsink);
+    else return m->getClass()->evalPseudoMethod(m, mv, val, *call_args, xsink);
+}
+
+static QoreValue PseudoMethodVariant_call_VAVV_lexical(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    QoreValue val = get_param_value(args, 0);
+    return PseudoMethodVariant_call_VAVV_impl<true>(qore_get_native_semantic_policy(), self, v, args, runtime_cfg, xsink, val);
+}
+
+static QoreValue PseudoMethodVariant_call_VAVV(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue PseudoMethodVariant_callArgs_VAC15_softlist_auto__impl(LexicalSemanticPolicy policy, QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, QoreValue val, const QoreListNode* argv) {
+    // the privileges of the calling code
+    QoreReflectionCaller caller;
+    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
+    // a confusing exception
+    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
+    const QoreMethod* m = mv->getMethod();
+    if (check_pseudo_call(val, *m, xsink)) {
+        return QoreValue();
+    }
+
+    // the variant must be allowed by the caller and the method's Program
+    if (reflection_check_variant_call(caller, v->variant, m->getClass()->getName(), m->getName(), v->pgm, xsink)) {
+        return QoreValue();
+    }
+    // pseudo-classes and pseudo-methods are always valid
+    if constexpr (Lexical) return qore_lexical_reflection_pseudo(policy, *m->getClass(), m, mv, val, argv, xsink);
+    else return m->getClass()->evalPseudoMethod(m, mv, val, argv, xsink);
+}
+
+static QoreValue PseudoMethodVariant_callArgs_VAC15_softlist_auto__lexical(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    QoreValue val = get_param_value(args, 0);
+    const QoreListNode* argv = get_param_value(args, 1).get<const QoreListNode>();
+    return PseudoMethodVariant_callArgs_VAC15_softlist_auto__impl<true>(qore_get_native_semantic_policy(), self, v, args, runtime_cfg, xsink, val, argv);
+}
+
+static QoreValue PseudoMethodVariant_callArgs_VAC15_softlist_auto_(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+
+static const QoreLexicalMethodRegistrationHelper::Entry lexical_entries_PseudoMethodVariant[] = {
+    {reinterpret_cast<q_method_t>(PseudoMethodVariant_call_VAVV), reinterpret_cast<q_method_t>(PseudoMethodVariant_call_VAVV_lexical)},
+    {reinterpret_cast<q_method_t>(PseudoMethodVariant_callArgs_VAC15_softlist_auto_), reinterpret_cast<q_method_t>(PseudoMethodVariant_callArgs_VAC15_softlist_auto__lexical)},
+};
+
+
 
 //! The class for %Qore class normal method variants
 /**
@@ -68,30 +142,7 @@ auto v = m.call(val, arg1, arg2);
     @see callArgs()
 */
 auto PseudoMethodVariant::call(auto val, ...) {
-    // the privileges of the calling code
-    QoreReflectionCaller caller;
-    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
-    // a confusing exception
-    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
-    const QoreMethod* m = mv->getMethod();
-    if (check_pseudo_call(val, *m, xsink)) {
-        return QoreValue();
-    }
-
-    ReferenceHolder<QoreListNode> call_args(xsink);
-
-    // if there are arguments to pass
-    if (num_args(args) > 1) {
-        // create argument list by copying current list
-        call_args = args->copyListFrom(1);
-    }
-
-    // the variant must be allowed by the caller and the method's Program
-    if (reflection_check_variant_call(caller, v->variant, m->getClass()->getName(), m->getName(), v->pgm, xsink)) {
-        return QoreValue();
-    }
-    // pseudo-classes and pseudo-methods are always valid
-    return m->getClass()->evalPseudoMethod(m, mv, val, *call_args, xsink);
+    return PseudoMethodVariant_call_VAVV_impl<false>({}, self, v, args, runtime_cfg, xsink, val);
 }
 
 //! calls the given pseudo-method variant with the given value; the value must be compatible with the pseudo-class's type
@@ -113,20 +164,8 @@ auto v = m.callArgs(val, (arg1, arg2));
     @see call()
 */
 auto PseudoMethodVariant::callArgs(auto val, *softlist<auto> argv) {
-    // the privileges of the calling code
-    QoreReflectionCaller caller;
-    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
-    // a confusing exception
-    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
-    const QoreMethod* m = mv->getMethod();
-    if (check_pseudo_call(val, *m, xsink)) {
-        return QoreValue();
-    }
-
-    // the variant must be allowed by the caller and the method's Program
-    if (reflection_check_variant_call(caller, v->variant, m->getClass()->getName(), m->getName(), v->pgm, xsink)) {
-        return QoreValue();
-    }
-    // pseudo-classes and pseudo-methods are always valid
-    return m->getClass()->evalPseudoMethod(m, mv, val, argv, xsink);
+    return PseudoMethodVariant_callArgs_VAC15_softlist_auto__impl<false>({}, self, v, args, runtime_cfg, xsink, val, argv);
 }
+
+
+//! @qppinit: QoreLexicalMethodRegistrationHelper lexical_registration(lexical_entries_PseudoMethodVariant);

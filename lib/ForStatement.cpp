@@ -35,6 +35,38 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreDeferredRelease.h"
 
+namespace {
+class StrictBooleanForStatement : public ForStatement {
+public:
+    using ForStatement::ForStatement;
+private:
+    int execImpl(QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(return_value, xsink);
+    }
+    int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(rc, return_value, xsink);
+    }
+};
+}
+
+ForStatement* ForStatement::create(LexicalSemanticPolicy policy, int start_line, int end_line,
+        QoreValue a, QoreValue c, QoreValue i, StatementBlock* cd) {
+    ForStatement* rv = policy.strictBoolean()
+        ? new StrictBooleanForStatement(start_line, end_line, a, c, i, cd)
+        : new ForStatement(start_line, end_line, a, c, i, cd);
+    rv->setSemanticPolicy(policy);
+    return rv;
+}
+
+int ForStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(return_value, xsink);
+}
+
+int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(rc, return_value, xsink);
+}
+
+
 ForStatement::ForStatement(int start_line, int end_line, QoreValue a, QoreValue c, QoreValue i, StatementBlock* cd)
         : AbstractStatement(start_line, end_line), assignment(a), cond(c), iterator(i), code(cd) {
 }
@@ -47,7 +79,8 @@ ForStatement::~ForStatement() {
     delete lvars;
 }
 
-int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int ForStatement::execCommon(QoreValue& return_value, ExceptionSink *xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
@@ -76,7 +109,7 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
         // check conditional expression, exit "for" loop if condition is false
         if (cond) {
             bool b;
-            if (qore_eval_condition(cond, b, xsink) || !b) {
+            if (qore_eval_condition<StrictBoolean>(cond, b, xsink) || !b) {
                 break;
             }
         }
@@ -113,7 +146,8 @@ int ForStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     return rc;
 }
 
-int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int ForStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
@@ -142,7 +176,7 @@ int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
         // check conditional expression, exit "for" loop if condition is false
         if (cond) {
             bool b;
-            if (qore_eval_condition(cond, b, xsink, rc) || !b) {
+            if (qore_eval_condition<StrictBoolean>(cond, b, xsink, rc) || !b) {
                 break;
             }
         }
@@ -180,6 +214,8 @@ int ForStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exception
 }
 
 int ForStatement::parseInitImpl(QoreParseContext& parse_context) {
+    // code of the loop can run more than once, so a read in it can follow an assignment parsed after it (qore#5937)
+    ParseDeferredScopeHelper deferred_scope;
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_TOP_LEVEL);
@@ -260,6 +296,9 @@ int ForStatement::parseInitImpl(QoreParseContext& parse_context) {
             ash.recordSavedAsImplicitBranch();
             ash.mergeAndApply();
         }
+        // the code after the loop can follow any point of the body that break or continue leaves, and assignments
+        // in the body may have run (qore#5937)
+        ash.applyChangesSinceSave();
     }
 
     return err;

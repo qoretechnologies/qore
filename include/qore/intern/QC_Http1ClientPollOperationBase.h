@@ -279,8 +279,11 @@ public:
     */
     DLLLOCAL bool setStateUnlessClosed(H1State s, const char* site);
 
+    //! Returns true once the protocol was switched, also after the operation was closed or aborted
+    /** The socket belongs to the new protocol from then on (issue #5985); see switched_protocol
+    */
     DLLLOCAL bool isProtocolSwitched() const {
-        return h1_state.load(std::memory_order_acquire) == H1State::PROTOCOL_SWITCHED;
+        return switched_protocol.load(std::memory_order_acquire);
     }
 
     DLLLOCAL void setProtocolSwitchedListener(QoreObject* listener, ExceptionSink* xsink) {
@@ -465,6 +468,14 @@ private:
 
     //! Connection state (atomic for lock-free reads from app threads)
     std::atomic<H1State> h1_state{H1State::CONNECTING};
+    //! Set once the protocol was switched and never cleared: when a 101 response was delivered to the stream, or
+    //! when the connection became ready in H1State::PROTOCOL_SWITCHED (HTTP/2 negotiated with ALPN in a proxy tunnel)
+    /** The socket is taken over by the new protocol (a WebSocket, or an HTTP/2 connection negotiated with ALPN) from
+        then on; h1_state is set to H1State::CLOSED when the operation is aborted or closed afterwards, and the
+        completion of the operation, delivered on a worker at any time after the switch, must still leave the socket
+        alone (issue #5985)
+    */
+    std::atomic<bool> switched_protocol{false};
 
     //! Whether SSL/TLS is required
     bool ssl_required;
@@ -973,7 +984,9 @@ private:
 
     // Response dispatch
     DLLLOCAL QoreHashNode* dispatchResponse(ExceptionSink* xsink);
-    DLLLOCAL void dispatchStreamingHeaders(ExceptionSink* xsink);
+    //! Delivers the response headers to the stream; returns true if they were delivered (a stream is active, and no
+    //! exception was raised)
+    DLLLOCAL bool dispatchStreamingHeaders(ExceptionSink* xsink);
     DLLLOCAL void dispatchStreamingData(const BinaryNode* data, ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* dispatchStreamingEnd(ExceptionSink* xsink);
     DLLLOCAL void resetResponseState(ExceptionSink* xsink);

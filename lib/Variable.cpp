@@ -47,6 +47,7 @@
 #include <memory>
 #include <set>
 #include <utility>
+#include <unordered_set>
 
 #include <qore/QoreType.h>
 #include "qore/intern/ParserSupport.h"
@@ -828,12 +829,18 @@ LValueHelper::LValueHelper(QoreObject& self, ExceptionSink* xsink) : vl(xsink), 
     ocvec.push_back(ObjCountRec(&self));
 }
 
+// Runtime native callbacks can race with other writers of the object's members. No parent-container count
+// snapshot is needed here: only the final recursive-reference scan uses this root, under its own synchronization.
+LValueHelper::LValueHelper(QoreObject& self, ExceptionSink* xsink, ObjectScan) : vl(xsink), before(true),
+        robj(qore_object_private::get(self)) {
+}
+
 LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink), assignment_only(for_assignment) {
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), before(o.before),
-        removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
+        removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
         track_write_protection(o.track_write_protection),
@@ -856,11 +863,140 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
 #ifdef DEBUG
 //! the number of recursive-reference scans started by lvalue operations in the current thread
 static thread_local int64 lvalue_scan_count = 0;
+static thread_local int64 lvalue_removal_visit_count = 0;
+static thread_local int64 lvalue_removal_probe_count = 0;
+static thread_local int64 lvalue_removal_allocation_count = 0;
 
 int64 q_get_lvalue_scan_count() {
     return lvalue_scan_count;
 }
+
+int64 q_get_lvalue_removal_visit_count() {
+    return lvalue_removal_visit_count;
+}
+
+int64 q_get_lvalue_removal_probe_count() {
+    return lvalue_removal_probe_count;
+}
+
+int64 q_get_lvalue_removal_allocation_count() {
+    return lvalue_removal_allocation_count;
+}
+
+void q_record_lvalue_removal_probe() {
+    ++lvalue_removal_probe_count;
+}
 #endif
+
+struct QoreRemovedValueTracker::ObjectEqual {
+    bool operator()(const RObject* a, const RObject* b) const noexcept {
+#ifdef DEBUG
+        q_record_lvalue_removal_probe();
+#endif
+        return a == b;
+    }
+};
+
+struct QoreRemovedValueTracker::State {
+    std::unordered_set<const AbstractQoreNode*> containers;
+
+    // Only identities are needed: an open-addressed table avoids one allocation per removed object.  At most
+    // half the buckets are occupied, so every lookup has an empty bucket at which to stop.
+    std::vector<const RObject*> objects;
+    size_t count = 0;
+
+    static size_t hash(const RObject* obj) {
+        // Mix the address before masking: allocator alignment/size classes make the low pointer bits unsuitable
+        // for power-of-two bucket counts.  This finalizer also works for zero-extended 32-bit addresses.
+        uint64_t bits = reinterpret_cast<uintptr_t>(obj);
+        bits ^= bits >> 33;
+        bits *= UINT64_C(0xff51afd7ed558ccd);
+        bits ^= bits >> 33;
+        bits *= UINT64_C(0xc4ceb9fe1a85ec53);
+        bits ^= bits >> 33;
+        return static_cast<size_t>(bits);
+    }
+
+    static size_t slot(const std::vector<const RObject*>& table, const RObject* obj) {
+        size_t mask = table.size() - 1;
+        size_t pos = hash(obj) & mask;
+        while (table[pos]) {
+            if (ObjectEqual{}(table[pos], obj)) {
+                break;
+            }
+            pos = (pos + 1) & mask;
+        }
+        return pos;
+    }
+
+    void grow() {
+        // Build the new table before replacing the old one, so allocation failure leaves its membership intact.
+        std::vector<const RObject*> next(objects.empty() ? 8 : objects.size() * 2, nullptr);
+        for (const RObject* obj : objects) {
+            if (obj) {
+                next[slot(next, obj)] = obj;
+            }
+        }
+        objects.swap(next);
+    }
+
+    void add(const RObject* obj) {
+        if (objects.empty()) {
+            grow();
+        }
+        size_t pos = slot(objects, obj);
+        if (objects[pos]) {
+            return;
+        }
+        if (count == objects.size() / 2) {
+            grow();
+            pos = slot(objects, obj);
+        }
+        objects[pos] = obj;
+        ++count;
+    }
+
+    bool contains(const RObject* obj) const {
+        return !objects.empty() && objects[slot(objects, obj)];
+    }
+};
+
+QoreRemovedValueTracker::State& QoreRemovedValueTracker::getState() {
+    if (!state) {
+        state = new State;
+#ifdef DEBUG
+        ++lvalue_removal_allocation_count;
+#endif
+    }
+    return *state;
+}
+
+void QoreRemovedValueTracker::releaseState() {
+    delete state;
+}
+
+void QoreRemovedValueTracker::add(const RObject* obj) {
+    assert(obj);
+    if (!first) {
+        first = obj;
+    } else if (ObjectEqual{}(first, obj)) {
+        return;
+    } else if (!second) {
+        second = obj;
+    } else if (!ObjectEqual{}(second, obj)) {
+        getState().add(obj);
+    }
+}
+
+bool QoreRemovedValueTracker::contains(const RObject* obj) const {
+    return (first && ObjectEqual{}(first, obj))
+        || (second && ObjectEqual{}(second, obj))
+        || (state && state->contains(obj));
+}
+
+bool QoreRemovedValueTracker::visit(const AbstractQoreNode* container) {
+    return getState().containers.insert(container).second;
+}
 
 LValueHelper::~LValueHelper() {
     // a write whose value was rejected must not leave behind the entries created to reach its target, as a rejected
@@ -1045,25 +1181,61 @@ LValueHelper::~LValueHelper() {
 }
 
 void LValueHelper::removedValue(const QoreValue& v) {
+#ifdef DEBUG
+    ++lvalue_removal_visit_count;
+#endif
+    if (!v.isPointer()) {
+        return;
+    }
+    // Flat containers need no visitation storage: only a nested container can share a traversal path.  Register
+    // the parent before descending so every nested container is entered through the visited set.  Object/scalar
+    // children are handled here without another recursive call.
+    auto child = [this](const QoreValue& value, const AbstractQoreNode* parent) {
+        qore_type_t type = value.getType();
+        if (type == NT_LIST || type == NT_HASH) {
+            removed_objects.visit(parent);
+            removedValue(value);
+        } else {
+#ifdef DEBUG
+            ++lvalue_removal_visit_count;
+#endif
+            if (type == NT_OBJECT) {
+                removed_objects.add(qore_object_private::get(*value.get<const QoreObject>()));
+            }
+        }
+    };
     switch (v.getType()) {
         case NT_OBJECT: {
-            const RObject* o = qore_object_private::get(*v.get<const QoreObject>());
-            if (std::find(removed_objects.begin(), removed_objects.end(), o) == removed_objects.end()) {
-                removed_objects.push_back(o);
-            }
+            removed_objects.add(qore_object_private::get(*v.get<const QoreObject>()));
             break;
         }
         case NT_LIST: {
-            ConstListIterator i(v.get<const QoreListNode>());
+            const QoreListNode* list = v.get<const QoreListNode>();
+            if (removed_objects.tracking() && !removed_objects.visit(list)) {
+                break;
+            }
+            ConstListIterator i(list);
             while (i.next()) {
-                removedValue(i.getValue());
+                child(i.getValue(), list);
+            }
+            // A third object can have started tracking without a nested container.  Remember this root too,
+            // since the same write can report more than one removed value.
+            if (removed_objects.tracking()) {
+                removed_objects.visit(list);
             }
             break;
         }
         case NT_HASH: {
-            ConstHashIterator i(v.get<const QoreHashNode>());
+            const QoreHashNode* hash = v.get<const QoreHashNode>();
+            if (removed_objects.tracking() && !removed_objects.visit(hash)) {
+                break;
+            }
+            ConstHashIterator i(hash);
             while (i.next()) {
-                removedValue(i.get());
+                child(i.get(), hash);
+            }
+            if (removed_objects.tracking()) {
+                removed_objects.visit(hash);
             }
             break;
         }
@@ -1216,7 +1388,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
     QoreValue c = n;
     while (c.getType() == NT_OPERATOR) {
         const AbstractQoreNode* node = c.getInternalNode();
-        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             evaluated += op->getRight().needsEval() ? 1 : 0;
             c = op->getLeft();
         } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
@@ -1237,7 +1409,7 @@ const QoreLValuePathKeys* LValueHelper::getPathKeys(QoreLValuePathKeyCache& cach
     c = n;
     while (c.getType() == NT_OPERATOR) {
         const AbstractQoreNode* node = c.getInternalNode();
-        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             keys.push_back(op->getRight());
             c = op->getLeft();
         } else if (auto* hop = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
@@ -2071,7 +2243,7 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
             read_access = RA_ELEMENT;
         }
         const QoreSquareBracketsOperatorNode* op =
-            dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
+            qore_exact_node_cast<QoreSquareBracketsOperatorNode>(n.getInternalNode());
         if (op) {
             // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
             // outermost step of a path that needs it (qore#5753)
@@ -2209,7 +2381,7 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
             read_access = RA_ELEMENT;
         }
         const QoreSquareBracketsOperatorNode* op =
-            dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode());
+            qore_exact_node_cast<QoreSquareBracketsOperatorNode>(n.getInternalNode());
         if (op) {
             // the keys and indices of the path are evaluated from the root out, before the path is resolved, at the
             // outermost step of a path that needs it (qore#5753)
@@ -2786,6 +2958,21 @@ bool qore_is_indirect_ref_value(const QoreValue& val) {
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
+    return assignImpl<false>(n, desc, check_types, mode, {});
+}
+
+int LValueHelper::assign(QoreValue n, const char* desc, LexicalSemanticPolicy policy, bool check_types,
+        AssignmentMode mode) {
+    return assignImpl<true>(n, desc, check_types, mode, policy);
+}
+
+int LValueHelper::assignNative(QoreValue n, const char* desc) {
+    return assignImpl<false, true>(n, desc, true, AssignmentMode::Normal, {});
+}
+
+template <bool Lexical, bool Native>
+int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, AssignmentMode mode,
+        LexicalSemanticPolicy policy) {
     member_lvalue_modified = true;
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
@@ -2797,7 +2984,13 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, Assign
     //    qv);
     if (check_types) {
         // check type for assignment
-        QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+        if constexpr (Native) {
+            QoreTypeInfo::acceptAssignmentNative(typeInfo, desc, n, vl.xsink, this);
+        } else if constexpr (Lexical) {
+            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, policy, this);
+        } else {
+            QoreTypeInfo::acceptAssignment(typeInfo, desc, n, vl.xsink, this);
+        }
         if (*vl.xsink) {
             //printd(5, "LValueHelper::assign() this: %p saving type-rejected value: %p '%s'\n", this, n,
             //    get_type_name(n));
@@ -3798,7 +3991,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     assert(t == NT_OPERATOR);
 
     {
-        const QoreSquareBracketsOperatorNode* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(lvalue.getInternalNode());
+        const QoreSquareBracketsOperatorNode* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(lvalue.getInternalNode());
         if (op) {
             doRemove(op);
             return;
@@ -3900,7 +4093,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 }
 
 static void do_list_value(QoreListNode& v, QoreListNode& l, int64 ind, const QoreTypeInfo*& vtype, bool& vcommon,
-        ind_set_t& iset, unsigned i, bool negative_offsets, bool is_range = false) {
+        ind_set_t& iset, unsigned i, bool negative_offsets, bool is_range = false, bool broken_list_range = false) {
     QoreValue p{};
     bool push;
     if (negative_offsets && ind < 0) {
@@ -3911,7 +4104,7 @@ static void do_list_value(QoreListNode& v, QoreListNode& l, int64 ind, const Qor
         p = l.getReferencedEntry(ind);
         push = true;
     } else {
-        push = !is_range || runtime_get_parse_options() & PO_BROKEN_LIST_RANGE;
+        push = !is_range || broken_list_range;
     }
 
     if (push) {
@@ -4168,7 +4361,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     ConstListIterator li(rh->get<const QoreListNode>());
                     while (li.next()) {
                         do_list_value(**v, *l, li.getValue().getAsBigInt(), vtype, vcommon, iset, i + li.index(),
-                            negative_offsets, true);
+                            negative_offsets, true, op->getSemanticPolicy().brokenListRange());
                     }
                 } else {
                     do_list_value(**v, *l, rh->getAsBigInt(), vtype, vcommon, iset, i, negative_offsets);
@@ -4299,7 +4492,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
     const QoreValue* stop_index = &sel[1];
     lvh.startContainerRemoval();
 
-    bool broken_list_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
+    bool broken_list_range = op->getSemanticPolicy().brokenListRange();
     bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
 
     int64 start, stop, seq_size;

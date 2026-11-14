@@ -48,6 +48,8 @@ module WooCommerceRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("woocommerce", WooCommerceRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage WooCommerceRestClient Module

@@ -1,0 +1,41 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%requires compatprobe
+
+auto sub invoke(Program target, string name) { return target.callFunction(name); }
+
+int failures = 0;
+foreach bool legacy in (False, True) {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+    if (legacy) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+    p.parse('%requires compatprobe
+        class Target { public { softbool value; } }
+        hashdecl Typed { softbool set; softbool helper; }
+        auto sub containers() { return CompatProbe::container_values("text"); }
+        auto sub assignments() {
+            Target obj();
+            softbool target = False;
+            hash<Typed> values();
+            return CompatProbe::assignment_values("text", obj, \target, values);
+        }
+    ', "native-container-policy");
+    foreach int invocation in (0, 1) {
+        auto actual = invoke(p, "containers");
+        auto expected = ((!legacy, !legacy, !legacy), {"set": !legacy, "merge": !legacy});
+        bool passed = actual === expected;
+        printf("containers legacy=%y mutated=%d expected=%y actual=%y %s\n", legacy, invocation,
+            expected, actual, passed ? "PASS" : "FAIL");
+        if (!passed) ++failures;
+        actual = invoke(p, "assignments");
+        expected = (!legacy, !legacy, !legacy, !legacy, !legacy);
+        passed = actual === expected;
+        printf("assignments legacy=%y mutated=%d expected=%y actual=%y %s\n", legacy, invocation,
+            expected, actual, passed ? "PASS" : "FAIL");
+        if (!passed) ++failures;
+        if (legacy) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+    }
+}
+if (failures) throw "NATIVE-CONTAINER-POLICY", sprintf("%d failures", failures);
+printf("PASS\n");

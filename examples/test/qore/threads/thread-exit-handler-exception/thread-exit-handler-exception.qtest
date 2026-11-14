@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads and thread_exit, and AOT code generation and linking of block handlers
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ThreadExitHandlerExceptionTest
+
+#! A try statement that a thread_exit leaves discards an exception that a handler raises while the thread exits (#5912)
+/** The thread exits after the handlers of the blocks that it leaves; an exception that one of them raises is deleted by
+    the first try statement that the thread_exit leaves, and no catch block runs, as with the AST interpreter.  The IR
+    interpreter and native code left the function from the thread_exit, so that the exception was reported as
+    unhandled.  ThreadExitHandlerException.q gives the output of the AST interpreter in every execution mode and
+    compiled with qcc.
+*/
+class ThreadExitHandlerExceptionTest inherits QUnit::Test {
+    public {
+        #! the output of ThreadExitHandlerException.q with the AST interpreter
+        const Expected = "-- block_handler
+on_exit
+-- try_block_handler
+on_exit
+-- error_success_handlers
+on_exit
+on_error \"ONEXIT\"
+-- two_handlers
+on_exit 2
+on_exit 1
+-- nested_try
+inner on_exit
+outer on_exit
+-- in_catch_block
+on_exit in catch FIRST
+-- rethrow_in_catch_handler
+on_exit A
+rethrown A
+-- rethrow_in_nested_catch_handler
+rethrown A
+-- in_loop
+on_exit 0
+on_exit 1
+-- no_handler
+-- caller_try
+callee on_exit
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("ThreadExitHandlerExceptionTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/ThreadExitHandlerException.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a handler's exception while the thread exits", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a handler's exception while the thread exits", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-thread-exit-handler-exception-");
+        string exe = tmp.path + DirSep + "thread-exit-handler-exception";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

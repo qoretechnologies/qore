@@ -267,8 +267,8 @@ class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
         #! the registered connections, keyed by the path of their request without the leading slash
         hash<string, ServerSentEventHandler::ServerSentEventConnection> conns = {};
 
-        #! the IDs of the deregistered connections
-        hash<string, bool> gone = {};
+        #! the IDs of the deregistered connections, and the thread that deregistered each of them
+        hash<string, int> gone = {};
 
         #! while set, a deregistration made on another thread than @ref allowed_tid waits until it reaches zero
         *Counter gate;
@@ -297,7 +297,7 @@ class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
 
     deregisterConnectionImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
         AutoLock al(rm);
-        gone{conn.cid} = True;
+        gone{conn.cid} = gettid();
         rc.broadcast();
     }
 
@@ -317,7 +317,13 @@ class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
     #! Returns True if the connection has been deregistered
     bool isGone(string cid) {
         AutoLock al(rm);
-        return gone{cid} ?? False;
+        return exists gone{cid};
+    }
+
+    #! Returns the thread that deregistered the connection, if it has been deregistered
+    *int goneTid(string cid) {
+        AutoLock al(rm);
+        return gone{cid};
     }
 
     #! Makes the deregistrations of other threads than @p tid wait until @ref releaseGate() is called
@@ -457,6 +463,8 @@ hashdecl PublishResult {
     int sent = 0;
     #! the exception that the publisher raised, if any
     *hash<ExceptionInfo> ex;
+    #! the thread that published
+    int tid;
 }
 
 class SseBufferBoundTest inherits QUnit::Test {
@@ -594,6 +602,48 @@ class SseBufferBoundTest inherits QUnit::Test {
             assertThrows("SSE-CLOSED", \op.queueRawString(), "z");
         }
         {
+            # the end of a stream whose client is dropped for its bound is reported on the thread that queued the
+            # data, before the exception is raised; the controller finds no close callback to run afterwards
+            HttpServerAsyncIo::HttpSseStreamPollOperation op(new Socket());
+            int calls = 0;
+            *int tid;
+            op.setCloseCallback(sub () {
+                ++calls;
+                tid = gettid();
+            });
+            op.setMaxBufferSize(100);
+            op.queueRawString(strmul("y", 150));
+            assertThrows("SSE-CLIENT-OVERFLOW", \op.queueRawString(), "z");
+            assertEq(1, calls, "the close callback has run when the exception is raised");
+            assertEq(gettid(), tid, "the close callback runs on the thread that queued the data");
+            assertNothing(op.takeCloseCallback(), "the controller finds no close callback");
+            assertTrue(op.isDisconnected(), "the client is dropped");
+        }
+        {
+            # an exception of the close callback of a dropped client is logged; SSE-CLIENT-OVERFLOW is still raised
+            HttpServerAsyncIo::HttpSseStreamPollOperation op(new Socket());
+            list<string> warnings = ();
+            op.setWarningCallback(sub (string msg) { warnings += msg; });
+            op.setCloseCallback(sub () { throw "CLOSE-CALLBACK-ERROR", "the callback failed"; });
+            op.setMaxBufferSize(100);
+            op.queueRawString(strmul("y", 150));
+            assertThrows("SSE-CLIENT-OVERFLOW", \op.queueRawString(), "z");
+            assertEq(1, elements (select warnings, $1 =~ /close callback of the dropped client raised CLOSE-CALLBACK-ERROR/),
+                sprintf("the exception of the close callback is logged: %y", warnings));
+        }
+        {
+            # a stream that has ended for another reason keeps its close callback for the controller
+            HttpServerAsyncIo::HttpSseStreamPollOperation op(new Socket());
+            int calls = 0;
+            op.setCloseCallback(sub () { ++calls; });
+            op.setMaxBufferSize(100);
+            op.queueRawString(strmul("y", 150));
+            op.abort();
+            assertThrows("SSE-CLOSED", \op.queueRawString(), "z");
+            assertEq(0, calls, "the close callback is not run by the sender");
+            assertTrue(exists op.takeCloseCallback(), "the controller runs the close callback");
+        }
+        {
             # a stream that has already ended is closed, not dropped for its bound
             HttpServerAsyncIo::HttpSseStreamPollOperation op(new Socket());
             op.setMaxBufferSize(100);
@@ -705,6 +755,9 @@ class SseBufferBoundTest inherits QUnit::Test {
             assertEq(1, r.sent, "the event after it overflows");
         }
         assertTrue(handler.isGone(sconn.cid), "the stalled client is dropped");
+        # the client is dropped and deregistered on the thread that sent the event, before the exception is raised
+        # (the end of the stream that the drop causes is not reported by another thread first)
+        assertEq(r.tid, handler.goneTid(sconn.cid), "the stalled client is deregistered by the sending thread");
     }
 
     testObservable(string proto) {
@@ -781,6 +834,7 @@ class SseBufferBoundTest inherits QUnit::Test {
         Counter done(1);
         background sub () {
             on_exit done.dec();
+            r.tid = gettid();
             try {
                 while (r.sent < MaxSends && !stop()) {
                     send(r.sent);

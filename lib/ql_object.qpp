@@ -37,7 +37,8 @@
 // q_get_runtime_call_program() is declared DLLLOCAL in qore_program_private.h and defined
 // once in ql_misc.cpp; the calls below resolve to that single definition.
 
-QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
+template <bool Lexical>
+static QoreValue q_call_static_method_args_impl(LexicalSemanticPolicy policy, QoreProgram* pgm, const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
     // the names are looked up as C strings, which would be cut at a NUL character and name another class or method
     if (q_check_no_nul(class_name->c_str(), class_name->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)
         || q_check_no_nul(method->c_str(), method->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
@@ -84,15 +85,25 @@ QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* clas
     }
     ObjectSubstitutionHelper osh(nullptr, class_ctx);
     RuntimeConfig& rc = rc_get_current_ref();
-    return qore_method_private::eval(*m, xsink, rc, nullptr, args);
+    return qore_method_private::evalWithPolicy<Lexical>(policy, *m, xsink, rc, nullptr, args);
 }
+
+QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
+    return q_call_static_method_args_impl<false>({}, pgm, class_name, method, args, xsink);
+}
+
+QoreValue q_call_static_method_args(LexicalSemanticPolicy policy, QoreProgram* pgm, const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
+    return q_call_static_method_args_impl<true>(policy, pgm, class_name, method, args, xsink);
+}
+
 
 static QoreValue call_static_method_args_intern(QoreProgram* pgm, const QoreStringNode* class_name,
         const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
     return q_call_static_method_args(pgm, class_name, method, args, xsink);
 }
 
-static QoreObject* create_object_intern(QoreProgram* pgm, const QoreStringNode* class_name, unsigned arg_offset,
+template <bool Lexical>
+static QoreObject* create_object_intern_impl(LexicalSemanticPolicy policy, QoreProgram* pgm, const QoreStringNode* class_name, unsigned arg_offset,
         const QoreListNode* args, ExceptionSink* xsink) {
     // the name is looked up as a C string, which would be cut at a NUL character and name another class
     if (q_check_no_nul(class_name->c_str(), class_name->size(), "class name", "class names", "CREATE-OBJECT-ERROR",
@@ -127,8 +138,14 @@ static QoreObject* create_object_intern(QoreProgram* pgm, const QoreStringNode* 
     }
 
     //printd(5, "create_object_intern() '%s' offset: %d size: %d (a: %d)\n", tmp->c_str(), arg_offset, real_args ? real_args->size() : 0, args ? args->size() : 0);
-    return qc->execConstructor(real_args, xsink);
+    return qore_class_private::execConstructorWithPolicy<Lexical>(policy, *qc, rc_get_current_ref(), nullptr, real_args, xsink);
 }
+
+static QoreObject* create_object_intern(QoreProgram* pgm, const QoreStringNode* class_name, unsigned arg_offset,
+        const QoreListNode* args, ExceptionSink* xsink) {
+    return create_object_intern_impl<false>({}, pgm, class_name, arg_offset, args, xsink);
+}
+
 
 /** @defgroup object_functions Object Functions
     Object functions
@@ -503,3 +520,84 @@ object create_object_args(string class_name, *softlist<auto> arguments) [flags=N
     return create_object_intern(q_get_runtime_call_program(runtime_cfg), class_name, 0, arguments, xsink);
 }
 ///@}
+
+// Cold forwarding bodies share argument layout with their registered builtin variants.
+template <bool ListArguments, bool Pseudo = false>
+static QoreValue q_call_object_lexical(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper method(get_hard_value_param(args, 1));
+    if (q_check_no_nul((*method)->c_str(), (*method)->size(), "method name", "method names",
+            Pseudo ? "PSEUDO-METHOD-DOES-NOT-EXIST" : "METHOD-DOES-NOT-EXIST", xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> copied_args(xsink);
+    const QoreListNode* forwarded_args;
+    if constexpr (ListArguments) forwarded_args = get_param_value(args, 2).get<const QoreListNode>();
+    else {
+        if (num_args(args) > 2) copied_args = args->copyListFrom(2);
+        forwarded_args = *copied_args;
+    }
+    LexicalSemanticPolicy policy = qore_get_native_semantic_policy();
+    if constexpr (Pseudo) {
+        return pseudo_classes_eval(policy, get_param_value(args, 0), (*method)->c_str(), forwarded_args, xsink);
+    } else {
+        TempEncodingHelper name(*method, QCS_DEFAULT, xsink);
+        if (!name) return QoreValue();
+        QoreObject* obj = HARD_QORE_VALUE_OBJECT(args, 0);
+        return qore_class_private::get(*obj->getClass())->evalMethod(policy, obj, name->c_str(), forwarded_args,
+            runtime_get_class(), rc, xsink);
+    }
+}
+
+template <bool ListArguments>
+static QoreValue q_call_static_lexical(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper cls(get_hard_value_param(args, 0));
+    QoreStringNodeValueHelper method(get_hard_value_param(args, 1));
+    ReferenceHolder<QoreListNode> copied_args(xsink);
+    const QoreListNode* forwarded_args;
+    if constexpr (ListArguments) forwarded_args = get_param_value(args, 2).get<const QoreListNode>();
+    else {
+        if (num_args(args) > 2) copied_args = args->copyListFrom(2);
+        forwarded_args = *copied_args;
+    }
+    return q_call_static_method_args(qore_get_native_semantic_policy(), q_get_runtime_call_program(rc),
+        *cls, *method, forwarded_args, xsink);
+}
+
+template <bool ListArguments>
+static QoreValue q_create_object_lexical(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper cls(get_hard_value_param(args, 0));
+    const QoreListNode* forwarded_args = ListArguments ? get_param_value(args, 1).get<const QoreListNode>() : args;
+    return create_object_intern_impl<true>(qore_get_native_semantic_policy(), q_get_runtime_call_program(rc),
+        *cls, ListArguments ? 0 : 1, forwarded_args, xsink);
+}
+
+// qpp emits raw C++ before generated wrappers. These immutable pairs are used only at registration.
+static QoreValue f_call_object_method_VoVsVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_object_method_args_VoVsC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_callObjectMethod_VoVsVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_callObjectMethodArgs_VoVsC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_pseudo_VAVsVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_pseudo_args_VAVsC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_static_method_VsVsVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_static_method_args_VsVsC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_create_object_VsVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_create_object_args_VsC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+
+q_func_t qore_get_lexical_object_builtin(q_func_t func) {
+    static const std::pair<q_func_t, q_func_t> forwarding[] = {
+        {f_call_object_method_VoVsVV, q_call_object_lexical<false>},
+        {f_call_object_method_args_VoVsC15_softlist_auto_, q_call_object_lexical<true>},
+        {f_callObjectMethod_VoVsVV, q_call_object_lexical<false>},
+        {f_callObjectMethodArgs_VoVsC15_softlist_auto_, q_call_object_lexical<true>},
+        {f_call_pseudo_VAVsVV, q_call_object_lexical<false, true>},
+        {f_call_pseudo_args_VAVsC15_softlist_auto_, q_call_object_lexical<true, true>},
+        {f_call_static_method_VsVsVV, q_call_static_lexical<false>},
+        {f_call_static_method_args_VsVsC15_softlist_auto_, q_call_static_lexical<true>},
+        {f_create_object_VsVV, q_create_object_lexical<false>},
+        {f_create_object_args_VsC15_softlist_auto_, q_create_object_lexical<true>},
+    };
+    for (const auto& entry : forwarding) {
+        if (entry.first == func) return entry.second;
+    }
+    return nullptr;
+}

@@ -40,6 +40,117 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/ParseNode.h"
 
+namespace {
+// Keep concrete bases so the IR slot-coverage guard can follow each lexical operator to its operand.
+
+class LexicalScalarCastOperatorNode : public QoreScalarCastOperatorNode {
+public:
+    using QoreScalarCastOperatorNode::QoreScalarCastOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        ValueHolder exp(copy_value_and_resolve_lvar_refs(this->exp, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return new LexicalScalarCastOperatorNode(loc, typeInfo, exp.release(), or_nothing);
+    }
+
+    QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const override {
+        return castValueImpl<true>(inner, xsink);
+    }
+
+    int checkValue(ExceptionSink* xsink, const QoreValue& value, bool lvalue) const override {
+        return checkValueImpl<true>(xsink, value, lvalue);
+    }
+};
+
+class LexicalHashDeclCastOperatorNode : public QoreHashDeclCastOperatorNode {
+public:
+    using QoreHashDeclCastOperatorNode::QoreHashDeclCastOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        ValueHolder exp(copy_value_and_resolve_lvar_refs(this->exp, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (isDynamicHashDeclCast()) {
+            return new LexicalHashDeclCastOperatorNode(loc, dynamic_hashdecl_name.c_str(), exp.release(), or_nothing);
+        }
+        return new LexicalHashDeclCastOperatorNode(loc, hd, exp.release(), or_nothing);
+    }
+
+    QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const override {
+        return castValueImpl<true>(inner, xsink);
+    }
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalImplInternal<true>(needs_deref, xsink);
+    }
+};
+
+class LexicalComplexHashCastOperatorNode : public QoreComplexHashCastOperatorNode {
+public:
+    using QoreComplexHashCastOperatorNode::QoreComplexHashCastOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        ValueHolder exp(copy_value_and_resolve_lvar_refs(this->exp, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return new LexicalComplexHashCastOperatorNode(loc, typeInfo, exp.release(), or_nothing);
+    }
+
+    QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const override {
+        return castValueImpl<true>(inner, xsink);
+    }
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalImplInternal<true>(needs_deref, xsink);
+    }
+};
+
+class LexicalComplexListCastOperatorNode : public QoreComplexListCastOperatorNode {
+public:
+    using QoreComplexListCastOperatorNode::QoreComplexListCastOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        ValueHolder exp(copy_value_and_resolve_lvar_refs(this->exp, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return new LexicalComplexListCastOperatorNode(loc, typeInfo, exp.release(), or_nothing);
+    }
+
+    QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const override {
+        return castValueImpl<true>(inner, xsink);
+    }
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalImplInternal<true>(needs_deref, xsink);
+    }
+};
+
+template <typename Base, typename... Args>
+Base* qore_make_cast(LexicalSemanticPolicy policy, Args&&... args) {
+    if (!policy.needsFilter()) {
+        return new Base(std::forward<Args>(args)...);
+    }
+    if constexpr (std::is_same_v<Base, QoreScalarCastOperatorNode>) {
+        return new LexicalScalarCastOperatorNode(std::forward<Args>(args)...);
+    } else if constexpr (std::is_same_v<Base, QoreHashDeclCastOperatorNode>) {
+        return new LexicalHashDeclCastOperatorNode(std::forward<Args>(args)...);
+    } else if constexpr (std::is_same_v<Base, QoreComplexHashCastOperatorNode>) {
+        return new LexicalComplexHashCastOperatorNode(std::forward<Args>(args)...);
+    } else {
+        static_assert(std::is_same_v<Base, QoreComplexListCastOperatorNode>);
+        return new LexicalComplexListCastOperatorNode(std::forward<Args>(args)...);
+    }
+}
+}
+
 QoreString QoreParseCastOperatorNode::cast_str("cast operator expression");
 
 static bool qore_cast_parse_type_is_auto(const QoreParseTypeInfo* pti) {
@@ -244,7 +355,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             parse_context.typeInfo = autoHashTypeInfo;
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
-                val = new QoreHashDeclCastOperatorNode(loc, static_cast<const TypedHashDecl*>(nullptr), takeExp(),
+                val = qore_make_cast<QoreHashDeclCastOperatorNode>(getSemanticPolicy(), loc, static_cast<const TypedHashDecl*>(nullptr), takeExp(),
                     or_nothing);
             }
             set_cast_analysis();
@@ -265,7 +376,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             parse_context.typeInfo = autoListTypeInfo;
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
-                val = new QoreComplexListCastOperatorNode(loc, nullptr, takeExp(), or_nothing);
+                val = qore_make_cast<QoreComplexListCastOperatorNode>(getSemanticPolicy(), loc, nullptr, takeExp(), or_nothing);
             }
             set_cast_analysis();
             // parse exception already raised; current expression invalid
@@ -305,9 +416,9 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                 ReferenceHolder<> holder(this, nullptr);
                 std::string hashdecl_name = qore_cast_aot_deferred_hashdecl_name(parse_context.typeInfo);
                 val = hashdecl_name.empty()
-                    ? new QoreHashDeclCastOperatorNode(loc, static_cast<const TypedHashDecl*>(nullptr), takeExp(),
+                    ? qore_make_cast<QoreHashDeclCastOperatorNode>(getSemanticPolicy(), loc, static_cast<const TypedHashDecl*>(nullptr), takeExp(),
                         or_nothing)
-                    : new QoreHashDeclCastOperatorNode(loc, hashdecl_name.c_str(), takeExp(), or_nothing);
+                    : qore_make_cast<QoreHashDeclCastOperatorNode>(getSemanticPolicy(), loc, hashdecl_name.c_str(), takeExp(), or_nothing);
             }
             set_cast_analysis();
             return err;
@@ -324,7 +435,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             err = -1;
         }
         ReferenceHolder<> holder(this, nullptr);
-        val = new QoreScalarCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
+        val = qore_make_cast<QoreScalarCastOperatorNode>(getSemanticPolicy(), loc, parse_context.typeInfo, takeExp(), or_nothing);
         set_cast_analysis();
         return err;
     }
@@ -387,7 +498,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
                 parse_context.typeInfo = hd->getTypeInfo();
                 if (exp) {
                     ReferenceHolder<> holder(this, nullptr);
-                    val = new QoreHashDeclCastOperatorNode(loc, hd, takeExp(), or_nothing);
+                    val = qore_make_cast<QoreHashDeclCastOperatorNode>(getSemanticPolicy(), loc, hd, takeExp(), or_nothing);
                     set_cast_analysis();
                     return err;
                 }
@@ -417,7 +528,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
-                val = new QoreComplexHashCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
+                val = qore_make_cast<QoreComplexHashCastOperatorNode>(getSemanticPolicy(), loc, parse_context.typeInfo, takeExp(), or_nothing);
                 set_cast_analysis();
                 return err;
             }
@@ -440,7 +551,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
-                val = new QoreComplexListCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
+                val = qore_make_cast<QoreComplexListCastOperatorNode>(getSemanticPolicy(), loc, parse_context.typeInfo, takeExp(), or_nothing);
                 set_cast_analysis();
                 return err;
             }
@@ -474,7 +585,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
-                val = new QoreComplexListCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
+                val = qore_make_cast<QoreComplexListCastOperatorNode>(getSemanticPolicy(), loc, parse_context.typeInfo, takeExp(), or_nothing);
                 set_cast_analysis();
                 return err;
             }
@@ -569,6 +680,11 @@ const QoreTypeInfo* QoreScalarCastOperatorNode::getConversionTypeInfo(const Qore
 }
 
 int QoreScalarCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const {
+    return checkValueImpl<false>(xsink, val, lvalue);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int QoreScalarCastOperatorNode::checkValueImpl(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const {
     if (val.isNothing() && or_nothing) {
         return 0;
     }
@@ -578,7 +694,13 @@ int QoreScalarCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue
         return 0;
     }
 
-    if (QoreTypeInfo::runtimeAcceptsValue(conversionTypeInfo, val) == QTI_NOT_EQUAL) {
+    qore_type_result_e accepted;
+    if constexpr (Lexical) {
+        accepted = QoreTypeInfo::runtimeAcceptsValue(conversionTypeInfo, val, getSemanticPolicy());
+    } else {
+        accepted = QoreTypeInfo::runtimeAcceptsValue(conversionTypeInfo, val);
+    }
+    if (accepted == QTI_NOT_EQUAL) {
         xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to '%s'",
             val.getTypeName(), QoreTypeInfo::getName(typeInfo));
         return -1;
@@ -587,8 +709,9 @@ int QoreScalarCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue
     return 0;
 }
 
-QoreValue QoreScalarCastOperatorNode::castValueToType(const QoreTypeInfo* typeInfo, bool or_nothing,
-        QoreValue inner, ExceptionSink* xsink) {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreScalarCastOperatorNode::castValueToTypeImpl(const QoreTypeInfo* typeInfo, bool or_nothing,
+        QoreValue inner, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
     if (inner.isNothing() && or_nothing) {
         return QoreValue();
     }
@@ -598,14 +721,24 @@ QoreValue QoreScalarCastOperatorNode::castValueToType(const QoreTypeInfo* typeIn
         return inner.needsRef() ? inner.refSelf() : inner;
     }
 
-    if (QoreTypeInfo::runtimeAcceptsValue(conversionTypeInfo, inner) == QTI_NOT_EQUAL) {
+    qore_type_result_e accepted;
+    if constexpr (Lexical) {
+        accepted = QoreTypeInfo::runtimeAcceptsValue(conversionTypeInfo, inner, policy);
+    } else {
+        accepted = QoreTypeInfo::runtimeAcceptsValue(conversionTypeInfo, inner);
+    }
+    if (accepted == QTI_NOT_EQUAL) {
         xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to '%s'",
             inner.getTypeName(), QoreTypeInfo::getName(typeInfo));
         return QoreValue();
     }
 
     QoreValue val = inner.needsRef() ? inner.refSelf() : inner;
-    QoreTypeInfo::acceptAssignment(conversionTypeInfo, "<cast operator>", val, xsink);
+    if constexpr (Lexical) {
+        QoreTypeInfo::acceptAssignment(conversionTypeInfo, "<cast operator>", val, xsink, policy);
+    } else {
+        QoreTypeInfo::acceptAssignment(conversionTypeInfo, "<cast operator>", val, xsink);
+    }
     if (xsink && *xsink) {
         val.discard(nullptr);
         return QoreValue();
@@ -616,8 +749,19 @@ QoreValue QoreScalarCastOperatorNode::castValueToType(const QoreTypeInfo* typeIn
     return val;
 }
 
+
+QoreValue QoreScalarCastOperatorNode::castValueToType(const QoreTypeInfo* typeInfo, bool or_nothing,
+        QoreValue inner, ExceptionSink* xsink) {
+    return castValueToTypeImpl<false>(typeInfo, or_nothing, inner, xsink, {});
+}
+
 QoreValue QoreScalarCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
     return castValueToType(typeInfo, or_nothing, inner, xsink);
+}
+
+template <bool Lexical>
+QoreValue QoreScalarCastOperatorNode::castValueImpl(QoreValue inner, ExceptionSink* xsink) const {
+    return castValueToTypeImpl<Lexical>(typeInfo, or_nothing, inner, xsink, getSemanticPolicy());
 }
 
 QoreValue QoreScalarCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -744,6 +888,15 @@ int QoreHashDeclCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreVal
 }
 
 QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(needs_deref, xsink);
+}
+
+QoreValue QoreHashDeclCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    return castValueImpl<false>(inner, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreHashDeclCastOperatorNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink) {
         return QoreValue();
@@ -787,11 +940,15 @@ QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     }
 
     // do the runtime cast
-    QoreValue result = typed_hash_decl_private::get(*target_hd)->newHash(h, true, xsink);
-    return result;
+    if constexpr (Lexical) {
+        return typed_hash_decl_private::get(*target_hd)->newHash(h, true, xsink, getSemanticPolicy());
+    } else {
+        return typed_hash_decl_private::get(*target_hd)->newHash(h, true, xsink);
+    }
 }
 
-QoreValue QoreHashDeclCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreHashDeclCastOperatorNode::castValueImpl(QoreValue inner, ExceptionSink* xsink) const {
     if (QoreHashDeclCastOperatorNode::checkValue(xsink, inner, false)) {
         return QoreValue();
     }
@@ -821,7 +978,11 @@ QoreValue QoreHashDeclCastOperatorNode::castValue(QoreValue inner, ExceptionSink
     }
 
     // do the runtime cast
-    return typed_hash_decl_private::get(*target_hd)->newHash(h, true, xsink);
+    if constexpr (Lexical) {
+        return typed_hash_decl_private::get(*target_hd)->newHash(h, true, xsink, getSemanticPolicy());
+    } else {
+        return typed_hash_decl_private::get(*target_hd)->newHash(h, true, xsink);
+    }
 }
 
 // checks if the value matches the expected type
@@ -847,6 +1008,15 @@ int QoreComplexHashCastOperatorNode::checkValue(ExceptionSink* xsink, const Qore
 }
 
 QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(needs_deref, xsink);
+}
+
+QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    return castValueImpl<false>(inner, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexHashCastOperatorNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink) {
@@ -872,10 +1042,16 @@ QoreValue QoreComplexHashCastOperatorNode::evalImpl(bool& needs_deref, Exception
     // 2. hashdecl bindings are cleared (important for hashes created by map operators)
     // This is necessary even if types match, because hashdecl values might still have bindings
     // the values are converted to the value type as by an assignment
-    return qore_hash_private::newComplexHashFromHash(typeInfo, rv.takeReferencedNode<QoreHashNode>(), xsink, true);
+    if constexpr (Lexical) {
+        return qore_hash_private::newComplexHashFromHash(typeInfo, rv.takeReferencedNode<QoreHashNode>(), xsink,
+            true, getSemanticPolicy());
+    } else {
+        return qore_hash_private::newComplexHashFromHash(typeInfo, rv.takeReferencedNode<QoreHashNode>(), xsink, true);
+    }
 }
 
-QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexHashCastOperatorNode::castValueImpl(QoreValue inner, ExceptionSink* xsink) const {
     if (QoreComplexHashCastOperatorNode::checkValue(xsink, inner, false)) {
         return QoreValue();
     }
@@ -890,9 +1066,12 @@ QoreValue QoreComplexHashCastOperatorNode::castValue(QoreValue inner, ExceptionS
     // Always call newComplexHashFromHash to ensure inner value hashdecls are cleared
     // (this is what evalImpl() does; the previous shortcut skipped necessary work)
     // the values are converted to the value type as by an assignment
-    QoreValue result = qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(),
-        xsink, true);
-    return result;
+    if constexpr (Lexical) {
+        return qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink,
+            true, getSemanticPolicy());
+    } else {
+        return qore_hash_private::newComplexHashFromHash(typeInfo, inner.get<QoreHashNode>()->hashRefSelf(), xsink, true);
+    }
 }
 
 // checks if the value matches the expected type
@@ -929,6 +1108,15 @@ int QoreComplexListCastOperatorNode::checkValue(ExceptionSink* xsink, const Qore
 }
 
 QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(needs_deref, xsink);
+}
+
+QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    return castValueImpl<false>(inner, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     ValueEvalOptimizedRefHolder rv(exp, xsink);
     if (*xsink) {
@@ -949,11 +1137,23 @@ QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, Exception
             return QoreValue();
         }
         assert(is_softlist);
-        return qore_cast_coerce_softlist_value(typeInfo, rv.takeReferencedValue(), xsink);
+        if constexpr (Lexical) {
+            QoreValue value = rv.takeReferencedValue();
+            QoreTypeInfo::acceptAssignment(typeInfo, "<cast operator>", value, xsink, getSemanticPolicy());
+            return *xsink ? QoreValue() : value;
+        } else {
+            return qore_cast_coerce_softlist_value(typeInfo, rv.takeReferencedValue(), xsink);
+        }
     }
 
     if (is_softlist && rv->getType() != NT_LIST) {
-        return qore_cast_coerce_softlist_value(typeInfo, rv.takeReferencedValue(), xsink);
+        if constexpr (Lexical) {
+            QoreValue value = rv.takeReferencedValue();
+            QoreTypeInfo::acceptAssignment(typeInfo, "<cast operator>", value, xsink, getSemanticPolicy());
+            return *xsink ? QoreValue() : value;
+        } else {
+            return qore_cast_coerce_softlist_value(typeInfo, rv.takeReferencedValue(), xsink);
+        }
     }
 
     assert(rv->getType() == NT_LIST);
@@ -973,10 +1173,15 @@ QoreValue QoreComplexListCastOperatorNode::evalImpl(bool& needs_deref, Exception
         return qore_list_private::getPlainList(rv.takeReferencedNode<QoreListNode>());
     }
 
-    return qore_list_private::newComplexListFromValue(typeInfo, rv.takeReferencedValue(), xsink);
+    if constexpr (Lexical) {
+        return qore_list_private::newComplexListFromValue(typeInfo, rv.takeReferencedValue(), xsink, getSemanticPolicy());
+    } else {
+        return qore_list_private::newComplexListFromValue(typeInfo, rv.takeReferencedValue(), xsink);
+    }
 }
 
-QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreComplexListCastOperatorNode::castValueImpl(QoreValue inner, ExceptionSink* xsink) const {
     if (checkValue(xsink, inner, false)) {
         return QoreValue();
     }
@@ -988,12 +1193,24 @@ QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionS
             return QoreValue();
         }
         assert(is_softlist);
-        return qore_cast_coerce_softlist_value(typeInfo, inner, xsink);
+        if constexpr (Lexical) {
+            QoreValue value = inner;
+            QoreTypeInfo::acceptAssignment(typeInfo, "<cast operator>", value, xsink, getSemanticPolicy());
+            return *xsink ? QoreValue() : value;
+        } else {
+            return qore_cast_coerce_softlist_value(typeInfo, inner, xsink);
+        }
     }
 
     if (is_softlist && inner.getType() != NT_LIST) {
         QoreValue ref_inner = inner.needsRef() ? inner.refSelf() : inner;
-        return qore_cast_coerce_softlist_value(typeInfo, ref_inner, xsink);
+        if constexpr (Lexical) {
+            QoreValue value = ref_inner;
+            QoreTypeInfo::acceptAssignment(typeInfo, "<cast operator>", value, xsink, getSemanticPolicy());
+            return *xsink ? QoreValue() : value;
+        } else {
+            return qore_cast_coerce_softlist_value(typeInfo, ref_inner, xsink);
+        }
     }
 
     assert(inner.getType() == NT_LIST);
@@ -1011,7 +1228,11 @@ QoreValue QoreComplexListCastOperatorNode::castValue(QoreValue inner, ExceptionS
     }
 
     QoreValue ref_inner = inner.needsRef() ? inner.refSelf() : inner;
-    return qore_list_private::newComplexListFromValue(typeInfo, ref_inner, xsink);
+    if constexpr (Lexical) {
+        return qore_list_private::newComplexListFromValue(typeInfo, ref_inner, xsink, getSemanticPolicy());
+    } else {
+        return qore_list_private::newComplexListFromValue(typeInfo, ref_inner, xsink);
+    }
 }
 
 // checks if the value matches the expected enum type

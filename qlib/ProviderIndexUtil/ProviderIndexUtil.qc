@@ -578,7 +578,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
 
         @since ProviderIndexUtil 1.2
     */
-    static bool setBuildMode(bool build) {
+    static bool setBuildMode(bool build) [dom=PROCESS_CONTROL] {
         m.lock();
         on_exit m.unlock();
         bool rv = build_mode;
@@ -842,7 +842,7 @@ map removeTools($1), info.removed;
 
         @since ProviderIndexUtil 1.2
     */
-    static hash<ProviderIndexReloadInfo> reloadIndex() {
+    static hash<ProviderIndexReloadInfo> reloadIndex() [dom=PROCESS_CONTROL] {
         # the index used before is read first, so that its changes can be reported
         checkDataIndex();
 
@@ -1710,7 +1710,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @note The app info replaces any indexed info of the app, and is kept when the index is reloaded with
         @ref reloadIndex()
     */
-    static addAppToCache(hash<auto> app) {
+    static addAppToCache(hash<auto> app) [dom=PROCESS_CONTROL] {
         if (!app.name) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add app info to cache: app name is missing (%y)", app);
         }
@@ -1738,7 +1738,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @note The action replaces any indexed action with the same name, and is kept when the index is reloaded with
         @ref reloadIndex()
     */
-    static addActionToCache(hash<auto> action) {
+    static addActionToCache(hash<auto> action) [dom=PROCESS_CONTROL] {
         if (!checkMetadataContext()) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action %y of app %y to the cache while the data "
                 "provider index is initializing", action.action, action.app);
@@ -1779,7 +1779,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @note A removed app's indexed metadata stays hidden when the index is reloaded with @ref reloadIndex(); only
         info and actions added again with @ref addAppToCache() and @ref addActionToCache() are cached for it
     */
-    static bool removeCachedApp(string app) {
+    static bool removeCachedApp(string app) [dom=PROCESS_CONTROL] {
         while (True) {
             int gen = index_generation;
             # the app's actions are not restored: they are discarded
@@ -1870,7 +1870,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @return @ref True if the module was loaded, @ref False if it was not
     */
-    static bool tryLoadModule(string mod) {
+    static bool tryLoadModule(string mod) [dom=PROCESS_CONTROL] {
         # check local cache first to avoid acquiring the global module lock
         if (loaded_module_cache{mod}) {
             return True;
@@ -2659,7 +2659,7 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     #! Sets or clears the global logger
     /** @param logger the global data provider logger
     */
-    static setGlobalLogger(*LoggerInterface logger) {
+    static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         ProviderIndexUtil::logger = logger;
     }
 
@@ -4783,7 +4783,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Sets the environment variable
-    static setEnvironmentVariable(string dir) {
+    static setEnvironmentVariable(string dir) [dom=PROCESS_CONTROL] {
         setenv(ProviderIndexEnvVar, dir);
         ENV{ProviderIndexEnvVar} = dir;
     }

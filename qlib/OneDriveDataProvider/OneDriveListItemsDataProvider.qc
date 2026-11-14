@@ -78,7 +78,7 @@ public class OneDriveListItemsDataProvider inherits OneDriveDataProviderBase {
     constructor(*hash<auto> options) : OneDriveDataProviderBase(options) {}
     string getName() { return ProviderInfo.name; }
 
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         string path;
         if (search_options.search_query) {

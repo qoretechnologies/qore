@@ -231,6 +231,11 @@ class AstHighlightsTest inherits QUnit::Test {
         # local variables are not highlighted
         assertNotHighlighted(src, "z");
 
+        # a functional-domain attribute list (issue #5803)
+        src = "sub f() [dom=NETWORK] {}";
+        assertCapture(src, "dom", "attribute");
+        assertCapture(src, "NETWORK", "constant");
+
         # constants by naming convention
         src = "x = MY_CONSTANT + Ns::OTHER_ONE;";
         assertCapture(src, "MY_CONSTANT", "constant");

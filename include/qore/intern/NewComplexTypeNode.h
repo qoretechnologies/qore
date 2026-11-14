@@ -97,6 +97,11 @@ enum class QoreComplexBufferInitKind : uint8_t {
 
 class NewHashDeclNode : public ParseNode {
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -182,6 +187,8 @@ public:
 
 class NewComplexHashNode : public ParseNode {
 protected:
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -247,6 +254,8 @@ public:
 
 class NewComplexListNode : public ParseNode {
 protected:
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -369,5 +378,24 @@ public:
 
 DLLLOCAL QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo, QoreValue val,
     ExceptionSink* xsink, QoreComplexBufferInitKind initKind = QoreComplexBufferInitKind::Constructor);
+
+//! Source and background-copy factories select a legacy entry before execution.
+template <typename Base>
+class LexicalNewComplexNode : public Base {
+public:
+    using Base::Base;
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return this->evalLexical(needs_deref, xsink);
+    }
+};
+
+template <typename Base, typename... Args>
+Base* qore_make_new_complex(LexicalSemanticPolicy policy, Args&&... args) {
+    return policy.needsFilter()
+        ? new LexicalNewComplexNode<Base>(std::forward<Args>(args)...)
+        : new Base(std::forward<Args>(args)...);
+}
 
 #endif

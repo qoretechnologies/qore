@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# test-exec-mode: children - the modules are loaded and compared in child processes that run in the default mode
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires Util
+%requires FsUtil
+%requires QUnit
+
+%include RestSchemaModuleLazyTypes.qc
+
+%exec-class RestSchemaModuleLazyTypesPart6
+
+#! runs part 6 of 8 of the cases of RestSchemaModuleLazyTypesBase
+class RestSchemaModuleLazyTypesPart6 inherits RestSchemaModuleLazyTypesBase {
+    constructor() : RestSchemaModuleLazyTypesBase("RestSchemaModuleLazyTypesPart6", 6) {
+    }
+}

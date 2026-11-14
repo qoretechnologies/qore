@@ -65,20 +65,11 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
         #! Channel of received frames
         Channel recv_channel(-1);
 
-        #! Buffer for incoming WebSocket frame data
-        binary recv_buffer = binary();
-
         #! Close code
         int close_code = 1000;
 
         #! Close reason
         string close_reason = "";
-
-        #! True if we initiated close
-        bool close_initiated = False;
-
-        #! Maximum frame size (16MB default)
-        int max_frame_size = 16 * 1024 * 1024;
     }
 
     #! Creates a WebSocket stream over HTTP/2
@@ -113,7 +104,6 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
             return;
         }
 
-        close_initiated = True;
         close_code = code;
         close_reason = reason;
 
@@ -189,159 +179,6 @@ public class Http2WebSocketStream inherits AbstractWebSocketConnection {
     *hash<auto> getNextSendFrame() {
         auto result = send_channel.tryRecv();
         return exists result ? result.value : NOTHING;
-    }
-
-    #! Processes received data from HTTP/2 DATA frames
-    /** Called by the poll operation when data is received on this stream.
-        Parses WebSocket frames from the data and adds them to the receive queue.
-    */
-    processReceivedData(binary data) {
-        recv_buffer += data;
-        parseFrames();
-    }
-
-    #! Parses WebSocket frames from the receive buffer
-    private parseFrames() {
-        while (recv_buffer.size() >= 2) {
-            # Parse frame header
-            int b0 = recv_buffer[0];
-            int b1 = recv_buffer[1];
-
-            bool fin = (b0 & 0x80) != 0;
-            int opcode = b0 & 0x0F;
-            bool masked = (b1 & 0x80) != 0;
-            int payload_len = b1 & 0x7F;
-
-            int header_size = 2;
-            if (payload_len == 126) {
-                if (recv_buffer.size() < 4) {
-                    return;  # Need more data
-                }
-                payload_len = (recv_buffer[2] << 8) | recv_buffer[3];
-                header_size = 4;
-            } else if (payload_len == 127) {
-                if (recv_buffer.size() < 10) {
-                    return;  # Need more data
-                }
-                payload_len = 0;
-                for (int i = 0; i < 8; ++i) {
-                    payload_len = (payload_len << 8) | recv_buffer[2 + i];
-                }
-                header_size = 10;
-            }
-
-            if (masked) {
-                header_size += 4;  # Masking key
-            }
-
-            # Check frame size limit
-            if (payload_len > max_frame_size) {
-                sendClose(1009, "Message too big");
-                return;
-            }
-
-            int total_frame_size = header_size + payload_len;
-            if (recv_buffer.size() < total_frame_size) {
-                return;  # Need more data
-            }
-
-            # Extract payload
-            binary payload = binary();
-            if (payload_len > 0) {
-                payload = recv_buffer.substr(header_size, payload_len);
-
-                # Unmask if needed (client frames are always masked)
-                if (masked) {
-                    binary mask = recv_buffer.substr(header_size - 4, 4);
-                    payload = unmaskData(payload, mask);
-                }
-            }
-
-            # Remove processed frame from buffer
-            recv_buffer = recv_buffer.substr(total_frame_size);
-
-            # Handle frame
-            handleFrame(opcode, payload, fin);
-        }
-    }
-
-    #! Unmasks WebSocket data
-    private binary unmaskData(binary data, binary mask) {
-        binary result = binary();
-        for (int i = 0; i < data.size(); ++i) {
-            result += binary(chr(data[i] ^ mask[i % 4]));
-        }
-        return result;
-    }
-
-    #! Handles a received WebSocket frame
-    private handleFrame(int opcode, binary payload, bool fin) {
-        switch (opcode) {
-            case WS_OP_TEXT: {
-                string text = payload.toString("UTF-8");
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "text",
-                    "data": text,
-                });
-                break;
-            }
-
-            case WS_OP_BINARY: {
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "binary",
-                    "data": payload,
-                });
-                break;
-            }
-
-            case WS_OP_PING: {
-                # Send pong with same payload
-                queueFrame(WS_OP_PONG, payload);
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "ping",
-                    "data": payload,
-                });
-                break;
-            }
-
-            case WS_OP_PONG: {
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "pong",
-                    "data": payload,
-                });
-                break;
-            }
-
-            case WS_OP_CLOSE: {
-                if (payload.size() >= 2) {
-                    close_code = (payload[0] << 8) | payload[1];
-                    if (payload.size() > 2) {
-                        close_reason = payload.substr(2).toString("UTF-8");
-                    }
-                }
-
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "close",
-                    "code": close_code,
-                    "reason": close_reason,
-                });
-
-                if (!close_initiated) {
-                    # Echo the close frame
-                    queueFrame(WS_OP_CLOSE, payload);
-                }
-                state = STATE_CLOSING;
-                break;
-            }
-
-            case WS_OP_CONTINUATION: {
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "binary",
-                    "data": payload,
-                });
-                break;
-            }
-        }
     }
 
     #! Encodes a WebSocket frame for sending

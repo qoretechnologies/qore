@@ -156,6 +156,7 @@ class HttpServerLogLevelTest inherits QUnit::Test {
         logger.addAppender(appender);
         list<string> messages = runLoggingServer(logger);
         assertEq(0, count(messages, "sendReply:"), "no listener message reaches the server: " + messages.join("\n"));
+        assertEq(0, count(messages, "doResponse:"), "no listener message reaches the server: " + messages.join("\n"));
         assertEq(0, elements appender.take(), "nothing is logged at the ERROR level");
     }
 
@@ -163,6 +164,8 @@ class HttpServerLogLevelTest inherits QUnit::Test {
     testServerReimplementsLog() {
         list<string> messages = runLoggingServer();
         assertEq(2, count(messages, "sendReply: code=200"), "one message per request: " + messages.join("\n"));
+        assertEq(2, count(messages, "doResponse: capturing async response code=200 body_size=2 has_stream=False$"),
+            "one message per request: " + messages.join("\n"));
     }
 
     testPersistentLevelChange() {
@@ -198,6 +201,8 @@ class HttpServerLogLevelTest inherits QUnit::Test {
         # each request of the persistent session decides for itself
         assertEq(2, count(messages, ": GET /x[12] HTTP/1\\.1"), "the request lines: " + messages.join("\n"));
         assertEq(2, count(messages, "sendReply: code=200"), "one message per request: " + messages.join("\n"));
+        assertEq(2, count(messages, "doResponse: capturing async response code=200"),
+            "one message per request: " + messages.join("\n"));
     }
 
     private static int count(list<string> messages, string pattern) {
@@ -211,6 +216,10 @@ class HttpServerLogLevelTest inherits QUnit::Test {
         assertEq(2, count(messages, "sendReply: code=200"), "one message per request: " + messages.join("\n"));
         assertEq(2, count(messages, "^HttpServer: \"listener-[0-9]+\" \\(ipv4\\(127\\.0\\.0\\.1\\):[0-9]+\\): sendReply: "),
             "each carries the prefix: " + messages.join("\n"));
+        # the message about the response that is passed to the I/O controller, unchanged
+        assertEq(2, count(messages, "^HttpServer: \"listener-[0-9]+\" \\(ipv4\\(127\\.0\\.0\\.1\\):[0-9]+\\): "
+            "doResponse: capturing async response code=200 body_size=2 has_stream=False$"),
+            "one message per request: " + messages.join("\n"));
         # the messages that the server logs for the request itself
         assertEq(2, count(messages, ": GET /x HTTP/1\\.1"), "the request lines: " + messages.join("\n"));
         assertEq(2, count(messages, "HTTP/1\\.1 200 OK handler: \"handler\""),

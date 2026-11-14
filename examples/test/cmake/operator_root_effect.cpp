@@ -6,8 +6,8 @@
 #include <stdexcept>
 #include <utility>
 
-// The runner extracts the unchanged, hidden default implementation verbatim.
-// SimpleQoreNode's vtable requires it when linking an internal-header consumer.
+// The runner extracts the hidden parse implementation, lexical policy helpers and debug entry TLS verbatim.
+// The node vtables require them when linking an internal-header consumer.
 #include "operator-base-parse.inc"
 
 namespace {

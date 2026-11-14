@@ -148,6 +148,15 @@ struct QoreAOTFunc;
     The contents land directly on @p tpgm as if they had been parsed
     from source.
 
+    The <tt>&#37;module-cmd</tt> directives recorded in @p metadata are
+    replayed in @p tpgm as its own directives, as when they are parsed in
+    it from source: the replay is not subject to the check that refuses a
+    module command from sandboxed code to another Program
+    (@ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()").  A
+    host must therefore not call this function (or
+    qore_aot_script_end_batch()) on behalf of sandboxed code, nor with a
+    @p metadata blob or a @p tpgm that sandboxed code chose.
+
     Hosts calling this from a custom <tt>main()</tt> typically:
     @code{.cpp}
     QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);

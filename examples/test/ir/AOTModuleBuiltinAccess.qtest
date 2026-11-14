@@ -84,34 +84,34 @@ static_init: RWLock
 p_closure_direct: ILLEGAL-CLASS-INSTANTIATION: parse options do not allow access to the 'RWLock' class
 p_create_object: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
 p_call_function_create_object: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
-p_call_function_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'
-p_call_ref_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'gethostname'
-p_closure_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'
+p_call_function_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'; functional domain: EXTERNAL_INFO (restricted by PO_NO_EXTERNAL_INFO)
+p_call_ref_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'gethostname'; functional domain: EXTERNAL_INFO (restricted by PO_NO_EXTERNAL_INFO)
+p_closure_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'; functional domain: EXTERNAL_INFO (restricted by PO_NO_EXTERNAL_INFO)
 p_closure_create_object_through_module: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
-p_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+p_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
 p_module_call_ref: \"RWLock|WaitGroup\"
 p_module_call_function: \"RWLock|WaitGroup\"
-p_overloaded_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
-p_call_ref_to_module_object_method: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
-p_closure_method_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
-p_call_function_overloaded_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'save_thread_data(string key, auto value)'
-p_call_ref_overloaded_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'save_thread_data'
+p_overloaded_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
+p_call_ref_to_module_object_method: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
+p_closure_method_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
+p_call_function_overloaded_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'save_thread_data(string key, auto value)'; functional domain: THREAD_CONTROL (restricted by PO_NO_THREAD_CONTROL)
+p_call_ref_overloaded_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'save_thread_data'; functional domain: THREAD_CONTROL (restricted by PO_NO_THREAD_CONTROL)
 sandboxed p_direct: ILLEGAL-CLASS-INSTANTIATION: parse options do not allow access to the 'RWLock' class
 sandboxed p_closure_direct: ILLEGAL-CLASS-INSTANTIATION: parse options do not allow access to the 'RWLock' class
 sandboxed p_create_object: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
 sandboxed p_call_function_create_object: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
-sandboxed p_call_function_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'
-sandboxed p_call_ref_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'gethostname'
-sandboxed p_closure_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'
+sandboxed p_call_function_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'; functional domain: EXTERNAL_INFO (restricted by PO_NO_EXTERNAL_INFO)
+sandboxed p_call_ref_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'gethostname'; functional domain: EXTERNAL_INFO (restricted by PO_NO_EXTERNAL_INFO)
+sandboxed p_closure_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'gethostname()'; functional domain: EXTERNAL_INFO (restricted by PO_NO_EXTERNAL_INFO)
 sandboxed p_closure_create_object_through_module: CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to the 'RWLock' class
-sandboxed p_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+sandboxed p_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
 sandboxed p_module_call_ref: \"RWLock|WaitGroup\"
 sandboxed p_module_call_function: \"RWLock|WaitGroup\"
-sandboxed p_overloaded_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
-sandboxed p_call_ref_to_module_object_method: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
-sandboxed p_closure_method_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
-sandboxed p_call_function_overloaded_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'save_thread_data(string key, auto value)'
-sandboxed p_call_ref_overloaded_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'save_thread_data'
+sandboxed p_overloaded_method_on_module_object: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
+sandboxed p_call_ref_to_module_object_method: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
+sandboxed p_closure_method_through_module: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
+sandboxed p_call_function_overloaded_builtin: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin function 'save_thread_data(string key, auto value)'; functional domain: THREAD_CONTROL (restricted by PO_NO_THREAD_CONTROL)
+sandboxed p_call_ref_overloaded_builtin: PARSE-EXCEPTION: parse options do not allow access to function 'save_thread_data'; functional domain: THREAD_CONTROL (restricted by PO_NO_THREAD_CONTROL)
 ";
 
         #! expected output of the calls of overloaded builtins and of constructors with arguments in module code
@@ -137,7 +137,7 @@ sandboxed static_direct: static
 closure: closure
 sandboxed closure: closure
 in_module_call_ref: call ref
-sandboxed in_module_call_ref: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'
+sandboxed in_module_call_ref: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
 thread_data: 1|2|gone
 sandboxed thread_data: 1|2|gone
 named_args: 3
@@ -149,9 +149,9 @@ sandboxed inherited_local: True|True
 inherited_via_methods: False|-1|True|True
 sandboxed inherited_via_methods: False|-1|True|True
 maybe_nothing: nothing
-sandboxed maybe_nothing: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::lock()'
+sandboxed maybe_nothing: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::lock()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
 untyped: untyped
-sandboxed untyped: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'
+sandboxed untyped: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::RWLock::readLock(timeout timeout_ms)'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES)
 ";
 
         #! expected output of the issue's reproduction: the module code runs and the sandbox refuses the connection

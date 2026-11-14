@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoResultReleaseOrderTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A poll operation whose first step reaches the goal; its destructor decrements the given Counter
+class ProbeOperation inherits AbstractPollOperation<auto> {
+    private {
+        Counter destroyed;
+        bool done = False;
+    }
+
+    constructor(Counter destroyed) {
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        destroyed.dec();
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return done ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        done = True;
+        return NOTHING;
+    }
+}
+
+#! An object whose destructor decrements the given Counter
+class Probe {
+    private {
+        Counter destroyed;
+    }
+
+    constructor(Counter destroyed) {
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        destroyed.dec();
+    }
+
+    bool ok() {
+        return True;
+    }
+}
+
+#! The controller's references to work are released before the work is delivered
+/** A thread that receives an operation's result, drops its own references to the operation and flushes the
+    controller's callbacks sees the operation destroyed, also if the I/O thread does nothing after the push: the
+    controller hands its references to the operation to the callback workers before it pushes the result, and the
+    callback worker that runs the operation's last step releases its own before it sends the step's result.  Likewise,
+    a thread that sees the work of a timer's callback done and flushes the callbacks sees the objects that only the
+    callback held destroyed: the controller hands its reference to the callback over before it dispatches it.
+*/
+class AsyncIoResultReleaseOrderTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AsyncIoResultReleaseOrderTest", "1.0", \ARGV) {
+        addTestCase("the controller releases its references to an operation before it delivers the result",
+            \testReleasedBeforeResult());
+        addTestCase("the callback worker that runs an operation's last step releases its reference to the "
+            "operation before it sends the step's result", \testStepReleasedBeforeResult());
+        addTestCase("the controller releases its references to an operation without a pause after the push",
+            \testReleasedWithoutPause());
+        addTestCase("the controller releases its reference to a timer's callback before it dispatches the callback",
+            \testTimerReleasedBeforeDispatch());
+        addTestCase("the controller releases its reference to a timer's callback without a pause after the dispatch",
+            \testTimerReleasedWithoutPause());
+        set_return_value(main());
+    }
+
+    #! submits an operation and returns whether it reached its goal; the references to the operation that this code
+    #! holds are gone when this returns
+    private static bool submitProbe(EventNotifier n, Counter destroyed) {
+        Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": new ProbeOperation(destroyed),
+            "owner": "result-release-order",
+            "to": -1s,
+        });
+        hash<auto> r = rq.get(HangGuard);
+        return r.spop.goalReached();
+    }
+
+    #! adds a timer whose callback holds a Probe and pushes to the given Queue; the callback holds the only
+    #! reference to the Probe when this returns
+    private static addProbeTimer(Queue q, Counter destroyed) {
+        Probe probe(destroyed);
+        AsyncIoController::addTimer(now_us(), sub () { q.push(probe.ok()); });
+    }
+
+    testReleasedBeforeResult() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the check requires a debug build");
+        }
+        Counter destroyed(1);
+        EventNotifier n();
+        call_function("dbg_async_io_pause_after_delivery", True);
+        bool pause_ended;
+        on_exit if (!pause_ended) {
+            call_function("dbg_async_io_pause_after_delivery", False);
+        }
+        assertTrue(submitProbe(n, destroyed), "the operation reached its goal");
+        # the I/O thread waits after the push: only what it did before the push is seen here
+        AsyncIoController::flushCallbacks();
+        bool destroyed_before_end = destroyed.getCount() == 0;
+        pause_ended = True;
+        bool paused = call_function("dbg_async_io_pause_after_delivery", False);
+        assertTrue(paused, "the I/O thread paused after it pushed the result");
+        assertTrue(destroyed_before_end, "the operation is destroyed when the result has been received and the "
+            "callbacks have been flushed");
+        # in any case, the operation is destroyed once the I/O thread goes on
+        assertEq(0, destroyed.waitForZero(HangGuard), "the operation is destroyed");
+    }
+
+    testStepReleasedBeforeResult() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the check requires a debug build");
+        }
+        Counter destroyed(1);
+        EventNotifier n();
+        call_function("dbg_async_io_pause_after_step_result", True);
+        bool pause_ended;
+        on_exit if (!pause_ended) {
+            call_function("dbg_async_io_pause_after_step_result", False);
+        }
+        assertTrue(submitProbe(n, destroyed), "the operation reached its goal");
+        # the callback worker that ran the step waits after it sent the step's result: only what it did before is
+        # seen here; flushing the callbacks does not wait for continuePoll() steps
+        AsyncIoController::flushCallbacks();
+        bool destroyed_before_end = destroyed.getCount() == 0;
+        pause_ended = True;
+        bool paused = call_function("dbg_async_io_pause_after_step_result", False);
+        assertTrue(paused, "the callback worker paused after it sent the step's result");
+        assertTrue(destroyed_before_end, "the operation is destroyed when the result has been received and the "
+            "callbacks have been flushed");
+        # in any case, the operation is destroyed once the worker goes on
+        assertEq(0, destroyed.waitForZero(HangGuard), "the operation is destroyed");
+    }
+
+    testReleasedWithoutPause() {
+        Counter destroyed(1);
+        EventNotifier n();
+        assertTrue(submitProbe(n, destroyed), "the operation reached its goal");
+        AsyncIoController::flushCallbacks();
+        assertEq(0, destroyed.getCount(), "the operation is destroyed when the result has been received and the "
+            "callbacks have been flushed");
+    }
+
+    testTimerReleasedBeforeDispatch() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the check requires a debug build");
+        }
+        Counter destroyed(1);
+        Queue q();
+        call_function("dbg_async_io_pause_after_delivery", True);
+        bool pause_ended;
+        on_exit if (!pause_ended) {
+            call_function("dbg_async_io_pause_after_delivery", False);
+        }
+        addProbeTimer(q, destroyed);
+        assertTrue(q.get(HangGuard), "the timer's callback ran");
+        # the I/O thread waits after the dispatch: only what it did before the dispatch is seen here
+        AsyncIoController::flushCallbacks();
+        bool destroyed_before_end = destroyed.getCount() == 0;
+        pause_ended = True;
+        bool paused = call_function("dbg_async_io_pause_after_delivery", False);
+        assertTrue(paused, "the I/O thread paused after it dispatched the callback");
+        assertTrue(destroyed_before_end, "the object that only the callback held is destroyed when the callback's "
+            "work is done and the callbacks have been flushed");
+        # in any case, the object is destroyed once the I/O thread goes on
+        assertEq(0, destroyed.waitForZero(HangGuard), "the object is destroyed");
+    }
+
+    testTimerReleasedWithoutPause() {
+        Counter destroyed(1);
+        Queue q();
+        addProbeTimer(q, destroyed);
+        assertTrue(q.get(HangGuard), "the timer's callback ran");
+        AsyncIoController::flushCallbacks();
+        assertEq(0, destroyed.getCount(), "the object that only the callback held is destroyed when the callback's "
+            "work is done and the callbacks have been flushed");
+    }
+}

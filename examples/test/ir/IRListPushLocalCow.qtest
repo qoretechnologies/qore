@@ -2,6 +2,30 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
 
+# IRListPushLocalCow.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+# push to a local list that is later changed through an element ("pinned") must push in place, also in a try block,
+# while a push to a list that another variable also holds copies it (copy-on-write).
+#
+# qore_ir_mark_local_list_pushes() marks such a push as a guarded local copy-on-write push: the IR interpreter
+# borrows the local's load, so the list's only reference is the local's own, and compiled code drops the references
+# it holds itself before the push checks whether the list is unique.  Without that, every push copies the list, so N
+# pushes are O(N^2), in the IR, JIT, and tiered modes and in AOT-compiled programs (including outlined AOT helpers).
+#
+# The test checks:
+# - the alias, type error, and auto-vivification results in every execution mode and in AOT-compiled programs
+# - that the pushes create no list (deterministic): with library debugging, dbg_get_list_create_count() counts the
+#   lists the current thread creates; a push in place creates none, a copy-on-write push creates a copy for every
+#   push, while the loop's hash values create no list (dbg_get_container_copy_count() would also count the hashes that
+#   AOT code copies to build them).  The pushes are counted in each function's first call, which the JIT and tiered
+#   modes also run in the IR interpreter, and in a second call, which runs compiled code in those modes.  A control
+#   run in the IR, JIT, and tiered modes with the borrowed load disabled (QORE_DISABLE_IR_BORROWED_LIST_PUSH_LOAD)
+#   must copy the list on every push in the IR interpreter, which proves that the count sees the copies, and in place
+#   in compiled code, which proves that the second calls run compiled code.  Without library debugging
+#   nothing is counted and the copy checks are skipped: the Linux CI jobs build libqore with CMAKE_BUILD_TYPE=debug,
+#   so they count the copies.  (This replaced a wall-clock check that 4x the pushes cost no more than ~8x the time,
+#   which could fail on loaded CI hosts.)
+
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
@@ -67,57 +91,74 @@ string sub errorCases() {
         invalid_empty_evaluations, empty.size(), empty[0]);
 }
 
-# clock_get_monotonic_us() is required here: now_us() is a wall clock and an
-# NTP step during the measured loop corrupts the elapsed time.
+# the lists that this thread has created so far, or -1 without library debugging
+int sub lists() {
+    if (!Option::HAVE_LIBRARY_DEBUGGING) {
+        return -1;
+    }
+    return call_function(\"dbg_get_list_create_count\");
+}
+
+# the lists created by the loop, or -1 without library debugging
+int sub createdSince(int before) {
+    return before < 0 ? -1 : lists() - before;
+}
+
 hash<auto> sub measurePinnedDirect(int n) {
     list<hash<auto>> values = ();
-    int started = clock_get_monotonic_us();
+    int before = lists();
     for (int i = 0; i < n; ++i) {
         hash<auto!> value = {\"i\": i};
         push values, value;
     }
-    int elapsed = clock_get_monotonic_us() - started;
+    int created = createdSince(before);
     values[0].touched = True;
-    return {\"elapsed\": elapsed, \"size\": values.size()};
+    return {\"created\": created, \"size\": values.size()};
 }
 
 hash<auto> sub measurePinnedGuarded(int n) {
     list<hash<auto>> values = ();
-    int started = clock_get_monotonic_us();
+    int before = lists();
     for (int i = 0; i < n; ++i) {
         try {
             hash<auto!> value = {\"i\": i};
             push values, value;
         } catch (hash<ExceptionInfo> ex) {
-            return {\"elapsed\": 0, \"size\": -1, \"error\": ex.err};
+            return {\"created\": -1, \"size\": -1, \"error\": ex.err};
         }
     }
-    int elapsed = clock_get_monotonic_us() - started;
+    int created = createdSince(before);
     values[0].touched = True;
-    return {\"elapsed\": elapsed, \"size\": values.size()};
+    return {\"created\": created, \"size\": values.size()};
 }
 
-bool direct_linear = True;
-bool guarded_linear = True;
-if (ENV.QORE_TEST_LIST_PUSH_SCALING == \"1\") {
-    # warm up (JIT promotion, allocator growth) before the measured runs
-    measurePinnedDirect(1000);
-    measurePinnedGuarded(1000);
-    hash<auto> ds = measurePinnedDirect(4000);
-    hash<auto> dl = measurePinnedDirect(16000);
-    hash<auto> gs = measurePinnedGuarded(4000);
-    hash<auto> gl = measurePinnedGuarded(16000);
-    # 4x the input must not cost more than ~8x the time: linear is ~4x, a copy
-    # of the pinned list per push is ~16x and takes hundreds of milliseconds.
-    # The absolute bound keeps timer noise on loaded CI hosts from failing runs
-    # that are already an order of magnitude below the quadratic floor.
-    direct_linear = ds.size == 4000 && dl.size == 16000
-        && (dl.elapsed < 8 * ds.elapsed || dl.elapsed < 250000);
-    guarded_linear = gs.size == 4000 && gl.size == 16000
-        && (gl.elapsed < 8 * gs.elapsed || gl.elapsed < 250000);
+const PushCount = 1000;
+
+# in-place if the pushes created (almost) no list, copied if they created a list for every push (each push copied
+# the list), unclear:<count> for anything in between, no-library-debugging without library debugging, and error if
+# the pushes did not push every element; a few lists can be created outside the pushes (the count reads themselves,
+# a tier-up), never one per push
+string sub classify(code<hash<auto>(int)> measure) {
+    hash<auto> h = measure(PushCount);
+    if (h.size != PushCount) {
+        return \"error\";
+    }
+    if (h.created < 0) {
+        return \"no-library-debugging\";
+    }
+    if (h.created >= PushCount) {
+        return \"copied\";
+    }
+    return h.created < PushCount / 10 ? \"in-place\" : sprintf(\"unclear:%d\", h.created);
 }
-printf(\"%s|%s|%y|%y\\n\", aliasCases(), errorCases(),
-    direct_linear, guarded_linear);
+
+# the first call of each function, which the JIT and tiered modes also run in the IR interpreter, then a second call,
+# which runs compiled code in those modes (ExecModeHarness::run() compiles a function synchronously after its first
+# call)
+list<string> pushes = (classify(\\measurePinnedDirect()), classify(\\measurePinnedGuarded()),
+    classify(\\measurePinnedDirect()), classify(\\measurePinnedGuarded()));
+
+printf(\"%s|%s|%s\\n\", aliasCases(), errorCases(), (foldl $1 + \",\" + $2, pushes));
 ";
 
 string base_path = "/tmp/qore-ir-list-push-local-cow-" + string(getpid());
@@ -134,7 +175,11 @@ on_exit {
     unlink(base_path + "-outlined");
 }
 
-string expected = "1:2|1:2|RUNTIME-TYPE-ERROR:1|RUNTIME-TYPE-ERROR:False:0:1|1:4|True|True\n";
+# the pushes create no list; without library debugging nothing is counted (-1)
+string results = "1:2|1:2|RUNTIME-TYPE-ERROR:1|RUNTIME-TYPE-ERROR:False:0:1|1:4|";
+string expected = results + (Option::HAVE_LIBRARY_DEBUGGING
+    ? "in-place,in-place,in-place,in-place"
+    : "no-library-debugging,no-library-debugging,no-library-debugging,no-library-debugging") + "\n";
 foreach string mode in ("ast", "ir", "tiered", "jit") {
     string actual = ExecModeHarness::run(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
@@ -142,6 +187,31 @@ foreach string mode in ("ast", "ir", "tiered", "jit") {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
         exit(2);
+    }
+}
+
+# control: without the borrowed local load that qore_ir_mark_local_list_pushes() marks for a guarded local
+# copy-on-write push, the load's own reference makes every push in the IR interpreter copy the list, and the count
+# must see each copy; the first calls run in the IR interpreter in each of these modes, the second calls run compiled
+# code in the JIT and tiered modes, which does not depend on the borrowed load, so they also prove that the second
+# calls of the main runs check compiled code
+if (Option::HAVE_LIBRARY_DEBUGGING) {
+    hash<string, string> control_results = {
+        "ir": "copied,copied,copied,copied",
+        "tiered": "copied,copied,in-place,in-place",
+        "jit": "copied,copied,in-place,in-place",
+    };
+    foreach hash<auto> i in (control_results.pairIterator()) {
+        string mode = i.key;
+        string control_expected = results + i.value + "\n";
+        string actual = ExecModeHarness::run(sprintf(
+            "QORE_DISABLE_IR_BORROWED_LIST_PUSH_LOAD=1 LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+            libqore_dir, qore_bin, mode, script_path));
+        if (actual != control_expected) {
+            printf("control mismatch in %s (borrowed list push load disabled)\nexpected:\n%sactual:\n%s", mode,
+                control_expected, actual);
+            exit(2);
+        }
     }
 }
 
@@ -154,14 +224,14 @@ string sub runAot(string suffix, string env, bool expect_outlining) {
         printf("AOT compile failed:\n%s", compile_out);
         exit(2);
     }
-    bool outlined = compile_out =~ /AOT-OUTLINE-FN:.*outlined/;
+    # both measured functions, whose pushes the outlined helpers must keep in place
+    bool outlined = compile_out =~ /AOT-OUTLINE-FN: 'measurePinnedDirect' outlined/
+        && compile_out =~ /AOT-OUTLINE-FN: 'measurePinnedGuarded' outlined/;
     if (outlined != expect_outlining) {
         printf("unexpected outlining status (%y):\n%s", expect_outlining, compile_out);
         exit(2);
     }
-    return backquote(sprintf(
-        "QORE_TEST_LIST_PUSH_SCALING=1 LD_LIBRARY_PATH=%s %s 2>&1",
-        libqore_dir, exe_path));
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
 }
 
 string aot = runAot("", "", False);

@@ -24,8 +24,8 @@ class ParseDirectivesTest inherits QUnit::Test {
             "%correct-references", "%correct-soft-types", "%correct-sprintf", "%correct-varargs", "%fp-fast-math",
             "%lock-options", "%lock-warnings", "%loose-args", "%loose-types", "%no-class-defs",
             "%no-constant-defs", "%no-external-info", "%no-module-path-directives", "%no-namespace-defs",
-            "%no-reflection", "%no-subroutine-defs", "%no-summarize", "%require-dollar", "%strict-warnings",
-            "%strong-encapsulation",
+            "%no-reflection", "%no-strict-parse-errors", "%no-subroutine-defs", "%no-summarize",
+            "%require-dollar", "%strict-parse-errors", "%strict-warnings", "%strong-encapsulation",
         );
     }
 

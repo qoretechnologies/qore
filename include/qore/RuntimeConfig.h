@@ -111,7 +111,9 @@ private:
     friend RuntimeConfig& rc_get_tls_ref();
     friend QoreProgram* rc_get_current_program(const RuntimeConfig& rc);
     friend void rc_sync_to_thread(const RuntimeConfig& rc);
+    friend class QoreRuntimeFlags;
     friend class RuntimeConfigHelper;
+    friend class RuntimeConfigCallRefAccess;
     friend class RuntimeConfigLocationHelper;
     friend class RuntimeConfigObjectHelper;
     friend class RuntimeConfigClosureHelper;

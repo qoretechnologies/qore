@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT/AOT compilation, encoding conversion and reentrant destruction under lvalue locks
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class CompoundAssignmentCleanupTest
+
+#! Values replaced by compound assignment are destroyed after its lvalue locks and graph updates.
+/** The worker's destructors read and write the assignment target. It checks hash/object merges and removals,
+    numeric replacements, exceptions, copied containers, removed cycles, nested targets and expression results.
+    Every execution mode and a compiled executable must complete the same checks as the AST interpreter.
+*/
+class CompoundAssignmentCleanupTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC_BIN ?? ENV.QORE_QCC_EXECUTABLE ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/compound-assignment-cleanup-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("CompoundAssignmentCleanup", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("destructors can reenter the target in every execution mode", \checkModes());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    checkModes() {
+        string ast = ExecModeHarness::run(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=ast " + quote(worker));
+        list<string> lines = select ast.split("\n"), $1;
+        assertEq(58, lines.size(), "all cleanup scenarios completed");
+        assertEq((), (select lines, !($1 =~ /^PASS /)), "the worker's checks passed");
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(ast, ExecModeHarness::run(prefix + quote(qore_bin)
+                + " -b --enable-debug --exec-mode=" + mode + " " + quote(worker)), mode);
+        }
+        assertEq(ast, ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + quote(worker)), "tiered-ir");
+        TmpDir tmp("qore-compound-cleanup-");
+        string exe = tmp.path + DirSep + "cleanup";
+        ExecModeHarness::run_any(prefix + quote(qcc_bin) + " -O2 -o " + quote(exe) + " " + quote(worker));
+        assertTrue(is_file(exe), "qcc produced the executable");
+        assertEq(ast, ExecModeHarness::run_any(prefix + quote(exe) + " -b --enable-debug"), "AOT");
+    }
+}

@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of typed container values and module loading
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AotTypedContainerTypesTest
+
+#! Typed container values of every type form keep their types in AOT code
+/** qcc writes a typed hash or list value with its type when the serialized Program resolves the type to the value's
+    own type object (the identity, not QoreTypeInfo::equal(), which takes a deferred type of a class or hashdecl that the
+    Program does not have as equal to a type of the same name): the constants of AotTypedContainerTypes.q cover
+    hashdecls, classes and namespaced ones, complex lists and hashes of them and of scalars, or-nothing element types,
+    typedefs, unions, nested containers, and the types of a module; constants are written as constant references, so
+    the containers of the error of a %try-module of a module whose init raises (TypeIdFailMod.qm) run the check: a
+    hashdecl that only the module has, and a class and a hashdecl of the module whose names are those of the Program's,
+    are written without the type, as QoreTypeInfo::equal() took them as the Program's types.  Its output is that of the
+    AST interpreter in every execution mode and compiled with qcc.
+*/
+class AotTypedContainerTypesTest inherits QUnit::Test {
+    public {
+        #! the output of AotTypedContainerTypes.q with the AST interpreter
+        const Expected = "hashdecl: hash<HD>
+ns hashdecl: hash<NsHash>
+list<object<Foo>>: list<object<Foo>>
+list<*object<Foo>>: list<*object<Foo>> [0]=nothing
+hash<string, object<Foo>>: hash<string, object<Foo>>
+list<object<Ns::Bar>>: list<object<Bar>>
+list<hash<HD>>: list<hash<HD>> [0]=hash<HD>
+hash<string, hash<HD>>: hash<string, hash<HD>> first=hash<HD>
+list<int>: list<int> [0]=integer
+list<*int>: list<*int> [0]=integer
+hash<string, int>: hash<string, int> first=integer
+list<MyInt>: list<int> [0]=integer
+list<*MyInt>: list<*int> [0]=nothing
+FooList: list<object<Foo>>
+list<union<int, string>>: list<union<int, string>> [0]=integer
+list<*union<int, string>>: list<*union<int, string>> [0]=integer
+hash<string, union<int, string>>: hash<string, union<int, string>> first=integer
+list<list<int>>: list<list<int>> [0]=list<int>
+list<hash<string, int>>: list<hash<string, int>> [0]=hash<string, int>
+list<object<TypeIdModClass>>: list<object<TypeIdModClass>>
+list<hash<TypeIdModHash>>: list<hash<TypeIdModHash>> [0]=hash<TypeIdModHash>
+list<TypeIdModInt>: list<int> [0]=integer
+module hashdecl: hash<TypeIdModHash>
+lsame: list [0]=hash [{x: 1}]
+osame: list []
+lonly: list [0]=hash [{x: 1}]
+honly: hash {a: {x: 1}}
+oonly: list [0]=nothing [null]
+nested: list [0]=list [[{x: 1}]]
+union: list [0]=integer [1]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AotTypedContainerTypesTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/AotTypedContainerTypes.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": typed container values of every type form", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: typed container values of every type form", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-aot-typed-container-types-");
+        string exe = tmp.path + DirSep + "aot-typed-container-types";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

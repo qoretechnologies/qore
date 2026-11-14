@@ -329,6 +329,38 @@ private:
 
     WebSocketFrameDecoder decoder;          //!< stateful frame decoder
     WebSocketFrameReassembler reassembler;  //!< fragment reassembler
+    //! the size of the fragments received of the message being reassembled, checked against the maximum frame size
+    //! as they arrive (issue #5861)
+    size_t fragment_bytes = 0;
+
+    //! the bytes still to discard of a frame rejected on its header (issue #5878)
+    uint64_t skip_bytes = 0;
+
+    //! set when the peer sent a frame that is a protocol error: once the close frame is written, the connection ends
+    //! with 1002 without waiting for the peer's close, which cannot be read any more (issue #5878)
+    bool protocol_failed = false;
+    //! the reason of the protocol error
+    std::string protocol_reason;
+
+    //! Rejects the message being received: discards what was received of it, and starts closing with the code given
+    /** Data frames are discarded from then on, whether or not the close frame could be queued (issue #5878)
+    */
+    DLLLOCAL void rejectMessage(uint16_t code, const char* reason, ExceptionSink* xsink);
+
+    //! Ends the operation for a lost connection: with 1006, or with the protocol error that the client closed for
+    DLLLOCAL void endConnectionLost(const char* reason, ExceptionSink* xsink);
+
+    //! Appends received data to the decoder, after discarding the rest of a frame rejected on its header
+    DLLLOCAL void feedDecoder(const void* data, size_t len);
+
+    //! Rejects the next frame on its header (issue #5878)
+    /** A data frame whose declared length takes the message over the limit is rejected with 1009, and its payload
+        is discarded as it arrives, so it is never buffered; an invalid length, a control frame over 125 bytes or a
+        reserved opcode is a protocol error, rejected with 1002, after which everything received is discarded.
+
+        @return true if a frame was rejected
+    */
+    DLLLOCAL bool rejectOversizedFrame(ExceptionSink* xsink);
 
     //! Current send inner operation (nullptr when not sending)
     SocketSendPollOperation* send_op = nullptr;
@@ -371,10 +403,16 @@ private:
     */
     DLLLOCAL void setCloseInfo(uint16_t code, const char* reason, bool final = false);
     bool close_initiated = false;           //!< true if we initiated the close handshake
+    //! true if the operation started the close itself because of an error (for example a message that is too big),
+    //! not because the application asked for it (issue #5861)
+    bool close_for_error = false;
     //! How long a close started by the client waits for the server's close frame (milliseconds, 0 = no bound)
     int64 close_timeout_ms = DefaultCloseTimeoutMs;
-    //! When a close started by the client stops waiting for the server's close frame (monotonic ms, 0 = never)
-    int64 close_deadline_ms = 0;
+    //! When a close started by the client stops waiting for the server's close frame (monotonic us, 0 = never)
+    /** In microseconds: a deadline in whole milliseconds, from a truncated clock reading, ended the wait up to a
+        millisecond before the close timeout
+    */
+    int64 close_deadline_us = 0;
     bool has_extensions = false;            //!< true if extensions are active (skip RSV validation)
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
@@ -453,7 +491,7 @@ private:
 
     //! Sets the close deadline of a close started by the client
     DLLLOCAL void startCloseWait() {
-        close_deadline_ms = close_timeout_ms ? q_clock_getmicros_monotonic() / 1000 + close_timeout_ms : 0;
+        close_deadline_us = close_timeout_ms ? q_clock_getmicros_monotonic() + close_timeout_ms * 1000 : 0;
     }
 
     //! Ends the operation closed without a close frame from the server, and reports it as a "closed" message

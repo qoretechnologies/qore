@@ -42,6 +42,8 @@ module AwsTextractRestClient {
         ConnectionSchemeCache::registerScheme("aws-textract",
             AwsTextractRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage AwsTextractRestClient Module

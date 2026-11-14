@@ -7,7 +7,7 @@
     Binary modules are shared libraries (<tt>.so</tt> / <tt>.dylib</tt> / <tt>.dll</tt>) that extend the %Qore language with new classes,
     functions, constants, and namespaces.
 
-    Since %Qore 3.0, binary modules use Module API 2.2, which requires a single
+    Since %Qore 3.0, binary modules use Module API 2.3, which requires a single
     \c extern \c "C" module description function instead of the old-style exported global variables.
 
     @subsection module_api_version Module API Version
@@ -20,15 +20,17 @@
     - looked up by its feature name (\c %%requires, @ref Qore::load_module() "load_module()"), only the files of the
       supported module API are considered, so the module is not found; the \c LOAD-MODULE-ERROR exception names each
       file of the feature built for another module API that is in the module path:
-      <tt>...; found '/usr/lib/qore-modules/xml-api-2.1.qmod' built for module API 2.1: rebuild it for module API
-      2.2</tt>
+      <tt>...; found '/usr/lib/qore-modules/xml-api-2.2.qmod' built for module API 2.2: rebuild it for module API
+      2.3</tt>
     - loaded by its path, it is refused with a \c LOAD-MODULE-ERROR exception that reports the API mismatch
 
     Module API 2.1 covers all public ABI changes made during %Qore 3.0 development after module API 2.0 was introduced
     (enum value ownership, new virtual methods in the I/O, iterator and polling classes, the representation of
     @ref QoreValue, program IDs, among others); a module built with the 2.0 headers is refused.  Module API 2.2 adds
-    QoreModuleInfo::cmd_caller_aware and QoreModuleCommandContext, through which a module command handler judges the
-    code that issues a command (see the parse command handler below); a module built with the 2.1 headers is refused.
+    the source-compatible callback invocation slots for lexical semantics in ResolvedCallReferenceNode; a module built
+    with the 2.1 headers is refused.  Module API 2.3 adds QoreModuleInfo::cmd_caller_aware and
+    QoreModuleCommandContext, through which a module command handler judges the code that issues a command (see the
+    parse command handler below); a module built with the 2.2 headers is refused.
 
     @note Any change to inline code, or to an exported or inline-visible type or function, in the public headers
     (<tt>include/qore</tt>, outside <tt>include/qore/intern</tt>) that a module compiled with the previous headers would
@@ -130,7 +132,7 @@
     ModuleManager::issueRuntimeCmd(), as well as the commands that a compiled program records and replays when it is
     loaded.  Set to \c nullptr in the description function if not used (this is the default).
 
-    @par Module Commands and the Restrictions of the Code that Issues Them (module API 2.2)
+    @par Module Commands and the Restrictions of the Code that Issues Them (module API 2.3)
 
     The handler runs in the Program that the command applies to: \c getProgram() there is the target of the command,
     and its parse options say nothing about the code that issued the command.  A handler decides what a command may do
@@ -180,14 +182,14 @@
 
     @warning The library creates the @ref QoreModuleInfo struct and validates the module API version only after the
     description function has filled it in, since the version is one of its fields: the version cannot be checked
-    before the description function runs.  A struct created by a library that implements module API 2.1 or earlier
-    has no \c cmd_caller_aware field, so a module built with module API 2.2 that such a library loads (by an explicit
-    path or a file name without the API suffix; the library does not look for a \c -api-2.2.qmod file) would write
+    before the description function runs.  A struct created by a library that implements module API 2.2 or earlier
+    has no \c cmd_caller_aware field, so a module built with module API 2.3 that such a library loads (by an explicit
+    path or a file name without the API suffix; the library does not look for a \c -api-2.3.qmod file) would write
     past the end of the struct.  A module that may be loaded by such a library sets the field only if the library
-    implements module API 2.2; the library then refuses the module for its API version, without the write:
+    implements module API 2.3; the library then refuses the module for its API version, without the write:
     @code{.cpp}
-    // the field exists only in a library that implements module API 2.2
-    if (is_module_api_supported(2, 2)) {
+    // the field exists only in a library that implements module API 2.3
+    if (is_module_api_supported(2, 3)) {
         mod_info.cmd_caller_aware = true;
     }
     @endcode
@@ -199,7 +201,7 @@
     to change a classpath that the code of a library module issues at run time is not refused for a caller that has
     only \c PO_NO_FILESYSTEM (see design/module-sandboxing-audit-guide.md).
 
-    @par The Restrictions of the Caller of a Module Function (module API 2.2)
+    @par The Restrictions of the Caller of a Module Function (module API 2.3)
 
     A module function or method that decides what its caller may do (a database driver that judges a classpath
     option, for example) asks QoreModuleCommandRestrictions::getCallerRestrictions() instead of reading

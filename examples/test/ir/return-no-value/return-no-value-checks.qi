@@ -10,6 +10,9 @@
 # statement raises "<block return> ... block missing return statement"; each check returns the error and its
 # description
 
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
+
 public namespace ReturnNoValueChecks {
     #! a hash type for a declared return type
     public hashdecl ReturnInfo {

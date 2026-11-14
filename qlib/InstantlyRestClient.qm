@@ -49,6 +49,8 @@ module InstantlyRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("instantly", InstantlyRestConnection::ConnectionScheme);
     };
+    # the module's own code waits for rate limits and retries with sleep() or usleep()
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage InstantlyRestClient Module

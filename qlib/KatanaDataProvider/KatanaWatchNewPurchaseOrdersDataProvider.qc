@@ -24,7 +24,7 @@ public class KatanaWatchNewPurchaseOrdersDataProvider inherits KatanaWatchDataPr
     string getName() { return ProviderInfo.name; }
     string getEndpoint() { return "purchase_orders"; }
     string getEventName() { return EVENT_NEW_POS; }
-    *string getTimestampField() { return "created_at"; }
+    string getTimestampField() { return "created_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaPurchaseOrderDataType();

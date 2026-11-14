@@ -39,6 +39,8 @@ class RuntimeConfig;
 
 class WhileStatement : public AbstractStatement {
 public:
+    DLLLOCAL static WhileStatement* create(LexicalSemanticPolicy policy, int start_line, int end_line,
+            QoreValue c, StatementBlock* cd);
     DLLLOCAL WhileStatement(int start_line, int end_line, QoreValue c, StatementBlock* cd);
     DLLLOCAL virtual ~WhileStatement();
 
@@ -66,6 +68,11 @@ public:
     }
 
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(QoreValue& return_value, ExceptionSink* xsink);
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
+
     QoreValue cond{};
     StatementBlock* code;
     LVList* lvars = nullptr;

@@ -151,15 +151,15 @@ FunctionalOperatorInterface* QoreRangeOperatorNode::getFunctionalIteratorImpl(Ru
     int64 stop = rh->getAsBigInt();
 
     value_type = list;
-    QoreParseOptions po = rc.getParseOptions() ? rc.getParseOptions() : runtime_get_parse_options();
-    if (!(po & PO_BROKEN_RANGE)) {
+    bool broken_range = semantic_policy.brokenRange();
+    if (!broken_range) {
         if (start <= stop) {
             ++stop;
         } else {
             --stop;
         }
     }
-    return new QoreFunctionalRangeOperator(start, stop, xsink);
+    return new QoreFunctionalRangeOperator(start, stop, broken_range, xsink);
 }
 
 bool QoreFunctionalRangeOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {

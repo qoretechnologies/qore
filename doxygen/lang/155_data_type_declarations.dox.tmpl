@@ -690,6 +690,42 @@ IntBox<int> explicit_box(2);
 # IntBox<string> bad("x");     # PARSE-TYPE-ERROR: string violates T: int
     @endcode
 
+    In generic code, a value of a bounded type parameter has its bound: it is accepted wherever a value of the bound
+    is, and refused where one is refused (an assignment, an argument, a return value), and a type parameter whose bound is a
+    class has that class's methods, which are called as on any value of that class (an override in the type argument's
+    class is called).  A value of type <tt>*T</tt> has the bound or no value.  A value of an unbounded type parameter
+    can have any type: it is accepted, and checked when the code runs.  The same holds for a bound that converts the
+    values that it accepts, such as \c softint or \c number: a value bound to the type parameter is not converted, so
+    its type is only known when the code runs:
+
+    @code{.py}
+class Base {
+    string name() { return "base"; }
+}
+
+class Named<T: Base> {
+    string describe(T v) {
+        # T: Base: v has the methods of Base
+        return v.name();
+    }
+}
+
+class Adder<T: int> {
+    int add(T v, int n) {
+        # T: int: v is an int value
+        int i = v;
+        return i + n;
+    }
+}
+
+class Holder<T> {
+    T take(auto value) {
+        # unbounded: checked when the code runs (RUNTIME-TYPE-ERROR if value is not a T)
+        return value;
+    }
+}
+    @endcode
+
     Source-defined generic classes can inherit generic base classes and pass
     through their own type parameters:
 
@@ -1779,6 +1815,7 @@ printf("%s\n", l.fullType());
     @note
     - The \c any type restriction is the same as using no type restriction
     - Assignment to \c any strips complex runtime type information for backward compatibility; this can have a large performance cost for large data structures
+    - A value passed to a parameter of type \c any is stripped in the same way: a \c list&lt;int&gt; or a \c hash&lt;string, int&gt; argument is a plain \c list or \c hash in the function, in every @ref execution_modes "execution mode" and in compiled code; the caller's value keeps its type
     - To assign any type without stripping complex types, use the @ref auto_type "auto" type restriction instead
     - In @ref modern "%modern" code, use @ref auto_type "auto" instead of \c any for unrestricted declarations unless complex type stripping is specifically required
     - In @ref modern "%modern" mode, \c any is also the @ref streaming_any "any streaming operator" in expression contexts; legacy declarations such as \c "any value = expr;", function and method parameters, return types, and class members still parse \c any as a type name for compatibility

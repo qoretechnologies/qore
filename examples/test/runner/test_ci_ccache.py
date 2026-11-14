@@ -40,6 +40,24 @@ for v in %(vars)s; do eval "echo finish:$v=\\${$v-<unset>}"; done
 """ % {"vars": " ".join(VARIABLES)}
 
 
+def system_tools(directory):
+    """Links every program of the system path (os.defpath) into the directory but ccache
+
+    The tests decide whether ccache is found, so the system's own ccache (as on a host or CI node that has one) must
+    not be found in the path that they give the scripts.
+    """
+    for path_dir in os.defpath.split(os.pathsep):
+        if not path_dir or not os.path.isdir(path_dir):
+            continue
+        with os.scandir(path_dir) as entries:
+            for entry in entries:
+                target = directory / entry.name
+                if entry.name == "ccache" or target.exists() or target.is_symlink():
+                    continue
+                if entry.is_file() and os.access(entry.path, os.X_OK):
+                    target.symlink_to(entry.path)
+
+
 def stub(directory, name, text):
     path = directory / name
     path.write_text("#!/bin/sh\n" + text)
@@ -57,11 +75,15 @@ class CiCcacheTest(unittest.TestCase):
         self.bin.mkdir()
         self.tmp = self.root / "tmp"
         self.tmp.mkdir()
+        # the system's programs without the system's ccache (os.defpath would find the host's ccache)
+        self.sys = self.root / "sys"
+        self.sys.mkdir()
+        system_tools(self.sys)
         # the toolchain: its version strings make the key
         self.compiler_version = "Apple clang version 17.0.0 (clang-1700.0.13.5)"
         self.write_toolchain()
         stub(self.bin, "ccache", 'case "$1" in --version) echo "ccache version 4.12.1";; *) echo "ccache $*";; esac\n')
-        if not shutil.which("shasum"):
+        if not shutil.which("shasum", path=str(self.sys)):
             stub(self.bin, "shasum", 'shift 2; exec sha256sum "$@"\n')
 
     def write_toolchain(self):
@@ -71,7 +93,7 @@ class CiCcacheTest(unittest.TestCase):
         stub(self.bin, "c++", 'echo "%s"\n' % self.compiler_version)
 
     def run_setup(self, env_extra, path_bin=True):
-        env = {"PATH": (str(self.bin) + ":" if path_bin else "") + os.defpath, "TMPDIR": str(self.tmp)}
+        env = {"PATH": (str(self.bin) + ":" if path_bin else "") + str(self.sys), "TMPDIR": str(self.tmp)}
         env.update(env_extra)
         result = subprocess.run(["sh", "-c", DRIVER, "driver", str(SCRIPT)], env=env, capture_output=True, text=True,
                                 timeout=60)

@@ -156,7 +156,7 @@ static bool claimCast(const QoreValue& expr) {
 
 static bool claimBuiltinTypeConversion(const QoreValue& expr) {
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     if (!call) {
         return false;
     }

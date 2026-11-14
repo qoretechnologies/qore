@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-weak-references
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalSoftEqualityTest
+
+class EqualityObject {}
+
+class LexicalSoftEqualityTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LexicalSoftEquality", "1.0", \ARGV) {
+        addTestCase("list", \check(), ((1, 2),));
+        addTestCase("hash", \check(), ({"x": 1},));
+        addTestCase("binary", \check(), (<01>,));
+        addTestCase("object", \check(), (new EqualityObject(),));
+        addTestCase("reference", \check(), (\sprintf(),));
+        addTestCase("closure", \check(), (sub () {},));
+        addTestCase("weak list truth", \indirect(), ((1, 2), False));
+        addTestCase("weak hash truth", \indirect(), ({"x": 1}, False));
+        addTestCase("weak object truth", \indirect(), (new EqualityObject(), False));
+        addTestCase("weak nested list", \indirect(), (((1, 2),), True));
+        addTestCase("weak nested hash", \indirect(), ({"x": (1, 2)}, True));
+        addTestCase("stored strong reference", \storedReference());
+        addTestCase("typed and generic scalar booleans", \scalarBooleans());
+        set_return_value(main());
+    }
+
+    check(auto value) {
+        foreach bool legacy in (False, True) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+            if (legacy) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('list<bool> sub sample(auto value) {
+                return (value == True, True == value, value != True,
+                    (value,) == (True,), {"x": value} == {"x": True},
+                    ({"x": (value,)},) == ({"x": (True,)},));
+            }
+            list<bool> sub typed() {
+                list<auto> value = (1, 2);
+                return (value == True, True == value, value != True, (1, 2) == True);
+            }', "lexical-soft-equality");
+            list<bool> expected = (!legacy, !legacy, legacy, !legacy, !legacy, !legacy);
+            foreach int invocation in (0, 1) {
+                assertEq(expected, p.callFunction("sample", value), "nested comparisons keep lexical policy");
+                assertEq((!legacy, !legacy, legacy, !legacy), p.callFunction("typed"),
+                    "typed and constant comparisons keep lexical policy");
+                if (legacy) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+        }
+    }
+    indirect(auto target, bool nested) {
+        foreach bool legacy in (False, True) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+            if (legacy) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('%allow-weak-references
+                list<bool> sub sample(auto target, auto comparison) {
+                    hash<auto> wrapped = {};
+                    wrapped.x := target;
+                    return (wrapped == {"x": comparison}, {"x": comparison} == wrapped);
+                }', "indirect-soft-equality");
+            auto comparison = nested ? (target.typeCode() == NT_LIST ? (True,) : {"x": True}) : True;
+            # Non-boolean comparison preserves the existing asymmetric treatment of a weak RHS container.
+            list<bool> expected = (!legacy, nested ? False : !legacy);
+            foreach int invocation in (0, 1) {
+                assertEq(expected, p.callFunction("sample", target, comparison), "weak references keep lexical policy");
+                if (legacy) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+        }
+    }
+
+    storedReference() {
+        foreach bool legacy in (False, True) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+            if (legacy) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('bool sub sample() {
+                list<auto> target = ((1, 2),);
+                return {"x": \target} == {"x": (True,)};
+            }', "stored-reference-equality");
+            assertEq(!legacy, p.callFunction("sample"));
+            if (legacy) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            assertEq(!legacy, p.callFunction("sample"));
+        }
+    }
+
+    scalarBooleans() {
+        foreach bool strict in (False, True) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+            if (strict) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            p.parse('list<bool> sub typed(bool a, bool b) { return (a == b, a != b); }
+                list<bool> sub generic(auto a, auto b) {
+                    return (a == b, a != b, (a,) == (b,), {"x": a} != {"x": b},
+                        ({"x": (a,)},) == ({"x": (b,)},));
+                }', "scalar-boolean-equality");
+            foreach int mutation in (0, 1) {
+                foreach bool a in (False, True) {
+                    foreach bool b in (False, True) {
+                        bool equal = a == b;
+                        assertEq((equal, !equal), p.callFunction("typed", a, b),
+                            sprintf("typed booleans, mutation %d", mutation));
+                        assertEq((equal, !equal, equal, !equal, equal), p.callFunction("generic", a, b));
+                    }
+                }
+                if (strict) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+                else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+            }
+        }
+    }
+
+}
