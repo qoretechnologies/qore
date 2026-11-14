@@ -1717,6 +1717,9 @@
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled
       module now runs the closure when it is unloaded, as the source module does (issue #6015)
+    - the @ref astparserintro "astparser" module parses the explicit type arguments of a generic function call that
+      contain an or-nothing type or a nested callable type, such as \c id<code<*hash<auto>(int)>>(c), so that
+      \c qdx and the documentation builds accept it (issue #6024)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash
