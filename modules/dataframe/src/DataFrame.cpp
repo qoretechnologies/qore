@@ -2243,6 +2243,130 @@ QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::strin
     return filterMask(mask, xsink);
 }
 
+//! Compares two values as the core <=> operator does (QoreLogicalComparisonOperatorNode::doComparison()) (qore#6097)
+/** @param cmp the result: -1, 0 or 1
+    @return 0 for success, -1 if the operator raises an exception (NAN-COMPARE-ERROR for a NaN value)
+*/
+static int qoreDataFrameCompareValues(QoreValue lhs, QoreValue rhs, int& cmp, ExceptionSink* xsink) {
+    QoreValue l = lhs.isEnum() ? lhs.getEnumMember()->getValue() : lhs;
+    QoreValue r = rhs.isEnum() ? rhs.getEnumMember()->getValue() : rhs;
+    qore_type_t lt = l.getType();
+    qore_type_t rt = r.getType();
+
+    if (lt == NT_STRING || rt == NT_STRING) {
+        QoreStringValueHelper ls(l);
+        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        int rc = ls->compare(*rs);
+        cmp = rc < 0 ? -1 : (rc > 0 ? 1 : 0);
+        return 0;
+    }
+
+    // the result of a comparison with a number, as the operator computes it
+    auto number_cmp = [&cmp](bool less, bool equal) {
+        cmp = less ? -1 : (equal ? 0 : 1);
+    };
+    auto nan_error = [xsink](const char* what, const char* side) {
+        xsink->raiseException("NAN-COMPARE-ERROR", "NaN in %s value on %s hand side of logical comparison operator",
+            what, side);
+        return -1;
+    };
+
+    if (lt == NT_NUMBER) {
+        const QoreNumberNode* ln = l.get<const QoreNumberNode>();
+        if (ln->nan()) {
+            return nan_error("arbitrary-precision", "left");
+        }
+        switch (rt) {
+            case NT_NUMBER: {
+                const QoreNumberNode* rn = r.get<const QoreNumberNode>();
+                if (rn->nan()) {
+                    return nan_error("arbitrary-precision", "right");
+                }
+                number_cmp(ln->lessThan(*rn), ln->equals(*rn));
+                return 0;
+            }
+            case NT_FLOAT: {
+                double f = r.getAsFloat();
+                if (std::isnan(f)) {
+                    return nan_error("floating-point", "right");
+                }
+                number_cmp(ln->lessThan(f), ln->equals(f));
+                return 0;
+            }
+            case NT_CHAR:
+            case NT_INT:
+            case NT_BOOLEAN: {
+                int64 ri = r.getAsBigInt();
+                number_cmp(ln->lessThan(ri), ln->equals(ri));
+                return 0;
+            }
+            default: {
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
+                number_cmp(ln->lessThan(**rn), ln->equals(**rn));
+                return 0;
+            }
+        }
+    }
+
+    if (rt == NT_NUMBER) {
+        const QoreNumberNode* rn = r.get<const QoreNumberNode>();
+        if (rn->nan()) {
+            return nan_error("arbitrary-precision", "right");
+        }
+        switch (lt) {
+            case NT_FLOAT: {
+                double lf = l.getAsFloat();
+                if (std::isnan(lf)) {
+                    return nan_error("floating-point", "left");
+                }
+                number_cmp(rn->greaterThan(lf), rn->equals(lf));
+                return 0;
+            }
+            case NT_CHAR:
+            case NT_INT:
+            case NT_BOOLEAN: {
+                int64 li = l.getAsBigInt();
+                number_cmp(rn->greaterThan(li), rn->equals(li));
+                return 0;
+            }
+            default: {
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
+                number_cmp(ln->lessThan(*rn), ln->equals(*rn));
+                return 0;
+            }
+        }
+    }
+
+    if (lt == NT_FLOAT || rt == NT_FLOAT) {
+        double lf = l.getAsFloat();
+        if (std::isnan(lf)) {
+            return nan_error("floating-point", "left");
+        }
+        double rf = r.getAsFloat();
+        if (std::isnan(rf)) {
+            return nan_error("floating-point", "right");
+        }
+        cmp = lf < rf ? -1 : (lf == rf ? 0 : 1);
+        return 0;
+    }
+
+    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
+        int64 li = l.getAsBigInt();
+        int64 ri = r.getAsBigInt();
+        cmp = li < ri ? -1 : (li == ri ? 0 : 1);
+        return 0;
+    }
+
+    DateTimeValueHelper ld(l);
+    DateTimeValueHelper rd(r);
+    int rc = DateTime::compareDates(*ld, *rd);
+    cmp = rc < 0 ? -1 : (rc > 0 ? 1 : 0);
+    return 0;
+}
+
 QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
         const QoreListNode* asc_list, ExceptionSink* xsink) const {
     if (qore_check_cancel(xsink, "sorting DataFrame")) {
@@ -2285,6 +2409,11 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
         perm[i] = i;
     }
 
+    // the cells of a column that holds any value are ordered as the core <=> operator orders them, which raises an
+    // exception for a NaN value; the first one is raised after the sort, and the comparisons of such cells return
+    // false after it
+    ExceptionSink cmp_xsink;
+    bool cmp_failed = false;
     std::stable_sort(perm.begin(), perm.end(), [&](int64_t a, int64_t b) -> bool {
         for (const auto& key : keys) {
             const ColumnData& cd = *columns[key.col_idx].data;
@@ -2320,6 +2449,17 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
                     cmp = (va < vb) ? -1 : (va > vb) ? 1 : 0;
                     break;
                 }
+                case ColumnType::AUTO:
+                    assert(a < static_cast<int64_t>(cd.auto_data.size())
+                        && b < static_cast<int64_t>(cd.auto_data.size()));
+                    if (cmp_failed) {
+                        return false;
+                    }
+                    if (qoreDataFrameCompareValues(cd.auto_data[a], cd.auto_data[b], cmp, &cmp_xsink)) {
+                        cmp_failed = true;
+                        return false;
+                    }
+                    break;
                 default:
                     break;
             }
@@ -2329,6 +2469,10 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
         }
         return false;  // equal
     });
+    if (cmp_failed) {
+        xsink->assimilate(cmp_xsink);
+        return nullptr;
+    }
 
     return selectRows(perm, xsink);
 }
