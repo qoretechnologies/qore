@@ -183,7 +183,7 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
         auto inserted = group_map.emplace(std::move(key), groups.size());
         if (inserted.second) {
             // the values of a group are those of the source columns at its first row
-            groups.push_back({{}, {r}});
+            groups.push_back({{r}});
         } else {
             groups[inserted.first->second].row_indices.push_back(r);
         }

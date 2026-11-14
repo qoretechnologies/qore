@@ -851,7 +851,8 @@ DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *stri
     their own.  In a column that holds any value, a float is grouped by its value as in a \c float64 column; an
     absolute date by its instant (two dates at the same instant in different time zones make one group); a relative
     date by its length in microseconds, with a month counted as 31 days and a year as 365 days (so \c 24h and
-    \c 1D make one group, as they do in a column of durations); an arbitrary-precision number by its exact value; a
+    \c 1D make one group, as they do in a column of durations); an arbitrary-precision number by its exact value
+    (the NaN numbers make one group, as the NaN floats do); a
     binary value by its bytes; a list or a hash by its elements (two lists make one group if their elements are
     equal in order, and two hashes if they have the same keys with equal values, in any order); an object, a
     closure or a call reference by its identity, and a weak reference as the object, hash or list that it refers
