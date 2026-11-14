@@ -88,7 +88,7 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
         directory, so the AOT artifact goes stale against a file it consumes.
     */
     testModuleSourceGlobTracking() {
-        TmpDir tmp("qore-module-source-glob-");
+        TmpDir tmp("qore-module-source-glob-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string stage_dir = tmp.path + "/stage";
@@ -158,7 +158,7 @@ qore_user_modules(\"qlib/Fixture\")
     }
 
     testSourceQmodSymlinkFreshness() {
-        TmpDir tmp("qore-source-qmod-links-");
+        TmpDir tmp("qore-source-qmod-links-", NOTHING, cmakeTmpBase());
         string source_qlib = tmp.path + "/qlib";
         string build_qmods = tmp.path + "/qlib-qmod";
         string source_module = source_qlib + "/Fixture";
@@ -205,7 +205,7 @@ qore_user_modules(\"qlib/Fixture\")
         first tree away from its tests.
     */
     testSourceQmodSymlinkOtherBuildTree() {
-        TmpDir tmp("qore-source-qmod-trees-");
+        TmpDir tmp("qore-source-qmod-trees-", NOTHING, cmakeTmpBase());
         string source_qlib = tmp.path + "/qlib";
         string remove_script = realpath(get_script_dir() + "/../../../cmake/RemoveSourceQmodSymlinks.cmake");
         string ensure_script = realpath(get_script_dir() + "/../../../cmake/EnsureSourceQmodSymlinks.cmake");
@@ -285,7 +285,7 @@ qore_user_modules(\"qlib/Fixture\")
         if (!qore_dir || !is_file(qore_dir + "/QoreBuildTree.cmake")) {
             testSkip("the build tree's QoreConfig.cmake is not available for the build under test");
         }
-        TmpDir tmp("qore-moved-build-tree-");
+        TmpDir tmp("qore-moved-build-tree-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string moved_dir = tmp.path + "/moved";
         string link_dir = tmp.path + "/link";
@@ -324,7 +324,7 @@ message(STATUS \"qore cmake dir: ${QORE_CMAKE_DIR}\")
     }
 
     testDownstreamCatalogInstallRoot() {
-        TmpDir tmp("qore-cmake-downstream-catalog-");
+        TmpDir tmp("qore-cmake-downstream-catalog-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -508,7 +508,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogInstallReconciliation() {
-        TmpDir tmp("qore-cmake-catalog-reconcile-");
+        TmpDir tmp("qore-cmake-catalog-reconcile-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string other_src_dir = tmp.path + "/other-src";
@@ -603,7 +603,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogOwnedOrphanRetirement() {
-        TmpDir tmp("qore-cmake-catalog-orphan-");
+        TmpDir tmp("qore-cmake-catalog-orphan-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -651,7 +651,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogManifestEntryValidation() {
-        TmpDir tmp("qore-cmake-catalog-manifest-");
+        TmpDir tmp("qore-cmake-catalog-manifest-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -689,7 +689,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogInstallDestdirStaging() {
-        TmpDir tmp("qore-cmake-catalog-destdir-");
+        TmpDir tmp("qore-cmake-catalog-destdir-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -849,7 +849,7 @@ find_package(Qore REQUIRED)
             testSkip("QoreMacros.cmake is not available beside the test");
         }
 
-        TmpDir tmp("qore-qcc-deps-libqore-");
+        TmpDir tmp("qore-qcc-deps-libqore-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         mkdir(src_dir);
@@ -921,7 +921,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/deps.txt\"
         if (!qore_dir) {
             testSkip("QoreConfig.cmake is not available for the build under test");
         }
-        TmpDir tmp("qore-external-qmod-runtime-");
+        TmpDir tmp("qore-external-qmod-runtime-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string tool_dir = tmp.path + "/tools";
@@ -1020,7 +1020,7 @@ qore_external_user_module(\"qlib/Fixture\" \"\")
     }
 
     testExportedHelpers() {
-        TmpDir tmp("qore-cmake-build-helpers-");
+        TmpDir tmp("qore-cmake-build-helpers-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         mkdir(src_dir);
@@ -1137,7 +1137,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         shared parse's depfile, so an edit to it rebuilt nothing.
     */
     testGroupExternalInputsDepfile() {
-        TmpDir tmp("qore-cmake-qcc-external-inputs-");
+        TmpDir tmp("qore-cmake-qcc-external-inputs-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1262,7 +1262,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/extinputs-vars.txt\"
     }
 
     testCyclicComponentBuilds() {
-        TmpDir tmp("qore-cmake-qcc-cycle-");
+        TmpDir tmp("qore-cmake-qcc-cycle-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1537,7 +1537,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/cycle-vars.txt\"
         provider never published and the aggregate failed with "body_contract=<hash> actual=".
     */
     testPartialAggregateBodyContracts() {
-        TmpDir tmp("qore-cmake-qcc-partial-agg-");
+        TmpDir tmp("qore-cmake-qcc-partial-agg-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1620,7 +1620,7 @@ add_custom_target(all-qo ALL DEPENDS ${AGG_STAMPS} ${AGG_PARTIAL_STAMP} ${AGG_FU
     }
 
     testManagedQccOutputPruning() {
-        TmpDir tmp("qore-cmake-qcc-prune-");
+        TmpDir tmp("qore-cmake-qcc-prune-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";

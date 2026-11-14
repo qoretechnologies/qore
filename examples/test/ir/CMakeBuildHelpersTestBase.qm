@@ -33,6 +33,7 @@ module CMakeBuildHelpersTestBase {
 }
 
 %requires(reexport) QUnit
+%requires Util
 
 /** The tests of the exported CMake build helpers build CMake projects with the cmake in the PATH and the Qore under
     test:
@@ -56,7 +57,7 @@ class MyTest inherits CMakeBuildHelpersTestBase::GenericQccObjectTest {
     }
 
     testScenario() {
-        TmpDir tmp("qore-cmake-qcc-scenario-");
+        TmpDir tmp("qore-cmake-qcc-scenario-", NOTHING, cmakeTmpBase());
         hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
         string out = run(buildCommand(project.build_dir));
     }
@@ -122,6 +123,20 @@ public class CMakeBuildTest inherits QUnit::Test {
 
     private string run(string cmd) {
         return backquote("{ " + cmd + "; } 2>&1");
+    }
+
+    #! Returns the directory for the temporary directories of the test cases, named as CMake names it
+    /** CMake names a path below /private/tmp by its path below /tmp (on macOS, where /tmp is a link to /private/tmp),
+        in what it generates and in the paths it derives (an install prefix below DESTDIR, for example), while the
+        standard temporary location is a real path; the test cases compare paths that CMake gives back with the paths
+        of their directories, so these are created below the directory as CMake names it
+    */
+    private static string cmakeTmpBase() {
+        string dir = tmp_location();
+        if (dir =~ /^\/private\/tmp(\/|$)/ && realpath("/tmp") == "/private/tmp") {
+            dir = dir.substr(8);
+        }
+        return dir;
     }
 
     #! Skips the test case unless the qcc of the build tree has its test hooks (CMake option QORE_QCC_TEST_HOOKS)
