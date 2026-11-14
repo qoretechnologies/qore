@@ -878,6 +878,18 @@ int PollPipelinePriv::addContextOr(const char* result_key, const char* key_a, co
     });
 }
 
+int PollPipelinePriv::addRequireContextKey(const char* key, const char* err_code, const char* desc) {
+    std::string k(key);
+    std::string err(err_code);
+    std::string d(desc);
+    return addTransform([k, err, d](Context& ctx, ExceptionSink* xsink) {
+        if (ctx.extra && ctx.extra->getKeyValue(k.c_str()).getAsBool()) {
+            return;
+        }
+        xsink->raiseException(err.c_str(), "%s", d.c_str());
+    });
+}
+
 // --- New composable primitives ---
 
 int PollPipelinePriv::addRecvFramed(FrameSizeFunc sizer) {
@@ -2747,6 +2759,28 @@ int PollPipeline::addSelectContextValue(string result_key, string condition_key,
 */
 int PollPipeline::addContextOr(string result_key, string key_a, string key_b) [flags=NAMED_ARGS] {
     return priv->addContextOr(result_key->c_str(), key_a->c_str(), key_b->c_str());
+}
+
+//! Adds a step that raises an exception if a context extra key is not set to a truthy value
+/** Ends the pipeline with an exception when a condition found by an earlier step does not hold, for example when a
+    server does not advertise a capability that the rest of the pipeline needs (see addCheckContains()).
+
+    @param context_key the context extra key to check
+    @param error_code the exception error code to raise if \c ctx.extra[context_key] is missing or not truthy
+    @param desc the exception description
+    @return the step index
+
+    @par Example:
+    @code{.py}
+# an SMTP client must not send an address with non-ASCII characters to a server that does not support SMTPUTF8
+pipeline.addCheckContains("hello_text", "SMTPUTF8", "server_has_smtputf8");
+pipeline.addRequireContextKey("server_has_smtputf8", "SMTP-SEND-ERROR", "the server does not support SMTPUTF8");
+    @endcode
+
+    @since %Qore 3.0
+*/
+int PollPipeline::addRequireContextKey(string context_key, string error_code, string desc) [flags=NAMED_ARGS] {
+    return priv->addRequireContextKey(context_key->c_str(), error_code->c_str(), desc->c_str());
 }
 
 //! Adds an unconditional jump to a target step (enables loops)

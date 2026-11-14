@@ -122,6 +122,7 @@ public class PollPipelineTest inherits QUnit::Test {
         addTestCase("IMAP response: tag matching", \imapTagMatching());
         addTestCase("branch on context int", \branchOnContextInt());
         addTestCase("check contains on binary values", \checkContainsBinary());
+        addTestCase("require context key", \requireContextKey());
         set_return_value(main());
     }
 
@@ -432,5 +433,32 @@ public class PollPipelineTest inherits QUnit::Test {
         p2.addSetContextBinary("data", <004e4545444c4500>);   # NUL "NEEDLE" NUL
         p2.addCheckContains("data", "NEEDLE", "found");
         assertEq(2, p2.getStepCount(), "steps added");
+    }
+
+    requireContextKey() {
+        # a step raises the given error if the context key is missing or not truthy, and the steps after it do not run
+        foreach hash<auto> i in ({"reply": "250-mock\r\n250-SMTPUTF8\r\n250 OK\r\n", "ok": True},
+                {"reply": "250-mock\r\n250 OK\r\n", "ok": False}) {
+            MockLineServer server((i.reply,));
+            server.start();
+            on_exit server.wait();
+
+            Socket sock();
+            PollPipeline p(sock);
+            p.addSetContextBinary("cmd", "EHLO x\r\n");
+            p.addConnect(server.getTarget());
+            p.addSendFromContext("cmd");
+            p.addRecvLineResponse("code", "text", "TEST-ERROR");
+            p.addCheckContains("text", "SMTPUTF8", "has_utf8");
+            assertEq(5, p.addRequireContextKey("has_utf8", "TEST-REQUIRE-ERROR", "no SMTPUTF8"));
+            p.addSetContextBool("done", True);
+            on_exit sock.close();
+            if (i.ok) {
+                drivePollOp(p);
+                assertTrue(p.getResult().extra.done);
+            } else {
+                assertThrows("TEST-REQUIRE-ERROR", "^no SMTPUTF8$", \drivePollOp(), (p,));
+            }
+        }
     }
 }

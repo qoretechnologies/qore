@@ -335,6 +335,11 @@ public:
     */
     DLLEXPORT int addContextOr(const char* result_key, const char* key_a, const char* key_b);
 
+    //! Raises an exception if a context key is not truthy
+    /** Raises \a err_code with \a desc if ctx.extra[key] is missing or not truthy, ending the pipeline
+    */
+    DLLEXPORT int addRequireContextKey(const char* key, const char* err_code, const char* desc);
+
     //! Adds a result delivery step
     DLLEXPORT int addDeliverResult();
 

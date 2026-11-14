@@ -34,6 +34,11 @@ public class Main inherits QUnit::Test {
         addTestCase("Test names of unnamed attachments", \testUnnamedAttachmentNames(), NOTHING);
         addTestCase("Test the sender's display name", \testSenderDisplayName(), NOTHING);
         addTestCase("Test the From header of parsed messages", \testParsedFromHeader(), NOTHING);
+        addTestCase("Test email addresses (issue #6066)", \testEmailAddresses(), NOTHING);
+        addTestCase("Test address headers (issue #6066)", \testAddressHeaders(), NOTHING);
+        addTestCase("Test addresses of parsed messages (issue #6066)", \testParsedAddresses(), NOTHING);
+        addTestCase("Test header line endings and control characters (issue #6066)", \testHeaderEncoding(),
+            NOTHING);
 
         set_return_value(main());
     }
@@ -1404,10 +1409,8 @@ lorem ipsum\r
             Message parsed(ser);
             assertEq(msg.getSender(), parsed.getSender(), i."in");
             assertEq(msg.getSender(), (new Message(parsed.serializeRaw())).getSender(), i."in");
-            # a parsed From header with a non-ASCII name is encoded as a whole (issue #6066)
-            if (i.out.isDataPrintableAscii()) {
-                assertEq(ser, parsed.serializeRaw(), i."in");
-            }
+            # a parsed From header is written again as it was parsed, with its encoded words (issue #6066)
+            assertEq(ser, parsed.serializeRaw(), i."in");
         }
 
         # a line break in the name cannot end the header line: it is white space, in or outside quotes
@@ -1453,7 +1456,8 @@ lorem ipsum\r
             Message parsed(sprintf("From: %s\r\nTo: to@example.com\r\nSubject: s\r\n\r\nbody\r\n", from));
             string decoded = "Jörg <j@x.com>, Müller, Jörg <m@x.com>";
             assertEq(decoded, parsed.getSender());
-            assertEq(Message::doHeaderValue("From", decoded), getFromLine(parsed.getHeaderString()));
+            # written as it was parsed, so that the comma in the encoded name does not separate mailboxes (#6066)
+            assertEq("From: " + from + "\r\n", getFromLine(parsed.getHeaderString()));
             Message reparsed(parsed.serializeRaw());
             assertEq(decoded, reparsed.getSender());
             assertEq("m@x.com", reparsed.getFrom());
@@ -1477,9 +1481,195 @@ lorem ipsum\r
             Message parsed(msg.serializeRaw());
             assertEq("j@example.com", parsed.getFrom(), name);
             assertEq(msg.getSender(), parsed.getSender(), name);
-            # the From header of the parsed message is written as it was parsed
-            assertEq(Message::doHeaderValue("From", parsed.getSender()), getFromLine(parsed.getHeaderString()), name);
+            # the From header of the parsed message is written as it was parsed, with its encoded words (#6066)
+            string from_line = getFromLine(msg.getHeaderString());
+            from_line =~ s/\r\n[ \t]+/ /g;
+            assertEq(from_line, getFromLine(parsed.getHeaderString()), name);
             assertEq(msg.getSender(), (new Message(parsed.serializeRaw())).getSender(), name);
         }
+    }
+    #! returns the header lines with the given name, with their folded lines
+    private static list<string> getHeaderLines(string hdr, string name) {
+        list<string> l = (hdr =~ x/^([^ \t\r\n:]+: .*?\r\n)(?![ \t])/gms) ?? ();
+        return cast<list<string>>(select l, $1.lwr().substr(0, name.size() + 2) == name.lwr() + ": ");
+    }
+
+    # issue #6066: email addresses are kept whole and can have non-ASCII characters
+    testEmailAddresses() {
+        # every atext character of RFC 5322 is part of the local part
+        foreach string addr in ("J.O'B@x.com", "a+tag@x.com", "a=b@x.com", "x!#$%&'*+/=?^_`{|}~-y@x.com",
+                "first.last@sub.example.com", "\"John Doe\"@x.com", "\"a\\\"b\"@x.com", "user@[192.0.2.1]",
+                "jörg@müller.de", "用户@例子.广告", "a@b.com.") {
+            assertEq(addr, Message::getEmailAddress(addr), addr);
+            assertEq(addr, Message::getEmailAddress("Name <" + addr + ">"), addr);
+            assertEq(addr, Message::getEmailAddress("\"Doe, John\" <" + addr + "> "), addr);
+            assertTrue(Message::checkEmailAddress(addr), addr);
+        }
+        assertEq("J.O'B@x.com", Message::getEmailAddress("John <J.O'B@x.com>"));
+        # the address alone, without the text before it
+        assertEq("john@x.com", Message::getEmailAddress("John Doe john@x.com"));
+        assertEq("j@x.com", Message::getEmailAddress("j@x.com (John)"));
+        assertEq("j@x.com", Message::getEmailAddress("j@x.com, other@x.com"));
+        # an address with a control character is not an address
+        assertNothing(Message::getEmailAddress("<j\x01@x.com>"));
+        assertEq("j@x.com", Message::getEmailAddress("j@x.com\r\nBcc: v@x.com"));
+        assertNothing(Message::getEmailAddress("\"a\r\nb\"@x.com"));
+        # an address in an encoded word is not an address
+        assertNothing(Message::getEmailAddress("=?UTF-8?Q?=3Cj@x.com=3E?="));
+        assertNothing(Message::getEmailAddress("no address"));
+
+        # the recipients and the sender are the whole addresses
+        Message msg("Jörg <jörg@müller.de>", Subject);
+        assertEq("jörg@müller.de", msg.getFrom());
+        assertEq("Jörg <jörg@müller.de>", msg.getSender());
+        msg.addTO("John <J.O'B@x.com>");
+        msg.addCC("a+tag@x.com");
+        msg.addBCC("\"Doe, Jane\" <\"jane doe\"@x.com>");
+        assertEq(("J.O'B@x.com", "a+tag@x.com", "\"jane doe\"@x.com"), msg.getRecipients());
+        assertEq(("John <J.O'B@x.com>",), msg.getTO());
+    }
+
+    # issue #6066: only the display names of the To, CC and BCC headers are encoded, never the addresses
+    testAddressHeaders() {
+        Message msg(Sender, Subject);
+        msg.addTO("Jöhn <j@x.com>");
+        msg.addTO("Jöhn <j@x.com>, \"Doe, Jörg\" <d@x.com>, plain@x.com, Ann <a@x.com>");
+        msg.addCC("\"Doe, Jörg\" <d@x.com>");
+        msg.addCC("Doe, Jörg <d@x.com>");
+        msg.addBCC("Müller <m@x.com>");
+        # an ASCII name with an internationalized address; the address is never encoded
+        msg.addTO("John <jörg@müller.de>");
+        msg.addTO("jörg@müller.de");
+        msg.setBody("body");
+        string hdr = msg.getHeaderString();
+        string jb = mime_encode_header_word_b("Jöhn");
+        string db = mime_encode_header_word_b("Doe, Jörg");
+        assertEq((
+            sprintf("To: %s <j@x.com>\r\n", jb),
+            sprintf("To: %s <j@x.com>, %s <d@x.com>, plain@x.com, Ann <a@x.com>\r\n", jb, db),
+            "To: John <jörg@müller.de>\r\n",
+            "To: jörg@müller.de\r\n",
+        ), getHeaderLines(hdr, "To"));
+        assertEq((sprintf("CC: %s <d@x.com>\r\n", db), sprintf("CC: %s <d@x.com>\r\n", db)),
+            getHeaderLines(hdr, "CC"));
+        assertEq((sprintf("BCC: %s <m@x.com>\r\n", mime_encode_header_word_b("Müller")),), getHeaderLines(hdr, "BCC"));
+
+        # the message is parsed with the same recipients
+        Message parsed(msg.serializeRaw());
+        assertEq(("Jöhn <j@x.com>", "Jöhn <j@x.com>, Doe, Jörg <d@x.com>, plain@x.com, Ann <a@x.com>",
+            "John <jörg@müller.de>", "jörg@müller.de"), parsed.getTO());
+        assertEq(("Doe, Jörg <d@x.com>", "Doe, Jörg <d@x.com>"), parsed.getCC());
+        assertEq(msg.getRecipients(), parsed.getRecipients());
+        assertEq(("j@x.com", "a@x.com", "jörg@müller.de", "jörg@müller.de", "d@x.com", "d@x.com", "m@x.com"),
+            parsed.getRecipients());
+        # and written again as it was parsed
+        assertEq(msg.serializeRaw(), parsed.serializeRaw());
+
+        # a value that is not a list of mailboxes is encoded as a whole, as before
+        msg = new Message(Sender, Subject);
+        msg.addTO("Jöhn j@x.com");
+        msg.setBody("body");
+        assertEq((Message::doHeaderValue("To", "Jöhn j@x.com"),), getHeaderLines(msg.getHeaderString(), "To"));
+
+        # a line break in a display name or after an address cannot end the header line
+        foreach string rcpt in ("Jöhn\r\nBcc: victim@x.com <j@x.com>", "\"Jöhn\r\nBcc: victim@x.com\" <j@x.com>",
+                "j@x.com\r\nBcc: victim@x.com", "Jöhn <j@x.com>\r\nBcc: victim@x.com",
+                "Jöhn <j@x.com>, \"a\r\nBcc: victim@x.com\" <a@x.com>") {
+            msg = new Message(Sender, Subject);
+            msg.addTO(rcpt);
+            msg.setBody("body");
+            hdr = msg.getHeaderString();
+            assertNRegex("\r\nBcc:", hdr, rcpt);
+            assertEq(1, getHeaderLines(hdr, "To").size(), rcpt);
+            assertNRegex("victim", msg.getRecipients().join(","), rcpt);
+            assertThrows("HEADER-ERROR", \msg.getHeaderString(), ("\r\n", False), rcpt);
+        }
+    }
+
+    # issue #6066: the addresses of a parsed message are taken from the raw headers, and its address headers are
+    # written again as they were parsed, or with only the display names encoded
+    testParsedAddresses() {
+        # an address in an encoded word is not the sender or a recipient
+        string raw = "From: evil@y.com =?UTF-8?Q?=3Cj@x.com=3E?=\r\n"
+            "To: other@y.com =?UTF-8?Q?=3Ct@x.com=3E?=\r\n"
+            "CC: =?UTF-8?Q?c@x.com?=\r\n"
+            "Subject: s\r\n\r\nbody\r\n";
+        Message parsed(raw);
+        assertEq("evil@y.com", parsed.getFrom());
+        assertEq("evil@y.com <j@x.com>", parsed.getSender());
+        assertEq(("other@y.com",), parsed.getRecipients());
+        assertEq(("other@y.com <t@x.com>",), parsed.getTO());
+        assertEq(raw, parsed.serializeRaw());
+
+        # a raw non-ASCII From and To are written with only the display names encoded
+        raw = "From: Jöhn <j@x.com>\r\n"
+            "To: Jöhn <j@x.com>, \"Müller, Jörg\" <m@x.com>, plain@x.com\r\n"
+            "CC: =?UTF-8?Q?J=C3=B6rg?= Müller <jm@x.com>\r\n"
+            "Subject: s\r\n\r\nbody\r\n";
+        parsed = new Message(raw);
+        assertEq("j@x.com", parsed.getFrom());
+        # the address of a header with a list of mailboxes is its first address, as before
+        assertEq(("j@x.com", "jm@x.com"), parsed.getRecipients());
+        string hdr = parsed.getHeaderString();
+        string jb = mime_encode_header_word_b("Jöhn");
+        assertEq(sprintf("From: %s <j@x.com>\r\n", jb), getFromLine(hdr));
+        assertEq((sprintf("To: %s <j@x.com>, %s <m@x.com>, plain@x.com\r\n", jb,
+            mime_encode_header_word_b("Müller, Jörg")),), getHeaderLines(hdr, "To"));
+        assertEq((sprintf("CC: %s <jm@x.com>\r\n", mime_encode_header_word_b("Jörg Müller")),),
+            getHeaderLines(hdr, "CC"));
+        Message reparsed(parsed.serializeRaw());
+        assertEq(parsed.getSender(), reparsed.getSender());
+        assertEq(parsed.getCC(), reparsed.getCC());
+        assertEq(parsed.getRecipients(), reparsed.getRecipients());
+        # the headers written with encoded display names are written again as they were parsed
+        assertEq(parsed.getHeaderString(), reparsed.getHeaderString());
+
+        # a recipient added to a parsed message
+        parsed.addTO("Ann <a@x.com>");
+        assertEq(("j@x.com", "a@x.com", "jm@x.com"), parsed.getRecipients());
+        assertEq("To: Ann <a@x.com>\r\n", getHeaderLines(parsed.getHeaderString(), "To")[1]);
+    }
+
+    # issue #6066: encoded words are folded with the line ending of the header, and a header value that is not
+    # encoded cannot have control characters
+    testHeaderEncoding() {
+        string long = strmul("Jörg Müller ", 10, 1);
+        int folds = (mime_encode_header_word_b(long) =~ x/(\r\n )/g).size();
+        assertGt(0, folds);
+        assertEq(folds, (mime_encode_header_word_b(long, "\n") =~ x/(\n )/g).size());
+        assertNRegex("\r", mime_encode_header_word_b(long, "\n"));
+        assertRegex("\\?=\n =\\?UTF-8\\?B\\?", mime_encode_header_word_b(long, "\n"));
+        assertNRegex("\r", mime_encode_header_word_q(long, "\n"));
+        assertRegex("\\?=\n =\\?UTF-8\\?Q\\?", mime_encode_header_word_q(long, "\n"));
+        assertEq(long, mime_decode_header(mime_encode_header_word_q(long, "\n")));
+        assertNRegex("\r", Message::doHeaderValue("Subject", long, "\n"));
+
+        Message msg(long + " <j@x.com>", long);
+        msg.addTO(long + " <t@x.com>");
+        msg.addCC(long + " t@x.com");
+        msg.setBody("body");
+        string hdr = msg.getHeaderString("\n");
+        assertNRegex("\r", hdr);
+        # every line of the header string is folded with the line ending
+        assertRegex("\n =\\?UTF-8\\?B\\?", hdr);
+        assertRegex("\n =\\?UTF-8\\?Q\\?", hdr);
+        hdr = msg.getHeaderString();
+        assertEq(hdr.split("\r\n").size(), (hdr.split("\n")).size());
+
+        # a value that is not encoded cannot have a control character other than horizontal tab
+        foreach string c in ("\x01", "\x08", "\x0b", "\x0c", "\x1b", "\x7f") {
+            assertThrows("HEADER-ERROR", "message header \"X-Test\" value .* contains a control character",
+                \Message::doHeaderValue(), ("X-Test", "a" + c + "b", "\r\n", False), sprintf("%y", c));
+            # an encoded value has the character encoded
+            assertEq(Message::doHeaderValue("X-Test", "a" + c + "b"),
+                sprintf("X-Test: %s\r\n", mime_encode_header_word_q("a" + c + "b")));
+            assertNRegex(c, Message::doHeaderValue("X-Test", "a" + c + "b"));
+        }
+        assertEq("X-Test: a\tb\r\n", Message::doHeaderValue("X-Test", "a\tb", "\r\n", False));
+        msg = new Message(Sender, "a\x01b");
+        msg.addTO(To);
+        msg.setBody("body");
+        assertThrows("HEADER-ERROR", \msg.getHeaderString(), ("\r\n", False));
+        assertNRegex("\x01", msg.getHeaderString());
     }
 }
