@@ -938,10 +938,16 @@ public:
     */
     DLLLOCAL void getAsString(QoreString& str, bool yaml = false) const;
 
-    DLLLOCAL void unaryMinus() {
-        epoch = -epoch;
-        us = -us;
-    }
+    //! negates the epoch offset and its microseconds (qore#6103)
+    /** @return QDO_NONE, or QDO_ABSOLUTE if the result is out of range (the range of the epoch offsets is not
+        symmetric), in which case the value is saturated
+    */
+    DLLLOCAL int unaryMinus();
+
+    //! adds the epoch offset of another absolute date; the result is in the current time zone (qore#6103)
+    /** @return QDO_NONE, or QDO_ABSOLUTE if the result is out of range, in which case the value is saturated
+    */
+    DLLLOCAL int addAbsolute(const qore_absolute_time& dt);
 
     DLLLOCAL const AbstractQoreZoneInfo* getZone() const {
         return zone;
@@ -956,6 +962,11 @@ public:
 protected:
     //! sets the value to the last (positive) or first (negative) date that it can hold; returns QDO_ABSOLUTE
     DLLLOCAL int saturate(bool positive);
+
+    //! sets the epoch offset and microseconds from microseconds since the epoch, checking the range
+    /** @return QDO_NONE, or QDO_ABSOLUTE if the result is out of range, in which case the value is saturated
+    */
+    DLLLOCAL int setEpochMicroseconds(__int128 total_us);
 
     //! adds (or subtracts, if \a neg is true) a relative date/time value; see add()
     template <bool neg>
@@ -1227,45 +1238,10 @@ public:
         return us;
     }
 
-    DLLLOCAL int compare(const qore_relative_time& rt) const {
-        // compare normalized values
-        qore_relative_time l;
-        l.set(year, month, day, hour, minute, second, us);
-        l.normalize(true);
-        qore_relative_time r;
-        r.set(rt.year, rt.month, rt.day, rt.hour, rt.minute, rt.second, rt.us);
-        r.normalize(true);
-
-        if (l.year > r.year)
-            return 1;
-        if (l.year < r.year)
-            return -1;
-        if (l.month > r.month)
-            return 1;
-        if (l.month < r.month)
-            return -1;
-        if (l.day > r.day)
-            return 1;
-        if (l.day < r.day)
-            return -1;
-        if (l.hour > r.hour)
-            return 1;
-        if (l.hour < r.hour)
-            return -1;
-        if (l.minute > r.minute)
-            return 1;
-        if (l.minute < r.minute)
-            return -1;
-        if (l.second > r.second)
-            return 1;
-        if (l.second < r.second)
-            return -1;
-        if (l.us > r.us)
-            return 1;
-        if (l.us < r.us)
-            return -1;
-        return 0;
-    }
+    //! compares the durations: the values are normalized as for a comparison (a day is 24 hours, a year 365 days
+    //! and a month 31 days) in 64 bits, so that no carry can overflow (qore#6103), and compared component by
+    //! component
+    DLLLOCAL int compare(const qore_relative_time& rt) const;
 
     //! negates the value
     /** @return QDO_NONE, or the qore_date_overflow code of the first component whose negative does not fit (it is
@@ -1699,13 +1675,8 @@ public:
     DLLLOCAL int add(const qore_date_private& dt, ExceptionSink* xsink) {
         int code;
         if (!relative) {
-            if (dt.relative) {
-                code = d.abs.add(dt.d.rel);
-            } else {
-                setDate(getEpochSecondsUTC() + dt.d.abs.getEpochSecondsUTC(), d.abs.getMicrosecond()
-                    + dt.d.abs.getMicrosecond());
-                return 0;
-            }
+            // the sum of two absolute dates is the sum of their epoch offsets
+            code = dt.relative ? d.abs.add(dt.d.rel) : d.abs.addAbsolute(dt.d.abs);
         } else {
             assert(dt.relative);
             code = d.rel.add(dt.d.rel);
@@ -1723,13 +1694,9 @@ public:
         @return 0 if the result is in range, -1 if not (the value is then saturated)
     */
     DLLLOCAL int unaryMinus(ExceptionSink* xsink) {
-        if (relative) {
-            int code = d.rel.unaryMinus();
-            if (__builtin_expect(code != QDO_NONE, 0)) {
-                return raiseOverflow(code, "relative date negation", xsink);
-            }
-        } else {
-            d.abs.unaryMinus();
+        int code = relative ? d.rel.unaryMinus() : d.abs.unaryMinus();
+        if (__builtin_expect(code != QDO_NONE, 0)) {
+            return raiseOverflow(code, relative ? "relative date negation" : "date negation", xsink);
         }
         return 0;
     }

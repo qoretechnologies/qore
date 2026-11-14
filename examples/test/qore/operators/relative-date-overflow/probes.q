@@ -40,6 +40,10 @@ list<string> sub probes() {
     float bigf = 9223372036855.0;
     float hugef = 1e30;
     float nan = float("nan");
+    date big2e9 = date("2000000000-01-01T00:00:00Z");
+    date neg15e8 = date("-1500000000-01-01T00:00:00Z");
+    date pos15e8 = date("1500000000-01-01T00:00:00Z");
+    date minyear = date("-2147483647-01-01T00:00:00Z");
     float inf = float("inf");
     number bign = 2n;
     list<string> l;
@@ -66,6 +70,20 @@ list<string> sub probes() {
     # absolute - absolute
     l += "abs-abs: " + try_value(date sub () { return big_abs - first_abs; });
     l += "abs-abs in range: " + try_value(date sub () { return 2026-01-01T00:00:00Z - first_abs; });
+    # absolute + absolute: the sum of the epoch offsets
+    l += "abs+abs: " + try_value(date sub () { return big2e9 + big2e9; });
+    l += "abs+abs negative: " + try_value(date sub () { return -neg15e8 + pos15e8; });
+    l += "abs+abs int64: " + try_value(date sub () { return localtime(maxint) + localtime(10); });
+    # in variables: the sum is in the current time zone, which a sum folded at parse time would take from the
+    # compiler (qcc)
+    date day2 = 1970-01-02T00:00:00Z;
+    date hour1 = 1970-01-01T01:00:00.5Z;
+    l += "abs+abs in range: " + try_value(date sub () { return day2 + hour1; });
+    # an absolute date out of range plus days
+    l += "abs out of range+days: " + try_value(date sub () { return localtime(maxint) + days(1); });
+    # unary minus of an absolute date: the range of the epoch offsets is not symmetric
+    l += "-abs smallest year: " + try_value(date sub () { return -minyear; });
+    l += "-abs in range: " + try_value(date sub () { return -1970-01-01T00:00:01.500000Z; });
     # unary minus
     l += "-smallest hours: " + try_value(date sub () { return -minh; });
     l += "-largest hours: " + try_value(date sub () { return -maxh; });
@@ -101,6 +119,9 @@ list<string> sub probes() {
     l += "durationMicroseconds(): " + try_value(int sub () { return maxy.durationMicroseconds(); });
     l += "get_duration_microseconds() in range: "
         + try_value(int sub () { return get_duration_microseconds(maxh); });
+    # the comparison of relative dates near the limits
+    l += "compare near limits: " + try_value(bool sub () { return (days(2147483647) + hours(48)) > years(5883516); });
+    l += "compare equal: " + try_value(bool sub () { return days(365) == years(1); });
     # literals
     l += "literal h: " + try_parse("2147483648h");
     l += "literal Y: " + try_parse("2147483648Y");

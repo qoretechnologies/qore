@@ -1027,6 +1027,32 @@ int qore_absolute_time::saturate(bool positive) {
     return QDO_ABSOLUTE;
 }
 
+int qore_absolute_time::setEpochMicroseconds(__int128 total_us) {
+    __int128 n_epoch = total_us / 1000000;
+    int n_us = static_cast<int>(total_us % 1000000);
+    if (n_us < 0) {
+        n_us += 1000000;
+        --n_epoch;
+    }
+    if (__builtin_expect(n_epoch > QORE_DATE_MAX_EPOCH || n_epoch < QORE_DATE_MIN_EPOCH, 0)) {
+        return saturate(n_epoch > 0);
+    }
+    epoch = static_cast<int64>(n_epoch);
+    us = static_cast<unsigned>(n_us);
+    return QDO_NONE;
+}
+
+int qore_absolute_time::addAbsolute(const qore_absolute_time& dt) {
+    // the sum of the epoch offsets, in the current time zone, as before (qore#6103)
+    zone = currentTZ();
+    return setEpochMicroseconds((static_cast<__int128>(epoch) + dt.epoch) * 1000000 + us + dt.us);
+}
+
+int qore_absolute_time::unaryMinus() {
+    // the negative of the epoch offset with its microseconds; the range of epoch offsets is not symmetric
+    return setEpochMicroseconds(-(static_cast<__int128>(epoch) * 1000000 + us));
+}
+
 int qore_absolute_time::addSecondsTo(int64 secs, int n_us) {
     // in 128 bits, so that no sum can overflow
     __int128 total_us = static_cast<__int128>(us) + n_us;
@@ -1059,6 +1085,11 @@ int qore_absolute_time::addRelative(const qore_relative_time& dt) {
 
     // break down date and do day, month, and year math
     if (dt.year || dt.month || dt.day) {
+        // a date out of range (ex: localtime(9223372036854775807)) cannot be broken down: the epoch plus the UTC
+        // offset could overflow
+        if (__builtin_expect(epoch > QORE_DATE_MAX_EPOCH || epoch < QORE_DATE_MIN_EPOCH, 0)) {
+            return saturate(epoch > 0);
+        }
         // get the broken-down date values for the date in local time
         qore_simple_tm2 tm(epoch + AbstractQoreZoneInfo::getUTCOffset(zone, epoch), us);
 
@@ -1127,9 +1158,10 @@ int qore_absolute_time::addRelative(const qore_relative_time& dt) {
     usecs += dus;
 
     // add time component; the offset fits in 64 bits, as the components are ints, but the epoch can be any int64
-    if (__builtin_expect(__builtin_add_overflow(epoch, SECS_PER_HOUR * dhour + SECS_PER_MINUTE * dminute + dsecond,
-            &epoch), 0)) {
-        return saturate(dhour > 0);
+    const int64 delta = SECS_PER_HOUR * dhour + SECS_PER_MINUTE * dminute + dsecond;
+    if (__builtin_expect(__builtin_add_overflow(epoch, delta, &epoch), 0)) {
+        // the sum overflows in the direction of the offset
+        return saturate(delta > 0);
     }
 
     // normalize epoch and microseconds
@@ -1195,9 +1227,8 @@ static void qore_rel_normalize_wide(int64& bigger, int64& smaller, int64 ratio) 
     }
 }
 
-int qore_relative_time::setWide(int64 n_year, int64 n_month, int64 n_day, int64 n_hour, int64 n_minute,
-        int64 n_second, int64 n_us) {
-    // the steps of normalize() in 64 bits
+// the steps of normalize() for the hours and the smaller units, in 64 bits
+static void qore_rel_normalize_time_wide(int64& n_hour, int64& n_minute, int64& n_second, int64& n_us) {
     qore_rel_normalize_wide(n_second, n_us, 1000000);
     qore_rel_normalize_wide(n_minute, n_second, 60);
     qore_rel_normalize_wide(n_hour, n_minute, 60);
@@ -1216,7 +1247,46 @@ int qore_relative_time::setWide(int64 n_year, int64 n_month, int64 n_day, int64 
     time_us %= MICROSECS_PER_MINUTE;
     n_second = time_us / MICROSECS_PER_SEC;
     n_us = time_us % MICROSECS_PER_SEC;
+}
 
+// the components of a relative date normalized for a comparison, as normalize() and then normalize(true) normalize
+// them, in 64 bits
+static void qore_rel_compare_key(const qore_simple_tm& t, int64* k) {
+    int64 y = t.year, mo = t.month, d = t.day, h = t.hour, mi = t.minute, s = t.second, u = t.us;
+    // normalize()
+    qore_rel_normalize_time_wide(h, mi, s, u);
+    qore_rel_normalize_wide(y, mo, 12);
+    // normalize(true)
+    qore_rel_normalize_time_wide(h, mi, s, u);
+    qore_rel_normalize_wide(d, h, 24);
+    qore_rel_normalize_wide(y, d, 365);
+    qore_rel_normalize_wide(mo, d, 31);
+    qore_rel_normalize_wide(y, mo, 12);
+    k[0] = y;
+    k[1] = mo;
+    k[2] = d;
+    k[3] = h;
+    k[4] = mi;
+    k[5] = s;
+    k[6] = u;
+}
+
+int qore_relative_time::compare(const qore_relative_time& rt) const {
+    int64 l[7], r[7];
+    qore_rel_compare_key(*this, l);
+    qore_rel_compare_key(rt, r);
+    for (int i = 0; i < 7; ++i) {
+        if (l[i] != r[i]) {
+            return l[i] > r[i] ? 1 : -1;
+        }
+    }
+    return 0;
+}
+
+int qore_relative_time::setWide(int64 n_year, int64 n_month, int64 n_day, int64 n_hour, int64 n_minute,
+        int64 n_second, int64 n_us) {
+    // the steps of normalize() in 64 bits
+    qore_rel_normalize_time_wide(n_hour, n_minute, n_second, n_us);
     qore_rel_normalize_wide(n_year, n_month, 12);
 
     int code = QDO_NONE;
