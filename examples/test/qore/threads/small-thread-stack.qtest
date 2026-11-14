@@ -31,15 +31,53 @@ public class SmallThreadStackTest inherits QUnit::Test {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
+    #! Returns the build tree of the qore under test, if any: that of LIBQORE_BINARY (set by run_tests.sh), else that
+    #! of the qore binary (QORE_BINARY or QORE_ARGV[0], a bare name found in the PATH, symbolic links resolved)
+    private static *string findBuildTree() {
+        list<string> candidates;
+        if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
+            push candidates, dirname(realpath(ENV.LIBQORE_BINARY));
+        }
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        if (qore !~ /\//) {
+            *string found;
+            foreach string dir in (ENV.PATH.split(":")) {
+                if (dir && is_executable(dir + "/" + qore)) {
+                    found = dir + "/" + qore;
+                    break;
+                }
+            }
+            qore = found ?? "";
+        }
+        if (qore && is_file(qore)) {
+            push candidates, dirname(realpath(qore));
+        }
+        foreach string dir in (candidates) {
+            if ((is_file(dir + "/libqore.so") || is_file(dir + "/libqore.dylib"))
+                    && is_file(dir + "/include/qore/qore-version.h")) {
+                return dir;
+            }
+        }
+    }
+
     private check() {
         if (!Option::HAVE_STACK_GUARD) {
             testSkip("runtime built without native stack protection");
         }
         string root = realpath(get_script_dir() + "/../../../..");
-        # the build tree of the qore under test (run_tests.sh sets LIBQORE_BINARY), whatever its directory's name
-        string libdir = realpath(ENV.QORE_LIBDIR ?? (ENV.LIBQORE_BINARY
-            ? dirname(ENV.LIBQORE_BINARY)
-            : dirname(ENV.QORE_BINARY ?? QORE_ARGV[0])));
+        string libdir;
+        if (ENV.QORE_LIBDIR) {
+            # as in run_tests.sh, QORE_LIBDIR names the build tree
+            libdir = realpath(ENV.QORE_LIBDIR);
+        } else {
+            *string dir = findBuildTree();
+            if (!dir) {
+                testSkip("the qore under test is not in a build tree (the fixture is compiled with the headers of "
+                    "this checkout and of its build tree): set QORE_LIBDIR to the build tree, or run the test with "
+                    "the qore of a build tree");
+            }
+            libdir = dir;
+        }
         TmpDir dir("qore-small-thread-stack-");
         string exe = dir.path + "/small-thread-stack";
         list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g", "-O2", "-I" + root + "/include",
