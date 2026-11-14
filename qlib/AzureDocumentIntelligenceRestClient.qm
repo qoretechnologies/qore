@@ -370,7 +370,8 @@ public class AzureDocumentIntelligenceRestClientIo
 
         string poll_path = servicePath(getUrl(), op_location);
         int retry_delay = retryAfter(submit_resp.headers."retry-after");
-        code<nothing(timeout)> wait = sleeper ?? (nothing sub (timeout delay) { Qore::usleep(delay); });
+        # a timeout is in milliseconds, and usleep() takes microseconds
+        code<nothing(timeout)> wait = sleeper ?? (nothing sub (timeout delay) { Qore::usleep(int(delay) * 1000); });
         # Every call owns its poller and callbacks. Copies and concurrent jobs never share job state.
         QoreAsyncJobUtils::AsyncJobPoller poller(
             hash<auto> sub (string job_id) {
