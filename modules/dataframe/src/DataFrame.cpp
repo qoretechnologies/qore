@@ -139,8 +139,31 @@ static bool fastRecordValueCompatible(ColumnType type, QoreValue value) {
             return value.getType() == NT_FLOAT || value.getType() == NT_NUMBER || value.getType() == NT_INT;
         case ColumnType::INT64:
             return value.getType() == NT_INT;
+        // a string column stores a scalar value as its string form; any other value (a list, a hash, a char) makes
+        // a column that holds any value, as mergeRecordColumnType() infers it (qore#6097)
         case ColumnType::STRING:
-            return true;
+            // the scalar values are told with no call into the library, as QoreValue::getType() costs more than
+            // storing a short string: a value held in the value itself (a short string, an int, a float, a bool),
+            // and a value in a node
+            if (value.isPointer()) {
+                qore_type_t t = value.getPtr()->getType();
+                return t == NT_STRING || t == NT_NUMBER || t == NT_DATE || t == NT_INT || t == NT_FLOAT
+                    || t == NT_BOOLEAN;
+            }
+            if (value.isShortString() || value.isInt() || value.isFloat() || value.isBool()) {
+                return true;
+            }
+            switch (value.getType()) {
+                case NT_STRING:
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_BOOLEAN:
+                case NT_DATE:
+                    return true;
+                default:
+                    return false;
+            }
         case ColumnType::BOOL:
             return value.getType() == NT_BOOLEAN;
         case ColumnType::DATE:

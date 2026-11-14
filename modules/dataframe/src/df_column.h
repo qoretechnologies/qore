@@ -66,8 +66,19 @@ static inline std::string dataFrameStdString(const QoreString* str) {
 DLLLOCAL int dataFrameConvertUtf8String(QoreValue v, std::string& out, ExceptionSink* xsink);
 
 static inline int dataFrameUtf8String(QoreValue v, std::string& out, ExceptionSink* xsink) {
-    QoreStringDataHelper str(v);
-    if (str && str.getEncoding() == QCS_UTF8) {
+    // the type of a value in a node is read from the node, with no call to QoreValue::getType(); a short string,
+    // held in the value itself, is always in UTF-8
+    if (v.isPointer()) {
+        const AbstractQoreNode* node = v.getPtr();
+        if (node->getType() == NT_STRING) {
+            const QoreStringNode* str = static_cast<const QoreStringNode*>(node);
+            if (str->getEncoding() == QCS_UTF8) {
+                out.assign(str->c_str(), str->size());
+                return 0;
+            }
+        }
+    } else if (v.isShortString()) {
+        QoreStringDataHelper str(v);
         out.assign(str.c_str(), str.size());
         return 0;
     }

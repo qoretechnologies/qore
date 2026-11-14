@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-mixed-inference.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameMixedInferenceTest
+
+#! A column of a string and a value that is not a scalar (a list, a hash, a char, a binary value) holds any value,
+#! whether the DataFrame is built from records or from a column hash, and keeps the values (qore#6097)
+class DataFrameMixedInferenceTest inherits QUnit::Test {
+    constructor() : Test("DataFrameMixedInferenceTest", "1.0", \ARGV) {
+        addTestCase("records and column hash", \mixedTest());
+        set_return_value(main());
+    }
+
+    mixedTest() {
+        # the values of each column, and the type of the column
+        list<list<auto>> columns = (
+            (("a", (1, 2)), "auto"),
+            (("a", c'x'), "auto"),
+            (("a", {"k": 1}), "auto"),
+            (("a", <61>), "auto"),
+            (("a", NOTHING, (1,)), "auto"),
+            # a string with scalar values makes a string column
+            (("a", 1), "string"),
+            ((1, "a"), "string"),
+            (("a", 1.5), "string"),
+            (("a", True), "string"),
+            (("a", "b"), "string"),
+        );
+        foreach list<auto> column in (columns) {
+            list<auto> values = column[0];
+            string dtype = column[1];
+            string label = sprintf("%y", values);
+            DataFrame::DataFrame by_hash({"v": values});
+            DataFrame::DataFrame by_records(map ("v": $1), values);
+            assertEq(dtype, by_hash.dtypes()[0], label + ": column hash type");
+            assertEq(dtype, by_records.dtypes()[0], label + ": records type");
+            assertEq(by_hash.getColumn("v"), by_records.getColumn("v"), label + ": the same values");
+            if (dtype == "auto") {
+                assertEq(values, by_records.getColumn("v"), label + ": the values are kept");
+            }
+        }
+    }
+}
