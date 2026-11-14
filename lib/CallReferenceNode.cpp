@@ -738,7 +738,7 @@ QoreValue RunTimeResolvedMethodReferenceNode::dispatchValue(const QoreListNode* 
     //printd(5, "RunTimeResolvedMethodReferenceNode::execValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
     // issue #2145: do not set the call reference class context before arguments are evaluted
     // NOTE: check this for race conditions
-    if (checkObject(xsink)) {
+    if (checkCallObject(xsink)) {
         return QoreValue();
     }
     // a user method runs in the Program that defines its class; the object's Program is used only when that
@@ -763,7 +763,7 @@ QoreValue RunTimeResolvedMethodReferenceNode::dispatchNamed(const QoreListNode* 
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (checkObject(xsink)) {
+    if (checkCallObject(xsink)) {
         return QoreValue();
     }
     // the Program of the call as for a call with positional arguments (see dispatchValue())
@@ -787,7 +787,7 @@ QoreValue RunTimeResolvedMethodReferenceNode::dispatchLexicalValue(const QoreLis
     //printd(5, "RunTimeResolvedMethodReferenceNode::dispatchValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
     // issue #2145: do not set the call reference class context before arguments are evaluted
     // NOTE: check this for race conditions
-    if (checkObject(xsink)) {
+    if (checkCallObject(xsink)) {
         return QoreValue();
     }
     // a user method runs in the Program that defines its class; the object's Program is used only when that
@@ -854,7 +854,7 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchValue(const QoreListNode* ar
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (checkObject(xsink)) {
+    if (checkCallObject(xsink)) {
         return QoreValue();
     }
     // issue #2145: set class context after evaluating arguments
@@ -876,7 +876,7 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* ar
     RuntimeConfig& rc = rc_get_current_ref();
     // the call runs with the permissions of the context that created the reference
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (checkObject(xsink)) {
+    if (checkCallObject(xsink)) {
         return QoreValue();
     }
     // the Program of the call as for a call with positional arguments (see dispatchValue())
@@ -914,7 +914,7 @@ QoreValue RunTimeObjectMethodReferenceNode::dispatchLexicalValue(const QoreListN
     RuntimeConfig& rc = rc_get_current_ref();
     // Compatibility semantics do not change the permissions of the reference's creator.
     QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
-    if (checkObject(xsink)) {
+    if (checkCallObject(xsink)) {
         return QoreValue();
     }
     // issue #2145: set class context after evaluating arguments
@@ -942,6 +942,30 @@ int RunTimeResolvedMethodReferenceNode::checkObject(ExceptionSink* xsink) const 
     // the status is read inline, without the exported call of QoreObject::isValid() (#5692)
     if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
         qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been deleted");
+        return -1;
+    }
+    return 0;
+}
+
+int RunTimeResolvedMethodReferenceNode::checkCallObject(ExceptionSink* xsink) const {
+    // the status is read inline, without the exported call of QoreObject::isValid() (#5692)
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
+        // the method of the reference, as the call names it (qore_object_private::startCall())
+        qore_object_private::get(*obj)->raiseDeletedCall(qore_class_private::get(*method->getClass()),
+            method->getName(), xsink);
+        return -1;
+    }
+    return 0;
+}
+
+int RunTimeObjectMethodReferenceNode::checkCallObject(ExceptionSink* xsink) const {
+    // the status is read inline, without the exported call of QoreObject::isValid() (#5692)
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
+        // the method found by name, as the call names it (qore_object_private::startCall()); the object's class if
+        // there is none
+        const QoreMethod* m = findMethod();
+        qore_object_private::get(*obj)->raiseDeletedCall(m ? qore_class_private::get(*m->getClass()) : nullptr,
+            method.c_str(), xsink);
         return -1;
     }
     return 0;

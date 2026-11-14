@@ -476,6 +476,12 @@ public:
     */
     DLLLOCAL int checkObject(ExceptionSink* xsink) const;
 
+    //! Raises the exception of a call of the method for an object that has been deleted, as the call raises it when
+    //! the arguments have deleted the object: naming the class of the method and the method (issue #6083)
+    /** @return -1 if the exception was raised, 0 if not
+    */
+    DLLLOCAL int checkCallObject(ExceptionSink* xsink) const;
+
     DLLLOCAL RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
             const char* n_method);
 
@@ -528,6 +534,12 @@ public:
     /** @return -1 if the exception was raised, 0 if not
     */
     DLLLOCAL int checkObject(ExceptionSink* xsink) const;
+
+    //! Raises the exception of a call of the method for an object that has been deleted, as the call raises it when
+    //! the arguments have deleted the object: naming the class of the method and the method (issue #6083)
+    /** @return -1 if the exception was raised, 0 if not
+    */
+    DLLLOCAL int checkCallObject(ExceptionSink* xsink) const;
 
     //! creates the reference with the class context of the creating code
     DLLLOCAL RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
