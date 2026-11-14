@@ -12571,7 +12571,8 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                 return -1;
             }
 
-            sig->lv[i]->instantiate(val);
+            // Filtering used the callee receiver before its runtime context is installed.
+            sig->lv[i]->instantiate(val, paramTypeInfo);
         } else if (i < defaultArgList.size() && defaultArgList[i]) {
             // Evaluate default argument expression
             QoreValue val = defaultArgList[i].eval(xsink);
@@ -12611,7 +12612,8 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                 return -1;
             }
 
-            sig->lv[i]->instantiate(val);
+            // Filtering used the callee receiver before its runtime context is installed.
+            sig->lv[i]->instantiate(val, paramTypeInfo);
         } else {
             // Match CodeEvaluationHelper::prepareDefaultArgs() for missing args: a typed param filters the missing
             // value, so a soft list param receives an empty list rather than NOTHING
@@ -12634,7 +12636,8 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                 return -1;
             }
 
-            sig->lv[i]->instantiate(val);
+            // Filtering used the callee receiver before its runtime context is installed.
+            sig->lv[i]->instantiate(val, paramTypeInfo);
         }
     }
     return 0;

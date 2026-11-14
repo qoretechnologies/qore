@@ -3801,7 +3801,8 @@ static int instantiateInterpreterFastCallParams(const UserSignature* sig, unsign
             return -1;
         }
 
-        sig->lv[i]->instantiate(val);
+        // Keep the concrete type used by the callee's filter when its storage is captured.
+        sig->lv[i]->instantiate(val, param_type_info);
     }
     return 0;
 }
