@@ -1588,8 +1588,9 @@ public:
     const AbstractStatement* statement;
 
     //! the depth of the statement in its function: 0 for a statement of the function's block (#5816)
-    /** For a DebugBlock with locals (QORE_IR_DEBUG_NEST_VALID set), the depth of the statement that contains the block,
-        which its locals are recorded on (#5999).
+    /** For a DebugBlock with locals, if QORE_IR_DEBUG_NEST_VALID is set, the depth of the statement that contains the
+        block, which its locals are recorded on (#5999); it is not set for a block at depth 0 (the inline body of an
+        on_exit handler declared at function level), whose locals are recorded on the last statement entered.
 
         The debugger's exception events of the IR interpreter are made for each statement that an exception leaves,
         from the innermost, as with the AST interpreter: the statements that a frame is in are the statements of its
