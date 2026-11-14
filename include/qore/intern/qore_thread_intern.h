@@ -623,6 +623,23 @@ DLLLOCAL qore_program_id_t runtime_get_module_call_app_id(const QoreProgram* cal
 */
 DLLLOCAL bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id);
 
+//! Enters a capability scope of the current thread (qorus#867, design/thread-capability-scope.md)
+/** The thread's set becomes \a caps merged over the current set, or \a caps only with \a replace.
+
+    @param level set to the level of the scope, for thread_pop_capability_scope()
+    @param gen set to the identity of the scope, for thread_pop_capability_scope()
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+DLLLOCAL int thread_push_capability_scope(const QoreHashNode* caps, bool replace, size_t& level, uint64_t& gen,
+    ExceptionSink* xsink);
+
+//! Leaves a capability scope, and the scopes still open inside it, if it is open in the current thread
+DLLLOCAL void thread_pop_capability_scope(size_t level, uint64_t gen, ExceptionSink* xsink);
+
+//! Returns the current thread's capability set with a reference, or nullptr if it has none
+DLLLOCAL QoreHashNode* thread_get_capabilities();
+
 //! checks code that a builtin variant flagged with @ref QCF_MODULE_OWNED runs for module code
 /** Module code that runs in its own Program for a caller with restrictions may run code asynchronously, or with
     thread cancellation deferred, only if the code's own Program allows what the caller may not: the module's own

@@ -59,6 +59,8 @@ class FtpPollerTest inherits QUnit::Test {
         addTestCase("error delay option test", \errorDelayOptionTest());
         addTestCase("error logging test", \errorLoggingTest());
         addTestCase("data provider test", \dataProviderTest());
+        addTestCase("start_thread from the thread's capability", \capabilityTest());
+        addTestCase("start_thread from the thread's capability in a restricted Program", \restrictedCapabilityTest());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -204,6 +206,107 @@ class FtpPollerTest inherits QUnit::Test {
             poller.start();
             assertRegex("FTP error in ", info.waitForMatch("FTP error in "));
         }
+    }
+
+    #! without the option, a poller created in a host's capability scope starts its thread with the host's
+    #! start_thread (qorus#867)
+    private capabilityTest() {
+        int port = getPort();
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+        port = serv.getPort();
+
+        Queue started();
+        MyFtpPoller poller;
+        {
+            ThreadCapabilityScope scope({"start_thread": int sub (code<nothing()> c) {
+                started.push(True);
+                return background c();
+            }});
+            poller = new MyFtpPoller(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {
+                "path": tmp_dir.path,
+                "error_delay": 1,
+            });
+        }
+        # the capability is taken when the poller is created, so it is used after the scope
+        poller.start();
+        on_exit poller.stop();
+        assertEq(1, started.size(), "the polling thread was started with the host's start_thread");
+
+        # a poller created outside a scope does not use it
+        MyFtpPoller poller2(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {
+            "path": tmp_dir.path,
+            "error_delay": 1,
+        });
+        poller2.start();
+        on_exit poller2.stop();
+        assertEq(1, started.size(), "outside a scope the host's start_thread is not used");
+    }
+
+    #! a restricted Program that loads the module first: the module declares THREAD_CONTROL (qorus#867)
+    /** The module's requirement is set when it is first loaded, so the restricted Program must load it first: the
+        check runs in a child process whose main Program does not load the module
+    */
+    private restrictedCapabilityTest() {
+        int port = getPort();
+        FtpServer serv(port, m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+        port = serv.getPort();
+        TmpDir dir("FtpPollerRestricted-");
+        serv.setPwd(dir.path);
+        string script = dir.path + "/restricted.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(RestrictedScript);
+        f.close();
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string module_dir = get_script_dir() + "/../../../../qlib"
+            + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s %s %d 2>&1", module_dir, qore_bin, script,
+            dir.path, port));
+        # the result lines; the loader can warn of modules that the restricted Program loads from source
+        list<string> lines = select out.split("\n"), $1 =~ /^(no-)?scope: /;
+        # the module declares the THREAD_CONTROL domain, so a restricted Program that loads it first needs no option
+        assertEq("no-scope: created", lines[0], "without a scope, the poller is created without the option: " + out);
+        assertEq("scope: created", lines[1], "in a scope, the poller is created with the capability: " + out);
+    }
+
+    private {
+        #! a host whose restricted Program loads FtpPoller first and creates a poller in and out of a scope
+        const RestrictedScript = "%new-style
+%require-types
+%strict-args
+Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_THREAD_CONTROL);
+p.loadModule(\"FtpPoller\");
+p.parse(\"class RestrictedPoller inherits FtpPoller::FtpPoller {
+    constructor(FtpClient c, hash<auto> opts) : FtpPoller::FtpPoller(c, opts) {}
+    singleFileEvent(hash<FtpPoller::FtpPollerFileEventInfo> event) {}
+    postSingleFileEvent(hash<FtpPoller::FtpPollerFileEventInfo> event) {}
+}
+object sub make(string dir, int port) {
+    return new RestrictedPoller(new FtpClient(\\\"ftp://user:pass@127.0.0.1:\\\" + port), {\\\"path\\\": dir,
+        \\\"sleep\\\": sub (softint s) {}});
+}\", \"restricted\");
+string dir = ARGV[0];
+int port = ARGV[1].toInt();
+try {
+    p.callFunction(\"make\", dir, port);
+    printf(\"no-scope: created\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"no-scope: %s\\n\", ex.err);
+}
+{
+    ThreadCapabilityScope scope({\"start_thread\": int sub (code c) { return background c(); }});
+    try {
+        p.callFunction(\"make\", dir, port);
+        printf(\"scope: created\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"scope: %s: %s\\n\", ex.err, ex.desc);
+    }
+}
+";
     }
 
     private dataProviderTest() {

@@ -768,6 +768,12 @@
     %Program, from the new \c QoreModuleCommandContext (module API 2.3; see @ref qore_modules), also for
     \c %module-cmd and for commands that a compiled program replays when it is loaded.
 
+    @par Thread Capability Scopes
+    A host sets capabilities for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope",
+    which module code uses through a guard (@ref Qore::get_thread_capability() "get_thread_capability()") when its
+    caller gives no \c start_thread or \c call_wrapper option
+    (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>).
+
     @par Strict Parse Errors
     The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the
     errors that the parser can prove as parse errors, starting with a local variable that cannot have been assigned
@@ -1283,6 +1289,8 @@
 
     - @ref discordwebsocketclientintro "DiscordWebSocketClient" module
       - see @ref discordwebsocketclientv1_2 for all changes
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
 
     - @ref elasticsearchdataproviderintro "ElasticSearchDataProvider" module
       - the Bulk, Scroll and Aggregations APIs
@@ -1299,7 +1307,18 @@
       - resources with their metadata (see @ref filelocationhandler_resources), and \c conn:// locations
       - see @ref filelocationhandler_v3_0 for all changes
 
+    - @ref filepollerintro "FilePoller" module
+      - uses the \c start_thread capability of the code that a host runs
+        (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      - see @ref file_poller_2_1 for all changes
+
     - @ref ftppollerintro "FtpPoller" module
+      - uses the \c start_thread capability of the code that a host runs
+        (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       - see @ref ftppollerv2_2 for all changes
 
     - @ref gmaildataproviderintro "GmailDataProvider" module
@@ -1436,6 +1455,10 @@
       - events are received with @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo"
         (HTTP/1.1, HTTP/2 and HTTP/3)
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - uses the \c start_thread capability of the code that a host runs
+        (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       - see @ref serversenteventclient_v1_1 for all changes
 
     - @ref serversenteventhandlerintro "ServerSentEventHandler" module
@@ -1483,6 +1506,10 @@
         permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - the close handshake follows RFC 6455
+      - uses the \c start_thread and \c call_wrapper capabilities of the code that a host runs
+        (@ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope")
+      - declares the \c THREAD_CONTROL @ref function_domains "domain": its threads start for a caller restricted with
+        @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       - see @ref wsc_v2_5 for all changes
 
     - @ref websockethandlerintro "WebSocketHandler" module

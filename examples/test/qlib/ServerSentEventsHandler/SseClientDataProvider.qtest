@@ -207,6 +207,7 @@ public class Main inherits QUnit::Test {
         addTestCase("connected event before the stream's events", \connectedFirstIoTest());
         addTestCase("legacy client: connected event before the stream's events", \connectedFirstLegacyTest());
         addTestCase("event thread terminating before the start call returns", \threadEndsBeforeStartReturnsTest());
+        addTestCase("start_thread from the thread's capability", \capabilityTest());
         addTestCase("disconnect from an observer before the start call returns",
             \observerDisconnectBeforeStartReturnsTest());
         addTestCase("event thread not started", \threadStartErrorTest());
@@ -635,6 +636,56 @@ public class Main inherits QUnit::Test {
     # The legacy client raises the connected event after starting its event thread, which waits for it before
     # raising the stream's events.  The server sends an event as soon as the connection is registered, so the event
     # can reach the client while connect() is still running; the order is checked over repeated connections.
+    #! without the option, a client created in a host's capability scope starts its event thread with the host's
+    #! start_thread (qorus#867); for the client and the legacy client
+    capabilityTest() {
+        ImmediateSseHandler sse({"logger": new Logger("sse", LoggerLevel::getLevelError())});
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        server.setHandler("sse-immediate", "", NOTHING, sse);
+        server.setDefaultHandler("sse-immediate", sse);
+        int sse_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+
+        Queue started();
+        hash<auto> caps = {"start_thread": int sub (code<nothing()> c) {
+            started.push(True);
+            return background c();
+        }};
+        hash<auto> opts = {
+            "url": "sse://localhost:" + sse_port,
+            "data": "json",
+        };
+        ServerSentEventClientIo client;
+        ServerSentEventClient legacy;
+        {
+            ThreadCapabilityScope scope(caps);
+            client = new ServerSentEventClientIo(opts);
+            legacy = new ServerSentEventClient(opts);
+        }
+        # the capability is taken when a client is created, so it is used after the scope
+        foreach object c in ((client, legacy)) {
+            OrderObserver observer();
+            c.registerObserver(observer);
+            c.connect();
+            assertEq(0, observer.first_data.waitForZero(30s), sprintf("%s: data received", c.className()));
+            c.disconnect();
+            assertTrue(started.get(30s), sprintf("%s: the event thread was started with the host's start_thread",
+                c.className()));
+        }
+
+        # clients created outside a scope do not use it
+        foreach object c in ((new ServerSentEventClientIo(opts), new ServerSentEventClient(opts))) {
+            OrderObserver observer();
+            c.registerObserver(observer);
+            c.connect();
+            assertEq(0, observer.first_data.waitForZero(30s), sprintf("%s: data received", c.className()));
+            c.disconnect();
+        }
+        assertEq(0, started.size(), "outside a scope the host's start_thread is not used");
+    }
+
     connectedFirstLegacyTest() {
         ImmediateSseHandler sse({"logger": new Logger("sse", LoggerLevel::getLevelError())});
         HttpServer server(<HttpServerOptionInfo>{

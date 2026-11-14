@@ -67,6 +67,7 @@ public class WebSocketClientCallWrapperTest inherits QUnit::Test {
         addTestCase("call_wrapper option validation", \optionValidationTest());
         addTestCase("call_wrapper wraps delivery", \deliveryWrapTest());
         addTestCase("call_wrapper survives reconnect", \reconnectWrapTest());
+        addTestCase("call_wrapper and start_thread from the thread's capabilities", \capabilityTest());
         addTestCase("data provider removes (not deletes) its client", \removeNotDeleteClientTest());
 
         logger = new Logger("test", LoggerLevel::getLevel(ENV.QORE_LOGLEVEL ?? "FATAL"));
@@ -143,6 +144,68 @@ public class WebSocketClientCallWrapperTest inherits QUnit::Test {
         wsc2.send("ECHO x");
         assertEq("NO-CONTEXT", delivered2.get(5s),
             "without a call_wrapper the delivery callback runs with no embedder context");
+    }
+
+    #! without the options, a client created in a host's capability scope uses its capabilities (qorus#867)
+    capabilityTest() {
+        Ctx ctx();
+        Queue delivered();
+        # one entry for each thread that the host's start_thread starts
+        Queue started();
+        code<int(code<nothing()>)> start_thread = int sub (code<nothing()> c) {
+            started.push(True);
+            return background c();
+        };
+        # the message callback is also called without data as a connection-close notification
+        code callback = sub (*data msg) {
+            if (exists msg) {
+                delivered.push(ctx.get(gettid().toString()) ?? "NO-CONTEXT");
+            }
+        };
+        WebSocketClient wsc;
+        {
+            ThreadCapabilityScope scope({
+                "call_wrapper": auto sub (code<auto()> call) {
+                    ctx.set(gettid().toString(), "HOST-CTX");
+                    on_exit ctx.del(gettid().toString());
+                    return call();
+                },
+                "start_thread": start_thread,
+            });
+            wsc = new WebSocketClient(callback, {
+                "url": "ws://localhost:" + port,
+                "logger": logger,
+                "reconnect": True,
+            });
+        }
+        # the capabilities are taken when the client is created, so they are used after the scope
+        on_exit wsc.disconnect();
+        wsc.connect();
+        assertTrue(wsc.isOpen());
+        wsc.send("ECHO hello");
+        assertEq("HOST-CTX", delivered.get(5s), "the delivery callback ran inside the host's call_wrapper");
+        # a reconnect thread is started with the client's start_thread
+        assertTrue(wsc.reconnect(), "reconnect started");
+        assertTrue(started.get(10s), "the reconnect thread was started with the host's start_thread");
+
+        # a client created outside a scope uses neither
+        Queue delivered2();
+        WebSocketClient wsc2(sub (*data msg) {
+            if (exists msg) {
+                delivered2.push(ctx.get(gettid().toString()) ?? "NO-CONTEXT");
+            }
+        }, {
+            "url": "ws://localhost:" + port,
+            "logger": logger,
+            "reconnect": True,
+        });
+        on_exit wsc2.disconnect();
+        wsc2.connect();
+        wsc2.send("ECHO x");
+        assertEq("NO-CONTEXT", delivered2.get(5s), "outside a scope the callback runs with no host context");
+        # the reconnect thread is started by the time reconnect() returns
+        assertTrue(wsc2.reconnect(), "reconnect started");
+        assertEq(0, started.size(), "outside a scope the host's start_thread is not used");
     }
 
     #! the call_wrapper must still wrap delivery AFTER a reconnect (the deaf-on-reconnect fix)
