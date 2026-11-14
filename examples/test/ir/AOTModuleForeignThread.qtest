@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the checks compile a module with qcc and run the interpreter in child processes
+# test-platform: macos - qcc compiles the module to native code and the interpreter loads it as a binary module
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTModuleForeignThreadTest
+
+#! a thread of another runtime (a daemon thread of the Python module, for example) is blocked in the code of a compiled
+#! (AOT) module when the process ends
+/** The module cleanup and the deletion of the module's Program waited for every thread that runs module code, and the
+    clearing of the data of the compiled modules did not leave a Program that such a thread runs in: the process hung
+    (qore#6045 made it so for every python3 process with a blocked daemon thread).  The thread is started by
+    staticpgm_foreign_call() of the test module "staticpgmcode" from ForeignBlockModule (the user module of
+    program-cleanup-at-exit.qtest, compiled here).  A hang is ended by timeout(1): status 124.
+*/
+class AOTModuleForeignThreadTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTModuleForeignThreadTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a compiled module with a blocked foreign thread", \testForeignThread());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1; echo status=$?");
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+    }
+
+    private testForeignThread() {
+        string module_dir = ENV.QORE_MODULE_DIR ?? "";
+        if (module_dir !~ /staticpgmcode/) {
+            testSkip("the test module staticpgmcode is not in the module path");
+        }
+        string src = get_script_dir() + "/../qore/misc/ForeignBlockModule.qm";
+        foreach string opt in ("-O0", "-O3") {
+            TmpDir tmp("qore-aot-foreign-");
+            string mod_dir = tmp.path + "/mods";
+            mkdir(mod_dir);
+            string qmod = mod_dir + "/ForeignBlockModule.qmod";
+            string out = run(sprintf("%s %s --module %s --output %s %s", env(), qcc_bin, opt, qmod, src));
+            assertTrue(is_file(qmod), "compiled with " + opt + ": " + out);
+
+            string probe = tmp.path + "/probe.qr";
+            File f();
+            f.open2(probe, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(sprintf("%%modern
+%%no-child-restrictions
+%%append-module-path %s
+%%requires ForeignBlockModule
+ForeignBlockModule::start();
+", mod_dir));
+            f.close();
+            foreach string mode in ("ast", "ir", "jit") {
+                string cmd = sprintf("%s timeout -s KILL 120 %s -b --exec-mode=%s -l staticpgmcode %s", env(), qore_bin,
+                    mode, probe);
+                assertRegex("status=0\n$", run(cmd), "the process ends with the foreign thread blocked: " + opt + " " + mode);
+            }
+        }
+    }
+}

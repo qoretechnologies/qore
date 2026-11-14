@@ -38,8 +38,14 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <future>
+#include <system_error>
+#include <thread>
 
 static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
+#ifdef STATICPGM_CODE
+static void staticpgm_cleanup_callback(QoreProgram* pgm);
+#endif
 static void staticpgm_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void staticpgm_module_delete();
 
@@ -82,6 +88,22 @@ static ExceptionSink module_xsink;
     deliberately the same shape the jni module uses for its global Java context Program.
 */
 static std::unique_ptr<QoreProgramHelper> qph;
+
+#ifdef STATICPGM_CODE
+//! the code of a foreign thread that blocks in a call to the function "staticpgm_block" of the Program
+/** the thread is registered with Qore and never ends: the process exits while it runs in the Program
+*/
+static void staticpgm_foreign_block(QoreProgram* pgm) {
+    if (q_register_foreign_thread() != QFT_OK) {
+        fprintf(stderr, "staticpgmcode: cannot register a foreign thread\n");
+        return;
+    }
+    ExceptionSink xsink;
+    pgm->callFunction("staticpgm_block", nullptr, &xsink);
+    // the call returns only if it fails
+    xsink.handleExceptions();
+}
+#endif
 
 #ifdef STATICPGM_CODE
 //! the code of the Program: a global object whose destructor runs code (closures, recursion, exceptions, containers)
@@ -161,6 +183,22 @@ class Teardown {
     }
 }
 
+# a thread of another runtime that is blocked in Qore code (QORE_STATICPGM_FOREIGN_THREAD, see below)
+our Counter foreign_ready(1);
+our Queue foreign_queue();
+sub foreign_block() {
+    foreign_ready.dec();
+    foreign_queue.get();
+}
+sub foreign_release() {
+    foreign_ready.dec();
+}
+sub foreign_probe() {
+}
+sub foreign_wait_ready() {
+    foreign_ready.waitForZero();
+}
+
 const TeardownConst = (1, 2, 3, "a", {"b": 1});
 const TeardownConst2 = {"first": TeardownConst[4], "second": (TeardownConst, 5)};
 
@@ -190,10 +228,135 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     if (!xsink) {
         (*qph)->run(&xsink);
     }
+    // QORE_STATICPGM_FOREIGN_ENTRY: a foreign thread tries to enter the Program while it is cleaned up
+    if (!xsink && getenv("QORE_STATICPGM_FOREIGN_ENTRY")) {
+        qore_register_program_cleanup_callback(staticpgm_cleanup_callback);
+    }
+    // QORE_STATICPGM_FOREIGN_THREAD: a foreign thread (registered with q_register_foreign_thread()) starts in the
+    // Program and blocks in Qore code that nothing ends, as a daemon thread of the Python module does when it waits in
+    // Queue::get() at the end of the process; the module returns when the thread is in the Qore call (the Program
+    // counts the thread), so the state at the end of the process does not depend on timing
+    if (!xsink && getenv("QORE_STATICPGM_FOREIGN_THREAD")) {
+        std::thread t;
+        try {
+            t = std::thread([]() {
+                // the thread never ends: the exceptions it can raise before it blocks are reported with its sink
+                ExceptionSink thread_xsink;
+                if (q_register_foreign_thread() == QFT_ERROR) {
+                    // let the module init return, it fails the test with the missing thread
+                    (*qph)->callFunction("foreign_release", nullptr, &thread_xsink);
+                    return;
+                }
+                (*qph)->callFunction("foreign_block", nullptr, &thread_xsink);
+                thread_xsink.handleExceptions();
+            });
+        } catch (const std::exception& e) {
+            xsink.raiseException("STATICPGM-ERROR", "cannot start the thread: %s", e.what());
+            return;
+        }
+        t.detach();
+        (*qph)->callFunction("foreign_wait_ready", nullptr, &xsink);
+    }
+    // a foreign thread blocks in the Program, which then still runs code when the library is cleaned up: its code
+    // has the functions "staticpgm_block", which blocks forever, and "staticpgm_wait_blocked", which returns once
+    // the thread has entered "staticpgm_block" (see program-cleanup-at-exit.qtest)
+    if (!xsink && getenv("QORE_STATICPGM_FOREIGN_BLOCK")) {
+        QoreProgram* pgm = **qph;
+        try {
+            std::thread(staticpgm_foreign_block, pgm).detach();
+        } catch (const std::system_error& e) {
+            xsink.raiseException("STATICPGM-ERROR", "cannot start a foreign thread: %s", e.what());
+            return;
+        }
+        pgm->callFunction("staticpgm_wait_blocked", nullptr, &xsink);
+    }
 #endif
 }
 
+#ifdef STATICPGM_CODE
+//! the cleanup callback of QORE_STATICPGM_FOREIGN_ENTRY: a foreign thread tries to enter the Program that is cleaned up
+/** The callback runs after the teardown has decided that no foreign thread runs in the Program, before its data is
+    destroyed: the entry must be refused (PROGRAM-ERROR) then, not accepted into a Program whose data is destroyed
+    meanwhile; the result is printed for the test (program-cleanup-at-exit.qtest)
+*/
+static void staticpgm_cleanup_callback(QoreProgram* pgm) {
+    if (!qph || pgm != (*qph).operator->()) {
+        return;
+    }
+    std::promise<bool> refused;
+    std::future<bool> result = refused.get_future();
+    std::thread t([&refused]() {
+        ExceptionSink thread_xsink;
+        bool r = false;
+        if (q_register_foreign_thread() == QFT_OK) {
+            (*qph)->callFunction("foreign_probe", nullptr, &thread_xsink);
+            r = (bool)thread_xsink;
+            thread_xsink.clear();
+            q_deregister_foreign_thread();
+        }
+        refused.set_value(r);
+    });
+    bool r = result.get();
+    t.join();
+    printf("staticpgmcode: foreign thread entry %s\n", r ? "refused" : "accepted");
+    fflush(stdout);
+}
+
+//! staticpgm_foreign_call(code c): runs c in a thread that the library does not control, as a thread of another runtime
+//! does (a daemon thread of the Python module, for example); the thread never ends if c blocks
+static QoreValue f_staticpgm_foreign_call(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    // the thread owns a reference to the call reference
+    std::unique_ptr<QoreValue> code_holder(new QoreValue());
+    try {
+        *code_holder = args->retrieveEntry(0).refSelf();
+    } catch (...) {
+        xsink->raiseException("STATICPGM-ERROR", "cannot keep the call reference");
+        return QoreValue();
+    }
+    QoreValue* code = code_holder.get();
+    std::thread t;
+    try {
+        t = std::thread([code]() {
+            ExceptionSink thread_xsink;
+            if (q_register_foreign_thread() != QFT_ERROR) {
+                code->get<ResolvedCallReferenceNode>()->invoke(nullptr, &thread_xsink).discard(&thread_xsink);
+            }
+            code->discard(&thread_xsink);
+            delete code;
+            thread_xsink.handleExceptions();
+        });
+    } catch (const std::exception& e) {
+        code_holder->discard(xsink);
+        xsink->raiseException("STATICPGM-ERROR", "cannot start the thread: %s", e.what());
+        return QoreValue();
+    }
+    // the thread owns the reference now
+    code_holder.release();
+    t.detach();
+    return QoreValue();
+}
+
+//! the object that staticpgm_keep_object() keeps for the life of the process
+static QoreObject* kept_object = nullptr;
+
+//! staticpgm_keep_object(object o): keeps a reference to the object, so that it outlives qore_cleanup() as the object of
+//! a host that releases it only after the library has been cleaned up does (a Program object that Python holds)
+static QoreValue f_staticpgm_keep_object(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    HARD_QORE_VALUE_PARAM(o, QoreObject, args, 0);
+    if (!kept_object) {
+        kept_object = static_cast<QoreObject*>(o->refSelf());
+    }
+    return QoreValue();
+}
+#endif
+
 static void staticpgm_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
+#ifdef STATICPGM_CODE
+    rns->addBuiltinVariant("staticpgm_foreign_call", f_staticpgm_foreign_call, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+    rns->addBuiltinVariant("staticpgm_keep_object", f_staticpgm_keep_object, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
+#endif
 }
 
 static void staticpgm_module_delete() {

@@ -84,6 +84,14 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             \staticProgramThreadStartTest());
         addTestCase("a sandbox time limit cannot be enforced for a call made when the library is cleaned up",
             \staticProgramSandboxLimitTest());
+        addTestCase("a thread of another runtime that is blocked in Qore code does not hold up the end of the process",
+            \staticProgramForeignThreadTest());
+        addTestCase("a thread of another runtime that is blocked in the code of a user module does not hold up the end "
+            "of the process", \staticProgramForeignThreadInModuleTest());
+        addTestCase("a foreign thread cannot enter a Program once its teardown at the end of the process has begun",
+            \staticProgramForeignEntryTest());
+        addTestCase("a Program in which a foreign thread is blocked does not keep the library cleanup from ending",
+            \staticProgramForeignThreadBlockedTest());
         set_return_value(main());
     }
 
@@ -225,6 +233,80 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         }
     }
 
+    #! a thread that the library did not start (a daemon thread of the Python module, for example) is blocked in Qore
+    #! code of a Program that outlives the modules when the process ends normally
+    /** qore_cleanup() cleared the data of such a Program (qore#6045) by waiting for all of its threads to end, which a
+        thread blocked in Queue::get() never does: every python3 process that ended with a blocked daemon thread hung
+        forever.  The module "staticpgmcode" starts such a thread when QORE_STATICPGM_FOREIGN_THREAD is set and returns
+        when the thread is in the call, so the state at the end of the process is the same at every run.  A hang is
+        ended by timeout(1), which gives 124 instead of the status 0 expected
+    */
+    private staticProgramForeignThreadTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        string tenv = "QORE_STATICPGM_FOREIGN_THREAD=1 timeout -s KILL 120 ";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            string output = "";
+            assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgmcode", options, \output, tenv),
+                "normal end: " + mode);
+            assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
+            assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options, NOTHING, tenv), "exit(0): " + mode);
+            assertEq(7, runChild("exit(7);", 7, "staticpgmcode", options, NOTHING, tenv), "exit(7): " + mode);
+        }
+    }
+
+    #! a thread of another runtime is blocked in the code of a user module when the process ends normally
+    /** the Program of a user module is deleted, and its data cleared, in the module cleanup, which waited for every
+        thread that runs module code: the blocked thread never leaves it, so the process hung.  The thread is started by
+        staticpgm_foreign_call() of the module "staticpgmcode" from the user module ForeignBlockModule, and the script
+        ends when it is blocked there (the module's start() returns then)
+    */
+    private staticProgramForeignThreadInModuleTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        # the module ForeignBlockModule is in the directory of this test
+        string mod_dir = get_script_dir();
+        string module_path = (ENV.QORE_MODULE_DIR ? ENV.QORE_MODULE_DIR + ":" : "") + mod_dir;
+        string tenv = sprintf("QORE_MODULE_DIR=%s timeout -s KILL 120 ", module_path);
+        string code = "%requires ForeignBlockModule\nForeignBlockModule::start();";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            string output = "";
+            assertEq(0, runChild(code, 0, "staticpgmcode", options, \output, tenv), "normal end: " + mode);
+            assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
+            assertEq(0, runChild(code + " exit(0);", 0, "staticpgmcode", options, NOTHING, tenv), "exit(0): " + mode);
+            assertEq(7, runChild(code + " exit(7);", 7, "staticpgmcode", options, NOTHING, tenv), "exit(7): " + mode);
+        }
+    }
+
+    #! a foreign thread tries to enter the Program of "staticpgmcode" while the library cleans it up
+    /** The teardown has found no foreign thread in the Program and does not wait for foreign threads, so one that
+        entered meanwhile would run in a Program whose data is destroyed: the entry is refused (PROGRAM-ERROR).  The
+        cleanup callback of the module runs in the window between the decision and the destruction of the data; it
+        starts the foreign thread and waits for its result (QORE_STATICPGM_FOREIGN_ENTRY), so the order is the same
+        at every run
+    */
+    private staticProgramForeignEntryTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string output = "";
+            assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgmcode", "--exec-mode=" + mode, \output,
+                "QORE_STATICPGM_FOREIGN_ENTRY=1 timeout -s KILL 120 "), "normal end: " + mode);
+            assertRegex("staticpgmcode: foreign thread entry refused", output, "the entry was refused: " + mode);
+        }
+    }
+
     #! the static Program of the module "staticpgmcode" at the end of a script that does not call exit() (qore#6045)
     /** qore_cleanup() freed the types (and the JIT engine and the thread data) before the static destructor of the
         module deleted the Program, and the Qore code of its global object's destructor then ran on freed memory: the
@@ -251,7 +333,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
 
     #! runs the code in \a code as the code of the static Program of "staticpgmcode" (QORE_STATICPGM_CODE_FILE) in a
     #! script that ends normally, in each execution mode, and calls \a check with the mode, the status and the output
-    private runStaticProgramCode(string name, string code, code check) {
+    private runStaticProgramCode(string name, string code, code check, string extra_env = "") {
         if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
             assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
                 "--build <build directory> --target staticpgmcode");
@@ -266,7 +348,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             string output = "";
             int rc = runChild("int i = 0; ++i;", -1, "staticpgmcode", "--exec-mode=" + mode, \output,
-                sprintf("QORE_STATICPGM_CODE_FILE=%s ", file));
+                sprintf("QORE_STATICPGM_CODE_FILE=%s %s", file, extra_env));
             check(mode, rc, output);
         }
     }
@@ -397,6 +479,33 @@ our Limited l = new Limited();
             assertRegex("sandboxed: SANDBOX-ERROR: .*wall time limit of 5000 ms cannot be enforced", output,
                 mode + ": the call fails closed when the library is cleaned up");
         });
+    }
+
+    #! a foreign thread (registered with q_register_foreign_thread()) is blocked in a call of the static Program when
+    #! the library is cleaned up; the module never deletes the Program, as a host language does that abandons its
+    #! threads at exit (ex: the daemon threads of Python in the python module)
+    /** The cleanup waited for the thread to leave the Program before it cleared the Program's data, i.e. forever: the
+        process hung at its normal end (module-python: a Python process exiting with a daemon thread blocked in a
+        Qore call).  The data of a Program that another thread runs in is not cleared: the thread can use it
+    */
+    private staticProgramForeignThreadBlockedTest() {
+        runStaticProgramCode("foreign", "%modern
+our Counter blocked(1);
+our Queue q();
+sub staticpgm_block() {
+    blocked.dec();
+    # blocks forever: the process exits while the thread waits here
+    q.get();
+}
+sub staticpgm_wait_blocked() {
+    blocked.waitForZero();
+    printf(\"foreign: blocked\\n\");
+}
+", sub (string mode, int rc, string output) {
+            assertEq(0, rc, mode + ": the process ends with its status; output: " + output);
+            assertRegex("foreign: blocked", output, mode + ": the foreign thread was blocked in the Program");
+            assertEq(Qore::False, output =~ /exception|error/i, mode + ": no error output: " + output);
+        }, "QORE_STATICPGM_FOREIGN_BLOCK=1 ");
     }
 
     private staticProgramExitStatusTest() {

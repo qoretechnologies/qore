@@ -5817,6 +5817,12 @@ void QoreModuleManager::delUser() {
     // and no other thread can enter module code from now on; those that are in it are waited for below
     qore_close_module_programs();
 
+    // a foreign thread runs module code that nothing will end: the modules are left as they are (see
+    // qore_cleanup() and qore_program_private::leaveForeignThreads())
+    if (qore_foreign_threads_in_module_code.load(std::memory_order_acquire)) {
+        return;
+    }
+
 #ifdef HAVE_SIGNAL_HANDLING
     // the signal handlers that module code set belong to the module's Program; the signal thread runs until the end of
     // the cleanup, so they are removed now: a handler entering a module's Program between the wait for its threads
@@ -5839,6 +5845,10 @@ void QoreModuleManager::delUser() {
         for (QoreUserModule* um : user_modules) {
             QoreProgram* pgm = um->getProgram();
             pgm->waitForTermination();
+            // a foreign thread that runs in the Program keeps its data (see qore_program_private::leaveForeignThreads())
+            if (qore_program_private::get(*pgm)->leaveForeignThreads()) {
+                continue;
+            }
             qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
         }
         qore_aot_clear_all_module_namespace_data(xsink);
@@ -5850,7 +5860,10 @@ void QoreModuleManager::delUser() {
         // opaque reference refers to schema objects, for example); breaking the cycle only when the owning module
         // is deleted would run the destructors of those objects after the programs of their classes are gone
         for (QoreUserModule* um : user_modules) {
-            qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+            // the targets of a Program that a foreign thread runs in are not destroyed under it
+            if (!qore_program_private::get(*um->getProgram())->leaveForeignThreads()) {
+                qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+            }
         }
         // AOT user modules are binary modules, deleted after all user modules in cleanup()
         qore_aot_clear_all_module_opaque_targets(xsink);

@@ -608,8 +608,12 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
         own = i->second;
     }
     tidmap.clear();
+    foreign_tids.clear();
     if (own) {
         tidmap[tid] = own;
+        if (q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
     }
     thread_count = own;
     thread_waiting = 0;
@@ -2050,6 +2054,26 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     }
 }
 
+//! the Programs that are left allocated at the end of the process; never destroyed, so they stay reachable
+static std::set<QoreProgram*>* left_programs = nullptr;
+static std::mutex* left_programs_lock = new std::mutex;
+
+void qore_program_private::leaveAllocated() {
+    std::lock_guard<std::mutex> al(*left_programs_lock);
+    if (!left_programs) {
+        left_programs = new std::set<QoreProgram*>;
+    }
+    // the reference is taken once per Program
+    if (left_programs->insert(pgm).second) {
+        depRef();
+    }
+}
+
+bool qore_program_private::hasLeftPrograms() {
+    std::lock_guard<std::mutex> al(*left_programs_lock);
+    return left_programs && !left_programs->empty();
+}
+
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // the code of the Program's classes that runs while it is deleted (its exit hooks, the cleanup callback and the
     // destructors run when its data is deleted) runs in it although its last reference may have been released (see
@@ -2077,13 +2101,24 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // we only clear the internal data structures once
     bool clr = false;
     bool need_cleanup = false;
+    bool leave = false;
     {
         ReferenceHolder<QoreListNode> l(xsink);
         {
             AutoLocker al(plock);
             // wait for all threads to terminate
             waitForAllThreadsToTerminateIntern();
-            if (!ptid) {
+            // a foreign thread that runs in the Program at the end of the process is not waited for, and the data
+            // that it uses is not destroyed (see leaveForeignThreads())
+            leave = qore_shutdown.load(std::memory_order_acquire) && !ptid
+                && (getOtherForeignThreadCountIntern() > 0 || leaveForeignThreadsInModuleCode());
+            if (leave) {
+                // the Program is kept allocated for the thread
+                leaveAllocated();
+            } else if (!ptid) {
+                // no foreign thread can enter the Program from now on (see canEnterIntern()): the decision above is
+                // final, and is made before any of the Program's data is destroyed
+                foreign_teardown_tid = qore_shutdown.load(std::memory_order_acquire) ? q_gettid() : 0;
                 if (!ns_const) {
                     l = new QoreListNode(autoTypeInfo);
                     qore_root_ns_private::clearConstants(*RootNS, **l);
@@ -2092,6 +2127,12 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
                 need_cleanup = true;
             }
         }
+    }
+
+    if (leave) {
+        printd(5, "qore_program_private::waitForTerminationAndClear() leaving pgm: %p: a foreign thread runs in it\n",
+            pgm);
+        return;
     }
 
     // Call the cleanup callback OUTSIDE plock and BEFORE ptid is set.
@@ -3231,10 +3272,22 @@ void qore_program_private::del(ExceptionSink* xsink) {
     }
     extmap.clear();
 
-    // the Program object released the Program after it had stopped reporting its code (clearScanHolder())
+    // the Program object released the Program after it had stopped reporting its code (clearScanHolder()), unless the
+    // data of the Program is deleted while the object still holds it (a Program cleared at the end of the process by
+    // qore_cleanup(), see clearRemainingPrograms(), while its owner holds the object): the object reports only the
+    // thread initialization code and the thread entry handlers, which are released below, so it stops reporting first;
+    // its later release of the Program finds nothing to clear
+    clearScanHolder();
     assert(!scan_holder);
-    if (thr_init) {
-        thr_init->deref(xsink);
+    ResolvedCallReferenceNode* old_thr_init;
+    {
+        // the object that survives can still set or get the code (Program::setThreadInit())
+        AutoLocker al(tlock);
+        old_thr_init = thr_init;
+        thr_init = nullptr;
+    }
+    if (old_thr_init) {
+        old_thr_init->deref(xsink);
     }
 
     // a Program that never ran waitForTerminationAndClear() can still have handlers
