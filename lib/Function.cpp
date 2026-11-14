@@ -1243,13 +1243,13 @@ QORE_CEH_CONSTRUCTOR_INLINE CodeEvaluationHelper::CodeEvaluationHelper(Exception
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
         const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
-        bool n_hide_call_site)
+        bool n_hide_call_site, const QoreClosureBase* n_closure)
     : ct(n_ct), call_flags(n_call_flags), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(n_hide_call_site ? hide_runtime_call_site(hidden_call_site_slot, hidden_call_site)
             : take_runtime_call_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
         receiver_type_info(n_explicit_receiver_type_info),
-        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation), closure(n_closure) {
     if (self && !self->isValid()) {
         assert(n_qc);
         qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
@@ -7392,7 +7392,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
 
             const QoreTypeInfo* paramTypeInfo
                 = needs_type_param_substitution
-                    ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
+                    ? qore_substitute_type_params_if_needed_inline(signature.getParamTypeInfo(i))
                     : signature.getParamTypeInfo(i);
             // the value's type is read once for the checks below (QoreValue::getType() is not inlined)
             qore_type_t val_type = val.getType();
@@ -7434,7 +7434,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
         //    i, signature.lv[i], signature.lv[i]->getName(), np.getType(), np.getTypeName());
 
         const QoreTypeInfo* paramTypeInfo = needs_type_param_substitution
-            ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
+            ? qore_substitute_type_params_if_needed_inline(signature.getParamTypeInfo(i))
             : signature.getParamTypeInfo(i);
         signature.lv[i]->instantiate(QoreValue(), paramTypeInfo);
     }
@@ -10136,7 +10136,9 @@ int QoreFunction::parseInitIntern(qore_ns_private* ns) {
     return err;
 }
 
-QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink,
+        bool tmp_args) const {
     RuntimeConfig& rc = rc_get_current_ref();
     // closures cannot be overloaded
     assert(vlist.singular());
@@ -10151,10 +10153,19 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     // the receiver type of a generic class that created the closure binds the type parameters of the class in the
     // closure's parameter and return types (qore#5733)
     const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
+    const QoreTypeInfo* receiver_type_info = closure_type_context ? closure_type_context->receiver_type_info : nullptr;
+    if (tmp_args) {
+        // the parameters take the values of the temporary argument list over
+        CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", const_cast<QoreListNode*>(args),
+            nullptr, class_ctx, CT_USER, false, nullptr, pgm, receiver_type_info, nullptr, 0, false, &closure_base);
+        if (*xsink) {
+            return QoreValue();
+        }
+        return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+    }
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
-        false, nullptr, pgm, closure_type_context ? closure_type_context->receiver_type_info : nullptr,
-        nullptr, 0, &closure_base);
+        false, nullptr, pgm, receiver_type_info, nullptr, 0, &closure_base);
     if (*xsink) {
         return QoreValue();
     }

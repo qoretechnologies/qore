@@ -1501,6 +1501,10 @@ public:
     // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
     // ended (see qore_ir_is_exception_only_release())
     bool exception_cleanup_release = false;
+    // Transient: a call with an argument that the IR interpreter's analysis found it can consume, which gives the
+    // references of its temporary arguments to the callee (see IRConsumedCallArgs in QoreIRInterpreter.cpp, issue
+    // #5882); set with the interpreter's analysis of the function, before the function runs
+    bool interpreter_gives_call_args = false;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;

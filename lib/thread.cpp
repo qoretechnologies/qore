@@ -3979,6 +3979,13 @@ void CalleeContextHelper::restoreContext() {
     td->rc->cls = old_rc_class;
 }
 
+void CalleeContextHelper::releaseArgv() {
+    if (argv_xsink && td->current_implicit_arg) {
+        td->current_implicit_arg->deref(argv_xsink);
+        td->current_implicit_arg = nullptr;
+    }
+}
+
 void CalleeContextHelper::restoreArgv() {
     // as ~ArgvContextHelper()
     if (td->current_implicit_arg) {
@@ -4236,6 +4243,14 @@ ArgvContextHelper::~ArgvContextHelper() {
         td->current_implicit_arg->deref(xsink);
     td->current_implicit_arg = old_argv;
     //printd(5, "ArgvContextHelper::~ArgvContextHelper() setting argv: %p\n", old_argv);
+}
+
+void ArgvContextHelper::releaseArgv() {
+    ThreadData* td  = thread_data.get();
+    if (td->current_implicit_arg) {
+        td->current_implicit_arg->deref(xsink);
+        td->current_implicit_arg = nullptr;
+    }
 }
 
 SingleArgvContextHelper::SingleArgvContextHelper(QoreValue val, ExceptionSink* n_xsink) : xsink(n_xsink) {

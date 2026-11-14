@@ -1857,7 +1857,9 @@ set(LIBQORE_CPP_SRC
     lib/QoreTypeSpecMatchRegistry.cpp
     lib/QoreIRExprRegistry.cpp
     lib/JITRuntime.cpp
+    lib/JITRuntimeGivenArgs.cpp
     lib/QoreIRInterpreter.cpp
+    lib/QoreIRInterpreterGivenArgs.cpp
     lib/QoreIRIntrinsic.cpp
     lib/QoreIRBuilder.cpp
     lib/QoreIRAnalysis.cpp
@@ -2570,7 +2572,11 @@ if (SINGLE_COMPILATION_UNIT)
     # - qore_git_revision.cpp: so git hash changes only recompile this tiny file
     # - qore_aot_runtime_identity.cpp: so AOT runtime identity changes only recompile this tiny file
     # - AllocTracking.cpp: defines global malloc/free symbols
-    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp)
+    # - JITRuntimeGivenArgs.cpp, QoreIRInterpreterGivenArgs.cpp: the code of the calls that give the references of
+    #   their temporary arguments to the callee (issue #5882); in the SCU, it would change how the compiler inlines
+    #   the helpers that the code of the calls that give nothing uses, and so that code
+    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
+        lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp)
     if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
         # sources that cannot share a translation unit with the LLVM users (see cmake/QoreScuChunks.cmake)
         list(APPEND LIBQORE_EXTRA_SRC ${LIBQORE_SCU_ISOLATED_SRC})
@@ -3189,6 +3195,9 @@ set(_qcc_format_sources
 #                      the AOT compiler shared with it, extractLValueBaseVarRef(),
 #                      now lives in QoreIRAnalysis.cpp -- if the compiler ever
 #                      calls into the interpreter again, this decision changes.
+#                      QoreIRInterpreterGivenArgs.cpp compiles part of it (its
+#                      calls that give their temporary arguments) in a unit of
+#                      its own, and is out for the same reason.
 #   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
 #   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
 #                      how many objects are compiled at once, never what they
@@ -3199,6 +3208,7 @@ set(_qcc_format_excluded_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreterGivenArgs.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRPrinter.cpp
 )
 

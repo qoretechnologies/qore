@@ -956,6 +956,8 @@ public:
         located at the runtime location, and a pending call site (see QoreRcCallSiteHelper) is hidden while it runs
         and restored afterwards, as the code can run between a call site and the frame that takes it, such as when
         a temporary value is released
+        @param n_closure the closure called with a temporary argument list (issue #5882), whose default values are
+        evaluated with its captured variables, as for a call with an argument list that the caller keeps
     */
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
@@ -963,7 +965,7 @@ public:
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            unsigned n_call_flags = 0, bool n_hide_call_site = false);
+            unsigned n_call_flags = 0, bool n_hide_call_site = false, const QoreClosureBase* n_closure = nullptr);
 
     DLLLOCAL CodeEvaluationHelper(LexicalSemanticPolicy invocation_policy, ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
@@ -3474,7 +3476,13 @@ public:
         return serial;
     }
 
-    DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
+    //! calls the closure
+    /** @param tmp_args true if \a args is a temporary list that the caller owns, whose values the parameters take
+        over, as the AST interpreter's call moves its evaluated arguments into the parameters, so that the last
+        reference of a temporary argument is released in the closure's frame (issue #5882)
+    */
+    DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
 
     //! evalClosure() with arguments in source order with the names in \a arg_names, which are bound to the
     //! parameters of the closure's variant by name (M4 phase 3)

@@ -937,6 +937,12 @@ public:
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
+    //! as evalMethod(), with a temporary argument list that the caller owns, whose values the parameters take over,
+    //! as the AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
+    DLLLOCAL QoreValue evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
+            const qore_class_private* cctx, QoreProgram* pgm_ctx) const;
+
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // resolved_variant, if given, is set to the variant called if it can be reused for another call with arguments of
     // the same types, otherwise to nullptr (a variant selected by checking the elements of an argument)
@@ -1026,6 +1032,12 @@ public:
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+
+    //! as evalMethod(), with a temporary argument list that the caller owns, whose values the parameters take over,
+    //! as the AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
+    DLLLOCAL QoreValue evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+            const qore_class_private* cctx, QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // resolved_variant, if given, is set to the variant called if it can be reused for another call with arguments of
@@ -4395,6 +4407,12 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             QoreProgram* pgm_ctx = nullptr) const;
 
+    //! as evalMethod() by name, with a temporary argument list that the caller owns, whose values the parameters of
+    //! a method found take over, as the AST interpreter's call moves its evaluated arguments into the parameters
+    //! (issue #5882)
+    DLLLOCAL QoreValue evalMethodGivenArgs(QoreObject* self, const char* nme, QoreListNode* args,
+            const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm_ctx) const;
+
     DLLLOCAL QoreValue evalMethodGate(QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue evalMethodGate(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
@@ -5625,6 +5643,21 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
         return m.priv->eval(policy, xsink, rc, self, args, cctx, pgm_ctx, receiver_type_info,
             explicit_type_param_instantiation);
+    }
+
+    //! as eval(), with a temporary argument list that the caller owns, whose values the parameters take over, as the
+    //! AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
+    DLLLOCAL static QoreValue evalGivenArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
+            QoreObject* self, QoreListNode* args, const qore_class_private* cctx = nullptr,
+            QoreProgram* pgm_ctx = nullptr) {
+        qore_method_private* priv = m.priv;
+        if (!priv->static_flag) {
+            assert(self);
+            return NMETHF(priv->func)->evalMethodGivenArgs(xsink, rc, nullptr, self, args, cctx, pgm_ctx);
+        }
+        // as eval(): the receiver of a static method called through an object is the object's type (issue #5769)
+        return SMETHF(priv->func)->evalMethodGivenArgs(xsink, rc, nullptr, args, cctx, pgm_ctx,
+            self ? qore_get_object_receiver_type_info(self) : nullptr);
     }
 
     DLLLOCAL static QoreValue evalTmpArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,

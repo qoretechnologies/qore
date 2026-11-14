@@ -5185,6 +5185,23 @@ QoreValue qore_class_private::evalMemberGate(QoreObject* self, const char* nme, 
     return self->evalMethod(*memberGate, *args, xsink);
 }
 
+QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* nme, QoreListNode* args,
+        const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm_ctx) const {
+    assert(self);
+    qore_object_private* self_priv = qore_object_private::get(*self);
+    if (self_priv->status != OS_DELETED && strcmp(nme, "copy")) {
+        const QoreMethod* w = getMethodForEval(nme, self_priv->pgm, class_ctx, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (w) {
+            return qore_method_private::evalGivenArgs(*w, xsink, rc, self, args, class_ctx, pgm_ctx);
+        }
+    }
+    // anything else is called as evalMethod() calls it
+    return evalMethod(self, nme, args, class_ctx, rc, xsink, nullptr, pgm_ctx);
+}
+
 // Member-call references, pseudo-methods and methodGate are only considered after method lookup fails.
 // Their ownership/locking locals must not reserve stack space on the ordinary method-call path.
 template <bool Lexical>
@@ -8392,6 +8409,28 @@ QORE_INTERN_ALWAYS_INLINE QoreValue NormalMethodFunction::evalMethodImpl(Lexical
     else return mv->evalMethod(self, ceh, xsink);
 }
 
+QoreValue NormalMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
+        const qore_class_private* cctx, QoreProgram* pgm_ctx) const {
+    // as evalMethod(), with the temporary argument list, whose values the parameters take over
+    const char* cname = getClassName();
+    const char* mname = getName();
+    const qore_class_private* method_qc = qore_class_private::get(*qc);
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, self, method_qc, CT_UNUSED, false, cctx,
+        qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx));
+    if (*xsink)
+        return QoreValue();
+
+    const MethodVariant* mv = METHV_const(variant);
+    if (mv->isAbstract()) {
+        xsink->raiseException("ABSTRACT-VARIANT-ERROR", "cannot call abstract variant %s::%s(%s) directly", cname,
+            mname, mv->getSignature()->getSignatureText());
+        return QoreValue();
+    }
+    return mv->evalMethod(self, ceh, xsink);
+}
+
 // raises the exception for a call of an abstract variant
 /** Outlined from NormalMethodFunction::evalMethodTmpArgs(), whose frame is on the stack at every level of a recursion
     of a method (issue #5852)
@@ -8539,6 +8578,22 @@ QoreValue StaticMethodFunction::evalMethod(
         QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
     return evalMethodImpl<true>(policy, xsink, rc, variant, args, cctx, pgm_ctx, receiver_type_info, explicit_type_param_instantiation);
+}
+
+QoreValue StaticMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, QoreListNode* args, const qore_class_private* cctx,
+        QoreProgram* pgm_ctx, const QoreTypeInfo* receiver_type_info) const {
+    // as evalMethod(), with the temporary argument list, whose values the parameters take over
+    const char* mname = getName();
+    QoreSourceProgramHolder spgm_holder(xsink);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, mname, args, nullptr, qore_class_private::get(*qc),
+        CT_UNUSED, false, cctx, qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), receiver_type_info);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // issue #4964: set class ctx
+    ObjectSubstitutionHelper osh(nullptr, cctx);
+    return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 
 // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified
