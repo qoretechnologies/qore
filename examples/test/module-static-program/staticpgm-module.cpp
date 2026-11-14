@@ -38,6 +38,8 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <system_error>
+#include <thread>
 
 static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void staticpgm_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -82,6 +84,29 @@ static ExceptionSink module_xsink;
     deliberately the same shape the jni module uses for its global Java context Program.
 */
 static std::unique_ptr<QoreProgramHelper> qph;
+
+#ifdef STATICPGM_CODE
+//! the Program of the module if a foreign thread is left blocked in it (QORE_STATICPGM_FOREIGN_BLOCK)
+/** the Program cannot be deleted while the thread runs in it, as the deletion would wait for the thread forever: the
+    module leaves it as a host language does that abandons the threads that use it at exit (ex: the daemon threads
+    of Python, see the python module); the pointer keeps it reachable
+*/
+static QoreProgramHelper* abandoned_qph = nullptr;
+
+//! the code of a foreign thread that blocks in a call to the function "staticpgm_block" of the Program
+/** the thread is registered with Qore and never ends: the process exits while it runs in the Program
+*/
+static void staticpgm_foreign_block(QoreProgram* pgm) {
+    if (q_register_foreign_thread() != QFT_OK) {
+        fprintf(stderr, "staticpgmcode: cannot register a foreign thread\n");
+        return;
+    }
+    ExceptionSink xsink;
+    pgm->callFunction("staticpgm_block", nullptr, &xsink);
+    // the call returns only if it fails
+    xsink.handleExceptions();
+}
+#endif
 
 #ifdef STATICPGM_CODE
 //! the code of the Program: a global object whose destructor runs code (closures, recursion, exceptions, containers)
@@ -189,6 +214,21 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     (*qph)->parse(code.c_str(), "staticpgmcode", &xsink, &xsink);
     if (!xsink) {
         (*qph)->run(&xsink);
+    }
+    // a foreign thread blocks in the Program, which then still runs code when the library is cleaned up: its code
+    // has the functions "staticpgm_block", which blocks forever, and "staticpgm_wait_blocked", which returns once
+    // the thread has entered "staticpgm_block" (see program-cleanup-at-exit.qtest)
+    if (!xsink && getenv("QORE_STATICPGM_FOREIGN_BLOCK")) {
+        QoreProgram* pgm = **qph;
+        try {
+            std::thread(staticpgm_foreign_block, pgm).detach();
+        } catch (const std::system_error& e) {
+            xsink.raiseException("STATICPGM-ERROR", "cannot start a foreign thread: %s", e.what());
+            return;
+        }
+        // the Program is never deleted: the thread never leaves it
+        abandoned_qph = qph.release();
+        pgm->callFunction("staticpgm_wait_blocked", nullptr, &xsink);
     }
 #endif
 }

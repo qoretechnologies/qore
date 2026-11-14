@@ -576,6 +576,24 @@ void qore_program_private::clearRemainingPrograms() {
             p->ref();
         }
         last_id = p->priv->programId;
+        // a Program in which another thread runs is left as it is: the threads that Qore started have been waited
+        // for, so the thread is a foreign thread that its host abandons at exit (ex: a Python daemon thread blocked
+        // in a Qore call, whose Program the python module does not delete); clearing the Program would wait for the
+        // thread to leave it forever, and the thread can still use its data
+        bool in_use;
+        {
+            AutoLocker al(p->priv->plock);
+            ptid_map_t::iterator i = p->priv->tidmap.find(q_gettid());
+            // the calling thread's own entries are discounted as in waitForAllThreadsToTerminateIntern()
+            in_use = p->priv->thread_count - (i != p->priv->tidmap.end() ? i->second : 0);
+        }
+        if (in_use) {
+            printd(5, "qore_program_private::clearRemainingPrograms() skipping pgm: %p pgmid: " QLLD " used by "
+                "another thread\n", p, (int64)last_id);
+            p->deref(&xsink);
+            xsink.handleExceptions();
+            continue;
+        }
         printd(5, "qore_program_private::clearRemainingPrograms() clearing pgm: %p pgmid: " QLLD "\n", p,
             (int64)last_id);
         p->priv->waitForTerminationAndClear(&xsink);
