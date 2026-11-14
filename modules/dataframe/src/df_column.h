@@ -357,8 +357,6 @@ DLLLOCAL bool scanColumnValues(const std::vector<Column>& columns, QorePrivateDa
 */
 DLLLOCAL std::string dataFrameValueKey(const ColumnData& cd, int64_t row);
 
-DLLLOCAL ColumnType inferColumnType(const QoreListNode* values);
-
 //! Build a ColumnData from a list of Qore values with the given type
 DLLLOCAL std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
     ColumnType type, ExceptionSink* xsink);
