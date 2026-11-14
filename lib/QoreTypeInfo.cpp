@@ -699,6 +699,9 @@ void init_qore_types() {
 
     do_maps(autoListTypeInfo, autoListOrNothingTypeInfo);
     do_maps(autoHashTypeInfo, autoHashOrNothingTypeInfo);
+    // Keep the canonical no-narrow marker when adding/removing NOTHING, including substitution of *T.
+    do_maps(autoNoNarrowListTypeInfo, autoNoNarrowListOrNothingTypeInfo);
+    do_maps(autoNoNarrowHashTypeInfo, autoNoNarrowHashOrNothingTypeInfo);
     do_maps(softAutoListTypeInfo, softAutoListOrNothingTypeInfo);
 }
 
