@@ -85,6 +85,79 @@ auto sub ex3() {
     throw "EX3";
 }
 
+# Known differences from the AST interpreter, pinned by handler-return-unwind.qtest (KnownDiffs) until they are fixed
+# finding 1: native code releases the replaced value only after the block's remaining handlers have run
+auto sub k1() {
+    T l("k1-l");
+    on_exit { lg += "y"; }
+    on_exit { lg += "x"; return new T("k1-h"); }
+    on_exit { lg += "te"; thread_exit; }
+    return new T("k1-body");
+}
+auto sub k2() {
+    T l("k2-l");
+    on_exit { lg += "y"; }
+    on_exit { lg += "x"; return new T("k2-h"); }
+    on_exit { lg += "thr"; throw "K2"; }
+    return new T("k2-body");
+}
+# finding 2: a handler's return replaces the value only after the handler's own handlers have run
+auto sub k3() {
+    T l("k3-l");
+    on_exit {
+        on_exit { lg += "in"; return new T("k3-hin"); }
+        lg += "out";
+        return new T("k3-hout");
+    }
+    on_exit { lg += "te"; thread_exit; }
+    return new T("k3-body");
+}
+auto sub k4() {
+    T l("k4-l");
+    on_exit {
+        on_exit { lg += "in"; return new T("k4-hin"); }
+        lg += "out";
+        return new T("k4-hout");
+    }
+    on_exit { lg += "thr"; throw "K4"; }
+    return new T("k4-body");
+}
+# finding 3: the return of a handler of a handler does not release the function's interrupted return (IR)
+auto sub k5() {
+    T l("k5-l");
+    on_exit {
+        T q("k5-q");
+        on_exit { lg += "in"; return new T("k5-hin"); }
+        lg += "out";
+        thread_exit;
+    }
+    return new T("k5-body");
+}
+auto sub k6() {
+    T l("k6-l");
+    on_exit {
+        T q("k6-q");
+        on_exit { lg += "in"; return new T("k6-hin"); }
+        lg += "out";
+        throw "K6";
+    }
+    return new T("k6-body");
+}
+# finding 4: with a try statement of the function catching the exception, the replaced value is released at the catch
+# (IR)
+auto sub k7() {
+    T l("k7-l");
+    try {
+        T m("k7-m");
+        on_exit { lg += "x"; return new T("k7-h"); }
+        on_exit { throw "K7"; }
+        return new T("k7-bodyin");
+    } catch (hash<ExceptionInfo> ex) {
+        lg += "caught";
+    }
+    return new T("k7-body");
+}
+
 # runs the function twice in a thread of its own, which a thread_exit ends
 sub show(string label, code c) {
     for (int i = 0; i < 2; ++i) {
@@ -100,7 +173,7 @@ sub show(string label, code c) {
             }
         }();
         done.waitForZero();
-        printf("%s: %y\n", label, lg);
+        printf("%s[%d]: %y\n", label, i, lg);
     }
 }
 show("te1", \te1());
@@ -115,3 +188,10 @@ show("te9", \te9());
 show("ex1", \ex1());
 show("ex2", \ex2());
 show("ex3", \ex3());
+show("k1", \k1());
+show("k2", \k2());
+show("k3", \k3());
+show("k4", \k4());
+show("k5", \k5());
+show("k6", \k6());
+show("k7", \k7());

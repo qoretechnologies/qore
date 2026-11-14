@@ -23,36 +23,69 @@
     function whose blocks keep their locals for the unwind was released after the locals, also with an exception
     pending (#6074, item 2).  A handler's value replaced by a later handler that ends in a thread_exit leaked in the IR
     interpreter (#6073).  HandlerReturnUnwind.q gives the output of the AST interpreter in every execution mode and
-    compiled with qcc.
+    compiled with qcc, except for the cases of KnownDiffs, which are pinned until they are fixed.
 */
 class HandlerReturnUnwindTest inherits QUnit::Test {
     public {
         #! the output of HandlerReturnUnwind.q with the AST interpreter
-        const Expected = "te1: [\"x2\", \"~te1-body\", \"x1\", \"~te1-h\"]
-te1: [\"x2\", \"~te1-body\", \"x1\", \"~te1-h\"]
-te2: [\"s\", \"x\", \"~te2-body\", \"~te2-h\"]
-te2: [\"s\", \"x\", \"~te2-body\", \"~te2-h\"]
-te3: [\"te\", \"x\", \"~te3-body\", \"~te3-h\"]
-te3: [\"te\", \"x\", \"~te3-body\", \"~te3-h\"]
-te4: [\"te\", \"x\", \"~te4-body\", \"~te4-l\", \"~te4-h\"]
-te4: [\"te\", \"x\", \"~te4-body\", \"~te4-l\", \"~te4-h\"]
-te5: [\"s\", \"x\", \"~te5-body\", \"~te5-l\", \"~te5-h\"]
-te5: [\"s\", \"x\", \"~te5-body\", \"~te5-l\", \"~te5-h\"]
-te6: [\"x\", \"~te6-l\", \"~te6-h\"]
-te6: [\"x\", \"~te6-l\", \"~te6-h\"]
-te7: [\"te\", \"xi\", \"~te7-body\", \"~te7-h\"]
-te7: [\"te\", \"xi\", \"~te7-body\", \"~te7-h\"]
-te8: [\"te\", \"xo\", \"~te8-body\", \"~te8-h\"]
-te8: [\"te\", \"xo\", \"~te8-body\", \"~te8-h\"]
-te9: [\"x3\", \"~te9-body\", \"x2\", \"~te9-h3\", \"x1\", \"~te9-h2\"]
-te9: [\"x3\", \"~te9-body\", \"x2\", \"~te9-h3\", \"x1\", \"~te9-h2\"]
-ex1: [\"thr\", \"x\", \"~ex1-body\", \"~ex1-l\", \"~ex1-h\", \"ex:EX1\"]
-ex1: [\"thr\", \"x\", \"~ex1-body\", \"~ex1-l\", \"~ex1-h\", \"ex:EX1\"]
-ex2: [\"x\", \"~ex2-a\", \"~ex2-h\", \"ex:EX2\"]
-ex2: [\"x\", \"~ex2-a\", \"~ex2-h\", \"ex:EX2\"]
-ex3: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
-ex3: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
+        const Expected = "te1[0]: [\"x2\", \"~te1-body\", \"x1\", \"~te1-h\"]
+te1[1]: [\"x2\", \"~te1-body\", \"x1\", \"~te1-h\"]
+te2[0]: [\"s\", \"x\", \"~te2-body\", \"~te2-h\"]
+te2[1]: [\"s\", \"x\", \"~te2-body\", \"~te2-h\"]
+te3[0]: [\"te\", \"x\", \"~te3-body\", \"~te3-h\"]
+te3[1]: [\"te\", \"x\", \"~te3-body\", \"~te3-h\"]
+te4[0]: [\"te\", \"x\", \"~te4-body\", \"~te4-l\", \"~te4-h\"]
+te4[1]: [\"te\", \"x\", \"~te4-body\", \"~te4-l\", \"~te4-h\"]
+te5[0]: [\"s\", \"x\", \"~te5-body\", \"~te5-l\", \"~te5-h\"]
+te5[1]: [\"s\", \"x\", \"~te5-body\", \"~te5-l\", \"~te5-h\"]
+te6[0]: [\"x\", \"~te6-l\", \"~te6-h\"]
+te6[1]: [\"x\", \"~te6-l\", \"~te6-h\"]
+te7[0]: [\"te\", \"xi\", \"~te7-body\", \"~te7-h\"]
+te7[1]: [\"te\", \"xi\", \"~te7-body\", \"~te7-h\"]
+te8[0]: [\"te\", \"xo\", \"~te8-body\", \"~te8-h\"]
+te8[1]: [\"te\", \"xo\", \"~te8-body\", \"~te8-h\"]
+te9[0]: [\"x3\", \"~te9-body\", \"x2\", \"~te9-h3\", \"x1\", \"~te9-h2\"]
+te9[1]: [\"x3\", \"~te9-body\", \"x2\", \"~te9-h3\", \"x1\", \"~te9-h2\"]
+ex1[0]: [\"thr\", \"x\", \"~ex1-body\", \"~ex1-l\", \"~ex1-h\", \"ex:EX1\"]
+ex1[1]: [\"thr\", \"x\", \"~ex1-body\", \"~ex1-l\", \"~ex1-h\", \"ex:EX1\"]
+ex2[0]: [\"x\", \"~ex2-a\", \"~ex2-h\", \"ex:EX2\"]
+ex2[1]: [\"x\", \"~ex2-a\", \"~ex2-h\", \"ex:EX2\"]
+ex3[0]: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
+ex3[1]: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
+k1[0]: [\"te\", \"x\", \"~k1-body\", \"y\", \"~k1-l\", \"~k1-h\"]
+k1[1]: [\"te\", \"x\", \"~k1-body\", \"y\", \"~k1-l\", \"~k1-h\"]
+k2[0]: [\"thr\", \"x\", \"~k2-body\", \"y\", \"~k2-l\", \"~k2-h\", \"ex:K2\"]
+k2[1]: [\"thr\", \"x\", \"~k2-body\", \"y\", \"~k2-l\", \"~k2-h\", \"ex:K2\"]
+k3[0]: [\"te\", \"out\", \"~k3-body\", \"in\", \"~k3-hout\", \"~k3-l\", \"~k3-hin\"]
+k3[1]: [\"te\", \"out\", \"~k3-body\", \"in\", \"~k3-hout\", \"~k3-l\", \"~k3-hin\"]
+k4[0]: [\"thr\", \"out\", \"~k4-body\", \"in\", \"~k4-hout\", \"~k4-l\", \"~k4-hin\", \"ex:K4\"]
+k4[1]: [\"thr\", \"out\", \"~k4-body\", \"in\", \"~k4-hout\", \"~k4-l\", \"~k4-hin\", \"ex:K4\"]
+k5[0]: [\"out\", \"in\", \"~k5-body\", \"~k5-q\", \"~k5-l\", \"~k5-hin\"]
+k5[1]: [\"out\", \"in\", \"~k5-body\", \"~k5-q\", \"~k5-l\", \"~k5-hin\"]
+k6[0]: [\"out\", \"in\", \"~k6-body\", \"~k6-q\", \"~k6-l\", \"~k6-hin\", \"ex:K6\"]
+k6[1]: [\"out\", \"in\", \"~k6-body\", \"~k6-q\", \"~k6-l\", \"~k6-hin\", \"ex:K6\"]
+k7[0]: [\"x\", \"~k7-bodyin\", \"~k7-m\", \"~k7-h\", \"caught\", \"~k7-l\", \"rv:k7-body\", \"~k7-body\"]
+k7[1]: [\"x\", \"~k7-bodyin\", \"~k7-m\", \"~k7-h\", \"caught\", \"~k7-l\", \"rv:k7-body\", \"~k7-body\"]
 ";
+
+        #! the lines of the output (\c "<case>[<call>]") that are known to differ from the AST interpreter's
+        /** The cases of the review of #6074 (k1-k7 in HandlerReturnUnwind.q), pinned until they are fixed: each line
+            listed must still differ from the AST interpreter's output, and every other line must be the same; a fix
+            makes the check fail until its lines are removed here.  The first call of a function runs as IR in jit and
+            tiered mode and the second one as native code (see ExecModeHarness).
+            - k1, k2: native code releases the replaced value only after the block's remaining handlers have run
+            - k3, k4: a handler's return replaces the value only after the handler's own handlers have run
+            - k5, k6: the return of a handler of a handler does not release the function's interrupted return (IR)
+            - k7: a try statement of the function that catches the exception releases the replaced value only at the
+              catch (IR)
+        */
+        const KnownDiffs = {
+            "ir": ("k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k5[1]", "k6[0]", "k6[1]", "k7[0]", "k7[1]"),
+            "jit": ("k1[1]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k6[0]", "k7[0]"),
+            "tiered": ("k1[1]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k6[0]", "k7[0]"),
+            "qcc -O0": ("k1[0]", "k1[1]", "k2[0]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]"),
+            "qcc -O3": ("k1[0]", "k1[1]", "k2[0]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]"),
+        };
 
         #! the optimization levels of the AOT compiles
         const OptLevels = (0, 3);
@@ -82,7 +115,7 @@ ex3: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
     modeTest(string mode) {
         string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
             libqore_dir, libqore_dir, qore_bin, mode, script));
-        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+        checkOutput(mode, output);
     }
 
     aotTest(int opt) {
@@ -93,6 +126,35 @@ ex3: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
         assertTrue(is_file(exe), "compiled the executable: " + out);
         string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
             libqore_dir, libqore_dir, exe));
-        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+        checkOutput(sprintf("qcc -O%d", opt), output);
+    }
+
+    #! Checks the output of a run against the AST interpreter's, line by line, with the lines of KnownDiffs differing
+    private checkOutput(string mode, string output) {
+        hash<string, string> expected = parseOutput(Expected);
+        hash<string, string> actual = parseOutput(output);
+        assertEq(keys expected, keys actual, mode + ": the cases of the output");
+        hash<string, bool> known = map {$1: True}, KnownDiffs{mode} ?? ();
+        foreach hash<auto> i in (expected.pairIterator()) {
+            if (known{i.key}) {
+                assertNeq(i.value, actual{i.key}, sprintf("%s: %s is known to differ from the AST interpreter; if it "
+                    "no longer does, remove it from KnownDiffs", mode, i.key));
+            } else {
+                assertEq(i.value, actual{i.key}, sprintf("%s: %s as with the AST interpreter", mode, i.key));
+            }
+        }
+    }
+
+    #! Returns the lines of an output by their \c "<case>[<call>]" label
+    private static hash<string, string> parseOutput(string output) {
+        hash<string, string> rv();
+        foreach string line in (output.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            int i = line.find(": ");
+            rv{i > 0 ? line.substr(0, i) : line} = i > 0 ? line.substr(i + 2) : "";
+        }
+        return rv;
     }
 }
