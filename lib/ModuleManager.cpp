@@ -1945,6 +1945,8 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     // a user module importing a binary module can hold objects of its classes, so it is deleted first; a module is
     // applied to a Program without the module manager's mutex, which the record takes (#5953)
     QMM.trySetUserBinaryModuleDependencyLocked(name.c_str());
+    // the module whose Program it is applied to at run time requires it too (qore#5790)
+    QMM.trySetModuleProgramBinaryDependencyLocked(tpgm, name.c_str());
 
     // Make sure getProgram() returns this Program when module_ns_init() is called.
     // A call-only context is not enough when a child Program loads a module from
@@ -6208,17 +6210,52 @@ void QoreModuleManager::cleanup() {
             }
             return user ? CleanupRank::USER : CleanupRank::AOT;
         };
+        // true if the module requires itself, directly or indirectly
+        auto on_cycle = [&](const std::string& start) {
+            strset_t visited;
+            std::vector<std::string> work;
+            auto add_requires = [&](const std::string& name) {
+                auto ri = required_mods.find(name);
+                if (ri != required_mods.end()) {
+                    work.insert(work.end(), ri->second.begin(), ri->second.end());
+                }
+            };
+            add_requires(start);
+            while (!work.empty()) {
+                std::string name = std::move(work.back());
+                work.pop_back();
+                if (name == start) {
+                    return true;
+                }
+                if (visited.insert(name).second) {
+                    add_requires(name);
+                }
+            }
+            return false;
+        };
         // the module of the lowest rank that no module left requires; if every module left is required by another
-        // one, the modules left are in a cycle, which is broken at the module of the lowest rank
+        // one, the modules left are in a cycle, which is broken at the module of the lowest rank among the modules
+        // that are in a cycle (not one that the modules of a cycle require, like a native module that two modules
+        // that load each other at run time require, which must outlive them)
         module_map_t::iterator i = map.end();
         CleanupRank rank = CleanupRank::AOT;
         for (int pass = 0; pass < 2 && i == map.end(); ++pass) {
+            strset_t cycle_mods;
+            if (pass) {
+                for (module_map_t::iterator j = map.begin(), e = map.end(); j != e; ++j) {
+                    if (on_cycle(j->first)) {
+                        cycle_mods.insert(j->first);
+                    }
+                }
+            }
             for (module_map_t::iterator j = map.begin(), e = map.end(); j != e; ++j) {
                 if (!pass) {
                     auto di = dependents.find(j->first);
                     if (di != dependents.end() && di->second) {
                         continue;
                     }
+                } else if (!cycle_mods.empty() && cycle_mods.find(j->first) == cycle_mods.end()) {
+                    continue;
                 }
                 CleanupRank r = get_rank(j);
                 if (i == map.end() || r < rank) {

@@ -986,6 +986,38 @@ bool qore_type_owner_is_live(const QoreTypeOwner* owner) {
     std::lock_guard<std::mutex> lock(r.m);
     return r.live.count(owner) > 0;
 }
+
+namespace {
+//! the types that are not freed
+struct QoreTypeInfoRegistry {
+    std::mutex m;
+    std::set<const QoreTypeInfo*> live;
+};
+
+// not destroyed: types are freed at library cleanup and at static destruction
+QoreTypeInfoRegistry& type_info_registry() {
+    static QoreTypeInfoRegistry* registry = new QoreTypeInfoRegistry;
+    return *registry;
+}
+}
+
+void qore_type_info_created(const QoreTypeInfo* ti) {
+    QoreTypeInfoRegistry& r = type_info_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.insert(ti);
+}
+
+void qore_type_info_destroyed(const QoreTypeInfo* ti) {
+    QoreTypeInfoRegistry& r = type_info_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.erase(ti);
+}
+
+bool qore_type_info_is_live(const QoreTypeInfo* ti) {
+    QoreTypeInfoRegistry& r = type_info_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    return r.live.count(ti) > 0;
+}
 #endif
 
 //! A group of declarations that survived the deletion of their Program together; guarded by ctl (see QoreTypeOwner)
@@ -1337,6 +1369,9 @@ void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreType
     if (!ti) {
         return;
     }
+    // a declaration names the types of its members by pointer: the owner of a type that it names must outlive it, or
+    // be kept by a reference or retired (QoreTypeOwnerBatch)
+    assert(qore_type_info_is_live(ti));
     QoreTypeOwner* o = nullptr;
     if (dynamic_cast<const QoreClassTypeInfo*>(ti)) {
         const QoreClass* qc = QoreTypeInfo::getReturnClass(ti);
