@@ -17868,28 +17868,34 @@ load_local_done:
                         && !explicit_inst
                         && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs, &func) > 0;
                     if (has_last_use_args && !prefer_inline_ir && !type_name_fast_path) {
-                        ReferenceHolder<QoreListNode> arg_list(
-                            buildArgList(values, direct_inst->operands, 0, xsink), xsink);
-                        if (xsink && *xsink) {
-                            return returnAfterUnhandledException();
+                        QoreValue res;
+                        // The call's arguments are released before its exception check: a destructor that raises
+                        // must discard the result before the next instruction can take it as a return value (#6093).
+                        {
+                            ReferenceHolder<QoreListNode> arg_list(
+                                buildArgList(values, direct_inst->operands, 0, xsink), xsink);
+                            if (xsink && *xsink) {
+                                return returnAfterUnhandledException();
+                            }
+                            consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
+                                value_use_counts, &weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                            if (xsink && *xsink) {
+                                return returnAfterUnhandledException();
+                            }
+                            RuntimeConfig& rc = rc_get_current_ref();
+                            QoreProgram* call_pgm = direct_inst->pgm ? direct_inst->pgm : rc.getProgram();
+                            if (!call_pgm) {
+                                call_pgm = getProgram();
+                            }
+                            // the call stack frame of the called code is located at the call
+                            qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
+                            res = direct_inst->func->evalFunctionTmpArgs(
+                                direct_inst->variant, *arg_list, call_pgm, rc, xsink,
+                                explicit_inst);
+                            qore_ir_clear_call_site(rl_cache.loc_ptr);
                         }
-                        consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
-                            value_use_counts, &weak_load_temp_slots, borrowed_temp_remaining, xsink);
                         if (xsink && *xsink) {
-                            return returnAfterUnhandledException();
-                        }
-                        RuntimeConfig& rc = rc_get_current_ref();
-                        QoreProgram* call_pgm = direct_inst->pgm ? direct_inst->pgm : rc.getProgram();
-                        if (!call_pgm) {
-                            call_pgm = getProgram();
-                        }
-                        // the call stack frame of the called code is located at the call
-                        qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
-                        QoreValue res = direct_inst->func->evalFunctionTmpArgs(
-                            direct_inst->variant, *arg_list, call_pgm, rc, xsink,
-                            explicit_inst);
-                        qore_ir_clear_call_site(rl_cache.loc_ptr);
-                        if (xsink && *xsink) {
+                            res.discard(xsink);
                             return returnAfterUnhandledException();
                         }
                         if (direct_inst->has_ref_args) {
