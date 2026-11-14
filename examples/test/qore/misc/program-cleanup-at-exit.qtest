@@ -131,7 +131,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         # reported by the shell only as "Abort trap: 6" or "Aborted", and the reason - a JVM fatal
         # error report, an assertion, a Qore exception - is only in the child's own output.
         # Discarding it left a CI failure with nothing to act on.
-        string out_file = sprintf("%s/qore-cleanup-child-%d.log", tmp_location(), gettid());
+        # the process ID keeps test processes running in parallel from sharing the file
+        string out_file = sprintf("%s/qore-cleanup-child-%d-%d.log", tmp_location(), getpid(), gettid());
         on_exit unlink(out_file);
         int rc = system(sprintf("%s%s%s %s -l %s -e '%s' >%s 2>&1", env_prefix, extra_env, qore_exe, options, module,
             statement, out_file));
