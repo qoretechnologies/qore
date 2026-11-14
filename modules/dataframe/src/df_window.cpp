@@ -291,7 +291,25 @@ static int pivotKey(const ColumnData& cd, int64_t i, std::string& key, std::stri
             return 0;
         }
         if (dt->isRelative()) {
-            *label = dataFrameUtf8Key(v);
+            // the length of the duration in seconds with its microseconds, as an ISO-8601 duration ("PT1.5S"), which
+            // tells every two keys apart
+            int64 micros;
+            if (!dt->getEpochMicrosecondsUTCChecked(micros)) {
+                return dataFrameDateOutOfRange(dt, xsink);
+            }
+            uint64_t abs_micros = micros < 0 ? -static_cast<uint64_t>(micros) : static_cast<uint64_t>(micros);
+            char buf[64];
+            int len = snprintf(buf, sizeof(buf), "%sPT%llu", micros < 0 ? "-" : "",
+                static_cast<unsigned long long>(abs_micros / 1000000));
+            unsigned frac = static_cast<unsigned>(abs_micros % 1000000);
+            if (frac) {
+                len += snprintf(buf + len, sizeof(buf) - len, ".%06u", frac);
+                while (buf[len - 1] == '0') {
+                    --len;
+                }
+            }
+            buf[len++] = 'S';
+            label->assign(buf, len);
         } else {
             QoreString str;
             dt->format(str, "YYYY-MM-DDTHH:mm:SS.usZ");

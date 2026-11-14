@@ -77,6 +77,11 @@ class DataFramePivotTypesTest inherits QUnit::Test {
         wide = dates.pivot("k", "c", "v");
         assertEq(2, wide.numRows(), "dates less than a second apart");
         assertEq(("k", "True", "False"), wide.columnNames(), "bool columns values");
+        # durations are labelled with their length as ISO-8601 durations
+        DataFrame::DataFrame durations({"k": (c'z', PT1S, PT1.5S, -PT2M, PT0S), "c": ("x", "x", "x", "x", "x"),
+            "v": (1, 2, 4, 8, 16)});
+        assertEq(("z", "PT1S", "PT1.5S", "-PT120S", "PT0S"), durations.pivot("k", "c", "v").getColumn("k"),
+            "durations");
         DataFrame::DataFrame ints({"k": ("a", "a"), "c": (1, 2), "v": (1.0, 2.0)});
         assertEq(("k", "1", "2"), ints.pivot("k", "c", "v").columnNames(), "int columns values");
     }
