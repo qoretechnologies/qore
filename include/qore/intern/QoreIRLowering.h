@@ -1036,6 +1036,11 @@ private:
     //! Depth of active catch scopes that need CatchCleanup on non-local exit
     int catch_cleanup_depth = 0;
 
+    //! the number of the scopes of blocks with handlers (handlerScopeCount()) where each active catch block was
+    //! entered, innermost last (one for each catch scope that catch_cleanup_depth counts); see
+    //! catchScopesClosedByThrow()
+    std::vector<size_t> catch_scope_depth_stack;
+
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
         leaves only the catch scopes entered since the try body began; the catch scopes that enclose the try statement
@@ -1057,6 +1062,45 @@ private:
     */
     int catchScopesLeftByThrow() const {
         return catch_cleanup_depth - (try_catch_cleanup_depth_stack.empty() ? 0 : try_catch_cleanup_depth_stack.back());
+    }
+
+    //! Returns the number of the catch scopes left by a throw or rethrow statement at the current point that it closes
+    //! before it raises the exception
+    /** These are the innermost of the catch scopes that the statement leaves (catchScopesLeftByThrow()) up to the
+        first one that a block with handlers separates from the statement: the catch block of the AST interpreter runs
+        its handlers, and those of the blocks in it, with its exception the current one (td->catchException), so that
+        a rethrow in them raises it again (#5968).  The catch scopes that a block with handlers separates from the
+        statement stay open, and the exception path of the outermost such block in each closes it after the block's
+        handlers ran and its locals were released (see lowerStatementBlock()).  A catch scope with no block with
+        handlers between it and the statement (only the scopes of reference foreach and context statements, if any)
+        has no code that can see its exception after the statement, and is closed before it, as before.
+    */
+    int catchScopesClosedByThrow() const {
+        int left = catchScopesLeftByThrow();
+        if (!left) {
+            return 0;
+        }
+        const size_t handler_scopes = handlerScopeCount();
+        int closed = 0;
+        while (closed < left && catch_scope_depth_stack[catch_cleanup_depth - 1 - closed] >= handler_scopes) {
+            ++closed;
+        }
+        return closed;
+    }
+
+    //! Returns the number of the open scopes of blocks with handlers (the Scope entries of cleanup_stack with
+    //! block_scope set)
+    /** The other scopes (those of try statements, reference foreach and context statements) run no code of the
+        program when an exception leaves them.
+    */
+    size_t handlerScopeCount() const {
+        size_t count = 0;
+        for (const BlockCleanupEntry& entry : cleanup_stack) {
+            if (entry.type == BlockCleanupEntry::Scope && entry.block_scope) {
+                ++count;
+            }
+        }
+        return count;
     }
 
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
