@@ -2833,8 +2833,58 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                         type = ColumnType::AUTO;
                     }
                 }
-                if (!same_types) {
+                // int64 and decimal columns make a decimal column, which holds the ints exactly as numbers, or a
+                // column that holds the exact values with no schema if the decimal would have more than 38 digits;
+                // decimal columns of different schemas make one of the schema that holds them all (qore#6144)
+                std::vector<const ColumnData*> cols;
+                cols.push_back(&first);
+                for (size_t d = 1; d < snapshots.size(); ++d) {
+                    auto it = snapshots[d].col_index.find(col.name);
+                    if (it != snapshots[d].col_index.end()) {
+                        cols.push_back(snapshots[d].columns[it->second].data.get());
+                    }
+                }
+                bool dec_has_schema = false;
+                QoreColumnarTypeDescriptor dec_schema;
+                bool int_decimal = !same_types && dataFrameIntDecimalSchema(cols, dec_has_schema, dec_schema);
+                bool decimals = same_types && type == ColumnType::AUTO && dataFrameIsDecimalColumn(first);
+                if (decimals) {
+                    dec_has_schema = true;
+                    dec_schema = first.columnar_schema;
+                    dec_schema.name.clear();
+                    for (size_t i = 1; i < cols.size(); ++i) {
+                        if (!dataFrameIsDecimalColumn(*cols[i])
+                                || !dataFrameMergeColumnSchema(dec_has_schema, dec_schema, first, *cols[i])) {
+                            dec_has_schema = false;
+                            break;
+                        }
+                    }
+                }
+                if (int_decimal) {
+                    // the ints become numbers in a decimal column
+                    QoreListNode* values = col_values.lists[c];
+                    if (dec_has_schema) {
+                        for (size_t i = 0; i < values->size(); ++i) {
+                            if (i && !(i % 100) && qore_check_cancel(xsink, "concatenating DataFrame decimals")) {
+                                return nullptr;
+                            }
+                            QoreValue v = values->retrieveEntry(i);
+                            if (v.getType() == NT_INT) {
+                                values->setEntry(i, new QoreNumberNode(v.getAsBigInt()), xsink);
+                            }
+                        }
+                    }
+                    col.data = buildColumnData(values, ColumnType::AUTO, xsink);
+                    if (!*xsink && dec_has_schema) {
+                        preserveColumnarSchema(*col.data, col.name, dec_schema);
+                    }
+                } else if (!same_types) {
                     col.data = buildColumnDataAuto(col_values.lists[c], xsink);
+                } else if (decimals) {
+                    col.data = buildColumnData(col_values.lists[c], type, xsink);
+                    if (!*xsink && dec_has_schema) {
+                        preserveColumnarSchema(*col.data, col.name, dec_schema);
+                    }
                 } else {
                     keep_schema = type == ColumnType::DATE && duration;
                     col.data = buildColumnData(col_values.lists[c], type, xsink);

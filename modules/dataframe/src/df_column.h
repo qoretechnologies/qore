@@ -434,6 +434,33 @@ static inline void dataFrameCopySchema(ColumnData& dest, const ColumnData& src) 
 DLLLOCAL bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& schema,
         const ColumnData& first, const ColumnData& src);
 
+//! Returns true if the column is a decimal column: one that holds any value (numbers) with a decimal128 schema
+static inline bool dataFrameIsDecimalColumn(const ColumnData& cd) {
+    return cd.type == ColumnType::AUTO && cd.has_columnar_schema
+        && cd.columnar_schema.kind == QoreColumnarTypeKind::Decimal128;
+}
+
+//! Gives the decimal schema of columns that are int64 and decimal columns, with at least one of each (qore#6144)
+/** An int64 column counts as a decimal(19, 0) column: the schema has the largest number of integer digits and the
+    largest scale of the columns, with the other fields of the first decimal schema, no native type, and nullable if
+    a column is; if it would have more than 38 digits, there is none (has_schema is false), and the columns make a
+    column that holds their exact values with no schema, as for the other decimal merges
+    (dataFrameMergeColumnSchema()).
+
+    @return true if the columns are int64 and decimal columns, with at least one of each, false otherwise (the
+    schema is then not set)
+*/
+DLLLOCAL bool dataFrameIntDecimalSchema(const std::vector<const ColumnData*>& cols, bool& has_schema,
+        QoreColumnarTypeDescriptor& schema);
+
+//! Returns a value of a column merged into a decimal column (qore#6144): an int of an int64 column as a number,
+//! which holds it exactly, and any other value as it is, referenced
+DLLLOCAL QoreValue dataFrameDecimalValue(const ColumnData& cd, int64_t row, ExceptionSink* xsink);
+
+//! Appends the key of an arbitrary-precision number, as the key of a value of a column that holds any value
+//! (qore#6144)
+DLLLOCAL void dataFrameAppendNumberKey(std::string& key, const QoreNumberNode* n);
+
 //! Makes a date column a column of durations: gives it the columnar schema of durations in microseconds, so that
 //! its cells are returned as relative dates (qore#6107)
 DLLLOCAL void dataFrameSetDurationSchema(ColumnData& col);

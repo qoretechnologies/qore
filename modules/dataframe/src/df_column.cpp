@@ -313,6 +313,64 @@ bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& sc
     return true;
 }
 
+bool dataFrameIntDecimalSchema(const std::vector<const ColumnData*>& cols, bool& has_schema,
+        QoreColumnarTypeDescriptor& schema) {
+    const ColumnData* first_decimal = nullptr;
+    bool any_int = false;
+    bool nullable = false;
+    int32_t int_digits = 0;
+    int32_t scale = 0;
+    // the types first, with no scan of the cells
+    for (const ColumnData* cd : cols) {
+        if (cd->type != ColumnType::INT64 && !dataFrameIsDecimalColumn(*cd)) {
+            return false;
+        }
+    }
+    for (const ColumnData* cd : cols) {
+        if (cd->type == ColumnType::INT64) {
+            // an int64 holds at most 19 digits
+            any_int = true;
+            int_digits = std::max(int_digits, 19);
+            nullable = nullable || cd->countNull() > 0;
+        } else if (dataFrameIsDecimalColumn(*cd)) {
+            if (!first_decimal) {
+                first_decimal = cd;
+            }
+            const QoreColumnarTypeDescriptor& d = cd->columnar_schema;
+            int_digits = std::max(int_digits, d.precision - d.scale);
+            scale = std::max(scale, d.scale);
+            nullable = nullable || d.nullable;
+        } else {
+            return false;
+        }
+    }
+    if (!any_int || !first_decimal) {
+        return false;
+    }
+    if (int_digits + scale > 38) {
+        has_schema = false;
+        return true;
+    }
+    schema = first_decimal->columnar_schema;
+    schema.name.clear();
+    schema.native_type.clear();
+    schema.precision = int_digits + scale;
+    schema.scale = scale;
+    schema.nullable = nullable;
+    has_schema = true;
+    return true;
+}
+
+QoreValue dataFrameDecimalValue(const ColumnData& cd, int64_t row, ExceptionSink* xsink) {
+    if (cd.isNull(row)) {
+        return QoreValue();
+    }
+    if (cd.type == ColumnType::INT64) {
+        return new QoreNumberNode(static_cast<int64>(cd.int_data[row]));
+    }
+    return cd.getValueAt(row, xsink);
+}
+
 void dataFrameSetDurationSchema(ColumnData& col) {
     col.columnar_schema = QoreColumnarTypeDescriptor();
     col.columnar_schema.kind = QoreColumnarTypeKind::Duration;
@@ -552,6 +610,10 @@ void appendAutoValueKey(std::string& key, QoreValue top) {
 
 void dataFrameAppendAutoValueKey(std::string& key, QoreValue v) {
     appendAutoValueKey(key, v);
+}
+
+void dataFrameAppendNumberKey(std::string& key, const QoreNumberNode* n) {
+    appendNumberKey(key, n);
 }
 
 std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {

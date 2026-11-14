@@ -60,6 +60,9 @@ static void reserveAppendCapacity(QoreDataFrameNS::ColumnData& col, int64_t rows
 
 namespace QoreDataFrameNS {
 
+//! the mode of a key column whose ints are keyed as numbers, to match the numbers of a decimal key column
+static constexpr char KEY_INT_AS_NUMBER = 2;
+
 // Build a key from column values at a given row index; a null value is a component of its own, and any other value
 // is keyed by its type and exact value as groupBy() keys a column that holds any value, so that two values match
 // only if they are equal and of the same type (qore#6116); the key of a value delimits itself.  A key column whose
@@ -79,6 +82,16 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
         key += 'V';
         if (!typed[ki]) {
             dataFrameAppendCellKey(key, cd, row);
+            continue;
+        }
+        if (typed[ki] == KEY_INT_AS_NUMBER) {
+            // an int of an int64 key column matched with a decimal key column: keyed as the number that holds it
+            if (cd.type == ColumnType::INT64) {
+                SimpleRefHolder<QoreNumberNode> n(new QoreNumberNode(static_cast<int64>(cd.int_data[row])));
+                dataFrameAppendNumberKey(key, *n);
+            } else {
+                dataFrameAppendCellKey(key, cd, row);
+            }
             continue;
         }
         switch (cd.type) {
@@ -278,7 +291,9 @@ static void appendKeyRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols, co
             continue;
         }
         ExceptionSink value_xsink;
-        ValueHolder value(src.getValueAt(row_idx, &value_xsink), &value_xsink);
+        // an int in a decimal key column is the number that holds it (qore#6144)
+        ValueHolder value(dataFrameIsDecimalColumn(dest) ? dataFrameDecimalValue(src, row_idx, &value_xsink)
+            : src.getValueAt(row_idx, &value_xsink), &value_xsink);
         dest.null_mask.push_back(0);
         dest.appendAutoValue(*value);
     }
@@ -416,10 +431,18 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
 
     // the key columns whose left and right columns have the same type, other than one that holds any value, whose
     // keys need no type tag
+    // (a key column of int64 and decimal columns is keyed as numbers: KEY_INT_AS_NUMBER, qore#6144)
     std::vector<char> typed_keys(left_key_indices.size());
     for (size_t i = 0; i < left_key_indices.size(); ++i) {
-        ColumnType lt = columns[left_key_indices[i]].data->type;
-        typed_keys[i] = lt == other->columns[right_key_indices[i]].data->type && lt != ColumnType::AUTO;
+        const ColumnData& lk = *columns[left_key_indices[i]].data;
+        const ColumnData& rk = *other->columns[right_key_indices[i]].data;
+        ColumnType lt = lk.type;
+        typed_keys[i] = lt == rk.type && lt != ColumnType::AUTO;
+        bool dec_has_schema;
+        QoreColumnarTypeDescriptor dec_schema;
+        if (!typed_keys[i] && dataFrameIntDecimalSchema({&lk, &rk}, dec_has_schema, dec_schema)) {
+            typed_keys[i] = KEY_INT_AS_NUMBER;
+        }
     }
 
     bool single_int64_key = left_key_indices.size() == 1
@@ -667,10 +690,18 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         auto cd = std::make_shared<ColumnData>();
         const ColumnData& rkey = *other->columns[right_key_indices[i]].data;
         bool right_values = how == "right" || how == "outer";
+        bool dec_has_schema = false;
+        QoreColumnarTypeDescriptor dec_schema;
         if (right_values && rkey.type != lc.data->type) {
-            // the key column holds the keys of both sides, of different types: it holds any value (qore#6116)
+            // the key column holds the keys of both sides, of different types: it holds any value (qore#6116); the
+            // keys of an int64 and a decimal key column make a decimal column, which holds the ints as numbers
+            // (qore#6144)
             cd->type = ColumnType::AUTO;
             mixed_keys = true;
+            if (dataFrameIntDecimalSchema({lc.data.get(), &rkey}, dec_has_schema, dec_schema) && dec_has_schema) {
+                cd->columnar_schema = dec_schema;
+                cd->has_columnar_schema = true;
+            }
         } else {
             cd->type = lc.data->type;
             setJoinKeySchema(*cd, *lc.data, rkey, right_values);

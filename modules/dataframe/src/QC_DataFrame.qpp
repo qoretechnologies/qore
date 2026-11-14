@@ -807,7 +807,9 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
 
     Two rows match if their key values are equal and of the same type, as groupBy() groups the values of a column
     that holds any value: an int and a float, or an int and a string, never match (cast a key column to match
-    values of different types), while an int key column matches the ints of a column that holds any value.  A key
+    values of different types), while an int key column matches the ints of a column that holds any value, and an
+    \c int64 key column the equal numbers of a decimal key column (the key column of a right or outer join of the
+    two is a decimal column, in which an \c int64 column counts as decimal(19, 0) and its ints are numbers).  A key
     column of a right or outer join whose left and right key columns differ in type holds any value, with no schema
     (a decimal and a float key column, for example), and cannot be exported to Arrow or Parquet (toArrowIpc() and
     writeParquet() raise \c DATAFRAME-IO-ERROR); one whose key columns have the same type gets a schema that holds
@@ -1063,7 +1065,11 @@ DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=
     \c "UTC" if their time zones differ, so that an export keeps their values; columns of durations keep the schema
     of the first one, with the time unit \c "us" if their time units differ; other columns are rebuilt from their
     values with no columnar schema.  A column of durations (with a duration schema) with a date column of absolute
-    dates holds any value.  Columns of different types make the column that the column hash constructor makes of
+    dates holds any value.  Decimal columns of different precisions and scales make a decimal column with the
+    largest number of integer digits and the largest scale, and \c int64 and decimal columns a decimal column in
+    which an \c int64 column counts as decimal(19, 0) and its ints are numbers; a decimal of more than 38 digits
+    makes a column that holds the exact values with no schema, which cannot be exported to Arrow or Parquet.  Other
+    columns of different types make the column that the column hash constructor makes of
     their values as the columns return them (see @ref dataframeintro): a date column returns its dates in the local
     time zone, so their string forms in a string column are in local time, and a date column without a duration
     schema holds absolute dates, so a duration in it becomes the date that far from the epoch.
@@ -1898,6 +1904,9 @@ DataFrame DataFrame::pivot(string index_col, string columns_col, string values_c
     The identifier columns keep their types and columnar schemas.  The value column is:
     - a \c float64 column if every value column is an \c int64 or \c float64 column (with the schema of \c float32
       value columns, for example, if they all have it);
+    - a decimal column if the value columns are \c int64 and decimal columns: an \c int64 column counts as
+      decimal(19, 0), the schema has the largest number of integer digits and the largest scale, and the ints are
+      numbers; if it would have more than 38 digits, a column that holds the exact values with no schema;
     - otherwise, if the value columns all have one type, a column of that type with a schema that holds the values
       of all of them: decimals get the largest number of integer digits and the largest scale, temporal columns the
       time unit \c "us" if their units differ and the time zone \c "UTC" if their zones differ, and the schema is
@@ -1908,8 +1917,8 @@ DataFrame DataFrame::pivot(string index_col, string columns_col, string values_c
       concat();
     - otherwise the column that the column hash constructor makes of the values (see @ref dataframeintro), which
       stores scalar values of different types as their string forms (an int and a string value column make a string
-      column, and an int and a decimal value column a \c float64 column) and holds any value if a value is not a
-      scalar; without rows, the value column of value columns of different types is a string column.
+      column) and holds any value if a value is not a scalar; without rows, the value column of value columns of
+      different types is a string column.
 
     @par Example:
     @code{.py}
