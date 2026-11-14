@@ -1165,13 +1165,12 @@ bool QoreFormatBoundsContext::scanEnter(const QoreValue val, unsigned depth, uns
 }
 
 namespace {
-// releases the copy of the data of an object that the scan expands; any exception is ignored, as in the recursive
-// scan, and the format pass reports it
+// releases the copy of the data of an object that the scan expands; as in the recursive scan, an exception raised
+// by the release is reported when the sink is destroyed
 struct FormatScanDataDeref {
     void operator()(QoreHashNode* h) const {
         ExceptionSink xs;
         h->deref(&xs);
-        xs.clear();
     }
 };
 

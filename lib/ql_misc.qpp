@@ -197,7 +197,9 @@ static inline int64 value_byte_size_scalar(qore_type_t type, const QoreValue& v,
     }
 }
 
-// returns the byte size of a deeply nested list or hash, with a work list instead of recursion (qore#6117)
+// returns the byte size of a deeply nested list or hash, with a work list instead of recursion (qore#6117); the
+// total and the error for an object are those of the recursion, but the values are visited in another order, and
+// cancellation is checked every 100 values of the whole walk rather than of each container
 // cold and not inlined: it must not change how the recursive measurement, which measures the values met in practice, is
 // compiled
 __attribute__((cold, noinline)) static int64 value_byte_size_without_recursion(const QoreValue& v,

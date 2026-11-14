@@ -145,6 +145,10 @@ static inline void strindent(QoreString* s, int indent) {
 typedef std::set<const AbstractQoreNode*> nset_t;
 
 static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const QoreValue n, int indent, bool shallow) {
+    // a value nested too deeply raises an exception instead of overflowing the stack (qore#6117)
+    if (check_stack(xsink)) {
+        return;
+    }
     const AbstractQoreNode* p = n.getInternalNode();
     if (n.hasNode()) {
         nset_t::iterator i = nset.lower_bound(p);
