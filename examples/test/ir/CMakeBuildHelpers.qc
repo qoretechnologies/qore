@@ -236,6 +236,13 @@ qore_user_modules(\"qlib/Fixture\")
         mkdir(tmp.path + "/debug/qlib-qmod/ModC", 0755, True);
         write(tmp.path + "/debug/qlib-qmod/ModC/ModC.qmod", "fixture qmod\n");
         symlink("../../debug/qlib-qmod/ModC/ModC.qmod", source_modc + "/ModC.qmod");
+        # and an absolute link that names tree "debug" otherwise than QORE_BUILD_QMOD_DIR (on macOS, CMake names
+        # /private/tmp/... as /tmp/..., and a link to /private/tmp/... was kept)
+        string source_modd = source_qlib + "/ModD";
+        mkdir(source_modd, 0755, True);
+        mkdir(tmp.path + "/debug/qlib-qmod/ModD", 0755, True);
+        write(tmp.path + "/debug/qlib-qmod/ModD/ModD.qmod", "fixture qmod\n");
+        symlink(tmp.path + "/debug/./qlib-qmod/ModD/ModD.qmod", source_modd + "/ModD.qmod");
 
         # the format-change cleanup of tree "debug" removes only its own links
         string out = run(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s -P %s",
@@ -244,7 +251,9 @@ qore_user_modules(\"qlib/Fixture\")
         assertEq(qmods.ModA, readlink(links.ModA), "the link into the other build tree is unchanged: " + out);
         assertFalse(is_link(links.ModB), "the link into the cleaning build tree is removed: " + out);
         assertFalse(is_link(source_modc + "/ModC.qmod"), "a relative link into the cleaning tree is removed: " + out);
-        assertTrue(out.find("Removed 2 generated source qmod symlink(s)") >= 0, out);
+        assertFalse(is_link(source_modd + "/ModD.qmod"),
+            "an absolute link into the cleaning tree named otherwise is removed: " + out);
+        assertTrue(out.find("Removed 3 generated source qmod symlink(s)") >= 0, out);
 
         # the stale-artifact check of tree "debug" does not remove tree "release"'s link to a fresh qmod
         string format_stamp = tmp.path + "/debug/qcc-format.stamp";
