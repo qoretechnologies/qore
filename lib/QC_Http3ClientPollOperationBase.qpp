@@ -1904,6 +1904,19 @@ int Http3ClientPollOperationBase::getSessionId() [flags=RET_VALUE_ONLY] {
     return priv->getSessionId();
 }
 
+//! Returns True once the QUIC handshake of the connection has completed, also after the connection has closed
+/** An error of a connection whose handshake has completed was raised after the server was reached, in the address
+    family of the connection, also while the HTTP/3 layer was still being set up.  Does not block and can be called
+    from any thread
+
+    @return True once the QUIC handshake has completed
+
+    @since %Qore 3.0
+*/
+bool Http3ClientPollOperationBase::isHandshakeComplete() [flags=RET_VALUE_ONLY] {
+    return priv->isHandshakeComplete();
+}
+
 //! Returns True if the QUIC session is still alive
 /** @return True if session is open
 */

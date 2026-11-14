@@ -2567,10 +2567,9 @@ printf("%d connection(s) migrated\n", migrated);
             return;
         }
         Http3ClientConnection h3conn = cast<Http3ClientConnection>(conn);
-        # the QUIC session ID is set when the handshake completes (issue #5944); a send error in the setup of
-        # HTTP/3 right after the handshake, before the ID is set, is still taken as one during the handshake, as by
-        # the C++ connection (is_unreached_error() in lib/QoreHttp3ClientConnection.cpp)
-        if (h3conn.getSessionId()) {
+        # a connection whose QUIC handshake completed reached the server, also if it failed while it set up HTTP/3
+        # (issue #5944)
+        if (h3conn.isHandshakeComplete()) {
             return;
         }
         *int family = h3conn.getAddressFamily();

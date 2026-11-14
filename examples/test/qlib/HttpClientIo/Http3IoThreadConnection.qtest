@@ -291,7 +291,7 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
         }
         list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections(key);
         assertEq(1, conns.size());
-        assertEq(0, cast<HttpClientIo::Http3ClientConnection>(conns[0]).getSessionId(), "no handshake");
+        assertFalse(cast<HttpClientIo::Http3ClientConnection>(conns[0]).isHandshakeComplete(), "no handshake");
         mgr.failConnection(key, conns[0], "QUIC-SEND-ERROR");
         assertEq((AF_INET,), mgr.getFailedFamilies(key), "a send error during the handshake");
 
@@ -301,7 +301,7 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
         assertEq("reached", get(mgr2, sprintf("https://127.0.0.1:%d", quic_port), "HTTP"));
         conns = mgr2.getConnections(key);
         assertEq(1, conns.size());
-        assertTrue(cast<HttpClientIo::Http3ClientConnection>(conns[0]).getSessionId() > 0, "handshake completed");
+        assertTrue(cast<HttpClientIo::Http3ClientConnection>(conns[0]).isHandshakeComplete(), "handshake completed");
         mgr2.failConnection(key, conns[0], "QUIC-SEND-ERROR");
         assertEq((), mgr2.getFailedFamilies(key), "a send error after the handshake");
     }
