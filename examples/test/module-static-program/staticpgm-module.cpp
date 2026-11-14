@@ -242,7 +242,7 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
             t = std::thread([]() {
                 // the thread never ends: the exceptions it can raise before it blocks are reported with its sink
                 ExceptionSink thread_xsink;
-                if (q_register_foreign_thread() == QFT_ERROR) {
+                if (q_register_foreign_thread() != QFT_OK) {
                     // let the module init return, it fails the test with the missing thread
                     (*qph)->callFunction("foreign_release", nullptr, &thread_xsink);
                     return;
@@ -318,9 +318,12 @@ static QoreValue f_staticpgm_foreign_call(const QoreListNode* args, RuntimeConfi
     try {
         t = std::thread([code]() {
             ExceptionSink thread_xsink;
-            if (q_register_foreign_thread() != QFT_ERROR) {
-                code->get<ResolvedCallReferenceNode>()->invoke(nullptr, &thread_xsink).discard(&thread_xsink);
+            if (q_register_foreign_thread() != QFT_OK) {
+                // nothing can wait for the thread: fail fast instead of a hang of the caller
+                fprintf(stderr, "staticpgmcode: cannot register a foreign thread\n");
+                _Exit(2);
             }
+            code->get<ResolvedCallReferenceNode>()->invoke(nullptr, &thread_xsink).discard(&thread_xsink);
             code->discard(&thread_xsink);
             delete code;
             thread_xsink.handleExceptions();
