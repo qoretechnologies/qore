@@ -4218,6 +4218,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 && (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements)) {
             dbg_block->block_locals = std::make_unique<QoreIRDebugBlockLocals>();
             dbg_block->block_locals->locals = lvars->lv;
+            // the depth of the statement that contains the block, which the locals are recorded on: the frame can
+            // still have the statements of another block of the statement in it whose ends did not run, as with the
+            // try block of a catch block (#5999)
+            if (debug_nest_depth) {
+                dbg_block->nest_depth = static_cast<uint16_t>(debug_nest_depth - 1);
+                dbg_block->nest_flags = QORE_IR_DEBUG_NEST_VALID;
+            }
         }
     } else if (handler_body && (builder.getFunction()->source_dpgm_addr
             || builder.getFunction()->emit_debug_statements)) {

@@ -7565,7 +7565,13 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_block(QoreIRDebugFrameState& s
     if (n.entries.empty()) {
         return;
     }
-    n.entries.back().block = inst;
+    // the statement that contains the block, if its depth is known; the last statement that the frame entered can be
+    // one of another block of that statement whose end did not run, as with the try block of a catch block (#5999)
+    if ((inst->nest_flags & QORE_IR_DEBUG_NEST_VALID) && inst->nest_depth < n.entries.size()) {
+        n.entries[inst->nest_depth].block = inst;
+    } else {
+        n.entries.back().block = inst;
+    }
     n.func = func;
     n.pre_instantiated = pre_instantiated;
 }
