@@ -39,6 +39,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -1337,6 +1338,112 @@ enum class QoreIRFusedCallTargetCheck : uint8_t {
     Other,          //!< any other call: always the full check
 };
 
+//! The class of an IR instruction object, for checked downcasts that need no RTTI (see qore_ir_inst_cast())
+/** Each instruction class passes its own tag to its base class constructor, so the tag names the most
+    derived class of the object; a class with subclasses accepts their tags in its isInstClass().
+*/
+enum class QoreIRInstClass : uint8_t {
+    Base,  //!< QoreIRInstruction itself
+    Plugin,
+    DebugStatement,
+    Const,
+    Branch,
+    BranchIf,
+    SwitchInt,
+    SwitchString,
+    Phi,
+    Guard,
+    Return,
+    Throw,
+    Local,
+    Var,
+    ImplicitArg,
+    HashKeyAccess,
+    HashKeyStore,
+    HashKeyStoreDynamic,
+    LValuePath,
+    ListIndexAccess,
+    ListIndexStore,
+    AddAssignLocalInt,
+    IncrementLocalInt,
+    BranchIfLtLocalInt,
+    MapHashKey,
+    MakeList,
+    MakeHash,
+    MakeHashConstKeys,
+    SelfMember,
+    StaticVar,
+    NewObject,
+    LoadConstant,
+    CreateClosure,
+    CreateCallRef,
+    CreateMethodRef,
+    CreateParseRef,
+    NewHashDecl,
+    NewComplexHash,
+    NewComplexList,
+    NewComplexBuffer,
+    VrnConstruct,
+    NewHashDeclFromHash,
+    LValue,
+    Expr,
+    Background,
+    StringConsumerCall,
+    CallDirect,
+    CallMethodDirect,
+    InvokeMethodDirect,
+    CallStaticDirect,
+    DotEvalMethodDirect,
+    InvokeDotEvalMethodDirect,
+    IteratorCreate,
+    IteratorNext,
+    OnBlockExit,
+    ScopeEnter,
+    ScopeExit,
+    Context,
+    Backquote,
+    ContextRef,
+    Find,
+    Summarize,
+    Invoke,
+    LandingPad,
+    SwitchRegexMatch,
+    SwitchCaseMatch,
+    RefForeachInit,
+    CallAOTHelper,
+};
+
+//! The class tag of an IR instruction object: a copy of the object has the same class, an assignment keeps it
+/** An assignment to the QoreIRInstruction part of an instruction (copying the common fields from an instruction of
+    another class) must not change the class of the object assigned to.
+*/
+class QoreIRInstClassTag {
+public:
+    constexpr QoreIRInstClassTag(QoreIRInstClass c) : cls(c) {
+    }
+
+    QoreIRInstClassTag(const QoreIRInstClassTag&) = default;
+
+    //! Keeps the class of the object assigned to
+    QoreIRInstClassTag& operator=(const QoreIRInstClassTag&) {
+        return *this;
+    }
+
+    constexpr operator QoreIRInstClass() const {
+        return cls;
+    }
+
+private:
+    QoreIRInstClass cls;
+};
+
+//! Declares the instruction class tag of an IR instruction class without subclasses
+#define QORE_IR_INST_CLASS(name) \
+    static constexpr QoreIRInstClass inst_class_id = QoreIRInstClass::name; \
+    static constexpr bool isInstClass(QoreIRInstClass c) { \
+        return c == inst_class_id; \
+    }
+
 class QoreIRInstruction {
 public:
     enum class AOTStringCaseComparisonKind : uint8_t {
@@ -1349,12 +1456,15 @@ public:
         Ge,
     };
 
-    explicit QoreIRInstruction(QoreIROpcode op) : opcode(op), cached_start_line(-1) {
+    explicit QoreIRInstruction(QoreIROpcode op, QoreIRInstClass cls = QoreIRInstClass::Base) : opcode(op),
+            inst_class(cls), cached_start_line(-1) {
     }
 
     virtual ~QoreIRInstruction() = default;
 
     QoreIROpcode opcode;
+    //! The class of this object; set on construction and never changed (see qore_ir_inst_cast())
+    QoreIRInstClassTag inst_class;
     // -1 = no loc, >=0 = loc->start_line (fills the padding after the opcode, so 32 bits are free here); must be
     // 32-bit to match QoreProgramLineLocation::start_line, or lines > 32767 wrap to negative values and the
     // debug line-change gate below reports the wrong line
@@ -1423,8 +1533,10 @@ struct QoreIRPluginOperationRef {
 
 class QoreIRPluginInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(Plugin)
+
     QoreIRPluginInstruction(QoreIROpcode op, QoreIRPluginOperationRef n_operation = {})
-            : QoreIRInstruction(op), operation(std::move(n_operation)) {
+            : QoreIRInstruction(op, inst_class_id), operation(std::move(n_operation)) {
     }
 
     QoreIRPluginOperationRef operation;
@@ -1456,13 +1568,15 @@ struct QoreIRDebugBlockLocals {
 //! The step event of the debugger for a statement (QoreIROpcode::DebugStatement)
 class QoreIRDebugStatementInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(DebugStatement)
+
     explicit QoreIRDebugStatementInstruction(const AbstractStatement* n_statement)
-            : QoreIRInstruction(QoreIROpcode::DebugStatement), statement(n_statement) {
+            : QoreIRInstruction(QoreIROpcode::DebugStatement, inst_class_id), statement(n_statement) {
     }
 
     //! Creates a DebugStatement instruction, or a DebugBlock instruction for the given block
     DLLLOCAL QoreIRDebugStatementInstruction(QoreIROpcode op, const AbstractStatement* n_statement)
-            : QoreIRInstruction(op), statement(n_statement) {
+            : QoreIRInstruction(op, inst_class_id), statement(n_statement) {
         assert(op == QoreIROpcode::DebugStatement || op == QoreIROpcode::DebugBlock);
     }
 
@@ -1490,7 +1604,9 @@ public:
 
 class QoreIRConstInstruction : public QoreIRInstruction {
 public:
-    QoreIRConstInstruction() : QoreIRInstruction(QoreIROpcode::ConstNothing) {
+    QORE_IR_INST_CLASS(Const)
+
+    QoreIRConstInstruction() : QoreIRInstruction(QoreIROpcode::ConstNothing, inst_class_id) {
     }
 
     QoreIRConstant constant;
@@ -1498,7 +1614,9 @@ public:
 
 class QoreIRBranchInstruction : public QoreIRInstruction {
 public:
-    QoreIRBranchInstruction() : QoreIRInstruction(QoreIROpcode::Br) {
+    QORE_IR_INST_CLASS(Branch)
+
+    QoreIRBranchInstruction() : QoreIRInstruction(QoreIROpcode::Br, inst_class_id) {
     }
 
     QoreIRBasicBlock* target = nullptr;
@@ -1506,7 +1624,9 @@ public:
 
 class QoreIRBranchIfInstruction : public QoreIRInstruction {
 public:
-    QoreIRBranchIfInstruction() : QoreIRInstruction(QoreIROpcode::BrIf) {
+    QORE_IR_INST_CLASS(BranchIf)
+
+    QoreIRBranchIfInstruction() : QoreIRInstruction(QoreIROpcode::BrIf, inst_class_id) {
     }
 
     QoreIRValue condition{};
@@ -1523,7 +1643,9 @@ struct QoreIRSwitchCase {
 //! Integer switch instruction - maps to LLVM switch for efficient dispatch
 class QoreIRSwitchIntInstruction : public QoreIRInstruction {
 public:
-    QoreIRSwitchIntInstruction() : QoreIRInstruction(QoreIROpcode::SwitchInt) {
+    QORE_IR_INST_CLASS(SwitchInt)
+
+    QoreIRSwitchIntInstruction() : QoreIRInstruction(QoreIROpcode::SwitchInt, inst_class_id) {
     }
 
     QoreIRValue switch_val{};                       //!< Value being switched on
@@ -1540,7 +1662,9 @@ struct QoreIRSwitchStringCase {
 //! String switch instruction - uses hash-table lookup for efficient dispatch
 class QoreIRSwitchStringInstruction : public QoreIRInstruction {
 public:
-    QoreIRSwitchStringInstruction() : QoreIRInstruction(QoreIROpcode::SwitchString) {
+    QORE_IR_INST_CLASS(SwitchString)
+
+    QoreIRSwitchStringInstruction() : QoreIRInstruction(QoreIROpcode::SwitchString, inst_class_id) {
     }
 
     QoreIRValue switch_val{};                           //!< Value being switched on (string)
@@ -1564,7 +1688,9 @@ enum class QoreIRPhiValueKind : uint8_t {
 
 class QoreIRPhiInstruction : public QoreIRInstruction {
 public:
-    QoreIRPhiInstruction() : QoreIRInstruction(QoreIROpcode::Phi) {
+    QORE_IR_INST_CLASS(Phi)
+
+    QoreIRPhiInstruction() : QoreIRInstruction(QoreIROpcode::Phi, inst_class_id) {
     }
 
     QoreIRPhiValueKind value_kind = QoreIRPhiValueKind::QoreValue;
@@ -1849,7 +1975,9 @@ struct TypeProfile {
 
 class QoreIRGuardInstruction : public QoreIRInstruction {
 public:
-    explicit QoreIRGuardInstruction(QoreIROpcode op) : QoreIRInstruction(op) {
+    QORE_IR_INST_CLASS(Guard)
+
+    explicit QoreIRGuardInstruction(QoreIROpcode op) : QoreIRInstruction(op, inst_class_id) {
     }
 
     QoreIRBasicBlock* deopt_target = nullptr;
@@ -1859,7 +1987,9 @@ public:
 
 class QoreIRReturnInstruction : public QoreIRInstruction {
 public:
-    QoreIRReturnInstruction() : QoreIRInstruction(QoreIROpcode::ReturnNothing) {
+    QORE_IR_INST_CLASS(Return)
+
+    QoreIRReturnInstruction() : QoreIRInstruction(QoreIROpcode::ReturnNothing, inst_class_id) {
     }
 
     bool has_value = false;
@@ -1887,7 +2017,9 @@ public:
 
 class QoreIRThrowInstruction : public QoreIRInstruction {
 public:
-    QoreIRThrowInstruction(QoreIROpcode op = QoreIROpcode::Throw) : QoreIRInstruction(op) {
+    QORE_IR_INST_CLASS(Throw)
+
+    QoreIRThrowInstruction(QoreIROpcode op = QoreIROpcode::Throw) : QoreIRInstruction(op, inst_class_id) {
     }
 
     QoreIRBasicBlock* exception_target = nullptr;
@@ -1900,8 +2032,10 @@ public:
 
 class QoreIRLocalInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(Local)
+
     QoreIRLocalInstruction(QoreIROpcode op, LocalVar* n_local, bool n_auto_ref = true)
-            : QoreIRInstruction(op), local(n_local), auto_ref(n_auto_ref) {
+            : QoreIRInstruction(op, inst_class_id), local(n_local), auto_ref(n_auto_ref) {
     }
 
     LocalVar* local = nullptr;
@@ -1922,7 +2056,9 @@ public:
 
 class QoreIRVarInstruction : public QoreIRInstruction {
 public:
-    QoreIRVarInstruction(QoreIROpcode op, Var* n_var) : QoreIRInstruction(op), var(n_var) {
+    QORE_IR_INST_CLASS(Var)
+
+    QoreIRVarInstruction(QoreIROpcode op, Var* n_var) : QoreIRInstruction(op, inst_class_id), var(n_var) {
     }
 
     Var* var = nullptr;
@@ -1933,8 +2069,10 @@ public:
 //! Implicit argument reference instruction - loads $1, $2, etc.
 class QoreIRImplicitArgInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(ImplicitArg)
+
     explicit QoreIRImplicitArgInstruction(int n_offset)
-            : QoreIRInstruction(QoreIROpcode::LoadImplicitArg), offset(n_offset) {
+            : QoreIRInstruction(QoreIROpcode::LoadImplicitArg, inst_class_id), offset(n_offset) {
     }
 
     int offset = 0;  // 0 for $1, 1 for $2, etc.
@@ -1943,9 +2081,11 @@ public:
 //! Hash key access instruction - loads hash.key directly (no AST delegation)
 class QoreIRHashKeyAccessInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(HashKeyAccess)
+
     explicit QoreIRHashKeyAccessInstruction(const char* n_key_name,
             QoreIROpcode op = QoreIROpcode::HashKeyAccess)
-            : QoreIRInstruction(op), key_name(n_key_name) {
+            : QoreIRInstruction(op, inst_class_id), key_name(n_key_name) {
     }
 
     std::string key_name;
@@ -1954,8 +2094,10 @@ public:
 //! Hash element store instruction — write hash{const_key} = value with COW support
 class QoreIRHashKeyStoreInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(HashKeyStore)
+
     QoreIRHashKeyStoreInstruction(const VarRefNode* n_container, const char* n_key)
-            : QoreIRInstruction(QoreIROpcode::HashKeyStore),
+            : QoreIRInstruction(QoreIROpcode::HashKeyStore, inst_class_id),
               container(n_container), key_name(n_key) {
     }
 
@@ -1979,8 +2121,10 @@ public:
 //! IR operand. Like HashKeyStore but handles dynamic (non-constant) keys.
 class QoreIRHashKeyStoreDynamicInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(HashKeyStoreDynamic)
+
     QoreIRHashKeyStoreDynamicInstruction(const VarRefNode* n_container)
-            : QoreIRInstruction(QoreIROpcode::HashKeyStoreDynamic),
+            : QoreIRInstruction(QoreIROpcode::HashKeyStoreDynamic, inst_class_id),
               container(n_container) {
     }
 
@@ -2191,8 +2335,10 @@ static inline QoreValue qore_ir_unique_container(const QoreValue& value, bool& c
 
 class QoreIRLValuePathInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(LValuePath)
+
     QoreIRLValuePathInstruction(QoreIROpcode op)
-            : QoreIRInstruction(op) {
+            : QoreIRInstruction(op, inst_class_id) {
     }
 
     ~QoreIRLValuePathInstruction() override {
@@ -2280,8 +2426,10 @@ DLLLOCAL QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t 
 //! List index access instruction - loads list[index] directly (no AST delegation)
 class QoreIRListIndexAccessInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(ListIndexAccess)
+
     explicit QoreIRListIndexAccessInstruction()
-            : QoreIRInstruction(QoreIROpcode::ListIndexAccess) {
+            : QoreIRInstruction(QoreIROpcode::ListIndexAccess, inst_class_id) {
     }
     // operands[0] = list container
     // operands[1] = index expression
@@ -2290,8 +2438,10 @@ public:
 //! List index store instruction - write value to list[index] with COW support
 class QoreIRListIndexStoreInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(ListIndexStore)
+
     explicit QoreIRListIndexStoreInstruction(const VarRefNode* n_container)
-            : QoreIRInstruction(QoreIROpcode::ListIndexStore),
+            : QoreIRInstruction(QoreIROpcode::ListIndexStore, inst_class_id),
               container(n_container) {
     }
 
@@ -2313,8 +2463,10 @@ public:
 //! Replaces LoadLocal(target) + LoadLocal(source) + AddAssignInt + StoreLocal(target)
 class QoreIRAddAssignLocalIntInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(AddAssignLocalInt)
+
     QoreIRAddAssignLocalIntInstruction(LocalVar* n_target, LocalVar* n_source)
-            : QoreIRInstruction(QoreIROpcode::AddAssignLocalInt),
+            : QoreIRInstruction(QoreIROpcode::AddAssignLocalInt, inst_class_id),
               target(n_target), source(n_source) {
     }
 
@@ -2329,8 +2481,10 @@ public:
 //! Replaces LoadLocal + ConstInt(delta) + AddAssignInt + StoreLocal
 class QoreIRIncrementLocalIntInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(IncrementLocalInt)
+
     QoreIRIncrementLocalIntInstruction(LocalVar* n_local, int64_t n_delta)
-            : QoreIRInstruction(QoreIROpcode::IncrementLocalInt),
+            : QoreIRInstruction(QoreIROpcode::IncrementLocalInt, inst_class_id),
               local(n_local), delta(n_delta) {
     }
 
@@ -2344,9 +2498,11 @@ public:
 //! Replaces LoadLocal(lhs) + LoadLocal(rhs) + LtInt + BranchIf
 class QoreIRBranchIfLtLocalIntInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(BranchIfLtLocalInt)
+
     QoreIRBranchIfLtLocalIntInstruction(LocalVar* n_lhs, LocalVar* n_rhs,
             QoreIRBasicBlock* n_true_target, QoreIRBasicBlock* n_false_target)
-            : QoreIRInstruction(QoreIROpcode::BranchIfLtLocalInt),
+            : QoreIRInstruction(QoreIROpcode::BranchIfLtLocalInt, inst_class_id),
               lhs(n_lhs), rhs(n_rhs),
               true_target(n_true_target), false_target(n_false_target) {
     }
@@ -2362,21 +2518,70 @@ public:
 //! Map hash key instruction - fully specialized map over hash key access
 class QoreIRMapHashKeyInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(MapHashKey)
+
     QoreIRMapHashKeyInstruction(QoreIROpcode op, const char* n_key1, const char* n_key2 = nullptr)
-            : QoreIRInstruction(op), key1(n_key1), key2(n_key2 ? n_key2 : "") {
+            : QoreIRInstruction(op, inst_class_id), key1(n_key1), key2(n_key2 ? n_key2 : "") {
     }
 
     std::string key1;  //!< primary key name
     std::string key2;  //!< secondary key (HashMapTwoKeys only)
 };
 
+//! The constant container that a MakeList or MakeHash rebuilds from its entries (qore#5977)
+/** QoreIRLowering::lowerConstant() rebuilds a small constant container from one operand per entry, so that the
+    fixed-aggregate scalar replacement can remove it; it records the constant here when the container could be loaded
+    by reference instead (QoreIRLowering::constantContainerLoadsByReference()).  An instruction that the scalar
+    replacement leaves in place is then turned into a LoadConstant of the value when all its uses only read it
+    (qore_ir_optimize()).  The holder owns a reference to the value; a fully concrete constant holds no object, so
+    releasing it runs no code.
+*/
+class QoreIRRebuiltConstant {
+public:
+    DLLLOCAL QoreIRRebuiltConstant() = default;
+    QoreIRRebuiltConstant(const QoreIRRebuiltConstant&) = delete;
+    QoreIRRebuiltConstant& operator=(const QoreIRRebuiltConstant&) = delete;
+
+    DLLLOCAL ~QoreIRRebuiltConstant() {
+        clear();
+    }
+
+    //! Records \a value, which must be a concrete list or hash
+    DLLLOCAL void set(const QoreValue& value) {
+        clear();
+        value_ = value.refSelf();
+    }
+
+    DLLLOCAL void clear() {
+        if (value_.hasNode()) {
+            ExceptionSink xsink;
+            value_.discard(&xsink);
+            value_ = QoreValue();
+        }
+    }
+
+    DLLLOCAL bool isSet() const {
+        return value_.hasNode();
+    }
+
+    DLLLOCAL const QoreValue& get() const {
+        return value_;
+    }
+
+private:
+    QoreValue value_;
+};
+
 //! Make list instruction with optional parse-time type info
 class QoreIRMakeListInstruction : public QoreIRInstruction {
 public:
-    explicit QoreIRMakeListInstruction() : QoreIRInstruction(QoreIROpcode::MakeList) {
+    QORE_IR_INST_CLASS(MakeList)
+
+    explicit QoreIRMakeListInstruction() : QoreIRInstruction(QoreIROpcode::MakeList, inst_class_id) {
     }
 
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+    QoreIRRebuiltConstant rebuilt_constant;  //!< the constant this instruction rebuilds, if any
 };
 
 //! Make hash instruction with optional parse-time type info.
@@ -2384,17 +2589,22 @@ public:
 //! native integer capacity hint used only for initially empty map results.
 class QoreIRMakeHashInstruction : public QoreIRInstruction {
 public:
-    explicit QoreIRMakeHashInstruction() : QoreIRInstruction(QoreIROpcode::MakeHash) {
+    QORE_IR_INST_CLASS(MakeHash)
+
+    explicit QoreIRMakeHashInstruction() : QoreIRInstruction(QoreIROpcode::MakeHash, inst_class_id) {
     }
 
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
+    QoreIRRebuiltConstant rebuilt_constant;  //!< the constant this instruction rebuilds, if any
 };
 
 //! Make hash with constant string keys - operands are values only, keys are pre-stored
 class QoreIRMakeHashConstKeysInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(MakeHashConstKeys)
+
     QoreIRMakeHashConstKeysInstruction(std::vector<std::string>&& n_keys)
-            : QoreIRInstruction(QoreIROpcode::MakeHashConstKeys), keys(std::move(n_keys)) {
+            : QoreIRInstruction(QoreIROpcode::MakeHashConstKeys, inst_class_id), keys(std::move(n_keys)) {
         if (keys.size() > 100) {
             unique_keys = false;
             return;
@@ -2417,8 +2627,10 @@ public:
 //! Self member access instruction - loads self.member_name
 class QoreIRSelfMemberInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(SelfMember)
+
     explicit QoreIRSelfMemberInstruction(const char* n_member_name)
-            : QoreIRInstruction(QoreIROpcode::LoadSelfMember), member_name(n_member_name) {
+            : QoreIRInstruction(QoreIROpcode::LoadSelfMember, inst_class_id), member_name(n_member_name) {
     }
 
     std::string member_name;
@@ -2427,8 +2639,10 @@ public:
 //! Static class variable access instruction - loads a static class variable
 class QoreIRStaticVarInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(StaticVar)
+
     QoreIRStaticVarInstruction(QoreVarInfo* n_vi, const char* n_var_name, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::LoadStaticVar), vi(n_vi), var_name(n_var_name),
+            : QoreIRInstruction(QoreIROpcode::LoadStaticVar, inst_class_id), vi(n_vi), var_name(n_var_name),
               expr(n_expr) {
         expr.ref();
     }
@@ -2446,10 +2660,12 @@ public:
 //! Object instantiation instruction - calls constructor directly
 class QoreIRNewObjectInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(NewObject)
+
     QoreIRNewObjectInstruction(const QoreClass* n_qc, const AbstractQoreFunctionVariant* n_variant,
             const QoreValue& n_expr = QoreValue(), const QoreTypeInfo* n_object_type_info = nullptr,
             const char* n_class_path = nullptr, const char* n_variant_sig = nullptr)
-            : QoreIRInstruction(QoreIROpcode::NewObject), qc(n_qc), variant(n_variant),
+            : QoreIRInstruction(QoreIROpcode::NewObject, inst_class_id), qc(n_qc), variant(n_variant),
               expr(n_expr), object_type_info(n_object_type_info),
               class_path(n_class_path ? n_class_path : ""), variant_sig(n_variant_sig ? n_variant_sig : "") {
         expr.ref();
@@ -2487,8 +2703,10 @@ public:
 //! Runtime constant load instruction - loads ConstantEntry::saved_val
 class QoreIRLoadConstantInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(LoadConstant)
+
     QoreIRLoadConstantInstruction(const RuntimeConstantRefNode* n_node, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::LoadConstant), node(n_node), expr(n_expr) {
+            : QoreIRInstruction(QoreIROpcode::LoadConstant, inst_class_id), node(n_node), expr(n_expr) {
         expr.ref();
     }
 
@@ -2504,9 +2722,11 @@ public:
 //! Closure creation instruction - creates QoreClosureNode or QoreObjectClosureNode
 class QoreIRCreateClosureInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(CreateClosure)
+
     QoreIRCreateClosureInstruction(const QoreClosureParseNode* n_closure_node,
             const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::CreateClosure), closure_node(n_closure_node),
+            : QoreIRInstruction(QoreIROpcode::CreateClosure, inst_class_id), closure_node(n_closure_node),
               expr(n_expr) {
         expr.ref();
     }
@@ -2523,8 +2743,10 @@ public:
 //! Call reference creation instruction - creates function/static method call references
 class QoreIRCreateCallRefInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(CreateCallRef)
+
     QoreIRCreateCallRefInstruction(const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::CreateCallRef), expr(n_expr) {
+            : QoreIRInstruction(QoreIROpcode::CreateCallRef, inst_class_id), expr(n_expr) {
         expr.ref();
     }
 
@@ -2539,8 +2761,10 @@ public:
 //! Method reference creation instruction - creates object method call references
 class QoreIRCreateMethodRefInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(CreateMethodRef)
+
     QoreIRCreateMethodRefInstruction(const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::CreateMethodRef), expr(n_expr) {
+            : QoreIRInstruction(QoreIROpcode::CreateMethodRef, inst_class_id), expr(n_expr) {
         expr.ref();
     }
 
@@ -2555,8 +2779,10 @@ public:
 //! Parse reference creation instruction - creates \var lvalue references
 class QoreIRCreateParseRefInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(CreateParseRef)
+
     QoreIRCreateParseRefInstruction(const ParseReferenceNode* n_node, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::CreateParseRef), node(n_node), expr(n_expr) {
+            : QoreIRInstruction(QoreIROpcode::CreateParseRef, inst_class_id), node(n_node), expr(n_expr) {
         expr.ref();
     }
 
@@ -2572,8 +2798,10 @@ public:
 //! Hashdecl construction instruction
 class QoreIRNewHashDeclInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(NewHashDecl)
+
     QoreIRNewHashDeclInstruction(const NewHashDeclNode* n_node, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::NewHashDecl), node(n_node), expr(n_expr) {
+            : QoreIRInstruction(QoreIROpcode::NewHashDecl, inst_class_id), node(n_node), expr(n_expr) {
         expr.ref();
     }
 
@@ -2589,8 +2817,10 @@ public:
 //! Complex hash construction instruction
 class QoreIRNewComplexHashInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(NewComplexHash)
+
     QoreIRNewComplexHashInstruction(const NewComplexHashNode* n_node, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::NewComplexHash), node(n_node), expr(n_expr) {
+            : QoreIRInstruction(QoreIROpcode::NewComplexHash, inst_class_id), node(n_node), expr(n_expr) {
         expr.ref();
     }
 
@@ -2606,8 +2836,10 @@ public:
 //! Complex list construction instruction
 class QoreIRNewComplexListInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(NewComplexList)
+
     QoreIRNewComplexListInstruction(const NewComplexListNode* n_node, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::NewComplexList), node(n_node), expr(n_expr) {
+            : QoreIRInstruction(QoreIROpcode::NewComplexList, inst_class_id), node(n_node), expr(n_expr) {
         expr.ref();
     }
 
@@ -2623,8 +2855,10 @@ public:
 //! Complex buffer construction instruction
 class QoreIRNewComplexBufferInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(NewComplexBuffer)
+
     QoreIRNewComplexBufferInstruction(const NewComplexBufferNode* n_node, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::NewComplexBuffer), node(n_node), expr(n_expr) {
+            : QoreIRInstruction(QoreIROpcode::NewComplexBuffer, inst_class_id), node(n_node), expr(n_expr) {
         expr.ref();
     }
 
@@ -2640,8 +2874,10 @@ public:
 //! VarRefNewObjectNode construction instruction - constructs value for typed variable declarations
 class QoreIRVrnConstructInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(VrnConstruct)
+
     QoreIRVrnConstructInstruction(const VarRefNewObjectNode* n_vrn, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::VrnConstruct), vrn(n_vrn), expr(n_expr) {
+            : QoreIRInstruction(QoreIROpcode::VrnConstruct, inst_class_id), vrn(n_vrn), expr(n_expr) {
         expr.ref();
     }
 
@@ -2661,14 +2897,16 @@ public:
 //! instructions. This enables correct AOT serialization.
 class QoreIRNewHashDeclFromHashInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(NewHashDeclFromHash)
+
     QoreIRNewHashDeclFromHashInstruction(const TypedHashDecl* n_hd, bool n_runtime_check)
-            : QoreIRInstruction(QoreIROpcode::NewHashDeclFromHash), hd(n_hd),
+            : QoreIRInstruction(QoreIROpcode::NewHashDeclFromHash, inst_class_id), hd(n_hd),
               runtime_check(n_runtime_check) {
     }
 
     QoreIRNewHashDeclFromHashInstruction(const char* n_hd_path, const TypedHashDecl* n_hd,
             bool n_runtime_check)
-            : QoreIRInstruction(QoreIROpcode::NewHashDeclFromHash), hd(n_hd),
+            : QoreIRInstruction(QoreIROpcode::NewHashDeclFromHash, inst_class_id), hd(n_hd),
               hd_path(n_hd_path ? n_hd_path : ""),
               runtime_check(n_runtime_check) {
     }
@@ -2680,9 +2918,11 @@ public:
 
 class QoreIRLValueInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(LValue)
+
     QoreIRLValueInstruction(QoreIROpcode op, const QoreValue& n_lvalue,
             AssignmentMode n_mode = AssignmentMode::Normal)
-            : QoreIRInstruction(op), lvalue(n_lvalue), mode(n_mode) {
+            : QoreIRInstruction(op, inst_class_id), lvalue(n_lvalue), mode(n_mode) {
         lvalue.ref();
     }
 
@@ -2709,7 +2949,13 @@ public:
 
 class QoreIRExprInstruction : public QoreIRInstruction {
 public:
-    QoreIRExprInstruction(QoreIROpcode op, const QoreValue& n_expr) : QoreIRInstruction(op), expr(n_expr) {
+    static constexpr QoreIRInstClass inst_class_id = QoreIRInstClass::Expr;
+    static constexpr bool isInstClass(QoreIRInstClass c) {
+        return c == QoreIRInstClass::Expr || c == QoreIRInstClass::Background;
+    }
+
+    QoreIRExprInstruction(QoreIROpcode op, const QoreValue& n_expr, QoreIRInstClass cls = inst_class_id)
+            : QoreIRInstruction(op, cls), expr(n_expr) {
         expr.ref();
     }
 
@@ -2749,9 +2995,11 @@ struct QoreIROwnedLocalVarDeleter {
 */
 class QoreIRBackgroundInstruction : public QoreIRExprInstruction {
 public:
+    QORE_IR_INST_CLASS(Background)
+
     QoreIRBackgroundInstruction(QoreIRBackgroundKind n_kind, std::string n_name,
             const QoreValue& n_expr = QoreValue())
-            : QoreIRExprInstruction(QoreIROpcode::BackgroundInt, n_expr),
+            : QoreIRExprInstruction(QoreIROpcode::BackgroundInt, n_expr, inst_class_id),
               kind(n_kind),
               name(std::move(n_name)) {
     }
@@ -2857,6 +3105,12 @@ private:
 //! Common metadata for exact calls whose string result is consumed in AOT lowering.
 class QoreIRStringConsumerCallInstruction : public QoreIRInstruction {
 public:
+    static constexpr QoreIRInstClass inst_class_id = QoreIRInstClass::StringConsumerCall;
+    static constexpr bool isInstClass(QoreIRInstClass c) {
+        return c == QoreIRInstClass::StringConsumerCall || c == QoreIRInstClass::CallDirect
+            || c == QoreIRInstClass::CallMethodDirect || c == QoreIRInstClass::CallStaticDirect;
+    }
+
     enum class AOTStringConsumerKind : uint8_t {
         None,
         Size,
@@ -2869,8 +3123,8 @@ public:
         Substr,
     };
 
-    explicit QoreIRStringConsumerCallInstruction(QoreIROpcode opcode)
-            : QoreIRInstruction(opcode) {
+    explicit QoreIRStringConsumerCallInstruction(QoreIROpcode opcode, QoreIRInstClass cls = inst_class_id)
+            : QoreIRInstruction(opcode, cls) {
     }
 
     AOTStringConsumerKind aot_string_consumer = AOTStringConsumerKind::None;
@@ -2895,6 +3149,8 @@ public:
 //! Stores function/variant/program pointers resolved at parse time
 class QoreIRCallDirectInstruction : public QoreIRStringConsumerCallInstruction {
 public:
+    QORE_IR_INST_CLASS(CallDirect)
+
     using AOTStringConsumerKind =
         QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
 
@@ -2965,7 +3221,7 @@ public:
 
     QoreIRCallDirectInstruction(const QoreFunction* n_func, const AbstractQoreFunctionVariant* n_variant,
             QoreProgram* n_pgm, const QoreValue& n_expr)
-            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallDirect),
+            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallDirect, inst_class_id),
               func(n_func), variant(n_variant), pgm(n_pgm), expr(n_expr) {
         expr.ref();
     }
@@ -3037,12 +3293,14 @@ public:
 //! The method pointer is resolved at compile time and stored directly in the instruction
 class QoreIRCallMethodDirectInstruction : public QoreIRStringConsumerCallInstruction {
 public:
+    QORE_IR_INST_CLASS(CallMethodDirect)
+
     using AOTStringConsumerKind =
         QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
 
     QoreIRCallMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant = nullptr, const QoreValue& n_expr = QoreValue())
-            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallMethodDirect),
+            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallMethodDirect, inst_class_id),
               method(n_method),
               qc(n_qc),
               variant(n_variant),
@@ -3076,10 +3334,12 @@ public:
 //! routing of Invoke, avoiding AST evaluation overhead.
 class QoreIRInvokeMethodDirectInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(InvokeMethodDirect)
+
     QoreIRInvokeMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant,
             QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception, const QoreValue& n_expr = QoreValue())
-            : QoreIRInstruction(QoreIROpcode::InvokeMethodDirect),
+            : QoreIRInstruction(QoreIROpcode::InvokeMethodDirect, inst_class_id),
               method(n_method), qc(n_qc), variant(n_variant),
               normal_target(n_normal),
               expr(n_expr) {
@@ -3113,12 +3373,14 @@ public:
 //! Uses the Invoke + invoke_opcode pattern for try/catch (like CallDirect).
 class QoreIRCallStaticDirectInstruction : public QoreIRStringConsumerCallInstruction {
 public:
+    QORE_IR_INST_CLASS(CallStaticDirect)
+
     using AOTStringConsumerKind =
         QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
 
     QoreIRCallStaticDirectInstruction(const QoreMethod* n_method,
             const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr)
-            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallStaticDirect),
+            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallStaticDirect, inst_class_id),
               method(n_method), variant(n_variant), expr(n_expr) {
         expr.ref();
     }
@@ -3147,6 +3409,8 @@ public:
 //! for obj.method(args) calls where the method is resolved at parse time.
 class QoreIRDotEvalMethodDirectInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(DotEvalMethodDirect)
+
     using AOTAggregateProjectionKind =
         QoreIRCallDirectInstruction::AOTAggregateProjectionKind;
 
@@ -3163,7 +3427,7 @@ public:
 
     QoreIRDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr, bool n_pseudo)
-            : QoreIRInstruction(QoreIROpcode::DotEvalMethodDirect),
+            : QoreIRInstruction(QoreIROpcode::DotEvalMethodDirect, inst_class_id),
               method(n_method), qc(n_qc), variant(n_variant), expr(n_expr), pseudo(n_pseudo) {
         expr.ref();
     }
@@ -3229,10 +3493,12 @@ public:
 //! exceptions to the exception target block.
 class QoreIRInvokeDotEvalMethodDirectInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(InvokeDotEvalMethodDirect)
+
     QoreIRInvokeDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr, bool n_pseudo,
             QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
-            : QoreIRInstruction(QoreIROpcode::InvokeDotEvalMethodDirect),
+            : QoreIRInstruction(QoreIROpcode::InvokeDotEvalMethodDirect, inst_class_id),
               method(n_method), qc(n_qc), variant(n_variant), expr(n_expr), pseudo(n_pseudo),
               normal_target(n_normal) {
         exception_target = n_exception;
@@ -3301,8 +3567,10 @@ DLLLOCAL bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRInvokeDotEvalMethodDi
 //! result contains a pointer to the iterator (as int64_t)
 class QoreIRIteratorCreateInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(IteratorCreate)
+
     QoreIRIteratorCreateInstruction(QoreIRValue n_iterable, FunctionalOperator* n_iterator_func = nullptr)
-            : QoreIRInstruction(QoreIROpcode::IteratorCreate),
+            : QoreIRInstruction(QoreIROpcode::IteratorCreate, inst_class_id),
               iterable(n_iterable),
               iterator_func(n_iterator_func) {
     }
@@ -3316,9 +3584,11 @@ public:
 //! If done, branches to done_target
 class QoreIRIteratorNextInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(IteratorNext)
+
     QoreIRIteratorNextInstruction(QoreIRValue n_iterator, QoreIRBasicBlock* n_done_target,
             QoreIRBasicBlock* n_continue_target)
-            : QoreIRInstruction(QoreIROpcode::IteratorNext),
+            : QoreIRInstruction(QoreIROpcode::IteratorNext, inst_class_id),
               iterator(n_iterator),
               done_target(n_done_target),
               continue_target(n_continue_target) {
@@ -3326,7 +3596,7 @@ public:
 
     QoreIRIteratorNextInstruction(QoreIROpcode op, QoreIRValue n_list, QoreIRValue n_index,
             QoreIRValue n_limit, QoreIRBasicBlock* n_done_target, QoreIRBasicBlock* n_continue_target)
-            : QoreIRInstruction(op), iterator(n_list), index(n_index), limit(n_limit),
+            : QoreIRInstruction(op, inst_class_id), iterator(n_list), index(n_index), limit(n_limit),
               done_target(n_done_target), continue_target(n_continue_target) {
         operands.push_back(n_list);
         operands.push_back(n_index);
@@ -3350,15 +3620,17 @@ public:
 
 class QoreIROnBlockExitInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(OnBlockExit)
+
     explicit QoreIROnBlockExitInstruction(const OnBlockExitStatement* n_stmt,
             uint32_t n_owner_scope_id = 0)
-            : QoreIRInstruction(QoreIROpcode::OnBlockExit), stmt(n_stmt),
+            : QoreIRInstruction(QoreIROpcode::OnBlockExit, inst_class_id), stmt(n_stmt),
               owner_scope_id(n_owner_scope_id) {
     }
 
     //! Constructor for deserialized case (no AST statement available)
     QoreIROnBlockExitInstruction(obe_type_e n_obe_type, std::unique_ptr<QoreIRFunction> n_handler_ir)
-            : QoreIRInstruction(QoreIROpcode::OnBlockExit), obe_type(n_obe_type),
+            : QoreIRInstruction(QoreIROpcode::OnBlockExit, inst_class_id), obe_type(n_obe_type),
               handler_ir(std::move(n_handler_ir)) {
     }
 
@@ -3378,8 +3650,10 @@ public:
 //! Marks the entry into a new scope that may have on_exit/on_success/on_error handlers
 class QoreIRScopeEnterInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(ScopeEnter)
+
     explicit QoreIRScopeEnterInstruction(uint32_t n_scope_id)
-            : QoreIRInstruction(QoreIROpcode::ScopeEnter), scope_id(n_scope_id) {
+            : QoreIRInstruction(QoreIROpcode::ScopeEnter, inst_class_id), scope_id(n_scope_id) {
     }
 
     uint32_t scope_id = 0;  //!< unique scope ID within function
@@ -3397,8 +3671,11 @@ public:
 //! Marks the exit from a scope - triggers execution of on_exit handlers registered since matching ScopeEnter
 class QoreIRScopeExitInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(ScopeExit)
+
     explicit QoreIRScopeExitInstruction(uint32_t n_scope_id, bool n_is_error = false, bool n_inline_lowered = false)
-            : QoreIRInstruction(QoreIROpcode::ScopeExit), scope_id(n_scope_id), is_error(n_is_error), inline_lowered(n_inline_lowered) {
+            : QoreIRInstruction(QoreIROpcode::ScopeExit, inst_class_id), scope_id(n_scope_id), is_error(n_is_error),
+            inline_lowered(n_inline_lowered) {
     }
 
     uint32_t scope_id = 0;  //!< scope ID from matching ScopeEnter
@@ -3431,9 +3708,11 @@ public:
 //! reinterpreted as i64.  0 means failure (xsink set).
 class QoreIRContextInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(Context)
+
     QoreIRContextInstruction(std::string n_name, const QoreValue& n_exp,
             const QoreValue& n_where, const QoreValue& n_sort, int n_sort_type)
-            : QoreIRInstruction(QoreIROpcode::Context),
+            : QoreIRInstruction(QoreIROpcode::Context, inst_class_id),
               name(std::move(n_name)),
               exp(n_exp),
               where_exp(n_where),
@@ -3460,8 +3739,10 @@ public:
 //! Backquote expression instruction — execute command and return stdout as string.
 class QoreIRBackquoteInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(Backquote)
+
     explicit QoreIRBackquoteInstruction(std::string n_command)
-            : QoreIRInstruction(QoreIROpcode::Backquote),
+            : QoreIRInstruction(QoreIROpcode::Backquote, inst_class_id),
               command(std::move(n_command)) {
     }
 
@@ -3471,8 +3752,10 @@ public:
 //! Context reference expression instruction: `%field` or `name:field`.
 class QoreIRContextRefInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(ContextRef)
+
     QoreIRContextRefInstruction(std::string n_key, int32_t n_stack_offset)
-            : QoreIRInstruction(QoreIROpcode::ContextRef),
+            : QoreIRInstruction(QoreIROpcode::ContextRef, inst_class_id),
               key(std::move(n_key)),
               stack_offset(n_stack_offset) {
     }
@@ -3484,9 +3767,11 @@ public:
 //! Find expression instruction — wraps find/source/where subexpressions.
 class QoreIRFindInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(Find)
+
     QoreIRFindInstruction(const QoreValue& n_exp, const QoreValue& n_find_exp,
             const QoreValue& n_where, int32_t n_mode = 0)
-            : QoreIRInstruction(QoreIROpcode::Find),
+            : QoreIRInstruction(QoreIROpcode::Find, inst_class_id),
               exp(n_exp),
               find_exp(n_find_exp),
               where(n_where),
@@ -3510,8 +3795,10 @@ public:
 
 class QoreIRSummarizeInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(Summarize)
+
     explicit QoreIRSummarizeInstruction(const SummarizeStatement* n_stmt)
-            : QoreIRInstruction(QoreIROpcode::Summarize), stmt(n_stmt) {
+            : QoreIRInstruction(QoreIROpcode::Summarize, inst_class_id), stmt(n_stmt) {
     }
 
     const SummarizeStatement* stmt = nullptr;
@@ -3519,8 +3806,10 @@ public:
 
 class QoreIRInvokeInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(Invoke)
+
     QoreIRInvokeInstruction(const QoreValue& n_expr, QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
-            : QoreIRInstruction(QoreIROpcode::Invoke),
+            : QoreIRInstruction(QoreIROpcode::Invoke, inst_class_id),
             expr(n_expr),
             normal_target(n_normal) {
         exception_target = n_exception;
@@ -3591,8 +3880,10 @@ inline int qore_ir_call_arg_start(const QoreIRInstruction* inst) {
 //! execute on_error/on_exit handlers for scopes entered within the try body.
 class QoreIRLandingPadInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(LandingPad)
+
     explicit QoreIRLandingPadInstruction(size_t n_scope_depth, uint32_t n_try_scope_id = 0)
-            : QoreIRInstruction(QoreIROpcode::LandingPad), scope_depth(n_scope_depth),
+            : QoreIRInstruction(QoreIROpcode::LandingPad, inst_class_id), scope_depth(n_scope_depth),
               try_scope_id(n_try_scope_id) {
     }
 
@@ -3609,8 +3900,10 @@ public:
 //! result is a bool indicating match
 class QoreIRSwitchRegexMatchInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(SwitchRegexMatch)
+
     explicit QoreIRSwitchRegexMatchInstruction(const CaseNodeRegex* n_regex_case)
-            : QoreIRInstruction(QoreIROpcode::SwitchRegexMatch), regex_case(n_regex_case) {
+            : QoreIRInstruction(QoreIROpcode::SwitchRegexMatch, inst_class_id), regex_case(n_regex_case) {
     }
 
     ~QoreIRSwitchRegexMatchInstruction() override;
@@ -3625,8 +3918,10 @@ public:
 //! result is a bool indicating match
 class QoreIRSwitchCaseMatchInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(SwitchCaseMatch)
+
     explicit QoreIRSwitchCaseMatchInstruction(const CaseNode* n_case_node)
-            : QoreIRInstruction(QoreIROpcode::SwitchCaseMatch), case_node(n_case_node) {
+            : QoreIRInstruction(QoreIROpcode::SwitchCaseMatch, inst_class_id), case_node(n_case_node) {
     }
 
     ~QoreIRSwitchCaseMatchInstruction() override;
@@ -3639,8 +3934,10 @@ public:
 //! for AOT serialization (expr slot). Result is an opaque state handle.
 class QoreIRRefForeachInitInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(RefForeachInit)
+
     explicit QoreIRRefForeachInitInstruction(const QoreValue& parse_ref_expr)
-            : QoreIRInstruction(QoreIROpcode::RefForeachInit), expr(parse_ref_expr) {
+            : QoreIRInstruction(QoreIROpcode::RefForeachInit, inst_class_id), expr(parse_ref_expr) {
         expr.ref();
     }
 
@@ -3660,8 +3957,10 @@ public:
 */
 class QoreIRCallAOTHelperInstruction : public QoreIRInstruction {
 public:
+    QORE_IR_INST_CLASS(CallAOTHelper)
+
     explicit QoreIRCallAOTHelperInstruction(std::string n_helper_name)
-            : QoreIRInstruction(QoreIROpcode::CallAOTHelper),
+            : QoreIRInstruction(QoreIROpcode::CallAOTHelper, inst_class_id),
               helper_name(std::move(n_helper_name)) {
     }
 
@@ -3675,6 +3974,22 @@ public:
     //! coordinator's own epilogue (see design/aot-function-outlining.md).
     QoreIRBasicBlock* return_target = nullptr;
 };
+
+//! Returns the instruction as the given instruction class pointer type if it is one, otherwise nullptr
+/** The same result as dynamic_cast<P>(), from the instruction's class tag: a dynamic_cast searches the class
+    hierarchy with string comparisons of the type names, which is too slow for the passes run on every function
+    and for the interpreter.
+
+    @tparam P a pointer to an instruction class, which may be const
+*/
+template <typename P, typename I>
+inline P qore_ir_inst_cast(I* inst) {
+    using T = std::remove_cv_t<std::remove_pointer_t<P>>;
+    static_assert(std::is_pointer_v<P> && std::is_base_of_v<QoreIRInstruction, T>);
+    P rv = (inst && T::isInstClass(inst->inst_class)) ? static_cast<P>(inst) : nullptr;
+    assert(rv == dynamic_cast<P>(inst));
+    return rv;
+}
 
 class QoreIRBasicBlock {
 public:
@@ -3905,6 +4220,10 @@ public:
     //! the ID of \a pgm, taken when it is set: a background compile checks that the Program with this ID is still
     //! the one at \a pgm, as a deleted Program's address can be reused (see QoreJIT::enqueueBgCompile())
     qore_program_id_t pgm_id = 0;
+    //! the owner of the native code compiled from this function when it is not \a pgm: the generic specialization
+    //! (QoreSpecializedIR) whose code is removed when the specialization is freed; the code of a function with
+    //! neither stays in the JIT for the life of the process (see QoreJIT::releaseCodeOwner())
+    const void* jit_owner = nullptr;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
 
     //! Transient SSA facts used by IR optimization and native lowering.
@@ -3934,11 +4253,11 @@ public:
     // At runtime, parent's local values are copied into these inherited slots
     uint32_t parent_slot_count = 0;
 
-    //! For handler IR functions: the closure-bound parent-slot locals that the handler declares itself
-    /** The lowering of a handler records the closure-bound locals of the handler code (including those of its
-        nested handlers), which it does not mark pre-instantiated, and the IR serialization writes their slots
-        (from QORE_AOT_HANDLER_OWN_LOCALS_VERSION), so that a handler read from serialized IR gets the same
-        pre-instantiated locals (see restoreHandlerPreInstantiatedLocals()).
+    //! For handler IR functions: the parent-slot locals that the handler declares itself
+    /** The lowering of a handler records the locals of the handler code (including those of its nested handlers),
+        which it does not mark pre-instantiated (closure-bound ones since qore#5653, the others since #6002), and the
+        IR serialization writes their slots (from QORE_AOT_HANDLER_OWN_LOCALS_VERSION), so that a handler read from
+        serialized IR gets the same pre-instantiated locals (see restoreHandlerPreInstantiatedLocals()).
     */
     std::unordered_set<const LocalVar*> handler_own_locals;
 
@@ -3949,6 +4268,11 @@ public:
     // Mapping of LocalVar* pointers to their slot IDs (computed during IR analysis)
     // Used by the IR interpreter to convert unordered_map lookups to direct array access
     std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
+
+    //! The self local resolved by computeSlotIdsAndEmbed(), including the name fallback of deserialized IR.
+    /** Immutable with the published slot map; nullptr also caches the absence of self, so calls of ordinary
+        closures do not scan every local name on every invocation.  Recomputed when slot IDs are rebuilt. */
+    LocalVar* self_local = nullptr;
 
     //! Reserve a stable local slot before full IR lowering is complete.
     /** Block-level on_exit handler compilation can compute and inherit parent
@@ -4222,6 +4546,14 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+
+    //! Collects the locals that the on_exit, on_error and on_success handlers of the function reference
+    /** as computeIROnlyLocals() does to keep them on the runtime stack: the handlers' statements and their IR
+
+        @return false if a handler has code whose locals cannot be collected, in which case any local can be
+        referenced
+    */
+    bool collectHandlerLocals(std::unordered_set<const void*>& locals) const;
     //! Releases a read of a plain local after its last use when the statement writes the local later
     /** A read of a plain local (qore_ir_is_plain_local_read(), in a function that creates no reference; its storage
         can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the
@@ -4257,9 +4589,9 @@ public:
     std::unordered_set<const LocalVar*> deriveHandlerOwnClosureLocalsFromIR() const;
 
     //! Marks the parent-slot locals of an on_block_exit handler read from serialized IR pre-instantiated
-    /** The lowering of a handler marks every parent slot pre-instantiated except the closure-bound locals that the
-        handler declares (handler_own_locals), and the IR interpreter reads and writes back the values of the parent's
-        variables only for the pre-instantiated ones.  Serialized IR has no pre-instantiated locals, so a handler read
+    /** The lowering of a handler marks every parent slot pre-instantiated except the locals that the handler declares
+        (handler_own_locals), and the IR interpreter reads and writes back the values of the parent's variables only
+        for the pre-instantiated ones.  Serialized IR has no pre-instantiated locals, so a handler read
         from it (an AOT closure run from its IR, or lazy debugger IR) has to restore them from the handler's own locals
         that the artifact records (or, for an older artifact, that its IR gives; see
         deriveHandlerOwnClosureLocalsFromIR()): without them, the handler took every closure-bound variable of the

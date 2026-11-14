@@ -199,10 +199,11 @@ bool QoreLogicalGreaterThanOperatorNode::doGreaterThan(const QoreValue& lh, cons
             case NT_FLOAT:
                 return l.get<const QoreNumberNode>()->greaterThan(r.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return l.get<const QoreNumberNode>()->greaterThan(r.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
                 return l.get<const QoreNumberNode>()->greaterThan(**rn);
             }
         }
@@ -214,10 +215,11 @@ bool QoreLogicalGreaterThanOperatorNode::doGreaterThan(const QoreValue& lh, cons
             case NT_FLOAT:
                 return r.get<const QoreNumberNode>()->lessThan(l.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return r.get<const QoreNumberNode>()->lessThan(l.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
                 return r.get<const QoreNumberNode>()->lessThan(**ln);
             }
         }
@@ -238,6 +240,12 @@ bool QoreLogicalGreaterThanOperatorNode::doGreaterThan(const QoreValue& lh, cons
             return false;
         }
         return ls->compare(*rs) > 0;
+    }
+
+    // a char is compared with any other value but a string as its code point, as an int is, and as the == and <=>
+    // operators compare it (a char with a string is compared as a one-character string, above)
+    if (lt == NT_CHAR || rt == NT_CHAR) {
+        return l.getAsBigInt() > r.getAsBigInt();
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {

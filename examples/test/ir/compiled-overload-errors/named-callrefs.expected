@@ -1,0 +1,63 @@
+top fr int: f(int count, string label) count=1 label="x"
+top fr float: f(string label, float count) label="y" count=1.5
+top mr: C::m(int count, string label) count=2 label="x" tag="obj"
+top sr: C::s(string label, float count) label="z" count=3.5
+top lmr: C::m(int count, string label) count=4 label="l" tag="obj"
+top lsr: C::s(int count, string label) count=5 label="l"
+top oc: object closure n=6 prefix="q" tag="obj"
+top oc default: object closure n=7 prefix="p" tag="obj"
+top cl: closure count=8 label="c" captured=10
+top cl default: closure count=9 label="dl" captured=10
+top mixed: f(int count, string label) count=1 label="m"
+top dflt: dflt(int a, string b, *int c) a=1 b="db" c=3
+top ref: rf(string b, reference<int> a) b="r" v=2
+top immediate closure: x=1 y=2
+fr int: f(int count, string label) count=1 label="x"
+fr float: f(string label, float count) label="y" count=1.5
+mr: C::m(int count, string label) count=2 label="x" tag="obj"
+sr: C::s(string label, float count) label="z" count=3.5
+lmr: C::m(int count, string label) count=4 label="l" tag="obj"
+lsr: C::s(int count, string label) count=5 label="l"
+oc: object closure n=6 prefix="q" tag="obj"
+cl: closure count=8 label="c" captured=10
+mixed: f(int count, string label) count=1 label="m"
+dflt: dflt(int a, string b, *int c) a=1 b="db" c=3
+unknown name: RUNTIME-OVERLOAD-ERROR: no variant matching 'f(label: string, cnt: integer)' can be found; the following variants were tested:
+   f(int count, string label)
+   f(string label, float count)
+closure unknown name: RUNTIME-OVERLOAD-ERROR: no variant matching '<anonymous closure>(cnt: integer)' can be found; the following variants were tested:
+   <anonymous closure>(int count, string label = "dl")
+no variant: RUNTIME-OVERLOAD-ERROR: no variant matching 'f(label: integer, count: string)' can be found; the following variants were tested:
+   f(int count, string label)
+   f(string label, float count)
+missing: RUNTIME-OVERLOAD-ERROR: no variant matching '<anonymous closure>(label: string)' can be found; the following variants were tested:
+   <anonymous closure>(int count, string label = "dl")
+not callable: REFERENCE-CALL-ERROR: expression does not evaluate to a call reference (evaluated to type 'integer')
+inherited: C::m(int count, string label) count=12 label="d" tag="obj"
+inherited in class: C::m(string label, float count) label="e" count=13.5 tag="obj"
+override: E::m(int count, string label) count=14 label="o"
+object closure unknown name: RUNTIME-OVERLOAD-ERROR: no variant matching '<anonymous closure>(n: integer, pfx: string)' can be found; the following variants were tested:
+   <anonymous closure>(int n, string prefix = "p")
+object closure bad type named: RUNTIME-OVERLOAD-ERROR: no variant matching '<anonymous closure>(n: string)' can be found; the following variants were tested:
+   <anonymous closure>(int n, string prefix = "p")
+object closure bad type positional: RUNTIME-OVERLOAD-ERROR: no variant matching '<anonymous closure>(string)' can be found; the following variants were tested:
+   <anonymous closure>(int n, string prefix = "p")
+closure ref: r=3
+closure ref after: z=3
+builtin named: abc
+builtin positional only: RUNTIME-OVERLOAD-ERROR: no variant matching 'sprintf(fmt: string, value: string)' can be found; the following variants were tested:
+   sprintf(string fmt, ...)
+deleted object positional: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+deleted object named: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+sandbox bound: f(int count, string label) count=16 label="sb"
+sandbox system policy: f(string label, float count) label="sp" count=17.5
+child function ref: cf(int count, string label) child count=18 label="c"
+child function ref float: cf(string label, float count) child label="c" count=18.5
+child method ref: CC::m child count=19 label="c"
+child closure: child closure child count=20 label="c"
+orphan closure positional: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+orphan closure named: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+orphan class closure positional: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+orphan class closure named: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+background: f(int count, string label) count=11 label="bg"
+background call: bg2

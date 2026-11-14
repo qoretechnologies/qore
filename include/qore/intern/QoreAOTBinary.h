@@ -403,8 +403,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      when parsed.  A v9-v21 record has no such byte: the class gets the flag only from its public members, as
 //!      before.
 //! v23: a serialized IR function has, after its local slot table, the number of its handler-own local slots and
-//!      their slot ids (u32 each): the closure-bound locals that an on_block_exit handler declares itself, which the
-//!      lowering does not mark pre-instantiated in the handler (zero for a function that is not a handler).  A handler
+//!      their slot ids (u32 each): the locals that an on_block_exit handler declares itself (closure-bound ones;
+//!      since #6002 all of them), which the lowering does not mark pre-instantiated in the handler (zero for a
+//!      function that is not a handler).  A handler
 //!      read from serialized IR marks its other parent slots pre-instantiated, as its lowering does.  A v9-v22 IR
 //!      function has no such list; its handler-own locals are derived from its IR (an approximation: see
 //!      QoreIRFunction::deriveHandlerOwnClosureLocalsFromIR()).
@@ -463,7 +464,11 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      closure, which is loaded with the module but run when the module is unloaded (#6015), or, for a local source
 //!      module that a compiled script embeds, when the script's Program is cleared; a reader of the earlier
 //!      formats refuses the type, and a module has none without a \c del closure.
-//! v35: the name of a capture of a closure that is the default argument of a function, and whose variable is a
+//! v35: a call through a call reference or closure with named arguments is written natively with the names of its
+//!      arguments (AOTExprKind::CALLREF_CALL_NAMED, 128: the CALLREF_CALL layout followed by a name string ref per
+//!      argument; its node form EN_CALLREF_CALL_NAMED, 27), so that the names are bound when the call is made (M4
+//!      phase 3); the earlier formats have no such expression, and a reader of them refuses the kind.
+//! v36: the name of a capture of a closure that is the default argument of a function, and whose variable is a
 //!      top-level local of the Program, is "top:<index>:<name>" (the index in the Program's top-level local list), as
 //!      the reference of a default argument expression to one is (v34); the reader binds the capture to that variable
 //!      and reads the closure again when the Program has its top-level locals.  An earlier reader takes the text as
@@ -499,8 +504,10 @@ constexpr uint16_t QORE_AOT_DECLARED_DOMAIN_VERSION = 33;
 constexpr uint16_t QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION = 34;
 //! First format version with native find expressions (see v34 above).
 constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
-//! First format version whose closure captures can name a top-level local by its index (see v35 above).
-constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 35;
+//! First format version with named call reference calls (see v35 above).
+constexpr uint16_t QORE_AOT_NAMED_CALLREF_VERSION = 35;
+//! First format version whose closure captures can name a top-level local by its index (see v36 above).
+constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
 constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION;
@@ -2392,6 +2399,8 @@ enum class AOTExprKind : uint8_t {
     TRANSLIT           = 126,
     //! Find expression (v34): mode byte (FindNode::Mode) + result expression + find-in expression + where expression
     FIND               = 127,
+    CALLREF_CALL_NAMED = 128, //!< named call reference call (M4 phase 3): as CALLREF_CALL, then u8 name count + a
+                              //!< string ref per argument name ("" for a positional argument)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -2429,6 +2438,8 @@ enum class AOTExprNodeKind : uint8_t {
     EN_NEW           = 24,  //!< u16 class_len + bytes; children = args
     EN_CALLREF_CALL  = 25,  //!< no metadata; children[0] = callref, [1..] = args
     EN_SCOPED_NEW    = 26,  //!< u16 class_len + bytes; children = args
+    EN_CALLREF_CALL_NAMED = 27, //!< named call reference call (M4 phase 3): u16 name count + (u16 len + bytes) per
+                                //!< argument name ("" for a positional argument); children as EN_CALLREF_CALL
 
     // Access operators (children = operands)
     EN_HASH_DEREF    = 30,  //!< children = [target, key_expr]
@@ -2637,6 +2648,7 @@ struct AOTExprSlotId {
     const QoreListNode* call_args = nullptr; //!< call args for NEW_OBJECT/SCOPED_NEW_OBJECT/STATIC_METHOD_CALL
     const QoreParseListNode* parse_args = nullptr; //!< parse args for HASHDECL_NEW
     const UserClosureFunction* closure_func = nullptr; //!< For CLOSURE_CREATE: source closure function
+    const name_vec_t* arg_names = nullptr; //!< For CALLREF_CALL_NAMED: the names of the arguments (interned)
 };
 
 //! Identity for a body local variable (needed for instantiation management)

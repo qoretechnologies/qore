@@ -87,6 +87,11 @@
     \c INVALID-FUNCTION-ACCESS and parse errors for code a Program may not use name the restricted functional domain.
 
 
+    @par An any Parameter Strips Complex Types
+    A typed list or hash passed to a parameter of type @ref any_type "any" is stripped of its complex type as on
+    assignment to \c any (ex: a \c list&lt;int&gt; argument is a plain \c list in the function), as with every other
+    \c any declaration; it kept the type before; use @ref auto_type "auto" to keep it.
+
     @par Adding a Value in Front of a Typed List Keeps Its Type
     The @ref plus_operator "+" operator gives a list of the type of a typed list when it adds a value in front of it,
     as it does when it adds the value at the end (ex: \c list&lt;int&gt; for <tt>1 + l</tt> for a \c list&lt;int&gt;
@@ -96,6 +101,11 @@
     A child class method variant that overrides a parent class variant, or that a call typed against the parent class
     can select, must return the parent class variant's type or a narrower one, or the class raises a
     \c PARSE-TYPE-ERROR; see @ref override_return_types.
+
+    @par Static Methods Called Through an Object Are Bound to the Receiver's Declared Class
+    A static method called through an object whose class is declared (<tt>o.method()</tt>) calls the method of the
+    receiver's declared class, as <tt>DeclaredClass::method()</tt> does, instead of a static method of the same name
+    that the object's class declares; see @ref static_methods_through_object.
 
     @par Builtin Methods That Subclasses Override Return Wider Types
     @ref Qore::HTTPClient::get() "HTTPClient::get()" and @ref Qore::HTTPClient::post() "HTTPClient::post()" return
@@ -247,6 +257,11 @@
     @par Compatibility Settings Are Bound to Parsed Code
     @ref lexical_compatibility_options "Compatibility semantics" are saved with parsed code, so changing
     @ref Qore::Program options affects newly parsed operations without changing existing code.
+
+    @par Native Member Removal Invalidates C++ Reference Helpers
+    After @ref QoreTypeSafeReferenceHelper::removeHashObjKey() invokes a native member gate or accessor, the helper
+    is invalid and unlocked and must be reset before further value access, or closed, so a callback can safely
+    replace its parent; see @ref native_member_callback_lvalue "native member callbacks".
 
     @par Binary Modules Implement Module API 2.2
     Every external binary module must be rebuilt for module API 2.2, which registers its metadata with a
@@ -667,6 +682,12 @@
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Warning for a User Symbol that Unqualified Resolution Cannot Reach
+    The strict @ref warning-language-traps "language-traps" warning is raised at the declaration of a user function,
+    class, constant, hashdecl or global variable named like a @ref Qore "Qore" namespace symbol, which
+    @ref unqualified_symbol_resolution "unqualified resolution" reaches instead
+    (<a href="https://github.com/qoretechnologies/qore/issues/6034">issue 6034</a>).
+
     @par Debugger Exception IDs
     The exception hash of @ref Qore::DebugProgram::onException() "DebugProgram::onException()" has the
     \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo", the same in each event of an exception, so that
@@ -842,7 +863,8 @@
       string iteration yield \c char values (@ref no-string-index-char "%no-string-index-char" restores strings)
     - new @ref string_escape_chars "Unicode string escapes" \c \\u{...}, \c \\uXXXX and \c \\UXXXXXXXX
     - @ref negative-offsets "%negative-offsets" for from-end indexes and slices, implied by @ref modern "%modern"
-    - @ref function_named_arguments "named arguments" in calls of functions, methods and constructors
+    - @ref function_named_arguments "named arguments" in calls of functions, methods and constructors and through
+      call references and closures
     - \c const for @ref constants "typed constants", @ref readonly_local_variables "read-only local variables" and
       parameters, and @ref const_methods "const methods"
     - <tt>?:</tt> as an alias of the @ref value_coalescing_operator "value coalescing operator"
@@ -1688,10 +1710,16 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the objects of a Program that outlives the library cleanup (such as a Program that a module holds in a static
+      object) are now destroyed while the library can run their destructors, which crashed at a normal process exit;
+      a thread started while the library is cleaned up now raises \c THREAD-CREATION-FAILURE (issue #6045)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled
       module now runs the closure when it is unloaded, as the source module does (issue #6015)
+    - the @ref astparserintro "astparser" module parses the explicit type arguments of a generic function call that
+      contain an or-nothing type or a nested callable type, such as \c id<code<*hash<auto>(int)>>(c), so that
+      \c qdx and the documentation builds accept it (issue #6024)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash

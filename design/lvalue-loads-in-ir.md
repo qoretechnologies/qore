@@ -201,10 +201,13 @@ refresh the cached root value before later uses.
 
 ## Parent Handler Interaction
 
-Deferred handler IR can mutate parent locals. Native/JIT/AOT parents install an
-exact parent slot cache before handler execution, track dirty slots, and publish
-dirty values back to runtime locals afterward. This prevents name-based lookup
-collisions and keeps native alloca caches coherent with handler writes.
+Deferred handlers can mutate parent locals, which they identify by their LocalVar
+and slot identity rather than by name. The IR interpreter releases its duplicate
+caches of runtime locals before each handler and accepts the handler's dirty-slot
+writeback afterward. Native/JIT/AOT parents publish the locals to the runtime
+stack, release their own cached references before the handlers, and reload them
+afterward. Keeping a duplicate owner across a handler would delay destruction of
+the value that its assignment or removal replaces.
 
 ## Removal Semantics: `remove` and `delete`
 

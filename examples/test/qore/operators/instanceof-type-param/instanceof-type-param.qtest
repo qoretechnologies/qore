@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation, and a qcc program compiled and linked from the worker
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class InstanceofTypeParamTest
+
+#! Tests instanceof with a type parameter of a generic class, function or method (qore#6016)
+/** The type parameter is the type argument of the instantiation that runs, as for a variable or parameter declared
+    with it; before, \c v \c instanceof \c T was always False, and the parser warned that it always returns False for
+    a typed operand.  The checks are in instanceof-type-param-worker.qr, which is run in each execution mode and as a
+    program compiled with qcc; every run must give the results below, and no other output (no parse warning).
+*/
+class InstanceofTypeParamTest inherits QUnit::Test {
+    public {
+        #! the result of every check the worker makes
+        const Expected = {
+            "class-same": "True",
+            "class-subclass": "True",
+            "class-other": "False",
+            "class-int": "True",
+            "class-int-other": "False",
+            "class-nothing": "False",
+            "class-or-nothing": "True",
+            "class-const-int": "True",
+            "class-const-other": "False",
+            "class-list": "True",
+            "class-list-other": "False",
+            "class-closure": "True",
+            "class-closure-other": "False",
+            "inherited": "True",
+            "inherited-other": "False",
+            "method-param": "True",
+            "method-param-other": "False",
+            "function": "True",
+            "function-other": "False",
+            "function-subclass": "True",
+            "function-indirect": "True",
+            "function-indirect-other": "False",
+            "function-closure": "True",
+            "function-closure-other": "False",
+            "function-background": "True",
+            "function-background-other": "False",
+            "function-inferred": "True",
+            "function-inferred-other": "False",
+            "class-background": "True",
+            "class-background-other": "False",
+            "class-via-function": "True",
+            "class-via-function-other": "False",
+            "class-via-method": "True",
+            "class-via-method-other": "False",
+            "static": "True",
+            "static-other": "False",
+            "alternating": "TFTFTFTFTFTFTFTF",
+        };
+
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("InstanceofTypeParamTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, getWorker()));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-instanceof-type-param-");
+        string exe = tmp.path + DirSep + "instanceof-type-param";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
+            qcc_bin, exe, getWorker()));
+        assertTrue(is_file(exe), "compiled program: " + compile_out);
+        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+        # the same without the cache of the resolved types of instanceof (#5976)
+        checkWorkerOutput("aot without type cache", backquote(sprintf(
+            "QORE_DISABLE_AOT_INSTANCEOF_TYPE_CACHE=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "instanceof-type-param-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

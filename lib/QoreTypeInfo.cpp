@@ -2356,14 +2356,30 @@ QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str) {
     }
     --close_pos;  // Point to the closing '>'
 
+    // a complex type followed by a parameter list is the callable signature of a nested code<> type whose return type
+    // is complex (ex: "hash<auto>()" in "code<hash<auto>()>"): it is kept as a single opaque name, as above, so that
+    // the outer code<> handler parses the return type and the parameters; parsing it as the complex type would drop
+    // the parameter list (#6022)
+    {
+        size_t next = close_pos + 1;
+        while (next < str.size() && isspace(str[next])) {
+            ++next;
+        }
+        if (next < str.size() && str[next] == '(') {
+            return new QoreParseTypeInfo(strdup(str.c_str()), or_nothing);
+        }
+    }
+
     // Extract base type and subtype content
     std::string base_type = str.substr(0, angle_pos);
     std::string subtype_content = str.substr(angle_pos + 1, close_pos - angle_pos - 1);
 
-    // Parse subtypes (split on commas, respecting nested brackets)
+    // Parse subtypes (split on commas, respecting nested brackets and the parameter lists of callable signatures,
+    // ex: the commas in "code<int(string, bool)>")
     parse_type_vec_t subtypes;
     std::string current;
     int angle_depth = 0;
+    int paren_depth = 0;
     for (size_t i = 0; i <= subtype_content.size(); ++i) {
         char c = i < subtype_content.size() ? subtype_content[i] : '\0';
         if (c == '<') {
@@ -2372,7 +2388,14 @@ QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str) {
         } else if (c == '>') {
             --angle_depth;
             current += c;
-        } else if ((c == ',' || c == '\0') && angle_depth == 0) {
+        } else if (c == '(') {
+            ++paren_depth;
+            current += c;
+        } else if (c == ')') {
+            --paren_depth;
+            current += c;
+        } else if ((c == ',' && angle_depth == 0 && paren_depth == 0) || c == '\0') {
+            // the last subtype is kept also if its brackets are unbalanced, so that its resolution reports it
             // Trim whitespace
             while (!current.empty() && isspace(current.back())) current.pop_back();
             while (!current.empty() && isspace(current.front())) current.erase(0, 1);
@@ -2499,6 +2522,133 @@ static const QoreTypeInfo* parse_and_resolve_type_string(const char* type_str, c
     if (!pti) return nullptr;
 
     return QoreParseTypeInfo::resolveAndDelete(pti, loc, err);
+}
+
+// trims leading and trailing whitespace
+static void qore_trim_type_component(std::string& str) {
+    while (!str.empty() && isspace(str.back())) {
+        str.pop_back();
+    }
+    size_t i = 0;
+    while (i < str.size() && isspace(str[i])) {
+        ++i;
+    }
+    str.erase(0, i);
+}
+
+//! Splits the callable signature "ReturnType(ParamTypes...)" of a code<> type (#6022)
+/** The parameter list is the first one outside angle brackets, as the return type can be a callable type with a
+    parameter list of its own (ex: "code<*hash<auto>()>()"), and ends at its matching parenthesis, after which only
+    whitespace is allowed; the parameters are split at the commas outside angle brackets and parentheses, so that a
+    nested callable's parameters stay with it; a "..." at the end of the last parameter (alone or after its type) makes
+    the callable variadic, so that the "..." of a nested callable does not.  Empty parameters are skipped.
+
+    @param sig the signature
+    @param return_type the return type string (trimmed; empty if none)
+    @param params the parameter type strings (trimmed)
+    @param varargs set to true if the callable is variadic
+    @param error the error message if the signature is malformed
+
+    @return true if the signature is well formed, false (with @a error set) if not
+*/
+static bool qore_split_code_signature(const char* sig, std::string& return_type, std::vector<std::string>& params,
+        bool& varargs, std::string& error) {
+    params.clear();
+    varargs = false;
+
+    const char* open = nullptr;
+    int angle_depth = 0;
+    for (const char* p = sig; *p; ++p) {
+        if (*p == '<') {
+            ++angle_depth;
+        } else if (*p == '>') {
+            --angle_depth;
+        } else if (*p == '(' && !angle_depth) {
+            open = p;
+            break;
+        }
+    }
+    if (!open) {
+        error = "expected format 'ReturnType(ParamTypes...)' with parentheses";
+        return false;
+    }
+
+    // the matching closing parenthesis
+    const char* close = nullptr;
+    int paren_depth = 0;
+    angle_depth = 0;
+    for (const char* p = open; *p; ++p) {
+        if (*p == '<') {
+            ++angle_depth;
+        } else if (*p == '>') {
+            --angle_depth;
+        } else if (*p == '(') {
+            ++paren_depth;
+        } else if (*p == ')' && !--paren_depth) {
+            close = p;
+            break;
+        }
+    }
+    if (!close) {
+        error = "missing closing parenthesis";
+        return false;
+    }
+    if (angle_depth) {
+        error = "unbalanced angle brackets in the parameter list";
+        return false;
+    }
+    for (const char* p = close + 1; *p; ++p) {
+        if (!isspace(*p)) {
+            error = std::string("unexpected text '") + p + "' after the parameter list";
+            return false;
+        }
+    }
+
+    return_type.assign(sig, open - sig);
+    qore_trim_type_component(return_type);
+
+    std::string current;
+    angle_depth = 0;
+    paren_depth = 0;
+    for (const char* p = open + 1; p <= close; ++p) {
+        char c = (p == close) ? '\0' : *p;
+        if (c == '<') {
+            ++angle_depth;
+        } else if (c == '>') {
+            --angle_depth;
+        } else if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')') {
+            --paren_depth;
+        }
+        if (angle_depth < 0 || paren_depth < 0) {
+            error = "unbalanced angle brackets or parentheses in the parameter list";
+            return false;
+        }
+        if ((c == ',' || !c) && !angle_depth && !paren_depth) {
+            qore_trim_type_component(current);
+            if (!current.empty()) {
+                params.push_back(current);
+            }
+            current.clear();
+        } else {
+            current += c;
+        }
+    }
+
+    // a "..." at the end of the last parameter makes the callable variadic
+    if (!params.empty()) {
+        std::string& last = params.back();
+        if (last.size() >= 3 && !last.compare(last.size() - 3, 3, "...")) {
+            varargs = true;
+            last.erase(last.size() - 3);
+            qore_trim_type_component(last);
+            if (last.empty()) {
+                params.pop_back();
+            }
+        }
+    }
+    return true;
 }
 
 // Helper function to build the typed callable type name
@@ -5442,38 +5592,15 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
 
         const char* sig_str = subtypes[0]->cscope->ostr;
 
-        // Find the opening parenthesis to split return type from params
-        // Handle complex return types like hash<string, int> by tracking angle bracket depth
-        const char* paren_open = nullptr;
-        int angle_depth = 0;
-        for (const char* p = sig_str; *p; ++p) {
-            if (*p == '<') {
-                ++angle_depth;
-            } else if (*p == '>') {
-                --angle_depth;
-            } else if (*p == '(' && angle_depth == 0) {
-                paren_open = p;
-                break;
+        // split the signature into the return type and the parameter types (see qore_split_code_signature())
+        std::string return_type_str;
+        std::vector<std::string> param_strs;
+        bool has_varargs;
+        {
+            std::string error;
+            if (!qore_split_code_signature(sig_str, return_type_str, param_strs, has_varargs, error)) {
+                return nullptr;
             }
-        }
-        if (!paren_open) {
-            return nullptr;
-        }
-
-        // Find closing parenthesis
-        const char* paren_close = strrchr(sig_str, ')');
-        if (!paren_close || paren_close < paren_open) {
-            return nullptr;
-        }
-
-        // Extract return type string
-        std::string return_type_str(sig_str, paren_open - sig_str);
-        // Trim whitespace
-        while (!return_type_str.empty() && isspace(return_type_str.back())) {
-            return_type_str.pop_back();
-        }
-        while (!return_type_str.empty() && isspace(return_type_str.front())) {
-            return_type_str.erase(0, 1);
         }
         // If the subtype was flagged as or-nothing (a leading `*` on the
         // callable's return type — e.g. `code<*Foo(string)>`), getSubTypes
@@ -5503,69 +5630,20 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         }
         // If empty or "nothing", returnType stays nullptr (means nothing return)
 
-        // Extract parameter types string
-        std::string params_str(paren_open + 1, paren_close - paren_open - 1);
-
-        // Check for varargs
-        bool has_varargs = false;
-        size_t dotdotdot_pos = params_str.rfind("...");
-        if (dotdotdot_pos != std::string::npos) {
-            has_varargs = true;
-            // Remove "..." from params_str
-            params_str = params_str.substr(0, dotdotdot_pos);
-            // Trim trailing comma and whitespace
-            while (!params_str.empty() && (isspace(params_str.back()) || params_str.back() == ',')) {
-                params_str.pop_back();
-            }
-        }
-
-        // Parse parameter types
+        // Resolve the parameter types
         type_vec_t param_types;
-        if (!params_str.empty()) {
-            // Split on commas, handling nested angle brackets and parentheses
-            std::string current_param;
-            int param_angle_depth = 0;
-            int param_paren_depth = 0;
-            for (size_t i = 0; i <= params_str.size(); ++i) {
-                char c = i < params_str.size() ? params_str[i] : '\0';
-                if (c == '<') {
-                    ++param_angle_depth;
-                    current_param += c;
-                } else if (c == '>') {
-                    --param_angle_depth;
-                    current_param += c;
-                } else if (c == '(') {
-                    ++param_paren_depth;
-                    current_param += c;
-                } else if (c == ')') {
-                    --param_paren_depth;
-                    current_param += c;
-                } else if ((c == ',' || c == '\0') && param_angle_depth == 0 && param_paren_depth == 0) {
-                    // Trim whitespace from current_param
-                    while (!current_param.empty() && isspace(current_param.back())) {
-                        current_param.pop_back();
-                    }
-                    while (!current_param.empty() && isspace(current_param.front())) {
-                        current_param.erase(0, 1);
-                    }
-                    if (!current_param.empty()) {
-                        // reject parameter names and any other trailing text after the type; the parse-time
-                        // path (resolveSubtype()) raises a PARSE-TYPE-ERROR for the same input
-                        std::string trailing;
-                        if (code_sig_type_trailing_text(current_param, trailing)) {
-                            return nullptr;
-                        }
-                        const QoreTypeInfo* param_type = qore_get_type_from_string_intern(current_param.c_str());
-                        if (!param_type) {
-                            return nullptr;
-                        }
-                        param_types.push_back(param_type);
-                    }
-                    current_param.clear();
-                } else {
-                    current_param += c;
-                }
+        for (const std::string& current_param : param_strs) {
+            // reject parameter names and any other trailing text after the type; the parse-time path
+            // (resolveSubtype()) raises a PARSE-TYPE-ERROR for the same input
+            std::string trailing;
+            if (code_sig_type_trailing_text(current_param, trailing)) {
+                return nullptr;
             }
+            const QoreTypeInfo* param_type = qore_get_type_from_string_intern(current_param.c_str());
+            if (!param_type) {
+                return nullptr;
+            }
+            param_types.push_back(param_type);
         }
 
         return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
@@ -5880,32 +5958,21 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         // Use getName() to get the full type string including angle brackets and parentheses
         const char* sig_str = subtypes[0]->getName();
 
-        // Find the opening parenthesis to split return type from params
-        const char* paren_open = strchr(sig_str, '(');
-        if (!paren_open) {
-            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid callable signature '%s'; " \
-                "expected format 'ReturnType(ParamTypes...)' with parentheses", getName(), sig_str);
-            err = -1;
-            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
-        }
-
-        // Find closing parenthesis
-        const char* paren_close = strrchr(sig_str, ')');
-        if (!paren_close || paren_close < paren_open) {
-            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid callable signature '%s'; " \
-                "missing closing parenthesis", getName(), sig_str);
-            err = -1;
-            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
-        }
-
-        // Extract return type string
-        std::string return_type_str(sig_str, paren_open - sig_str);
-        // Trim whitespace
-        while (!return_type_str.empty() && isspace(return_type_str.back())) {
-            return_type_str.pop_back();
-        }
-        while (!return_type_str.empty() && isspace(return_type_str.front())) {
-            return_type_str.erase(0, 1);
+        // split the signature into the return type and the parameter types (see qore_split_code_signature(), as
+        // resolveRuntimeSubtype() does): the return type can be a callable type with a parameter list of its own
+        // (ex: code<*hash<auto>()> in code<code<*hash<auto>()>()>), and a nested callable's parameters and "..." stay
+        // with it (#6022)
+        std::string return_type_str;
+        std::vector<std::string> param_strs;
+        bool has_varargs;
+        {
+            std::string error;
+            if (!qore_split_code_signature(sig_str, return_type_str, param_strs, has_varargs, error)) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; invalid callable signature '%s'; %s",
+                    getName(), sig_str, error.c_str());
+                err = -1;
+                return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
+            }
         }
 
         // Resolve return type
@@ -5919,64 +5986,15 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         }
         // If empty or "nothing", returnType stays nullptr (means nothing return)
 
-        // Extract parameter types string
-        std::string params_str(paren_open + 1, paren_close - paren_open - 1);
-
-        // Check for varargs
-        bool has_varargs = false;
-        size_t dotdotdot_pos = params_str.rfind("...");
-        if (dotdotdot_pos != std::string::npos) {
-            has_varargs = true;
-            // Remove "..." from params_str
-            params_str = params_str.substr(0, dotdotdot_pos);
-            // Trim trailing comma and whitespace
-            while (!params_str.empty() && (isspace(params_str.back()) || params_str.back() == ',')) {
-                params_str.pop_back();
-            }
-        }
-
-        // Parse parameter types
+        // Resolve the parameter types
         type_vec_t param_types;
-        if (!params_str.empty()) {
-            // Split on commas, handling nested angle brackets
-            std::string current_param;
-            int angle_depth = 0;
-            int paren_depth = 0;
-            for (size_t i = 0; i <= params_str.size(); ++i) {
-                char c = i < params_str.size() ? params_str[i] : '\0';
-                if (c == '<') {
-                    ++angle_depth;
-                    current_param += c;
-                } else if (c == '>') {
-                    --angle_depth;
-                    current_param += c;
-                } else if (c == '(') {
-                    ++paren_depth;
-                    current_param += c;
-                } else if (c == ')') {
-                    --paren_depth;
-                    current_param += c;
-                } else if ((c == ',' || c == '\0') && angle_depth == 0 && paren_depth == 0) {
-                    // Trim whitespace from current_param
-                    while (!current_param.empty() && isspace(current_param.back())) {
-                        current_param.pop_back();
-                    }
-                    while (!current_param.empty() && isspace(current_param.front())) {
-                        current_param.erase(0, 1);
-                    }
-                    if (!current_param.empty()) {
-                        // Use the helper to properly parse and resolve complex types
-                        const QoreTypeInfo* param_type = parse_and_resolve_type_string(current_param.c_str(), loc, err);
-                        if (err) {
-                            return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
-                        }
-                        param_types.push_back(param_type);
-                    }
-                    current_param.clear();
-                } else {
-                    current_param += c;
-                }
+        for (const std::string& current_param : param_strs) {
+            // Use the helper to properly parse and resolve complex types
+            const QoreTypeInfo* param_type = parse_and_resolve_type_string(current_param.c_str(), loc, err);
+            if (err) {
+                return or_nothing ? codeOrNothingTypeInfo : codeTypeInfo;
             }
+            param_types.push_back(param_type);
         }
 
         return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);

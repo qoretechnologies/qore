@@ -546,6 +546,47 @@ qore_program_private::programid_to_program_map_t qore_program_private::programid
 QoreRWLock qore_program_private::lck_programMap;
 qore_program_id_t qore_program_private::programIdCounter = 1;
 
+void qore_program_private::clearRemainingPrograms() {
+    // the Programs are cleared one at a time, oldest first, and the registry is scanned again after each one: a
+    // Program that an older one holds (a child Program in a global variable of its parent, for example) is cleared
+    // when the older one releases it, as when its owner deletes the older one, so the objects of the child that the
+    // parent holds are destroyed while the child still has its data; a Program that a destructor creates while the
+    // Programs are cleared is cleared as well (its ID is higher than any cleared before it).  The IDs of the Programs
+    // are never reused, so each one is cleared once
+    ExceptionSink xsink;
+    qore_program_id_t last_id = 0;
+    while (true) {
+        QoreProgram* p = nullptr;
+        {
+            QoreAutoRWReadLocker al(&lck_programMap);
+            for (QoreProgram* i : qore_program_set) {
+                // a Program without references is skipped: no reference can be taken to it; it has been cleared if
+                // its last reference was released with an exception sink (see clear()), and it is freed by the code
+                // that holds it otherwise; its references cannot drop to zero meanwhile, as that needs the write lock
+                // (see derefUnregister())
+                qore_program_id_t id = i->priv->programId;
+                if (id > last_id && i->reference_count() > 0 && (!p || id < p->priv->programId)) {
+                    p = i;
+                }
+            }
+            if (!p) {
+                break;
+            }
+            // a reference of its own while it is cleared: no reference of the owner is released
+            p->ref();
+        }
+        last_id = p->priv->programId;
+        printd(5, "qore_program_private::clearRemainingPrograms() clearing pgm: %p pgmid: " QLLD "\n", p,
+            (int64)last_id);
+        p->priv->waitForTerminationAndClear(&xsink);
+        // the owner's references keep the Program; if the Program has lost them while it was cleared, it is released
+        // here as by any other last reference
+        p->deref(&xsink);
+        // each Program's exceptions are reported with it
+        xsink.handleExceptions();
+    }
+}
+
 #ifdef DEBUG
 size_t qore_program_private::dbgGetLiveProgramCount() {
     QoreAutoRWReadLocker al(&lck_programMap);
@@ -3253,6 +3294,10 @@ void qore_program_private::del(ExceptionSink* xsink) {
     }
     exp_set.clear();
 
+    // no code of this Program runs any more and its background compiles are drained: the native code that only it
+    // owns is removed from the JIT (qore#5772)
+    QoreJIT::instance().releaseCodeOwner(pgm);
+
     //printd(5, "QoreProgram::~QoreProgram() this: %p deleting root ns %p\n", this, RootNS);
 
     for (name_section_sline_statement_map_t::iterator it = statementByFileIndex.begin(); it != statementByFileIndex.end(); it++) {
@@ -5286,7 +5331,7 @@ private:
             addArgs(call->getParseArgs(), call->getArgs());
             // a function whose variant is chosen at runtime is stepped into only if it has user code
             if (!call->getVariant()) {
-                auto* fc = dynamic_cast<const FunctionCallNode*>(call);
+                auto* fc = qore_get_function_call_node(call);
                 const QoreFunction* f = fc ? fc->getFunction() : nullptr;
                 if (f && !f->hasUser()) {
                     return;

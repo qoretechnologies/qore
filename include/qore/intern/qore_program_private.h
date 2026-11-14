@@ -966,7 +966,7 @@ public:
     //! qore_program_private::parseDeniedDomains())
     int64 mod_header_dom = QDOM_DEFAULT;
     //! true while the init and del closures of the module header are parse-initialized (see
-    //! qore_program_private::parseDeniedDomains())
+    //! qore_program_private::parseAddDomain())
     bool mod_header_closure_init = false;
 
     //! the restrictions that an AOT module Program inherited from the Program that loaded it
@@ -1751,6 +1751,23 @@ public:
 
     //! Unregisters a user variant of the Program's code when it is destroyed or moved to another Program
     DLLLOCAL void unregisterUserVariant(const UserVariantBase* v);
+
+    //! clears the data of the Programs that still exist when the library is cleaned up (qore#6045)
+    /** called by qore_cleanup() once no thread but the calling one can run Qore code and the modules have been
+        deleted, while the types, the thread data and the JIT engine still exist: a Program that its owner keeps
+        beyond that (ex: a module's Program with static storage duration, which a static destructor deletes after
+        the library has been cleaned up) has its data (global variables, constants) cleared here, so the Qore code
+        that its objects run when they are destroyed (their destructors) runs while the library can run it; the
+        owner's later deletion of the Program finds its data cleared (see waitForTerminationAndClear(), which clears
+        it only once)
+
+        No reference that the owner holds is released: each Program is held by a reference of its own while it is
+        cleared.  The Programs are cleared oldest first, and the registry is scanned again after each one, so a
+        Program that another one holds is cleared when that one releases it, and a Program created while the
+        Programs are cleared is cleared too.  No thread can be started by the code that runs then (see
+        qore_thread_start_closed).  Exceptions raised by the destructors are reported as unhandled exceptions.
+    */
+    DLLLOCAL static void clearRemainingPrograms();
 
 #ifdef DEBUG
     //! For tests: the number of Program objects that exist (created and not yet destroyed)
@@ -3840,6 +3857,19 @@ public:
             }
         }
         QoreParseOptions neg = (n_dom & ~QoreParseOptions::POSITIVE_OPTIONS);
+        // a closure of a module header is parse-initialized after the header with the options in effect where it was
+        // written: one written before the domains key still has the restrictions that the declaration removed for the
+        // rest of the module, the one inherited from the Program loading a module from the process-wide module path
+        // (setModuleOwnDomainsIntern()) and the header's own one (QoreUserModuleDefContextHelper), so they do not apply
+        // to it, whatever the order of the keys of the header, for functions, methods and classes (qore#5803)
+        // module_trusted_dom, module_own_dom and mod_header_dom are per Program and are not reset when its module is
+        // loaded: a container that the API provides for a module (loadApplyToUserModule()) and that is used for a
+        // second module, after a restriction has been added back to it, would give the second module's header closures
+        // the first module's relief; the API does not reuse a container so, and without restrictions added back the
+        // first declaration has removed these restrictions from the container's options for good
+        if (neg && mod_header_closure_init) {
+            neg &= ~QoreParseOptions(module_trusted_dom | (module_own_dom & mod_header_dom));
+        }
         if (neg && (neg & pwo.parse_options)) {
             rv |= (neg & pwo.parse_options);
             pend_dom |= neg;
@@ -4778,28 +4808,22 @@ public:
     /** as parseAddDomain(); the restrictions that a module header adds for its own code do not apply to the domains
         declared on user code (\a user_declared): the header's \c init and \c del closures may call user code that
         declares a domain, which the code loading the module is checked for when it calls the module; a header closure
-        has the domains that the header declares, also when it is written before the domains key
+        has the domains that the header declares, also when it is written before the domains key (see parseAddDomain())
     */
     DLLLOCAL static QoreParseOptions parseDeniedDomains(QoreProgram* pgm, int64 dom, int64 user_declared) {
         QoreParseOptions denied = parseAddDomain(pgm, dom);
         if (denied && user_declared && pgm->priv->mod_header_dom) {
             denied &= ~QoreParseOptions(user_declared & pgm->priv->mod_header_dom & ~(dom & ~user_declared));
         }
-        // a closure of the module header is parse-initialized after the header with the options in effect where it
-        // was written: one written before the domains key still has the restrictions that the declaration removed
-        // for the rest of the module, the one inherited from the Program loading a module from the process-wide
-        // module path (setModuleOwnDomainsIntern()) and the header's own one (QoreUserModuleDefContextHelper), so
-        // they do not apply to it, whatever the order of the keys of the header
-        if (denied && pgm->priv->mod_header_closure_init) {
-            denied &= ~QoreParseOptions(pgm->priv->module_trusted_dom
-                | (pgm->priv->module_own_dom & pgm->priv->mod_header_dom));
-        }
         return denied;
     }
 
-    //! Marks the parse initialization of the init and del closures of a module header (see parseDeniedDomains())
-    DLLLOCAL static void setModuleHeaderClosureInit(QoreProgram& pgm, bool on) {
+    //! Marks the parse initialization of the init and del closures of a module header (see parseAddDomain())
+    //! \return the previous value
+    DLLLOCAL static bool setModuleHeaderClosureInit(QoreProgram& pgm, bool on) {
+        bool prev = pgm.priv->mod_header_closure_init;
         pgm.priv->mod_header_closure_init = on;
+        return prev;
     }
 
     //! Sets the restrictions that a user module header adds to the module's Program while its header is parsed

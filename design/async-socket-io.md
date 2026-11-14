@@ -1849,6 +1849,10 @@ the idle period and does a `recv(MSG_PEEK)` to confirm silence, then closes.  Qo
   is in the middle of a WebSocket hijack (HTTP/1.1 → WS via `101 Switching Protocols`).
   Without this guard, `handleConnectionResult` would call `continueReading()` which throws
   `HTTPCLIENT-STATE-ERROR` and closes the socket that the WebSocket layer is now using.
+  `isProtocolSwitched()` is sticky: it stays true when the H1 operation is aborted or closed after the 101 was
+  delivered (`switched_protocol`), as the completion is delivered on a worker at any time and, for a closed
+  operation, `handleConnectionResult` would call `conn.close()` → `cancelAndClose()` on the WebSocket's socket
+  (issue #5985).
 
 The end state: H1/H2 idle connections are closed proactively by the poll op, invisibly to
 callers, with a deterministic upper bound (`idle_timeout`) on how long a stale pooled connection

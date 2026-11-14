@@ -732,7 +732,10 @@ struct InstRegistryMethodRef {
         method_name = method_name_storage.c_str();
 
         const char* payload = first_sep + 1;
-        const char* second_sep = strrchr(payload, '\n');
+        // the variant's class reference ends the payload's first line, or its second one for a class of a module;
+        // the signature text that follows has the default values of the parameters, whose strings can have newlines
+        // (qore#6026)
+        const char* second_sep = qore_aot_find_class_ref_end(payload);
         if (!second_sep) {
             // Backward-compatible form: method_name + "\n" + signature.
             sig_text = payload;
@@ -847,7 +850,7 @@ static std::string instRegistryGetVariantSignatureRef(const AbstractQoreFunction
  */
 static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValue& expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (auto* call = qore_get_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
         std::string name = instRegistryGetFunctionCallName(call);
         ctx.writer.writeStringRef(name.c_str());
@@ -1579,15 +1582,18 @@ static bool instRegistryWriteCheckCallTargetExpr(AOTInstWriteCtx& ctx, const Qor
             return true;
         }
     }
-    if (dynamic_cast<const CallReferenceCallNode*>(node)) {
+    if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
         // a call through a call reference (AOTExprKind::CALLREF_CALL): no callable (it is the operand) and no
-        // arguments
-        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CALLREF_CALL));
+        // arguments; a named call has the names of its arguments (AOTExprKind::CALLREF_CALL_NAMED), which are bound
+        // when the call is made (CallReferenceCallNode::evalRuntimeNamedWithArgs())
+        const name_vec_t* arg_names = crc->getRuntimeArgNames();
+        ctx.writer.writeU8(static_cast<uint8_t>(arg_names ? AOTExprKind::CALLREF_CALL_NAMED
+            : AOTExprKind::CALLREF_CALL));
         if (!ctx.writeExpr(ctx.writer, QoreValue())) {
             return false;
         }
         ctx.writer.writeU8(0);
-        return true;
+        return !arg_names || qore_aot_write_callref_arg_names(ctx.writer, *arg_names);
     }
     return instRegistryWriteCallTargetExpr(ctx, expr);
 }
@@ -3012,7 +3018,7 @@ static std::unique_ptr<QoreIRInstruction> readLoadConst(
         ctx.error = error;
         return nullptr;
     }
-    auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode());
+    auto* rcr = qore_get_runtime_constant_ref_node(expr.getInternalNode());
     auto* lci = new QoreIRLoadConstantInstruction(rcr, expr);
     lci->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
@@ -3347,7 +3353,7 @@ static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
     // The AST statement pointer is not serializable and the source location rides on the base-instruction record;
     // from format version 26, the nesting of the statement (#5816): its depth (u16) and its flags (u8), 0 for the
     // instruction of a block
-    auto* dbg = dynamic_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
+    auto* dbg = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
     ctx.writer.writeU16(dbg ? dbg->nest_depth : 0);
     ctx.writer.writeU8(dbg ? dbg->nest_flags : 0);
     // from format version 31, the locals of the block of a DebugBlock, by name and slot (#5921)

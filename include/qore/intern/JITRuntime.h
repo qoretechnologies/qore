@@ -332,7 +332,15 @@ void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx
 
 //! Raises the exception that the call @a call raises for its target @a target before it evaluates its arguments, if
 //! any (QoreIROpcode::CheckCallTarget; issue #5784)
-/** @return -1 if an exception was raised, 0 if not
+/** @param call the call
+    @param target the value that the call is made on or with
+    @param xsink for the exception
+
+    @return -1 if an exception was raised, 0 if not
+
+    @note qore_rt_check_call_target_aot() makes the check with the call expression that the AOT loader rebuilds,
+    which has no source location (\c loc_builtin): it raises the exception with the thread's runtime location
+    instead, which compiled code sets to the location of the call before the check (issue #5835)
 */
 DLLLOCAL int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
 
@@ -500,6 +508,12 @@ void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tra
 
 //! Returns 1 if the value is a reference, 0 otherwise
 uint8_t qore_rt_value_is_reference(uint64_t value);
+
+//! Returns the argument of an `any` parameter with the complex type of a list or hash stripped (qore#6032)
+/** Takes the reference of \a value and returns a reference: a shared container is copied with a plain type, as
+    QoreTypeInfo::acceptInputParam() does for an `any` parameter; any other value is returned as it is
+*/
+uint64_t qore_rt_strip_any_param(uint64_t value);
 
 //! As qore_rt_load_local(), except that a reference held by the variable is returned itself
 uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);

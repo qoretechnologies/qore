@@ -592,7 +592,54 @@ typedef std::vector<ObjCountRec> ocvec_t;
 /** for tests; see dbg_get_lvalue_scan_count()
 */
 DLLLOCAL int64 q_get_lvalue_scan_count();
+//! returns the number of values examined while collecting objects held by removals in this thread
+DLLLOCAL int64 q_get_lvalue_removal_visit_count();
+//! returns the number of object identity comparisons made by removal bookkeeping in this thread
+DLLLOCAL int64 q_get_lvalue_removal_probe_count();
+//! records one object identity comparison by removal bookkeeping
+DLLLOCAL void q_record_lvalue_removal_probe();
+//! returns the number of lazy removal-tracker states allocated in this thread
+DLLLOCAL int64 q_get_lvalue_removal_allocation_count();
 #endif
+
+//! Identities held by a removal until its recursive-reference scan completes
+/** The first two objects are stored inline.  Larger object sets and nested-container visitation use lazy storage, so
+    an ordinary lvalue has the same storage as the old vector and removing a flat value with up to two objects allocates nothing.
+    These pointers borrow the removed values' lifetime; no reference is released by this tracker.
+*/
+class QoreRemovedValueTracker {
+public:
+    DLLLOCAL QoreRemovedValueTracker() = default;
+    DLLLOCAL QoreRemovedValueTracker(QoreRemovedValueTracker&& other) noexcept
+            : first(other.first), second(other.second), state(other.state) {
+        other.first = other.second = nullptr;
+        other.state = nullptr;
+    }
+    DLLLOCAL ~QoreRemovedValueTracker() {
+        if (state) {
+            releaseState();
+        }
+    }
+    DLLLOCAL bool empty() const { return !first; }
+    DLLLOCAL void add(const RObject* obj);
+    DLLLOCAL bool contains(const RObject* obj) const;
+    DLLLOCAL bool visit(const AbstractQoreNode* container);
+    DLLLOCAL bool tracking() const { return state; }
+
+private:
+    struct ObjectEqual;
+    struct State;
+    const RObject* first = nullptr;
+    const RObject* second = nullptr;
+    State* state = nullptr;
+
+    DLLLOCAL void releaseState();
+    DLLLOCAL State& getState();
+    DLLLOCAL QoreRemovedValueTracker(const QoreRemovedValueTracker&) = delete;
+    DLLLOCAL QoreRemovedValueTracker& operator=(const QoreRemovedValueTracker&) = delete;
+};
+static_assert(sizeof(QoreRemovedValueTracker) == sizeof(std::vector<const RObject*>),
+    "removal bookkeeping must not grow ordinary lvalue frames");
 
 // this class grabs global variable or object locks for the duration of the scope of the object
 // no evaluations can be done while this object is in scope or a deadlock may result
@@ -664,7 +711,8 @@ private:
     DLLLOCAL void releaseIntern(ExceptionSink* xsink);
 };
 
-class LValueHelper {
+class LValueHelper final {
+    friend struct qore_type_safe_ref_helper_priv_t;
     friend class LValueRemoveHelper;
     friend class LValueLockHandoffHelper;
 
@@ -790,7 +838,7 @@ private:
     //! objects other than \a robj that a value needing a scan was removed from; each holds a weak reference
     std::vector<RObject*> removal_objects;
     //! the objects removed by this write, which it still holds while it scans; see removedValue()
-    std::vector<const RObject*> removed_objects;
+    QoreRemovedValueTracker removed_objects;
 
     // recursive delta: change to recursive reference count
     int rdt = 0;
@@ -1007,6 +1055,14 @@ public:
 
     DLLLOCAL LValueHelper(ExceptionSink* xsink, bool for_assignment = false);
 
+    //! Finishes the parent lvalue before a callback that can replace or remove it
+    /** The caller must first retain the target object. Completes counts, locks, reference Program entries,
+        writebacks, scans and deferred releases, then leaves an empty helper. Pending member notifications stay
+        with this helper until its original scope ends. The caller must not read the old lvalue afterwards.
+        Object mutation does not write its reference back to an external parent member.
+    */
+    DLLLOCAL void finishForCallback();
+
     //! Returns how the helper resolves the lvalue (see ReadAccess)
     DLLLOCAL read_access_e getReadAccess() const {
         return read_access;
@@ -1044,6 +1100,9 @@ public:
 
     // to scan objects after initialization
     DLLLOCAL LValueHelper(QoreObject& obj, ExceptionSink* xsink);
+    //! Scan an already pinned object after unlocked native callbacks, without reading its member counts
+    struct ObjectScan {};
+    DLLLOCAL LValueHelper(QoreObject& self, ExceptionSink* xsink, ObjectScan);
 
     DLLLOCAL ~LValueHelper();
 

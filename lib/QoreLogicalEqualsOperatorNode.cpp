@@ -243,13 +243,15 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
     // check for optimizations based on type, but only assign if neither side is a string or number (highest priority)
     // and types are known for both operands (if not, QoreTypeInfo::parseReturns(type, NT_STRING) will return a
     // non-zero value); a lower-priority comparison is not chosen when an operand can be a value of a higher-priority
-    // type (float, then int), which the generic comparison compares as that type: ex: int == union<int, float> and
-    // int == *float compare floats (an or-nothing or union type is not of a value type for QoreTypeInfo::isType();
-    // qore#5875)
+    // type (float, then int or char), which the generic comparison compares as that type: ex: int == union<int, float>
+    // and int == *float compare floats (an or-nothing or union type is not of a value type for QoreTypeInfo::isType();
+    // qore#5875), and char == bool compares the char's code point as an int (qore#6048)
     if (!QoreTypeInfo::parseReturns(lti, NT_STRING) && !QoreTypeInfo::parseReturns(rti, NT_STRING)
         && !QoreTypeInfo::parseReturns(lti, NT_NUMBER) && !QoreTypeInfo::parseReturns(rti, NT_NUMBER)) {
         bool can_be_float = QoreTypeInfo::parseReturns(lti, NT_FLOAT) || QoreTypeInfo::parseReturns(rti, NT_FLOAT);
         bool can_be_int = QoreTypeInfo::parseReturns(lti, NT_INT) || QoreTypeInfo::parseReturns(rti, NT_INT);
+        // a char is compared as an int (its code point) before bools, as the generic comparison does (qore#6048)
+        bool can_be_char = QoreTypeInfo::parseReturns(lti, NT_CHAR) || QoreTypeInfo::parseReturns(rti, NT_CHAR);
         if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT)) {
             pfunc = &QoreLogicalEqualsOperatorNode::floatSoftEqual;
         } else if (QoreTypeInfo::isType(lti, NT_INT) || QoreTypeInfo::isType(rti, NT_INT)) {
@@ -257,7 +259,7 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
                 pfunc = &QoreLogicalEqualsOperatorNode::bigIntSoftEqual;
             }
         } else if (QoreTypeInfo::isType(lti, NT_BOOLEAN) || QoreTypeInfo::isType(rti, NT_BOOLEAN)) {
-            if (!can_be_float && !can_be_int) {
+            if (!can_be_float && !can_be_int && !can_be_char) {
                 pfunc = &QoreLogicalEqualsOperatorNode::boolSoftEqual;
             }
         }
@@ -336,7 +338,7 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
             case NT_CHAR:
                 return l.get<const QoreNumberNode>()->equals(r.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
                 return l.get<const QoreNumberNode>()->equals(**rn);
             }
         }
@@ -352,7 +354,7 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
             case NT_CHAR:
                 return r.get<const QoreNumberNode>()->equals(l.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
                 return r.get<const QoreNumberNode>()->equals(**ln);
             }
         }
