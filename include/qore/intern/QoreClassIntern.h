@@ -2286,8 +2286,6 @@ public:
             const qore_class_private* class_ctx, bool allow_internal,
             const QoreProgramLocation* consumer_loc = nullptr) const;
 
-    DLLLOCAL int addBaseClassesToSubclass(QoreClass* child, bool is_virtual);
-
     DLLLOCAL void initializeBuiltin();
 };
 
@@ -2406,13 +2404,11 @@ public:
 
     DLLLOCAL bool isBaseClass(QoreClass* qc, bool toplevel) const;
 
-    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual) {
-        for (auto& i : *this) {
-            if ((*i).addBaseClassesToSubclass(child, is_virtual))
-                return -1;
-        }
-        return sml.addBaseClassesToSubclass(thisparent, child, is_virtual);
-    }
+    //! adds the classes of the hierarchy of \a thisparent, whose base classes these are, to the hierarchy of \a child
+    /** Walks the hierarchy iteratively, as it can be as long as the code declares it (issue #6047); see
+        qore_class_private::addBaseClassesToSubclass()
+    */
+    DLLLOCAL int addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual);
 
     DLLLOCAL void rescanParents(QoreClass* cls);
 
@@ -3936,6 +3932,7 @@ public:
         scl->addAncestors(m);
     }
 
+    //! adds the static methods of the base classes that the method overrides, to the most distant base class
     DLLLOCAL void parseAddStaticAncestors(QoreMethod* m) {
         if (!scl) {
             return;
@@ -3944,12 +3941,14 @@ public:
         scl->parseAddStaticAncestors(m);
     }
 
+    //! adds the methods of the base classes that the method overrides, to the most distant base class
     DLLLOCAL void parseAddAncestors(QoreMethod* m) {
         //printd(5, "qore_class_private::parseAddAncestors(%p %s) this: %p cls: %p %s scl: %p\n", m, m->getName(), this, cls, name.c_str(), scl);
         assert(strcmp(m->getName(), "constructor"));
 
-        if (!scl)
+        if (!scl) {
             return;
+        }
 
         scl->parseAddAncestors(m);
     }
@@ -4616,10 +4615,12 @@ public:
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClass(const qore_class_private& oc) const;
     DLLLOCAL qore_type_result_e runtimeCheckCompatibleClassIntern(const qore_class_private& oc) const;
 
-    // find the given class anywhere in the hierarchy regardless of access permissions or location
+    //! finds the given class anywhere in the hierarchy regardless of access permissions or location
+    /** The hierarchy is walked iteratively (see BCList::findInHierarchy()) */
     DLLLOCAL const QoreClass* findInHierarchy(const qore_class_private& qc) {
-        if (equal(qc))
+        if (equal(qc)) {
             return cls;
+        }
         return scl ? scl->findInHierarchy(qc) : nullptr;
     }
 

@@ -3048,20 +3048,6 @@ void BCNode::execConstructors(LexicalSemanticPolicy policy, QoreObject* o, BCEAL
     return execConstructorsImpl<true>(policy, o, bceal, rc, xsink);
 }
 
-int BCNode::addBaseClassesToSubclass(QoreClass* child, bool is_virtual) {
-    // issue #2318 must check for duplicate base classes here
-    // sclass may be 0 in case of a parse exception
-    if (!sclass) {
-        return 0;
-    }
-
-    if (sclass->priv->scl && sclass->priv->scl->findInHierarchy(*child->priv)) {
-        parse_error(*loc, "OOPS %s", child->getName());
-        return -1;
-    }
-
-    return sclass->priv->addBaseClassesToSubclass(child, is_virtual || this->is_virtual);
-}
 
 void BCNode::initializeBuiltin() {
     assert(sclass);
@@ -3363,38 +3349,64 @@ void BCList::parseAddAncestors(QoreMethod* m) {
 
     //printd(5, "BCList::parseAddAncestors(%p %s) this: %p size: %d\n", m, name, this, size());
 
-    for (auto& i : *this) {
-        // if there was a parse error finding the base class, then skip
-        QoreClass* qc = (*i).sclass;
-        if (!qc)
+    // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
+    // code declares it (issue #6047)
+    std::vector<std::pair<const BCList*, size_t>> stack;
+    stack.emplace_back(this, 0);
+    while (!stack.empty()) {
+        std::pair<const BCList*, size_t>& f = stack.back();
+        if (f.second == f.first->size()) {
+            stack.pop_back();
             continue;
+        }
+        const BCNode& n = *(*f.first)[f.second++];
+        // if there was a parse error finding the base class, then skip
+        QoreClass* qc = n.sclass;
+        if (!qc) {
+            continue;
+        }
 
         const QoreMethod* w = qc->priv->parseFindLocalMethod(name);
         //printd(5, "BCList::parseAddAncestors(%p %s) this: %p qc: %p w: %p\n", m, name, this, qc, w);
 
         if (w) {
             qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                (*i).access);
+                n.access);
         }
 
-        qc->priv->parseAddAncestors(m);
+        if (qc->priv->scl) {
+            stack.emplace_back(qc->priv->scl, 0);
+        }
     }
 }
 
 void BCList::parseAddStaticAncestors(QoreMethod* m) {
     const char* name = m->getName();
-    for (auto& i : *this) {
-        QoreClass* qc = (*i).sclass;
-        // qc may be 0 if there were a parse error with an unknown class earlier
-        if (!qc)
+    // the hierarchy is walked iteratively, as for parseAddAncestors()
+    std::vector<std::pair<const BCList*, size_t>> stack;
+    stack.emplace_back(this, 0);
+    while (!stack.empty()) {
+        std::pair<const BCList*, size_t>& f = stack.back();
+        if (f.second == f.first->size()) {
+            stack.pop_back();
             continue;
+        }
+        const BCNode& n = *(*f.first)[f.second++];
+        QoreClass* qc = n.sclass;
+        // qc may be 0 if there were a parse error with an unknown class earlier
+        if (!qc) {
+            continue;
+        }
 
         const QoreMethod* w = qc->priv->parseFindLocalStaticMethod(name);
-        if (w)
+        if (w) {
             qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                (*i).access);
+                n.access);
+        }
 
-        qc->priv->parseAddStaticAncestors(m);
+        if (qc->priv->scl) {
+            stack.emplace_back(qc->priv->scl, 0);
+        }
     }
 }
 
@@ -3434,12 +3446,28 @@ QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc,
 }
 
 const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
-    for (auto& i : *this) {
-        const QoreClass* rv = (*i).findInHierarchy(qc);
-        if (rv)
-            return rv;
+    // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
+    // code declares it (issue #6047)
+    std::vector<std::pair<const BCList*, size_t>> stack;
+    stack.emplace_back(this, 0);
+    while (!stack.empty()) {
+        std::pair<const BCList*, size_t>& f = stack.back();
+        if (f.second == f.first->size()) {
+            stack.pop_back();
+            continue;
+        }
+        const BCNode& n = *(*f.first)[f.second++];
+        // sclass can be 0 if the class could not be found during parse initialization
+        if (!n.sclass) {
+            continue;
+        }
+        if (n.sclass->priv->equal(qc)) {
+            return n.sclass->priv->cls;
+        }
+        if (n.sclass->priv->scl) {
+            stack.emplace_back(n.sclass->priv->scl, 0);
+        }
     }
-
     return nullptr;
 }
 
@@ -5472,12 +5500,68 @@ QoreObject* qore_class_private::execCopyImpl(LexicalSemanticPolicy policy, QoreO
 int qore_class_private::addBaseClassesToSubclass(QoreClass* child, bool is_virtual) {
     //printd(5, "qore_class_private::addBaseClassesToSubclass() this: %p '%s' sc: %p '%s' is_virtual: %d scl: %p\n",
     //  this, name.c_str(), sc, sc->getName(), is_virtual, scl);
-    // recurses to the most distant base class (see initializeHierarchy())
-    if (scl && (parse_check_stack(loc) || scl->addBaseClassesToSubclass(cls, child, is_virtual))) {
+    if (scl && scl->addBaseClassesToSubclass(cls, child, is_virtual)) {
         return -1;
     }
     assert(child->priv->scl);
     return child->priv->scl->sml.add(child, cls, is_virtual);
+}
+
+namespace {
+//! A class whose base classes are being added to a subclass by BCList::addBaseClassesToSubclass()
+struct AddBaseClassesFrame {
+    //! the class: thisparent for the first frame, the class's own QoreClass for the others, as in the recursion
+    QoreClass* cls;
+    //! the class's private data
+    qore_class_private* c;
+    //! if it is inherited virtually by the subclass
+    bool is_virtual;
+    //! the index of its next base class
+    size_t next = 0;
+};
+}
+
+int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bool is_virtual) {
+    // the classes of the hierarchy, from thisparent to the class whose base classes are being added; each is added to
+    // the subclass after its own base classes, in the order of the recursion that this replaces:
+    // BCNode::addBaseClassesToSubclass() -> qore_class_private::addBaseClassesToSubclass() for each base class, then
+    // the base classes of the class itself from its class list (sml)
+    assert(this == thisparent->priv->scl);
+    std::vector<AddBaseClassesFrame> stack;
+    stack.push_back({thisparent, thisparent->priv, is_virtual});
+    while (!stack.empty()) {
+        AddBaseClassesFrame& f = stack.back();
+        BCList* l = f.c->scl;
+        if (l && f.next < l->size()) {
+            BCNode& n = *(*l)[f.next++];
+            // issue #2318 must check for duplicate base classes here; sclass may be 0 in case of a parse exception
+            if (!n.sclass) {
+                continue;
+            }
+            if (n.sclass->priv->scl && n.sclass->priv->scl->findInHierarchy(*child->priv)) {
+                parse_error(*n.loc, "OOPS %s", child->getName());
+                return -1;
+            }
+            bool virt = f.is_virtual || n.is_virtual;
+            stack.push_back({n.sclass->priv->cls, n.sclass->priv, virt});
+            continue;
+        }
+        // the base classes of the class have been added: the class list of the class, then the class itself, unless
+        // it is thisparent, which the caller adds
+        if (l && l->sml.addBaseClassesToSubclass(f.cls, child, f.is_virtual)) {
+            return -1;
+        }
+        QoreClass* cls = f.cls;
+        bool virt = f.is_virtual;
+        stack.pop_back();
+        if (!stack.empty()) {
+            assert(child->priv->scl);
+            if (child->priv->scl->sml.add(child, cls, virt)) {
+                return -1;
+            }
+        }
+    }
+    return 0;
 }
 
 int qore_class_private::addUserMethod(const char* mname, MethodVariantBase* f, bool n_static) {
@@ -5876,8 +5960,11 @@ int qore_class_private::parseInitPartialIntern() {
 
     int err = 0;
 
-    // initialize parents first for abstract method handling
-    if (scl) {
+    // initialize parents first for abstract method handling; this recurses to the base classes that are not yet
+    // initialized, once for each level of inheritance, so a long chain stops while enough stack remains (issue #6047)
+    if (scl && parse_check_stack(loc)) {
+        err = -1;
+    } else if (scl) {
         for (bclist_t::iterator i = scl->begin(), e = scl->end(); i != e; ++i) {
             if ((*i)->sclass) {
                 if ((*i)->sclass->priv->parseInitPartial() && !err) {

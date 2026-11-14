@@ -579,21 +579,24 @@ bool qore_has_debug() {
 #endif
 }
 
-int parse_check_stack(const QoreProgramLocation* loc) {
-    if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-        return 0;
-    }
+int parse_raise_stack_error(const QoreProgramLocation* loc) {
     parseException(loc ? *loc : loc_builtin, QORE_PARSE_STACK_ERR, new QoreStringNode(QORE_PARSE_STACK_DESC));
     return -1;
 }
 
-bool qore_has_parse_stack_error(const ExceptionSink& xsink) {
+const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink) {
     for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
-        if (e->err.getType() == NT_STRING && *e->err.get<const QoreStringNode>() == QORE_PARSE_STACK_ERR) {
-            return true;
+        // the error code can be an inline short string, which has no QoreStringNode
+        QoreStringDataHelper err(e->err);
+        if (err && (!strcmp(err.c_str(), QORE_PARSE_STACK_ERR) || !strcmp(err.c_str(), "STACK-LIMIT-EXCEEDED"))) {
+            return e;
         }
     }
-    return false;
+    return nullptr;
+}
+
+bool qore_has_thread_stack_error(const ExceptionSink& xsink) {
+    return qore_find_thread_stack_error(xsink) != nullptr;
 }
 
 #ifndef NDEBUG
@@ -654,7 +657,7 @@ private:
 static QORE_INTERN_NOINLINE int parse_init_value_stack_exceeded(AbstractQoreNode* n, QoreValue& val,
         QoreParseContext& parse_context) {
     const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
-    int rc = parse_check_stack(pn ? pn->loc : nullptr);
+    int rc = parse_raise_stack_error(pn ? pn->loc : nullptr);
     {
         ParseExceptionSink xsink;
         val.discard(*xsink);

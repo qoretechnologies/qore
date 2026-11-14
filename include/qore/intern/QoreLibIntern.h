@@ -455,16 +455,27 @@ constexpr size_t QORE_PARSE_STACK_RESERVE = 64 * 1024;
 /** Called before parse initialization recurses into a nested expression or statement: the parser accepts nesting
     that a thread with a small stack cannot initialize, which would otherwise overflow the stack
 
-    The error is QORE_PARSE_STACK_ERR.
+    The error is QORE_PARSE_STACK_ERR.  Inline, so that the common case, with enough stack, is a comparison (see
+    q_thread_stack_reserve_exceeded()); defined after qore_thread_intern.h is included below.
 
     @param loc the location of the code being initialized, if known
 */
-DLLLOCAL int parse_check_stack(const QoreProgramLocation* loc);
+DLLLOCAL inline int parse_check_stack(const QoreProgramLocation* loc);
 
-//! Returns true if the exception sink holds the parse error QORE_PARSE_STACK_ERR
-/** Raised where the parse of the code or of a module that it loads ran short of the stack of the thread
+//! Raises the parse error QORE_PARSE_STACK_ERR for parse_check_stack() and returns -1
+DLLLOCAL int parse_raise_stack_error(const QoreProgramLocation* loc);
+
+//! Returns true if the exception sink holds an error that depends on the stack of the thread, not on the code
+/** The parse error QORE_PARSE_STACK_ERR, raised where the parse of the code or of a module that it loads ran short of
+    the stack of the thread, or \c STACK-LIMIT-EXCEEDED, raised where code that runs while a module is loaded or
+    initialized (the initialization of its constants, for example) did; a module whose load fails with either is not
+    a module that is not available (see QoreModuleManager::parseLoadModule())
 */
-DLLLOCAL bool qore_has_parse_stack_error(const ExceptionSink& xsink);
+DLLLOCAL bool qore_has_thread_stack_error(const ExceptionSink& xsink);
+
+//! Returns the first exception in the sink with an error that depends on the stack of the thread, or nullptr
+/** See qore_has_thread_stack_error() */
+DLLLOCAL const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink);
 
 //! Parse-initializes a node that is not a level of nesting of its own
 /** For a node that parse initialization replaces with another node in the same place, and for a node that the
@@ -1305,6 +1316,10 @@ public:
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/lvalue_ref.h"
 #include "qore/intern/qore_thread_intern.h"
+
+DLLLOCAL inline int parse_check_stack(const QoreProgramLocation* loc) {
+    return q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE) ? parse_raise_stack_error(loc) : 0;
+}
 #include "qore/intern/Function.h"
 #include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/CallReferenceNode.h"
