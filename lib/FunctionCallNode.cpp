@@ -1291,6 +1291,15 @@ SetSelfFunctionCallNode::SetSelfFunctionCallNode(const SelfFunctionCallNode& old
     self->ref();
 }
 
+SetSelfFunctionCallNode::SetSelfFunctionCallNode(const SetSelfFunctionCallNode& old, QoreListNode* args)
+        : SelfFunctionCallNode(old, args), self(old.self), cls(old.cls) {
+    // a copy is made before the copied call is evaluated, while it holds its reference to the object: a nested
+    // background operator copies its operand instead of evaluating it, and a copy evaluated more than once
+    // (reusable_tmp_args) keeps the reference until it is released
+    assert(old.deref_self);
+    self->ref();
+}
+
 QoreValue SetSelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);

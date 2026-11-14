@@ -565,6 +565,12 @@ static AbstractQoreNode* crlr_selfcall_copy(RuntimeConfig& rc, const SelfFunctio
             return nullptr;
         }
     }
+    // the copy of a background copy of a self call, made by a background expression nested in another one in the
+    // thread of the outer one, keeps the object of the copied call: the thread has no object of its own (qore#5971)
+    if (const SetSelfFunctionCallNode* set_self = dynamic_cast<const SetSelfFunctionCallNode*>(n)) {
+        return crlr_call_copy_done(qore_make_function_call<SetSelfFunctionCallNode>(n->getSemanticPolicy(), *set_self,
+            na));
+    }
     return crlr_call_copy_done(qore_make_function_call<SetSelfFunctionCallNode>(n->getSemanticPolicy(), *n, na));
 }
 
