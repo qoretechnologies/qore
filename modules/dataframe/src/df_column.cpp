@@ -1111,6 +1111,13 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
     return col;
 }
 
+std::shared_ptr<ColumnData> buildColumnDataFromDenseRows(const ColumnData& src, const QoreBufferNode* values,
+        ExceptionSink* xsink) {
+    return src.type == ColumnType::DATE
+        ? buildColumnDataFromTemporalBuffer(values, xsink)
+        : buildColumnDataFromBuffer(values, xsink);
+}
+
 std::shared_ptr<ColumnData> buildColumnDataFromTemporalBuffer(const QoreBufferNode* values,
         ExceptionSink* xsink) {
     if (!values) {

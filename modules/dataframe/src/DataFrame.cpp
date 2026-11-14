@@ -1109,7 +1109,7 @@ QoreDataFrame* QoreDataFrame::sliceRows(int64_t start, int64_t count,
         if (src_col.data->hasDenseBuffer()) {
             ReferenceHolder<QoreBufferNode> buffer(src_col.data->dense_buffer->view(
                 static_cast<size_t>(start), static_cast<size_t>(count)), xsink);
-            new_data = buildColumnDataFromBuffer(*buffer, xsink);
+            new_data = buildColumnDataFromDenseRows(*src_col.data, *buffer, xsink);
             if (*xsink) {
                 delete df;
                 return nullptr;
@@ -1796,7 +1796,7 @@ QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
                 }
             }
 
-            new_data = buildColumnDataFromBuffer(*buffer, xsink);
+            new_data = buildColumnDataFromDenseRows(*src_col.data, *buffer, xsink);
             if (*xsink) {
                 delete df;
                 return nullptr;

@@ -361,6 +361,13 @@ DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferN
     ExceptionSink* xsink);
 
 //! Build a date/time ColumnData from a dense int64 microsecond buffer
+//! Builds the column of rows selected from a column with dense storage, as the column was built from its buffer
+/** A date column (a timestamp, date or duration column) keeps its dense buffer<int64> of microseconds, which is
+    built as a date column, not as an int column (qore#6097)
+*/
+DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataFromDenseRows(const ColumnData& src,
+        const QoreBufferNode* values, ExceptionSink* xsink);
+
 DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataFromTemporalBuffer(const QoreBufferNode* values,
     ExceptionSink* xsink);
 
