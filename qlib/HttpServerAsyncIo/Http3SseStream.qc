@@ -83,8 +83,8 @@ public class Http3SseStream inherits AbstractSseConnection {
         #! Generation value used to ignore canceled or superseded timer callbacks
         int heartbeat_generation = 0;
 
-        #! Epoch microseconds of the last successful SSE DATA write
-        int last_send_us = clock_getmicros();
+        #! Monotonic-clock microseconds of the last successful SSE DATA write
+        int last_send_us = clock_get_monotonic_us();
     }
 
     #! Creates an SSE stream over HTTP/3
@@ -165,7 +165,7 @@ public class Http3SseStream inherits AbstractSseConnection {
         AutoLock al(heartbeat_mutex);
         heartbeat_ms = interval_ms;
         heartbeat_msg = msg;
-        last_send_us = clock_getmicros();
+        last_send_us = clock_get_monotonic_us();
         rescheduleHeartbeatTimerLocked();
     }
 
@@ -328,7 +328,7 @@ public class Http3SseStream inherits AbstractSseConnection {
 
     private noteSseDataSent() {
         AutoLock al(heartbeat_mutex);
-        last_send_us = clock_getmicros();
+        last_send_us = clock_get_monotonic_us();
         rescheduleHeartbeatTimerLocked();
     }
 
@@ -342,7 +342,7 @@ public class Http3SseStream inherits AbstractSseConnection {
         if (heartbeat_ms <= 0 || !stream_open || !headers_sent) {
             return;
         }
-        int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+        int elapsed_ms = (clock_get_monotonic_us() - last_send_us) / 1000;
         int delay_ms = heartbeat_ms - elapsed_ms;
         if (delay_ms < 1) {
             delay_ms = 1;
@@ -350,7 +350,7 @@ public class Http3SseStream inherits AbstractSseConnection {
         int generation = heartbeat_generation;
         AsyncSocketIo::AsyncSocketIoController controller =
             AsyncSocketIo::getGlobalAsyncIoController();
-        heartbeat_timer_id = controller.addTimer(now_us() + milliseconds(delay_ms),
+        heartbeat_timer_id = controller.addTimerDelay(milliseconds(delay_ms),
             sub () { self.handleHeartbeatTimer(generation); });
     }
 
@@ -376,7 +376,7 @@ public class Http3SseStream inherits AbstractSseConnection {
                 return;
             }
             remove heartbeat_timer_id;
-            int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+            int elapsed_ms = (clock_get_monotonic_us() - last_send_us) / 1000;
             if (elapsed_ms < heartbeat_ms) {
                 rescheduleHeartbeatTimerLocked();
                 return;
