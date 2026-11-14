@@ -1353,9 +1353,31 @@ foreach string key in (keys hash)
     |!Argument|!Processing
     |@ref number_type "number"|Gives the result of multiplying its arguments; @ref integer "ints" and @ref float "floats" are converted to @ref number "numbers" if at least one of the arguments is a @ref number "number"
     |@ref float_type "float"|Gives the result of multiplying its arguments; @ref integer "ints" are converted to @ref float "floats" if at least one of the arguments is a @ref float "float"
-    |@ref date_type "date"|Gives a @ref relative_dates "relative date": the date multiplied by the other argument
+    |@ref date_type "date"|Gives a @ref relative_dates "relative date": the date multiplied by the other argument (see below)
     |@ref int_type "int"|Gives the result of multiplying its arguments
     |any other type|Converts argument to a @ref number "number" and performs the multiplication
+
+    @anchor relative_date_multiplication
+    @par Multiplying a Relative Date
+    @parblock
+    A @ref relative_dates "relative date" multiplied by a number (in either order) gives a relative date whose
+    components (years, months, days, hours, minutes, seconds and microseconds) are each multiplied by the number and
+    then normalized as in date arithmetic (ex: 60 seconds are 1 minute and 12 months are 1 year; days are never
+    converted to months, nor hours to days), so a calendar component stays a calendar component:
+    - <tt>months(1) * 2</tt> gives <tt>2 months</tt>, and <tt>2024-01-31 + months(1) * 2</tt> gives
+      \c 2024-03-31, as <tt>2024-01-31 + months(2)</tt> does
+    - <tt>(hours(1) + minutes(30)) * 3</tt> gives <tt>4 hours 30 minutes</tt>
+
+    With a @ref float_type "float" or a @ref number_type "number" factor (a number is converted to a float), the
+    fraction of each component's product is carried to the smaller units with the rules of
+    @ref Qore::date(string) "date(string)" for an ISO 8601 duration with a decimal fraction: a year is 365 days, a
+    month 30 days and a day 24 hours; the fractions are rounded to the nearest microsecond.  So <tt>months(1) * 1.5</tt>
+    gives <tt>1 month 15 days</tt>, as \c date("P1.5M") does, and <tt>years(1) * 1.5</tt> gives
+    <tt>1 year 182 days 12 hours</tt>, as \c date("P1.5Y") does.
+
+    Any other factor is converted to an @ref int_type "int".  An @ref absolute_dates "absolute date" is first
+    converted to the time from now until the date (zero for a date in the past), as get_duration_microseconds() does.
+    @endparblock
 
     @throw INVALID-DATE a component of the product does not fit a signed 32-bit integer, or the factor is a float that
     is not a finite number (NaN or infinity)

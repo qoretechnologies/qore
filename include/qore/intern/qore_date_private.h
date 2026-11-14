@@ -1259,6 +1259,23 @@ public:
         return QDO_NONE;
     }
 
+    //! multiplies each component by an integer factor and normalizes the result (qore#6109)
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component of the result that does not fit, in
+        which case the value is saturated
+    */
+    DLLLOCAL int multiply(int64 factor);
+
+    //! multiplies each component by a floating-point factor and normalizes the result (qore#6109)
+    /** The fraction of each product is carried to the smaller units with the rules of the ISO 8601 duration parser
+        (addFractionalYear() etc: a year is 365 days, a month 30 days and a day 24 hours) and rounded to the nearest
+        microsecond
+
+        @return QDO_NONE, or the qore_date_overflow code of the first component of the result that does not fit
+        (QDO_NOT_FINITE if the factor is NaN or infinite, in which case the value is not changed), in which case the
+        value is saturated
+    */
+    DLLLOCAL int multiply(double factor);
+
     //! returns the duration in microseconds (a day is 24 hours, a month 31 days and a year 365 days) in 128 bits,
     //! which cannot overflow (qore#6103)
     DLLLOCAL __int128 getRelativeMicroseconds128() const {
@@ -1603,9 +1620,9 @@ public:
 
         @return the product, a relative date, or no value if an exception was raised
 
-        The duration of the date in microseconds (a month is 31 days and a year 365 days; an absolute date gives the
-        time from now until it) is multiplied by the other operand, a float factor if it is a float, otherwise
-        converted to an int, and the result is a relative date of that many seconds.
+        A relative date is multiplied component by component (see qore_relative_time::multiply()); an absolute date
+        gives the time from now until it (zero for a date in the past), which is multiplied.  The other operand is
+        a float factor if it is a float or a number, otherwise it is converted to an int.
     */
     DLLLOCAL static QoreValue multiply(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
 

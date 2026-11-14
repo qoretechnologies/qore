@@ -1311,6 +1311,74 @@ int qore_relative_time::addSecondsTo(double secs) {
     return addSecondsTo(whole, n_us);
 }
 
+// the index of each component of a relative date in the arrays of multiply()
+enum { QRM_YEAR, QRM_MONTH, QRM_DAY, QRM_HOUR, QRM_MINUTE, QRM_SECOND, QRM_US, QRM_COUNT };
+
+// adds v to acc, saturating at the limits of int64 (a saturated component is out of the range of a relative date)
+static void qore_rel_acc_add(int64& acc, int64 v) {
+    if (__builtin_add_overflow(acc, v, &acc)) {
+        acc = v > 0 ? std::numeric_limits<int64>::max() : std::numeric_limits<int64>::min();
+    }
+}
+
+int qore_relative_time::multiply(int64 factor) {
+    const int comp[QRM_COUNT] = {year, month, day, hour, minute, second, us};
+    int64 acc[QRM_COUNT];
+    for (int i = 0; i < QRM_COUNT; ++i) {
+        if (__builtin_expect(__builtin_mul_overflow(static_cast<int64>(comp[i]), factor, &acc[i]), 0)) {
+            // a product that does not fit 64 bits is out of the range of a relative date
+            acc[i] = (comp[i] < 0) != (factor < 0) ? std::numeric_limits<int64>::min()
+                : std::numeric_limits<int64>::max();
+        }
+    }
+    return setWide(acc[QRM_YEAR], acc[QRM_MONTH], acc[QRM_DAY], acc[QRM_HOUR], acc[QRM_MINUTE], acc[QRM_SECOND],
+        acc[QRM_US]);
+}
+
+int qore_relative_time::multiply(double factor) {
+    if (__builtin_expect(!std::isfinite(factor), 0)) {
+        return QDO_NOT_FINITE;
+    }
+    // the length of each component in microseconds for its fraction, with the rules of the ISO 8601 duration parser
+    // (addFractionalYear() etc): a year is 365 days, a month 30 days and a day 24 hours
+    static constexpr double unit_us[QRM_COUNT] = {365.0 * MICROSECS_PER_AVG_DAY, 30.0 * MICROSECS_PER_AVG_DAY,
+        MICROSECS_PER_AVG_DAY, MICROSECS_PER_HOUR, MICROSECS_PER_MINUTE, MICROSECS_PER_SEC, 1.0};
+    const int comp[QRM_COUNT] = {year, month, day, hour, minute, second, us};
+    int64 acc[QRM_COUNT] = {0, 0, 0, 0, 0, 0, 0};
+    // the fractions of the products in microseconds (in all less than a year, a month, a day, an hour, a minute, a
+    // second and a microsecond)
+    double frac_us = 0.0;
+    for (int i = 0; i < QRM_COUNT; ++i) {
+        if (!comp[i]) {
+            continue;
+        }
+        double p = static_cast<double>(comp[i]) * factor;
+        // the product must fit an int64 before it is converted; one that does not is out of the range of a relative
+        // date
+        if (__builtin_expect(!(p < 9223372036854775808.0 && p >= -9223372036854775808.0), 0)) {
+            acc[i] = p > 0 ? std::numeric_limits<int64>::max() : std::numeric_limits<int64>::min();
+            continue;
+        }
+        int64 whole = static_cast<int64>(p);
+        acc[i] = whole;
+        frac_us += (p - static_cast<double>(whole)) * unit_us[i];
+    }
+    // the fractions are rounded to the nearest microsecond, so that the binary approximation of a decimal factor does
+    // not lose a microsecond (ex: months(1) * 2.3 gives 2 months 9 days); they are carried to days, hours, minutes,
+    // seconds and microseconds, as the ISO 8601 duration parser carries the fraction of a component
+    int64 f = std::llround(frac_us);
+    qore_rel_acc_add(acc[QRM_DAY], f / MICROSECS_PER_AVG_DAY);
+    f %= MICROSECS_PER_AVG_DAY;
+    qore_rel_acc_add(acc[QRM_HOUR], f / MICROSECS_PER_HOUR);
+    f %= MICROSECS_PER_HOUR;
+    qore_rel_acc_add(acc[QRM_MINUTE], f / MICROSECS_PER_MINUTE);
+    f %= MICROSECS_PER_MINUTE;
+    qore_rel_acc_add(acc[QRM_SECOND], f / MICROSECS_PER_SEC);
+    qore_rel_acc_add(acc[QRM_US], f % MICROSECS_PER_SEC);
+    return setWide(acc[QRM_YEAR], acc[QRM_MONTH], acc[QRM_DAY], acc[QRM_HOUR], acc[QRM_MINUTE], acc[QRM_SECOND],
+        acc[QRM_US]);
+}
+
 int qore_date_private::raiseOverflow(int code, const char* op, ExceptionSink* xsink) {
     assert(code != QDO_NONE);
     if (!xsink) {
@@ -1355,31 +1423,23 @@ QoreValue qore_date_private::multiply(const QoreValue& l, const QoreValue& r, Ex
     const DateTimeNode* dt = left_date ? l.get<const DateTimeNode>() : r.get<const DateTimeNode>();
     const QoreValue& factor = left_date ? r : l;
 
-    // the duration in microseconds (a month is 31 days and a year 365 days; an absolute date gives the time from now
-    // until it) multiplied by the factor; the product must fit an int64, and its hours an int (qore#6103)
-    __int128 us = dt->isRelative()
-        ? qore_relative_time::getPrivate(dt)->d.rel.getRelativeMicroseconds128()
-        : static_cast<__int128>(dt->getRelativeMicroseconds());
-    __int128 product = 0;
-    int code = QDO_NONE;
-    if (l.getType() == NT_FLOAT || r.getType() == NT_FLOAT) {
-        double f = factor.getAsFloat();
-        double p = static_cast<double>(us) * f;
-        if (!std::isfinite(f)) {
-            code = QDO_NOT_FINITE;
-        } else if (!(p < 9223372036854775808.0 && p >= -9223372036854775808.0)) {
-            code = QDO_HOURS;
-        } else {
-            product = static_cast<int64>(p);
-        }
-    } else if (__builtin_mul_overflow(us, static_cast<__int128>(factor.getAsBigInt()), &product)
-            || product > std::numeric_limits<int64>::max() || product < std::numeric_limits<int64>::min()) {
-        code = QDO_HOURS;
-    }
     SimpleRefHolder<DateTimeNode> rv(new DateTimeNode(true));
+    qore_date_private* p = qore_relative_time::getPrivate(*rv);
+    int code;
+    if (dt->isRelative()) {
+        p->d.rel.set(qore_relative_time::getPrivate(dt)->d.rel);
+        code = QDO_NONE;
+    } else {
+        // an absolute date gives the time from now until it
+        int64 us = dt->getRelativeMicroseconds();
+        code = p->d.rel.setSeconds(us / 1000000, static_cast<int>(us % 1000000));
+    }
     if (code == QDO_NONE) {
-        code = qore_relative_time::getPrivate(*rv)->d.rel.setSeconds(static_cast<int64>(product / 1000000),
-            static_cast<int>(product % 1000000));
+        qore_type_t ft = factor.getType();
+        // each component is multiplied (qore#6109); a number factor is a float factor
+        code = (ft == NT_FLOAT || ft == NT_NUMBER)
+            ? p->d.rel.multiply(factor.getAsFloat())
+            : p->d.rel.multiply(factor.getAsBigInt());
     }
     if (__builtin_expect(code != QDO_NONE, 0)) {
         raiseOverflow(code, "relative date multiplication", xsink);
