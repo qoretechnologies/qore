@@ -487,9 +487,20 @@ public:
 //! Helper class to save and merge local-variable assignment state for branch tracking
 class AssignedStateHelper {
 private:
-    typedef std::vector<std::pair<LocalVar*, bool>> state_map_t;
+    //! the flow-sensitive assignment state of a local variable
+    struct assigned_state_t {
+        //! assigned on every path
+        bool assigned;
+        //! assigned on some path; see LocalVar::mayBeAssigned()
+        bool may_be_assigned;
+    };
+    typedef std::vector<std::pair<LocalVar*, assigned_state_t>> state_map_t;
     state_map_t saved_states;
     std::vector<state_map_t> branch_states;
+    //! the point of the sequence of changes of the assignment state when the state was saved
+    uint64_t saved_seq = 0;
+
+    DLLLOCAL static assigned_state_t getState(const LocalVar* lvar);
 
 public:
     //! Save the current assignment state of all visible local variables
@@ -509,6 +520,45 @@ public:
 
     //! Record the saved state as an implicit branch
     DLLLOCAL void recordSavedAsImplicitBranch();
+
+    //! Applies the changes made since the state was saved to the current state of the saved variables
+    /** A variable that may have been assigned since the save may be assigned, and one that was the operand of
+        \c delete or \c remove since the save is not definitely assigned.  Used where control can leave code in the
+        middle of it, so that the state at the end of the code does not describe every path out of it: at the end of
+        a loop, which \c break and \c continue leave, at the start of a \c catch block, which an exception in the
+        \c try block reaches, and at the start of a \c case block, which the previous one can fall through to
+        (qore#5937).  Does not allocate memory.
+    */
+    DLLLOCAL void applyChangesSinceSave();
+
+    //! Merges the state of code that can run any number of times, including none, into the saved state
+    /** The state after the code is the merge of the saved state and the current one, with the changes since the save
+        applied; see applyChangesSinceSave().  Does not allocate memory.
+    */
+    DLLLOCAL void mergeLoopAndApply();
+
+    //! Records the changes since the state was saved as effects of an on_exit, on_success or on_error block, which
+    //! apply when the enclosing block exits; see parse_add_block_exit_effect()
+    DLLLOCAL void recordChangesAsBlockExitEffects() const;
+};
+
+//! Merges the assignment state of local variables in code that can run any number of times, including none, when it
+//! goes out of scope; see AssignedStateHelper::mergeLoopAndApply()
+class ParseLoopAssignedStateHelper {
+public:
+    DLLLOCAL ParseLoopAssignedStateHelper() {
+        ash.saveState();
+    }
+
+    DLLLOCAL ~ParseLoopAssignedStateHelper() {
+        ash.mergeLoopAndApply();
+    }
+
+    ParseLoopAssignedStateHelper(const ParseLoopAssignedStateHelper&) = delete;
+    ParseLoopAssignedStateHelper& operator=(const ParseLoopAssignedStateHelper&) = delete;
+
+private:
+    AssignedStateHelper ash;
 };
 
 #endif // _QORE_STATEMENT_BLOCK_H

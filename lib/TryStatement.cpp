@@ -174,6 +174,8 @@ int TryStatement::parseInitImpl(QoreParseContext& parse_context) {
         fht.setFlags(PF_IN_TRY);
         err = try_block->parseInitImpl(parse_context);
         ash.recordBranchAndRestore();
+        // the catch block can follow any point of the try block that raises an exception (qore#5937)
+        ash.applyChangesSinceSave();
     } else {
         ash.recordSavedAsImplicitBranch();
     }

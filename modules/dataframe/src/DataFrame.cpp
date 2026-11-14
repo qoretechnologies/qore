@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <sstream>
 #include <unordered_set>
 
@@ -344,7 +345,16 @@ static bool qoreDataFrameSoftEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* 
 
     if (lt == NT_STRING || rt == NT_STRING) {
         QoreStringValueHelper ls(l);
-        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        // the right string is converted to the encoding of the left one, or to its own encoding if the left one is
+        // US-ASCII, as by the core == operator
+        const QoreEncoding* common = ls->getEncoding();
+        if (common == QCS_USASCII && rt == NT_STRING) {
+            const QoreEncoding* renc = QoreStringDataHelper(r).getEncoding();
+            if (renc) {
+                common = renc;
+            }
+        }
+        QoreStringValueHelper rs(r, common, xsink);
         return *xsink ? false : ls->equalSoft(*rs, xsink);
     }
     // a char is compared with another char by its code point, and with any other value but a string as its code
@@ -400,67 +410,120 @@ static bool qoreDataFrameSoftEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* 
         && l.getInternalNode()->is_equal_soft(r.getInternalNode(), xsink);
 }
 
-static bool qoreDataFrameLessThan(QoreValue lhs, QoreValue rhs, ExceptionSink* xsink) {
+//! the ordering operators of the core: <, <=, > and >=
+enum class QoreDataFrameOrder {
+    LT,
+    LE,
+    GT,
+    GE,
+};
+
+//! returns the operator that gives the same result with its operands swapped
+static constexpr QoreDataFrameOrder qoreDataFrameSwapOrder(QoreDataFrameOrder o) {
+    switch (o) {
+        case QoreDataFrameOrder::LT: return QoreDataFrameOrder::GT;
+        case QoreDataFrameOrder::LE: return QoreDataFrameOrder::GE;
+        case QoreDataFrameOrder::GT: return QoreDataFrameOrder::LT;
+        case QoreDataFrameOrder::GE: return QoreDataFrameOrder::LE;
+    }
+    return o;
+}
+
+//! applies an ordering operator to two scalar values (or to a three-way comparison result and 0)
+template <QoreDataFrameOrder O, typename T>
+static bool qoreDataFrameOrderScalar(T l, T r) {
+    if constexpr (O == QoreDataFrameOrder::LT) {
+        return l < r;
+    } else if constexpr (O == QoreDataFrameOrder::LE) {
+        return l <= r;
+    } else if constexpr (O == QoreDataFrameOrder::GT) {
+        return l > r;
+    } else {
+        return l >= r;
+    }
+}
+
+//! applies an ordering operator to a number and another value
+template <QoreDataFrameOrder O, typename T>
+static bool qoreDataFrameOrderNumber(const QoreNumberNode* l, const T& r) {
+    if constexpr (O == QoreDataFrameOrder::LT) {
+        return l->lessThan(r);
+    } else if constexpr (O == QoreDataFrameOrder::LE) {
+        return l->lessThanOrEqual(r);
+    } else if constexpr (O == QoreDataFrameOrder::GT) {
+        return l->greaterThan(r);
+    } else {
+        return l->greaterThanOrEqual(r);
+    }
+}
+
+//! returns the result of the core ordering operator on two values
+/** As the core operators' implementations (QoreLogicalLessThanOperatorNode::doLessThan(),
+    QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals(), QoreLogicalGreaterThanOperatorNode::doGreaterThan()
+    and QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals()), each operator is applied as it is, never
+    as the negation or the swap of another one: a float NaN is unordered, so that <= is not the negation of >
+*/
+template <QoreDataFrameOrder O>
+static bool qoreDataFrameOrderValues(QoreValue lhs, QoreValue rhs, ExceptionSink* xsink) {
     QoreValue l = lhs.isEnum() ? lhs.getEnumMember()->getValue() : lhs;
     QoreValue r = rhs.isEnum() ? rhs.getEnumMember()->getValue() : rhs;
     qore_type_t lt = l.getType();
     qore_type_t rt = r.getType();
 
     if (lt == NT_NUMBER) {
+        const QoreNumberNode* ln = l.get<const QoreNumberNode>();
         switch (rt) {
             case NT_NUMBER:
-                return l.get<const QoreNumberNode>()->lessThan(*r.get<const QoreNumberNode>());
+                return qoreDataFrameOrderNumber<O>(ln, *r.get<const QoreNumberNode>());
             case NT_FLOAT:
-                return l.get<const QoreNumberNode>()->lessThan(r.getAsFloat());
+                return qoreDataFrameOrderNumber<O>(ln, r.getAsFloat());
             case NT_BOOLEAN:
             case NT_CHAR:
             case NT_INT:
-                return l.get<const QoreNumberNode>()->lessThan(r.getAsBigInt());
+                return qoreDataFrameOrderNumber<O>(ln, (int64)r.getAsBigInt());
             default: {
                 ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
-                return l.get<const QoreNumberNode>()->lessThan(**rn);
+                return qoreDataFrameOrderNumber<O>(ln, **rn);
             }
         }
     }
     if (rt == NT_NUMBER) {
+        constexpr QoreDataFrameOrder S = qoreDataFrameSwapOrder(O);
+        const QoreNumberNode* rn = r.get<const QoreNumberNode>();
         switch (lt) {
             case NT_FLOAT:
-                return r.get<const QoreNumberNode>()->greaterThan(l.getAsFloat());
+                return qoreDataFrameOrderNumber<S>(rn, l.getAsFloat());
             case NT_BOOLEAN:
             case NT_CHAR:
             case NT_INT:
-                return r.get<const QoreNumberNode>()->greaterThan(l.getAsBigInt());
+                return qoreDataFrameOrderNumber<S>(rn, (int64)l.getAsBigInt());
             default: {
                 ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
-                return r.get<const QoreNumberNode>()->greaterThan(**ln);
+                return qoreDataFrameOrderNumber<S>(rn, **ln);
             }
         }
     }
     if (lt == NT_FLOAT || rt == NT_FLOAT) {
-        return l.getAsFloat() < r.getAsFloat();
+        return qoreDataFrameOrderScalar<O>(l.getAsFloat(), r.getAsFloat());
     }
     if (lt == NT_INT || rt == NT_INT) {
-        return l.getAsBigInt() < r.getAsBigInt();
+        return qoreDataFrameOrderScalar<O>(l.getAsBigInt(), r.getAsBigInt());
     }
     if (lt == NT_STRING || rt == NT_STRING) {
         QoreStringValueHelper ls(l);
         QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
-        return *xsink ? false : ls->compare(*rs) < 0;
+        return *xsink ? false : qoreDataFrameOrderScalar<O>(ls->compare(*rs), 0);
     }
     // a char is compared with any other value but a string as its code point, as an int is (qore#6040)
     if (lt == NT_CHAR || rt == NT_CHAR) {
-        return l.getAsBigInt() < r.getAsBigInt();
+        return qoreDataFrameOrderScalar<O>(l.getAsBigInt(), r.getAsBigInt());
     }
     if (lt == NT_DATE || rt == NT_DATE) {
         DateTimeValueHelper ld(l);
         DateTimeValueHelper rd(r);
-        return DateTime::compareDates(*ld, *rd) < 0;
+        return qoreDataFrameOrderScalar<O>(DateTime::compareDates(*ld, *rd), 0);
     }
-    return l.getAsFloat() < r.getAsFloat();
-}
-
-static bool qoreDataFrameLessThanOrEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* xsink) {
-    return !qoreDataFrameLessThan(rhs, lhs, xsink);
+    return qoreDataFrameOrderScalar<O>(l.getAsFloat(), r.getAsFloat());
 }
 
 static bool qoreDataFrameListContainsValue(const QoreListNode* values, QoreValue value,
@@ -512,6 +575,37 @@ static bool qoreDataFrameListContainsDateMicros(const QoreListNode* values, int6
     return false;
 }
 
+//! returns true if the value is an absolute date whose time in microseconds since the epoch fits in an int64
+/** The core operators compare two absolute dates by their epoch seconds and microseconds, which is the comparison of
+    their epoch microseconds when they fit in an int64, as the cells of a date column do
+*/
+static bool qoreDataFrameIsAbsoluteDateMicros(QoreValue value) {
+    if (value.getType() != NT_DATE) {
+        return false;
+    }
+    const DateTimeNode* dt = value.get<const DateTimeNode>();
+    if (dt->isRelative()) {
+        return false;
+    }
+    constexpr int64 max_seconds = std::numeric_limits<int64_t>::max() / 1000000 - 1;
+    int64 seconds = dt->getEpochSecondsUTC();
+    return seconds <= max_seconds && seconds >= -max_seconds;
+}
+
+//! returns true if every value of the list is null or an absolute date that qoreDataFrameIsAbsoluteDateMicros()
+//! accepts, so that qoreDataFrameListContainsDateMicros() gives the result of the core == operator for any cell of a
+//! date column of absolute dates
+static bool qoreDataFrameListHasOnlyAbsoluteDates(const QoreListNode* values) {
+    assert(values);
+    for (size_t i = 0; i < values->size(); ++i) {
+        QoreValue entry = values->retrieveEntry(i);
+        if (!entry.isNullOrNothing() && !qoreDataFrameIsAbsoluteDateMicros(entry)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool qoreDataFrameAutoCellMatches(QoreValue cell, const std::string& op, QoreValue value,
         ExceptionSink* xsink) {
     if (op == "contains" || op == "startswith" || op == "endswith") {
@@ -530,16 +624,16 @@ static bool qoreDataFrameAutoCellMatches(QoreValue cell, const std::string& op, 
         return !qoreDataFrameSoftEqual(cell, value, xsink);
     }
     if (op == "<") {
-        return qoreDataFrameLessThan(cell, value, xsink);
+        return qoreDataFrameOrderValues<QoreDataFrameOrder::LT>(cell, value, xsink);
     }
     if (op == "<=") {
-        return qoreDataFrameLessThanOrEqual(cell, value, xsink);
+        return qoreDataFrameOrderValues<QoreDataFrameOrder::LE>(cell, value, xsink);
     }
     if (op == ">") {
-        return qoreDataFrameLessThan(value, cell, xsink);
+        return qoreDataFrameOrderValues<QoreDataFrameOrder::GT>(cell, value, xsink);
     }
     if (op == ">=") {
-        return qoreDataFrameLessThanOrEqual(value, cell, xsink);
+        return qoreDataFrameOrderValues<QoreDataFrameOrder::GE>(cell, value, xsink);
     }
     return false;
 }
@@ -1822,6 +1916,15 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
         }
         cmp_list = value.get<const QoreListNode>();
     }
+    // a cell is compared with the value as the core operators (==, !=, <, <=, > and >=) compare them (qore#6061); the
+    // typed comparison of a column's cells is used only for a value with which it gives the core operators' result,
+    // which is a value of the column's own type (and an int for a float column, which the core operators compare as a
+    // float); with any other value, the comparison kind is AUTO, and each cell is compared as a value of any type
+    const bool op_core = op_eq || op_ne || op_lt || op_le || op_gt || op_ge;
+    // the core operators compare an enum member as its value
+    const QoreValue cmp_value = value.isEnum() ? value.getEnumMember()->getValue() : value;
+    const qore_type_t cmp_type = cmp_value.getType();
+    ColumnType cmp_kind = cd.type;
     double cmp_float = 0.0;
     int64_t cmp_int = 0;
     bool cmp_bool = false;
@@ -1830,22 +1933,69 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
     if (!cmp_is_null) {
         switch (cd.type) {
             case ColumnType::FLOAT64:
-                cmp_float = value.getAsFloat();
+                if (op_core) {
+                    if (cmp_type == NT_FLOAT || cmp_type == NT_INT) {
+                        cmp_float = cmp_value.getAsFloat();
+                    } else {
+                        cmp_kind = ColumnType::AUTO;
+                    }
+                }
                 break;
             case ColumnType::INT64:
-                cmp_int = value.getAsBigInt();
+                if (op_core) {
+                    if (cmp_type == NT_INT) {
+                        cmp_int = cmp_value.getAsBigInt();
+                    } else {
+                        cmp_kind = ColumnType::AUTO;
+                    }
+                }
                 break;
-            case ColumnType::STRING: {
-                QoreStringValueHelper sh(value);
-                cmp_string = dataFrameStdString(*sh);
+            case ColumnType::STRING:
+                if (op_core) {
+                    // a cell is a string in the default encoding; the core operators convert the value to the
+                    // encoding of the cell and compare the bytes of strings in UTF-8, so the typed comparison is used
+                    // when the default encoding is UTF-8 and the value can be converted to it
+                    if (cmp_type == NT_STRING && QCS_DEFAULT == QCS_UTF8) {
+                        ExceptionSink conv_xsink;
+                        QoreStringValueHelper sh(cmp_value, QCS_UTF8, &conv_xsink);
+                        if (conv_xsink) {
+                            // the core comparison of each cell raises the exception
+                            conv_xsink.clear();
+                            cmp_kind = ColumnType::AUTO;
+                        } else {
+                            cmp_string = dataFrameStdString(*sh);
+                        }
+                    } else {
+                        cmp_kind = ColumnType::AUTO;
+                    }
+                } else if (op_contains || op_startswith || op_endswith) {
+                    QoreStringValueHelper sh(value);
+                    cmp_string = dataFrameStdString(*sh);
+                }
                 break;
-            }
             case ColumnType::BOOL:
-                cmp_bool = value.getAsBool();
+                if (op_core) {
+                    if (cmp_type == NT_BOOLEAN) {
+                        cmp_bool = cmp_value.getAsBool();
+                    } else {
+                        cmp_kind = ColumnType::AUTO;
+                    }
+                }
                 break;
             case ColumnType::DATE:
-                if (value.getType() == NT_DATE) {
-                    cmp_date = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                // the cells of a duration column are relative dates, which are always compared as values
+                if (cd.isDuration()) {
+                    if (op_core || op_in || op_not_in) {
+                        cmp_kind = ColumnType::AUTO;
+                    }
+                } else if (op_core) {
+                    if (qoreDataFrameIsAbsoluteDateMicros(cmp_value)) {
+                        cmp_date = cmp_value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                    } else {
+                        cmp_kind = ColumnType::AUTO;
+                    }
+                } else if ((op_in || op_not_in) && !qoreDataFrameListHasOnlyAbsoluteDates(cmp_list)) {
+                    cmp_kind = ColumnType::AUTO;
                 }
                 break;
             default:
@@ -1882,29 +2032,39 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
 
         bool match = false;
 
-        if (cd.type == ColumnType::FLOAT64) {
+        if (cmp_kind == ColumnType::FLOAT64) {
             double cell = cd.float_data(i);
-            if (op_in || op_not_in) { match = qoreDataFrameListContainsValue(cmp_list, QoreValue(cell), xsink); }
+            if (op_in || op_not_in) {
+                // a value can hold a float in a node of its own, which the holder releases
+                ValueHolder cell_value(QoreValue(cell), xsink);
+                match = qoreDataFrameListContainsValue(cmp_list, *cell_value, xsink);
+            }
             else if (op_eq) { match = cell == cmp_float; }
             else if (op_ne) { match = cell != cmp_float; }
             else if (op_lt) { match = cell < cmp_float; }
             else if (op_le) { match = cell <= cmp_float; }
             else if (op_gt) { match = cell > cmp_float; }
             else if (op_ge) { match = cell >= cmp_float; }
-        } else if (cd.type == ColumnType::INT64) {
+        } else if (cmp_kind == ColumnType::INT64) {
             int64_t cell = cd.int_data[i];
-            if (op_in || op_not_in) { match = qoreDataFrameListContainsValue(cmp_list, QoreValue(cell), xsink); }
+            if (op_in || op_not_in) {
+                // a value holds an int outside of the 48-bit range in a node of its own, which the holder releases
+                ValueHolder cell_value(QoreValue(cell), xsink);
+                match = qoreDataFrameListContainsValue(cmp_list, *cell_value, xsink);
+            }
             else if (op_eq) { match = cell == cmp_int; }
             else if (op_ne) { match = cell != cmp_int; }
             else if (op_lt) { match = cell < cmp_int; }
             else if (op_le) { match = cell <= cmp_int; }
             else if (op_gt) { match = cell > cmp_int; }
             else if (op_ge) { match = cell >= cmp_int; }
-        } else if (cd.type == ColumnType::STRING) {
+        } else if (cmp_kind == ColumnType::STRING) {
             const std::string& cell = cd.str_data[i];
             if (op_in || op_not_in) { match = qoreDataFrameListContainsString(cmp_list, cell, xsink); }
             else if (op_eq) { match = cell == cmp_string; }
             else if (op_ne) { match = cell != cmp_string; }
+            // byte order (std::char_traits<char> compares unsigned), as QoreString::compare() orders strings in the
+            // same encoding, as by the core operators
             else if (op_lt) { match = cell < cmp_string; }
             else if (op_le) { match = cell <= cmp_string; }
             else if (op_gt) { match = cell > cmp_string; }
@@ -1915,23 +2075,37 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
                 match = cell.size() >= cmp_string.size()
                     && cell.compare(cell.size() - cmp_string.size(), cmp_string.size(), cmp_string) == 0;
             }
-        } else if (cd.type == ColumnType::BOOL) {
+        } else if (cmp_kind == ColumnType::BOOL) {
             bool cell = cd.bool_data[i];
             if (op_in || op_not_in) { match = qoreDataFrameListContainsValue(cmp_list, QoreValue(cell), xsink); }
             else if (op_eq) { match = cell == cmp_bool; }
             else if (op_ne) { match = cell != cmp_bool; }
-        } else if (cd.type == ColumnType::DATE && ((op_in || op_not_in) || value.getType() == NT_DATE)) {
-                int64_t cell = cd.date_data[i];
-                if (op_in || op_not_in) { match = qoreDataFrameListContainsDateMicros(cmp_list, cell, xsink); }
-                else if (op_eq) { match = cell == cmp_date; }
-                else if (op_ne) { match = cell != cmp_date; }
-                else if (op_lt) { match = cell < cmp_date; }
-                else if (op_le) { match = cell <= cmp_date; }
-                else if (op_gt) { match = cell > cmp_date; }
-                else if (op_ge) { match = cell >= cmp_date; }
-        } else if (cd.type == ColumnType::AUTO) {
-            assert(i < static_cast<int64_t>(cd.auto_data.size()));
-            match = qoreDataFrameAutoCellMatches(cd.auto_data[i], op, value, xsink);
+            // the core operators order bools as False < True
+            else if (op_lt) { match = cell < cmp_bool; }
+            else if (op_le) { match = cell <= cmp_bool; }
+            else if (op_gt) { match = cell > cmp_bool; }
+            else if (op_ge) { match = cell >= cmp_bool; }
+        } else if (cmp_kind == ColumnType::DATE) {
+            int64_t cell = cd.date_data[i];
+            if (op_in || op_not_in) { match = qoreDataFrameListContainsDateMicros(cmp_list, cell, xsink); }
+            else if (op_eq) { match = cell == cmp_date; }
+            else if (op_ne) { match = cell != cmp_date; }
+            else if (op_lt) { match = cell < cmp_date; }
+            else if (op_le) { match = cell <= cmp_date; }
+            else if (op_gt) { match = cell > cmp_date; }
+            else if (op_ge) { match = cell >= cmp_date; }
+        } else if (cmp_kind == ColumnType::AUTO) {
+            if (cd.type == ColumnType::AUTO) {
+                assert(i < static_cast<int64_t>(cd.auto_data.size()));
+                match = qoreDataFrameAutoCellMatches(cd.auto_data[i], op, value, xsink);
+            } else {
+                // a typed cell compared with a value of another type is compared as the value that the DataFrame
+                // returns for it
+                ValueHolder cell(cd.getValueAt(i, xsink), xsink);
+                if (!*xsink) {
+                    match = qoreDataFrameAutoCellMatches(*cell, op, value, xsink);
+                }
+            }
             if (*xsink) {
                 return {};
             }

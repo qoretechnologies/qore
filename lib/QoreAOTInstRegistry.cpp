@@ -1717,7 +1717,7 @@ static bool writeBackground(AOTInstWriteCtx& ctx) {
         if (!bi->helper_ir) {
             return false;
         }
-        ctx.writer.writeU8(bi->helper_uses_self ? 1 : 0);
+        ctx.writer.writeU8(bi->helper_uses_self);
         ctx.writer.writeU32(static_cast<uint32_t>(bi->helper_params.size()));
         for (LocalVar* lv : bi->helper_params) {
             auto i = bi->helper_ir->local_var_slots.find(lv);
@@ -1744,9 +1744,14 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     std::unique_ptr<QoreIRFunction> helper_ir;
     std::vector<LocalVar*> helper_params;
-    bool helper_uses_self = false;
+    QoreBackgroundHelperSelf helper_uses_self = QBHS_NONE;
     if (kind == QoreIRBackgroundKind::Helper) {
-        helper_uses_self = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+        uint8_t self_mode = QoreAOTBinaryReader::readU8(ctx.ptr);
+        if (self_mode > QBHS_HELD) {
+            ctx.error = "invalid background helper self mode " + std::to_string(self_mode);
+            return nullptr;
+        }
+        helper_uses_self = static_cast<QoreBackgroundHelperSelf>(self_mode);
         uint32_t num_params = QoreAOTBinaryReader::readU32(ctx.ptr);
         if (num_params != operands.size()) {
             ctx.error = "background helper parameter count differs from its operand count";
