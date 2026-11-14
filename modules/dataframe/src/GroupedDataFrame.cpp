@@ -190,6 +190,13 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
     }
 }
 
+//! Raises NAN-COMPARE-ERROR for a NaN value in an aggregation that orders the values (min, max, median), as the <=>
+//! operator and sortBy() do (qore#6107)
+static void raiseNanOrderError(const std::string& func, ExceptionSink* xsink) {
+    xsink->raiseException("NAN-COMPARE-ERROR", "aggregation '%s' of a DataFrame group has a NaN value, which cannot "
+        "be ordered", func.c_str());
+}
+
 double QoreGroupedDataFrame::aggregateNumeric(const ColumnData& cd,
         const std::vector<int64_t>& indices, const std::string& func, ExceptionSink* xsink) const {
     auto get_value = [&cd](int64_t i) -> double {
@@ -227,6 +234,11 @@ double QoreGroupedDataFrame::aggregateNumeric(const ColumnData& cd,
                 continue;
             }
             double value = get_value(row);
+            // a NaN value cannot be ordered (qore#6107)
+            if (std::isnan(value)) {
+                raiseNanOrderError(func, xsink);
+                return std::numeric_limits<double>::quiet_NaN();
+            }
             if (!have_value) {
                 result = value;
                 have_value = true;
@@ -321,7 +333,13 @@ double QoreGroupedDataFrame::aggregateNumeric(const ColumnData& cd,
             }
             int64_t row = indices[i];
             if (!cd.isNull(row)) {
-                vals.push_back(get_value(row));
+                double value = get_value(row);
+                // a NaN value cannot be ordered (qore#6107)
+                if (std::isnan(value)) {
+                    raiseNanOrderError(func, xsink);
+                    return std::numeric_limits<double>::quiet_NaN();
+                }
+                vals.push_back(value);
             }
         }
         if (vals.empty()) {

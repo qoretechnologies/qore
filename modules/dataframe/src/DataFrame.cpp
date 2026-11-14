@@ -1436,6 +1436,15 @@ QoreListNode* QoreDataFrame::describe(ExceptionSink* xsink) const {
             }
 
             if (!vals.empty()) {
+                // a NaN value cannot be ordered for the minimum, the maximum and the quantiles; it raises
+                // NAN-COMPARE-ERROR, as the <=> operator and sortBy() do, before the values are sorted (qore#6107)
+                if (cd.type == ColumnType::FLOAT64 && std::any_of(vals.begin(), vals.end(), [] (double v) {
+                        return std::isnan(v);
+                    })) {
+                    xsink->raiseException("NAN-COMPARE-ERROR", "DataFrame column '%s' has a NaN value, which cannot "
+                        "be ordered for its minimum, maximum and quantiles", col.name.c_str());
+                    return nullptr;
+                }
                 std::sort(vals.begin(), vals.end());
                 double sum = 0;
                 for (double v : vals) {

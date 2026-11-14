@@ -1249,6 +1249,9 @@ static DataFrame DataFrame::fromColumnarResult(auto result) [flags=RET_VALUE_ONL
 
 //! Returns per-column descriptive statistics
 /** @return list of ColumnStats hashes with count, mean, std, min, max, quartiles
+
+    @throw NAN-COMPARE-ERROR if a float64 column has a NaN value, which cannot be ordered for the minimum, the
+    maximum and the quartiles, as with the <=> operator and sortBy()
 */
 list<hash<ColumnStats>> DataFrame::describe() [flags=RET_VALUE_ONLY] {
     return df->describe(xsink);
