@@ -4523,6 +4523,12 @@ public:
     */
     DLLLOCAL int parseCheckFinalHierarchy() const;
 
+    //! checks that no generic class is inherited with different type arguments through the parent classes (qore#6027)
+    /** The members of a generic class that is inherited through two paths belong to one parent, so its type
+        arguments must be the same through both; returns -1 if a parse error was raised
+    */
+    DLLLOCAL int parseCheckGenericParentInstantiations() const;
+
     //! Checks that the variants that a call typed against a parent class can select return compatible types
     /** See MethodFunctionBase::checkReturnTypeResolution() (issue #5838).
     */
