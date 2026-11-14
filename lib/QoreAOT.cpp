@@ -34372,9 +34372,7 @@ class ExprTreeSerializer {
             // Keep any explicit class prefix.  Qualified self calls are
             // non-virtual; stripping the prefix turns them into virtual self
             // dispatch when the expression tree is deserialized.
-            const AbstractQoreFunctionVariant* variant = sfc->getVariant();
-            std::string method_ref = qore_aot_encode_static_method_ref(sfc->getName(), variant,
-                variant ? nullptr : &sfc->getParsedArgTypeInfo());
+            std::string method_ref = qore_aot_encode_self_method_ref(sfc, true);
             // the arguments are written in source order: a named call keeps the positions of their parameters or
             // their names before the method reference (read by read_node_EN_SELF_CALL())
             method_ref.insert(0, qore_aot_named_call_arg_prefix(sfc));
@@ -35338,10 +35336,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // (e.g., "AbstractDataField::getExampleValue" stays qualified so that the NamedScope
         // at deserialization has size() > 1, causing evalImpl to use the method pointer directly
         // instead of virtual dispatch — preventing infinite recursion for explicit base class calls)
-        const AbstractQoreFunctionVariant* call_variant = call->getVariant();
-        // with the explicit type arguments of the call (qore#5818)
-        id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
-            call_variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        id.ref2 = qore_aot_encode_self_method_ref(call, true);
         // a named call resolved at run time by parameter name: the names of its arguments in source order, first (read
         // by resolveExprSlot())
         id.ref2.insert(0, qore_aot_named_call_arg_prefix(call, false));
@@ -36163,19 +36158,25 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.kind = AOTExprKind::DOT_EVAL_TARGET;
             bool force_name_dispatch = target && target->fallback_method_name
                 && !target->qc && !target->method;
-            const QoreClass* qc = force_name_dispatch ? nullptr
-                : (target && target->qc ? target->qc : mc->getClass());
             bool is_pseudo = target ? target->pseudo : mc->isPseudo();
+            // a call dispatched by name still records the method resolved at parse time, with the
+            // QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH flag: the check of the call's target before its arguments are
+            // evaluated (QoreIROpcode::CheckCallTarget) uses it as the AST interpreter does (issue #5824), and the call
+            // itself is still dispatched by name
+            bool record_parse_target = force_name_dispatch && !is_pseudo && mc->getClass() && mc->getMethod();
+            const QoreClass* qc = force_name_dispatch ? (record_parse_target ? mc->getClass() : nullptr)
+                : (target && target->qc ? target->qc : mc->getClass());
             // Pseudo-classes are not attached to the namespace tree, so
             // getNamespacePath() can be empty. Serialize their constructor
             // path so the runtime pseudo-class resolver can recover qc/method.
             id.ref1 = qore_aot_encode_class_ref(qc, is_pseudo);
-            const QoreMethod* method = force_name_dispatch ? nullptr
+            const QoreMethod* method = force_name_dispatch ? (record_parse_target ? mc->getMethod() : nullptr)
                 : (target && target->method ? target->method : mc->getMethod());
             const char* fallback_name = target && target->fallback_method_name
                 ? target->fallback_method_name : mc->getName();
             id.ref2 = method ? method->getName() : (fallback_name ? fallback_name : "");
-            const AbstractQoreFunctionVariant* variant = force_name_dispatch ? nullptr
+            const AbstractQoreFunctionVariant* variant = force_name_dispatch
+                ? (record_parse_target ? mc->getVariant() : nullptr)
                 : (target && target->variant ? target->variant : mc->getVariant());
             if (variant) {
                 if (AbstractFunctionSignature* sig = variant->getSignature()) {
@@ -36188,7 +36189,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             }
             // the explicit type arguments of the call (obj.method<T>()): the target has no expression node to hold them
             qore_aot_append_call_type_args(id.ref2, mc->getExplicitTypeParamInstantiation());
-            id.flags = is_pseudo ? 1 : 0;
+            id.flags = (is_pseudo ? QORE_AOT_DOT_EVAL_TARGET_PSEUDO : 0)
+                | (force_name_dispatch ? QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH : 0);
             return id;
         }
     }

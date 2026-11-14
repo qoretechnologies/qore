@@ -1476,7 +1476,13 @@ private:
 
     //! Emits the inline test that @a qv is an object that has not been deleted, with the layout of the running
     //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
-    llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func);
+    llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func,
+        const QoreClass* qc = nullptr, const QoreClass* method_qc = nullptr);
+
+    //! Emits the fast test of QoreIROpcode::CheckCallTarget: true if @a target needs no other check (a method call
+    //! resolved at parse time on an object of its class that has not been deleted; issues #5784, #5824)
+    llvm::Value* emitCallTargetFastTest(const QoreIRExprInstruction* check, uint64_t call_bits, llvm::Value* target,
+        llvm::Module& module, llvm::Function* llvm_func);
 
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node

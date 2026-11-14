@@ -41,6 +41,7 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRInterpreter.h"
@@ -1062,6 +1063,9 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     // cross-function access.  Marking a top-level local as IR-only would cause
                     // StoreLocal to only update the IR cache without syncing to the thread-local
                     // stack, making the variable invisible to called functions.
+                    // the interpreter makes the check of a call's target in the load of the target, as for the code
+                    // of a function (UserVariantBase::lowerIRFunction(); issues #5784, #5824)
+                    qore_ir_fuse_call_target_checks(*func);
                     cached_toplevel_ir = func;
                 });
                 ir_func = cached_toplevel_ir;

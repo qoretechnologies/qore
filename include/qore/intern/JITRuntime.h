@@ -43,6 +43,7 @@ class QoreIRFunction;
 class AbstractStatement;
 class FunctionEntry;
 class QoreIRBackgroundInstruction;
+class QoreCallTargetCheckCache;
 struct QoreAOTContext;
 class QoreIRLValuePathInstruction;
 class QoreValue;
@@ -344,23 +345,20 @@ void qore_rt_raise_return_statement_nothing_by_type_path_aot(QoreAOTContext* ctx
 */
 DLLLOCAL int qore_check_call_target(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
 
-//! Returns true if the call @a call needs no check of its target @a target: a method call (not a call through a
-//! call reference) on an object that has not been deleted, the common case (QoreIROpcode::CheckCallTarget)
-/** With the inline accessors of the values only; qore_check_call_target() makes the check otherwise.
-*/
-static inline bool qore_call_target_needs_no_check(const QoreValue& call, const QoreValue& target) {
-    if (!target.isPointer() || !call.isPointer()) {
-        return false;
-    }
-    const AbstractQoreNode* target_node = target.getPtr();
-    const AbstractQoreNode* call_node = call.getPtr();
-    return target_node && call_node && target_node->getType() == NT_OBJECT && call_node->getType() != NT_FUNCREFCALL
-        && static_cast<const QoreObject*>(target_node)->isValid();
-}
+//! Raises the exception that a method call @a call raises when its arguments deleted its object @a target
+/** The check made after the arguments of a call that can have side effects (QoreIRExprInstruction::check_after_args):
+    the AST interpreter raises "cannot call <class>::<method>() on an object that has already been deleted" when the
+    method's code is entered (qore_object_private::startCall()), naming the class of the method (issue #5824)
 
-//! The JIT fast test of QoreIROpcode::CheckCallTarget for a call that is not a call through a call reference (known
-//! when the call is compiled): true if the target is an object that has not been deleted
-bool qore_rt_call_target_is_valid_object(uint64_t target_bits);
+    @return -1 if the exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink);
+
+//! The JIT fast test of QoreIROpcode::CheckCallTarget for a method call resolved at parse time (known when the call is
+//! compiled): true if the target is an object that has not been deleted, of one of the classes given or of any class
+//! if @a any_class is true (see qore_object_private::isValidOfClass(), issue #5824)
+bool qore_rt_call_target_is_valid_object(uint64_t target_bits, const QoreClass* qc, const QoreClass* method_qc,
+    bool any_class);
 
 //! The layout of the fields that JIT-generated code reads to test that a value is an object that has not been deleted
 /** Taken from the running libqore: JIT code is generated and run in the same process.  AOT code never uses it (the AOT
@@ -376,6 +374,8 @@ struct QoreJITObjectLayout {
     uint32_t priv_offset;
     //! the byte offset of the status (a 32-bit atomic int) in the private data
     uint32_t status_offset;
+    //! the byte offset of the class pointer in the private data
+    uint32_t class_offset;
     //! the status of a deleted object
     int32_t deleted_status;
 };
@@ -387,10 +387,10 @@ struct QoreJITObjectLayout {
 */
 const QoreJITObjectLayout* qore_jit_object_layout();
 
-//! The JIT fast test of QoreIROpcode::CheckCallTarget: qore_call_target_needs_no_check() with NaN-boxed values
-bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits);
 
-//! The AOT counterpart of qore_rt_call_target_needs_no_check(), with the call identified by its expression slot
+//! The AOT fast test of QoreIROpcode::CheckCallTarget, with the call identified by its expression slot: true if the
+//! call is a method call resolved at parse time, and its target an object that has not been deleted of the call's class
+//! or of the method's class (issue #5824)
 bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits);
 
 //! The JIT helper of QoreIROpcode::CheckCallTarget: qore_check_call_target() with the NaN-boxed call and target
@@ -398,6 +398,18 @@ void qore_rt_check_call_target(uint64_t call_bits, uint64_t target_bits, Excepti
 
 //! The AOT counterpart of qore_rt_check_call_target(), with the call identified by its expression slot
 void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits, ExceptionSink* xsink);
+
+//! The JIT fast test of a CheckCallTarget of a method looked up by name: true if the cache of the call site knows
+//! that the lookup finds a method for the class of the object @a target_bits, which has not been deleted, from the
+//! current class context (QoreCallTargetCheckCache; issue #5824)
+bool qore_rt_call_target_cache_hit(const QoreCallTargetCheckCache* cache, uint64_t target_bits);
+
+//! The JIT helper of a CheckCallTarget made after the arguments (QoreIRExprInstruction::check_after_args)
+void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink);
+
+//! The AOT counterpart of qore_rt_check_call_target_after_args(), with the call identified by its expression slot
+void qore_rt_check_call_target_after_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t target_bits,
+    ExceptionSink* xsink);
 
 //! Returns the current object as a NaN-boxed value (no reference), which native code reads once per function
 uint64_t qore_rt_current_self_bits();

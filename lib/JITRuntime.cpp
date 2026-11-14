@@ -194,10 +194,13 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_coerce_return", reinterpret_cast<void*>(&qore_rt_coerce_return) },
     { "qore_rt_coerce_nothing_return", reinterpret_cast<void*>(&qore_rt_coerce_nothing_return) },
     { "qore_rt_call_target_is_valid_object", reinterpret_cast<void*>(&qore_rt_call_target_is_valid_object) },
-    { "qore_rt_call_target_needs_no_check", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check) },
     { "qore_rt_call_target_needs_no_check_aot", reinterpret_cast<void*>(&qore_rt_call_target_needs_no_check_aot) },
     { "qore_rt_check_call_target", reinterpret_cast<void*>(&qore_rt_check_call_target) },
     { "qore_rt_check_call_target_aot", reinterpret_cast<void*>(&qore_rt_check_call_target_aot) },
+    { "qore_rt_check_call_target_after_args", reinterpret_cast<void*>(&qore_rt_check_call_target_after_args) },
+    { "qore_rt_call_target_cache_hit", reinterpret_cast<void*>(&qore_rt_call_target_cache_hit) },
+    { "qore_rt_check_call_target_after_args_aot",
+        reinterpret_cast<void*>(&qore_rt_check_call_target_after_args_aot) },
     { "qore_rt_current_self_bits", reinterpret_cast<void*>(&qore_rt_current_self_bits) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
     { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
@@ -1664,24 +1667,6 @@ extern "C" DLLEXPORT void qore_rt_raise_return_statement_nothing(const QoreTypeI
     qore_rt_accept_return_statement_nothing(ti, xsink).discard(xsink);
 }
 
-//! Returns true if @a target is an object that has not been deleted (issue #5784)
-static inline bool qore_call_target_is_valid_object(const QoreValue& target) {
-    if (!target.isPointer()) {
-        return false;
-    }
-    const AbstractQoreNode* n = target.getPtr();
-    return n && n->getType() == NT_OBJECT && static_cast<const QoreObject*>(n)->isValid();
-}
-
-extern "C" DLLEXPORT bool qore_rt_call_target_is_valid_object(uint64_t target_bits) {
-    QoreValue target = fromBits(target_bits);
-    if (!target.isPointer()) {
-        return false;
-    }
-    const AbstractQoreNode* n = target.getPtr();
-    return n && n->getType() == NT_OBJECT && qore_object_private::isValidInline(static_cast<const QoreObject*>(n));
-}
-
 // the fields read by the JIT's inline test for a valid object (QoreJITObjectLayout): a plain 32-bit load of the
 // status must see what QoreObject::isValid() sees, and a deleted object's type must fit the 11-bit field
 static_assert(std::is_same<decltype(qore_object_private::status), std::atomic<int>>::value,
@@ -1756,6 +1741,7 @@ static std::unique_ptr<QoreJITObjectLayout> qore_jit_compute_object_layout() {
     }
     layout->priv_offset = qore_object_private::getPrivOffset();
     layout->status_offset = qore_object_private::getStatusOffset();
+    layout->class_offset = qore_object_private::getClassOffset();
     layout->deleted_status = OS_DELETED;
     return layout;
 }
@@ -1765,17 +1751,86 @@ const QoreJITObjectLayout* qore_jit_object_layout() {
     return layout.get();
 }
 
-extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check(uint64_t call_bits, uint64_t target_bits) {
-    return qore_call_target_needs_no_check(fromBits(call_bits), fromBits(target_bits));
+extern "C" DLLEXPORT bool qore_rt_call_target_is_valid_object(uint64_t target_bits, const QoreClass* qc,
+        const QoreClass* method_qc, bool any_class) {
+    QoreValue target = fromBits(target_bits);
+    if (!target.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = target.getPtr();
+    return n && n->getType() == NT_OBJECT
+        && qore_object_private::isValidOfClass(static_cast<const QoreObject*>(n), qc, method_qc, any_class);
+}
+
+//! True if @a self_call is a qualified call (Base::m()) to a method that is not abstract, which is not virtual
+static bool qore_self_call_is_qualified(const SelfFunctionCallNode* self_call) {
+    return !self_call->hasSingleName() && !self_call->isAbstractCall() && !self_call->isCopyCall();
+}
+
+//! true if the cache of a method call site (QoreCallTargetCheckCache) knows that a lookup by name finds a method for
+//! the class of the object @a target_bits, which has not been deleted, from the current class context (issue #5824)
+static bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, uint64_t target_bits) {
+    if (!cache) {
+        return false;
+    }
+    QoreValue target = fromBits(target_bits);
+    const AbstractQoreNode* n = target.isPointer() ? target.getPtr() : nullptr;
+    if (!n || n->getType() != NT_OBJECT) {
+        return false;
+    }
+    const QoreObject* obj = static_cast<const QoreObject*>(n);
+    const QoreClass* cls = obj->getClass();
+    return qore_object_private::isValidOfClass(obj, nullptr, nullptr, true)
+        && qore_class_private::get(*cls)->runtimeMethodLookupIsStable()
+        && cache->hit(cls, runtime_get_class());
+}
+
+extern "C" DLLEXPORT bool qore_rt_call_target_cache_hit(const QoreCallTargetCheckCache* cache,
+        uint64_t target_bits) {
+    return qore_call_target_cache_hit(cache, target_bits);
 }
 
 extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t target_bits) {
-    // a slot without an expression is a direct method call (AOTExprKind::DOT_EVAL_TARGET)
+    // the method resolved at parse time: the call's target (AOTExprKind::DOT_EVAL_TARGET) or its expression; and the
+    // cache of the call site, for a method looked up by name
+    const QoreClass* qc = nullptr;
+    const QoreMethod* method = nullptr;
+    const QoreCallTargetCheckCache* cache = nullptr;
     if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
-        return qore_call_target_is_valid_object(fromBits(target_bits));
+        const QoreAOTCallTarget& call_target = ctx->call_targets[slot];
+        if (!call_target.is_pseudo) {
+            qc = call_target.check_qc;
+            method = call_target.check_method;
+            cache = &call_target.check_cache;
+        }
+    } else {
+        const AbstractQoreNode* node = fromBits(ctx->exprs[slot]).getInternalNode();
+        if (node->getType() == NT_SELF_CALL) {
+            const SelfFunctionCallNode* self_call = static_cast<const SelfFunctionCallNode*>(node);
+            if (qore_self_call_is_qualified(self_call)) {
+                // not virtual: the method is called on an object of any class
+                return qore_rt_call_target_is_valid_object(target_bits, nullptr, nullptr, true);
+            }
+            qc = self_call->getClass();
+            method = self_call->getMethod();
+            cache = &self_call->check_cache;
+        } else if (node->getType() == NT_OPERATOR) {
+            // the RTTI test is made only for an operator node, as a dot call is one
+            if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+                const MethodCallNode* m = dot->getMethodCall();
+                if (m && !m->isPseudo()) {
+                    qc = m->getClass();
+                    method = m->getMethod();
+                    cache = &m->check_cache;
+                }
+            }
+        }
     }
-    return qore_call_target_needs_no_check(fromBits(ctx->exprs[slot]), fromBits(target_bits));
+    if (qc && method && qore_rt_call_target_is_valid_object(target_bits, qc, method->getClass(), false)) {
+        return true;
+    }
+    return qore_call_target_cache_hit(cache, target_bits);
 }
 
 //! qore_check_call_target(); @a runtime_location is a template parameter, so that the JIT and IR paths, which use
@@ -1783,10 +1838,6 @@ extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext*
 template <bool runtime_location>
 static int qore_check_call_target_impl(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
     const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr;
-    // the common case first: see qore_call_target_needs_no_check()
-    if (qore_call_target_needs_no_check(call, target)) {
-        return 0;
-    }
     // dispatched on the node types, without RTTI: the check is made for every call that it is emitted for
     if (node && node->getType() == NT_FUNCREFCALL) {
         // as CallReferenceCallNode::evalImpl(): a value that is not a call reference raises its error before the
@@ -1809,14 +1860,39 @@ static int qore_check_call_target_impl(const QoreValue& call, const QoreValue& t
     }
     if (node && node->getType() == NT_SELF_CALL) {
         // an unqualified call to a method: its object is self (issue #5823)
+        // as AbstractMethodCallNode::exec(): a method of another class than the call's parse-time class is looked up
+        // by name (issue #5824)
         const SelfFunctionCallNode* self_call = static_cast<const SelfFunctionCallNode*>(node);
-        return target.getType() == NT_OBJECT
-            ? self_call->checkObject(const_cast<QoreObject*>(target.get<const QoreObject>()), self_call->getName(),
-                xsink)
-            : 0;
+        if (target.getType() != NT_OBJECT) {
+            return 0;
+        }
+        QoreObject* obj = const_cast<QoreObject*>(target.get<const QoreObject>());
+        if (qore_self_call_is_qualified(self_call)) {
+            // a qualified call (Base::m()) is not virtual: SelfFunctionCallNode::evalImpl() calls its method directly,
+            // which checks only that the object has not been deleted
+            if (!obj->isValid()) {
+                const QoreMethod* method = self_call->getMethod();
+                if (method) {
+                    // the error of CodeEvaluationHelper, which names the method's class
+                    qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been "
+                        "deleted", method->getClass()->getName(), method->getName());
+                } else {
+                    qore_raise_deleted_method_call(xsink, obj, self_call->getName(), self_call->getClass(), nullptr,
+                        nullptr);
+                }
+                return -1;
+            }
+            return 0;
+        }
+        // an unqualified or abstract call: SelfFunctionCallNode::evalImpl() calls exec() with the name of the method
+        // without a class qualifier (issue #5933)
+        return qore_check_object_method_call(obj, self_call->getMethodName(), self_call->getClass(),
+            self_call->getMethod(), self_call->getVariant(), xsink, &self_call->check_cache);
     }
-    if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-        return dot->checkReceiver(target, xsink);
+    if (node && node->getType() == NT_OPERATOR) {
+        // the only operator that the check is emitted for is a method call (QoreIRLowering::lowerDotEval())
+        assert(dynamic_cast<const QoreDotEvalOperatorNode*>(node));
+        return static_cast<const QoreDotEvalOperatorNode*>(node)->checkReceiver(target, xsink);
     }
     return 0;
 }
@@ -1845,21 +1921,113 @@ extern "C" DLLEXPORT void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int
     // a direct method call keeps the target of the call in its slot (AOTExprKind::DOT_EVAL_TARGET), not its
     // expression: the check is made from the target
     if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
-        // the common case first: a method call on an object that has not been deleted has nothing to check
-        if (qore_call_target_is_valid_object(fromBits(target_bits))) {
-            return;
-        }
+        // the method resolved at parse time (QoreAOTCallTarget::check_method), also for a call dispatched by name
         const QoreAOTCallTarget& target = ctx->call_targets[slot];
-        const char* name = target.method ? target.method->getName() : target.method_name;
+        const char* name = target.check_method ? target.check_method->getName() : target.method_name;
         if (name) {
-            qore_check_method_call_receiver(fromBits(target_bits), name, target.qc, target.method, target.variant,
-                target.is_pseudo, xsink);
+            qore_check_method_call_receiver(fromBits(target_bits), name, target.check_qc, target.check_method,
+                target.check_variant, target.is_pseudo, xsink, &target.check_cache);
         }
         return;
     }
     // the call expression that the loader rebuilt has no source location (loc_builtin): the error is raised with the
     // runtime location, which the compiled code sets to the location of the call (issue #5835)
     qore_check_call_target_impl<true>(fromBits(ctx->exprs[slot]), fromBits(target_bits), xsink);
+}
+
+//! Raises the error of a method call whose arguments deleted its object, as the AST interpreter raises it when the
+//! method's code is entered (CodeContextHelper, qore_object_private::startCall()), naming the class of the method
+/** @param base the value that the method is called on
+    @param name the name of the method, without a class qualifier
+    @param qc the parse-time class of the call, if any
+    @param method the method resolved at parse time, if any
+    @param direct true if the call is made with @a method whatever the class of the object (a qualified call)
+    @param xsink for the exception
+
+    @return -1 if the error was raised, 0 if not
+*/
+static int qore_check_method_call_after_args(QoreValue base, const char* name, const QoreClass* qc,
+        const QoreMethod* method, bool direct, ExceptionSink* xsink) {
+    QoreObject* obj = nullptr;
+    switch (base.getType()) {
+        case NT_OBJECT:
+            obj = const_cast<QoreObject*>(base.get<const QoreObject>());
+            break;
+        case NT_WEAKREF:
+            obj = base.get<WeakReferenceNode>()->get();
+            break;
+        default:
+            break;
+    }
+    if (!obj || obj->isValid()) {
+        return 0;
+    }
+    // the method that the call runs: as AbstractMethodCallNode::exec(), the method resolved at parse time on an object
+    // of its class or of the parse-time class, otherwise the method found by name (qore_class_private::evalMethod())
+    const QoreMethod* m = nullptr;
+    if (method && (direct || (qc && (obj->getClass() == qc || obj->getClass() == method->getClass())))) {
+        m = method;
+    } else if (name) {
+        const qore_class_private* class_ctx = runtime_get_class();
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
+            class_ctx = nullptr;
+        }
+        ExceptionSink lookup_xsink;
+        m = qore_class_private::get(*obj->getClass())->getMethodForEval(name, obj->getProgram(), class_ctx,
+            &lookup_xsink);
+        lookup_xsink.clear();
+    }
+    if (!m || m->isStatic()) {
+        // no method of the class (a member closure, a methodGate or a pseudo-method): the call raises its own error;
+        // a static method has no object, and the AST interpreter calls it whatever the arguments did to the object
+        return 0;
+    }
+    qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+        m->getClass()->getName(), m->getName());
+    return -1;
+}
+
+int qore_check_call_target_after_args(const QoreValue& call, const QoreValue& target, ExceptionSink* xsink) {
+    const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr;
+    if (!node) {
+        return 0;
+    }
+    if (node->getType() == NT_SELF_CALL) {
+        const SelfFunctionCallNode* self_call = static_cast<const SelfFunctionCallNode*>(node);
+        return qore_check_method_call_after_args(target, self_call->getMethodName(), self_call->getClass(),
+            self_call->getMethod(), qore_self_call_is_qualified(self_call), xsink);
+    }
+    if (node->getType() == NT_OPERATOR) {
+        // the only operator that the check is emitted for is a method call (QoreIRLowering::lowerDotEval())
+        assert(dynamic_cast<const QoreDotEvalOperatorNode*>(node));
+        const MethodCallNode* m = static_cast<const QoreDotEvalOperatorNode*>(node)->getMethodCall();
+        if (m && !m->isPseudo()) {
+            return qore_check_method_call_after_args(target, m->getName(), m->getClass(), m->getMethod(), false,
+                xsink);
+        }
+    }
+    return 0;
+}
+
+extern "C" DLLEXPORT void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits,
+        ExceptionSink* xsink) {
+    qore_check_call_target_after_args(fromBits(call_bits), fromBits(target_bits), xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_check_call_target_after_args_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t target_bits, ExceptionSink* xsink) {
+    if (!ctx->exprs[slot] || !fromBits(ctx->exprs[slot]).hasNode()) {
+        // a direct method call keeps the target of the call in its slot (AOTExprKind::DOT_EVAL_TARGET)
+        const QoreAOTCallTarget& target = ctx->call_targets[slot];
+        if (target.is_pseudo) {
+            return;
+        }
+        const char* name = target.check_method ? target.check_method->getName() : target.method_name;
+        qore_check_method_call_after_args(fromBits(target_bits), name, target.check_qc, target.check_method, false,
+            xsink);
+        return;
+    }
+    qore_check_call_target_after_args(fromBits(ctx->exprs[slot]), fromBits(target_bits), xsink);
 }
 
 //! Checks the value of a return statement against the declared return type, as the AST interpreter checks it in the

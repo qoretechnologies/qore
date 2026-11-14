@@ -45,6 +45,7 @@
 #include <vector>
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreCallTargetCheckCache.h"
 #include <qore/intern/QoreTypeInfo.h>
 
 class LocalVar;
@@ -1332,7 +1333,7 @@ struct QoreIRPhiIncoming;
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
     None,           //!< no check
-    MethodCall,     //!< the call is a method call: a valid object needs no other check
+    MethodCall,     //!< a method call resolved at parse time: a valid object of the method's classes needs no other check
     CallReference,  //!< the call is a call through a call reference: a closure needs no other check
     Other,          //!< any other call: always the full check
 };
@@ -1373,6 +1374,11 @@ public:
     // Transient: LoadLocal directly followed by the CheckCallTarget of its value: the interpreter makes the check in
     // the load and steps over it (qore_ir_fuse_call_target_checks(); issue #5784)
     QoreIRFusedCallTargetCheck fused_call_target_check = QoreIRFusedCallTargetCheck::None;
+    // Transient: the CheckCallTarget of a method call that the IR had directly before the call (after the arguments,
+    // or for arguments without side effects), which the call makes itself: the IR interpreter and native code run it
+    // before the call, with the check's own location and exception routing (qore_ir_fuse_call_target_checks();
+    // issue #5824)
+    std::unique_ptr<QoreIRInstruction> fused_call_check;
     bool borrowed_local_load = false;  // Transient: LoadLocal solely feeding an in-place mutation; the interpreter
                                        // borrows the local's slot-cache reference so the node stays unique at the
                                        // mutation site (native code borrows via alloca loads already)
@@ -2764,6 +2770,23 @@ public:
     }
 
     QoreValue expr;
+    //! CheckCallTarget only (transient: set by the lowering): the class of the method resolved at parse time and the
+    //! method's class; an object of either is called with that method, and needs no other check than that it has not
+    //! been deleted (AbstractMethodCallNode::exec()); null if the call has no such method (issue #5824)
+    const QoreClass* check_class = nullptr;
+    const QoreClass* check_method_class = nullptr;
+    //! CheckCallTarget only (transient: set by the lowering): the call is made with its method on an object of any
+    //! class, which needs no other check than that it has not been deleted (a qualified self call, which is not
+    //! virtual: SelfFunctionCallNode::evalImpl())
+    bool check_any_class = false;
+    //! CheckCallTarget only (transient: set by the lowering): the check made after the arguments of a call that can
+    //! have side effects, which can delete the object: the AST interpreter raises its error when the method's code is
+    //! entered (CodeContextHelper: qore_object_private::startCall() or checkCurrentObjectCall()), naming the method's
+    //! class (issue #5824)
+    bool check_after_args = false;
+    //! CheckCallTarget only (transient: set by the builder): the cache of the call site
+    //! (AbstractMethodCallNode::check_cache), which the IR interpreter tests inline (issue #5824)
+    const QoreCallTargetCheckCache* check_cache = nullptr;
     bool has_ref_args = false;  //!< True if any operand is a reference type (may be modified by callee)
     //! ListIndexDynamic only: selector kinds for native list/string/binary slices
     //! with range entries. 0 = single index (one operand), 1 = range (start+stop operands).

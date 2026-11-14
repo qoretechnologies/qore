@@ -2780,6 +2780,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 for (size_t i = 1; i < inst->operands.size(); ++i) {
                     markIRValueUse(non_dot_eval_uses, inst->operands[i]);
                 }
+            } else if (inst->opcode == QoreIROpcode::CheckCallTarget) {
+                // the check of a call's target before or after its arguments only reads the base of the call and
+                // keeps no reference to it: the base stays borrowed (issue #5824)
             } else {
                 qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                     markIRValueUse(non_dot_eval_uses, operand);
@@ -4167,7 +4170,7 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
             }
             case QoreIROpcode::DotEvalMethodDirect:
                 if (operation || inst_ptr->exception_target || !inst_ptr->result.isValid()
-                        || inst_ptr->operands.size() != 1) {
+                        || inst_ptr->operands.size() != 1 || inst_ptr->fused_call_check) {
                     return false;
                 }
                 operation = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst_ptr.get());
@@ -4462,7 +4465,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
                 }
                 case QoreIROpcode::DotEvalMethodDirect:
                     if (operation || inst_ptr->exception_target || !inst_ptr->result.isValid()
-                            || inst_ptr->operands.size() != 1) {
+                            || inst_ptr->operands.size() != 1 || inst_ptr->fused_call_check) {
                         return reject();
                     }
                     operation = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst_ptr.get());
@@ -8692,6 +8695,73 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // the current object of the frame, read by the first check of a call through self (issue #5823)
     QoreObject* frame_self = nullptr;
     bool frame_self_known = false;
+    // the class context and the Program of the frame, which do not change while it runs: read once, for the inline
+    // test of the cache of a call target check (issue #5824)
+    const qore_class_private* frame_runtime_class = nullptr;
+    const QoreProgram* frame_pgm = nullptr;
+    bool frame_class_known = false;
+    // true if the check @a check of a method call's target before its arguments needs no other test than that the
+    // object @a target has not been deleted: a lookup by name for the object's class from this frame's class context
+    // found a method before (QoreCallTargetCheckCache; issue #5824)
+    auto call_target_check_cache_hit = [&](const QoreIRExprInstruction* check, const QoreValue& target) -> bool {
+        if (!check->check_cache || check->check_after_args) {
+            return false;
+        }
+        const AbstractQoreNode* target_node = target.isPointer() ? target.getPtr() : nullptr;
+        if (!target_node || target_node->getType() != NT_OBJECT) {
+            return false;
+        }
+        const QoreObject* target_obj = static_cast<const QoreObject*>(target_node);
+        if (!frame_class_known) {
+            frame_runtime_class = runtime_get_class();
+            frame_pgm = getProgram();
+            frame_class_known = true;
+        }
+        const QoreClass* target_class = target_obj->getClass();
+        return qore_object_private::isValidOfClass(target_obj, nullptr, nullptr, true)
+            && qore_class_private::get(*target_class)->runtimeMethodLookupIsStable(frame_pgm)
+            && check->check_cache->hit(target_class, frame_runtime_class);
+    };
+    // the part of call_target_check_ok() after its inline tests, out of line: the cache of a method looked up by name,
+    // then the check itself; returns false if it raised an exception
+    auto call_target_check_slow = [&](const QoreIRExprInstruction* ei, const QoreValue& target) -> bool {
+        // a method call looked up by name for the object's class from this class context before
+        if (call_target_check_cache_hit(ei, target)) {
+            return true;
+        }
+        return !(ei->check_after_args ? qore_check_call_target_after_args(ei->expr, target, xsink)
+            : qore_check_call_target(ei->expr, target, xsink));
+    };
+    // makes the check of a call's target (QoreIROpcode::CheckCallTarget, or the check that a call makes itself, see
+    // QoreIRInstruction::fused_call_check); returns false if it raised an exception (issues #5784, #5823, #5824)
+    // the common case, an object of the method's class that has not been deleted, is decided inline
+    auto call_target_check_ok = [&](const QoreIRInstruction* check_inst) QORE_IR_LAMBDA_INLINE -> bool {
+        const QoreIRExprInstruction* ei = static_cast<const QoreIRExprInstruction*>(check_inst);
+        if (check_inst->operands.empty()) {
+            // no operand: the call is made through self, on the current object (issue #5823), which does not change
+            // while the frame runs: it is read once
+            if (!frame_self_known) {
+                frame_self = runtime_get_stack_object();
+                frame_self_known = true;
+            }
+            // a method call on an object that has not been deleted needs no other check, if the object is of the
+            // class of the method resolved at parse time (issue #5824)
+            if (frame_self && qore_object_private::isValidOfClass(frame_self, ei->check_class,
+                    ei->check_method_class, ei->check_any_class)) {
+                return true;
+            }
+            return call_target_check_slow(ei, frame_self ? QoreValue(static_cast<AbstractQoreNode*>(frame_self))
+                : QoreValue());
+        }
+        QoreValue target = getIRValue(values, check_inst->operands.front());
+        const AbstractQoreNode* target_node = target.isPointer() ? target.getPtr() : nullptr;
+        if (target_node && target_node->getType() == NT_OBJECT
+                && qore_object_private::isValidOfClass(static_cast<const QoreObject*>(target_node),
+                    ei->check_class, ei->check_method_class, ei->check_any_class)) {
+            return true;
+        }
+        return call_target_check_slow(ei, target);
+    };
     debug_active = can_debug && tlpd->runtimeCheck();
     // the state of the debugger's events of the frame (see QoreIRDebugFrameState)
     QoreIRDebugFrameState dbg_state;
@@ -10400,6 +10470,22 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::Invoke: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Opcode guarantees instruction type; static_cast avoids RTTI overhead
                 auto* inv = static_cast<QoreIRInvokeInstruction*>(inst);
                 assert(inv);
@@ -11183,13 +11269,20 @@ load_local_done:
                     const AbstractQoreNode* target_node = out.isPointer() ? out.getPtr() : nullptr;
                     if (local_inst->fused_call_target_check == QoreIRFusedCallTargetCheck::MethodCall
                             && target_node && target_node->getType() == NT_OBJECT
-                            && qore_object_private::isValidInline(static_cast<const QoreObject*>(target_node))) {
+                            && qore_object_private::isValidOfClass(static_cast<const QoreObject*>(target_node),
+                                static_cast<const QoreIRExprInstruction*>(check)->check_class,
+                                static_cast<const QoreIRExprInstruction*>(check)->check_method_class)) {
                         ++ip;
                         break;
                     }
                     // and a call of a closure, which is always callable and has no object
                     if (local_inst->fused_call_target_check == QoreIRFusedCallTargetCheck::CallReference
                             && target_node && target_node->getType() == NT_RUNTIME_CLOSURE) {
+                        ++ip;
+                        break;
+                    }
+                    // a method call looked up by name for the object's class from this class context before
+                    if (call_target_check_cache_hit(static_cast<const QoreIRExprInstruction*>(check), out)) {
                         ++ip;
                         break;
                     }
@@ -15240,27 +15333,7 @@ load_local_done:
             case QoreIROpcode::CheckCallTarget: {
                 // the target of a call is checked before its arguments are evaluated, as the AST interpreter checks
                 // it (issue #5784)
-                const QoreIRExprInstruction* ei = static_cast<const QoreIRExprInstruction*>(inst);
-                // qore_check_call_target() decides the common case (a method call on an object that has not been
-                // deleted) first; testing it inline here measured the same
-                QoreValue target;
-                if (inst->operands.empty()) {
-                    // no operand: the call is made through self, on the current object (issue #5823), which does
-                    // not change while the frame runs: it is read once
-                    if (!frame_self_known) {
-                        frame_self = runtime_get_stack_object();
-                        frame_self_known = true;
-                    }
-                    // a method call on an object that has not been deleted needs no other check
-                    if (frame_self && qore_object_private::isValidInline(frame_self)) {
-                        ++ip;
-                        break;
-                    }
-                    target = frame_self ? QoreValue(static_cast<AbstractQoreNode*>(frame_self)) : QoreValue();
-                } else {
-                    target = getIRValue(values, inst->operands.front());
-                }
-                if (qore_check_call_target(ei->expr, target, xsink)) {
+                if (!call_target_check_ok(inst)) {
                     if (inst->exception_target) {
                         // the handler is in this frame: only the raising statement's temps are dead there
                         cleanupToTempScope(inst->temp_scope_id, true, false, true);
@@ -17965,6 +18038,22 @@ load_local_done:
             case QoreIROpcode::Call:
             case QoreIROpcode::CallMethod:
             case QoreIROpcode::CallStatic: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 // CallDirect/CallStaticDirect use their own instruction classes (with extra
@@ -18158,6 +18247,22 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::CallMethodDirect: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Direct method call for devirtualized final class methods
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
@@ -18265,6 +18370,22 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::InvokeMethodDirect: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Direct method call with exception routing for devirtualized final class methods
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
@@ -18397,6 +18518,22 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::DotEvalMethodDirect: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Direct dot-eval method call with pre-evaluated base + args
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
@@ -18608,6 +18745,22 @@ load_local_done:
                 break;
             }
             case QoreIROpcode::InvokeDotEvalMethodDirect: {
+                // the check of the call's target that the call makes itself (QoreIRInstruction::fused_call_check):
+                // an exception is routed as the check's own, which then is the instruction for the bookkeeping of the
+                // operands after the switch
+                if (inst->fused_call_check && !call_target_check_ok(inst->fused_call_check.get())) {
+                    inst = inst->fused_call_check.get();
+                    if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return false;
+                }
                 // Direct dot-eval method call with exception routing
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);

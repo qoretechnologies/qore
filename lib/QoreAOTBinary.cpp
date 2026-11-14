@@ -3202,6 +3202,10 @@ QoreAOTStaticMethodRef::QoreAOTStaticMethodRef(const char* encoded) : method_nam
     method_name = method_name_storage.c_str();
 
     const char* payload = first_sep + 1;
+    if (!strcmp(payload, QORE_AOT_ABSTRACT_SELF_CALL_MARKER)) {
+        abstract_self_call = true;
+        return;
+    }
     size_t marker_len = strlen(QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER);
     if (!strncmp(payload, QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER, marker_len)
             && payload[marker_len] == '\n') {
@@ -3236,6 +3240,20 @@ static std::string qore_aot_encode_call_arg_type_signature(const type_vec_t& arg
     }
     rv += ")";
     return rv;
+}
+
+std::string qore_aot_encode_self_method_ref(const SelfFunctionCallNode* call, bool arg_types) {
+    if (call->isAbstractCall()) {
+        // the explicit type arguments of the call follow the marker: QoreAOTStaticMethodRef strips them first
+        std::string rv = qore_aot_encode_static_method_ref(call->getName(), nullptr, nullptr,
+            call->getExplicitTypeParamInstantiation());
+        std::string name(call->getName() ? call->getName() : "");
+        rv.insert(name.size(), std::string("\n") + QORE_AOT_ABSTRACT_SELF_CALL_MARKER);
+        return rv;
+    }
+    const AbstractQoreFunctionVariant* variant = call->getVariant();
+    return qore_aot_encode_static_method_ref(call->getName(), variant,
+        arg_types && !variant ? &call->getParsedArgTypeInfo() : nullptr, call->getExplicitTypeParamInstantiation());
 }
 
 std::string qore_aot_encode_static_method_ref(const char* method_name,
@@ -12899,9 +12917,8 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
         std::string class_ref = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_ref.c_str());
-        const AbstractQoreFunctionVariant* variant = call->getVariant();
-        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        // with the parse-time abstract flag (issue #5824)
+        std::string method_ref = qore_aot_encode_self_method_ref(call, true);
         // the arguments are written in source order (the order of their evaluation): a named call keeps the
         // positions of their parameters (bound at parse time) or their names (resolved at run time by parameter
         // name) first (read by read_expr_self_method_call())

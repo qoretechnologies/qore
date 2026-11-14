@@ -249,6 +249,9 @@ std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_
 //! Marker for method-ref payloads that carry deferred call argument type metadata.
 constexpr const char* QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER = "@qore-aot-static-call-arg-types-v1";
 constexpr const char* QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER = "@qore-aot-explicit-type-args-v1";
+//! Marker for the method-ref payload of a self call to an abstract method (SelfFunctionCallNode::isAbstractCall()),
+//! which is looked up by name at run time and has no variant (issue #5824)
+constexpr const char* QORE_AOT_ABSTRACT_SELF_CALL_MARKER = "@qore-aot-abstract-self-call-v1";
 
 //! returns the signature whose type parameters the code of the function whose AOT context is being built names
 /** (see QoreAOTTypeParamOwnerHelper); a closure read in that context names them (qore#5733)
@@ -270,6 +273,8 @@ struct QoreAOTStaticMethodRef {
     const char* variant_class_path = nullptr;
     const char* sig_text = nullptr;
     const char* arg_type_sig = nullptr;
+    //! a self call to an abstract method (QORE_AOT_ABSTRACT_SELF_CALL_MARKER)
+    bool abstract_self_call = false;
     bool explicit_type_args_present = false;
     bool explicit_type_args_valid = true;
     std::vector<std::string> explicit_type_arg_paths;
@@ -286,6 +291,13 @@ struct QoreAOTStaticMethodRef {
 */
 const AbstractQoreFunctionVariant* qore_aot_find_method_variant(QoreProgram* pgm, const QoreMethod*& method,
         const char* method_name, const char* variant_ref, bool pseudo);
+
+class SelfFunctionCallNode;
+
+//! Encodes the method reference of a self call: a call to an abstract method is marked as such and has no variant
+//! (QORE_AOT_ABSTRACT_SELF_CALL_MARKER), as parsing marks it (SelfFunctionCallNode::parseInitCall()); otherwise as
+//! qore_aot_encode_static_method_ref(), with the call's argument types if @a arg_types and it has no variant
+std::string qore_aot_encode_self_method_ref(const SelfFunctionCallNode* call, bool arg_types);
 
 //! Encodes a static method reference, optionally with an exact variant or deferred argument type signature.
 std::string qore_aot_encode_static_method_ref(const char* method_name,
@@ -452,6 +464,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v33: a user variant's signature flags have bit 4 (0x0010) when the variant declares functional domains in Qore
 //!      source (\c [dom=...]); the declared QDOM_* bits follow the variant's parse options as an i64.  A v9-v32
 //!      variant declares none (#5803).
+//! v34: the flags of an AOTExprKind::DOT_EVAL_TARGET slot have the bit QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH (0x02)
+//!      for a call dispatched by name, whose slot records the class, method and variant resolved at parse time for the
+//!      check of the call's target; and the method-ref payload of a self call to an abstract method is
+//!      QORE_AOT_ABSTRACT_SELF_CALL_MARKER (#5824).  A v9-v33 image has neither.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -479,9 +495,11 @@ constexpr uint8_t QORE_AOT_CONST_FLAG_PENDING = 0x01;
 constexpr uint8_t QORE_AOT_CONST_FLAG_EXPLICIT_TYPE = 0x02;
 //! First format version whose user variant signatures can carry declared functional domains (see v33 above).
 constexpr uint16_t QORE_AOT_DECLARED_DOMAIN_VERSION = 33;
+//! First format version whose call targets can be dispatched by name and self calls marked abstract (see v34 above).
+constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 34;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DECLARED_DOMAIN_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -2224,6 +2242,12 @@ bool readEmbeddedSource(const uint8_t* data, uint32_t size, const char*& source,
 // ---- Slot Map Serialization (Phase 5) ----
 
 //! Expression identity kinds for serialized slot maps
+//! AOTExprKind::DOT_EVAL_TARGET flag: a pseudo-method call
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_PSEUDO = (1 << 0);
+//! AOTExprKind::DOT_EVAL_TARGET flag: the call is dispatched by name; the class, method and variant recorded are those
+//! resolved at parse time, used only by the check of the call's target (issue #5824)
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH = (1 << 1);
+
 enum class AOTExprKind : uint8_t {
     UNSUPPORTED        = 0,   //!< Compile-time-only invalid marker; never serialized in new AOT output
     FUNC_CALL          = 1,   //!< Regular function call: ref1=function_name
@@ -2261,7 +2285,7 @@ enum class AOTExprKind : uint8_t {
     CONST_NOTHING      = 32,  //!< Nothing constant: no data
     LIST_LITERAL       = 33,  //!< List literal: count(u8) + [value(AOTExprKind)] * N
     CONST_NULL         = 34,  //!< NULL constant: no data
-    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name[\nvariant_class\nvariant_sig], flags=is_pseudo
+    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name[\nvariant_class\nvariant_sig], flags=QORE_AOT_DOT_EVAL_TARGET_*
     FUNC_CALL_REF      = 36,  //!< Function call reference (\func): ref1=function_name
     BOUND_METHOD_REF   = 37,  //!< Bound method reference (\method): ref1=class_path, ref2=method_name
     STATIC_METHOD_REF  = 38,  //!< Static method reference (\Class::method): ref1=class_path, ref2=method_name
@@ -2601,7 +2625,7 @@ struct AOTExprSlotId {
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
     std::string ref3;        //!< kind-specific: instantiated object type path for NEW_OBJECT
-    uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: bit 0 = is_pseudo)
+    uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: QORE_AOT_DOT_EVAL_TARGET_*)
     QoreAOTCallRelocationTargetKind call_relocation_kind = QoreAOTCallRelocationTargetKind::NONE;
     std::string reloc_qore_path; //!< canonical symbol-index path for safe direct-call relocation
     QoreValue child_expr;   //!< kind-specific child expression (e.g., OBJ_METHOD_REF_EXPR target)

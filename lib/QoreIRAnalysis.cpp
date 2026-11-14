@@ -2514,8 +2514,54 @@ bool QoreIRControlFlowGraph::dominates(size_t dominator, size_t block) const {
         && (dominators[block][dominator / 64] & (uint64_t(1) << (dominator % 64)));
 }
 
+//! returns the expression of a method call instruction that can make the check of its target itself (see
+//! QoreIRInstruction::fused_call_check), or nullptr
+static const QoreValue* qore_ir_fusable_method_call_expr(const QoreIRInstruction* inst) {
+    switch (inst->opcode) {
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallMethod:
+            return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
+        case QoreIROpcode::CallMethodDirect:
+            return &static_cast<const QoreIRCallMethodDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::InvokeMethodDirect:
+            return &static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::DotEvalMethodDirect:
+            return &static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+            return &static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)->expr;
+        case QoreIROpcode::Invoke:
+            return &static_cast<const QoreIRInvokeInstruction*>(inst)->expr;
+        default:
+            return nullptr;
+    }
+}
+
 size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func) {
     size_t count = 0;
+    // the check of a method call's target directly before the call (after its arguments) goes into the call, which
+    // makes it: the IR interpreter makes no instruction of its own for it (issue #5824)
+    for (auto& block : func.blocks) {
+        auto& insts = block->instructions;
+        for (size_t i = 0; i + 1 < insts.size();) {
+            const QoreIRInstruction* check = insts[i].get();
+            QoreIRInstruction* call = insts[i + 1].get();
+            if (check->opcode == QoreIROpcode::CheckCallTarget && !call->fused_call_check) {
+                const QoreValue& check_expr = static_cast<const QoreIRExprInstruction*>(check)->expr;
+                const QoreValue* call_expr = qore_ir_fusable_method_call_expr(call);
+                // the check of a method call (a dot or self call; not of a call reference) and the call of the same
+                // expression
+                if (call_expr && check_expr.isPointer() && call_expr->isPointer()
+                        && check_expr.getType() != NT_FUNCREFCALL
+                        && call_expr->getInternalNode() == check_expr.getInternalNode()) {
+                    call->fused_call_check = std::move(insts[i]);
+                    insts.erase(insts.begin() + i);
+                    ++count;
+                    continue;
+                }
+            }
+            ++i;
+        }
+    }
     for (auto& block : func.blocks) {
         auto& insts = block->instructions;
         for (size_t i = 0; i + 1 < insts.size(); ++i) {
@@ -2526,13 +2572,16 @@ size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func) {
             // the first instruction of each line, so the location stays the same; the load has no operands, so the
             // operand bookkeeping after the load is the check's
             if (load->opcode == QoreIROpcode::LoadLocal && check->opcode == QoreIROpcode::CheckCallTarget
+                    && !static_cast<const QoreIRExprInstruction*>(check)->check_after_args
                     && load->operands.empty() && load->result.isValid() && check->operands.size() == 1
                     && check->operands.front().id == load->result.id
                     && check->cached_start_line == load->cached_start_line) {
                 const QoreValue& call = static_cast<const QoreIRExprInstruction*>(check)->expr;
+                // a method call is decided in the load only with the classes of its method (issue #5824)
                 load->fused_call_target_check = !call.isPointer() ? QoreIRFusedCallTargetCheck::Other
                     : call.getType() == NT_FUNCREFCALL ? QoreIRFusedCallTargetCheck::CallReference
-                    : QoreIRFusedCallTargetCheck::MethodCall;
+                    : static_cast<const QoreIRExprInstruction*>(check)->check_class
+                        ? QoreIRFusedCallTargetCheck::MethodCall : QoreIRFusedCallTargetCheck::Other;
                 ++count;
             }
         }

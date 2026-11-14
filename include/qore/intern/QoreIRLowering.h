@@ -632,8 +632,21 @@ private:
 
         @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
         @param loc the location of the call
+        @param check_class the class of the method resolved at parse time, if any
+        @param check_method the method resolved at parse time, if any
+        @param check_any_class true for a qualified call (Base::m()), which is not virtual: its method is called on
+        an object of any class (QoreIRExprInstruction::check_any_class)
     */
-    void emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc);
+    //! Emits the check of the target of a call after its arguments (QoreIRExprInstruction::check_after_args)
+    /** @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
+        @param target the value that the method is called on; invalid for a call through self, on the current object
+        @param loc the location of the call
+    */
+    void emitCallTargetCheckAfterArgs(const QoreValue& call, QoreIRValue target, const QoreProgramLocation* loc);
+
+    void emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc,
+        const QoreClass* check_class = nullptr, const QoreMethod* check_method = nullptr,
+        bool check_any_class = false);
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,

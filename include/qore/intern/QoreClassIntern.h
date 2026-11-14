@@ -4356,6 +4356,32 @@ public:
     DLLLOCAL void generateBuiltinSignature(const char* nspath);
     DLLLOCAL void initializeBuiltin();
 
+    //! Raises the error that evalMethod() raises before it evaluates the arguments of a call (issue #5824)
+    /** The method looked up by name is private, or there is neither a method, a member holding a call reference,
+        a pseudo-method of the "<object>" class nor a methodGate; runs no Qore code.
+
+        @return -1 if the error was raised, 0 if the call can be made
+    */
+    DLLLOCAL int checkMethodForEval(const QoreObject* self, const char* nme, const qore_class_private* class_ctx,
+            ExceptionSink* xsink, bool* found_method = nullptr) const;
+
+    //! Returns true if the lookup of a method of the class by name depends only on the class and the class context
+    /** The class's source Program is the thread's current Program, which cannot be deleted while the thread runs in
+        it, or a module Program within the module lifetime: getMethodForEval() then raises no error for the lifecycle
+        of the source Program (see getSourceProgramForCall()), so a method found can be cached
+        (QoreCallTargetCheckCache, issue #5824)
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool runtimeMethodLookupIsStable() const {
+        return runtimeMethodLookupIsStable(::getProgram());
+    }
+
+    //! runtimeMethodLookupIsStable() with the thread's current Program @a current_pgm, which the caller knows
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool runtimeMethodLookupIsStable(const QoreProgram* current_pgm) const {
+        QoreProgram* p = spgm.load();
+        return p && (p == current_pgm
+            || (spgm_module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()));
+    }
+
     //! calls the named method of the object, resolved at run time
     /** @param pgm_ctx the Program that the call runs in, if not the current Program: a call reference created in
         another Program runs as a direct call there does (see RunTimeObjectMethodReferenceNode::execValue()); a user
