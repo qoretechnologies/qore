@@ -1,7 +1,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# The value of a return is released at once when the release of the return statement's temporaries raises an
-# exception (#5995); see return-temp-raises-value-release.qtest
+# The value of a return is released at once when the release of the arguments of the call that gives it raises an
+# exception, and after the locals when the release of the return statement's other temporaries does (#5995); see
+# return-temp-raises-value-release.qtest
 
 %modern
 %enable-all-warnings
@@ -31,6 +32,18 @@ class TT inherits T {
     destructor() {
         log += "dthrow";
         throw "DT";
+    }
+
+    T mk(string v) {
+        return new T(v);
+    }
+
+    static T smk(string v, auto x) {
+        return new T(v);
+    }
+
+    string getName() {
+        return n;
     }
 }
 
@@ -145,6 +158,64 @@ T sub r11() {
     return first(new T("r11-v"), new T("r11-t"));
 }
 
+# a static method
+T sub r12() {
+    T z("r12-z");
+    {
+        T q("r12-q");
+        return TT::smk("r12-v", new TT("r12-tt"));
+    }
+}
+
+# a call reference
+T sub r13() {
+    T z("r13-z");
+    code f = T sub (string v, auto x) { return new T(v); };
+    {
+        T q("r13-q");
+        return f("r13-v", new TT("r13-tt"));
+    }
+}
+
+# the statement takes the value before it releases its temporaries: the value is released after the locals
+T sub h1() {
+    T z("h1-z");
+    {
+        T q("h1-q");
+        return (new TT("h1-tt"), new T("h1-v"))[1];
+    }
+}
+
+# the same in a try block whose catch block continues
+T sub h2() {
+    T z("h2-z");
+    try {
+        T q("h2-q");
+        return (new TT("h2-tt"), new T("h2-v"))[1];
+    } catch (hash<ExceptionInfo> ex) {
+        log += "catch:" + ex.err;
+    }
+    return new T("h2-after");
+}
+
+# a temporary whose member is an argument of the call
+auto sub h3() {
+    T z("h3-z");
+    {
+        T q("h3-q");
+        return first(new T("h3-v"), (new TT("h3-tt")).getName());
+    }
+}
+
+# the temporary receiver of a method call is a temporary of the statement
+T sub h4() {
+    T z("h4-z");
+    {
+        T q("h4-q");
+        return (new TT("h4-tt")).mk("h4-v");
+    }
+}
+
 sub run(string name, code c) {
     log = ();
     try {
@@ -177,5 +248,11 @@ for (int i = 0; i < 3; ++i) {
     run("r9", auto sub () { return r9("x"); });
     run("r10", \r10());
     run("r11", \r11());
+    run("r12", \r12());
+    run("r13", \r13());
+    run("h1", \h1());
+    run("h2", \h2());
+    run("h3", \h3());
+    run("h4", \h4());
     run("closure", closure);
 }

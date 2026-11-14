@@ -14,12 +14,15 @@
 
 %exec-class ReturnTempRaisesValueReleaseTest
 
-#! The value of a return is released at once when the release of the return statement's temporaries raises (#5995)
-/** When the destructor of a temporary of a return statement (an argument of the call whose value it returns) raised
-    an exception, native code (jit, tiered and qcc) held the value of the return until after the locals, as the value
-    of a return that an exception interrupts; the AST interpreter releases it at once, before the locals, since the
-    exception is raised in the evaluation of the return's expression.  ReturnTempRaisesValueRelease.q gives the output
-    of the AST interpreter, which counts the live objects, in every execution mode and compiled with qcc.
+#! The value of a return when the release of a temporary of the return statement raises (#5995)
+/** When the destructor of an argument of the call whose value a return statement returns raised an exception as the
+    call released it, native code (jit, tiered and qcc) held the value of the return until after the locals, as the
+    value of a return that an exception interrupts; the AST interpreter releases it at once, before the locals, since
+    the exception is raised in the evaluation of the return's expression.  The other temporaries of the statement (a
+    temporary receiver of a method call, the elements of a list) are released after the statement takes the value,
+    and the value is then kept until after the locals, which the IR interpreter did not do.
+    ReturnTempRaisesValueRelease.q gives the output of the AST interpreter, which counts the live objects, in every
+    execution mode and compiled with qcc.
 */
 class ReturnTempRaisesValueReleaseTest inherits QUnit::Test {
     public {
@@ -35,6 +38,12 @@ method: [\"dthrow\", \"~m-tt\", \"~m-v\", \"~m-q\", \"~m-z\", \"caught:DT\"] liv
 r9: [\"dthrow\", \"~r9-tt\", \"~r9-v\", \"~r9-q\", \"~r9-zx\", \"caught:DT\"] live=0
 r10: [\"dthrow\", \"~r10-tt\", \"~r10-v\", \"caught:DT\"] live=0
 r11: [\"~r11-t\", \"dthrow\", \"~r11-d\", \"~r11-z\", \"~r11-v\", \"caught:DT\"] live=0
+r12: [\"dthrow\", \"~r12-tt\", \"~r12-v\", \"~r12-q\", \"~r12-z\", \"caught:DT\"] live=0
+r13: [\"dthrow\", \"~r13-tt\", \"~r13-v\", \"~r13-q\", \"~r13-z\", \"caught:DT\"] live=0
+h1: [\"dthrow\", \"~h1-tt\", \"~h1-q\", \"~h1-z\", \"~h1-v\", \"caught:DT\"] live=0
+h2: [\"dthrow\", \"~h2-tt\", \"~h2-q\", \"~h2-v\", \"catch:DT\", \"~h2-z\", \"got\", \"~h2-after\"] live=0
+h3: [\"dthrow\", \"~h3-tt\", \"~h3-q\", \"~h3-z\", \"~h3-v\", \"caught:DT\"] live=0
+h4: [\"dthrow\", \"~h4-tt\", \"~h4-q\", \"~h4-z\", \"~h4-v\", \"caught:DT\"] live=0
 closure: [\"dthrow\", \"~cl-tt\", \"~cl-v\", \"~cl-q\", \"~cl-z\", \"caught:DT\"] live=0
 r1: [\"dthrow\", \"~r1-tt\", \"~r1-v\", \"~r1-q\", \"~r1-z\", \"caught:DT\"] live=0
 r2: [\"dthrow\", \"~r2-tt\", \"~r2-v\", \"~r2-q\", \"~r2-z\", \"caught:DT\"] live=0
@@ -47,6 +56,12 @@ method: [\"dthrow\", \"~m-tt\", \"~m-v\", \"~m-q\", \"~m-z\", \"caught:DT\"] liv
 r9: [\"dthrow\", \"~r9-tt\", \"~r9-v\", \"~r9-q\", \"~r9-zx\", \"caught:DT\"] live=0
 r10: [\"dthrow\", \"~r10-tt\", \"~r10-v\", \"caught:DT\"] live=0
 r11: [\"~r11-t\", \"dthrow\", \"~r11-d\", \"~r11-z\", \"~r11-v\", \"caught:DT\"] live=0
+r12: [\"dthrow\", \"~r12-tt\", \"~r12-v\", \"~r12-q\", \"~r12-z\", \"caught:DT\"] live=0
+r13: [\"dthrow\", \"~r13-tt\", \"~r13-v\", \"~r13-q\", \"~r13-z\", \"caught:DT\"] live=0
+h1: [\"dthrow\", \"~h1-tt\", \"~h1-q\", \"~h1-z\", \"~h1-v\", \"caught:DT\"] live=0
+h2: [\"dthrow\", \"~h2-tt\", \"~h2-q\", \"~h2-v\", \"catch:DT\", \"~h2-z\", \"got\", \"~h2-after\"] live=0
+h3: [\"dthrow\", \"~h3-tt\", \"~h3-q\", \"~h3-z\", \"~h3-v\", \"caught:DT\"] live=0
+h4: [\"dthrow\", \"~h4-tt\", \"~h4-q\", \"~h4-z\", \"~h4-v\", \"caught:DT\"] live=0
 closure: [\"dthrow\", \"~cl-tt\", \"~cl-v\", \"~cl-q\", \"~cl-z\", \"caught:DT\"] live=0
 r1: [\"dthrow\", \"~r1-tt\", \"~r1-v\", \"~r1-q\", \"~r1-z\", \"caught:DT\"] live=0
 r2: [\"dthrow\", \"~r2-tt\", \"~r2-v\", \"~r2-q\", \"~r2-z\", \"caught:DT\"] live=0
@@ -59,6 +74,12 @@ method: [\"dthrow\", \"~m-tt\", \"~m-v\", \"~m-q\", \"~m-z\", \"caught:DT\"] liv
 r9: [\"dthrow\", \"~r9-tt\", \"~r9-v\", \"~r9-q\", \"~r9-zx\", \"caught:DT\"] live=0
 r10: [\"dthrow\", \"~r10-tt\", \"~r10-v\", \"caught:DT\"] live=0
 r11: [\"~r11-t\", \"dthrow\", \"~r11-d\", \"~r11-z\", \"~r11-v\", \"caught:DT\"] live=0
+r12: [\"dthrow\", \"~r12-tt\", \"~r12-v\", \"~r12-q\", \"~r12-z\", \"caught:DT\"] live=0
+r13: [\"dthrow\", \"~r13-tt\", \"~r13-v\", \"~r13-q\", \"~r13-z\", \"caught:DT\"] live=0
+h1: [\"dthrow\", \"~h1-tt\", \"~h1-q\", \"~h1-z\", \"~h1-v\", \"caught:DT\"] live=0
+h2: [\"dthrow\", \"~h2-tt\", \"~h2-q\", \"~h2-v\", \"catch:DT\", \"~h2-z\", \"got\", \"~h2-after\"] live=0
+h3: [\"dthrow\", \"~h3-tt\", \"~h3-q\", \"~h3-z\", \"~h3-v\", \"caught:DT\"] live=0
+h4: [\"dthrow\", \"~h4-tt\", \"~h4-q\", \"~h4-z\", \"~h4-v\", \"caught:DT\"] live=0
 closure: [\"dthrow\", \"~cl-tt\", \"~cl-v\", \"~cl-q\", \"~cl-z\", \"caught:DT\"] live=0
 ";
 

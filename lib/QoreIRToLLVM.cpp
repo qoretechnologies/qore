@@ -12099,16 +12099,24 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         return;
     }
 
-    // an instruction that gives the value of a return statement and then raises - a call when the release of its
-    // arguments raises, the DiscardTempsKeep of the statement when the release of its temporaries does - raises in
-    // the evaluation of the return's expression: its value is released there, before the locals, as a temporary of
-    // the statement, as the AST interpreter (ReturnStatement::execImpl()) and the IR interpreter release it; the
-    // exit on the exception holds the values of the returns until after the locals (holding_return_values) only for
-    // an exception that interrupts a return whose value is complete, such as one that a handler or the destructor of
-    // a local raises (qore#5941, qore#5995)
-    if (!return_value_ids.empty() && inst->result.isValid() && return_value_ids.count(inst->result.id)) {
+    // a call that gives the value of a return statement and then raises as it releases its own arguments raises in
+    // the evaluation of the return's expression: the AST interpreter releases the arguments of a call when the call
+    // returns, before the return statement takes the value, which it then drops (ReturnStatement::execImpl()), so the
+    // value is released there, before the locals, as a temporary of the statement, as the IR interpreter releases it
+    // (qore#5995).  The exit on the exception holds the values of the returns until after the locals
+    // (holding_return_values) for an exception raised once the statement has taken the value (qore#5941): by the
+    // release of the statement's temporaries (DiscardTempsKeep), which the AST interpreter releases after it - a
+    // temporary receiver of a method call among them (QoreStatementTempScope::holdReceiver()) - by a handler or
+    // by the destructor of a local
+    if (!return_value_ids.empty() && inst->opcode != QoreIROpcode::DiscardTempsKeep && inst->result.isValid()
+            && return_value_ids.count(inst->result.id)) {
         auto alloca_it = invoke_alloca_map.find(inst->result.id);
         if (alloca_it != invoke_alloca_map.end() && alloca_it->second) {
+            // the exception edge is emitted on the path where the exception is pending only, which does not
+            // dominate the continuation: the temporaries that it would promote to cleanup allocas are promoted here
+            if (!pending_ssa_cleanup.empty()) {
+                promotePendingSsaToAllocas(module, llvm_func);
+            }
             llvm::Value* has_exception = emitPendingExceptionTest();
             llvm::BasicBlock* raised = llvm::BasicBlock::Create(ctx, "return_value_raised", llvm_func);
             llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "return_value_cont", llvm_func);
@@ -12119,8 +12127,8 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
             auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                     llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
             builder->CreateCall(decref_fn, {val, xsink_arg});
-            emitExceptionBranch(module, llvm_func, inst, force_function_error);
-            // the exception is still pending
+            // the exception is pending here: the branch goes to the exception path
+            emitExceptionBranch(module, llvm_func, inst, force_function_error, builder->getTrue());
             builder->CreateUnreachable();
             builder->SetInsertPoint(cont);
             return;
@@ -12131,7 +12139,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
 
 // documented in QoreIRToLLVM.h
 void QoreIRToLLVM::emitExceptionBranch(llvm::Module& module, llvm::Function* llvm_func,
-        const QoreIRInstruction* inst, bool force_function_error) {
+        const QoreIRInstruction* inst, bool force_function_error, llvm::Value* pending) {
     llvm::BasicBlock* exception_block = nullptr;
     if (!force_function_error && inst->exception_target) {
         auto except_it = block_map.find(inst->exception_target);
@@ -12161,7 +12169,7 @@ void QoreIRToLLVM::emitExceptionBranch(llvm::Module& module, llvm::Function* llv
         site.iter_end = iterator_cleanup_allocas.size();
         site.loc = builder->getCurrentDebugLocation();
     }
-    llvm::Value* has_exception = emitPendingExceptionTest();
+    llvm::Value* has_exception = pending ? pending : emitPendingExceptionTest();
     llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception", llvm_func);
     // Phase 2B — route the exception edge through a per-site preamble
     // BB that decrefs the current pending_ssa_cleanup snapshot before
