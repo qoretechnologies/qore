@@ -1388,22 +1388,37 @@ lorem ipsum\r
         assertEq("foo@bar.cz", msg.getSender());
         assertEq("foo@bar.cz", msg.getFrom());
 
-        # a line break in the name cannot end the header line: outside quotes it is white space between words, in a
-        # quoted string it is encoded, or raises HEADER-ERROR if the header is not encoded
-        sender = "A\r\nBcc: victim@example.com <a@example.com>";
-        msg = new Message(sender, Subject);
-        assertEq("a@example.com", msg.getFrom());
-        assertEq("\"A Bcc: victim@example.com\" <a@example.com>", msg.getSender());
-        assertEq("From: \"A Bcc: victim@example.com\" <a@example.com>\r\n", getFromHeader(sender));
-        assertEq("From: \"A Bcc: victim@example.com\" <a@example.com>\r\n", getFromHeader(sender, False));
-        sender = "\"A\r\nBcc: victim@example.com\" <a@example.com>";
-        msg = new Message(sender, Subject);
-        assertEq("a@example.com", msg.getFrom());
-        assertEq("From: " + mime_encode_header_word_b("A\r\nBcc: victim@example.com") + " <a@example.com>\r\n",
-            getFromHeader(sender));
-        msg.addTO(To);
-        msg.setBody("body");
-        assertThrows("HEADER-ERROR", \msg.getHeaderString(), ("\r\n", False));
+        # white space in a name is collapsed, and a name of white space alone is no name
+        foreach hash<auto> i in ({"in": "\"\" \"\" <j@x.com>", "out": "j@x.com"},
+                {"in": "\"  \" <j@x.com>", "out": "j@x.com"},
+                {"in": "\"  John  \" <j@x.com>", "out": "John <j@x.com>"},
+                {"in": "\"John \t\r\n  Doe\" <j@x.com>", "out": "John Doe <j@x.com>"},
+                {"in": "\"  Jörg  \" <j@x.com>", "out": "Jörg <j@x.com>"}) {
+            msg = new Message(i."in", Subject);
+            assertEq(i.out, msg.getSender(), i."in");
+            assertEq("j@x.com", msg.getFrom(), i."in");
+            # serialized, parsed and serialized again, the sender and the message are the same
+            msg.addTO(To);
+            msg.setBody("body");
+            string ser = msg.serializeRaw();
+            Message parsed(ser);
+            assertEq(msg.getSender(), parsed.getSender(), i."in");
+            assertEq(msg.getSender(), (new Message(parsed.serializeRaw())).getSender(), i."in");
+            # a parsed From header with a non-ASCII name is encoded as a whole (issue #6066)
+            if (i.out.isDataPrintableAscii()) {
+                assertEq(ser, parsed.serializeRaw(), i."in");
+            }
+        }
+
+        # a line break in the name cannot end the header line: it is white space, in or outside quotes
+        foreach string s in ("A\r\nBcc: victim@example.com <a@example.com>",
+                "\"A\r\nBcc: victim@example.com\" <a@example.com>") {
+            msg = new Message(s, Subject);
+            assertEq("a@example.com", msg.getFrom());
+            assertEq("\"A Bcc: victim@example.com\" <a@example.com>", msg.getSender());
+            assertEq("From: \"A Bcc: victim@example.com\" <a@example.com>\r\n", getFromHeader(s));
+            assertEq("From: \"A Bcc: victim@example.com\" <a@example.com>\r\n", getFromHeader(s, False));
+        }
 
         # a display name of quoted strings and words is one name
         assertEq("\"John Q. Public\" <j@x.com>", (new Message("\"John Q.\" Public <j@x.com>", Subject)).getSender());

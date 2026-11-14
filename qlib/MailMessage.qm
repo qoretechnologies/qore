@@ -1300,7 +1300,12 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         if (in_word) {
             words += word;
         }
-        return words.join(" ");
+        # white space in quoted strings is collapsed as between words, so that the name has no line break and no
+        # white space that the header could not keep; an empty name is no name
+        string name = words.join(" ");
+        name =~ s/\s+/ /g;
+        trim name;
+        return name;
     }
 
     # returns a mailbox in display format: "Name <addr>", with the name as a quoted string if it has specials
