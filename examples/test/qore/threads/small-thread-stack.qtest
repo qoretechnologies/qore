@@ -36,7 +36,10 @@ public class SmallThreadStackTest inherits QUnit::Test {
             testSkip("runtime built without native stack protection");
         }
         string root = realpath(get_script_dir() + "/../../../..");
-        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        # the build tree of the qore under test (run_tests.sh sets LIBQORE_BINARY), whatever its directory's name
+        string libdir = realpath(ENV.QORE_LIBDIR ?? (ENV.LIBQORE_BINARY
+            ? dirname(ENV.LIBQORE_BINARY)
+            : dirname(ENV.QORE_BINARY ?? QORE_ARGV[0])));
         TmpDir dir("qore-small-thread-stack-");
         string exe = dir.path + "/small-thread-stack";
         list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g", "-O2", "-I" + root + "/include",
