@@ -216,7 +216,9 @@ smtp.sendMessage(msg);@endcode
     - A message is sent to every address of a \c To, \c CC or \c BCC entry with several addresses or a group, with
       one \c RCPT \c TO command for each address, and \c SMTPUTF8 is used if any of them has non-ASCII
       characters; only the first address of an entry got the message (fixed in MailMessage 1.5.1,
-      <a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
+      <a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>); if one of the addresses cannot
+      be sent in an SMTP command (a quoted local part with white space, a \c "<" or a \c ">"), the whole message is
+      refused with \c MESSAGE-ERROR
     - A server reply that is not valid UTF-8 (ex: an \c EHLO reply with a Latin-1 host name) is read bytewise; it
       made sending fail with \c INVALID-ENCODING
     - A message is now always sent with SMTP transparency
@@ -983,7 +985,8 @@ smtp.setToken(new_access_token);
           \c MAIL \c FROM command (RFC 6531) if the server advertises the \c SMTPUTF8 extension in its reply to
           \c EHLO; otherwise \c SMTP-SEND-ERROR is raised before the credentials or the message are sent
         - An address with a quoted local part that has a \c "<", a \c ">" or white space is refused with
-          \c MESSAGE-ERROR; see
+          \c MESSAGE-ERROR, and the message is then not sent to any recipient, also when the address is one of
+          several in a \c To, \c CC or \c BCC entry; see
           @ref SmtpClient::SmtpSendPollOperation::checkEnvelope() "SmtpSendPollOperation::checkEnvelope()"
 
         @throw MESSAGE-ERROR the message is incomplete and cannot be sent, or the sender or a recipient address

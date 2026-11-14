@@ -53,6 +53,11 @@ public class Main inherits QUnit::Test {
             NOTHING);
         addTestCase("Test the time to get the recipients of long entries (issue #6134)", \testListRecipientsTime(),
             NOTHING);
+        addTestCase("Test sender round trips (issue #6134)", \testSenderRoundTrips(), NOTHING);
+        addTestCase("Test encoded word lookalikes (issue #6134)", \testEncodedWordLookalikes(), NOTHING);
+        addTestCase("Test recipients with a separate display name (issue #6134)", \testNameAddressRecipients(),
+            NOTHING);
+        addTestCase("Test quoted local part duplicates (issue #6134)", \testQuotedLocalPartDuplicates(), NOTHING);
 
         set_return_value(main());
     }
@@ -1537,9 +1542,12 @@ lorem ipsum\r
         # an address in an encoded word is not an address
         assertNothing(Message::getEmailAddress("=?UTF-8?Q?=3Cj@x.com=3E?="));
         assertNothing(Message::getEmailAddress("=?UTF-8?Q?j@x.com?="));
-        assertNothing(Message::getEmailAddress("=?utf-8?q?x_<j@x.com>?="));
-        assertNothing(Message::getEmailAddress("=?UTF-8?Q?j@x.com_(J=C3=B6rg)?="));
-        assertNothing(Message::getEmailAddress("=?UTF-8?Q?a,b@x.com?="));
+        # text with a character that an encoded word cannot have (RFC 2047 section 5) is not an encoded word, and
+        # is read as RFC 5322 reads it (issue #6134)
+        assertEq("j@x.com", Message::getEmailAddress("=?utf-8?q?x_<j@x.com>?="));
+        assertEq("=?UTF-8?Q?j@x.com_", Message::getEmailAddress("=?UTF-8?Q?j@x.com_(J=C3=B6rg)?="));
+        assertEq("b@x.com", Message::getEmailAddress("=?UTF-8?Q?a,b@x.com?="));
+        assertNothing(Message::getEmailAddress("=?utf-8?q?x_=3Cj@x.com=3E?="));
         assertEq("a@x.com", Message::getEmailAddress("=?UTF-8?Q?x_<j@x.com>?= <a@x.com>"));
         assertEq("a@x.com", Message::getEmailAddress("=?UTF-8?Q?j@x.com_?= a@x.com"));
         assertNothing(Message::getEmailAddress("no address"));
@@ -2031,7 +2039,7 @@ lorem ipsum\r
         # getEmailAddresses() returns the duplicates of an entry and an empty group has no address
         assertEq(("a@x.com", "a@X.COM", "A@x.com"), Message::getEmailAddresses("a@x.com, A <a@X.COM>, A@x.com"));
         assertEq((), Message::getEmailAddresses("undisclosed-recipients:;"));
-        assertEq(("j@x.com",), Message::getEmailAddresses("=?UTF-8?Q?a@evil.com,?= <j@x.com>"));
+        assertEq(("j@x.com",), Message::getEmailAddresses("=?UTF-8?Q?a@evil.com=2C?= <j@x.com>"));
 
         # an entry with no address cannot be added
         {
@@ -2060,7 +2068,7 @@ lorem ipsum\r
         # parsed headers, with encoded words that cannot hide or add a separator or an address
         {
             string raw = "From: s@x.com\r\n"
-                "To: a@x.com, =?UTF-8?Q?Doe=2C_John_evil@y.com,?= <j@x.com>, Team: b@y.com, c@z.com;\r\n"
+                "To: a@x.com, =?UTF-8?Q?Doe=2C_John_evil@y.com=2C?= <j@x.com>, Team: b@y.com, c@z.com;\r\n"
                 "CC: =?UTF-8?B?w4RubmE=?= <anna@x.com>,\r\n \"Müller, Jörg\" <jm@x.com>, undisclosed-recipients:;\r\n"
                 "BCC: (c, d@evil.com) e@x.com, A@X.COM\r\n"
                 "Subject: s\r\n\r\nbody\r\n";
@@ -2071,6 +2079,97 @@ lorem ipsum\r
             assertEq(parsed.getRecipients(), reparsed.getRecipients());
             assertEq(parsed.getTO(), reparsed.getTO());
         }
+    }
+
+    # issue #6134 review: the sender of a parsed or created message is the same after the message is written and
+    # parsed again, and a sender header is never written as a group
+    testSenderRoundTrips() {
+        foreach string v in ("evil@e.com; Jörg <a@x.com>", "ü@ü.de;<a@x.com>", "Jörg evil@e.com, <a@x.com>",
+                "Jörg <a@x.com>, evil@e.com", "evil@e.com: Jörg <a@x.com>") {
+            Message f("From: " + v + "\r\nTo: t@x.com\r\nSubject: s\r\n\r\nbody\r\n");
+            string from = f.getFrom();
+            string ser = f.serializeRaw();
+            string hdr = (ser =~ x/^(From: .*?)\r\n(?![ \t])/s)[0];
+            assertNRegex(";$", hdr, v);
+            for (int i = 0; i < 3; ++i) {
+                Message f2(ser);
+                assertEq(from, f2.getFrom(), sprintf("parsed %y round %d", v, i));
+                ser = f2.serializeRaw();
+            }
+            # created
+            Message m(v, "s");
+            m.addTO("t@x.com");
+            m.setBody("b");
+            from = m.getFrom();
+            ser = m.serializeRaw();
+            hdr = (ser =~ x/^(From: .*?)\r\n(?![ \t])/s)[0];
+            assertNRegex(";$", hdr, v);
+            for (int i = 0; i < 3; ++i) {
+                Message m2(ser);
+                assertEq(from, m2.getFrom(), sprintf("created %y round %d", v, i));
+                ser = m2.serializeRaw();
+            }
+        }
+        assertEq("a@x.com", (new Message("From: evil@e.com; Jörg <a@x.com>\r\nTo: t@x.com\r\nSubject: s\r\n\r\nb\r\n"))
+            .getFrom());
+    }
+
+    # issue #6134 review: text that looks like an encoded word but has a quote, a parenthesis, a bracket, a
+    # backslash or a separator is not an encoded word: it cannot change how the rest of the value is read
+    testEncodedWordLookalikes() {
+        # value, recipients
+        list<list<auto>> cases = (
+            ("=?UTF-8?Q?\"?= , evil@e.com, \" <a@x.com>", ("a@x.com",)),
+            ("Ann =?UTF-8?Q?\"?= x, evil@e.com, y\" <a@x.com>", ("a@x.com",)),
+            ("=?UTF-8?Q?(?= , evil@e.com, ) <a@x.com>", ("a@x.com",)),
+            ("=?UTF-8?Q?[?= , evil@e.com, ] <a@x.com>", ("a@x.com",)),
+            ("=?UTF-8?Q?\\?= \", evil@e.com\" <a@x.com>", ("a@x.com",)),
+            ("\"N=?UTF-8?Q?x\",evil@e.com,\"?=\" <a@x.com>", ("evil@e.com", "a@x.com")),
+            ("\"=?UTF-8?Q?x\"?= , evil@e.com, \"\" <a@x.com>", ("evil@e.com", "a@x.com")),
+            # a real encoded word is text, and the address in it is not a recipient
+            ("=?UTF-8?Q?evil@e.com?= <a@x.com>", ("a@x.com",)),
+            ("=?UTF-8?Q?J=C3=B6rg_x?= <a@x.com>, b@y.com", ("a@x.com", "b@y.com")),
+        );
+        foreach list<auto> c in (cases) {
+            assertEq(c[1], Message::getEmailAddresses(c[0]), c[0]);
+            Message msg(Sender, Subject);
+            msg.addTO(c[0]);
+            msg.setBody("body");
+            assertEq(c[1], msg.getRecipients(), "created: " + c[0]);
+            Message parsed("From: s@x.com\r\nTo: " + c[0] + "\r\nSubject: s\r\n\r\nbody\r\n");
+            assertEq(c[1], parsed.getRecipients(), "parsed: " + c[0]);
+            assertEq(c[1], (new Message(parsed.serializeRaw())).getRecipients(), "reparsed: " + c[0]);
+        }
+    }
+
+    # issue #6134 review: a display name given apart from the address is quoted, so that it cannot add a recipient
+    testNameAddressRecipients() {
+        Message msg(Sender, Subject);
+        msg.addTO("attacker@evil.com,", "j@x.com");
+        msg.addCC("Doe, \"John\" \\ <x@evil.com>; G: e@evil.com;", "c@x.com");
+        msg.addBCC("", "b@x.com");
+        msg.addTO("Jörg Müller, (attacker@evil.com", "m@x.com");
+        msg.setBody("body");
+        assertEq(("j@x.com", "m@x.com", "c@x.com", "b@x.com"), msg.getRecipients());
+        assertEq(("\"attacker@evil.com,\" <j@x.com>", "\"Jörg Müller, (attacker@evil.com\" <m@x.com>"), msg.getTO());
+        assertEq(("b@x.com",), msg.getBCC());
+        Message parsed(msg.serializeRaw());
+        assertEq(msg.getRecipients(), parsed.getRecipients());
+        assertEq(msg.getRecipients(), (new Message(parsed.serializeRaw())).getRecipients());
+        # the address must be an address alone
+        assertThrows("MESSAGE-ADDTO-ERROR", \msg.addTO(), ("Ann", "a@x.com, evil@e.com"));
+        assertThrows("MESSAGE-ADDCC-ERROR", \msg.addCC(), ("Ann", "Ann <a@x.com>"));
+        assertThrows("MESSAGE-ADDBCC-ERROR", \msg.addBCC(), ("Ann", "nothing"));
+    }
+
+    # issue #6134 review: a quoted local part that needs no quotes is the same address as the unquoted one
+    testQuotedLocalPartDuplicates() {
+        Message msg(Sender, Subject);
+        msg.addTO("\"a\"@x.com, a@X.com, \"a.b\"@x.com, a.b@x.com, \"a b\"@x.com, \"a\\b\"@x.com, ab@x.com");
+        msg.addCC("\"jörg\"@x.com, jörg@x.com, \"A\"@x.com");
+        msg.setBody("body");
+        assertEq(("\"a\"@x.com", "\"a.b\"@x.com", "\"a b\"@x.com", "\"a\\b\"@x.com", "\"jörg\"@x.com", "\"A\"@x.com"),
+            msg.getRecipients());
     }
 
     # issue #6134: the time to get the recipients is linear in the length of an entry

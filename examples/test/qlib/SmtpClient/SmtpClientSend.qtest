@@ -1329,5 +1329,17 @@ public class SmtpClientSendTest inherits QUnit::Test {
             }
             assertNothing(server.getServerError());
         }
+
+        # an address of a list entry that cannot be sent in an SMTP command refuses the whole message, before
+        # anything is sent
+        MockSmtpServer server(True);
+        server.start();
+        on_exit server.wait();
+        SmtpClient smtp(sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort()));
+        MailMessage::Message msg("s@test.com", "List Test");
+        msg.addTO("a@test.com, \"b c\"@test.com");
+        msg.setBody("Hello");
+        assertThrows("MESSAGE-ERROR", "quoted local part", \smtp.sendMessage(), msg);
+        assertEq((), (select server.getReceivedCommands(), $1 =~ /^(MAIL|RCPT)/i));
     }
 }
