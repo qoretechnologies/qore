@@ -2940,18 +2940,19 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
+        @throw UPSERT-RECORD-ERROR an element of \a recs is not a hash
     */
     *list<string> upsertRecordsBulk(list<auto> recs, *hash<auto> upsert_options) {
-        on_error {
-            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
-            }
-        }
+        # a failed upsert raises the error the provider raised, as for every other record shape: it is not a create
+        # error (an on_error block copied from createRecordsBulk() wrapped it as CREATE-RECORD-ERROR, so the same
+        # upsert raised another code by the shape of its records)
         # an empty list is no records, not a single record with no value
         hash<auto> h = {};
         foreach auto rec in (recs) {
             if (rec.typeCode() != NT_HASH) {
-                throw "CREATE-RECORD-ERROR", sprintf("Each record must be a hash; got type %y instead", rec.fullType());
+                # an upsert's input error, not a create's
+                throw "UPSERT-RECORD-ERROR", sprintf("Each record to upsert must be a hash; got type %y instead",
+                    rec.fullType());
             }
             if (!h) {
                 h = map {$1: ()}, keys rec;
