@@ -8652,7 +8652,8 @@ void UserVariantBase::attemptJITRecompilation() const {
         orig_name.c_str());
 }
 
-static bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver_type_info,
+// The default call path tests only two null pointers; keep this predicate inline across evaluator specializations.
+static QORE_INTERN_ALWAYS_INLINE bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* type_param_instantiation) {
     return (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info))
         || (type_param_instantiation && !type_param_instantiation->empty());
@@ -8785,9 +8786,22 @@ void UserVariantBase::SpecializedIRCache::evictDeadTypes(const std::set<const Qo
     }
 }
 
-QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
+QORE_INTERN_ALWAYS_INLINE void QoreConstructorCompletion::capture(ExceptionSink* xsink) const {
+    const qore_es_private* es = qore_es_private::get(*xsink);
+    completed = !es->head && !es->thread_exit;
+}
+
+template <typename Completion>
+QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
         ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
-        bool caller_has_frame_boundary) const {
+        bool caller_has_frame_boundary, Completion completion) const {
+    if constexpr (Completion::constructor) {
+        // Constructor wrappers already instantiated self for base-argument evaluation. The body must neither
+        // instantiate it again nor carry a dynamic receiver through its ordinary-call cleanup paths.
+        assert(!self);
+        self = nullptr;
+    }
+
     ThreadFrameBoundaryHelper tfbh(!caller_has_frame_boundary);
 
     if (self && signature.selfid) {
@@ -8870,6 +8884,7 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
             if (gate) {
                 gate->exit();
             }
+            completion.capture(xsink);
         }
     }
 
@@ -8947,8 +8962,16 @@ static bool qore_ir_test_promote_in_call() {
     return promote_in_call.get();
 }
 
+template <typename Completion>
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-        ExceptionSink* xsink, bool caller_has_frame_boundary) const {
+        ExceptionSink* xsink, bool caller_has_frame_boundary, Completion completion) const {
+    if constexpr (Completion::constructor) {
+        // Constructor wrappers already instantiated self for base-argument evaluation. The body must neither
+        // instantiate it again nor carry a dynamic receiver through its ordinary-call cleanup paths.
+        assert(!self);
+        self = nullptr;
+    }
+
     assert(pgm);
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
@@ -8988,7 +9011,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             QoreSpecializedIRRef specialized_ir = getOrCreateSpecializedIR(name, specialization_receiver_type_info,
                 specialization_type_param_instantiation, false);
             if (specialized_ir) {
-                return evalSpecializedIR(name, specialized_ir.get(), argv, self, xsink, caller_has_frame_boundary);
+                return evalSpecializedIR(name, specialized_ir.get(), argv, self, xsink, caller_has_frame_boundary, completion);
             }
             if (pgm) {
                 pgm->recordIRFallback("generic specialization unavailable");
@@ -9034,8 +9057,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             std::optional<ArgvContextHelper> argv_helper;
             if (call_uses_argv) {
                 argv_helper.emplace(argv.release(), xsink);
-            } else {
-                // argv not used - just discard the reference without creating context
+            } else if constexpr (!Completion::constructor) {
+                // Ordinary calls retain their existing unused-argv release point. A constructor must finish its
+                // body before releasing arguments, and capture that completion before their destructors run.
                 if (argv) {
                     argv.release()->deref(xsink);
                 }
@@ -9143,6 +9167,13 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (gate) {
                     gate->exit();
                 }
+                completion.capture(xsink);
+            }
+        }
+
+        if constexpr (Completion::constructor) {
+            if (!call_uses_argv) {
+                argv = nullptr;
             }
         }
 
@@ -9290,6 +9321,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (gate) {
                     gate->exit();
                 }
+                completion.capture(xsink);
             }
         }
 
@@ -9387,7 +9419,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // promoted it further in the meantime: the call then runs on the tier that the function has
     if (promotable && current_tier.load(std::memory_order_acquire) != TIER_AST) {
         exec_count.fetch_sub(1, std::memory_order_relaxed);
-        return evalTiered(name, argv, self, xsink, caller_has_frame_boundary);
+        return evalTiered(name, argv, self, xsink, caller_has_frame_boundary, completion);
     }
 
     // Fall through to AST execution (bypass the tiered check)
@@ -9413,6 +9445,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             if (gate) {
                 gate->exit();
             }
+            completion.capture(xsink);
         }
     }
 
@@ -9434,8 +9467,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     return val;
 }
 
+template <typename Completion>
 QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-        ExceptionSink* xsink) const {
+        ExceptionSink* xsink, Completion completion) const {
+    if constexpr (Completion::constructor) {
+        // Constructor wrappers already instantiated self for base-argument evaluation. The body must neither
+        // instantiate it again nor carry a dynamic receiver through its ordinary-call cleanup paths.
+        assert(!self);
+        self = nullptr;
+    }
+
     //QORE_TRACE("UserVariantBase::evalIntern()");
     if (!statements && hasLazyAOTFunctionIR()
             && !materializeLazyAOTFunctionIR(name, xsink)) {
@@ -9456,12 +9497,12 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             // evalTiered() materializes any deferred AOT context before binding
             // arguments or executing the native function.
             if (has_aot) {
-                return evalTiered(name, argv, self, xsink, true);
+                return evalTiered(name, argv, self, xsink, true, completion);
             }
             // IR-only dispatch: closure variants reconstructed from AOT binary
             // with cached IR but no AST body and no native AOT function
             if (!statements && ir) {
-                return evalTiered(name, argv, self, xsink, true);
+                return evalTiered(name, argv, self, xsink, true, completion);
             }
             // Tiered promotion for JIT/IR/tiered modes with %modern code.
             // Skip if function already has an AOT fn registered — the AOT path
@@ -9471,7 +9512,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
                     && (mode == QEM_TIERED || mode == QEM_JIT || mode == QEM_IR)) {
                 QoreParseOptions po = getParseOptions(pgm->getParseOptions());
                 if (qore_parse_options_support_ir(po)) {
-                    return evalTiered(name, argv, self, xsink, true);
+                    return evalTiered(name, argv, self, xsink, true, completion);
                 }
             }
         }
@@ -9523,6 +9564,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
                 if (gate) {
                     gate->exit();
                 }
+                completion.capture(xsink);
             }
         }
 
@@ -9531,6 +9573,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
 
         // self uninstantiation now handled by SelfInstantiationHelper RAII above
     } else {
+        completion.capture(xsink);
         argv = nullptr; // dereference argv now
     }
 
@@ -9552,6 +9595,15 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
 
     return val;
 }
+
+// These entries have callers outside Function.cpp in non-SCU builds. Keep their out-of-line template bodies
+// available independently of whether this translation unit's ordinary calls were inlined.
+template QoreValue UserVariantBase::evalIntern<QoreCallCompletion>(const char*,
+    ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*, QoreCallCompletion) const;
+template QoreValue UserVariantBase::evalTiered<QoreCallCompletion>(const char*,
+    ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*, bool, QoreCallCompletion) const;
+template QoreValue UserVariantBase::evalIntern<QoreConstructorCompletion>(const char*,
+    ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*, QoreConstructorCompletion) const;
 
 // primary function for executing user code
 QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,

@@ -59,6 +59,19 @@ using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
 // these data structures are all private to the library
 
+//! Ordinary calls carry no completion state; the empty policy adds no runtime check or argument storage.
+struct QoreCallCompletion {
+    static constexpr bool constructor = false;
+    DLLLOCAL void capture(ExceptionSink*) const {}
+};
+
+//! Constructor-only observation after body/local cleanup and before implicit argument cleanup (#6086).
+struct QoreConstructorCompletion {
+    static constexpr bool constructor = true;
+    bool& completed;
+    DLLLOCAL void capture(ExceptionSink* xsink) const;
+};
+
 class MethodVariantBase;
 class LocalVar;
 class VarRefNode;
@@ -1727,8 +1740,9 @@ protected:
     //! Lock-free call guard; publishes aot_lazy_function_ir before first invocation.
     mutable std::atomic<bool> has_aot_lazy_function_ir{false};
 
+    template <typename Completion = QoreCallCompletion>
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, Completion completion = {}) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
             const qore_class_private* qc = nullptr, bool ref_obj = true) const;
     //! eval() for a call without a CodeEvaluationHelper (destructors), which has a helper of its own for the override
@@ -1738,8 +1752,9 @@ protected:
             const;
 
     //! Tiered compilation dispatch path
+    template <typename Completion = QoreCallCompletion>
     DLLLOCAL QoreValue evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-            ExceptionSink* xsink, bool caller_has_frame_boundary = false) const;
+            ExceptionSink* xsink, bool caller_has_frame_boundary = false, Completion completion = {}) const;
     //! Attempt to lower to IR; called via std::call_once.
     /** If @p raise_on_failure is true and lowering fails, a parseException
         is raised describing the gap.  Used for parse-time eager compilation
@@ -1756,9 +1771,10 @@ protected:
             const QoreTypeInfo* receiver_type_info,
             const QoreTypeParamInstantiation* type_param_instantiation,
             bool raise_on_failure) const;
-    DLLLOCAL QoreValue evalSpecializedIR(const char* name, const QoreIRFunction* ir,
+    template <typename Completion = QoreCallCompletion>
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalSpecializedIR(const char* name, const QoreIRFunction* ir,
             ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
-            bool caller_has_frame_boundary) const;
+            bool caller_has_frame_boundary, Completion completion = {}) const;
     //! Materialize source-stripped AOT debug IR on demand when a debugger is attached.
     DLLLOCAL bool materializeAOTDebugIR(const char* name, ExceptionSink* xsink) const;
 
