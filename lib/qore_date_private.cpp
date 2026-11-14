@@ -1231,18 +1231,25 @@ int qore_relative_time::setWide(int64 n_year, int64 n_month, int64 n_day, int64 
     return code;
 }
 
+int qore_relative_time::addWide(const qore_relative_time& dt, bool neg) {
+    const int64 sign = neg ? -1 : 1;
+    return setWide(year + sign * dt.year, month + sign * dt.month, day + sign * dt.day, hour + sign * dt.hour,
+        minute + sign * dt.minute, second + sign * dt.second, us + sign * dt.us);
+}
+
 int qore_relative_time::add(const qore_relative_time& dt) {
     // every component is checked: the minutes, seconds and microseconds of a value that is not normalized (such as
-    // the literal PT140S) can have any int value (qore#6103)
+    // the literal PT140S) can have any int value (qore#6103); each check is a branch, which is cheaper than combining
+    // the overflow flags, and the components are only changed once all sums fit
     int y, mo, d, h, mi, s, u;
-    if (__builtin_expect(__builtin_add_overflow(year, dt.year, &y) | __builtin_add_overflow(month, dt.month, &mo)
-            | __builtin_add_overflow(day, dt.day, &d) | __builtin_add_overflow(hour, dt.hour, &h)
-            | __builtin_add_overflow(minute, dt.minute, &mi) | __builtin_add_overflow(second, dt.second, &s)
-            | __builtin_add_overflow(us, dt.us, &u), 0)) {
-        return setWide(static_cast<int64>(year) + dt.year, static_cast<int64>(month) + dt.month,
-            static_cast<int64>(day) + dt.day, static_cast<int64>(hour) + dt.hour,
-            static_cast<int64>(minute) + dt.minute, static_cast<int64>(second) + dt.second,
-            static_cast<int64>(us) + dt.us);
+    if (__builtin_expect(__builtin_add_overflow(year, dt.year, &y), 0)
+            || __builtin_expect(__builtin_add_overflow(month, dt.month, &mo), 0)
+            || __builtin_expect(__builtin_add_overflow(day, dt.day, &d), 0)
+            || __builtin_expect(__builtin_add_overflow(hour, dt.hour, &h), 0)
+            || __builtin_expect(__builtin_add_overflow(minute, dt.minute, &mi), 0)
+            || __builtin_expect(__builtin_add_overflow(second, dt.second, &s), 0)
+            || __builtin_expect(__builtin_add_overflow(us, dt.us, &u), 0)) {
+        return addWide(dt, false);
     }
     year = y;
     month = mo;
@@ -1257,14 +1264,14 @@ int qore_relative_time::add(const qore_relative_time& dt) {
 
 int qore_relative_time::subtract(const qore_relative_time& dt) {
     int y, mo, d, h, mi, s, u;
-    if (__builtin_expect(__builtin_sub_overflow(year, dt.year, &y) | __builtin_sub_overflow(month, dt.month, &mo)
-            | __builtin_sub_overflow(day, dt.day, &d) | __builtin_sub_overflow(hour, dt.hour, &h)
-            | __builtin_sub_overflow(minute, dt.minute, &mi) | __builtin_sub_overflow(second, dt.second, &s)
-            | __builtin_sub_overflow(us, dt.us, &u), 0)) {
-        return setWide(static_cast<int64>(year) - dt.year, static_cast<int64>(month) - dt.month,
-            static_cast<int64>(day) - dt.day, static_cast<int64>(hour) - dt.hour,
-            static_cast<int64>(minute) - dt.minute, static_cast<int64>(second) - dt.second,
-            static_cast<int64>(us) - dt.us);
+    if (__builtin_expect(__builtin_sub_overflow(year, dt.year, &y), 0)
+            || __builtin_expect(__builtin_sub_overflow(month, dt.month, &mo), 0)
+            || __builtin_expect(__builtin_sub_overflow(day, dt.day, &d), 0)
+            || __builtin_expect(__builtin_sub_overflow(hour, dt.hour, &h), 0)
+            || __builtin_expect(__builtin_sub_overflow(minute, dt.minute, &mi), 0)
+            || __builtin_expect(__builtin_sub_overflow(second, dt.second, &s), 0)
+            || __builtin_expect(__builtin_sub_overflow(us, dt.us, &u), 0)) {
+        return addWide(dt, true);
     }
     year = y;
     month = mo;

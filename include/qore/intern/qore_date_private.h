@@ -975,14 +975,17 @@ protected:
         // the carries are checked: they are only taken when a smaller unit is out of its range, so the check costs
         // nothing for a value that needs no carry (qore#6103)
         // normalize seconds from microseconds
-        bool ov = normalize_units_checked<int, int>(second, us, 1000000);
+        if (__builtin_expect(normalize_units_checked<int, int>(second, us, 1000000), 0)) {
+            return true;
+        }
 
         // normalize minutes from seconds
-        ov |= normalize_units_checked<int, int>(minute, second, 60);
+        if (__builtin_expect(normalize_units_checked<int, int>(minute, second, 60), 0)) {
+            return true;
+        }
 
         // normalize hours from minutes
-        ov |= normalize_units_checked<int, int>(hour, minute, 60);
-        if (__builtin_expect(ov, 0)) {
+        if (__builtin_expect(normalize_units_checked<int, int>(hour, minute, 60), 0)) {
             return true;
         }
 
@@ -1006,15 +1009,14 @@ protected:
 
         // only normalize hours to days and days to months if we are comparing
         // we use an average year length of 365 days and an maximum month length of 31 days
-        if (for_comparison) {
-            ov |= normalize_units_checked<int, int>(day, hour, 24);
-            ov |= normalize_units_checked<int, int>(year, day, 365);
-            ov |= normalize_units_checked<int, int>(month, day, 31);
+        if (for_comparison && (normalize_units_checked<int, int>(day, hour, 24)
+                || normalize_units_checked<int, int>(year, day, 365)
+                || normalize_units_checked<int, int>(month, day, 31))) {
+            return true;
         }
 
         // normalize years from months
-        ov |= normalize_units_checked<int, int>(year, month, 12);
-        return ov;
+        return normalize_units_checked<int, int>(year, month, 12);
     }
 
     //! normalizes the value
@@ -1064,7 +1066,7 @@ public:
         not fit, in which case every such component is saturated
     */
     DLLLOCAL int setWide(int64 n_year, int64 n_month, int64 n_day, int64 n_hour, int64 n_minute, int64 n_second,
-            int64 n_us);
+            int64 n_us) __attribute__((noinline));
 
     DLLLOCAL void setUnnormalized(int n_year, int n_month, int n_day, int n_hour, int n_minute, int n_second,
             int n_us) {
@@ -1464,6 +1466,9 @@ public:
 protected:
     //! negates the value when a component is the smallest int; see unaryMinus()
     DLLLOCAL int unaryMinusSaturated();
+
+    //! the slow path of add() and subtract() (if \a neg is true): the sums in 64 bits, normalized and saturated
+    DLLLOCAL int addWide(const qore_relative_time& dt, bool neg) __attribute__((noinline, cold));
 };
 
 static inline void zero_tm(struct tm& tms) {
