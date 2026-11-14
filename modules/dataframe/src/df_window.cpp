@@ -85,6 +85,10 @@ __attribute__((always_inline)) static inline int windowCompareCells(const Column
             double va = cd.float_data(a), vb = cd.float_data(b);
             cmp = (va < vb) ? -1 : (va > vb) ? 1 : 0;
             if (!cmp && (std::isnan(va) || std::isnan(vb))) {
+                // a caller that passes no sink compares no float64 cells
+                if (!xsink) {
+                    return -1;
+                }
                 xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on %s hand side of logical "
                     "comparison operator", std::isnan(va) ? "left" : "right");
                 return -1;

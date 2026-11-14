@@ -21,6 +21,7 @@ class DataFrameWindowOrderTest inherits QUnit::Test {
         addTestCase("order keys", \orderTest());
         addTestCase("partition keys", \partitionTest());
         addTestCase("NaN", \nanTest());
+        addTestCase("window functions with several keys", \functionTest());
         set_return_value(main());
     }
 
@@ -70,6 +71,31 @@ class DataFrameWindowOrderTest inherits QUnit::Test {
         assertThrows("NAN-COMPARE-ERROR", \df.rowNumber(), {"order_by": ("v",)}, "a float64 NaN");
         DataFrame::DataFrame any({"v": (c'z', @nan@, 0.5)});
         assertThrows("NAN-COMPARE-ERROR", \any.rowNumber(), {"order_by": ("v",)}, "a NaN in an auto column");
+    }
+
+    #! lag(), lead(), cumSum() and rollingMean() with several partition and order keys of different types
+    functionTest() {
+        DataFrame::DataFrame df({
+            "p1": (c'z', 2, c'z', 2, NOTHING, c'z'),
+            "p2": (2024-01-01, 2024-01-01, 2024-01-02, 2024-01-01, 2024-01-01, 2024-01-01),
+            "o": (3, 1.5, 2, 0.5, 1, 1),
+            "v": (10, 20, 30, 40, 50, 60),
+        });
+        # partitions (z, 01-01): rows 5, 0; (2, 01-01): rows 3, 1; (z, 01-02): row 2; (null, 01-01): row 4
+        hash<auto> spec = {"partition_by": ("p1", "p2"), "order_by": ("o",)};
+        assertEq((2, 2, 1, 1, 1, 1), df.rowNumber(spec), "two partition keys: rowNumber");
+        assertEq((60, 40, NOTHING, NOTHING, NOTHING, NOTHING), df.lag("v", 1, spec), "two partition keys: lag");
+        assertEq((NOTHING, NOTHING, NOTHING, 20, NOTHING, 10), df.lead("v", 1, spec), "two partition keys: lead");
+        assertEq((70.0, 60.0, 30.0, 40.0, 50.0, 60.0), df.cumSum("v", spec), "two partition keys: cumSum");
+        assertEq((35.0, 30.0, 30.0, 40.0, 50.0, 60.0), df.rollingMean("v", 2, spec),
+            "two partition keys: rollingMean");
+        # partitions z: rows 2, 5, 0 (p2 descending, then o ascending); 2: rows 3, 1; null: row 4
+        spec = {"partition_by": ("p1",), "order_by": ("p2", "o"), "ascending": (False, True)};
+        assertEq((3, 2, 1, 1, 1, 2), df.rowNumber(spec), "two order keys: rowNumber");
+        assertEq((60, 40, NOTHING, NOTHING, NOTHING, 30), df.lag("v", 1, spec), "two order keys: lag");
+        assertEq((NOTHING, NOTHING, 60, 20, NOTHING, 10), df.lead("v", 1, spec), "two order keys: lead");
+        assertEq((100.0, 60.0, 30.0, 40.0, 50.0, 90.0), df.cumSum("v", spec), "two order keys: cumSum");
+        assertEq((35.0, 30.0, 30.0, 40.0, 50.0, 45.0), df.rollingMean("v", 2, spec), "two order keys: rollingMean");
     }
 
     #! returns the row numbers that sortBy() gives: the position of each row in its partition
