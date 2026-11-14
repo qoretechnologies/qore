@@ -1208,6 +1208,12 @@ private:
     //! The number of the background helper this lowering lowers, if any (see bg_helper)
     unsigned bg_helper_index = 0;
 
+    //! The handler functions compiled by the outermost lowering and the lowerings of the handlers nested in it
+    //! (see compileBlockHandlerIRs(), #6087)
+    struct HandlerIRCache;
+    //! Created by the first handler compiled; the lowerings of the handlers share their parent's
+    std::shared_ptr<HandlerIRCache> handler_ir_cache;
+
     //! Lowers a value that a background expression takes when the thread starts, while lowering its helper
     /** @param expr the expression to lower
         @param rv the load of the parameter holding the value (for a reference, a reference to the parameter), if
