@@ -508,6 +508,25 @@ public:
     */
     DLLLOCAL int sendStreamControlFrame(int32_t stream_id, const void* data, size_t len, ExceptionSink* xsink);
 
+    //! Sends the application's WebSocket close frame on a stream, unless a close frame was sent on it before
+    /** The close frame is recorded under the session's lock, as the close frame of the stream's WebSocket frame
+        state (see sendStreamControlFrame()), so that the stream has one close frame (RFC 6455 section 5.5.1): a close
+        frame sent before, by the frame state or by the application, makes this one not sent, and data sent after
+        it is refused (issue #6077).  The frame is buffered past the stream's send limit, as a close frame is never
+        dropped.
+
+        @param stream_id the stream
+        @param data the encoded close frame
+        @param len the size of the frame
+        @param end_stream also ends the stream (also if the frame is not sent)
+        @param xsink exception sink
+
+        @return 0 if the frame was buffered, 2 if a close frame was sent on the stream before (only the end of the
+        stream is sent, if requested), -1 on error (exception raised)
+    */
+    DLLLOCAL int sendStreamCloseFrame(int32_t stream_id, const void* data, size_t len, bool end_stream,
+            ExceptionSink* xsink);
+
     //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
     /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
         is buffered.  With a limit, a send that would make the buffered data exceed it returns 1 instead, unless

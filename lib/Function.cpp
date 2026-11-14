@@ -2005,6 +2005,9 @@ static __attribute__((noinline, cold)) QoreValue qore_eval_closure_default_arg(c
         const QoreValue& exp, ExceptionSink* xsink) {
     CVecInstantiator closure_vars(closure.getCvec(), xsink);
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env(&closure);
+    // the closure's frame, as for its code: a captured variable is found in the closure's environment, not in the
+    // frame of the code that calls the closure, which can hold a variable of the same name (qore#6050)
+    ThreadFrameBoundaryHelper closure_frame(true);
     // the closure's object and class context, as for the closure's code: a closure created by the default value takes
     // the object of the closure and not that of the caller (issue #5931)
     std::optional<ObjectSubstitutionHelper> closure_self;

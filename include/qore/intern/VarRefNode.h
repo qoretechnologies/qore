@@ -42,6 +42,26 @@ class Var;
 struct ClosureVarValue;
 class RuntimeConfig;
 
+//! The assignment state of a local variable at a read of it, as the parser proves it (qore#5937)
+enum class qore_local_read_state_e : unsigned char {
+    //! assigned on every path to the read
+    Assigned,
+    //! assigned on no path to the read: the read gives NOTHING
+    Unassigned,
+    //! assigned on some paths only, or not known: an assignment parsed after the read can run before it (in a loop,
+    //! an on_exit block, or a closure), or the variable can be changed through a reference
+    Unknown,
+};
+
+//! Raises a parse error if \a expr is a read of a local variable proven unassigned (qore#5937) whose value is used as a
+//! value of \a target_type, which does not accept NOTHING, with %strict-parse-errors
+/** @param target_desc what the value is given to, for the message (ex: "the return value")
+
+    @return -1 if the error was raised, 0 if not
+*/
+DLLLOCAL int qore_parse_check_unassigned_read(QoreProgram* pgm, const QoreProgramLocation* loc, const QoreValue& expr,
+        const QoreTypeInfo* target_type, const char* target_desc);
+
 class VarRefNode : public ParseNode {
 public:
     union var_u {
@@ -204,6 +224,22 @@ public:
             ref.id->parseAssigned();
     }
 
+    //! Records that a local variable may have a value from here on; see LocalVar::parseMayBeAssigned()
+    DLLLOCAL void parseMayBeAssigned() {
+        assert(type != VT_IMMEDIATE);
+        if ((type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) && ref.id) {
+            ref.id->parseMayBeAssigned();
+        }
+    }
+
+    //! Returns the assignment state of the local variable at this read, as the parser proved it (qore#5937)
+    /** Only meaningful for a parsed read of a local variable; the state of any other reference is
+        qore_local_read_state_e::Assigned.
+    */
+    DLLLOCAL qore_local_read_state_e getReadState() const {
+        return read_state;
+    }
+
     DLLLOCAL bool scanMembers(RSetHelper& rsh);
 
     //! Returns the declared type info for reference creation (no narrowing)
@@ -236,6 +272,8 @@ protected:
     bool new_decl : 1;       // is this a new variable declaration
     bool explicit_scope : 1; // scope was explicitly provided
     bool read_only_decl : 1; // declaration uses const/read-only binding syntax
+    //! the assignment state of a local variable at this read; see getReadState()
+    qore_local_read_state_e read_state = qore_local_read_state_e::Assigned;
 
     DLLLOCAL ~VarRefNode() {
         //printd(5, "VarRefNode::~VarRefNode() deleting variable reference %p %s\n", this, name.ostr ? name.ostr : "<taken>");

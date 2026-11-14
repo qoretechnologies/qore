@@ -1,0 +1,12 @@
+direct: mi hash<string, int> ml list<int> nested hash<string, list<int>>
+IntBox: mi hash<string, int> ml list<int> nested hash<string, list<int>>
+StringLeaf: mi hash<string, string> ml list<string> nested hash<string, list<string>>
+LeafOfIntBox: mi hash<string, int> ml list<int> nested hash<string, list<int>>
+GBox<int>: mi hash<string, int> ml list<int> nested hash<string, list<int>>
+GBox<string>: mi hash<string, string> ml list<string> nested hash<string, list<string>>
+TwoParents: mi hash<string, float> ml list<float> nested hash<string, list<float>>
+TwoParents: vals hash<string, int> ids list<string>
+{x: 1} [2] {k: [1, 2]}
+refused: RUNTIME-TYPE-ERROR
+{x: "v"}
+refused: RUNTIME-TYPE-ERROR

@@ -3514,6 +3514,17 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
 
     auto& sbd = it->second;
 
+    // a close frame was staged on the stream (by its WebSocket frame state or by the application): no data frame may
+    // follow it (RFC 6455 section 5.5.1), so a data frame (an opcode below the control frames') is refused under the
+    // lock the close was staged with; a control frame (a ping) and a FIN without data are not (issue #6077)
+    if (!ignore_limit && sbd.close_frame_staged && data && len > 0
+            && (static_cast<const uint8_t*>(data)[0] & 0x0f) < WSOP_CLOSE) {
+        xsink->raiseException("WEBSOCKET-CLOSING-ERROR", "cannot send data on HTTP/3 stream %" PRId64 ": its "
+            "WebSocket connection sent a close frame; no data frame may follow a close frame (RFC 6455 section "
+            "5.5.1)", stream_id);
+        return -1;
+    }
+
     // Check backpressure: if staging buffer > 1MB, signal caller to retry.
     // sent_bufs holds data already given to nghttp3/ngtcp2 (not counted here
     // because it will be freed via h3AckedStreamDataCallback).
@@ -3591,19 +3602,11 @@ int QuicSession::setStreamSendLimit(int64_t stream_id, int64_t limit, ExceptionS
 int QuicSession::sendStreamControlFrame(int64_t stream_id, const void* data, size_t len, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     uint8_t opcode = (data && len) ? (static_cast<const uint8_t*>(data)[0] & 0x0f) : 0;
-    auto it = streaming_body_data_.find(stream_id);
-    // a close frame is staged past the limit once per stream: a close is never dropped (issue #5900)
-    if (opcode == WSOP_CLOSE && it != streaming_body_data_.end() && !it->second.close_frame_staged) {
-        int rv = sendStreamData(stream_id, data, len, false, xsink, true);
-        if (!rv) {
-            auto it2 = streaming_body_data_.find(stream_id);
-            if (it2 != streaming_body_data_.end()) {
-                it2->second.close_frame_staged = true;
-                // a pong kept before is not sent after the close frame
-                it2->second.pending_pong.clear();
-            }
-        }
-        return rv;
+    // a close frame is staged past the limit once per stream: a close is never dropped (issue #5900); one staged
+    // before, also by the application (sendStreamCloseFrame()), is not followed by another (issue #6077)
+    if (opcode == WSOP_CLOSE) {
+        int rv = sendStreamCloseFrame(stream_id, data, len, false, xsink);
+        return rv == 2 ? 0 : rv;
     }
     int rv = sendStreamData(stream_id, data, len, false, xsink);
     auto it2 = streaming_body_data_.find(stream_id);
@@ -3621,6 +3624,29 @@ int QuicSession::sendStreamControlFrame(int64_t stream_id, const void* data, siz
         }
         if (!rv) {
             // a pong kept before is answered by this newer one
+            it2->second.pending_pong.clear();
+        }
+    }
+    return rv;
+}
+
+int QuicSession::sendStreamCloseFrame(int64_t stream_id, const void* data, size_t len, bool end_stream,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streaming_body_data_.find(stream_id);
+    if (it != streaming_body_data_.end() && it->second.close_frame_staged) {
+        // a close frame was staged on the stream before: no other follows it (RFC 6455 section 5.5.1)
+        if (end_stream && sendStreamData(stream_id, nullptr, 0, true, xsink) < 0) {
+            return -1;
+        }
+        return 2;
+    }
+    int rv = sendStreamData(stream_id, data, len, end_stream, xsink, true);
+    if (!rv) {
+        auto it2 = streaming_body_data_.find(stream_id);
+        if (it2 != streaming_body_data_.end()) {
+            it2->second.close_frame_staged = true;
+            // a pong kept before is not sent after the close frame
             it2->second.pending_pong.clear();
         }
     }

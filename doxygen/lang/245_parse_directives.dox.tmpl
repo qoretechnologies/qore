@@ -7,7 +7,7 @@
     Parse directives that set parsing options can be used any time parse options have not been locked on a @ref Qore::Program "Program object". They are used most often when it's not possible or desirable to set the parse options in the qore command line.
 
     The recommended parse directive for %Qore programming is @ref modern "%modern", which combines all the recommended parse options into a single directive:
-    - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings
+    - @ref modern "%modern" - sets @ref new-style "%new-style", @ref strict-args "%strict-args", @ref require-types "%require-types", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref strict-parse-errors "%strict-parse-errors", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings
 
     Alternatively, files with any extension except <tt>.q</tt> (for example <tt>.qr</tt>, <tt>.qc</tt>, <tt>.qm</tt>, <tt>.qtest</tt>, <tt>.qsd</tt>, <tt>.qfd</tt>, <tt>.qrd</tt>, <tt>.qore</tt>), as well as files with no extension at all, automatically enable @ref modern "%modern" mode without any parse directive. Only files whose filename ends in exactly <tt>.q</tt> stay in legacy mode by default. The environment variable \c QORE_OLD_STYLE_DEFAULT (set to any non-empty value other than \c "0") globally disables this auto-enable, restoring the pre-3.0 opt-in-only default.
 
@@ -90,7 +90,7 @@
     |@ref lock-options "%lock-options"|Prohibits further changes to parse options (equivalent to the <tt>-</tt><tt>-lock-options</tt> command line option)
     |@ref lock-warnings "%lock-warnings"|Prohibits further changes to the warning mask (equivalent to the <tt>-</tt><tt>-lock-warnings</tt> command line option)
     |@ref loose-args "%loose-args"|reverts the effect of the @ref strict-args "%strict-args" parse options
-    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with any extension other than <tt>.q</tt> (including no extension) automatically enable this mode; set the environment variable \c QORE_OLD_STYLE_DEFAULT to disable the auto-enable globally.<br/><br/>Since %Qore 3.0
+    |@ref modern "%modern"|Sets @ref new-style "%new-style", @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref strict-parse-errors "%strict-parse-errors", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings. This is the recommended parse directive for modern %Qore programming. Files with any extension other than <tt>.q</tt> (including no extension) automatically enable this mode; set the environment variable \c QORE_OLD_STYLE_DEFAULT to disable the auto-enable globally.<br/><br/>Since %Qore 3.0
     |@ref loose-types "%loose-types"|Deprecated: support removed in %Qore 3.0; this directive has no effect
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br/><br/>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br/><br/>Since %Qore 0.8.4
@@ -130,6 +130,7 @@
     |@ref no-negative-offsets "%no-negative-offsets"|Restores legacy behavior where negative list, binary, and buffer indexes are not from-end offsets and negative range endpoints are literal values, for compatibility with old code; cannot be used while @ref modern "%modern" is in effect<br/><br/>Since %Qore 3.0
     |@ref no-process-control "%no-process-control"|Disallows access to functions that would affect the current process (see @ref no-process-control "%no-process-control" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_PROCESS_CONTROL and the <tt>-</tt><tt>-no-process-control</tt> command line option
     |@ref no-reflection "%no-reflection"|Disallows access to the reflection API provided by the @ref reflectionintro "reflection" module; equivalent to parse option @ref Qore::PO_NO_REFLECTION<br/><br/>Since %Qore 0.9
+    |@ref no-strict-parse-errors "%no-strict-parse-errors"|Disables @ref strict-parse-errors "%strict-parse-errors", also with @ref modern "%modern"; set programmatically via the string \c "no-strict-parse-errors" on @ref Qore::ParseOptions<br/><br/>Since %Qore 3.0
     |@ref no-subroutine-defs "%no-subroutine-defs"|Disallows subroutine (function) definitions; equivalent to parse option @ref Qore::PO_NO_SUBROUTINE_DEFS and the <tt>-</tt><tt>-no-subroutine-defs</tt> command line option
     |@ref no-summarize "%no-summarize"|Disallows the \c summarize statement; implied by @ref modern "%modern". Set programmatically via the string \c "no-summarize" on @ref Qore::ParseOptions<br/><br/>Since %Qore 3.0
     |@ref no-terminal-io "%no-terminal-io"|Disallows access to terminal I/O (see @ref no-terminal-io "%no-terminal-io" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_TERMINAL_IO and the <tt>-pno-terminal-io</tt> command line option
@@ -152,6 +153,7 @@
     |@ref set-time-zone "%set-time-zone"|Sets the time zone for the current program from a UTC offset (with format \c "+/-[00[:00[:00]]"; \c ":" characters are optional) or a time zone region name (ex: \c "Europe/Prague") <br/><br/>Since %Qore 0.8.3
     |@ref strict-args "%strict-args"|Prohibits access to builtin functions and methods flagged with @ref NOOP or @ref RUNTIME_NOOP and also causes errors to be raised if excess arguments are given to functions that do not access excess arguments and if a non-list lvalue is passed to the @ref push, @ref pop, or @ref shift <br/><br/>Since %Qore 0.8.0
     |@ref strict-bool-eval "%strict-bool-eval"|Sets qore's default strict mathematic boolean evaluation mode, where any value converted to 0 is @ref False "False" and otherwise it's is @ref True "True"; this was how qore behaved by default prior to v0.8.6. <br/><br/>Equivalent to parse option @ref Qore::PO_STRICT_BOOLEAN_EVAL and the <tt>-pstrict-bool-eval</tt> command line option. <br/><br/>See also @ref perl-bool-eval "%perl-bool-eval"<br/><br/>Since %Qore 0.8.6
+    |@ref strict-parse-errors "%strict-parse-errors"|Raises the errors that the parser can prove as parse errors, such as a local variable that cannot have been assigned where its value is given to a type that does not accept @ref nothing "NOTHING"; implied by @ref modern "%modern". Set programmatically via the string \c "strict-parse-errors" on @ref Qore::ParseOptions<br/><br/>Since %Qore 3.0
     |@ref strict-types "%strict-types"|Deprecated: support removed in %Qore 3.0; this directive has no effect
     |@ref strong-encapsulation "%strong-encapsulation"|Disallows out-of-line class and namespace declarations. <br/><br/>Since %Qore 0.8.13
     |@ref try-child-module "%try-child-module" <em>feature</em> <tt>[\<\|\<=\|=\|\>=\|\></tt> <em>version</em><tt>]</tt>|Declares an optional @ref user_module_children "child module" that extends the @ref user_modules "user module" containing the directive; the child is loaded by the module loader after the declaring module has been fully loaded and published.  The declaration is optional: a child that is absent, or that is present but cannot be loaded, never fails the declaring module's load; a child that cannot be loaded is reported and skipped.  Can only be used in a user module<br/><br/>Since %Qore 3.0
@@ -1635,7 +1637,7 @@ sub validate_input(int value, int max_value) {
     @ref Qore::PO_MODERN
 
     @par Description:
-    Sets @ref new-style "%new-style" (@ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local"), @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings.
+    Sets @ref new-style "%new-style" (@ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local"), @ref require-types "%require-types", @ref strict-args "%strict-args", @ref strong-encapsulation "%strong-encapsulation", @ref no-summarize "%no-summarize", @ref strict-parse-errors "%strict-parse-errors", @ref streaming-any "%streaming-any", @ref negative-offsets "%negative-offsets", and enables all non-strict warnings.
 
     This is the recommended parse directive for modern %Qore programming. It combines all the best practices into a single directive.
 
@@ -2565,6 +2567,27 @@ sub legacy() {
     @since %Qore 3.0
 
     <hr>
+    @section no-strict-parse-errors %no-strict-parse-errors
+
+    @par Parse Directive:
+    <tt>%%no-strict-parse-errors</tt>
+
+    @par Command Line:
+    <tt>-</tt><tt>-set-parse-option=no-strict-parse-errors</tt>
+
+    @par Parse Option Constant:
+    <tt>"no-strict-parse-errors"</tt> (via @ref Qore::ParseOptions)
+
+    @par Description:
+    Disables @ref strict-parse-errors "%strict-parse-errors": the errors that it raises at parse time are raised when
+    the code runs, as they are without it.  It takes effect also when @ref modern "%modern" is in effect, before or
+    after it.
+
+    @note This is an extended parse option (bit 90).
+
+    @since %Qore 3.0
+
+    <hr>
     @section no-terminal-io %no-terminal-io
 
     @par Parse Directive:
@@ -2995,6 +3018,63 @@ if (str)
     @see @ref perl-bool-eval "perl-bool-eval"
 
     @since %Qore 0.8.6
+
+    <hr>
+    @section strict-parse-errors %strict-parse-errors
+
+    @par Parse Directive:
+    <tt>%%strict-parse-errors</tt>
+
+    @par Command Line:
+    <tt>-</tt><tt>-set-parse-option=strict-parse-errors</tt>
+
+    @par Parse Option Constant:
+    <tt>"strict-parse-errors"</tt> (via @ref Qore::ParseOptions)
+
+    @par Description:
+    Raises the errors that the parser can prove as parse errors instead of raising them when the code runs.  It is
+    implied by @ref modern "%modern" (and so applies to all <tt>.qr</tt> files and to programs started with the
+    \c -M command-line flag or the @ref Qore::PO_MODERN option constant); @ref no-strict-parse-errors
+    "%no-strict-parse-errors" disables it.
+
+    The errors that it covers:
+    - <b>a local variable that cannot have been assigned where it is read</b>, whose value, which is then always
+      @ref nothing "NOTHING", is given to a type that does not accept @ref nothing "NOTHING" (a
+      \c PARSE-TYPE-ERROR with the diagnostic code \c UNINITIALIZED-LOCAL-READ):
+      - the value of a \c return statement, when the return type does not accept @ref nothing "NOTHING"
+      - the value assigned to an lvalue whose type does not accept @ref nothing "NOTHING"
+      - an argument of a call of a function written in %Qore that has a single variant, for a parameter whose type
+        does not accept @ref nothing "NOTHING" and that has no default value (calls of methods, of builtin functions
+        and of functions with more than one variant are not checked, as another variant can take
+        @ref nothing "NOTHING" at run time, nor are calls with named arguments)
+
+      A read is proven unassigned only when no assignment of the variable can have run before it: the variable is
+      declared without a value or was the operand of \c delete or \c remove on every path to the read, no path
+      to the read assigns it, it is not changed through a reference or by a closure, and no loop body, iterated
+      expression (of \c map, \c select, \c foldl and the other operators that run an expression for each
+      element), \c on_exit, \c on_success or \c on_error block, or closure lies between its declaration and the
+      read.  A local variable declared at the top level of a program is never proven unassigned, as the functions
+      and methods of the program can assign or remove it whenever they are called.  The parser does not evaluate conditions:
+      code that can never run (such as the code of <tt>if (False)</tt>) is checked as the code that runs.  The other reads of a variable that is not definitely assigned raise the \c LANGUAGE-TRAP warning
+      (@ref warning-language-traps "language-traps") as they do without this option.  A read that is meant to
+      inspect the absent value is not an error: the operand of @ref exists "exists" and a variable that is the
+      left operand of the @ref null_coalescing_operator "null coalescing" or
+      @ref value_coalescing_operator "value coalescing" operator, and the operands of the reference, \c delete and
+      \c remove operators, which do not read the variable.
+
+    @par Example:
+    @code{.py}
+%strict-parse-errors
+int sub get() {
+    int x;
+    # PARSE-TYPE-ERROR: x cannot have been assigned, so the return statement gives NOTHING
+    return x;
+}
+    @endcode
+
+    @note This is an extended parse option (bit 89).
+
+    @since %Qore 3.0
 
     <hr>
     @section strict-types %strict-types

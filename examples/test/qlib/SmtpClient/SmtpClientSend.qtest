@@ -356,6 +356,7 @@ public class SmtpClientSendTest inherits QUnit::Test {
         addTestCase("blocking sendMessage with auth", \testBlockingSendMessageWithAuth());
         addTestCase("blocking connect then sendMessage", \testBlockingConnectThenSendMessage());
         addTestCase("send with multiple recipients", \testMultipleRecipients());
+        addTestCase("sender display name", \testSenderDisplayName());
         addTestCase("send poll operation API", \testSendPollOperationApi());
         addTestCase("send with no recipients error", \testNoRecipientsError());
         addTestCase("XOAUTH2 send", \testXoauth2Send());
@@ -808,6 +809,28 @@ public class SmtpClientSendTest inherits QUnit::Test {
         list<string> cmds = server.getReceivedCommands();
         assertTrue(cmds.contains("DATA"), "DATA command sent");
         assertTrue(cmds.contains("QUIT"), "QUIT command sent");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test that the sender's display name is written in the From header, and the envelope sender is the address
+    testSenderDisplayName() {
+        MockSmtpServer server(True);
+        server.start();
+        on_exit server.wait();
+
+        SmtpClient smtp(sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort()));
+
+        MailMessage::Message msg("Test Sender <sender@test.com>", "Display Name Test");
+        msg.addTO("recipient@test.com");
+        msg.setBody("Hello from a named sender");
+
+        smtp.sendMessage(msg);
+
+        list<string> mail_from = select server.getReceivedCommands(), $1 =~ /^MAIL FROM:/i;
+        assertEq(("MAIL FROM: <sender@test.com>",), mail_from, "the envelope sender is the address alone");
+        *string body = server.getReceivedBody();
+        assertRegex("(^|\r\n)From: Test Sender <sender@test\\.com>\r\n", body ?? "",
+            "the From header has the display name");
         assertNothing(server.getServerError(), "no server errors");
     }
 

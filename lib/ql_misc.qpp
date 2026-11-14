@@ -3215,6 +3215,9 @@ set_module_parse_option_mask(new ParseOptions(("no-thread-control", "no-thread-c
 
     @throw MODULE-PARSE-OPTION-MASK-ERROR a mask contains an option that is not a restriction (an explicitly-allowed,
     language, style or module option), or an option in both masks; the calling code has a sandbox manager
+    @throw PARSE-OPTION-ERROR a module loaded afterwards cannot be parsed because the restrictions that the mask adds
+    complete @ref modern "%modern" while the module uses a compatibility option that %modern does not allow (the
+    message names the restrictions that the mask adds)
 
     @see @ref module_parse_option_masks
 
@@ -3304,7 +3307,12 @@ load_module_masked("SoapClient", new ParseOptions(("no-thread-control", "no-thre
     @endcode
 
     @throw LOAD-MODULE-ERROR the module cannot be loaded (see load_module())
-    @throw MODULE-PARSE-OPTION-MASK-ERROR see set_module_parse_option_mask(ParseOptions, *ParseOptions)
+    @throw MODULE-PARSE-OPTION-MASK-ERROR see set_module_parse_option_mask(ParseOptions, *ParseOptions); the module is
+    loaded already, and the restrictions that the mask adds complete @ref modern "%modern" while the module has a
+    compatibility option that %modern does not allow (the mask is not applied)
+    @throw PARSE-OPTION-ERROR the module is loaded for the first time and cannot be parsed because the restrictions
+    that the mask adds complete @ref modern "%modern" while it uses a compatibility option that %modern does not
+    allow (the message names the restrictions that the mask adds)
 
     @see @ref module_parse_option_masks
 
@@ -3333,7 +3341,8 @@ load_module_masked("SoapClient", PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES);
     @endcode
 
     @throw LOAD-MODULE-ERROR the module cannot be loaded (see load_module())
-    @throw MODULE-PARSE-OPTION-MASK-ERROR see set_module_parse_option_mask(ParseOptions, *ParseOptions)
+    @throw MODULE-PARSE-OPTION-MASK-ERROR see load_module_masked(string, ParseOptions, *ParseOptions, int)
+    @throw PARSE-OPTION-ERROR see load_module_masked(string, ParseOptions, *ParseOptions, int)
 
     @since %Qore 3.0
 */
@@ -3361,8 +3370,9 @@ nothing load_module_masked(string name, softint strip, softint add = 0, int warn
 add_module_parse_option_mask("WSDL", new ParseOptions(("no-thread-control", "no-thread-classes")));
     @endcode
 
-    @throw MODULE-PARSE-OPTION-MASK-ERROR the module is not loaded; see also
-    set_module_parse_option_mask(ParseOptions, *ParseOptions)
+    @throw MODULE-PARSE-OPTION-MASK-ERROR the module is not loaded; the restrictions that the mask adds complete
+    @ref modern "%modern" while the module has a compatibility option that %modern does not allow (the mask is not
+    applied); see also set_module_parse_option_mask(ParseOptions, *ParseOptions)
 
     @see @ref module_parse_option_masks
 

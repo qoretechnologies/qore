@@ -444,17 +444,21 @@ public:
     */
     DLLEXPORT int compareSoft(const QoreString* str, ExceptionSink* xsink) const;
 
-    //! compares two strings without converting encodings (if the encodings do not match then "this" is deemed automatically less than the argument)
-    /**
+    //! compares two strings without converting encodings (if the encodings do not match then "this" is deemed automatically greater than the argument)
+    /** Empty strings are equal whatever their encodings, and an empty string is less than any other string
+
         @param str the string to compare
         @return -1, 0, or 1 if "this" is less than, equal to, or greater than "str" respectively
     */
     DLLEXPORT int compare(const QoreString* str) const;
 
     //! compares the string with a c-string, which is assumed to be in the same encoding as the string
-    /**
-        @param str the string to compare
-        @return -1, 0, or 1 if "this" is less than, equal to, or greater than "str" respectively
+    /** An empty string is equal to an empty or null c-string and less than any other; any other string is greater
+        than a null c-string
+
+        @param str the string to compare; may be null
+        @return a negative value, 0, or a positive value if "this" is less than, equal to, or greater than "str"
+        respectively
     */
     DLLEXPORT int compare(const char* str) const;
 

@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the checks of iterate-hashdecl.qtest: prints one "name=result" line per check
+
+hashdecl IterA {
+    int a = 1;
+    string s = "x";
+}
+
+hashdecl IterB {
+    int b = 2;
+}
+
+#! the keys of a hashdecl-typed hash, with the key of its pairs read with the member types of the pair
+list<string> sub key_list(hash<IterA> h) {
+    list<string> l = map $1.key, iterate h;
+    return l;
+}
+
+#! the pairs of a hash whose type is known only at run time
+auto sub untyped_pairs(auto u) {
+    return map $1, iterate u;
+}
+
+#! the pairs of a hash with one of two hashdecl types
+list<auto> sub union_pairs(union<hash<IterA>, hash<IterB>> h) {
+    return map $1.key + "=" + $1.value, iterate h;
+}
+
+#! the pairs of a hashdecl-typed hash or NOTHING
+*list<auto> sub or_nothing_pairs(*hash<IterA> h) {
+    return map $1.key, iterate h;
+}
+
+#! the pairs of a hashdecl-typed hash, in a foreach loop that declares the type of the pair
+list<string> sub foreach_pairs(hash<IterA> h) {
+    list<string> l = ();
+    foreach hash<KeyValueInfo<auto>> p in (iterate h) {
+        l += sprintf("%s:%y", p.key, p.value);
+    }
+    return l;
+}
+
+#! the pairs of a hashdecl-typed hash, filtered by their values
+list<auto> sub select_pairs(hash<IterA> h) {
+    return map $1.key, select (iterate h), $1.value.typeCode() == NT_INT;
+}
+
+#! a streaming operator on a hashdecl-typed hash
+auto sub first_pair(hash<IterA> h) {
+    return (first $1.key == "s", h).value;
+}
+
+#! the iterator object returned by iterate for a hashdecl-typed hash
+list<string> sub iterator_pairs(hash<IterA> h) {
+    AbstractIterator i = iterate h;
+    list<string> l = ();
+    while (i.next()) {
+        hash<auto> p = i.getValue();
+        l += sprintf("%s:%y", p.key, p.value);
+    }
+    return l;
+}
+
+#! the pairs of a typed hash keep the value type of the hash
+auto sub complex_hash_pairs(hash<string, int> h) {
+    return map $1, iterate h;
+}
+
+#! map without iterate gives the hashdecl-typed hash itself, a single value
+auto sub map_without_iterate(hash<IterA> h) {
+    return map $1, h;
+}
+
+#! the values of a hashdecl-typed hash have the types of its members
+auto sub values_of(auto u) {
+    return u.values();
+}
+
+#! a hashdecl-typed hash is assigned to a typed hash only if every member value has its value type
+string sub assign_typed_hash(auto u) {
+    try {
+        hash<string, hash<IterA>> h = u;
+        return "accepted:" + h.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! returns a new hashdecl-typed hash with no other reference, with an untyped return value
+auto sub new_a() {
+    return <IterA>{};
+}
+
+#! a hashdecl-typed hash with no other reference is not folded into a typed hash in place
+string sub assign_unique_typed_hash() {
+    try {
+        hash<string, softint> h = new_a();
+        return "accepted:" + h.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! the pairs of a value that is a hashdecl-typed hash or an integer
+list<auto> sub mixed_union_pairs(union<hash<IterA>, int> v) {
+    return map $1.key, iterate v;
+}
+
+#! the elements of a value that is a hashdecl-typed hash or a string
+list<auto> sub mixed_union_string(union<hash<IterA>, string> v) {
+    return map $1, iterate v;
+}
+
+hash<IterA> a = <IterA>{};
+printf("key-list=%y\n", key_list(a));
+auto l = untyped_pairs(a);
+printf("untyped-pairs=%y\n", l);
+printf("untyped-pairs-type=%s\n", l.fullType());
+printf("union-pairs-a=%y\n", union_pairs(a));
+printf("union-pairs-b=%y\n", union_pairs(<IterB>{}));
+printf("or-nothing-pairs=%y\n", or_nothing_pairs(a));
+printf("or-nothing-pairs-nothing=%y\n", or_nothing_pairs());
+printf("foreach-pairs=%y\n", foreach_pairs(a));
+printf("select-pairs=%y\n", select_pairs(a));
+printf("first-pair=%y\n", first_pair(a));
+printf("iterator-pairs=%y\n", iterator_pairs(a));
+l = complex_hash_pairs({"k": 3});
+printf("complex-hash-pairs=%y\n", l);
+printf("complex-hash-pairs-type=%s\n", l.fullType());
+l = map_without_iterate(a);
+printf("map-without-iterate-type=%s\n", l.fullType());
+l = values_of(a);
+printf("values=%y\n", l);
+printf("values-type=%s\n", l.fullType());
+printf("assign-typed-hash=%s\n", assign_typed_hash(a));
+printf("assign-unique-typed-hash=%s\n", assign_unique_typed_hash());
+printf("mixed-union-pairs=%y\n", mixed_union_pairs(a));
+printf("mixed-union-string=%y\n", mixed_union_string("ab"));
+printf("mixed-union-string-pairs=%y\n", mixed_union_string(a));

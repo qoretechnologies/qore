@@ -198,7 +198,7 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
 
     #! Returns reference data for campaigns
     private list<hash<AllowedValueInfo>> getReferenceCampaigns() {
-        list<hash<AllowedValueInfo>> rv;
+        list<hash<AllowedValueInfo>> rv = ();
         auto response = doGet("/campaigns");
         list<auto> campaigns = response.typeCode() == NT_LIST ? response
             : (response.campaigns.typeCode() == NT_LIST ? response.campaigns : ());
@@ -217,7 +217,7 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
 
     #! Returns reference data for leads
     private list<hash<AllowedValueInfo>> getReferenceLeads(*hash<auto> options) {
-        list<hash<AllowedValueInfo>> rv;
+        list<hash<AllowedValueInfo>> rv = ();
         # Leads require a campaignId; use one from options if provided
         *string campaign_id = options.campaignId;
         if (!campaign_id) {
@@ -244,7 +244,7 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
 
     #! Returns reference data for tasks
     private list<hash<AllowedValueInfo>> getReferenceTasks() {
-        list<hash<AllowedValueInfo>> rv;
+        list<hash<AllowedValueInfo>> rv = ();
         auto response = doGet("/tasks", {"limit": 100});
         list<auto> tasks;
         if (response.typeCode() == NT_LIST) {
