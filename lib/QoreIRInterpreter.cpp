@@ -1944,7 +1944,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         return {true, result};
     }
     // background foo(args) — free function call
-    if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
+    if (auto* fcn = qore_get_function_call_node(inner)) {
         const QoreParseListNode* pargs = fcn->getParseArgs();
         const QoreListNode* fargs = fcn->getArgs();
         size_t actual_nargs = pargs ? pargs->size() : (fargs ? fargs->size() : 0);
@@ -1996,6 +1996,8 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
             buildArgListFromIROperands(operands, 1, nargs_ops, values);
         CallReferenceCallNode* call_node =
             new CallReferenceCallNode(crcn->loc, callee, arg_list);
+        // a named call keeps the names of its arguments
+        call_node->setRuntimeArgNames(crcn->getRuntimeArgNames());
         QoreValue result = do_op_background(QoreValue(call_node), xsink);
         QoreValue(call_node).discard(xsink);
         return {true, result};
@@ -3358,6 +3360,39 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
             slot_owned_values[id] |= QORE_IR_SLOT_RETURN;
         }
     }
+    // the value that the DiscardTempsKeep of a return statement keeps is the value of the return as well: the AST
+    // interpreter takes the value before it releases the statement's temporaries (ReturnStatement::execImpl()), so an
+    // exception that their release raises interrupts the return, and the value is kept until the locals are released,
+    // as native code keeps it (qore#5995); the operand of the DiscardTempsKeep is not, as a call that raises as it
+    // releases its own arguments raises before the statement takes its value
+    if (!return_value_slot_ids.empty()) {
+        std::unordered_map<uint32_t, const QoreIRInstruction*> keep_defs;
+        for (const auto& b : func.blocks) {
+            for (const auto& inst_ptr : b->instructions) {
+                if (inst_ptr && (inst_ptr->opcode == QoreIROpcode::RefSelf
+                            || inst_ptr->opcode == QoreIROpcode::DiscardTempsKeep)
+                        && inst_ptr->result.isValid() && !inst_ptr->operands.empty()) {
+                    keep_defs[inst_ptr->result.id] = inst_ptr.get();
+                }
+            }
+        }
+        for (uint32_t id : return_value_slot_ids) {
+            std::unordered_set<uint32_t> seen;
+            for (uint32_t cur = id; seen.insert(cur).second;) {
+                auto d = keep_defs.find(cur);
+                if (d == keep_defs.end()) {
+                    break;
+                }
+                if (d->second->opcode == QoreIROpcode::DiscardTempsKeep) {
+                    if (cur < slot_owned_values.size()) {
+                        slot_owned_values[cur] |= QORE_IR_SLOT_RETURN;
+                    }
+                    break;
+                }
+                cur = d->second->operands.front().id;
+            }
+        }
+    }
     func.interpreter_slot_owned_values = std::move(slot_owned_values);
     func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
     func.interpreter_return_preserve_slot_ids = std::move(return_preserve_slot_ids);
@@ -4227,10 +4262,10 @@ static bool tryExecuteSimpleClosureIncrement(const QoreClosureBase* cb,
     if (!cb || !local) {
         return false;
     }
-    ClosureVarValue* stack_cvv = thread_try_find_closure_var(local->getName());
+    // the closure's captured binding comes first: a variable of the same name found on the thread's stack can belong
+    // to another frame, such as a recursive frame of the function that created the closure (qore#6050)
     ClosureVarValue* env_cvv = cb->find(local);
-    ClosureVarValue* cv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
-        : (env_cvv ? env_cvv : stack_cvv);
+    ClosureVarValue* cv = env_cvv ? env_cvv : thread_try_find_closure_var(local->getName());
     if (!cv) {
         return false;
     }
@@ -4789,10 +4824,9 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
         if (!closure || !inst->native_leaf_local) {
             return false;
         }
-        ClosureVarValue* stack_cvv = thread_try_find_closure_var(inst->native_leaf_local->getName());
+        // the closure's captured binding comes first (see tryExecuteSimpleClosureIncrement(); qore#6050)
         ClosureVarValue* env_cvv = closure->find(inst->native_leaf_local);
-        ClosureVarValue* cv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
-            : (env_cvv ? env_cvv : stack_cvv);
+        ClosureVarValue* cv = env_cvv ? env_cvv : thread_try_find_closure_var(inst->native_leaf_local->getName());
         if (!cv) {
             return false;
         }
@@ -4831,10 +4865,9 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
         if (!closure || !inst->native_leaf_local) {
             return false;
         }
-        ClosureVarValue* stack_cvv = thread_try_find_closure_var(inst->native_leaf_local->getName());
+        // the closure's captured binding comes first (see tryExecuteSimpleClosureIncrement(); qore#6050)
         ClosureVarValue* env_cvv = closure->find(inst->native_leaf_local);
-        ClosureVarValue* cv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
-            : (env_cvv ? env_cvv : stack_cvv);
+        ClosureVarValue* cv = env_cvv ? env_cvv : thread_try_find_closure_var(inst->native_leaf_local->getName());
         if (!cv) {
             return false;
         }
@@ -4871,10 +4904,9 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
         if (!closure || !inst->native_leaf_local) {
             return false;
         }
-        ClosureVarValue* stack_cvv = thread_try_find_closure_var(inst->native_leaf_local->getName());
+        // the closure's captured binding comes first (see tryExecuteSimpleClosureIncrement(); qore#6050)
         ClosureVarValue* env_cvv = closure->find(inst->native_leaf_local);
-        ClosureVarValue* cv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
-            : (env_cvv ? env_cvv : stack_cvv);
+        ClosureVarValue* cv = env_cvv ? env_cvv : thread_try_find_closure_var(inst->native_leaf_local->getName());
         if (!cv) {
             return false;
         }
@@ -5888,6 +5920,22 @@ static __attribute__((noinline, cold)) void qore_ir_inline_closure_param_mismatc
     update_runtime_stack_location(&stack_loc);
 }
 
+//! true if a closure variable in the current frame has the name of one that the closure captured, but is another
+/** see tryExecuteInterpreterInlineIRClosure(); qore#6050 */
+static bool interpreterInlineClosureNeedsFrame(const QoreClosureBase* cb) {
+    const cvv_vec_t* cvec = cb->getCvec();
+    if (!cvec) {
+        return false;
+    }
+    for (ClosureVarValue* cvv : *cvec) {
+        ClosureVarValue* frame_cvv = thread_try_find_closure_var_in_current_frame(cvv->id);
+        if (frame_cvv && frame_cvv != cvv) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
         const QoreProgramLocation* call_loc, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
@@ -6048,6 +6096,13 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         return true;
     }
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env(cb);
+    // a captured variable is looked up in the current frame before the closure's environment (as for the closure's
+    // own variables), so a closure variable of the same name in the frame of the code that calls the closure (such
+    // as a recursive frame of the function that created it) would be found instead of the captured one (qore#6050):
+    // the closure then gets a frame of its own, as on every other path that runs a closure (execClosureDirect(),
+    // UserClosureFunction::evalClosure()).  Only then, as the frame costs a push and a pop on two stacks per call; a
+    // captured variable that CVecInstantiator pushed is in the current frame itself and is the same one
+    ThreadFrameBoundaryHelper tfbh(interpreterInlineClosureNeedsFrame(cb));
 
     QoreObject* self = const_cast<QoreObject*>(cb->getObject());
     std::optional<QoreClosureSelfContextHelper> closure_self_ctx;
@@ -6657,7 +6712,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             // Native operator handling: [] and .{} with pre-evaluated operands
             if (!inv->operands.empty() && (op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect)
                     && inv->operands.size() == 2 && inv->expr.hasNode()) {
-                if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                         inv->expr.getInternalNode())) {
                     QoreValue lhs_val = getIRValue(values, inv->operands[0]);
                     QoreValue rhs_val = getIRValue(values, inv->operands[1]);
@@ -6711,7 +6766,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             bool used_operands = false;
             QoreValue res;
             if (op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect) {
-                if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                if (auto* call = qore_get_function_call_node(
                         inv->expr.getInternalNode())) {
                     // Direct evalImpl() — avoids evalExprNode() overhead
                     if (call->getRuntimeArgNames()) {
@@ -6722,6 +6777,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         FunctionCallNode clone(*call, arg_list);
                         res = evalTmpCallAndRef(&clone, xsink);
                     }
+                    used_operands = true;
+                } else if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(inv->expr.getInternalNode());
+                        crc && crc->getRuntimeArgNames()) {
+                    // a named call through a call reference or closure: the callable is the first operand
+                    res = crc->evalRuntimeNamedWithArgs(arg_list, xsink);
                     used_operands = true;
                 }
             } else if (op == QoreIROpcode::CallMethod) {
@@ -6956,7 +7016,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         }
 
         case QoreIROpcode::LoadConstant: {
-            if (auto* node = dynamic_cast<const RuntimeConstantRefNode*>(
+            if (auto* node = qore_get_runtime_constant_ref_node(
                     inv->expr.getInternalNode())) {
                 return fromBits(qore_rt_load_constant(node, xsink));
             }
@@ -7347,6 +7407,33 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
     }
 }
 
+// Drop duplicate runtime-local owners before each handler, including values written back by its predecessor.
+// Handler execution is entered from the innermost active interpreter frame. Resolve its metadata only here,
+// using the existing pool as the debugger's cold helpers do, so ordinary dispatch needs no extra arguments,
+// captures or state. Frames have stable addresses even when a destructor re-enters the interpreter.
+static QORE_INTERN_NOINLINE void releaseHandlerParentCache(std::vector<QoreValue>& parent_cache,
+        ExceptionSink* xsink) {
+    IRCallFramePool& pool = TlFramePool::get();
+    assert(pool.top);
+    IRCallFrame& frame = *pool.frames[pool.top - 1];
+    auto& cache = frame.locals_slot_cache;
+    assert(&cache.vector() == &parent_cache);
+    const auto& ir_only = frame.locals_ir_only;
+    for (size_t i = 0; i < cache.size(); ++i) {
+        if (i && !(i % 100)) {
+            // Finish releasing the caches even if cancellation is pending; the handler observes it at its
+            // statement boundary, as it does while the enclosing frame is unwinding.
+            (void)qore_check_cancel(nullptr, "IR handler local cache release");
+        }
+        // IR-only locals cannot be reached by handlers and remain owned by their slots.
+        if (i < ir_only.size() && ir_only[i]) {
+            continue;
+        }
+        cache.release(i, xsink);
+        cache.set(i, QoreValue());
+    }
+}
+
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
@@ -7368,6 +7455,9 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
                 "handler lowering must have failed silently");
         }
         return;
+    }
+    if (parent_slot_cache) {
+        releaseHandlerParentCache(*parent_slot_cache, obe_xsink);
     }
     QoreValue rv;
     // the handler runs with the debug context of its frame, so that a debugger gets the events of its statements, as
@@ -8793,24 +8883,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 if (candidate->opcode == QoreIROpcode::PushTempMark) {
                     break;
                 }
-                if (auto* br = dynamic_cast<QoreIRBranchInstruction*>(candidate)) {
+                if (auto* br = qore_ir_inst_cast<QoreIRBranchInstruction*>(candidate)) {
                     stack.push_back(br->target);
                     break;
                 }
-                if (auto* br_if = dynamic_cast<QoreIRBranchIfInstruction*>(candidate)) {
+                if (auto* br_if = qore_ir_inst_cast<QoreIRBranchIfInstruction*>(candidate)) {
                     stack.push_back(br_if->false_target);
                     stack.push_back(br_if->true_target);
                     break;
                 }
-                if (auto* inv = dynamic_cast<QoreIRInvokeInstruction*>(candidate)) {
+                if (auto* inv = qore_ir_inst_cast<QoreIRInvokeInstruction*>(candidate)) {
                     stack.push_back(inv->normal_target);
                     break;
                 }
-                if (auto* inv_md = dynamic_cast<QoreIRInvokeMethodDirectInstruction*>(candidate)) {
+                if (auto* inv_md = qore_ir_inst_cast<QoreIRInvokeMethodDirectInstruction*>(candidate)) {
                     stack.push_back(inv_md->normal_target);
                     break;
                 }
-                if (auto* inv_dot = dynamic_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(candidate)) {
+                if (auto* inv_dot = qore_ir_inst_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(candidate)) {
                     stack.push_back(inv_dot->normal_target);
                     break;
                 }
@@ -9829,7 +9919,12 @@ next_instruction:
                 if (inst->list_push_in_place && list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
                     qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
-                    result = list_val;
+                    // an in-place push borrows the list from the local, which keeps its reference: when the value is
+                    // rejected, the result stays empty, so the discard below does not release the local's list (the
+                    // frame's locals release it); no flag is used, as execute() is at its stack budget
+                    if (!xsink || !*xsink) {
+                        result = list_val;
+                    }
                 } else {
                     const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
                         inst->element_type ? inst->element_type : autoTypeInfo);
@@ -12766,7 +12861,7 @@ load_local_done:
                 QoreValue out;
                 const RuntimeConstantRefNode* rcr = lc_inst->node
                     ? lc_inst->node
-                    : dynamic_cast<const RuntimeConstantRefNode*>(lc_inst->expr.getInternalNode());
+                    : qore_get_runtime_constant_ref_node(lc_inst->expr.getInternalNode());
                 if (rcr) {
                     out = const_cast<RuntimeConstantRefNode*>(rcr)->eval(
                             needs_deref, xsink);
@@ -14999,14 +15094,14 @@ load_local_done:
                 if (debug_active && !(xsink && *xsink)) {
                     // the block's locals, which an exception that leaves the block releases before the event of the
                     // statement that contains it (#5921)
-                    if (auto* dbg_block_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst);
+                    if (auto* dbg_block_inst = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(inst);
                             dbg_block_inst && dbg_block_inst->block_locals) {
                         qore_ir_dbg_nest_block(dbg_state, dbg_block_inst, &func, pre_instantiated);
                     }
                     // the block of the instruction, or the block that starts at its location, as for the debug IR of
                     // AOT code; the block of the function otherwise
                     const StatementBlock* dbg_block = nullptr;
-                    if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+                    if (auto* dbg_inst = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(inst)) {
                         dbg_block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
                     }
                     if (!dbg_block && pgm && inst->loc && inst->cached_start_line >= 0) {
@@ -15325,6 +15420,18 @@ load_local_done:
                     QoreTypeInfo::acceptAssignment(return_type, "<return statement>", checked, xsink);
                     checked.discard(xsink);
                     if (xsink && *xsink) {
+                        // the rejected value is the value of the return that the exception interrupts: it is kept
+                        // until the locals of the blocks that the exception leaves are released, as the AST
+                        // interpreter releases the value of a return after them, and native code with its cleanup
+                        // slot.  When the return statement has a temp scope, the checked value is one of its temps,
+                        // which the exception releases, and the Return gives another slot; otherwise the checked value
+                        // is the one that the Return gives, whose slot the exception holds itself
+                        // (exceptionBranchTempScope(), unwindForException()).  A try statement of the frame that
+                        // catches the exception releases it before its catch block, the frame's exit after its locals
+                        // (#5996)
+                        if (value.hasNode() && !frame.cleanup.isReturnSlot(inst->operands.front().id)) {
+                            frame.locals_slot_cache.holdReturn(value.refSelf());
+                        }
                         if (inst->exception_target) {
                             // the handler is in this frame: only the raising statement's temps are dead there
                             cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
@@ -15550,7 +15657,10 @@ load_local_done:
                     break;
                 }
                 unwindForException();
-                cleanupLocalCaches();
+                // the frame is left as by an exception that leaves it (returnAfterUnhandledException()): the locals
+                // that a handler declares are released at the exit of the handler, though their variables on the
+                // runtime stack are the function's, as the AST interpreter releases them at the end of their blocks
+                cleanupLocalCaches(false);
                 return exitAfterUnwind();
             case QoreIROpcode::GuardInt:
             case QoreIROpcode::GuardFloat:
@@ -16068,7 +16178,7 @@ load_local_done:
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 int32_t string_index_char = 1;
                 if (inst->opcode == QoreIROpcode::ListIndexDynamic && expr_inst->expr.hasNode()) {
-                    if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                    if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                             expr_inst->expr.getInternalNode())) {
                         string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                     }
@@ -17881,6 +17991,9 @@ load_local_done:
                         consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
                             value_use_counts, &weak_load_temp_slots, borrowed_temp_remaining, xsink);
                         if (xsink && *xsink) {
+                            // the release of an argument raised an exception after the call returned its value, which
+                            // is released after the arguments, as the AST interpreter releases it (#6051)
+                            res.discard(xsink);
                             return returnAfterUnhandledException();
                         }
                     }
@@ -18032,7 +18145,7 @@ load_local_done:
                 // These are not function calls — operands are container+index, not args
                 if (!inst->operands.empty() && effective_opcode == QoreIROpcode::Call
                         && inst->operands.size() == 2 && call_expr.hasNode()) {
-                    if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                    if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                             call_expr.getInternalNode())) {
                         QoreValue lhs_val = getIRValue(values, inst->operands[0]);
                         QoreValue rhs_val = getIRValue(values, inst->operands[1]);
@@ -18089,7 +18202,7 @@ load_local_done:
                         return returnAfterUnhandledException();
                     }
                     if (effective_opcode == QoreIROpcode::Call) {
-                        if (auto* call = dynamic_cast<const FunctionCallNode*>(call_expr.getInternalNode())) {
+                        if (auto* call = qore_get_function_call_node(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             if (call->getRuntimeArgNames()) {
                                 // a named call resolved at run time by parameter name keeps its class
@@ -18099,6 +18212,11 @@ load_local_done:
                                 FunctionCallNode clone(*call, arg_list);
                                 res = evalTmpCallAndRef(&clone, xsink);
                             }
+                            used_operands = true;
+                        } else if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(
+                                call_expr.getInternalNode()); crc && crc->getRuntimeArgNames()) {
+                            // a named call through a call reference or closure: the callable is the first operand
+                            res = crc->evalRuntimeNamedWithArgs(arg_list, xsink);
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallMethod) {
@@ -18131,7 +18249,7 @@ load_local_done:
                             SelfFunctionCallNode clone(*call, arg_list);
                             res = evalTmpCallAndRef(&clone, xsink);
                             used_operands = true;
-                        } else if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                        } else if (auto* call = qore_get_function_call_node(
                                 call_expr.getInternalNode())) {
                             // AOT can load parser-equivalent namespace function fallbacks
                             // from Class::name() syntax through CallStatic slots.
@@ -19067,7 +19185,7 @@ load_local_done:
         case QoreIROpcode::BackgroundInt: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 QoreValue res;
-                auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
+                auto* bg_inst = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst);
                 auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
                     expr_inst->expr.getInternalNode());
                 bool matched;

@@ -449,6 +449,9 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         // chains: A → B (via reexport) → C will reach C.
         reexport(old.reexport),
         parse_init_done(old.parse_init_done) {
+    // the copy uses the types of the source's members (issue #5790)
+    old.ref();
+    copy_source = const_cast<typed_hash_decl_private*>(&old);
     type_params = old.type_params;
     parameterized_base = old.parameterized_base;
     // a copy of a concrete declaration is counted as the destructor uncounts it (issue #5765)
@@ -1294,6 +1297,15 @@ TypedHashDecl::TypedHashDecl(typed_hash_decl_private* p) : priv(p) {
 TypedHashDecl::TypedHashDecl(const TypedHashDecl& old) : priv(new typed_hash_decl_private(*old.priv, this)) {
     assert(priv->typeInfo);
     assert(priv->orNothingTypeInfo);
+}
+
+__attribute__((noinline)) void typed_hash_decl_private::derefLast() {
+    assert(thd->priv == this);
+    // a hashdecl whose types are still named is retired, not freed (issue #5790)
+    if (qore_type_owner_released(&type_owner)) {
+        return;
+    }
+    delete thd;
 }
 
 TypedHashDecl::~TypedHashDecl() {

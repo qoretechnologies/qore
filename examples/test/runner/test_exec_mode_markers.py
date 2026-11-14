@@ -170,6 +170,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - AOTModuleDelClosure (#6015): its checks compile modules and scripts with qcc and run the interpreter and the
         #   compiled programs in child processes
         # - AOTNestedFind (#5974): its checks run the interpreter, qcc and the compiled programs in child processes
+        # - AOTNamedCallRefModules (M4 phase 3): its checks compile modules with qcc and run the interpreter and the
+        #   compiled programs in child processes
+        # - AOTRuntimeNamedCallReturnType: its checks run the interpreter, qcc and the compiled programs in child
+        #   processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
         # - nested-callable-types (#6022): its script runs in child processes that set their own --exec-mode, and
         #   compiled with qcc
@@ -182,13 +186,27 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   WebSocket client in the test's own process only drives it
         # - callref-object-method-program and reflection-typed-hash-visibility (#5692): their probes run in child
         #   processes that set their own --exec-mode
+        # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
+        #   their own --exec-mode
+        # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
+        #   in qcc executables
+        # - empty-string-order (#6090): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
+        #   processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
+                                 "examples/test/qore/classes/deleted-program-types.qtest",
+                                 "examples/test/qore/classes/method-reference-per-class.qtest",
+                                 "examples/test/qore/operators/empty-string-order.qtest",
+                                 "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
+                                 "examples/test/ir/AOTNamedCallRefModules.qtest",
+                                 "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest",

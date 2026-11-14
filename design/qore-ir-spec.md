@@ -102,9 +102,13 @@ Slot identity is significant:
 
 - Deferred handler IR inherits parent locals by IR slot ID.
 - AOT local tables preserve IR slot IDs so handler inheritance remains exact.
-- Native/JIT/AOT parents publish exact handler slot caches before executing
-  deferred handlers.
-- Dirty parent slots are written back after handler execution.
+- Before each deferred IR handler, the parent releases its duplicate caches of
+  runtime locals. A handler's assignment must release the value it replaces
+  immediately, including when a preceding handler wrote that value back into the
+  parent cache. IR-only locals are unreachable by handlers and keep their owners.
+- Dirty parent slots are written back after IR handler execution.
+- Native/JIT/AOT handlers access the runtime locals after the parent publishes
+  them and releases its own cached references; the parent reloads them afterward.
 
 Name-based lookup is not sufficient for handler execution because nested
 functions and native frames can have colliding local names.

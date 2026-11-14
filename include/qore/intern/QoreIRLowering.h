@@ -367,6 +367,14 @@ public:
     QoreIRValue lowerContainerLiteral(const QoreValue& expr, std::string& error);
     QoreIRValue lowerContainerElement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
+    //! Returns true if a value can be NOTHING although its parse type does not accept NOTHING: a read of an lvalue
+    //! that may have no value, or +, - or * of two such values (qore#5937)
+    DLLLOCAL bool valueMayBeNothingDespiteType(const QoreValue& value) const;
+
+    //! Returns true if the typed operation (given by its int opcode) of the operands does not give the result of the
+    //! AST interpreter when an operand has no value, so the generic operation must be used (qore#5937)
+    DLLLOCAL bool typedOpNeedsNothingFallback(QoreIROpcode int_op, const QoreValue& left,
+        const QoreValue& right) const;
     QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
     QoreIRValue lowerElements(const QoreValue& expr, std::string& error);
@@ -726,6 +734,10 @@ private:
         CF_NONE = 0,
         CF_SKIP_LVARS = 1,       //!< skip local var cleanup (for return - pre-instantiation handles it)
         CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break and return)
+        //! close the catch blocks left (CatchScope entries) in their place among the other cleanups: a catch block
+        //! is closed after its own blocks and before the blocks that enclose it, whose on_exit handlers then see
+        //! the exception of an enclosing catch block, as in the AST interpreter (qore#6017)
+        CF_CATCH_SCOPES = 4,
     };
 
     //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
@@ -880,7 +892,7 @@ private:
         //! non-local exit inside the handler body cannot re-enter the same
         //! handler range. Cleanup entries below that Scope still run.
         enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar,
-            ForeachElement, ForeachSource };
+            ForeachElement, ForeachSource, CatchScope };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
@@ -895,6 +907,15 @@ private:
         QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
         QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any
         size_t temp_scope_depth = 0;               //!< temp scopes open when the entry was pushed
+        //! the lowering state where the entry was pushed: the number of scope_stack entries, catch_cleanup_depth and
+        //! the number of try_catch_cleanup_depth_stack entries
+        /** The handlers of a Scope entry that a return, break or continue runs are lowered with this state: they
+            run after the exit has left the blocks, catch blocks and try statements inside the block, so code in them
+            must not count those (qore#6017)
+        */
+        size_t open_scopes = 0;
+        int open_catch_depth = 0;
+        size_t open_try_depth = 0;
         //! true for the Scope entry of a statement block with on_exit/on_success/on_error handlers
         bool block_scope = false;
         //! the exception target of the body of the block of a Scope entry with handlers (block_scope)
@@ -1023,6 +1044,11 @@ private:
     //! Depth of active catch scopes that need CatchCleanup on non-local exit
     int catch_cleanup_depth = 0;
 
+    //! the number of the scopes of blocks with handlers (handlerScopeCount()) where each active catch block was
+    //! entered, innermost last (one for each catch scope that catch_cleanup_depth counts); see
+    //! catchScopesClosedByThrow()
+    std::vector<size_t> catch_scope_depth_stack;
+
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
         leaves only the catch scopes entered since the try body began; the catch scopes that enclose the try statement
@@ -1044,6 +1070,45 @@ private:
     */
     int catchScopesLeftByThrow() const {
         return catch_cleanup_depth - (try_catch_cleanup_depth_stack.empty() ? 0 : try_catch_cleanup_depth_stack.back());
+    }
+
+    //! Returns the number of the catch scopes left by a throw or rethrow statement at the current point that it closes
+    //! before it raises the exception
+    /** These are the innermost of the catch scopes that the statement leaves (catchScopesLeftByThrow()) up to the
+        first one that a block with handlers separates from the statement: the catch block of the AST interpreter runs
+        its handlers, and those of the blocks in it, with its exception the current one (td->catchException), so that
+        a rethrow in them raises it again (#5968).  The catch scopes that a block with handlers separates from the
+        statement stay open, and the exception path of the outermost such block in each closes it after the block's
+        handlers ran and its locals were released (see lowerStatementBlock()).  A catch scope with no block with
+        handlers between it and the statement (only the scopes of reference foreach and context statements, if any)
+        has no code that can see its exception after the statement, and is closed before it, as before.
+    */
+    int catchScopesClosedByThrow() const {
+        int left = catchScopesLeftByThrow();
+        if (!left) {
+            return 0;
+        }
+        const size_t handler_scopes = handlerScopeCount();
+        int closed = 0;
+        while (closed < left && catch_scope_depth_stack[catch_cleanup_depth - 1 - closed] >= handler_scopes) {
+            ++closed;
+        }
+        return closed;
+    }
+
+    //! Returns the number of the open scopes of blocks with handlers (the Scope entries of cleanup_stack with
+    //! block_scope set)
+    /** The other scopes (those of try statements, reference foreach and context statements) run no code of the
+        program when an exception leaves them.
+    */
+    size_t handlerScopeCount() const {
+        size_t count = 0;
+        for (const BlockCleanupEntry& entry : cleanup_stack) {
+            if (entry.type == BlockCleanupEntry::Scope && entry.block_scope) {
+                ++count;
+            }
+        }
+        return count;
     }
 
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr

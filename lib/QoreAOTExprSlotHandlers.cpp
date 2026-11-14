@@ -378,7 +378,7 @@ static bool write_slot_PLUS(AOTExprSlotWriteCtx& ctx) {
 
 static bool write_slot_SQUARE_BRACKET(AOTExprSlotWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
-    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!op) {
         return false;
     }
@@ -802,7 +802,8 @@ static bool write_slot_CALLREF_CALL(AOTExprSlotWriteCtx& ctx) {
             return false;
         }
     }
-    return true;
+    // a named call has the names of its arguments after them (AOTExprKind::CALLREF_CALL_NAMED)
+    return !ctx.expr.arg_names || qore_aot_write_callref_arg_names(ctx.writer, *ctx.expr.arg_names);
 }
 
 static bool write_slot_LOG_NOT(AOTExprSlotWriteCtx& ctx) {

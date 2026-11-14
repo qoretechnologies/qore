@@ -608,8 +608,12 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
         own = i->second;
     }
     tidmap.clear();
+    foreign_tids.clear();
     if (own) {
         tidmap[tid] = own;
+        if (q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
     }
     thread_count = own;
     thread_waiting = 0;
@@ -2050,6 +2054,26 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     }
 }
 
+//! the Programs that are left allocated at the end of the process; never destroyed, so they stay reachable
+static std::set<QoreProgram*>* left_programs = nullptr;
+static std::mutex* left_programs_lock = new std::mutex;
+
+void qore_program_private::leaveAllocated() {
+    std::lock_guard<std::mutex> al(*left_programs_lock);
+    if (!left_programs) {
+        left_programs = new std::set<QoreProgram*>;
+    }
+    // the reference is taken once per Program
+    if (left_programs->insert(pgm).second) {
+        depRef();
+    }
+}
+
+bool qore_program_private::hasLeftPrograms() {
+    std::lock_guard<std::mutex> al(*left_programs_lock);
+    return left_programs && !left_programs->empty();
+}
+
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // the code of the Program's classes that runs while it is deleted (its exit hooks, the cleanup callback and the
     // destructors run when its data is deleted) runs in it although its last reference may have been released (see
@@ -2077,13 +2101,24 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // we only clear the internal data structures once
     bool clr = false;
     bool need_cleanup = false;
+    bool leave = false;
     {
         ReferenceHolder<QoreListNode> l(xsink);
         {
             AutoLocker al(plock);
             // wait for all threads to terminate
             waitForAllThreadsToTerminateIntern();
-            if (!ptid) {
+            // a foreign thread that runs in the Program at the end of the process is not waited for, and the data
+            // that it uses is not destroyed (see leaveForeignThreads())
+            leave = qore_shutdown.load(std::memory_order_acquire) && !ptid
+                && (getOtherForeignThreadCountIntern() > 0 || leaveForeignThreadsInModuleCode());
+            if (leave) {
+                // the Program is kept allocated for the thread
+                leaveAllocated();
+            } else if (!ptid) {
+                // no foreign thread can enter the Program from now on (see canEnterIntern()): the decision above is
+                // final, and is made before any of the Program's data is destroyed
+                foreign_teardown_tid = qore_shutdown.load(std::memory_order_acquire) ? q_gettid() : 0;
                 if (!ns_const) {
                     l = new QoreListNode(autoTypeInfo);
                     qore_root_ns_private::clearConstants(*RootNS, **l);
@@ -2092,6 +2127,12 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
                 need_cleanup = true;
             }
         }
+    }
+
+    if (leave) {
+        printd(5, "qore_program_private::waitForTerminationAndClear() leaving pgm: %p: a foreign thread runs in it\n",
+            pgm);
+        return;
     }
 
     // Call the cleanup callback OUTSIDE plock and BEFORE ptid is set.
@@ -3231,10 +3272,22 @@ void qore_program_private::del(ExceptionSink* xsink) {
     }
     extmap.clear();
 
-    // the Program object released the Program after it had stopped reporting its code (clearScanHolder())
+    // the Program object released the Program after it had stopped reporting its code (clearScanHolder()), unless the
+    // data of the Program is deleted while the object still holds it (a Program cleared at the end of the process by
+    // qore_cleanup(), see clearRemainingPrograms(), while its owner holds the object): the object reports only the
+    // thread initialization code and the thread entry handlers, which are released below, so it stops reporting first;
+    // its later release of the Program finds nothing to clear
+    clearScanHolder();
     assert(!scan_holder);
-    if (thr_init) {
-        thr_init->deref(xsink);
+    ResolvedCallReferenceNode* old_thr_init;
+    {
+        // the object that survives can still set or get the code (Program::setThreadInit())
+        AutoLocker al(tlock);
+        old_thr_init = thr_init;
+        thr_init = nullptr;
+    }
+    if (old_thr_init) {
+        old_thr_init->deref(xsink);
     }
 
     // a Program that never ran waitForTerminationAndClear() can still have handlers
@@ -3271,16 +3324,22 @@ void qore_program_private::del(ExceptionSink* xsink) {
     // behind the entire global compile queue.
     QoreJIT::instance().waitForBgCompileQueue(pgm);
 
-    // delete the namespace and all data
-    qore_root_ns_private::get(*RootNS)->deleteData(xsink);
+    {
+        // the declarations of the namespace that survive it (referenced by values or by other Programs) keep the
+        // declarations whose types they name, and the others are destroyed together (issue #5790)
+        QoreTypeOwnerBatch type_owner_batch(*qore_root_ns_private::get(*RootNS));
 
-    // no more code of this Program runs: free the thread-local data of the family for the last time if this
-    // Program is its root, including the data that the destructors run above have saved; the members of the family
-    // that are still alive become roots of families of their own
-    freeFamilyThreadData(true, xsink);
+        // delete the namespace and all data
+        qore_root_ns_private::get(*RootNS)->deleteData(xsink);
 
-    delete RootNS;
-    RootNS = nullptr;
+        // no more code of this Program runs: free the thread-local data of the family for the last time if this
+        // Program is its root, including the data that the destructors run above have saved; the members of the
+        // family that are still alive become roots of families of their own
+        freeFamilyThreadData(true, xsink);
+
+        delete RootNS;
+        RootNS = nullptr;
+    }
 
     // delete all root code
     // method call can be repeated
@@ -4179,15 +4238,35 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
     QoreStringNode* desc = new QoreStringNode;
     if (set) {
         describeModernSetConflict(pwo.parse_options, po, conflict, "used", *desc);
-        desc->concat(isModern(pwo.parse_options)
-            ? "; remove the directive, or parse the code without %modern (as a .q file, or after %old-style)"
-            : "; remove the option, or parse the code without %modern");
+        // %modern is complete only with the restrictions that a module parse option mask added to the Program of the
+        // module: the error names them, as the user did not write %modern (issue #5682)
+        QoreParseOptions all = pwo.parse_options | po;
+        if (module_mask_added && isModern(all) && !isModern(all & ~module_mask_added)) {
+            desc->concat("; %modern is complete only with ");
+            describeParseOptions(module_mask_added, *desc);
+            desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
+                "load_module_masked())");
+            desc->concat("; remove the option, or load the module with a mask that does not add them");
+        } else {
+            desc->concat(isModern(pwo.parse_options)
+                ? "; remove the directive, or parse the code without %modern (as a .q file, or after %old-style)"
+                : "; remove the option, or parse the code without %modern");
+        }
     } else {
         // %no-negative-offsets is the only directive that disables an option that %modern implies
         desc->concat("%no-negative-offsets cannot be used while %modern is in effect, which implies ");
         describeParseOptions(conflict, *desc);
-        desc->concat(" and guarantees a consistent set of parse options; remove the directive, or parse the code "
-            "without %modern (as a .q file, or after %old-style)");
+        desc->concat(" and guarantees a consistent set of parse options");
+        // %modern is complete only with the restrictions that a module parse option mask added (see above)
+        if (module_mask_added && isModern(pwo.parse_options) && !isModern(pwo.parse_options & ~module_mask_added)) {
+            desc->concat("; %modern is complete only with ");
+            describeParseOptions(module_mask_added, *desc);
+            desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
+                "load_module_masked()); remove the directive, or load the module with a mask that does not add them");
+        } else {
+            desc->concat("; remove the directive, or parse the code without %modern (as a .q file, or after "
+                "%old-style)");
+        }
     }
     qore_program_private::makeParseException(pgm, *loc, "PARSE-OPTION-ERROR", desc);
     return -1;
@@ -5331,7 +5410,7 @@ private:
             addArgs(call->getParseArgs(), call->getArgs());
             // a function whose variant is chosen at runtime is stepped into only if it has user code
             if (!call->getVariant()) {
-                auto* fc = dynamic_cast<const FunctionCallNode*>(call);
+                auto* fc = qore_get_function_call_node(call);
                 const QoreFunction* f = fc ? fc->getFunction() : nullptr;
                 if (f && !f->hasUser()) {
                     return;

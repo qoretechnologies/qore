@@ -284,6 +284,17 @@ struct QoreAOTNamedCallArgs {
 };
 
 class FunctionCallBase;
+class QoreAOTBinaryWriter;
+class QoreAOTBinaryReader;
+
+//! writes the names of the arguments of a named call reference call (AOTExprKind::CALLREF_CALL_NAMED): u8 count, then
+//! a string ref per name; returns false if there are more than 255
+DLLLOCAL bool qore_aot_write_callref_arg_names(QoreAOTBinaryWriter& writer, const name_vec_t& names);
+
+//! reads the names written by qore_aot_write_callref_arg_names(); returns the interned names, or nullptr with \a error
+//! set if the data is truncated
+DLLLOCAL const name_vec_t* qore_aot_read_callref_arg_names(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, std::string& error);
 
 //! returns the serialized binding of the arguments of a named call ("" for any other call)
 /** @param with_map true to include the parameter positions of a call bound at parse time (an expression tree, whose
@@ -870,6 +881,20 @@ DLLLOCAL std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo 
     text, with the default values of the parameters) can have newlines (qore#6026)
 */
 DLLLOCAL const char* qore_aot_find_class_ref_end(const char* ref);
+
+//! finds the method of a class that an AOT image names, whatever its access
+/** The compiler checked the access when it resolved the method: an image is loaded without the class context of the
+    code that calls it, in which QoreClass::findMethod() and QoreClass::findStaticMethod() do not find a
+    private:internal method of the class, such as one that a closure in a method of a final class calls through self,
+    which the compiler resolves itself (qore#5975); the class's own context finds it, a normal method before a static
+    one
+
+    @param qc the class
+    @param method_name the name of the method
+
+    @return the method, or nullptr if the class has none of that name
+*/
+DLLLOCAL const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const char* method_name);
 
 //! Resolves a class reference emitted by qore_aot_encode_class_ref().
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,

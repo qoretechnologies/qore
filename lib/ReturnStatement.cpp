@@ -43,7 +43,7 @@ static bool qore_return_expr_is_deferred_static_method_call(const QoreValue& exp
         return !call->getMethod() && !call->getClassPath().empty();
     }
 
-    const FunctionCallNode* call = dynamic_cast<const FunctionCallNode*>(exp.getInternalNode());
+    const FunctionCallNode* call = qore_get_function_call_node(exp.getInternalNode());
     if (!call || strcmp(call->getName(), "call_static_method")) {
         return false;
     }
@@ -159,6 +159,13 @@ int ReturnStatement::parseInitImpl(QoreParseContext& parse_context) {
     const QoreTypeInfo* returnTypeInfo = parse_get_return_type_info();
 
     //printd(5, "ReturnStatement::parseInitImpl() arg=%s rt=%s\n", argTypeInfo->getTypeName(), returnTypeInfo->getTypeName());
+
+    // a local variable that cannot have been assigned gives NOTHING (qore#5937)
+    if (!QoreTypeInfo::isType(returnTypeInfo, NT_NOTHING)
+            && qore_parse_check_unassigned_read(parse_context.pgm, loc, exp, returnTypeInfo, "the return value")
+            && !err) {
+        err = -1;
+    }
 
     // check return type and throw a parse exception or warning
     if (!QoreTypeInfo::parseAccepts(returnTypeInfo, argTypeInfo)) {

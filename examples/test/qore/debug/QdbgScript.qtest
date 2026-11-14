@@ -1039,7 +1039,10 @@ public class QdbgScriptTest inherits QUnit::Test {
     # an exception that matches a common pitfall is shown with a hint, and a variable that was declared but not
     # assigned is shown as such
     trapHintTest() {
-        hash<auto> res = runQdbg("%modern\nsub f() {\n    *int src;\n    int count = src;\n    printf(\"%d\\n\", count);\n}\nf();\n", (
+        # the unassigned value is deliberate: its run-time handling is tested; "sub f() { *int src;" is on one line
+        # so that the read stays on line 4
+        hash<auto> res = runQdbg("%modern\n%no-strict-parse-errors\nsub f() { *int src;\n    int count = src;\n"
+            "    printf(\"%d\\n\", count);\n}\nf();\n", (
             "exception filter uncaught",
             "go run",
             "thread local count",
@@ -1117,7 +1120,9 @@ public class QdbgScriptTest inherits QUnit::Test {
 
     # the stop at an exception gives the hint of a common pitfall
     jsonExceptionTest() {
-        hash<auto> res = runQdbg("%modern\nsub f() {\n    *int src;\n    int count = src;\n}\nf();\n", (
+        # the unassigned value is deliberate: its run-time handling is tested
+        hash<auto> res = runQdbg("%modern\n%no-strict-parse-errors\nsub f() {\n    *int src;\n    int count = src;\n}\n"
+            "f();\n", (
             "exception filter uncaught",
             "go",
             "go",

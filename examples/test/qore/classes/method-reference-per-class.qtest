@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT native code and qcc AOT code generation of method call references
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class MethodReferencePerClassTest
+
+#! A method call reference resolves the method for the class of each object in every mode (qore#6062)
+/** A reference expression \o.m() whose object expression has no class type resolved the method with the class of the
+    first object that it was evaluated with and kept it; for an object of another class it made a reference by name,
+    which reached the class's methodGate() method or raised METHOD-DOES-NOT-EXIST when it was called, so the result
+    depended on the objects that the expression had been evaluated with before (AOT code resolved the method for each
+    object).  The method kept could also belong to a class of a Program that had been deleted since.  The probes
+    (method-reference-per-class/probes.q) run in each execution mode in a child process, with tiered execution at the
+    IR tier and promoted to native code, and as qcc-compiled executables (-O0, -O3).
+*/
+class MethodReferencePerClassTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Line = "HasFoo::foo,OtherFoo::foo,OBJECT-METHOD-REFERENCE-ERROR,OBJECT-METHOD-REFERENCE-ERROR; "
+            "OBJECT-METHOD-REFERENCE-ERROR,OBJECT-METHOD-REFERENCE-ERROR,HasFoo::foo,OtherFoo::foo; "
+            "OtherFoo::foo,HasFoo::foo,HasFoo::foo,OverFoo::foo,StaticFoo::foo,HasFoo::foo,OtherFoo::foo,"
+            "StaticFoo::foo; "
+            "HasFoo::foo,OverFoo::foo,HasFoo::foo,ILLEGAL-CALL-REFERENCE,OverFoo::foo; "
+            "ILLEGAL-CALL-REFERENCE,HasFoo::foo,ILLEGAL-CALL-REFERENCE; "
+            "PrivFoo::foo,HasFoo::foo,PrivFoo::foo; "
+            "20/20";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("MethodReferencePerClass", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        for (int i = 0; i < 8; ++i) {
+            expected += sprintf("%d: %s\n", i, Line);
+        }
+
+        addTestCase("method references resolve the method for each object's class in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-method-reference-per-class-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "method-reference-per-class" + DirSep
+            + "probes.q") + "\nfor (int i = 0; i < 8; ++i) {\n    printf(\"%d: %s\\n\", i, probes());\n}\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+            assertEq(expected, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+        }
+    }
+}

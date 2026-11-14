@@ -271,6 +271,45 @@ class ProbeHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! The code that a DeferringHttpServer was given to run on its handler pool
+class DeferredTasks {
+    private {
+        Mutex m();
+        list<code<nothing()>> tasks;
+    }
+
+    add(code<nothing()> c) {
+        AutoLock al(m);
+        push tasks, c;
+    }
+
+    #! Returns the code given so far and forgets it
+    list<code<nothing()>> take() {
+        AutoLock al(m);
+        list<code<nothing()>> rv = tasks;
+        tasks = ();
+        return rv;
+    }
+}
+
+#! A server that keeps the code that it would run on its handler pool, for the test to run when it chooses
+class DeferringHttpServer inherits HttpServer {
+    private {
+        DeferredTasks tasks;
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts, DeferredTasks tasks) : HttpServer(opts) {
+        self.tasks = tasks;
+    }
+
+    private code<nothing(code<nothing()>)> getHandlerPoolSubmitter() {
+        DeferredTasks t = tasks;
+        return sub (code<nothing()> c) {
+            t.add(c);
+        };
+    }
+}
+
 #! A client stream
 class Client {
     public {
@@ -345,6 +384,12 @@ class SseEventSourcePoolTest inherits QUnit::Test {
         addTestCase("h1: a source of its own pushes its events and closes its stream, and is stopped once",
             \testCustomSource());
         addTestCase("h1: a source whose start fails closes its stream and is stopped", \testCustomSourceStartError());
+        # the stop that the end of a stream submits to the handler pool can run after everything else that refers to
+        # the source's run has released it
+        addTestCase("h1: a source that closes its stream is stopped when its stop runs after the server has stopped",
+            \testStopAfterServerStop(), "/custom");
+        addTestCase("h1: a source whose start fails is stopped when its stop runs after the server has stopped",
+            \testStopAfterServerStop(), "/custom/throw");
         addTestCase("h1: an sse_source that is not an AbstractSseEventSource is an error", \testBadSourceType());
         addTestCase("h1: a source on a response that is not a stream is stopped at once", \testSourceNotUsed());
         addTestCase("h1: a source on a response with an invalid code is stopped", \testSourceInvalidCode());
@@ -366,13 +411,14 @@ class SseEventSourcePoolTest inherits QUnit::Test {
     /** The streams use a listener of their own (an HTTP/1.1 listener for h1, a TLS listener for h2 and h3), and
         ordinary requests the HTTP/1.1 listener; the case is skipped if no TLS listener can be created
     */
-    private ServerCtx startServer(string proto) {
+    private ServerCtx startServer(string proto, *DeferredTasks deferred) {
         ServerCtx ctx();
-        ctx.server = new HttpServer(<HttpServerOptionInfo>{
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
             "max_handler_threads": PoolThreads,
-        });
+        };
+        ctx.server = deferred ? new DeferringHttpServer(opts, deferred) : new HttpServer(opts);
         ctx.server.setHandler("plain", "/plain", NOTHING, new PlainSseHandler(ctx.sh));
         ctx.server.setHandler("socket", "/socket", NOTHING, new SocketSseHandler(ctx.sh));
         ctx.server.setHandler("probe", "/probe", NOTHING, new ProbeHandler());
@@ -648,6 +694,26 @@ class SseEventSourcePoolTest inherits QUnit::Test {
         assertEq("", resp.body ?? "", "the stream ended without events");
         assertEq(0, ctx.custom.last.stopped.waitForZero(HangTimeout), "the source was stopped");
         probe(ctx, "an ordinary request after a source failed to start");
+    }
+
+    #! The stop of a source that the end of its stream submits to the handler pool runs after the server has stopped
+    /** Once the server has stopped, the request, the stream and the handler pool have released everything that
+        refers to the source's run, so only the submitted code can keep the run until the source has been stopped
+    */
+    testStopAfterServerStop(string path) {
+        DeferredTasks deferred();
+        ServerCtx ctx = startServer("h1", deferred);
+        on_exit delete ctx.server;
+        hash<auto> resp = rawRequest(ctx, "GET", path);
+        assertEq(200, resp.status_code);
+        TestSource src = ctx.custom.last;
+        delete ctx.server;
+        list<code<nothing()>> stops = deferred.take();
+        assertEq(1, stops.size(), "the end of the stream submitted the stop once");
+        assertEq(1, src.stopped.getCount(), "the source was not stopped before its stop ran");
+        map $1(), stops;
+        assertEq(0, src.stopped.getCount(), "the source was stopped");
+        assertEq(1, src.getStopCalls(), "the source was stopped once");
     }
 
     testBadSourceType() {

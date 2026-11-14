@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
 
@@ -214,7 +215,14 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             const qore_class_private* qc = parse_get_class_priv();
             needs_type_context = parse_get_signature_type_param_context() || (qc && qc->hasTypeParams());
         }
-        err = uf->parseInitClosure();
+        {
+            // the closure runs when it is called: any number of times, including none, and after the code parsed after
+            // it, so its code is a deferred scope whose assignments and deletions of the variables it captures may
+            // have run after its creation (qore#5937)
+            ParseDeferredScopeHelper deferred_scope;
+            ParseLoopAssignedStateHelper loop_assigned_state;
+            err = uf->parseInitClosure();
+        }
         uf->parseCommit();
         if (uf->defaultsNeedObject()) {
             defaults_need_object = true;
@@ -285,6 +293,19 @@ QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QorePr
     }
     assert(uf);
     return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink);
+}
+
+QoreValue QoreClosureParseNode::execNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, const name_vec_t& arg_names, QoreObject* self, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    // a deferred closure is initialized as for a call with positional arguments (see exec())
+    if (is_deferred && const_cast<QoreClosureParseNode*>(this)->parseInitDeferred()) {
+        xsink->raiseException("CLOSURE-INITIALIZATION-ERROR", "the closure used in this constant expression could "
+            "not be initialized");
+        return QoreValue();
+    }
+    assert(uf);
+    return uf->evalClosureNamed(closure_base, pgm, args, arg_names, self, class_ctx, xsink);
 }
 
 QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) const {

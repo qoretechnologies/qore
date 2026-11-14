@@ -651,6 +651,25 @@ Base* qore_make_function_call(LexicalSemanticPolicy policy, Args&&... args) {
 DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
         const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant);
 
+//! Returns the node as a FunctionCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const FunctionCallNode*>(), from the node type: a FunctionCallNode has
+    NT_FUNCTION_CALL and ProgramFunctionCallNode NT_PROGRAM_FUNC_CALL; its other subclasses keep the type of their
+    base class (the lexical variants made by qore_make_function_call()) or of the call they copy
+    (RuntimeNamedFunctionCallNode), and no other class has either type.  A dynamic_cast searches the class hierarchy
+    with string comparisons of the type names, which is too slow for the interpreter's per-call paths.
+*/
+DLLLOCAL inline const FunctionCallNode* qore_get_function_call_node(const AbstractQoreNode* n) {
+    if (!n) {
+        return nullptr;
+    }
+    qore_type_t t = n->getType();
+    const FunctionCallNode* rv = (t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL)
+        ? static_cast<const FunctionCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const FunctionCallNode*>(n));
+    return rv;
+}
+
 class AbstractMethodCallNode : public AbstractFunctionCallNode {
 protected:
     // if a method pointer can be resolved at parse time, then the class
@@ -983,6 +1002,18 @@ protected:
 class SetSelfFunctionCallNode : public SelfFunctionCallNode {
 public:
     DLLLOCAL SetSelfFunctionCallNode(const SelfFunctionCallNode& old, QoreListNode* n_args);
+
+    //! copies a background copy of a self call, with the object and the class of the copied call
+    /** A background expression nested in a background expression copies the copies that the outer one made, in the
+        thread of the outer one, which has no object of its own: the object of the starting code is the one that the
+        copied call holds (qore#5971)
+    */
+    DLLLOCAL SetSelfFunctionCallNode(const SetSelfFunctionCallNode& old, QoreListNode* n_args);
+
+    //! returns the object of the starting code that the copy holds
+    DLLLOCAL QoreObject* getSelf() const {
+        return self;
+    }
 
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;

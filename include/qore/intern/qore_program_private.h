@@ -500,6 +500,8 @@ public:
     // for the thread counter, used only with plock
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
+    std::set<int> foreign_tids;  // the tids in tidmap of foreign threads
+    int foreign_teardown_tid = 0; // the TID of the thread whose teardown at the end of the process refuses other foreign threads; under plock
     unsigned thread_count = 0;   // number of threads currently running in this Program
     // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
     bool cancel_new_threads = false;
@@ -974,6 +976,10 @@ public:
         attachAOTEntryStatementBlock())
     */
     QoreParseOptions aot_inherited_po;
+    //! the restrictions that a module parse option mask added to the parse options of the Program of a user module
+    //! when it was created (see set_module_parse_option_mask() and load_module_masked()), named in the error of a
+    //! directive that conflicts with the %modern that they complete (issue #5682)
+    QoreParseOptions module_mask_added;
 
     std::string exec_class_name, script_dir, script_path, script_name, include_path;
 
@@ -1309,6 +1315,12 @@ public:
         if (isModern(pwo.parse_options)) {
             assert(!(pwo.parse_options & modernIncompatibleOptions()));
             pwo.parse_options |= modernImpliedOptions();
+        }
+        // %modern sets %strict-parse-errors, which %no-strict-parse-errors disables also with %modern
+        if (pwo.parse_options & QoreParseOptions::NO_STRICT_PARSE_ERRORS) {
+            pwo.parse_options &= ~QoreParseOptions::STRICT_PARSE_ERRORS;
+        } else if (isModern(pwo.parse_options)) {
+            pwo.parse_options |= QoreParseOptions::STRICT_PARSE_ERRORS;
         }
     }
 
@@ -2005,6 +2017,11 @@ public:
         if (!canEnterIntern(tid)) {
             return false;
         }
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         ++tidmap[tid];
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
         if (!thread_count++) {
@@ -2019,7 +2036,20 @@ public:
         the Program, as those of the destructors run while it is in the Program (see enterWithoutContext()), must not
         fail while the Program's data is valid.  After the teardown (ptid is -1), no thread can enter it.
     */
+    DLLLOCAL bool foreignEntryRefusedIntern(int tid) const {
+        return foreign_teardown_tid && tid != foreign_teardown_tid && ptid != tid && tid == q_gettid()
+            && q_thread_is_foreign() && tidmap.find(tid) == tidmap.end();
+    }
+
+    //! see canEnterIntern()
     DLLLOCAL bool canEnterIntern(int tid) const {
+        // once the teardown has found no foreign thread in the Program at the end of the process (foreign_teardown), none
+        // can enter it: it is not waited for, and the data that it would use is destroyed meanwhile
+        // (the thread that performs the teardown, which can be a foreign thread itself, and the threads already in the
+        // Program are not refused)
+        if (foreignEntryRefusedIntern(tid)) {
+            return false;
+        }
         return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
     }
 
@@ -2137,10 +2167,16 @@ public:
         // declared before the lock, so that a transition is published after it is released
         ProgramThreadActivityPublisher activity;
         AutoLocker al(plock);
-        if (ptid) {
+        // a foreign thread is refused once the teardown at the end of the process has begun, as by canEnterIntern()
+        if (ptid || foreignEntryRefusedIntern(tid)) {
             xsink->raiseException("PROGRAM-ERROR", "the Program has already been deleted; its code cannot be "
                 "inherited");
             return -1;
+        }
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
         }
         ++tidmap[tid];
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
@@ -2174,6 +2210,11 @@ public:
                 "be accessed at runtime");
         }
 
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         ++tidmap[tid];
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2199,6 +2240,11 @@ public:
                 "cannot be accessed at runtime");
         }
 
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         ++tidmap[tid];
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2225,6 +2271,7 @@ public:
         assert(i != tidmap.end());
         if (!--i->second) {
             tidmap.erase(i);
+            foreign_tids.erase(tid);
             // a thread that still holds the parse lock releases its deferred references when it releases the lock
             if (parse_tid != tid) {
                 derefs = takeDeferredDerefs(tid, clear);
@@ -2293,6 +2340,62 @@ public:
         // grab program-level lock
         AutoLocker al(plock);
         return thread_count;
+    }
+
+    //! Returns the number of threads other than the calling thread that are foreign threads running in this Program
+    /** A foreign thread is a thread of another runtime (a daemon thread of the Python module, for example) registered
+        with q_register_foreign_thread(); called with plock held
+    */
+    DLLLOCAL unsigned getOtherForeignThreadCountIntern() const {
+        int tid = q_gettid();
+        unsigned count = 0;
+        for (int ftid : foreign_tids) {
+            if (ftid != tid) {
+                ptid_map_t::const_iterator i = tidmap.find(ftid);
+                if (i != tidmap.end()) {
+                    count += i->second;
+                }
+            }
+        }
+        return count;
+    }
+
+    //! Returns true if the Program of a module is left because a foreign thread runs in module code
+    /** A foreign thread that runs in module code is not counted in the Program of its module (the entries into the
+        Programs of the modules are counted by the thread, see qore_module_uncounted_entry()), so every Program of a
+        module is left; see leaveForeignThreads()
+    */
+    DLLLOCAL bool leaveForeignThreadsInModuleCode() const {
+        return qore_foreign_threads_in_module_code.load(std::memory_order_acquire)
+            && pwo.parse_options.hasAny(QoreParseOptions(PO_IN_MODULE));
+    }
+
+    //! keeps the Program allocated, and reachable by the library, for the rest of the process (see leaveForeignThreads())
+    /** The Program is not freed, so that a foreign thread that runs in it never finds it destroyed; it is held by a list
+        that lives as long as the process, so a leak checker finds it still reachable, not lost.  Called with plock held
+    */
+    DLLLOCAL void leaveAllocated();
+
+    //! Returns true if a Program has been left allocated (see leaveAllocated())
+    DLLLOCAL static bool hasLeftPrograms();
+
+    //! Returns true if the Program is left as it is because a foreign thread still runs in it
+    /** Once qore_cleanup() has waited for the threads of the library (qore_shutdown is set), a foreign thread can be
+        blocked in Qore code for as long as the process lives (a daemon thread of the Python module in Queue::get(),
+        for example): the deletion of the Program (see waitForTerminationAndClear()) does not wait for it, as that would
+        hang the end of the process (every python3 process with a blocked daemon thread, qore#6045), and the data that
+        the thread uses is not destroyed under it, so the Program is left as it is until the process ends.  The other
+        threads are waited for as before
+    */
+    DLLLOCAL bool leaveForeignThreads() {
+        if (!qore_shutdown.load(std::memory_order_acquire)) {
+            return false;
+        }
+        if (leaveForeignThreadsInModuleCode()) {
+            return true;
+        }
+        AutoLocker al(plock);
+        return getOtherForeignThreadCountIntern() > 0;
     }
 
     //! Claims parse ownership, which serializes namespace writers for this Program
@@ -2382,7 +2485,9 @@ public:
         unsigned adj = (i != tidmap.end() ? i->second : 0);
 
         // a batch JIT compile that reads the Program's code holds it as well (see tryHoldForCompile())
-        while ((thread_count - adj) || parse_count || compile_holds) {
+        // the foreign threads that remain at the end of the process are not waited for (see leaveForeignThreads())
+        while ((thread_count - adj - (qore_shutdown.load(std::memory_order_acquire)
+            ? getOtherForeignThreadCountIntern() : 0)) || parse_count || compile_holds) {
             ++thread_waiting;
 #ifdef DEBUG
             if (compile_holds) {
@@ -4790,6 +4895,17 @@ public:
 
     DLLLOCAL static void setAOTInheritedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         pgm.priv->aot_inherited_po = po;
+    }
+
+    //! Records the restrictions that a module parse option mask added to the parse options of a module's Program
+    DLLLOCAL static void setModuleMaskAddedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
+        pgm.priv->module_mask_added = po;
+    }
+
+    //! Returns the restrictions that a module parse option mask added to the parse options of a module's Program
+    //! while its code is parsed (none otherwise)
+    DLLLOCAL static QoreParseOptions getModuleMaskAddedParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->module_mask_added;
     }
 
     //! Records the functional domains that a user module declares in its module header (\c domains)

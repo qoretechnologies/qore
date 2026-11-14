@@ -212,6 +212,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_load_local_raw", reinterpret_cast<void*>(&qore_rt_load_local_raw) },
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
+    { "qore_rt_strip_any_param", reinterpret_cast<void*>(&qore_rt_strip_any_param) },
     { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
     { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
     { "qore_rt_element_local_replace", reinterpret_cast<void*>(&qore_rt_element_local_replace) },
@@ -751,17 +752,17 @@ static size_t qore_short_string_utf8_length(QoreValue v);
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
-// Empty strings sort at end (both "" vs "x" and "x" vs "" return 1)
+// An empty string is less than any other string (qore#6090)
 static inline int fast_string_compare(const QoreStringNode* ls, const QoreStringNode* rs) {
     size_t llen = ls->size();
     size_t rlen = rs->size();
 
-    // Handle empty strings - empty sorts at end (returns 1 if either is empty but not both)
+    // empty strings are equal whatever their encodings, and less than any other string
     if (!llen) {
-        return rlen ? 1 : 0;
+        return rlen ? -1 : 0;
     }
     if (!rlen) {
-        return 1;  // right is empty, left is not -> left > right (empty at end)
+        return 1;
     }
 
     // Compare bytes
@@ -2199,6 +2200,20 @@ extern "C" DLLEXPORT void qore_rt_strip_complex_type(uint64_t value) {
             qore_list_private::get(*l)->complexTypeInfo = nullptr;
         }
     }
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_strip_any_param(uint64_t value) {
+    QoreValue val = fromBits(value);
+    if (!QoreTypeInfo::mayRequireFilter(anyTypeInfo, val)) {
+        return value;
+    }
+    // copies a shared container with a plain type, as QoreTypeInfo::acceptInputParam() does for an `any` parameter
+    ExceptionSink xsink;
+    QoreTypeInfo::acceptInputParam(anyTypeInfo, 0, nullptr, val, &xsink);
+    // stripping a plain list or hash raises nothing
+    assert(!xsink);
+    xsink.clear();
+    return toBits(val);
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
@@ -3929,7 +3944,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     QoreValue expr = fromBits(ctx->exprs[idx]);
     if (expr.hasNode()) {
-        if (auto* node = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode())) {
+        if (auto* node = qore_get_runtime_constant_ref_node(expr.getInternalNode())) {
             return qore_rt_load_constant(node, xsink);
         }
     }
@@ -11314,7 +11329,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     // Phase 5: Fast-call detection for builtins
     // Skip QoreListNode allocation for builtins with fast-call variants; only for a call of the Qore builtin, never of
     // a user or module function with the same name, and each fast path returns what the builtin returns
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
+    if (auto* call = qore_get_function_call_node(expr.getInternalNode())) {
         // a named call resolved by parameter name binds its arguments by name; the fast paths take them by position
         const char* fname = qore_rt_is_qore_builtin_function(call->getFunctionEntry()) && !call->getRuntimeArgNames()
             ? call->getName() : nullptr;
@@ -11392,7 +11407,7 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
     bool used_operands = false;
     QoreValue result;
 
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
+    if (auto* call = qore_get_function_call_node(expr.getInternalNode())) {
         QoreValue call_expr(call->copyWithArgs(arg_list.release()));
         ValueHolder call_holder(call_expr, nullptr);
         bool needs_deref = true;
@@ -11418,6 +11433,11 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
         if (!needs_deref && result.needsRef()) {
             result = result.refSelf();
         }
+        used_operands = true;
+    } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(expr.getInternalNode());
+            call && call->getRuntimeArgNames()) {
+        // a named call through a call reference or closure: the callable is the first argument
+        result = call->evalRuntimeNamedWithArgs(arg_list.release(), xsink);
         used_operands = true;
     } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(expr.getInternalNode())) {
         const ParseNode* parse_node = dynamic_cast<const ParseNode*>(expr.getInternalNode());
@@ -12811,6 +12831,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     if (!use_direct_params) {
         // Standard path: uninstantiate params from TLS
@@ -13019,6 +13043,10 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
     if (!use_direct_params) {
         // Standard path: uninstantiate params from TLS
         for (int i = (int)num_params - 1; i >= 0; --i) {
@@ -13236,6 +13264,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     // Uninstantiate parameter locals in reverse order
     for (int i = (int)num_params - 1; i >= 0; --i) {
@@ -13363,6 +13395,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
     for (int i = (int)num_params - 1; i >= 0; --i) {
         sig->lv[i]->uninstantiate(xsink);
     }
@@ -13714,12 +13750,19 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         if (selfid_instantiated) {
             selfid->uninstantiateSelf();
         }
+        // the release of a consumed argument raised an exception after the call gave its value, which is
+        // released then, as the AST interpreter releases it (#6051)
+        val.discard(xsink);
         return toBits(QoreValue());
     }
 
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     if (!use_direct_params) {
         // Standard path: uninstantiate params from TLS
@@ -15209,7 +15252,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int
             bool needs_deref = true;
             return toBits(expr.eval(needs_deref, xsink));
         }
-        if (auto* fcn = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
+        if (auto* fcn = qore_get_function_call_node(expr.getInternalNode())) {
             const char* name = fcn->getName();
             if (name && !strcmp(name, "create_object")) {
                 bool needs_deref = true;
@@ -17752,6 +17795,11 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         if (sig->argvid) {
             sig->argvid->uninstantiate(xsink);
         }
+        // with an exception pending, the value of the return is released after $argv and before the parameters, which
+        // hold the only references to the arguments that the call consumed, as the AST interpreter releases it before
+        // the caller releases its arguments (#6039); the release below covers an exception raised by the release of a
+        // parameter
+        val = qore_release_value_with_exception(val, xsink);
         for (int i = (int)num_params - 1; i >= 0; --i) {
             sig->lv[i]->uninstantiate(xsink);
         }
@@ -18309,12 +18357,16 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    result_bits = toBits(qore_release_value_with_exception(fromBits(result_bits), xsink));
     for (int i = (int)num_params - 1; i >= 0; --i) {
         sig->lv[i]->uninstantiate(xsink);
     }
 
     // No return type coercion — self-recursive, same return type
-    return result_bits;
+    return toBits(qore_release_value_with_exception(fromBits(result_bits), xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr self_fn,
@@ -19530,6 +19582,9 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         if (selfid_instantiated) {
             selfid->uninstantiateSelf();
         }
+        // the release of a consumed argument raised an exception after the call gave its value, which is
+        // released then, as the AST interpreter releases it (#6051)
+        val.discard(xsink);
         result = toBits(QoreValue());
         return true;
     }
@@ -19537,6 +19592,10 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     if (!use_direct_params) {
         // Standard path: uninstantiate params from TLS
@@ -21013,6 +21072,10 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     if (sig->argvid) {
         sig->argvid->uninstantiate(xsink);
     }
+    // with an exception pending, the value of the return is released after $argv and before the parameters, which hold
+    // the only references to the arguments that the call consumed, as the AST interpreter releases it before the caller
+    // releases its arguments (#6039); the release below covers an exception raised by the release of a parameter
+    val = qore_release_value_with_exception(val, xsink);
 
     // Uninstantiate parameter locals in reverse order
     for (int i = (int)num_params - 1; i >= 0; --i) {
@@ -22137,6 +22200,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call(
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     CallReferenceCallNode* call_node =
         new CallReferenceCallNode(crcn->loc, callee, arg_list);
+    // a named call keeps the names of its arguments
+    call_node->setRuntimeArgNames(crcn->getRuntimeArgNames());
     QoreValue result = doBackgroundWithLocation(crcn->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
@@ -22176,7 +22241,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_function_call_aot(
     if (!bg_op) {
         return 0;
     }
-    auto* fcn = dynamic_cast<const FunctionCallNode*>(bg_op->getExp().getInternalNode());
+    auto* fcn = qore_get_function_call_node(bg_op->getExp().getInternalNode());
     if (!fcn) {
         xsink->raiseException("AOT-BACKGROUND-ERROR",
             "background expression slot %d is not a function call", slot);
@@ -22324,6 +22389,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     CallReferenceCallNode* call_node =
         new CallReferenceCallNode(crcn->loc, callee, arg_list);
+    // a named call keeps the names of its arguments
+    call_node->setRuntimeArgNames(crcn->getRuntimeArgNames());
     QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
@@ -22366,7 +22433,7 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
 
 //! starts a background helper thread with the values given by native or interpreted starting code
 static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const uint64_t* values, int nvalues, bool uses_self, ExceptionSink* xsink) {
+        const uint64_t* values, int nvalues, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink) {
     assert(nvalues >= 0);
     std::vector<QoreValue> vals;
     vals.reserve(nvalues);
@@ -22377,7 +22444,7 @@ static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& cod
     const QoreProgramLocation* loc = get_runtime_location();
     QoreProgramLocationHelper loc_helper(loc ? loc : &loc_builtin);
     return toBits(do_op_background_helper(code, params, vals.empty() ? nullptr : vals.data(), vals.size(),
-        uses_self, xsink));
+        self_mode, xsink));
 }
 
 QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& inst, const QoreValue* values,
@@ -22414,8 +22481,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
     QoreBackgroundHelperCode code;
     code.aot_fn = helper_fn;
     code.aot_ctx = ctx;
+    // the mode is a QoreBackgroundHelperSelf value of the instruction that the native code was compiled from
+    assert(uses_self >= QBHS_NONE && uses_self <= QBHS_HELD);
     return qore_background_helper_start(code, params.empty() ? nullptr : params.data(), values, nvalues,
-        uses_self != 0, xsink);
+        static_cast<QoreBackgroundHelperSelf>(uses_self), xsink);
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_throwing(

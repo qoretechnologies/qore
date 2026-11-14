@@ -3,8 +3,8 @@
 %no-child-restrictions
 %requires compatprobe
 
-# named calls whose variant is resolved at run time by parameter name (the argument has no type at parse time) keep
-# the semantic policy of the call, as calls with positional arguments do: the value "text" given to a builtin converts
+# named calls whose variant is resolved at run time by parameter name (the argument has no type at parse time),
+# also through call references, keep the semantic policy of the call, as calls with positional arguments do: the value "text" given to a builtin converts
 # to False with strict boolean evaluation and to True without it, in the builtin's body and for a soft parameter
 const Source = '%requires compatprobe
 class Derived inherits CompatProbe::NativeProbe {
@@ -19,6 +19,8 @@ auto sub virtual_method() { auto v = "text"; CompatProbe::NativeProbe obj = new 
 auto sub soft_function() { auto v = "text"; return CompatProbe::named_soft(value: v); }
 auto sub soft_method() { auto v = "text"; CompatProbe::NativeProbe obj("text", "text"); return obj.named_soft(value: v); }
 auto sub self_method() { Derived obj(); return obj.self_named("text"); }
+auto sub soft_function_ref() { auto v = "text"; code r = \CompatProbe::named_soft(); return r(value: v); }
+auto sub soft_method_ref() { auto v = "text"; CompatProbe::NativeProbe obj("text", "text"); code r = \obj.named_soft(); return r(value: v); }
 auto sub scoped_method() { Derived obj(); return obj.scoped_named("text"); }
 ';
 
@@ -33,7 +35,8 @@ foreach bool legacy in (False, True) {
     p.parse(Source, "native-named-policy");
     foreach int invocation in (0, 1) {
         foreach string name in ("function", "method", "static_method", "virtual_method",
-                "soft_function", "soft_method", "self_method", "scoped_method") {
+                "soft_function", "soft_method", "self_method", "scoped_method", "soft_function_ref",
+                "soft_method_ref") {
             bool expected = !legacy;
             auto actual = invoke(p, name);
             bool passed = actual === expected;

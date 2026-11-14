@@ -21,8 +21,6 @@
 */
 class FakeVoyageHandler inherits AbstractHttpRequestHandler {
     public {
-        #! Receives True when a request has arrived
-        Channel arrived(100);
         #! Releases a stalled response
         Channel release(100);
     }
@@ -41,9 +39,6 @@ class FakeVoyageHandler inherits AbstractHttpRequestHandler {
         script = responses;
         self.repeat = repeat;
         requests = ();
-        while (arrived.size()) {
-            arrived.recv();
-        }
     }
 
     list<hash<auto>> getRequests() {
@@ -60,14 +55,12 @@ class FakeVoyageHandler inherits AbstractHttpRequestHandler {
                 "path": cx.raw_path,
                 # the client port identifies the connection
                 "cid": cx."peer-info".port,
-                "arrived_us": clock_get_monotonic_us(),
                 "input": req.input,
                 "body": req,
                 "auth": hdr.authorization,
             };
             step = script ? shift script : repeat;
         }
-        arrived.send(True);
         if (step.stall) {
             # hold the response until the test releases it, as a connection that delivers nothing would
             release.recv(step.stall);
@@ -102,14 +95,69 @@ class FakeVoyageHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Virtual time for a rate limiter: the limiter's clock moves only when the limiter asks to wait
+/** Every wait the limiter asks for is pushed to @ref events with its length in ms and the waiting thread's ID.  By
+    default a wait advances the clock by its length and returns at once, so the limiter decides exactly as after a
+    real wait of that length, without waiting.  A blocking instance leaves the clock unchanged and has the limiter
+    wait until it is woken by a settled request or a block, or until its thread is cancelled.
+
+    Test threads push their outcomes to @ref events as well, so a test reads everything in the order it happened,
+    without sleeps or timeouts.
+*/
+class VirtualTime {
+    public {
+        #! The limiter's time in microseconds; far from any monotonic time, so a deadline taken from another clock
+        #! is far off and fails the test
+        int now_us = 1000000000000000;
+        #! Waits (\c wait in ms and \c tid) and thread outcomes (\c outcome), in order
+        Queue events();
+    }
+
+    private {
+        bool block;
+    }
+
+    constructor(EmbedderRateLimiter limiter, bool block = False) {
+        self.block = block;
+        limiter.setClock(int sub () { return now_us; });
+        limiter.setWaiter(bool sub (int ms) {
+            events.push({"wait": ms, "tid": gettid()});
+            if (!self.block) {
+                now_us += ms * 1000;
+            }
+            return self.block;
+        });
+    }
+
+    #! Lets every later wait pass virtual time and wakes the waiters, so no thread is left waiting after a test
+    release(EmbedderRateLimiter limiter) {
+        block = False;
+        # settling an unknown ticket only wakes the waiters
+        limiter.settle(-1);
+    }
+
+    #! Returns the lengths of the waits recorded so far, in ms; any other event fails the test
+    list<int> takeWaits() {
+        list<int> rv = ();
+        while (events.size()) {
+            hash<auto> event = events.get();
+            if (!exists event.wait) {
+                throw "UNEXPECTED-EVENT", sprintf("expected a wait; got %y", event);
+            }
+            push rv, event.wait;
+        }
+        return rv;
+    }
+}
+
 #! A limiter that records when it admits each request, as it decides it
 class RecordingRateLimiter inherits EmbedderRateLimiter {
     public {
-        #! the admission instants, in monotonic microseconds, in admission order
+        #! the admission instants, in the limiter's clock, in admission order
         Queue admissions();
     }
 
-    constructor(*int requests_per_window, *int tokens_per_window, int window_ms)
+    constructor(*int requests_per_window, *int tokens_per_window, int window_ms = 60000)
             : EmbedderRateLimiter(requests_per_window, tokens_per_window, window_ms) {
     }
 
@@ -142,9 +190,24 @@ class TestVoyageEmbedder inherits VoyageEmbedder {
     }
 }
 
-#! Limiter without jitter, so rate-limit waits are exact
-class ExactLimiter inherits EmbedderRateLimiter {
-    constructor(*int requests, *int tokens, int window_ms = 60000) : EmbedderRateLimiter(requests, tokens, window_ms) {
+#! Voyage reranker with a test limiter
+class TestVoyageReranker inherits VoyageReranker {
+    private {
+        EmbedderRateLimiter test_limiter;
+    }
+
+    constructor(hash<RerankerConfig> config, EmbedderRateLimiter limiter) : VoyageReranker(config) {
+        test_limiter = limiter;
+    }
+
+    private EmbedderRateLimiter getRateLimiter() {
+        return test_limiter;
+    }
+}
+
+#! Recording limiter without jitter, so rate-limit waits are exact
+class ExactLimiter inherits RecordingRateLimiter {
+    constructor(*int requests, *int tokens, int window_ms = 60000) : RecordingRateLimiter(requests, tokens, window_ms) {
     }
 
     private int jitter(int limit_ms) {
@@ -227,6 +290,13 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         } + (extra ?? {}));
     }
 
+    #! Gives the process-wide limiter of an account, request kind and model virtual time, before any client uses it
+    private VirtualTime sharedVirtualTime(string key, string model, *int requests_per_minute,
+            string kind = VoyageRestClient::VoyageRestClientBase::RateLimitEmbed) {
+        return new VirtualTime(VoyageRestClient::VoyageRestClientBase::getRateLimiter(kind, "http://localhost:" + port,
+            key, model, requests_per_minute));
+    }
+
     private list<string> inputs(int count, int offset = 0) {
         return map sprintf("t%d", $1), xrange(offset, offset + count);
     }
@@ -240,87 +310,110 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         }
     }
 
+    #! Returns admission instants relative to a start time
+    private list<int> since(int t0, list<int> times) {
+        return map $1 - t0, times;
+    }
+
     testLimiterRequestSpacing() {
-        # the instants at which the limiter admits the requests, not when their threads next run
+        # the instants at which the limiter admits the requests, in virtual time: a waiting thread advances the clock
+        # by exactly the wait the limiter asked for, so the instants do not depend on how the threads are scheduled
         RecordingRateLimiter limiter(2, NOTHING, 300);
+        VirtualTime vt(limiter);
+        int t0 = vt.now_us;
         Counter done(5);
         for (int i = 0; i < 5; ++i) {
             background sub () {
                 on_exit done.dec();
-                int id = limiter.admit(1, clock_get_monotonic_us() + 5000000);
+                int id = limiter.admit(1, t0 + 5000000);
                 limiter.settle(id, 1);
             }();
         }
         done.waitForZero();
-        list<int> times = limiter.getAdmissions();
-        assertEq(5, times.size());
-        for (int i = 2; i < times.size(); ++i) {
-            assertGe(300000, times[i] - times[i - 2], sprintf("admission %d waited for the window", i));
-        }
+        assertEq((0, 0, 300000, 300000, 600000), since(t0, limiter.getAdmissions()),
+            "two admissions per window; each later one waited for the window");
+        assertEq((300, 300), vt.takeWaits(), "the limiter waited exactly until the window had room");
     }
 
     testLimiterTokens() {
-        EmbedderRateLimiter limiter(NOTHING, 100, 60000);
-        int first = limiter.admit(80, clock_get_monotonic_us() + 1000000);
-        Channel admitted(1);
-        int started = clock_get_monotonic_us();
+        # a blocking virtual clock: the waiter waits until it is woken, and no virtual time passes
+        RecordingRateLimiter limiter(NOTHING, 100, 60000);
+        VirtualTime vt(limiter, True);
+        # a failed check must not leave the waiting thread blocked
+        on_exit vt.release(limiter);
+        int t0 = vt.now_us;
+        int first = limiter.admit(80, t0 + 1000000);
         background sub () {
-            int id = limiter.admit(50, clock_get_monotonic_us() + 5000000);
-            admitted.send(clock_get_monotonic_us());
-            limiter.settle(id, 50);
+            try {
+                int id = limiter.admit(50, t0 + 5000000);
+                limiter.settle(id, 50);
+                vt.events.push({"outcome": "admitted"});
+            } catch (hash<ExceptionInfo> ex) {
+                vt.events.push({"outcome": ex.err});
+            }
         }();
+        # the window is full until the first request leaves it in a minute, after the waiter's deadline; the first
+        # request is in flight, so the waiter waits until its deadline for it to settle
+        assertEq(5000, vt.events.get().wait, "the waiter waits for the request in flight");
         # the provider reported less usage than the estimate, which frees the window for the waiter
         limiter.settle(first, 10);
-        int when = admitted.recv(5s);
-        assertLt(5000000, when - started, "settled usage admitted the waiter long before the window expired");
+        assertEq("admitted", vt.events.get().outcome);
+        assertEq((0, 0), since(t0, limiter.getAdmissions()),
+            "settled usage admitted the waiter at once, long before the window expired");
+        assertEq(t0, vt.now_us);
         assertEq({"requests": 2, "tokens": 60}, limiter.usage());
 
         # a request larger than the token limit is admitted alone, once the window is empty
-        EmbedderRateLimiter small(NOTHING, 10, 200);
-        int id = small.admit(5, clock_get_monotonic_us() + 1000000);
-        small.settle(id, 5);
-        int t0 = clock_get_monotonic_us();
-        small.settle(small.admit(50, clock_get_monotonic_us() + 2000000));
-        assertGe(150000, clock_get_monotonic_us() - t0, "an oversized request waits for an empty window");
+        RecordingRateLimiter small(NOTHING, 10, 200);
+        VirtualTime svt(small);
+        t0 = svt.now_us;
+        small.settle(small.admit(5, t0 + 1000000), 5);
+        small.settle(small.admit(50, t0 + 2000000));
+        assertEq((0, 200000), since(t0, small.getAdmissions()), "an oversized request waits for an empty window");
+        assertEq((200,), svt.takeWaits());
     }
 
     testLimiterBlock() {
-        EmbedderRateLimiter limiter(100, NOTHING, 60000);
-        # the block runs from the call to block(), so the time is taken before it; taken after it, the wait measured
-        # is shorter than the block by the time between the two calls
-        int t0 = clock_get_monotonic_us();
+        RecordingRateLimiter limiter(100, NOTHING, 60000);
+        VirtualTime vt(limiter);
+        int t0 = vt.now_us;
         limiter.block(300);
-        limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 2000000));
-        assertGe(300000, clock_get_monotonic_us() - t0, "a block holds admission for its duration");
+        limiter.settle(limiter.admit(1, t0 + 2000000));
+        assertEq((300000,), since(t0, limiter.getAdmissions()), "a block holds admission for its duration");
+        assertEq((300,), vt.takeWaits());
         # an earlier block does not shorten a later one
-        t0 = clock_get_monotonic_us();
+        t0 = vt.now_us;
         limiter.block(300);
         limiter.block(10);
-        limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 2000000));
-        assertGe(300000, clock_get_monotonic_us() - t0);
+        limiter.settle(limiter.admit(1, t0 + 2000000));
+        assertEq((300000,), since(t0, limiter.getAdmissions()));
+        assertEq((300,), vt.takeWaits());
     }
 
     testLimiterDeadline() {
         EmbedderRateLimiter limiter(1, NOTHING, 60000);
-        limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 1000000));
-        int t0 = clock_get_monotonic_us();
+        VirtualTime vt(limiter);
+        int t0 = vt.now_us;
+        limiter.settle(limiter.admit(1, t0 + 1000000));
         try {
-            limiter.admit(1, clock_get_monotonic_us() + 5000000);
+            limiter.admit(1, t0 + 5000000);
             fail("expected EMBEDDER-RATE-LIMIT-ERROR");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("EMBEDDER-RATE-LIMIT-ERROR", ex.err);
             assertEq("rate_limit_wait_deadline", ex.arg.reason_code);
             assertTrue(ex.arg.retryable);
-            assertGt(50000, ex.arg.wait_ms);
+            assertEq(60000, ex.arg.wait_ms, "the window has room again in a minute");
         }
-        assertLt(1000000, clock_get_monotonic_us() - t0, "nothing in flight: no wait before failing");
+        assertEq((), vt.takeWaits(), "nothing in flight: no wait before failing");
+        assertEq(t0, vt.now_us);
 
         # with a request in flight, the waiter waits until its deadline for it to settle
         EmbedderRateLimiter busy(1, NOTHING, 60000);
-        busy.admit(1, clock_get_monotonic_us() + 1000000);
-        t0 = clock_get_monotonic_us();
-        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \busy.admit(), (1, clock_get_monotonic_us() + 200000));
-        assertGe(200000, clock_get_monotonic_us() - t0);
+        VirtualTime bvt(busy);
+        t0 = bvt.now_us;
+        busy.admit(1, t0 + 1000000);
+        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \busy.admit(), (1, t0 + 200000));
+        assertEq((200,), bvt.takeWaits(), "the waiter waited until its deadline");
     }
 
     testLimiterConfig() {
@@ -339,26 +432,29 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
 
     testLimiterCancel() {
         EmbedderRateLimiter limiter(2, NOTHING, 60000);
-        limiter.settle(limiter.admit(1, clock_get_monotonic_us() + 1000000));
+        # a blocking virtual clock: the wait ends only when the waiter is woken or cancelled
+        VirtualTime vt(limiter, True);
+        # a failed check must not leave the waiting thread blocked
+        on_exit vt.release(limiter);
+        int t0 = vt.now_us;
+        limiter.settle(limiter.admit(1, t0 + 1000000));
         # keep a request in flight so the waiter waits instead of failing at once
-        limiter.admit(1, clock_get_monotonic_us() + 1000000);
-        Channel started(1);
-        Channel done(1);
+        limiter.admit(1, t0 + 1000000);
         background sub () {
-            started.send(gettid());
             try {
-                limiter.admit(1, clock_get_monotonic_us() + 50000000);
-                done.send("admitted");
+                limiter.admit(1, t0 + 50000000);
+                vt.events.push({"outcome": "admitted"});
             } catch (hash<ExceptionInfo> ex) {
                 clear_thread_cancel();
-                done.send(ex.err);
+                vt.events.push({"outcome": ex.err});
             }
         }();
-        int tid = started.recv(2s);
-        int t0 = clock_get_monotonic_us();
-        cancel_thread(tid);
-        assertEq("THREAD-CANCELLED", done.recv(5s));
-        assertLt(5000000, clock_get_monotonic_us() - t0);
+        hash<auto> wait = vt.events.get();
+        assertEq(50000, wait.wait, "the waiter waits until its deadline");
+        cancel_thread(wait.tid);
+        assertEq("THREAD-CANCELLED", vt.events.get().outcome, "cancellation ended the wait");
+        assertEq(t0, vt.now_us);
+        assertEq(0, vt.events.size(), "the cancelled thread did not wait again");
     }
 
     testSharedRegistry() {
@@ -440,6 +536,8 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         handler.setScript(());
         # two requests per 400ms window, shared by independently created embedders
         RecordingRateLimiter limiter(2, NOTHING, 400);
+        VirtualTime vt(limiter);
+        int t0 = vt.now_us;
         hash<EmbedderConfig> cfg = config();
         Counter done(6);
         Queue errors();
@@ -457,41 +555,47 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         done.waitForZero();
         assertEq(0, errors.size(), errors.size() ? errors.get() : "");
         # every request reached the server, each after the limiter admitted it; the limiter's own admission instants
-        # show the spacing (an arrival also depends on how soon the sending thread runs after its admission)
+        # in virtual time show the spacing exactly
         assertEq(6, handler.getRequests().size());
-        list<int> times = limiter.getAdmissions();
-        assertEq(6, times.size());
-        for (int i = 2; i < times.size(); ++i) {
-            assertGe(400000, times[i] - times[i - 2], sprintf("request %d waited for the window", i));
-        }
-        assertGe(800000, times[5] - times[0]);
+        assertEq((0, 0, 400000, 400000, 800000, 800000), since(t0, limiter.getAdmissions()),
+            "each later request waited for the window");
+        assertEq((400, 400), vt.takeWaits());
     }
 
     testRetryAfter() {
         handler.setScript(({"status": 429, "headers": {"Retry-After": "1"}},));
         list<hash<RagTelemetryEvent>> events = ();
-        VoyageEmbedder emb(config({"telemetry_observer": <RagTelemetryObserver>{
+        RecordingRateLimiter limiter(NOTHING, NOTHING);
+        VirtualTime vt(limiter);
+        int t0 = vt.now_us;
+        TestVoyageEmbedder emb(config({"telemetry_observer": <RagTelemetryObserver>{
             "event_callback": sub (hash<RagTelemetryEvent> event) { push events, event; },
-        }}));
+        }}), limiter);
         assertOrdered(emb.encodeBatch(inputs(3)), 3);
         list<hash<auto>> requests = handler.getRequests();
         assertEq(2, requests.size());
-        assertGe(1000000, requests[1].arrived_us - requests[0].arrived_us, "Retry-After was honored");
         assertEq(requests[0].input, requests[1].input, "the same inputs are sent again");
         assertEq(1, events.size());
         assertEq(429, events[0].error.status_code);
-        assertGe(1000, events[0].attributes.retry_delay_ms);
+        # Retry-After plus up to 10% jitter
+        int delay_ms = events[0].attributes.retry_delay_ms;
+        assertGe(1000, delay_ms);
+        assertLe(1100, delay_ms);
+        assertEq((delay_ms,), vt.takeWaits(), "Retry-After was honored");
+        assertEq((0, delay_ms * 1000), since(t0, limiter.getAdmissions()));
     }
 
     testBackoff() {
         handler.setScript(({"status": 429}, {"status": 429}));
-        TestVoyageEmbedder emb(config(), new ExactLimiter(100, NOTHING));
+        ExactLimiter limiter(100, NOTHING);
+        VirtualTime vt(limiter);
+        int t0 = vt.now_us;
+        TestVoyageEmbedder emb(config(), limiter);
         assertOrdered(emb.encodeBatch(inputs(1)), 1);
-        list<hash<auto>> requests = handler.getRequests();
-        assertEq(3, requests.size());
+        assertEq(3, handler.getRequests().size());
         # without jitter: half of 1s, then half of 2s
-        assertGe(500000, requests[1].arrived_us - requests[0].arrived_us);
-        assertGe(1000000, requests[2].arrived_us - requests[1].arrived_us);
+        assertEq((500, 1000), vt.takeWaits());
+        assertEq((0, 500000, 1500000), since(t0, limiter.getAdmissions()));
     }
 
     testExhausted() {
@@ -517,47 +621,67 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
 
     testBudget() {
         handler.setScript(({"status": 429, "headers": {"Retry-After": "60"}},));
-        VoyageEmbedder emb(config({"rate_limit_timeout": 2s}));
-        int t0 = clock_get_monotonic_us();
+        RecordingRateLimiter limiter(NOTHING, NOTHING);
+        VirtualTime vt(limiter);
+        int t0 = vt.now_us;
+        TestVoyageEmbedder emb(config({"rate_limit_timeout": 2s}), limiter);
+        *hash<ExceptionInfo> err;
         try {
             emb.encodeBatch(inputs(1));
-            fail("expected EMBEDDER-RATE-LIMIT-ERROR");
         } catch (hash<ExceptionInfo> ex) {
-            assertEq("EMBEDDER-RATE-LIMIT-ERROR", ex.err);
-            assertEq(1, ex.arg.attempts);
-            assertEq(60000, ex.arg.retry_after_ms);
+            err = ex;
         }
-        assertLt(1000000, clock_get_monotonic_us() - t0, "a delay beyond the budget is not waited");
+        assertEq((), vt.takeWaits(), "a delay beyond the budget is not waited");
+        assertEq(t0, vt.now_us);
         assertEq(1, handler.getRequests().size());
+        assertEq("EMBEDDER-RATE-LIMIT-ERROR", err.err);
+        assertEq("provider_rate_limited", err.arg.reason_code);
+        assertEq(1, err.arg.attempts);
+        assertEq(60000, err.arg.retry_after_ms);
 
         # a positive per-call timeout further limits the budget
         handler.setScript(({"status": 429, "headers": {"Retry-After": "3"}},));
-        emb = new VoyageEmbedder(config());
-        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \emb.encodeBatch(), (inputs(1), {"timeout": 1s}));
+        RecordingRateLimiter timed(NOTHING, NOTHING);
+        VirtualTime tvt(timed);
+        emb = new TestVoyageEmbedder(config(), timed);
+        remove err;
+        try {
+            emb.encodeBatch(inputs(1), {"timeout": 1s});
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq((), tvt.takeWaits(), "a delay beyond the per-call timeout is not waited");
         assertEq(1, handler.getRequests().size());
+        assertEq("EMBEDDER-RATE-LIMIT-ERROR", err.err);
+        assertEq("provider_rate_limited", err.arg.reason_code);
+        assertEq(3000, err.arg.retry_after_ms);
     }
 
     testCancelBackoff() {
         handler.setScript(({"status": 429, "headers": {"Retry-After": "30"}},));
-        Channel started(1);
-        Channel done(1);
-        VoyageEmbedder emb(config());
+        ExactLimiter limiter(NOTHING, NOTHING);
+        # a blocking virtual clock: the wait ends only when the waiter is woken or cancelled
+        VirtualTime vt(limiter, True);
+        # a failed check must not leave the waiting thread blocked
+        on_exit vt.release(limiter);
+        int t0 = vt.now_us;
+        TestVoyageEmbedder emb(config(), limiter);
         background sub () {
-            started.send(gettid());
             try {
                 emb.encodeBatch(inputs(1));
-                done.send("completed");
+                vt.events.push({"outcome": "completed"});
             } catch (hash<ExceptionInfo> ex) {
                 clear_thread_cancel();
-                done.send(ex.err);
+                vt.events.push({"outcome": ex.err});
             }
         }();
-        int tid = started.recv(2s);
-        assertTrue(handler.arrived.recv(5s), "the first request reached the server");
-        int t0 = clock_get_monotonic_us();
-        cancel_thread(tid);
-        assertEq("THREAD-CANCELLED", done.recv(5s));
-        assertLt(5000000, clock_get_monotonic_us() - t0, "cancellation ended the 30s wait");
+        hash<auto> wait = vt.events.get();
+        assertEq(30000, wait.wait, "the rejected request waits for Retry-After");
+        assertEq(1, handler.getRequests().size(), "the first request reached the server");
+        cancel_thread(wait.tid);
+        assertEq("THREAD-CANCELLED", vt.events.get().outcome, "cancellation ended the 30s wait");
+        assertEq(t0, vt.now_us);
+        assertEq(0, vt.events.size(), "the cancelled request did not wait again");
         assertEq(1, handler.getRequests().size());
     }
 
@@ -578,12 +702,14 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         # the configured limit paces real requests: one per window
         handler.setScript(());
         hash<EmbedderConfig> cfg = config({"requests_per_minute": 1});
+        VirtualTime vt = sharedVirtualTime(cfg.api_key, cfg.model, 1);
         VoyageEmbedder emb(cfg);
         emb.encodeBatch(inputs(1));
         assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \emb.encodeBatch(), (inputs(1), {"rate_limit_timeout": 100ms}));
         assertThrows("EMBEDDER-RATE-LIMIT-ERROR", sub () {
             new VoyageEmbedder(cfg).encodeBatch(inputs(1), {"rate_limit_timeout": 100ms});
         }, NOTHING, "another embedder with the same key shares the limit");
+        assertEq((), vt.takeWaits(), "a full window that cannot free up before the deadline is not waited for");
         assertEq(1, handler.getRequests().size());
     }
 
@@ -632,11 +758,12 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
 
     testCallObserver() {
         ExactLimiter limiter(1, NOTHING, 1500);
+        VirtualTime vt(limiter);
         list<hash<RateLimitEventInfo>> events = ();
         code observer = sub (hash<RateLimitEventInfo> event) { push events, event; };
         int calls = 0;
         hash<auto> rv = limiter.call(<RateLimitedCallInfo>{"tokens": 1,
-                "deadline_us": clock_get_monotonic_us() + 10000000, "observer": observer},
+                "deadline_us": limiter.getClockUs() + 10000000, "observer": observer},
             hash<auto> sub () {
                 if (!calls++) {
                     throw "REST-RESPONSE-ERROR", "too many", {"status_code": 429, "headers": {"retry-after": "0"}};
@@ -648,13 +775,14 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         assertEq(("retry", "wait"), map $1.type, events);
         assertEq(429, events[0].status_code);
         assertEq(0, events[0].retry_after_ms);
-        assertGe(1000, events[1].delay_ms);
+        assertEq(1500, events[1].delay_ms, "the retry waited for the window");
         assertEq(1, events[1].attempt);
+        assertEq((1500,), vt.takeWaits());
 
         # other failures propagate unchanged and are not retried
         calls = 0;
         assertThrows("REST-RESPONSE-ERROR", sub () {
-            limiter.call(<RateLimitedCallInfo>{"deadline_us": clock_get_monotonic_us() + 10000000},
+            limiter.call(<RateLimitedCallInfo>{"deadline_us": limiter.getClockUs() + 10000000},
                 auto sub () { ++calls; throw "REST-RESPONSE-ERROR", "bad", {"status_code": 400}; });
         });
         assertEq(1, calls);
@@ -668,13 +796,15 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
             "event_callback": sub (hash<RagTelemetryEvent> event) { push events, event; },
         }});
         ExactLimiter limiter(1, NOTHING, 1200);
+        VirtualTime vt(limiter);
         TestVoyageEmbedder emb(cfg, limiter);
         emb.encodeBatch(inputs(1));
         emb.encodeBatch(inputs(1));
-        assertEq(1, events.size(), "the second request waited about a second for the window");
+        assertEq(1, events.size(), "the second request waited more than a second for the window");
         assertEq("wait", events[0].type);
         assertTrue(events[0].attributes.rate_limited);
-        assertGe(1000, events[0].attributes.rate_limit_wait_ms);
+        assertEq(1200, events[0].attributes.rate_limit_wait_ms);
+        assertEq((1200,), vt.takeWaits());
     }
 
     private hash<RerankerConfig> rerankConfig(*hash<auto> extra) {
@@ -688,6 +818,8 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
 
     testReranker() {
         hash<RerankerConfig> cfg = rerankConfig({"requests_per_minute": 1});
+        VirtualTime rvt = sharedVirtualTime(cfg.api_key, cfg.model, 1,
+            VoyageRestClient::VoyageRestClientBase::RateLimitRerank);
         VoyageReranker rr(cfg);
         assertEq({"requests_per_minute": 1, "tokens_per_minute": 3800000}, rr.getRateLimits());
         assertEq({"requests_per_minute": 1900, "tokens_per_minute": 1900000},
@@ -698,6 +830,7 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         assertThrows("RERANKER-RATE-LIMIT-ERROR", sub () {
             new VoyageReranker(cfg).rerank("q", ("a",), 1, {"rate_limit_timeout": 100ms});
         });
+        assertEq((), rvt.takeWaits(), "the full bucket is not waited for");
         # embeddings of the same account are limited separately
         VoyageEmbedder emb(config({"api_key": cfg.api_key, "requests_per_minute": 1}));
         emb.encodeBatch(inputs(1));
@@ -706,19 +839,26 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         # a 429 with Retry-After is retried after the stated delay and reported to the observer
         handler.setScript(({"status": 429, "headers": {"Retry-After": "1"}},));
         list<hash<RagTelemetryEvent>> events = ();
-        VoyageReranker retried(rerankConfig({"telemetry_observer": <RagTelemetryObserver>{
+        RecordingRateLimiter limiter(NOTHING, NOTHING);
+        VirtualTime vt(limiter);
+        int t0 = vt.now_us;
+        TestVoyageReranker retried(rerankConfig({"telemetry_observer": <RagTelemetryObserver>{
             "event_callback": sub (hash<RagTelemetryEvent> event) { push events, event; },
-        }}));
+        }}), limiter);
         hash<RerankOutcome> outcome = retried.rerankEx("q", ("a", "b", "c"), 3);
         assertEq(3, outcome.results.size());
         assertEq(11, outcome.usage.total_tokens);
-        list<hash<auto>> requests = handler.getRequests();
-        assertEq(2, requests.size());
-        assertGe(1000000, requests[1].arrived_us - requests[0].arrived_us);
+        assertEq(2, handler.getRequests().size());
         assertEq(1, events.size());
         assertEq("rerank", events[0].operation);
         assertEq(429, events[0].error.status_code);
         assertTrue(events[0].attributes.rate_limited);
+        # Retry-After plus up to 10% jitter
+        int delay_ms = events[0].attributes.retry_delay_ms;
+        assertGe(1000, delay_ms);
+        assertLe(1100, delay_ms);
+        assertEq((delay_ms,), vt.takeWaits(), "Retry-After was honored");
+        assertEq((0, delay_ms * 1000), since(t0, limiter.getAdmissions()));
     }
 
     testRerankerExhausted() {
@@ -744,13 +884,14 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
 
     testDataProvider() {
         string key = sprintf("dp-key-%d-%d", getpid(), ++key_seq);
+        VirtualTime vt = sharedVirtualTime(key, "voyage-4-lite");
+        int t0 = vt.now_us;
         # the data provider and an embedder of the same account and model share one limiter: a Retry-After
         # the embedder received holds the data provider too
         handler.setScript(({"status": 429, "headers": {"Retry-After": "120"}},));
         VoyageEmbedder emb(config({"api_key": key}));
         assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \emb.encodeBatch(), (inputs(1),));
         handler.setScript(());
-        int t0 = clock_get_monotonic_us();
         try {
             dataProvider(key, "create-embeddings").doRequest({"model": "voyage-4-lite", "input": ("t0",)});
             fail("expected the shared window to be full");
@@ -759,18 +900,23 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
             assertEq("EMBEDDER-RATE-LIMIT-ERROR", ex.err);
             assertEq("rate_limit_wait_deadline", ex.arg.reason_code);
         }
-        assertLt(1000000, clock_get_monotonic_us() - t0);
+        assertEq((), vt.takeWaits(), "neither the embedder nor the data provider waited");
+        assertEq(t0, vt.now_us);
         assertEq(0, handler.getRequests().size());
 
         # a 429 is retried after Retry-After, through the limiter
         string other = sprintf("dp-key-%d-%d", getpid(), ++key_seq);
+        VirtualTime ovt = sharedVirtualTime(other, "voyage-4-lite");
         handler.setScript(({"status": 429, "headers": {"Retry-After": "1"}},));
         hash<auto> resp = dataProvider(other, "create-embeddings").doRequest({"model": "voyage-4-lite",
             "input": ("t0", "t1")});
         assertEq(2, resp.data.size());
-        list<hash<auto>> requests = handler.getRequests();
-        assertEq(2, requests.size());
-        assertGe(1000000, requests[1].arrived_us - requests[0].arrived_us);
+        assertEq(2, handler.getRequests().size());
+        # Retry-After plus up to 10% jitter
+        list<int> waits = ovt.takeWaits();
+        assertEq(1, waits.size(), "the retry waited once");
+        assertGe(1000, waits[0], "Retry-After was honored");
+        assertLe(1100, waits[0]);
 
         # transient failures are retried by the shared transient policy
         handler.setScript(({"status": 503},));
@@ -782,6 +928,8 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
     testDataProviderExhausted() {
         handler.setScript((), {"status": 429, "headers": {"Retry-After": "60"}});
         string key = sprintf("dp-key-%d-%d", getpid(), ++key_seq);
+        VirtualTime vt = sharedVirtualTime(key, "rerank-2.5-lite", NOTHING,
+            VoyageRestClient::VoyageRestClientBase::RateLimitRerank);
         try {
             dataProvider(key, "rerank").doRequest({"model": "rerank-2.5-lite", "query": "q",
                 "documents": ("a", "b")});
@@ -792,6 +940,7 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
             assertEq("provider_rate_limited", ex.arg.reason_code);
             assertEq(1, ex.arg.attempts);
         }
+        assertEq((), vt.takeWaits(), "a delay beyond the budget is not waited");
         assertEq(1, handler.getRequests().size());
         handler.setScript(());
     }
@@ -799,6 +948,8 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
     testPing() {
         handler.setScript(());
         string key = sprintf("ping-key-%d-%d", getpid(), ++key_seq);
+        VirtualTime vt = sharedVirtualTime(key, VoyageRestClient::VoyageRestClientBase::DefaultEmbeddingModel, 1);
+        int t0 = vt.now_us;
         VoyageRestClient::VoyageRestConnection conn = connection(key, {"requests-per-minute": 1});
         hash<PingInfo> ok = conn.ping();
         assertTrue(ok.ok, ok.info);
@@ -808,15 +959,14 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \same_account.encodeBatch(),
             (inputs(1), {"rate_limit_timeout": 100ms}));
         # and the next ping fails promptly as rate limited instead of blocking the monitor
-        int t0 = clock_get_monotonic_us();
         hash<PingInfo> limited = conn.ping();
         assertFalse(limited.ok);
         assertRegex("VOYAGE-RATE-LIMITED", limited.info);
-        assertLt(2000000, clock_get_monotonic_us() - t0);
+        assertEq((), vt.takeWaits(), "the rate-limited ping did not wait");
         # the polling monitor's ping never waits
-        t0 = clock_get_monotonic_us();
         assertThrows("VOYAGE-RATE-LIMITED", sub () { conn.startPollConnect(); });
-        assertLt(500000, clock_get_monotonic_us() - t0);
+        assertEq((), vt.takeWaits(), "the polling ping did not wait");
+        assertEq(t0, vt.now_us);
         assertEq(1, handler.getRequests().size(), "no rate-limited ping reached the server");
 
         # a ping that is not an embeddings request is not limited
@@ -830,18 +980,29 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
     testPing429() {
         handler.setScript(({"status": 429, "headers": {"Retry-After": "30"}},));
         string key = sprintf("ping-key-%d-%d", getpid(), ++key_seq);
+        VirtualTime vt = sharedVirtualTime(key, VoyageRestClient::VoyageRestClientBase::DefaultEmbeddingModel);
+        int t0 = vt.now_us;
         VoyageRestClient::VoyageRestConnection conn = connection(key);
-        int t0 = clock_get_monotonic_us();
         hash<PingInfo> info = conn.ping();
         assertFalse(info.ok);
         assertRegex("VOYAGE-RATE-LIMITED", info.info);
-        assertLt(2000000, clock_get_monotonic_us() - t0, "the ping is not retried");
+        assertEq((), vt.takeWaits(), "the ping is not retried");
         assertEq(1, handler.getRequests().size());
         # the 429 blocks every client of the account: an embedder fails at once instead of sending
         handler.setScript(());
         VoyageEmbedder same_account(config({"api_key": key}));
-        assertThrows("EMBEDDER-RATE-LIMIT-ERROR", \same_account.encodeBatch(),
-            (inputs(1), {"rate_limit_timeout": 1s}));
+        try {
+            same_account.encodeBatch(inputs(1), {"rate_limit_timeout": 1s});
+            fail("expected EMBEDDER-RATE-LIMIT-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-RATE-LIMIT-ERROR", ex.err);
+            assertEq("rate_limit_wait_deadline", ex.arg.reason_code);
+            # the block is Retry-After plus up to 10% jitter
+            assertGe(30000, ex.arg.wait_ms);
+            assertLe(33000, ex.arg.wait_ms);
+        }
+        assertEq((), vt.takeWaits(), "the blocked embedder did not wait");
+        assertEq(t0, vt.now_us);
         assertEq(0, handler.getRequests().size());
     }
 
@@ -856,10 +1017,11 @@ class VoyageEmbedderRateLimitTest inherits QUnit::Test {
         VoyageEmbedder emb(config({"retry_timeout": 9s}));
         int t0 = clock_get_monotonic_us();
         assertOrdered(emb.encodeBatch(inputs(1)), 1);
-        int ms = (clock_get_monotonic_us() - t0) / 1000;
-        assertGe(3000, ms, "the first attempt was given its limit");
-        assertLt(9000, ms, "answered before the budget expired");
-        assertEq(2, handler.getRequests().size(), "the stalled attempt was retried");
+        # a socket timeout never ends early, so this lower bound holds however loaded the machine is
+        assertGe(3000, (clock_get_monotonic_us() - t0) / 1000, "the first attempt was given its limit");
+        # the retry policy retries only within its budget, so a second request shows that the stalled attempt was
+        # limited to less than the budget (testAttemptDefaults() checks the limit itself)
+        assertEq(2, handler.getRequests().size(), "the stalled attempt was retried before the budget expired");
 
         # an explicit attempt limit equal to the budget leaves no time to retry a stall
         handler.setScript(({"stall": 20s},));
