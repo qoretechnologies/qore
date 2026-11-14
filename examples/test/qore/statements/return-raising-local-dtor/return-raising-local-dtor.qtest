@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the release of a return value on an exception
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ReturnRaisingLocalDtorTest
+
+#! The value of a return is released when the destructor of a local raises an exception after it (#6029)
+/** When the destructor of a local raised an exception as the block of a return statement released it, the frame of
+    the IR interpreter returned the value of the return with the exception, and a call through the function's variant
+    (UserVariantBase::evalTiered(), the specialized variant, or the top level of a program) dropped the value without
+    releasing it: it leaked.  The calls that the IR interpreter makes itself released it.  The AST interpreter
+    releases it after the locals.  ReturnRaisingLocalDtor.q gives the output of the AST interpreter, which counts
+    the live objects, in every execution mode and compiled with qcc.
+*/
+class ReturnRaisingLocalDtorTest inherits QUnit::Test {
+    public {
+        #! the output of ReturnRaisingLocalDtor.q with the AST interpreter
+        const Expected = "d1: [\"x\", \"~d1-d\", \"~d1-z\", \"~d1-t\", \"caught:DX\"] live=0
+d1: [\"x\", \"~d1-d\", \"~d1-z\", \"~d1-t\", \"caught:DX\"] live=0
+d1: [\"x\", \"~d1-d\", \"~d1-z\", \"~d1-t\", \"caught:DX\"] live=0
+d2: [\"~d2-d\", \"~d2-z\", \"~d2-t\", \"caught:DX\"] live=0
+d2: [\"~d2-d\", \"~d2-z\", \"~d2-t\", \"caught:DX\"] live=0
+d2: [\"~d2-d\", \"~d2-z\", \"~d2-t\", \"caught:DX\"] live=0
+d3: [\"~d3-d\", \"~d3-t\", \"caught:DX\"] live=0
+d3: [\"~d3-d\", \"~d3-t\", \"caught:DX\"] live=0
+d3: [\"~d3-d\", \"~d3-t\", \"caught:DX\"] live=0
+d4: [\"~d4-d\", \"~d4-t1\", \"caught:DX\"] live=0
+d4: [\"~d4-d\", \"~d4-t1\", \"caught:DX\"] live=0
+d4: [\"~d4-d\", \"~d4-t1\", \"caught:DX\"] live=0
+d5: [\"~d5-d\", \"~d5-t\", \"caught:DX\"] live=0
+d5: [\"~d5-d\", \"~d5-t\", \"caught:DX\"] live=0
+d5: [\"~d5-d\", \"~d5-t\", \"caught:DX\"] live=0
+top: [\"~top-d\", \"~top-z\", \"~top-t\", \"caught:DX\"] live=0
+top: [\"~top-d\", \"~top-z\", \"~top-t\", \"caught:DX\"] live=0
+top: [\"~top-d\", \"~top-z\", \"~top-t\", \"caught:DX\"] live=0
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("ReturnRaisingLocalDtorTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/ReturnRaisingLocalDtor.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the value of a return when a local's destructor raises", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the value of a return when a local's destructor raises", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-return-raising-local-dtor-");
+        string exe = tmp.path + DirSep + "return-raising-local-dtor";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

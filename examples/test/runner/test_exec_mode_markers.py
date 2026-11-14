@@ -167,6 +167,13 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   programs and modules it compiles in child processes
         # - AOTInstanceOfTypePath (#5976): its checks run an AOT-compiled module and the same module's source in the
         #   AST interpreter in child processes
+        # - AOTModuleDelClosure (#6015): its checks compile modules and scripts with qcc and run the interpreter and the
+        #   compiled programs in child processes
+        # - AOTNestedFind (#5974): its checks run the interpreter, qcc and the compiled programs in child processes
+        # - AOTNamedCallRefModules (M4 phase 3): its checks compile modules with qcc and run the interpreter and the
+        #   compiled programs in child processes
+        # - AOTRuntimeNamedCallReturnType: its checks run the interpreter, qcc and the compiled programs in child
+        #   processes
         # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
         # - nested-callable-types (#6022): its script runs in child processes that set their own --exec-mode, and
         #   compiled with qcc
@@ -184,6 +191,10 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
+                                 "examples/test/ir/AOTModuleDelClosure.qtest",
+                                 "examples/test/ir/AOTNestedFind.qtest",
+                                 "examples/test/ir/AOTNamedCallRefModules.qtest",
+                                 "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest",

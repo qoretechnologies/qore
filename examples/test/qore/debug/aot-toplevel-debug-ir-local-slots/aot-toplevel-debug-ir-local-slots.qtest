@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of top-level code and its debug IR
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class AOTTopLevelDebugIRLocalSlotsTest
+
+#! The local variables of the debug IR of top-level code compiled ahead of time (#6043)
+/** The debug IR of top-level code, which a qcc executable runs while a debugger is attached, assigned its local slots
+    in the order of its own instructions, while the runtime binds each of them to the variable of the native code's
+    slot with the same ID; a closure-bound local instantiated at the start of a loop body took a slot before the
+    locals that the native code gives slots first, and the debug IR then read and wrote other variables: the variable
+    of a foreach loop got the type of a catch variable in the second iteration of an outer loop.
+    AOTTopLevelDebugIRLocalSlots.q attaches a debugger and runs loops of that shape, in every execution mode and
+    compiled with qcc.
+*/
+class AOTTopLevelDebugIRLocalSlotsTest inherits QUnit::Test {
+    public {
+        #! the output of AOTTopLevelDebugIRLocalSlots.q with the AST interpreter
+        const Expected = "1: A0
+1: A1
+2: B01
+3: C01
+2: B02
+3: C02
+2: B01
+3: C01
+2: B02
+3: C02
+4: w=0 n=0
+2: B11
+3: C11
+2: B12
+3: C12
+2: B11
+3: C11
+2: B12
+3: C12
+4: w=1 n=2
+5: D0
+6: E0
+5: D1
+6: E1
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("AOTTopLevelDebugIRLocalSlotsTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/AOTTopLevelDebugIRLocalSlots.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the local variables of top-level code with a debugger", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the local variables of the debug IR of top-level code", opt), \aotTest(),
+                (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-aot-toplevel-debug-ir-local-slots-");
+        string exe = tmp.path + DirSep + "toplevel-debug-ir-local-slots";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
+            libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the native fast-entry code generation and linking of qcc executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class AnyParamStripTest
+
+#! issue #6032: an `any` parameter strips the complex type of a list as well as of a hash, in every execution mode
+/** `any` strips complex type information, as on assignment to an `any` variable; `auto` keeps it.  The AST
+    interpreter stripped a hash passed to an `any` parameter but not a list, the IR engines stripped both, and code
+    compiled with qcc stripped neither.  The script passes typed lists and hashes (and a hashdecl and a list<auto>) to
+    `any` parameters of a function, a method and a closure, and to `auto` and typed parameters, and checks the types
+    that the callee sees and that the caller's values keep theirs.
+*/
+class AnyParamStripTest inherits QUnit::Test {
+    public {
+        const Expected = "any list<int>: list\n"
+            "any hash<string, int>: hash\n"
+            "any hashdecl: hash\n"
+            "any list<auto>: list\n"
+            "any method list<int>: list\n"
+            "any closure hash<string, int>: hash\n"
+            "auto list<int>: list<int>\n"
+            "auto hash<string, int>: hash<string, int>\n"
+            "typed list<int>: list<int>\n"
+            "typed hash<string, int>: hash<string, int>\n"
+            "caller: list<int> hash<string, int> hash<AnyParamStripHd>\n";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("any parameter strip", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/AnyParamStrip.qr";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("background compiles", \backgroundTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode, compiled at the first call
+    private modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s "
+                "--exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+    }
+
+    #! runs the script with background compiles
+    private backgroundTest() {
+        foreach string mode in (("jit", "tiered")) {
+            assertEq(Expected, backquote(sprintf("env -u QORE_JIT_SYNC_COMPILE %s QORE_IR_THRESHOLD=1 "
+                "QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, script)),
+                mode + " with background compiles");
+        }
+    }
+
+    #! compiles the script with qcc: the functions are called through their native fast entries
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("any-param-strip-aot-");
+        string exe = dir.path + "/any-param-strip";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(Expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+}

@@ -46,7 +46,7 @@ QoreTypeSafeReferenceHelper::~QoreTypeSafeReferenceHelper() {
 }
 
 int QoreTypeSafeReferenceHelper::set(const ReferenceNode* ref) {
-    return priv->set(*ref);
+    return priv->lvalue.set(*ref);
 }
 
 int QoreTypeSafeReferenceHelper::reset(const ReferenceNode* ref, ExceptionSink* xsink) {
@@ -58,7 +58,7 @@ int QoreTypeSafeReferenceHelper::reset(const ReferenceNode* ref, ExceptionSink* 
 }
 
 AbstractQoreNode* QoreTypeSafeReferenceHelper::getUnique() {
-    return priv->getUnique(priv->vl.xsink);
+    return priv->getUnique(priv->lvalue.vl.xsink);
 }
 
 int QoreTypeSafeReferenceHelper::assign(QoreValue val) {
@@ -70,7 +70,7 @@ const QoreValue QoreTypeSafeReferenceHelper::getValue() const {
 }
 
 QoreTypeSafeReferenceHelper::operator bool() const {
-    return *priv;
+    return priv->lvalue;
 }
 
 qore_type_t QoreTypeSafeReferenceHelper::getType() const {
@@ -82,7 +82,7 @@ const char* QoreTypeSafeReferenceHelper::getTypeName() const {
 }
 
 int QoreTypeSafeReferenceHelper::setObjKey(QoreObject* obj, const char* key, bool for_remove) {
-    priv->setObjectContext(qore_object_private::get(*obj));
+    priv->lvalue.setObjectContext(qore_object_private::get(*obj));
     return priv->doObjLValue(obj, key, for_remove);
 }
 
@@ -96,38 +96,38 @@ int QoreTypeSafeReferenceHelper::moveToHashObjKey(const char* key, bool for_remo
 
 QoreValue QoreTypeSafeReferenceHelper::removeHashObjKey(const char* key) {
     // see LValueHelper::startContainerRemoval(): the scan is skipped if the removal took out no scannable value
-    priv->startContainerRemoval();
+    priv->lvalue.startContainerRemoval();
     QoreValue v = priv->getValue();
     if (v.getType() == NT_OBJECT) {
-        return qore_object_private::takeMember(*v.get<QoreObject>(), *priv, key);
+        return qore_object_private::takeMember(*v.get<QoreObject>(), priv->lvalue, key);
     } else if (v.getType() == NT_HASH) {
-        priv->ensureUnique();
+        priv->lvalue.ensureUnique();
         // ensureUnique() can replace the referenced lvalue with a copy; reload it instead of
         // mutating the stale shared value captured before copy-on-write.
         QoreHashNode* h = priv->getValue().get<QoreHashNode>();
-        ValueHolder rv(h->takeKeyValue(key), priv->vl.xsink);
+        ValueHolder rv(h->takeKeyValue(key), priv->lvalue.vl.xsink);
         if (needs_scan(*rv)) {
             if (!qore_hash_private::getScanCount(*h)) {
-                priv->setDelta(-1);
+                priv->lvalue.setDelta(-1);
             }
         }
         return rv.release();
     }
-    priv->vl.xsink->raiseException("REMOVE-KEY-ERROR", new QoreStringNodeMaker("Cannot remove a key from type "
+    priv->lvalue.vl.xsink->raiseException("REMOVE-KEY-ERROR", new QoreStringNodeMaker("Cannot remove a key from type "
         "\"%s\"; expecting \"hash\" or \"object\"", v.getFullTypeName()));
     return QoreValue();
 }
 
 const QoreTypeInfo* QoreTypeSafeReferenceHelper::getReferenceTypeInfo() const {
-    return priv->typeInfo;
+    return priv->lvalue.typeInfo;
 }
 
 AutoVLock& QoreTypeSafeReferenceHelper::getVLock() const {
-    return priv->vl;
+    return priv->lvalue.vl;
 }
 
 bool QoreTypeSafeReferenceHelper::isLocked() const {
-    return (bool)priv->vl;
+    return (bool)priv->lvalue.vl;
 }
 
 void QoreTypeSafeReferenceHelper::close() {
@@ -136,5 +136,5 @@ void QoreTypeSafeReferenceHelper::close() {
 }
 
 ExceptionSink* QoreTypeSafeReferenceHelper::getExceptionSink() const {
-    return priv->vl.xsink;
+    return priv->lvalue.vl.xsink;
 }

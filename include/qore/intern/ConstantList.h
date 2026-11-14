@@ -989,6 +989,20 @@ public:
     }
 };
 
+//! Returns the node as a RuntimeConstantRefNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const RuntimeConstantRefNode*>(), from the node type: every
+    RuntimeConstantRefNode, including the AOT constant path subclass, has NT_RTCONSTREF, and no other node has it.
+    A dynamic_cast searches the class hierarchy with string comparisons of the type names, which is too slow for
+    a constant read.
+*/
+DLLLOCAL inline const RuntimeConstantRefNode* qore_get_runtime_constant_ref_node(const AbstractQoreNode* n) {
+    const RuntimeConstantRefNode* rv = (n && n->getType() == NT_RTCONSTREF)
+        ? static_cast<const RuntimeConstantRefNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const RuntimeConstantRefNode*>(n));
+    return rv;
+}
+
 inline QoreValue ConstantEntry::getParseValue() const {
     return runtime_ref ? QoreValue(static_cast<AbstractQoreNode*>(runtime_ref)) : val;
 }

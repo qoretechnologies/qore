@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - native callbacks and lvalue checks run in children with explicit modes or qcc executables
+# test-platform: macos - native module callbacks, concurrent lvalue replacement and JIT/AOT compilation
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%exec-class NativeLValueCallbackTest
+
+class NativeLValueCallbackTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libdir + "/qcc";
+        string worker = get_script_dir() + "/worker.q";
+        string prefix;
+        const Count = 423;
+    }
+
+    constructor() : Test("NativeLValueCallback", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase("native callback parent lifetime in " + mode, \checkMode(), mode);
+        }
+        addTestCase("native callback parent lifetime in the IR tier", \checkIrTier());
+        addTestCase("native callback parent lifetime in AOT", \checkAot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    private checkOutput(string out) {
+        list<string> lines = select out.split("\n"), $1;
+        assertEq(Count, lines.size(), "all native callback scenarios completed");
+        assertEq((), (select lines, !($1 =~ /^PASS /)), "all worker checks passed");
+    }
+
+    checkMode(string mode) {
+        checkOutput(ExecModeHarness::run(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=" + mode + " " + quote(worker)));
+    }
+
+    checkIrTier() {
+        checkOutput(ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + quote(worker)));
+    }
+
+    checkAot() {
+        TmpDir tmp("native-lvalue-callback-");
+        string exe = tmp.path + "/worker";
+        hash<ExecModeHarness::ModeRunResult> compiled = ExecModeHarness::run_command(prefix + quote(qcc_bin)
+            + " -O2 -o " + quote(exe) + " " + quote(worker));
+        assertEq(0, compiled.rc, compiled.stdout + compiled.stderr);
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix + quote(exe)
+            + " -b --enable-debug");
+        assertEq(0, result.rc, result.stdout + result.stderr);
+        checkOutput(result.stdout);
+    }
+}

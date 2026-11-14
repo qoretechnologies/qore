@@ -161,6 +161,20 @@ public class HttpAsyncSocketIoController {
         #! Shutdown flag; prevents handler tasks from submitting new operations during stop()
         bool stopping = False;
 
+        #! The listeners that removeListener() has removed, by the hash that their connections are matched with
+        /** Each value is a weak reference to the listener, which is matched by identity: an entry matches only while
+            its listener exists, which it does for as long as a connection of the listener can exist, as a
+            connection holds its listener; an entry whose listener is gone matches nothing, and is purged by the next
+            removal or check that finds no listener left (listenerRemoved()).  A connection whose operation is
+            submitted after the removal took its snapshot of the listener's connections - the request of an SSE
+            stream that returns then, for example - is ended when it is submitted (qore#5991).
+        */
+        hash<auto> removed_listeners;
+
+        #! True while \c removed_listeners may have an entry whose listener exists; read before the lock is taken on
+        #! every submission, so that a server that has removed no listener (or none that still exists) pays nothing
+        bool have_removed_listeners;
+
         #! True after stop() has been called; prevents new listeners from being added
         bool has_been_stopped = False;
 
@@ -1231,6 +1245,8 @@ public class HttpAsyncSocketIoController {
                 "max_request_body_size": max_request_body_size,
                 "http_listener": http_listener,
             };
+            # a listener added again is no longer removed
+            remove removed_listeners{http_listener ? http_listener.uniqueHash() : lhash};
         }
 
         # Submit N concurrent accept operations
@@ -1310,6 +1326,8 @@ public class HttpAsyncSocketIoController {
                 "max_request_body_size": max_request_body_size,
             };
             quic_listener_hash_by_http_listener{http_listener.uniqueHash()} = lhash;
+            # a listener added again is no longer removed
+            remove removed_listeners{http_listener.uniqueHash()};
         }
         # Remove listener from map if submitQuicAcceptOp fails
         on_error {
@@ -1345,6 +1363,16 @@ public class HttpAsyncSocketIoController {
         }
 
         @debug(log(LoggerLevel::DEBUG, "removeListener: removing listener %s", lhash));
+        # the listener is recorded as removed before its connections are taken below, under the lock that a
+        # connection is registered with: a connection that is not in that snapshot is submitted after this, and
+        # submitConnectionOpIntern() ends it (qore#5991)
+        {
+            AutoWriteLock al(m);
+            purgeRemovedListeners();
+            object removed_listener = (linfo && linfo.http_listener) ? linfo.http_listener : listener;
+            removed_listeners{conn_listener_hash} := removed_listener;
+            have_removed_listeners = True;
+        }
         # Cancel accept operations (owned by the listener hash)
         controller.cancelByOwner(lhash);
 
@@ -3085,6 +3113,43 @@ public class HttpAsyncSocketIoController {
         submitConnectionOpIntern(uh, cinfo);
     }
 
+    #! Returns @ref True "True" if removeListener() has removed \a listener (see \c removed_listeners)
+    /** The listener is matched by identity against the removed listeners that still exist, of which there are
+        rarely more than one or two, so no hash of the listener is made on the submission path; when none exists
+        any more, the entries are purged and the check is turned off until the next removal.
+    */
+    private bool listenerRemoved(HttpServer::HttpListenerInterface listener) {
+        {
+            AutoReadLock al(m);
+            bool any;
+            foreach string k in (keys removed_listeners) {
+                *object removed = removed_listeners{k};
+                if (removed) {
+                    if (removed == listener) {
+                        return True;
+                    }
+                    any = True;
+                }
+            }
+            if (any) {
+                return False;
+            }
+        }
+        AutoWriteLock al(m);
+        purgeRemovedListeners();
+        return False;
+    }
+
+    #! Removes the entries of \c removed_listeners whose listener no longer exists; called with the write lock held
+    private purgeRemovedListeners() {
+        foreach string k in (keys removed_listeners) {
+            if (!removed_listeners{k}) {
+                remove removed_listeners{k};
+            }
+        }
+        have_removed_listeners = boolean(removed_listeners);
+    }
+
     #! Shared implementation for submitConnectionOp / submitConnectionOpUnlocked
     private submitConnectionOpIntern(string uh, hash<HttpActiveConnectionInfo> cinfo) {
         AbstractPollOperation op;
@@ -3242,6 +3307,24 @@ public class HttpAsyncSocketIoController {
                 "has_on_complete": True,
             };
             controller.submit(submit_info, True);  # replace=True since connection key may be reused
+            # a connection of a listener removed before this submission is not in the removal's snapshot of the
+            # listener's connections, so it is cancelled here, as the removal cancels the others: either this check
+            # sees the listener removed, or the connection was registered before the snapshot was taken (qore#5991).
+            # An operation that ends the connection - the send of its last response, or the close after it - is
+            # left to finish: a request that returns after the removal is answered and its connection closed (see
+            # handleRequestResult()).  A response whose request returned just before the removal is sent with an
+            # operation that keeps the connection, and is canceled with it, as the removal cancels the operations of
+            # the connections that it finds
+            if (have_removed_listeners && cinfo.listener && cinfo.state != HttpConnectionState::LingeringClose
+                    && cinfo.state != HttpConnectionState::SendStreamResponse && listenerRemoved(cinfo.listener)) {
+                log(LoggerLevel::DEBUG, "connection %s submitted after its listener was removed; ending it", uh);
+                try {
+                    controller.cancelByOwner(owner);
+                } catch () {
+                    # ignore errors for an operation that has already ended
+                }
+                cancelDelayedResponses((uh,));
+            }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit connection op for %s (state=%y): %s: %s",
                 uh, cinfo.state, ex.err, ex.desc);
@@ -4228,7 +4311,10 @@ public class HttpAsyncSocketIoController {
         # the drain started was made for a persistent connection.  Only a result that returns the connection to the
         # idle state is changed: a connection handed to a dedicated handler (WebSocket, SSE) or one that closes after
         # the response is not, as the server closes a long-lived connection with its protocol's close
-        if (draining && result.return_to_idle) {
+        # The same holds for a request that returns after its listener was removed: the connection is not kept for
+        # another request on the removed listener (qore#5991).
+        if (result.return_to_idle && (draining
+                || (have_removed_listeners && linfo.listener && listenerRemoved(linfo.listener)))) {
             result.close = True;
             result.return_to_idle = False;
             if (result.code) {

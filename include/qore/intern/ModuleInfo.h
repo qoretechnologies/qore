@@ -1554,6 +1554,13 @@ public:
         return init_c.refSelf();
     }
 
+    //! returns a reference to the del closure (a closure or a call reference), if the module has one
+    /** For the AOT compilation of the local modules that a script embeds; the module still owns its reference
+    */
+    DLLLOCAL QoreValue refDelClosure() const {
+        return del ? QoreValue(del->refSelf()) : QoreValue();
+    }
+
     DLLLOCAL virtual bool isBuiltin() const override {
         return false;
     }
