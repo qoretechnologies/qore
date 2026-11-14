@@ -1710,6 +1710,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::years() "years()", @ref Qore::months() "months()", @ref Qore::days() "days()",
+      @ref Qore::hours() "hours()", @ref Qore::minutes() "minutes()", @ref Qore::seconds() "seconds()",
+      @ref Qore::milliseconds() "milliseconds()" and @ref Qore::microseconds() "microseconds()" now raise
+      \c INVALID-DATE for a value that a relative date cannot hold; it wrapped to another duration (issue #6101)
     - the objects of a Program that outlives the library cleanup (such as a Program that a module holds in a static
       object) are now destroyed while the library can run their destructors, which crashed at a normal process exit;
       a thread started while the library is cleaned up now raises \c THREAD-CREATION-FAILURE (issue #6045)
