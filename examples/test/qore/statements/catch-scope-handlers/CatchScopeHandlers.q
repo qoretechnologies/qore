@@ -255,6 +255,145 @@ sub r4() {
     } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
 }
 
+# a handler in a reference foreach in a catch block: the catch block is left after the foreach releases its values
+sub w1() {
+    try {
+        D loc("local");
+        try { throw "A", "", new D("arg"); } catch () {
+            list<auto> li = (new D("e0"),);
+            foreach auto x in (\li) {
+                on_exit { try { rethrow; } catch (hash<ExceptionInfo> r) { log += "oh:" + r.err; } }
+                x = new D("e1");
+                throw "B";
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+sub w2() {
+    list<auto> li = (1,);
+    try {
+        on_exit { log += "enclosing"; }
+        try { throw "A", "", new D("arg"); } catch () {
+            foreach auto x in (\li) {
+                on_exit { log += "inner"; }
+                x = new D("w");
+                throw "B";
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+    remove li;
+}
+sub w3i() {
+    D loc("local");
+    try { throw "A", "", new D("arg"); } catch () {
+        list<auto> li = (new D("h0"),);
+        foreach auto x in (\li) {
+            on_exit { log += "oh"; }
+            x = new D("h1");
+            thrower();
+        }
+    }
+}
+sub w3() {
+    try { w3i(); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+# a call that raises in a nested catch block before the handler of the enclosing catch block is registered
+sub c1() {
+    try {
+        D loc("local");
+        try { throw "A", "", new D("arg"); } catch () {
+            try { throw "N", "", new D("n"); } catch () { thrower(); }
+            on_exit { log += "oh"; }
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+sub c2i() {
+    D loc("local");
+    try { throw "A", "", new D("arg"); } catch () {
+        try { throw "N", "", new D("n"); } catch () { thrower(); }
+        on_exit { log += "oh"; }
+    }
+}
+sub c2() {
+    try { c2i(); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+# without handlers
+sub c3() {
+    try {
+        D loc("local");
+        try { throw "A", "", new D("arg"); } catch () {
+            try { throw "N", "", new D("n"); } catch () { thrower(); }
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+# the catch variable is released with the catch block, before the handlers and locals of the enclosing blocks
+sub v1i() {
+    on_exit log += "fh";
+    D loc("local");
+    try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) {
+        on_exit { log += "h"; }
+        throw "B";
+    }
+}
+sub v1() {
+    try { v1i(); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+sub v2() {
+    try {
+        D loc("local");
+        try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) {
+            on_exit { log += "h"; }
+            throw "B";
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+sub v3() {
+    try {
+        D loc("local");
+        try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) {
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+
+# a statement of a catch block that can raise (whose exception goes to the catch block's exit) after a try block whose
+# partial removal uses the values of its selectors on its exception path
+our auto nothing_bound;
+int sub sel(string s, int v) { log += "sel " + s; return v; }
+sub s1() {
+    list<int> m = (0, 1, 2, 3, 4);
+    try {
+        remove m[sel("a", 1)..sel("b", 2), nothing_bound, sel("c", 4)..nothing_bound];
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught:" + ex.err;
+    }
+    log += sprintf("%y", m);
+}
+
+# a catch block with only simple statements in no exception region of its frame
+sub x1i(int k) {
+    D loc("local");
+    try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) {
+        if (k == 0) throw "B";
+        if (k == 1) rethrow;
+        rethrow "A2", "";
+    }
+}
+sub x1() {
+    for (int k = 0; k < 3; ++k) {
+        try { x1i(k); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+    }
+}
+sub x2i() {
+    D loc("local");
+    try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) {
+        throw "B";
+    }
+}
+sub x2() {
+    try { x2i(); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+
 # the functions are called directly, so that they run as native code in the jit and tiered modes, and each twice, so
 # that the second call runs the code that the first one compiled in the tiered mode
 sub call(string fn) {
@@ -286,10 +425,23 @@ sub call(string fn) {
         case "r2": r2(); break;
         case "r3": r3(); break;
         case "r4": r4(); break;
+        case "w1": w1(); break;
+        case "w2": w2(); break;
+        case "w3": w3(); break;
+        case "c1": c1(); break;
+        case "c2": c2(); break;
+        case "c3": c3(); break;
+        case "v1": v1(); break;
+        case "v2": v2(); break;
+        case "v3": v3(); break;
+        case "s1": s1(); break;
+        case "x1": x1(); break;
+        case "x2": x2(); break;
     }
 }
 foreach string fn in (("h1", "h2", "h3", "h4", "h5", "n1", "n2", "n3", "n4", "d1", "d2", "e1", "f1", "f2", "t1", "o1",
-        "o2", "a1", "r1", "r2", "r3", "r4")) {
+        "o2", "a1", "r1", "r2", "r3", "r4", "w1", "w2", "w3", "c1", "c2", "c3", "v1", "v2", "v3", "s1",
+        "x1", "x2")) {
     for (int i = 0; i < 2; ++i) {
         log = ();
         call(fn);

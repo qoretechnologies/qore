@@ -21,7 +21,12 @@
     handler failed (an assertion in a debug build).  The AST interpreter runs the catch block, with its handlers, with
     its exception the current one, and deletes it after the catch block; a catch block in no block with handlers is
     left before the locals of the enclosing blocks are released (d1, d2), also when the exception leaves a reference
-    foreach or context statement in it (r1-r3).  CatchScopeHandlers.q gives the output of
+    foreach or context statement in it (r1-r3), and after the values of a reference foreach with a handler in it
+    (w1-w3).  A catch block left by an exception that a call in a nested catch block raised is left after the nested
+    one and before the enclosing blocks (c1-c3), and the catch variable is released with the catch block (v1-v3).  A
+    catch block whose statements can raise comes after the try block in native code (s1).  A catch block of simple
+    statements in no exception region of its frame is closed, after its catch variable is released, by a throw or
+    rethrow in it (x1, x2).  CatchScopeHandlers.q gives the output of
     the AST interpreter in every execution mode and compiled with qcc.
 */
 class CatchScopeHandlersTest inherits QUnit::Test {
@@ -71,6 +76,30 @@ r3: [\"del:arg\", \"del:local\", \"caught:B\", \"del:arg\", \"del:local\", \"cau
 r3: [\"del:arg\", \"del:local\", \"caught:B\", \"del:arg\", \"del:local\", \"caught:B\"]
 r4: [\"oh:A\", \"caught:B\"]
 r4: [\"oh:A\", \"caught:B\"]
+w1: [\"oh:A\", \"del:e1\", \"del:e0\", \"del:arg\", \"del:local\", \"caught:B\"]
+w1: [\"oh:A\", \"del:e1\", \"del:e0\", \"del:arg\", \"del:local\", \"caught:B\"]
+w2: [\"inner\", \"del:w\", \"del:arg\", \"enclosing\", \"caught:B\"]
+w2: [\"inner\", \"del:w\", \"del:arg\", \"enclosing\", \"caught:B\"]
+w3: [\"oh\", \"del:h1\", \"del:h0\", \"del:arg\", \"del:local\", \"caught:B\"]
+w3: [\"oh\", \"del:h1\", \"del:h0\", \"del:arg\", \"del:local\", \"caught:B\"]
+c1: [\"del:n\", \"del:arg\", \"del:local\", \"caught:B\"]
+c1: [\"del:n\", \"del:arg\", \"del:local\", \"caught:B\"]
+c2: [\"del:n\", \"del:arg\", \"del:local\", \"caught:B\"]
+c2: [\"del:n\", \"del:arg\", \"del:local\", \"caught:B\"]
+c3: [\"del:n\", \"del:arg\", \"del:local\", \"caught:B\"]
+c3: [\"del:n\", \"del:arg\", \"del:local\", \"caught:B\"]
+v1: [\"h\", \"del:arg\", \"fh\", \"del:local\", \"caught:B\"]
+v1: [\"h\", \"del:arg\", \"fh\", \"del:local\", \"caught:B\"]
+v2: [\"h\", \"del:arg\", \"del:local\", \"caught:B\"]
+v2: [\"h\", \"del:arg\", \"del:local\", \"caught:B\"]
+v3: [\"del:arg\", \"del:local\", \"caught:B\"]
+v3: [\"del:arg\", \"del:local\", \"caught:B\"]
+s1: [\"sel a\", \"sel b\", \"sel c\", \"caught:RANGE-ERROR\", \"[3, 4]\"]
+s1: [\"sel a\", \"sel b\", \"sel c\", \"caught:RANGE-ERROR\", \"[3, 4]\"]
+x1: [\"del:arg\", \"del:local\", \"caught:B\", \"del:local\", \"caught:A\", \"del:arg\", \"del:local\", \"caught:A2\", \"del:arg\"]
+x1: [\"del:arg\", \"del:local\", \"caught:B\", \"del:local\", \"caught:A\", \"del:arg\", \"del:local\", \"caught:A2\", \"del:arg\"]
+x2: [\"del:arg\", \"del:local\", \"caught:B\"]
+x2: [\"del:arg\", \"del:local\", \"caught:B\"]
 ";
 
         #! the optimization levels of the AOT compiles
