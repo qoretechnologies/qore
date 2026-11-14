@@ -1781,8 +1781,27 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
         if (*xsink) {
             return -1;
         }
+        // the type arguments of the member's class: the object's own instantiated type if the member is its class's,
+        // else the instantiation of the generic parent class that declares the member, which a non-generic or another
+        // generic subclass gives as the arguments of its base class (class IntBox inherits Box<int>, qore#6027)
+        const QoreTypeInfo* instantiated_type = qore_object_private::get(o)->instantiated_type;
+        if (const qore_class_private* member_priv = info.getClass()) {
+            const QoreClass* member_class = member_priv->cls;
+            const QoreClass* object_class = o.getClass();
+            if (!sameDeclaration(member_class, object_class) && member_priv->hasTypeParams()) {
+                const qore_class_private* object_priv = qore_class_private::get(*object_class);
+                const QoreParameterizedClassTypeInfo* object_pti = QoreTypeInfo::getParameterizedClassType(
+                    instantiated_type);
+                const QoreTypeInfo* parent_type = object_pti
+                    ? object_priv->getParameterizedBaseTypeInfo(object_pti, member_class)
+                    : object_priv->getConcreteParameterizedBaseTypeInfo(member_class, false);
+                if (parent_type) {
+                    instantiated_type = parent_type;
+                }
+            }
+        }
         const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(info.getInitializerTypeInfo(),
-            qore_object_private::get(o)->instantiated_type);
+            instantiated_type);
         printd(5, "qore_class_private::initMember() this: %p '%s::%s' type %s val: %s filter: %d\n", this, name.c_str(),
             member_name, QoreTypeInfo::getPath(member_type),
             val->getFullTypeName(true),

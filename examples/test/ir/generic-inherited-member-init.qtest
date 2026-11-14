@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT serialization and loading of generic class members
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class GenericInheritedMemberInitTest
+
+#! the members with an initializer of a generic class that a class inherits through an instantiation (qore#6027)
+/** In `class IntBox inherits Box<int>` the member `hash<string, T> mi = {}` of an `IntBox` object kept the
+    unsubstituted type parameter in the type of its value, in every mode: the initializer was substituted with the type
+    arguments of the object's own class, which has none.  It is now substituted with those that the object's class
+    gives to the generic class that declares the member, through any number of levels and for each parent class.
+    Every mode, qcc executables included, must print the output of the AST.
+
+    The program is in \c generic-inherited-member-init/.
+*/
+class GenericInheritedMemberInitTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string dir = get_script_dir() + "/generic-inherited-member-init";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("inherited",);
+    }
+
+    constructor() : QUnit::Test("GenericInheritedMemberInitTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string run(string name, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs) {
+            string out = run(name, "ast");
+            assertEq(expected(name), out, name + " ast");
+            # the member types of the inherited instantiations, which the expected output holds, have no type parameter
+            assertTrue(out !~ /<T>|, T>|<K>|<V>|, V>/, name + ": no unsubstituted type parameter: " + out);
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        TmpDir tmp("qore-generic-inherited-member-init-");
+        foreach string name in (Programs) {
+            foreach string opt in (("0", "3")) {
+                string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+                int rc;
+                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
+                assertEq(0, rc, sprintf("%s -O%s compiled (output: %y)", name, opt, out));
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b", exe));
+                assertEq(0, r.rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, r.out));
+                assertEq(expected(name), r.stdout, sprintf("%s qcc -O%s", name, opt));
+            }
+        }
+    }
+}
