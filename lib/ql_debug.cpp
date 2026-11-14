@@ -96,6 +96,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
+#include "qore/intern/qore_enum_decl_private.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -19623,6 +19624,19 @@ static QoreValue f_dbg_get_deref_rsection_count(const QoreListNode* params, Runt
     return q_get_deref_rsection_count();
 }
 
+//! returns the number of references to the declaration of an enum value, or -1 if the value is not an enum value
+/** An enum value holds a reference to its declaration; tests use this to verify that the code that releases enum
+    values releases each reference that it took (qore#6091).
+*/
+static QoreValue f_dbg_enum_decl_reference_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreValue v = get_param_value(params, 0);
+    if (!v.isEnum()) {
+        return -1;
+    }
+    return qore_enum_decl_private::get(*v.getEnumMember()->getEnumDecl())->referenceCount();
+}
+
 //! returns the number of dereferences in the current thread that took the locking path
 /** A dereference of an object or captured variable that has nothing to decide releases its reference with a single
     atomic operation and no lock; tests use this to verify that calling methods on a shared object outside a cycle
@@ -22766,6 +22780,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_deref_locked_count", f_dbg_get_deref_locked_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_enum_decl_reference_count", f_dbg_enum_decl_reference_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "v");
     qns.addBuiltinVariant("dbg_scan_wait_notify", f_dbg_scan_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "c");
     qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

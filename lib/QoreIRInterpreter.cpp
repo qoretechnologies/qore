@@ -14805,12 +14805,13 @@ load_local_done:
                 // slot before qore_rt_iterator_next(); an exception that its destructor raises leaves the loop with
                 // the iterator still alive, which the loop's exception cleanup or the frame releases (qore#5670)
                 // (the slot keeps its place among the frame's temporaries, which an exception releases in order)
-                // (only a node has a reference to release, and the slot owns the element that it holds: the
-                // instructions that take it over or release it clear the slot)
+                // (only a node or an enum value, which holds its declaration, has a reference to release (qore#6091),
+                // and the slot owns the element that it holds: the instructions that take it over or release it clear
+                // the slot)
                 {
                     uint32_t elem_id = iter_inst->result.id;
                     assert(elem_id < values.size());
-                    if (values[elem_id].hasNode()) {
+                    if (values[elem_id].needsRef()) {
                         QoreValue elem = values[elem_id];
                         values[elem_id] = QoreValue();
                         elem.discard(xsink);
@@ -14900,8 +14901,8 @@ load_local_done:
                     ip = 0;
                 } else {
                     // Store current value in result and branch to continue; the previous element was released
-                    // above, so the slot holds no node
-                    assert(!values[iter_inst->result.id].hasNode());
+                    // above, so the slot holds no reference
+                    assert(!values[iter_inst->result.id].needsRef());
                     setValueSlotDirect(values, iter_inst->result.id, val.takeReferencedValue());
                     cleanup.push_back(iter_inst->result.id);
                     prev_block = block;

@@ -166,6 +166,11 @@ public:
         refs.ROreference();
     }
 
+    //! returns the number of references to the declaration (for debugging; see dbg_enum_decl_reference_count())
+    DLLLOCAL int referenceCount() const {
+        return refs.reference_count();
+    }
+
     DLLLOCAL bool deref() {
         if (refs.ROdereference()) {
             assert(ed->priv == this);
