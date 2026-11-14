@@ -1125,4 +1125,32 @@ public:
     }
 };
 
+//! Returns the node as a SelfFunctionCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const SelfFunctionCallNode*>(), from the node type: only SelfFunctionCallNode's
+    constructors give NT_SELF_CALL, and its subclasses keep it (SetSelfFunctionCallNode copies a self call; the
+    lexical variants made by qore_make_function_call() keep the type of their base class).  A dynamic_cast searches
+    the class hierarchy with string comparisons of the type names, which is too slow for the per-call paths.
+*/
+DLLLOCAL inline const SelfFunctionCallNode* qore_get_self_function_call_node(const AbstractQoreNode* n) {
+    const SelfFunctionCallNode* rv = (n && n->getType() == NT_SELF_CALL)
+        ? static_cast<const SelfFunctionCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const SelfFunctionCallNode*>(n));
+    return rv;
+}
+
+//! Returns the node as a StaticMethodCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const StaticMethodCallNode*>(), from the node type: only StaticMethodCallNode's
+    constructors give NT_STATIC_METHOD_CALL, and its lexical variants made by qore_make_function_call() keep it.  A
+    dynamic_cast searches the class hierarchy with string comparisons of the type names, which is too slow for the
+    per-call paths.
+*/
+DLLLOCAL inline const StaticMethodCallNode* qore_get_static_method_call_node(const AbstractQoreNode* n) {
+    const StaticMethodCallNode* rv = (n && n->getType() == NT_STATIC_METHOD_CALL)
+        ? static_cast<const StaticMethodCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const StaticMethodCallNode*>(n));
+    return rv;
+}
+
 #endif

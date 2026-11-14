@@ -4503,7 +4503,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         uvb ? uvb->getUserSignature() : nullptr);
                     if (base_bits) {
                         QoreValue base_val = fromBits(base_bits);
-                        const SelfFunctionCallNode* base_sfcn = dynamic_cast<const SelfFunctionCallNode*>(
+                        const SelfFunctionCallNode* base_sfcn = qore_get_self_function_call_node(
                             base_val.getInternalNode());
                         if (base_sfcn && num_args && self_args_ok) {
                             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base_sfcn,
@@ -6364,7 +6364,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             continue;
         }
         // Static method call
-        const auto* smc = dynamic_cast<const StaticMethodCallNode*>(node);
+        const auto* smc = qore_get_static_method_call_node(node);
         if (smc && smc->getMethod()) {
             ctx->call_targets[i].method = smc->getMethod();
             ctx->call_targets[i].is_static_method = true;
@@ -6379,7 +6379,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             continue;
         }
         // Self method call
-        const auto* self_call = dynamic_cast<const SelfFunctionCallNode*>(node);
+        const auto* self_call = qore_get_self_function_call_node(node);
         if (self_call && self_call->getMethod()) {
             ctx->call_targets[i].method = self_call->getMethod();
             ctx->call_targets[i].qc = self_call->getClass();

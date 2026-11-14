@@ -12711,7 +12711,7 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
         const AbstractQoreNode* inner = inner_expr.getInternalNode();
 
         // background self.method(args)
-        if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
+        if (auto* sfcn = qore_get_self_function_call_node(inner)) {
             // a named call resolved at run time by parameter name is not decomposed: its call node binds its
             // arguments by name, which the call made by the thread from the method alone would not
             if (sfcn->getMethod() && !sfcn->getMethod()->isStatic() && !sfcn->getRuntimeArgNames()
@@ -12747,7 +12747,7 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
             }
         }
         // background Class::staticMethod(args)
-        else if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
+        else if (auto* smcn = qore_get_static_method_call_node(inner)) {
             std::string class_path = smcn->getClassPath();
             if ((smcn->getMethod() || !class_path.empty())
                     && qore_ir_background_args_are_start_values(smcn->getParseArgs(), smcn->getArgs())) {
@@ -15937,7 +15937,7 @@ void QoreIRLowering::emitSelfCallTargetCheck(const QoreValue& call, const QorePr
 
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    auto* call = dynamic_cast<const SelfFunctionCallNode*>(node);
+    auto* call = qore_get_self_function_call_node(node);
     if (!call) {
         return QoreIRValue();
     }
@@ -16018,7 +16018,7 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
 
 QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    auto* call = dynamic_cast<const StaticMethodCallNode*>(node);
+    auto* call = qore_get_static_method_call_node(node);
     if (!call) {
         return QoreIRValue();
     }

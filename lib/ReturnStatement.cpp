@@ -39,7 +39,7 @@ static bool qore_return_expr_is_deferred_static_method_call(const QoreValue& exp
         return false;
     }
 
-    if (const StaticMethodCallNode* call = dynamic_cast<const StaticMethodCallNode*>(exp.getInternalNode())) {
+    if (const StaticMethodCallNode* call = qore_get_static_method_call_node(exp.getInternalNode())) {
         return !call->getMethod() && !call->getClassPath().empty();
     }
 

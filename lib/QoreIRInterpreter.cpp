@@ -115,16 +115,6 @@ static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
     return enabled;
 }
 
-// The cast of a static method call node that the call paths read on every call: StaticMethodCallNode is the only
-// class with NT_STATIC_METHOD_CALL, and a copy keeps the type of the node copied.  A test of the type replaces a
-// dynamic_cast, which compares the names of the classes (strcmp) on every call (see qore_get_function_call_node()).
-static inline const StaticMethodCallNode* qore_ir_static_method_call_node(const AbstractQoreNode* node) {
-    const StaticMethodCallNode* rv = node && node->getType() == NT_STATIC_METHOD_CALL
-        ? static_cast<const StaticMethodCallNode*>(node) : nullptr;
-    assert(rv == dynamic_cast<const StaticMethodCallNode*>(node));
-    return rv;
-}
-
 static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode() ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     // only the Qore builtins, never a user or module function with the same name
@@ -1916,7 +1906,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
     const size_t nargs_ops = operands.size();
 
     // background self.method(args)
-    if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
+    if (auto* sfcn = qore_get_self_function_call_node(inner)) {
         if (!sfcn->getMethod()) {
             return {false, QoreValue()};
         }
@@ -1945,7 +1935,7 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
         return {true, result};
     }
     // background Class::staticMethod(args)
-    if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
+    if (auto* smcn = qore_get_static_method_call_node(inner)) {
         const QoreParseListNode* pargs = smcn->getParseArgs();
         const QoreListNode* sargs = smcn->getArgs();
         size_t actual_nargs = pargs ? pargs->size() : (sargs ? sargs->size() : 0);
@@ -6721,7 +6711,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     used_operands = true;
                 }
             } else if (op == QoreIROpcode::CallMethod) {
-                if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                if (auto* call = qore_get_self_function_call_node(
                         inv->expr.getInternalNode())) {
                     // Direct evalImpl() — avoids evalExprNode() overhead
                     SelfFunctionCallNode clone(*call, arg_list);
@@ -6736,13 +6726,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     used_operands = true;
                 }
             } else if (op == QoreIROpcode::CallStatic || op == QoreIROpcode::CallStaticDirect) {
-                if (auto* call = dynamic_cast<const StaticMethodCallNode*>(
+                if (auto* call = qore_get_static_method_call_node(
                         inv->expr.getInternalNode())) {
                     // Direct evalImpl() — avoids evalExprNode() overhead
                     StaticMethodCallNode clone(*call, arg_list);
                     res = evalTmpCallAndRef(&clone, xsink);
                     used_operands = true;
-                } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                } else if (auto* call = qore_get_self_function_call_node(
                         inv->expr.getInternalNode())) {
                     // Scoped self call (Class::method(args)) lowered through a CallStatic slot
                     // but keeping its SelfFunctionCallNode expr — dispatch with the IR operand
@@ -17949,7 +17939,7 @@ load_local_done:
                 // the call stack frame of the called code is located at the call
                 QoreIRCallSiteScope call_site(qore_call_site_slot(rl_cache.loc_ptr), inst->loc);
                 auto* static_inst = static_cast<QoreIRCallStaticDirectInstruction*>(inst);
-                const StaticMethodCallNode* static_call_expr = qore_ir_static_method_call_node(
+                const StaticMethodCallNode* static_call_expr = qore_get_static_method_call_node(
                     static_inst->expr.getInternalNode());
                 if (static_inst->variant && static_call_expr) {
                     int nargs = static_cast<int>(static_inst->operands.size());
@@ -18151,7 +18141,7 @@ load_local_done:
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallMethod) {
-                        if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(call_expr.getInternalNode())) {
+                        if (auto* call = qore_get_self_function_call_node(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             SelfFunctionCallNode clone(*call, arg_list);
                             res = evalTmpCallAndRef(&clone, xsink);
@@ -18165,12 +18155,12 @@ load_local_done:
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallStatic) {
-                        if (auto* call = dynamic_cast<const StaticMethodCallNode*>(call_expr.getInternalNode())) {
+                        if (auto* call = qore_get_static_method_call_node(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             StaticMethodCallNode clone(*call, arg_list);
                             res = evalTmpCallAndRef(&clone, xsink);
                             used_operands = true;
-                        } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                        } else if (auto* call = qore_get_self_function_call_node(
                                 call_expr.getInternalNode())) {
                             // A scoped self call (Class::method(args) within the class hierarchy)
                             // is lowered through a CallStatic slot but keeps its SelfFunctionCallNode
