@@ -182,14 +182,8 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
 
         auto inserted = group_map.emplace(std::move(key), groups.size());
         if (inserted.second) {
-            std::vector<std::string> key_values;
-            key_values.reserve(group_cols.size());
-            for (const auto& gc : group_cols) {
-                size_t ci = src_col_index.at(gc);
-                const ColumnData& cd = *src_columns[ci].data;
-                key_values.push_back(cd.isNull(r) ? std::string() : get_key_value(cd, r));
-            }
-            groups.push_back({std::move(key_values), {r}});
+            // the values of a group are those of the source columns at its first row
+            groups.push_back({{}, {r}});
         } else {
             groups[inserted.first->second].row_indices.push_back(r);
         }

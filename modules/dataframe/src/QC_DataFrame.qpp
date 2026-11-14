@@ -855,7 +855,8 @@ DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *stri
     binary value by its bytes; a list or a hash by its elements (two lists make one group if their elements are
     equal in order, and two hashes if they have the same keys with equal values, in any order); an object, a
     closure or a call reference by its identity, and a weak reference as the object, hash or list that it refers
-    to; an enum member as its value; and any other value by its type and value.  Values of different types make
+    to (a weak reference whose object is deleted makes a group of its own, apart from the null values); an enum
+    member as its value; and any other value by its type and value.  Values of different types make
     different groups: the int \c 1, the float \c 1.0, the string \c "1" and \c True make four groups.  To group
     values of different types by a common value, group a typed column, or a column of the values cast to one type
     (ex: <tt>df.withColumn("k", map $1.toString(), df.getColumn("k"))</tt>).
@@ -1127,6 +1128,9 @@ DataFrame DataFrame::dropna() [flags=RET_VALUE_ONLY] {
     @param count_name optional name of the count column; defaults to \c count
     @return new DataFrame with the value column and count column
 
+    Two values are counted as one if they are equal as groupBy() groups them (in a column that holds any value, by
+    their type and exact value).
+
     @par Example:
     @code{.py}
     DataFrame counts = orders.valueCounts("status", sort_desc: True);
@@ -1151,6 +1155,9 @@ DataFrame DataFrame::valueCounts(string column, bool dropna = True, bool sort_de
 /** @param column the column to inspect
     @param dropna if True (the default), null values are excluded
     @return unique value count
+
+    Two values are counted as one if they are equal as groupBy() groups them (in a column that holds any value, by
+    their type and exact value).
 
     @par Example:
     @code{.py}
@@ -1267,12 +1274,13 @@ static DataFrame DataFrame::fromColumnarResult(auto result) [flags=RET_VALUE_ONL
 
     A NaN value of a \c float64 column cannot be ordered for the minimum, the maximum and the quartiles, so it raises
     \c NAN-COMPARE-ERROR, as with the <=> operator and sortBy(); null values are left out.  To describe a column
-    without its NaN values, drop them first: a NaN is never greater than or equal to \c -\@inf\@, while every other
-    number is (a null value is left out too).
+    without its NaN values, select it and drop them first: a NaN is never greater than or equal to \c -\@inf\@,
+    while every other number is (a null value is left out too); filtering the whole DataFrame would drop the rows
+    from its other columns too.
 
     @par Example:
     @code{.py}
-    list<hash<ColumnStats>> stats = df.filter("v", ">=", -@inf@).describe();
+    list<hash<ColumnStats>> stats = df.select(("v",)).filter("v", ">=", -@inf@).describe();
     @endcode
 
     @throw NAN-COMPARE-ERROR if a float64 column has a NaN value, which cannot be ordered for the minimum, the

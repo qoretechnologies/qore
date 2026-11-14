@@ -257,7 +257,8 @@ void appendKeyBytes(std::string& key, const char* data, size_t len) {
 //! returns the value that a value of a column that holds any value stands for, and its type (qore#6107)
 /** An enum member stands for its value, as with the core operators, and an opaque or weak reference for the value
     that it refers to (a weak reference to an object is keyed as the object; one whose object is deleted as no
-    value).  The tags of the value are checked inline, and the reference is resolved only for a reference.
+    value, which makes a key of its own, apart from the null cells of the column).  The tags of the value are
+    checked inline, and the reference is resolved only for a reference.
 */
 static inline QoreValue resolveKeyValue(QoreValue v, qore_type_t& t) {
     // a float, held in the value, is told with no call into the library
@@ -315,18 +316,49 @@ static void appendDateKey(std::string& key, const DateTimeNode* dt) {
     key.append(reinterpret_cast<const char*>(&us), sizeof(us));
 }
 
-//! appends the key of an arbitrary-precision number: the shortest decimal form that gives its value back at its
-//! precision, so that two numbers make one key if they are equal (qore#6107)
+//! the precision at which arbitrary-precision numbers are keyed: one for all numbers, which holds the value of a
+//! number of a lower precision exactly
+static constexpr unsigned DATAFRAME_NUMBER_KEY_PREC = 4096;
+
+//! appends the key of an arbitrary-precision number: its exact value, whatever its precision, so that two numbers
+//! make one key if and only if they are equal (qore#6107)
+/** The number is widened to one precision for all numbers, which holds its value exactly, and keyed by the
+    shortest decimal form that gives that value back at that precision; the form at a number's own precision would
+    give one form to two different values at two precisions.  A number of a higher precision (rare) is keyed by its
+    precision and its own form.  NaN, the infinities and zero (-0 == 0) have keys of their own.
+*/
 static void appendNumberKey(std::string& key, const QoreNumberNode* n) {
     key += 'n';
-    // -0 == 0
+    if (n->nan()) {
+        appendKeyBytes(key, "NaN", 3);
+        return;
+    }
+    if (n->inf()) {
+        if (n->sign() > 0) {
+            appendKeyBytes(key, "+Inf", 4);
+        } else {
+            appendKeyBytes(key, "-Inf", 4);
+        }
+        return;
+    }
     if (n->zero()) {
         appendKeyBytes(key, "0", 1);
         return;
     }
     QoreString str;
     ExceptionSink xsink;
-    if (n->toStringRoundTrip(str, false, &xsink)) {
+    int rc;
+    if (n->getPrec() <= DATAFRAME_NUMBER_KEY_PREC) {
+        SimpleRefHolder<QoreNumberNode> zero(new QoreNumberNode("0", DATAFRAME_NUMBER_KEY_PREC));
+        SimpleRefHolder<QoreNumberNode> wide(n->doPlus(**zero));
+        rc = wide->toStringRoundTrip(str, true, &xsink);
+    } else {
+        key += 'P';
+        unsigned prec = n->getPrec();
+        key.append(reinterpret_cast<const char*>(&prec), sizeof(prec));
+        rc = n->toStringRoundTrip(str, true, &xsink);
+    }
+    if (rc) {
         // a conversion error: the raw (unrounded) form
         xsink.clear();
         str.clear();
@@ -339,8 +371,11 @@ static void appendNumberKey(std::string& key, const QoreNumberNode* n) {
 void appendScalarValueKey(std::string& key, QoreValue v, qore_type_t t) {
     switch (t) {
         case NT_NOTHING:
-        case NT_NULL:
             key += 'N';
+            break;
+        // NULL != NOTHING with the == operator (a null cell of a column has a key of its own at the top level)
+        case NT_NULL:
+            key += 'U';
             break;
         case NT_FLOAT:
             appendDataFrameFloatKey(key, 'g', v.isFloat() ? v.getDouble() : v.getAsFloat());
@@ -362,10 +397,15 @@ void appendScalarValueKey(std::string& key, QoreValue v, qore_type_t t) {
             break;
         case NT_STRING: {
             // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in different
-            // encodings make the same key
+            // encodings make the same key; a UTF-8 string (a short string too) is appended with no copy
             key += 's';
-            std::string str = dataFrameUtf8Key(v);
-            appendKeyBytes(key, str.data(), str.size());
+            QoreStringDataHelper str(v);
+            if (str.getEncoding() == QCS_UTF8) {
+                appendKeyBytes(key, str.c_str(), str.size());
+            } else {
+                std::string utf8 = dataFrameUtf8Key(v);
+                appendKeyBytes(key, utf8.data(), utf8.size());
+            }
             break;
         }
         case NT_BINARY: {

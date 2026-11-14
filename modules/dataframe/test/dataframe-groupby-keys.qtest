@@ -128,6 +128,19 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         });
         assertEq((1.0, 2.0, 4.0, 24.0, 96.0, 128.0, 256.0, 512.0, 3072.0, 4096.0, 24576.0),
             df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        # numbers of different precisions: equal values make one group, different values two, whatever their forms
+        number a = 0.1n;
+        number a2 = a + 0.000000000000000000000000000000000000000000000000000000000000000000000000000n;
+        number hi = 0.1000000000000000000000000000000000000000000000000000000000000000000000000000n;
+        DataFrame::DataFrame n({
+            "k": (c'z', a, a2, hi, @nan@n, @nan@n, -@inf@n, @inf@n),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128),
+        });
+        assertEq((1.0, 6.0, 8.0, 48.0, 64.0, 128.0), n.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"),
+            "numbers of different precisions");
+        # NULL and NOTHING in a container differ, as with ==
+        DataFrame::DataFrame u({"k": (c'z', (NULL,), (NOTHING,), (NULL,)), "v": (1, 2, 4, 8)});
+        assertEq((1.0, 10.0, 4.0), u.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "NULL and NOTHING");
     }
 
     #! a weak reference is grouped as the object, hash or list that it refers to (qore#6107)
@@ -145,6 +158,13 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         k += (wl,);
         DataFrame::DataFrame df({"k": k, "v": (1, 2, 4, 8, 16, 32, 64, 128, 256)});
         assertEq((1.0, 6.0, 24.0, 96.0, 384.0), df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        # a weak reference whose object is deleted makes a group of its own, apart from the null values
+        object o3 = new Mutex();
+        list<auto> d = (c'z', NOTHING, 1, NOTHING);
+        d[3] := o3;
+        delete o3;
+        DataFrame::DataFrame dead({"k": d, "v": (1, 2, 4, 8)});
+        assertEq((1.0, 2.0, 4.0, 8.0), dead.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "a deleted object");
     }
 
     #! values in lists and hashes are keyed as at the top level

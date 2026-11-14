@@ -341,7 +341,8 @@ static int pivotKey(const ColumnData& cd, int64_t i, std::string& key, std::stri
         const DateTimeNode* dt = v.get<const DateTimeNode>();
         if (cd.type != ColumnType::DATE) {
             // the key of a value of a column that holds any value, as groupBy() makes it (qore#6107)
-            key = dataFrameValueKey(cd, i);
+            key.clear();
+            dataFrameAppendAutoValueKey(key, v);
         }
         if (!label) {
             return 0;
@@ -383,7 +384,8 @@ static int pivotKey(const ColumnData& cd, int64_t i, std::string& key, std::stri
             case NT_CHAR:
                 // the key of a value of a column that holds any value, as groupBy() makes it: its type and its
                 // exact value (qore#6107)
-                key = dataFrameValueKey(cd, i);
+                key.clear();
+                dataFrameAppendAutoValueKey(key, v);
                 break;
             default:
                 xsink->raiseException("DATAFRAME-ERROR", "pivot column '%s' has a value of type '%s', which cannot "
