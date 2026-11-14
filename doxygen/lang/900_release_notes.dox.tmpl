@@ -87,6 +87,11 @@
     \c INVALID-FUNCTION-ACCESS and parse errors for code a Program may not use name the restricted functional domain.
 
 
+    @par An any Parameter Strips Complex Types
+    A typed list or hash passed to a parameter of type @ref any_type "any" is stripped of its complex type as on
+    assignment to \c any (ex: a \c list&lt;int&gt; argument is a plain \c list in the function), as with every other
+    \c any declaration; it kept the type before; use @ref auto_type "auto" to keep it.
+
     @par Adding a Value in Front of a Typed List Keeps Its Type
     The @ref plus_operator "+" operator gives a list of the type of a typed list when it adds a value in front of it,
     as it does when it adds the value at the end (ex: \c list&lt;int&gt; for <tt>1 + l</tt> for a \c list&lt;int&gt;

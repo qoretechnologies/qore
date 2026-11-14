@@ -212,6 +212,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_load_local_raw", reinterpret_cast<void*>(&qore_rt_load_local_raw) },
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
+    { "qore_rt_strip_any_param", reinterpret_cast<void*>(&qore_rt_strip_any_param) },
     { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
     { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
     { "qore_rt_element_local_replace", reinterpret_cast<void*>(&qore_rt_element_local_replace) },
@@ -2199,6 +2200,20 @@ extern "C" DLLEXPORT void qore_rt_strip_complex_type(uint64_t value) {
             qore_list_private::get(*l)->complexTypeInfo = nullptr;
         }
     }
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_strip_any_param(uint64_t value) {
+    QoreValue val = fromBits(value);
+    if (!QoreTypeInfo::mayRequireFilter(anyTypeInfo, val)) {
+        return value;
+    }
+    // copies a shared container with a plain type, as QoreTypeInfo::acceptInputParam() does for an `any` parameter
+    ExceptionSink xsink;
+    QoreTypeInfo::acceptInputParam(anyTypeInfo, 0, nullptr, val, &xsink);
+    // stripping a plain list or hash raises nothing
+    assert(!xsink);
+    xsink.clear();
+    return toBits(val);
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
