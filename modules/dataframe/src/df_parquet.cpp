@@ -1237,6 +1237,21 @@ static std::shared_ptr<arrow::DataType> bufferElementTypeToArrowType(QoreBufferE
     }
 }
 
+//! returns a column or field name, which is in the default encoding, in UTF-8, the encoding of Arrow names (qore#6100)
+static std::string arrowName(const std::string& name, ExceptionSink* xsink) {
+    std::string rv;
+    dataFrameUtf8Bytes(name.data(), name.size(), QCS_DEFAULT, rv, xsink);
+    return rv;
+}
+
+//! returns an Arrow name, which is in UTF-8, in the default encoding, the encoding of column names and hash keys
+//! (qore#6100)
+static std::string qoreName(const std::string& name, ExceptionSink* xsink) {
+    std::string rv;
+    dataFrameDefaultString(name, rv, xsink);
+    return rv;
+}
+
 static QoreColumnarTypeDescriptor arrowTypeToColumnarDescriptor(const std::string& name,
         const std::shared_ptr<arrow::DataType>& type, bool nullable, ExceptionSink* xsink) {
     QoreColumnarTypeDescriptor desc;
@@ -1374,21 +1389,21 @@ static QoreColumnarTypeDescriptor arrowTypeToColumnarDescriptor(const std::strin
             return desc;
         }
         auto child = type->field(i);
-        desc.children.push_back(arrowTypeToColumnarDescriptor(child->name(), child->type(), child->nullable(),
-            xsink));
+        desc.children.push_back(arrowTypeToColumnarDescriptor(qoreName(child->name(), xsink), child->type(),
+            child->nullable(), xsink));
     }
     return desc;
 }
 
 static QoreColumnarTypeDescriptor arrowFieldToColumnarDescriptor(const std::shared_ptr<arrow::Field>& field,
         ExceptionSink* xsink) {
-    return arrowTypeToColumnarDescriptor(field->name(), field->type(), field->nullable(), xsink);
+    return arrowTypeToColumnarDescriptor(qoreName(field->name(), xsink), field->type(), field->nullable(), xsink);
 }
 
 static void setArrowColumnarSchema(ColumnData& data, const std::shared_ptr<arrow::Field>& field,
         ExceptionSink* xsink) {
     data.columnar_schema = arrowFieldToColumnarDescriptor(field, xsink);
-    data.columnar_schema.name = field->name();
+    data.columnar_schema.name = qoreName(field->name(), xsink);
     data.has_columnar_schema = !*xsink;
 }
 
@@ -1433,7 +1448,10 @@ static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
 
 static std::shared_ptr<arrow::Field> columnarDescriptorToArrowField(
         const QoreColumnarTypeDescriptor& desc, const std::string& fallback_name, ExceptionSink* xsink) {
-    std::string name = desc.name.empty() ? fallback_name : desc.name;
+    std::string name = arrowName(desc.name.empty() ? fallback_name : desc.name, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     auto type = columnarDescriptorToArrowType(desc, xsink);
     if (!type) {
         return nullptr;
@@ -1740,8 +1758,8 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     return QoreValue();
                 }
                 // a field name with a NUL character cannot be a hash key; the value cannot be read to a hash
-                const std::string& field_name = struct_type->field(i)->name();
-                if (QoreHashNode::checkKey(field_name.data(), field_name.size(), "DATAFRAME-IO-ERROR",
+                std::string field_name = qoreName(struct_type->field(i)->name(), xsink);
+                if (*xsink || QoreHashNode::checkKey(field_name.data(), field_name.size(), "DATAFRAME-IO-ERROR",
                         "struct field name", xsink)) {
                     child_val.discard(xsink);
                     return QoreValue();
@@ -1821,10 +1839,11 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                 if (*xsink) {
                     return QoreValue();
                 }
-                QoreStringValueHelper key_str(*key_val);
+                // a hash key is in the default encoding
+                QoreStringValueHelper key_str(*key_val, QCS_DEFAULT, xsink);
                 // a map key with a NUL character cannot be a hash key; the value cannot be read to a hash
-                if (QoreHashNode::checkKey(key_str->c_str(), key_str->size(), "DATAFRAME-IO-ERROR", "map key",
-                        xsink)) {
+                if (*xsink || QoreHashNode::checkKey(key_str->c_str(), key_str->size(), "DATAFRAME-IO-ERROR",
+                        "map key", xsink)) {
                     return QoreValue();
                 }
                 QoreValue item_val = arrowScalarToQore(items, start + i, xsink);
@@ -1933,14 +1952,30 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         case arrow::Type::DOUBLE:
             status = static_cast<arrow::DoubleBuilder*>(builder)->Append(val.getAsFloat());
             break;
-        case arrow::Type::STRING: {
-            QoreStringValueHelper str(val);
-            status = static_cast<arrow::StringBuilder*>(builder)->Append(str->c_str(), str->size());
-            break;
-        }
+        // an Arrow string is in UTF-8 (a hash key written as a map key, for example, is in the default encoding)
+        case arrow::Type::STRING:
         case arrow::Type::LARGE_STRING: {
-            QoreStringValueHelper str(val);
-            status = static_cast<arrow::LargeStringBuilder*>(builder)->Append(str->c_str(), str->size());
+            // a UTF-8 string, the usual value, is appended with no conversion and no call to QoreValue::getType()
+            auto append = [&](const char* data, size_t len) {
+                status = type->id() == arrow::Type::STRING
+                    ? static_cast<arrow::StringBuilder*>(builder)->Append(data, len)
+                    : static_cast<arrow::LargeStringBuilder*>(builder)->Append(data, len);
+            };
+            const QoreStringNode* node = val.isPointer() && val.getPtr()->getType() == NT_STRING
+                ? static_cast<const QoreStringNode*>(val.getPtr()) : nullptr;
+            if (node && node->getEncoding() == QCS_UTF8) {
+                append(node->c_str(), node->size());
+            } else if (val.isShortString()) {
+                // a short string is always in UTF-8
+                QoreStringDataHelper str(val);
+                append(str.c_str(), str.size());
+            } else {
+                QoreStringValueHelper str(val, QCS_UTF8, xsink);
+                if (*xsink) {
+                    return false;
+                }
+                append(str->c_str(), str->size());
+            }
             break;
         }
         case arrow::Type::BINARY: {
@@ -2104,8 +2139,8 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                 auto child_field = struct_type->field(i);
                 // the value of a field is the value of the key of the field name in the hash; a field name with a NUL
                 // character cannot be a key, and would otherwise select the value of another key
-                const std::string& field_name = child_field->name();
-                if (QoreHashNode::checkKey(field_name.data(), field_name.size(), xsink)) {
+                std::string field_name = qoreName(child_field->name(), xsink);
+                if (*xsink || QoreHashNode::checkKey(field_name.data(), field_name.size(), xsink)) {
                     return false;
                 }
                 if (!appendToArrowBuilder(struct_builder->child_builder(i).get(), child_field->type(),
@@ -2608,6 +2643,11 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             return nullptr;
         }
         ++column_index;
+        // a column name is in the default encoding, and an Arrow name in UTF-8
+        std::string arrow_name = arrowName(col.name, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
 
         const ColumnData& cd = *col.data;
         if (cd.has_columnar_schema) {
@@ -2639,7 +2679,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
         switch (cd.type) {
             case ColumnType::INT64: {
                 auto type = arrow::int64();
-                fields.push_back(arrow::field(col.name, type));
+                fields.push_back(arrow::field(arrow_name, type));
                 auto dense_arr = denseBufferToArrowArray(cd, type, col.name, xsink);
                 if (*xsink) {
                     return nullptr;
@@ -2675,7 +2715,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             }
             case ColumnType::FLOAT64: {
                 auto type = arrow::float64();
-                fields.push_back(arrow::field(col.name, type));
+                fields.push_back(arrow::field(arrow_name, type));
                 auto dense_arr = denseBufferToArrowArray(cd, type, col.name, xsink);
                 if (*xsink) {
                     return nullptr;
@@ -2710,7 +2750,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
                 break;
             }
             case ColumnType::STRING: {
-                fields.push_back(arrow::field(col.name, arrow::utf8()));
+                fields.push_back(arrow::field(arrow_name, arrow::utf8()));
                 arrow::StringBuilder builder(pool);
                 if (checkArrowColumnStatus(builder.Reserve(cd.n_rows), xsink,
                         "error reserving Arrow string array", col.name)) {
@@ -2759,7 +2799,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             }
             case ColumnType::BOOL: {
                 auto type = arrow::boolean();
-                fields.push_back(arrow::field(col.name, type));
+                fields.push_back(arrow::field(arrow_name, type));
                 auto dense_arr = denseBufferToArrowArray(cd, type, col.name, xsink);
                 if (*xsink) {
                     return nullptr;
@@ -2795,7 +2835,7 @@ static std::shared_ptr<arrow::Table> dataFrameToArrowTable(const std::vector<Col
             }
             case ColumnType::DATE: {
                 auto ts_type = arrow::timestamp(arrow::TimeUnit::MICRO, "UTC");
-                fields.push_back(arrow::field(col.name, ts_type));
+                fields.push_back(arrow::field(arrow_name, ts_type));
                 auto dense_arr = denseBufferToArrowArray(cd, ts_type, col.name, xsink);
                 if (*xsink) {
                     return nullptr;
@@ -2993,7 +3033,11 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
         }
 
         auto arrow_col = table->column(c);
-        std::string col_name = table->schema()->field(c)->name();
+        std::string col_name = qoreName(table->schema()->field(c)->name(), xsink);
+        if (*xsink) {
+            delete df;
+            return nullptr;
+        }
 
         auto cd = arrowColumnToDF(arrow_col, table->schema()->field(c), xsink);
         if (*xsink) {
@@ -3091,7 +3135,11 @@ QoreDataFrame* QoreDataFrame::fromArrowIpc(const BinaryNode* data,
         }
 
         auto arrow_col = table->column(c);
-        std::string col_name = table->schema()->field(c)->name();
+        std::string col_name = qoreName(table->schema()->field(c)->name(), xsink);
+        if (*xsink) {
+            delete df;
+            return nullptr;
+        }
 
         auto cd = arrowColumnToDF(arrow_col, table->schema()->field(c), xsink);
         if (*xsink) {

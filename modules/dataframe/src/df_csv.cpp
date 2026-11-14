@@ -242,8 +242,13 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
             has_header = v.getAsBool();
         }
         v = options->getKeyValue("null_string");
-        if (getDataFrameString(v, s)) {
-            null_string = s;
+        if (v.getType() == NT_STRING) {
+            // the fields are compared in the default encoding, in which they are read (qore#6100)
+            QoreStringValueHelper str(v, QCS_DEFAULT, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            null_string.assign(str->c_str(), str->size());
         }
         v = options->getKeyValue("skip_rows");
         if (!v.isNullOrNothing()) {

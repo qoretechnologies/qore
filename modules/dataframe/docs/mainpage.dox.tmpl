@@ -33,7 +33,11 @@
     character encoding, and a column name made from a string cell (by
     @ref Qore::DataFrame::DataFrame::pivot() "DataFrame::pivot()") is converted to it; a cell that it cannot
     represent raises \c DATAFRAME-ENCODING-ERROR (and @ref Qore::DataFrame::DataFrame::writeCSV()
-    "DataFrame::writeCSV()" leaves no file).
+    "DataFrame::writeCSV()" leaves no file).  The \c null_string option of
+    @ref Qore::DataFrame::DataFrame::readCSV() "DataFrame::readCSV()" is compared with the fields in the default
+    encoding.  Column names, struct field names and map keys, which are in UTF-8 in Parquet and Arrow data, are
+    converted to the default encoding, the encoding of column names and hash keys, when they are read, and back when
+    they are written.
 
     The cells of a \c date column are stored as the microseconds since the epoch in an int64, which holds the dates
     from \c -290308-12-21T19:59:05.224192Z to \c 294247-01-10T04:00:54.775807Z (and time values of the same
