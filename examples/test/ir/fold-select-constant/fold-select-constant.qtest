@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+# test-platform: macos - JIT and AOT code generation of a fold over a fused pipeline with a constant select predicate
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class FoldSelectConstantTest
+
+#! issue #6014: a fold over a select stage whose predicate is a constant
+/** The IR of a function with a fold over a fused pipeline whose select stage has a constant False predicate failed
+    verification ("operand references undefined value"), so the function could not run in the IR interpreter or as
+    native code, and qcc could not compile it.
+
+    The script next to the test runs in every execution mode (its functions compiled before they run, with
+    QORE_JIT_SYNC_COMPILE), on the IR tier and as AOT executables, and its output must be that of the AST interpreter.
+*/
+class FoldSelectConstantTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "fold-select-constant-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("fold over a constant select", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the functions are compiled to native code before they run, not in the background
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_JIT_SYNC_COMPILE=1", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        list<string> lines = out.split("\n");
+        assertEq(48, lines.size(), "cases");
+        foreach string line in (lines) {
+            (*string name, *string val) = (line =~ x/^(.*): (.*)$/);
+            assertEq(expectedValue(name), val, name);
+        }
+    }
+
+    #! the value that the AST interpreter gives for the case \a name
+    private static string expectedValue(string name) {
+        switch (name) {
+            case /list map false/: return "0";
+            case /list map true/: return "2";
+            case /any map false/: return "False";
+            case /any map true/: return "True";
+            case /map object true/: return "2";
+            case /false/: return "null";
+            case /string/: return "\"a,b\"";
+            case /map/: return name =~ /foldr/ ? "[2, 1]" : "[1, 2]";
+        }
+        return "3";
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("fold-select-constant-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

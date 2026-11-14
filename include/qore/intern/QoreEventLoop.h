@@ -244,13 +244,16 @@ loop.removeRegistration(fd, op_key, xsink);
     }
 
     //! Adds a timer to the event loop
-    /** @param deadline_us absolute deadline in microseconds since the epoch
+    /** @param deadline_us absolute deadline in microseconds: since the epoch (the system clock), or on the monotonic
+        clock (q_get_monotonic_us()) if \a monotonic is true
         @param udata user data pointer to associate with this timer
         @param preset_id if > 0, use this ID instead of auto-allocating
+        @param monotonic true if \a deadline_us is on the monotonic clock: a step of the system clock does not move
+        the timer (a timer for an interval, see AsyncIoController::addTimerDelay())
 
         @return the timer ID
     */
-    DLLLOCAL int64_t addTimer(int64_t deadline_us, void* udata, int64_t preset_id = 0);
+    DLLLOCAL int64_t addTimer(int64_t deadline_us, void* udata, int64_t preset_id = 0, bool monotonic = false);
 
     //! Cancels a timer
     /** @param id the timer ID returned by addTimer()
@@ -261,24 +264,24 @@ loop.removeRegistration(fd, op_key, xsink);
 
     //! Returns the number of active timers
     DLLLOCAL size_t timerCount() const {
-        return timer_set.size();
+        return timer_set.size() + mono_timer_set.size();
     }
 
     //! Returns the number of registered event sources (fds + timers)
     DLLLOCAL size_t size() const {
 #ifdef DARWIN
-        return fd_map.size() + user_event_map.size() + timer_set.size();
+        return fd_map.size() + user_event_map.size() + timerCount();
 #else
-        return fd_map.size() + timer_set.size();
+        return fd_map.size() + timerCount();
 #endif
     }
 
     //! Returns true if no event sources are registered (no fds and no timers)
     DLLLOCAL bool empty() const {
 #ifdef DARWIN
-        return fd_map.empty() && user_event_map.empty() && timer_set.empty();
+        return fd_map.empty() && user_event_map.empty() && timer_set.empty() && mono_timer_set.empty();
 #else
-        return fd_map.empty() && timer_set.empty();
+        return fd_map.empty() && timer_set.empty() && mono_timer_set.empty();
 #endif
     }
 
@@ -523,7 +526,7 @@ private:
 
     //! Timer entry for the sorted timer set
     struct TimerEntry {
-        int64_t deadline_us;    //!< Absolute deadline (usec since epoch)
+        int64_t deadline_us;    //!< Absolute deadline (usec since epoch, or on the monotonic clock in mono_timer_set)
         int64_t id;             //!< Unique timer ID
         void* udata;            //!< Caller-managed user data
 
@@ -535,11 +538,28 @@ private:
         }
     };
 
-    //! Sorted set of timers (ordered by deadline, then ID)
+    //! Sorted set of timers with deadlines on the system clock (ordered by deadline, then ID)
     std::set<TimerEntry> timer_set;
 
-    //! Map of timer ID -> iterator into timer_set for O(log n) cancel
-    std::unordered_map<int64_t, std::set<TimerEntry>::iterator> timer_id_map;
+    //! Sorted set of timers with deadlines on the monotonic clock (ordered by deadline, then ID)
+    /** Timers for an interval: a step of the system clock does not move them (see addTimer())
+    */
+    std::set<TimerEntry> mono_timer_set;
+
+    //! A timer's entry and the set that holds it
+    struct TimerRef {
+        std::set<TimerEntry>::iterator it;
+        bool monotonic;
+    };
+
+    //! Map of timer ID -> its entry in timer_set or mono_timer_set for O(log n) cancel
+    std::unordered_map<int64_t, TimerRef> timer_id_map;
+
+    //! Returns the time until the earliest timer is due in microseconds (0 if one is due), or -1 if there is none
+    DLLLOCAL int64_t nextTimerWaitUs() const;
+
+    //! Moves the expired timers of \a set (due at \a now_us on its clock) to \a events
+    DLLLOCAL void collectExpiredTimers(std::set<TimerEntry>& set, int64_t now_us, std::vector<QoreEventInfo>& events);
 
     //! Next timer ID to allocate
     int64_t next_timer_id = 1;

@@ -6607,12 +6607,18 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
 
 const QoreTypeInfo* QoreAOTTypeResolver::resolveForSignature(const char* path, std::string& error,
         const UserSignature* signature) {
-    const UserSignature* old_signature = signature_type_param_owner;
+    // restores the owner also when the resolution raises a C++ exception, as a resolver can be shared by a context
+    // build (qore#5885)
+    struct OwnerRestore {
+        const UserSignature*& owner;
+        const UserSignature* old;
+        ~OwnerRestore() {
+            owner = old;
+        }
+    } restore{signature_type_param_owner, signature_type_param_owner};
     // the type parameters that a closure names are those of the code that it is in (qore#5733)
     signature_type_param_owner = signature ? signature->getTypeParamOwner() : nullptr;
-    const QoreTypeInfo* rv = resolve(path, error);
-    signature_type_param_owner = old_signature;
-    return rv;
+    return resolve(path, error);
 }
 
 // ---- Namespace Serialization (Phase 3) ----
@@ -12405,6 +12411,10 @@ void qoreAOTAppendClosureCapture(std::vector<QoreAOTClosureCaptureInfo>& capture
     captures.push_back({lv, parent_slot});
 }
 
+template <typename F>
+static bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f,
+        std::unordered_set<const QoreIRFunction*>& visited_handlers);
+
 //! Calls \a f for each parameter that a background helper in \a func owns, in instruction order
 /** These are the parameters that hold the values that a background expression takes when its thread starts
     (QoreIRLowering::lowerBackgroundLeaf()); the other parameters of a helper are local variables of the code that
@@ -12415,6 +12425,14 @@ void qoreAOTAppendClosureCapture(std::vector<QoreAOTClosureCaptureInfo>& capture
 */
 template <typename F>
 bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f) {
+    // each handler function once: they can be shared (#6087)
+    std::unordered_set<const QoreIRFunction*> visited_handlers;
+    return qoreAOTForEachBackgroundHelperParam(func, f, visited_handlers);
+}
+
+template <typename F>
+static bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f,
+        std::unordered_set<const QoreIRFunction*>& visited_handlers) {
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
@@ -12429,12 +12447,13 @@ bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f) {
                         return false;
                     }
                 }
-                if (!qoreAOTForEachBackgroundHelperParam(*bi->helper_ir, f)) {
+                if (!qoreAOTForEachBackgroundHelperParam(*bi->helper_ir, f, visited_handlers)) {
                     return false;
                 }
             } else if (inst->opcode == QoreIROpcode::OnBlockExit) {
                 const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
-                if (obei->handler_ir && !qoreAOTForEachBackgroundHelperParam(*obei->handler_ir, f)) {
+                if (obei->handler_ir && visited_handlers.insert(obei->handler_ir.get()).second
+                        && !qoreAOTForEachBackgroundHelperParam(*obei->handler_ir, f, visited_handlers)) {
                     return false;
                 }
             }
@@ -12594,7 +12613,15 @@ bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vli
     });
     writer.writeU16(static_cast<uint16_t>(captures.size()));
     for (const QoreAOTClosureCaptureInfo& capture : captures) {
-        writer.writeStringRef(capture.lv->getName() ? capture.lv->getName() : "");
+        // a closure in a default argument has no enclosing function: a top-level local that it reads is written by
+        // its index in the Program's top-level local list, which the reader resolves (and waits for) as it does for
+        // the default argument expressions that read one (qore#5868, qore#5998)
+        std::string top_ref;
+        if (capture.parent_slot < 0 && qore_aot_top_level_local_ref(writer, capture.lv, top_ref)) {
+            writer.writeStringRef(top_ref.c_str());
+        } else {
+            writer.writeStringRef(capture.lv->getName() ? capture.lv->getName() : "");
+        }
         writer.writeU32(static_cast<uint32_t>(capture.parent_slot));
     }
     return true;
@@ -16525,10 +16552,13 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
 }
 
 bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const VarRefNode* varref, std::string& ref) {
-    if (!writer.allow_top_level_local_ref || !writer.serialization_program || !varref) {
+    return varref && qore_aot_top_level_local_ref(writer, varref->ref.id, ref);
+}
+
+bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const LocalVar* lv, std::string& ref) {
+    if (!writer.allow_top_level_local_ref || !writer.serialization_program) {
         return false;
     }
-    const LocalVar* lv = varref->ref.id;
     if (!lv || !lv->isTopLevel() || !lv->getName()) {
         return false;
     }

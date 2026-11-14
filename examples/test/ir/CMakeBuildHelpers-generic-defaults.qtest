@@ -39,7 +39,7 @@ class CMakeGenericDefaultsTest inherits CMakeBuildHelpersTestBase::GenericQccObj
           the program prints what it printed after the hashdecl default changed
     */
     testDefaultsAndTypes() {
-        TmpDir tmp("qore-cmake-qcc-defaults-");
+        TmpDir tmp("qore-cmake-qcc-defaults-", NOTHING, cmakeTmpBase());
         hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
         settleGenericBaseline(project);
         publishProviderAlone(project);

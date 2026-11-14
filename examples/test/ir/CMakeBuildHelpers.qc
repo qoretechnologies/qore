@@ -88,7 +88,7 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
         directory, so the AOT artifact goes stale against a file it consumes.
     */
     testModuleSourceGlobTracking() {
-        TmpDir tmp("qore-module-source-glob-");
+        TmpDir tmp("qore-module-source-glob-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string stage_dir = tmp.path + "/stage";
@@ -158,7 +158,7 @@ qore_user_modules(\"qlib/Fixture\")
     }
 
     testSourceQmodSymlinkFreshness() {
-        TmpDir tmp("qore-source-qmod-links-");
+        TmpDir tmp("qore-source-qmod-links-", NOTHING, cmakeTmpBase());
         string source_qlib = tmp.path + "/qlib";
         string build_qmods = tmp.path + "/qlib-qmod";
         string source_module = source_qlib + "/Fixture";
@@ -205,7 +205,7 @@ qore_user_modules(\"qlib/Fixture\")
         first tree away from its tests.
     */
     testSourceQmodSymlinkOtherBuildTree() {
-        TmpDir tmp("qore-source-qmod-trees-");
+        TmpDir tmp("qore-source-qmod-trees-", NOTHING, cmakeTmpBase());
         string source_qlib = tmp.path + "/qlib";
         string remove_script = realpath(get_script_dir() + "/../../../cmake/RemoveSourceQmodSymlinks.cmake");
         string ensure_script = realpath(get_script_dir() + "/../../../cmake/EnsureSourceQmodSymlinks.cmake");
@@ -236,6 +236,27 @@ qore_user_modules(\"qlib/Fixture\")
         mkdir(tmp.path + "/debug/qlib-qmod/ModC", 0755, True);
         write(tmp.path + "/debug/qlib-qmod/ModC/ModC.qmod", "fixture qmod\n");
         symlink("../../debug/qlib-qmod/ModC/ModC.qmod", source_modc + "/ModC.qmod");
+        # and an absolute link that names tree "debug" otherwise than QORE_BUILD_QMOD_DIR (on macOS, CMake names
+        # /private/tmp/... as /tmp/..., and a link to /private/tmp/... was kept)
+        string source_modd = source_qlib + "/ModD";
+        mkdir(source_modd, 0755, True);
+        mkdir(tmp.path + "/debug/qlib-qmod/ModD", 0755, True);
+        write(tmp.path + "/debug/qlib-qmod/ModD/ModD.qmod", "fixture qmod\n");
+        symlink(tmp.path + "/debug/./qlib-qmod/ModD/ModD.qmod", source_modd + "/ModD.qmod");
+        # a link that names tree "debug" through a symbolic link to it is removed too, while a link into a sibling
+        # directory whose name extends the tree's qmod directory (qlib-qmod2) is kept
+        string debug_alias = tmp.path + "/debug-alias";
+        symlink(tmp.path + "/debug", debug_alias);
+        hash<string, string> extra_links;
+        foreach hash<auto> h in ({"module": "ModE", "dir": debug_alias + "/qlib-qmod"},
+                {"module": "ModF", "dir": tmp.path + "/debug/qlib-qmod2"}) {
+            string source_module = source_qlib + "/" + h.module;
+            mkdir(source_module, 0755, True);
+            mkdir(tmp.path + "/debug/" + basename(h.dir) + "/" + h.module, 0755, True);
+            write(tmp.path + "/debug/" + basename(h.dir) + "/" + h.module + "/" + h.module + ".qmod", "fixture qmod\n");
+            extra_links{h.module} = source_module + "/" + h.module + ".qmod";
+            symlink(h.dir + "/" + h.module + "/" + h.module + ".qmod", extra_links{h.module});
+        }
 
         # the format-change cleanup of tree "debug" removes only its own links
         string out = run(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s -P %s",
@@ -244,11 +265,27 @@ qore_user_modules(\"qlib/Fixture\")
         assertEq(qmods.ModA, readlink(links.ModA), "the link into the other build tree is unchanged: " + out);
         assertFalse(is_link(links.ModB), "the link into the cleaning build tree is removed: " + out);
         assertFalse(is_link(source_modc + "/ModC.qmod"), "a relative link into the cleaning tree is removed: " + out);
-        assertTrue(out.find("Removed 2 generated source qmod symlink(s)") >= 0, out);
+        assertFalse(is_link(source_modd + "/ModD.qmod"),
+            "an absolute link into the cleaning tree named otherwise is removed: " + out);
+        assertFalse(is_link(extra_links.ModE),
+            "a link into the cleaning tree through a symbolic link to it is removed: " + out);
+        assertTrue(is_link(extra_links.ModF), "a link into a sibling qmod directory (qlib-qmod2) is kept: " + out);
+        assertTrue(out.find("Removed 4 generated source qmod symlink(s)") >= 0, out);
 
         # the stale-artifact check of tree "debug" does not remove tree "release"'s link to a fresh qmod
         string format_stamp = tmp.path + "/debug/qcc-format.stamp";
         write(format_stamp, "format=1\n");
+        foreach string mod in ("ModG", "ModH") {
+            mkdir(source_qlib + "/" + mod, 0755, True);
+            write(source_qlib + "/" + mod + "/" + mod + ".qm",
+                sprintf("%%modern\nmodule %s { version = \"1.0\"; }\n", mod));
+            string qmod = tmp.path + "/debug/qlib-qmod/" + mod + "/" + mod + ".qmod";
+            mkdir(dirname(qmod), 0755, True);
+            write(qmod, "fixture qmod\n");
+            TestFileTime::set_file_times(2026-01-01T00:00:00Z, qmod);
+        }
+        symlink(tmp.path + "/debug/./qlib-qmod/ModG/ModG.qmod", source_qlib + "/ModG/ModG.qmod");
+        symlink(debug_alias + "/qlib-qmod/ModH/ModH.qmod", source_qlib + "/ModH/ModH.qmod");
         TestFileTime::set_file_times(2026-01-01T00:00:00Z, debug_moda);
         TestFileTime::set_file_times(2026-01-01T00:01:00Z, format_stamp);
         assertTrue(mtime(debug_moda) < mtime(format_stamp),
@@ -258,6 +295,12 @@ qore_user_modules(\"qlib/Fixture\")
             shellQuote(ensure_script)));
         assertTrue(is_link(links.ModA), "a stale artifact in another tree keeps the link: " + out);
         assertEq(qmods.ModA, readlink(links.ModA), "a stale artifact in another tree leaves the link alone: " + out);
+        # a link to a stale artifact of tree "debug" is removed however it names the artifact (with ./, or through a
+        # symbolic link to the tree)
+        assertFalse(is_link(source_qlib + "/ModG/ModG.qmod"),
+            "a link to a stale artifact of the tree spelled with ./ is removed: " + out);
+        assertFalse(is_link(source_qlib + "/ModH/ModH.qmod"),
+            "a link to a stale artifact of the tree through a symbolic link to it is removed: " + out);
 
         # the cleanup requires the build tree whose links it removes
         assertNeq(0, system(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -P %s > /dev/null 2>&1",
@@ -276,7 +319,7 @@ qore_user_modules(\"qlib/Fixture\")
         if (!qore_dir || !is_file(qore_dir + "/QoreBuildTree.cmake")) {
             testSkip("the build tree's QoreConfig.cmake is not available for the build under test");
         }
-        TmpDir tmp("qore-moved-build-tree-");
+        TmpDir tmp("qore-moved-build-tree-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string moved_dir = tmp.path + "/moved";
         string link_dir = tmp.path + "/link";
@@ -315,7 +358,7 @@ message(STATUS \"qore cmake dir: ${QORE_CMAKE_DIR}\")
     }
 
     testDownstreamCatalogInstallRoot() {
-        TmpDir tmp("qore-cmake-downstream-catalog-");
+        TmpDir tmp("qore-cmake-downstream-catalog-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -499,7 +542,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogInstallReconciliation() {
-        TmpDir tmp("qore-cmake-catalog-reconcile-");
+        TmpDir tmp("qore-cmake-catalog-reconcile-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string other_src_dir = tmp.path + "/other-src";
@@ -594,7 +637,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogOwnedOrphanRetirement() {
-        TmpDir tmp("qore-cmake-catalog-orphan-");
+        TmpDir tmp("qore-cmake-catalog-orphan-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -642,7 +685,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogManifestEntryValidation() {
-        TmpDir tmp("qore-cmake-catalog-manifest-");
+        TmpDir tmp("qore-cmake-catalog-manifest-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -680,7 +723,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogInstallDestdirStaging() {
-        TmpDir tmp("qore-cmake-catalog-destdir-");
+        TmpDir tmp("qore-cmake-catalog-destdir-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -840,7 +883,7 @@ find_package(Qore REQUIRED)
             testSkip("QoreMacros.cmake is not available beside the test");
         }
 
-        TmpDir tmp("qore-qcc-deps-libqore-");
+        TmpDir tmp("qore-qcc-deps-libqore-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         mkdir(src_dir);
@@ -912,7 +955,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/deps.txt\"
         if (!qore_dir) {
             testSkip("QoreConfig.cmake is not available for the build under test");
         }
-        TmpDir tmp("qore-external-qmod-runtime-");
+        TmpDir tmp("qore-external-qmod-runtime-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string tool_dir = tmp.path + "/tools";
@@ -1011,7 +1054,7 @@ qore_external_user_module(\"qlib/Fixture\" \"\")
     }
 
     testExportedHelpers() {
-        TmpDir tmp("qore-cmake-build-helpers-");
+        TmpDir tmp("qore-cmake-build-helpers-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         mkdir(src_dir);
@@ -1128,7 +1171,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         shared parse's depfile, so an edit to it rebuilt nothing.
     */
     testGroupExternalInputsDepfile() {
-        TmpDir tmp("qore-cmake-qcc-external-inputs-");
+        TmpDir tmp("qore-cmake-qcc-external-inputs-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1253,7 +1296,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/extinputs-vars.txt\"
     }
 
     testCyclicComponentBuilds() {
-        TmpDir tmp("qore-cmake-qcc-cycle-");
+        TmpDir tmp("qore-cmake-qcc-cycle-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1528,7 +1571,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/cycle-vars.txt\"
         provider never published and the aggregate failed with "body_contract=<hash> actual=".
     */
     testPartialAggregateBodyContracts() {
-        TmpDir tmp("qore-cmake-qcc-partial-agg-");
+        TmpDir tmp("qore-cmake-qcc-partial-agg-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1611,7 +1654,7 @@ add_custom_target(all-qo ALL DEPENDS ${AGG_STAMPS} ${AGG_PARTIAL_STAMP} ${AGG_FU
     }
 
     testManagedQccOutputPruning() {
-        TmpDir tmp("qore-cmake-qcc-prune-");
+        TmpDir tmp("qore-cmake-qcc-prune-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
