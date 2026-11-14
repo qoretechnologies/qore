@@ -1034,9 +1034,12 @@ DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=
     \c decimal128 column, or a timestamp column read from Parquet, for example) keep their element type and the
     columnar schema of the first one, with the time unit \c "us" if their time units differ and the time zone
     \c "UTC" if their time zones differ, so that an export keeps their values; columns of durations keep the schema
-    of the first one; other columns are rebuilt from their values with no columnar schema.  A column of durations
-    (with a duration schema) with a date column of absolute dates holds any value.  Columns of different types make
-    the column that the column hash constructor makes of their values (see @ref dataframeintro).
+    of the first one, with the time unit \c "us" if their time units differ; other columns are rebuilt from their
+    values with no columnar schema.  A column of durations (with a duration schema) with a date column of absolute
+    dates holds any value.  Columns of different types make the column that the column hash constructor makes of
+    their values as the columns return them (see @ref dataframeintro): a date column returns its dates in the local
+    time zone, so their string forms in a string column are in local time, and a date column without a duration
+    schema holds absolute dates, so a duration in it becomes the date that far from the epoch.
 
     A DataFrame may be given more than once, and other threads may use the same DataFrames at the same time.
 
@@ -1528,7 +1531,8 @@ static DataFrame DataFrame::fromArrowIpc(binary data) [flags=RET_VALUE_ONLY] {
     assertEq(df.toRecords(), copy.toRecords());
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if Arrow serialization fails
+    @throw DATAFRAME-IO-ERROR if Arrow serialization fails, or a date or duration does not fit in an int64 of the
+    time unit of its column (a timestamp in nanoseconds after 2262 or before 1677, for example)
 */
 binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     return df->toArrowIpc(xsink);
@@ -1619,7 +1623,9 @@ static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> o
     df.writeParquet("/data/output.parquet", options);
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened for writing
+    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened for writing, or a date or
+    duration does not fit in an int64 of the time unit of its column (a timestamp in nanoseconds after 2262 or
+    before 1677, for example)
     @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be written
     @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 */
