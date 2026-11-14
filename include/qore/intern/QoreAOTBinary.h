@@ -473,6 +473,14 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      the reference of a default argument expression to one is (v34); the reader binds the capture to that variable
 //!      and reads the closure again when the Program has its top-level locals.  An earlier reader takes the text as
 //!      the name of a variable that does not exist (#5998).
+//! v(next) (PLACEHOLDER: the next version after the newest; renumber when this change gets a format slot): the IR of
+//!      an OnBlockExit instruction whose handler function an earlier OnBlockExit instruction of the same function or
+//!      of its handlers has (a handler nested in other handlers, whose function the copies of its statement share,
+//!      #6087) is written as the handler flag 2 followed by the u32 index of that function in the order in which the
+//!      handler functions of the function are written (see QoreAOTSharedHandlerTable); flag 1 is followed by the
+//!      function itself, as before; a reader of the earlier formats refuses flag 2.  The slot map entry of a function
+//!      has the u32 count of its LValuePath instructions after the u8 one, which a function with more than 255 of
+//!      them overflowed (#6127).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -508,9 +516,12 @@ constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
 constexpr uint16_t QORE_AOT_NAMED_CALLREF_VERSION = 35;
 //! First format version whose closure captures can name a top-level local by its index (see v36 above).
 constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
+//! First format version with shared handler functions and wide LValuePath instruction counts (see v(next) above)
+/** PLACEHOLDER: the next version after the newest; renumber when this change gets a format slot (#6087) */
+constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION + 1;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_SHARED_HANDLER_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -4567,6 +4578,47 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
 */
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
     const AOTExprWriteFunc& writeExpr);
+
+//! The handler functions written or read in the IR of a function (see QORE_AOT_SHARED_HANDLER_VERSION, #6087)
+/** A handler function shared by several handlers (QoreIROnBlockExitInstruction::handler_ir) is written in full once,
+    where the IR of the function and of its handlers first has it, and as the index of that copy at each other
+    handler that has it; the reader shares the function in the same way.  The functions are numbered in the order in
+    which their writing starts.  The IR of a function that is not a handler (a function, a closure, a background
+    helper) has a table of its own.
+*/
+struct QoreAOTSharedHandlerTable {
+    //! the index of each handler function written
+    std::unordered_map<const QoreIRFunction*, uint32_t> written;
+    //! the handler functions read, by index (null while one is read)
+    std::vector<std::shared_ptr<QoreIRFunction>> read;
+
+    //! Returns the table of the IR function being written or read by this thread, or null if there is none
+    DLLLOCAL static QoreAOTSharedHandlerTable*& current();
+    //! Set while a handler's IR function is written or read: its IR continues the table of the function containing
+    //! it (see QoreAOTSharedHandlerScope)
+    DLLLOCAL static bool& nested();
+};
+
+//! Gives the IR function written or read by serializeIRFunction() or deserializeIRFunction() its table of the handler
+//! functions (see QoreAOTSharedHandlerTable)
+class QoreAOTSharedHandlerScope {
+public:
+    DLLLOCAL QoreAOTSharedHandlerScope() : saved(QoreAOTSharedHandlerTable::current()) {
+        if (!QoreAOTSharedHandlerTable::nested()) {
+            QoreAOTSharedHandlerTable::current() = &own;
+        }
+        // the IR functions in this one that are not its handlers, such as closures, have tables of their own
+        QoreAOTSharedHandlerTable::nested() = false;
+    }
+
+    DLLLOCAL ~QoreAOTSharedHandlerScope() {
+        QoreAOTSharedHandlerTable::current() = saved;
+    }
+
+private:
+    QoreAOTSharedHandlerTable own;
+    QoreAOTSharedHandlerTable* saved;
+};
 
 //! Deserialize a QoreIRFunction from binary data
 /** Reads binary data written by serializeIRFunction() and reconstructs a

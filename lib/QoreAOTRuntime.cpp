@@ -3434,7 +3434,12 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint16_t num_regex_cases = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
-    uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
+    // the low byte of the count of LValuePath instructions, followed by the full count since the format of shared
+    // handler functions (#6127)
+    int num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
+    if (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION) {
+        num_lv_path_insts = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+    }
     int aot_num_regex_cases = qore_aot_func_num_regex_cases(aot_func);
     printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
     QoreEnvironmentValue trace_slot_reg_env_holder("QORE_AOT_TRACE_SLOT_REG");
@@ -3443,7 +3448,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         && (!*trace_slot_reg_env || (name && std::strstr(name, trace_slot_reg_env)));
     if (trace_slot_reg) {
         fprintf(stderr, "[aot-slot-reg] buildCtx '%s': binary(locals=%u globals=%u exprs=%u stmts=%u "
-            "regex=%u body_locals=%u lvpath=%u unsupported=%u) func(locals=%d globals=%d exprs=%d "
+            "regex=%u body_locals=%u lvpath=%d unsupported=%u) func(locals=%d globals=%d exprs=%d "
             "stmts=%d regex=%d)\n", name, num_locals, num_globals, num_exprs, num_stmts,
             num_regex_cases, num_body_locals, num_lv_path_insts, has_unsupported,
             aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts,
@@ -8154,6 +8159,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         ExceptionSink* cancel_xsink,
         const std::vector<LocalVar*>* enclosing_body_locals,
         const std::unordered_map<uint32_t, LocalVar*>* container_slot_locals) {
+    // the handler functions read in the IR of the function (#6087)
+    QoreAOTSharedHandlerScope shared_handler_scope;
     const uint8_t* func_start = ptr;
     auto remaining = [&ptr, end]() -> size_t {
         return end >= ptr ? static_cast<size_t>(end - ptr) : 0;
