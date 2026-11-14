@@ -23,8 +23,10 @@
     return; the replaced value was released only when the frame ended; and a return in a handler of an inner block
     whose handler returned too, or of a block in the body of another handler, made the lowering lower the handlers
     again without end.  A return in a try statement in a handler replaces the value when the try statement ends, in
-    every mode (TryStatement::execImpl() kept the function's value).  HandlerReturnReplacesValue.q gives the output of
-    the AST interpreter in every execution mode and compiled with qcc.
+    every mode (TryStatement::execImpl() kept the function's value), and the value that a handler run while an
+    exception leaves its block returns replaces the value of the return that the exception interrupted (it was
+    discarded).  HandlerReturnReplacesValue.q gives the output of the AST interpreter in every execution mode and
+    compiled with qcc.
 */
 class HandlerReturnReplacesValueTest inherits QUnit::Test {
     public {
@@ -79,6 +81,12 @@ tr6: [\"~tr6-body\", \"~tr6-try\", \"rv:tr6-last\", \"~tr6-last\"]
 tr6: [\"~tr6-body\", \"~tr6-try\", \"rv:tr6-last\", \"~tr6-last\"]
 tr7: [\"body\", \"rv:tr7-h\"]
 tr7: [\"body\", \"rv:tr7-h\"]
+xr1: [\"dthrow\", \"~xr1-tt\", \"~xr1-body\", \"~xr1-z\", \"~xr1-h\", \"ex:DT\"]
+xr1: [\"dthrow\", \"~xr1-tt\", \"~xr1-body\", \"~xr1-z\", \"~xr1-h\", \"ex:DT\"]
+xr2: [\"exit\", \"err\", \"~xr2-x\", \"~xr2-err\", \"ex:E2\"]
+xr2: [\"exit\", \"err\", \"~xr2-x\", \"~xr2-err\", \"ex:E2\"]
+xr3: [\"dthrow\", \"~xr3-tt\", \"~xr3-body\", \"~xr3-h\", \"catch\", \"~xr3-z\", \"rv:xr3-after\"]
+xr3: [\"dthrow\", \"~xr3-tt\", \"~xr3-body\", \"~xr3-h\", \"catch\", \"~xr3-z\", \"rv:xr3-after\"]
 m: [\"~m-body\", \"mexit\", \"rv:m-s\", \"~m-s\"]
 m: [\"~m-body\", \"mexit\", \"rv:m-s\", \"~m-s\"]
 cl: [\"~cl-body\", \"cx\", \"rv:cl-s\", \"~cl-s\"]

@@ -164,6 +164,32 @@ auto sub tr7() {
     on_exit { try { return "tr7-h"; } catch (hash<ExceptionInfo> ex) {} }
     log += "body";
 }
+# a handler run while an exception leaves its block returns: its value replaces the interrupted return's
+class TT inherits T {
+    constructor(string n) : T(n) {}
+    destructor() { log += "dthrow"; throw "DT"; }
+}
+auto sub xr1() {
+    T z("xr1-z");
+    on_exit { return new T("xr1-h"); }
+    return (new TT("xr1-tt"), new T("xr1-body"))[1];
+}
+auto sub xr2() {
+    T x("xr2-x");
+    on_error { log += "err"; return new T("xr2-err"); }
+    on_exit { log += "exit"; }
+    throw "E2";
+}
+auto sub xr3() {
+    T z("xr3-z");
+    try {
+        on_exit { return new T("xr3-h"); }
+        return (new TT("xr3-tt"), new T("xr3-body"))[1];
+    } catch (hash<ExceptionInfo> ex) {
+        log += "catch";
+    }
+    return "xr3-after";
+}
 # in a method and a closure
 class C {
     auto m() {
@@ -217,5 +243,8 @@ show("tr4", \tr4());
 show("tr5", \tr5());
 show("tr6", \tr6());
 show("tr7", \tr7());
+show("xr1", \xr1());
+show("xr2", \xr2());
+show("xr3", \xr3());
 show("m", auto sub () { C c(); return c.m(); });
 show("cl", cl);
