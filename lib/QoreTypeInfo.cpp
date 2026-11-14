@@ -3688,6 +3688,12 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
             && !qore_container_value_may_convert_to(u.ti, ti)) {
         return false;
     }
+    // a hash with a hashdecl type is not a hash with a specific value type, as for the selection of a variant
+    // (runtimeAcceptsValue()): its member values are not folded into the value type (folding the values of a hash
+    // with no other reference would break the member types of its hashdecl) (issue #5916)
+    if (h->getHashDecl()) {
+        return false;
+    }
 
     // try to fold values into our type; value types are not identical;
     // we have to get a new hash

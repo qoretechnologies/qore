@@ -724,11 +724,8 @@ public:
         obj_count += dt;
     }
 
+    //! returns the type of the values of a typed hash; a hashdecl gives no single type to its members
     DLLLOCAL const QoreTypeInfo* getValueTypeInfo() const {
-        if (hashdecl) {
-            // For hashdecl-typed hashes, the value type is the hashdecl's type itself
-            return hashdecl->getTypeInfo();
-        }
         return complexTypeInfo ? QoreTypeInfo::getComplexHashValueType(complexTypeInfo) : nullptr;
     }
 
