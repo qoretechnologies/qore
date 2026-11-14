@@ -2081,6 +2081,47 @@ static q_return_vec_t make_type_parameter_return_vec(const QoreTypeParameterType
     return rv;
 }
 
+const QoreTypeInfo* QoreTypeParameterTypeInfo::getBoundTypeInfo() const {
+    if (owner_signature) {
+        return owner_signature->getTypeParameterBoundTypeInfo(index);
+    }
+    if (owner_class) {
+        return qore_class_private::get(*owner_class)->getTypeParamBoundTypeInfo(index);
+    }
+    return nullptr;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getTypeParameterSourceType(const QoreTypeInfo* ti) {
+    if (!ti || ti->return_vec.size() > 2) {
+        return nullptr;
+    }
+    const QoreTypeParameterTypeInfo* tp = ti->return_vec[0].spec.getTypeParameterTypeInfo();
+    if (!tp) {
+        return nullptr;
+    }
+    bool or_nothing = false;
+    if (ti->return_vec.size() > 1) {
+        // *T: the type parameter and NOTHING (see make_type_parameter_return_vec())
+        if (ti->return_vec[1].spec.getTypeSpec() != QTS_TYPE || ti->return_vec[1].spec.getType() != NT_NOTHING) {
+            return nullptr;
+        }
+        or_nothing = true;
+    }
+    const QoreTypeInfo* bound = tp->getBoundTypeInfo();
+    if (!bound) {
+        return autoTypeInfo;
+    }
+    // a bound that accepts values with a conversion (softint, number, softlist<...>) accepts type arguments that it
+    // converts (C<string> for T: softint), but a value bound to T is not converted, so its type is only known at run
+    // time
+    for (auto& i : bound->getAcceptSpecs()) {
+        if (i.map) {
+            return autoTypeInfo;
+        }
+    }
+    return or_nothing ? get_or_nothing_type(bound) : bound;
+}
+
 QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const QoreClass* owner, size_t n_index, const char* name,
         bool n_or_nothing, const QoreTypeParameterTypeInfo* value_type)
         : QoreTypeInfo(
@@ -5591,6 +5632,16 @@ static int qore_check_parse_type_arg_bound(const QoreProgramLocation* loc, const
         return 0;
     }
 
+    // a bound that names its own generic type (class Self<T: Self<int>>) is checked again while it is resolved here;
+    // the check in progress decides it with the bound resolved, so a nested check of the same bound is not made,
+    // which would never end (qore#5774)
+    thread_local std::vector<const char*> bounds_in_check;
+    if (std::find(bounds_in_check.begin(), bounds_in_check.end(), bound_type) != bounds_in_check.end()) {
+        return 0;
+    }
+    bounds_in_check.push_back(bound_type);
+    ON_BLOCK_EXIT([] () { bounds_in_check.pop_back(); });
+
     int err = 0;
     std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
     if (!bound_pti) {
@@ -5620,6 +5671,15 @@ static bool qore_runtime_type_arg_satisfies_bound(const char* bound_type, const 
     if (!bound_type || !*bound_type) {
         return true;
     }
+
+    // as in qore_check_parse_type_arg_bound(): a bound that names its own generic type is decided by the check in
+    // progress, not checked again while it is resolved (qore#5774)
+    thread_local std::vector<const char*> bounds_in_check;
+    if (std::find(bounds_in_check.begin(), bounds_in_check.end(), bound_type) != bounds_in_check.end()) {
+        return true;
+    }
+    bounds_in_check.push_back(bound_type);
+    ON_BLOCK_EXIT([] () { bounds_in_check.pop_back(); });
 
     std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
     if (!bound_pti) {
@@ -7614,6 +7674,13 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
         return QTI_IDENT;
     }
     */
+    // a value of a type parameter (in generic code) has its bound, or any type if it has none (a may-match checked at
+    // run time), unless the target is a type parameter, which matches it by identity (qore#5774)
+    if (second && first && !first->return_vec.empty() && !first->return_vec[0].spec.getTypeParameterTypeInfo()) {
+        if (const QoreTypeInfo* src = getTypeParameterSourceType(second)) {
+            second = src;
+        }
+    }
     if (first == autoTypeInfo) {
         // If parameter is auto and argument is untyped (also auto),
         // require runtime matching so specific types can be preferred
