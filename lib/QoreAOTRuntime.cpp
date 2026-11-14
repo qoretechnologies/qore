@@ -300,7 +300,9 @@ static bool aotLocalTypeMatches(const LocalVar* lv, const char* type_path,
     }
 
     std::string type_error;
-    const QoreTypeInfo* resolved_ti = type_resolver->resolve(type_path, type_error);
+    // a type that names the type parameters of a generic function (qore#5885)
+    const QoreTypeInfo* resolved_ti = type_resolver->resolveForSignature(type_path, type_error,
+        qore_aot_get_type_param_owner());
     return resolved_ti && type_error.empty()
         && (QoreTypeInfo::isOutputIdentical(declared_ti, resolved_ti)
             || QoreTypeInfo::isOutputIdentical(lv->getTypeInfoForLValue(), resolved_ti));
@@ -327,7 +329,9 @@ static bool aotLocalTypeKnownMismatch(const LocalVar* lv, const char* type_path,
     }
 
     std::string type_error;
-    const QoreTypeInfo* resolved_ti = type_resolver->resolve(type_path, type_error);
+    // a type that names the type parameters of a generic function (qore#5885)
+    const QoreTypeInfo* resolved_ti = type_resolver->resolveForSignature(type_path, type_error,
+        qore_aot_get_type_param_owner());
     return resolved_ti && type_error.empty()
         && !QoreTypeInfo::isOutputIdentical(lv->getTypeInfo(), resolved_ti)
         && !QoreTypeInfo::isOutputIdentical(lv->getTypeInfoForLValue(), resolved_ti);
@@ -3665,7 +3669,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 std::string type_error;
                 const QoreTypeInfo* ti = nullptr;
                 if (ltype && *ltype) {
-                    ti = ctx_type_resolver->resolve(ltype, type_error);
+                    // the type of a local of a generic function can name its type parameters, which only the
+                    // function's signature resolves; resolved without it, the type is lost and the local accepts
+                    // any value (qore#5885)
+                    ti = ctx_type_resolver->resolveForSignature(ltype, type_error, qore_aot_get_type_param_owner());
                     if (!type_error.empty()) {
                         type_error.clear();
                     }
@@ -4956,7 +4963,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (ref_type_path && *ref_type_path) {
                         std::string type_error;
                         QoreAOTTypeResolver type_resolver(pgm);
-                        ref_ti = type_resolver.resolve(ref_type_path, type_error);
+                        // the type of a reference to a local of a generic function can name its type parameters
+                        // (qore#5885)
+                        ref_ti = type_resolver.resolveForSignature(ref_type_path, type_error,
+                            qore_aot_get_type_param_owner());
                         if (!ref_ti) {
                             printd(0, "AOT v2: cannot resolve PARSE_REF type '%s' for expr slot %d of '%s': %s\n",
                                 ref_type_path, i, name, type_error.c_str());
@@ -6525,7 +6535,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             std::string type_error;
             const QoreTypeInfo* ti = nullptr;
             if (bltype && *bltype) {
-                ti = ctx_type_resolver->resolve(bltype, type_error);
+                // a type that names the type parameters of a generic function (qore#5885)
+                ti = ctx_type_resolver->resolveForSignature(bltype, type_error, qore_aot_get_type_param_owner());
                 if (!type_error.empty()) {
                     type_error.clear();
                 }
@@ -8338,8 +8349,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
         std::string type_error;
         QoreAOTTypeResolver type_resolver(pgm);
+        // a type that names the type parameters of a generic function (qore#5885)
         const QoreTypeInfo* ti = (ltype && *ltype)
-            ? type_resolver.resolve(ltype, type_error) : nullptr;
+            ? type_resolver.resolveForSignature(ltype, type_error, qore_aot_get_type_param_owner()) : nullptr;
         qore_program_private* pp = qore_program_private::get(
             *(local_owner_pgm ? local_owner_pgm : pgm));
         return pp->createLocalVar(lname, ti);
@@ -8751,6 +8763,10 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
         error = "lazy closure IR is attached to a non-closure variant";
         return nullptr;
     }
+    // the IR is built when the closure is first called, out of the context build that names the type parameters of
+    // the generic function that the closure is in (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb->getUserSignature()
+        ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
 
     std::string open_error;
     const QoreAOTBinaryReader* retained_reader = lazy_ir.metadata->getReader(open_error);
@@ -8925,6 +8941,9 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_function_ir(
     const QoreAOTLazyFunctionIR::Entry& lazy_entry = lazy_ir.entries[entry_index];
     const char* name = lazy_entry.aot_func
         ? lazy_entry.aot_func->name : lazy_entry.source_name.c_str();
+    // the types of the IR can name the type parameters of the function (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb && uvb->getUserSignature()
+        ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
     std::unique_ptr<QoreIRFunction> ir = context->materializeDebugIR(name, error);
     if (!ir) {
         delete context;

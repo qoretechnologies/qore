@@ -6607,12 +6607,18 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
 
 const QoreTypeInfo* QoreAOTTypeResolver::resolveForSignature(const char* path, std::string& error,
         const UserSignature* signature) {
-    const UserSignature* old_signature = signature_type_param_owner;
+    // restores the owner also when the resolution raises a C++ exception, as a resolver can be shared by a context
+    // build (qore#5885)
+    struct OwnerRestore {
+        const UserSignature*& owner;
+        const UserSignature* old;
+        ~OwnerRestore() {
+            owner = old;
+        }
+    } restore{signature_type_param_owner, signature_type_param_owner};
     // the type parameters that a closure names are those of the code that it is in (qore#5733)
     signature_type_param_owner = signature ? signature->getTypeParamOwner() : nullptr;
-    const QoreTypeInfo* rv = resolve(path, error);
-    signature_type_param_owner = old_signature;
-    return rv;
+    return resolve(path, error);
 }
 
 // ---- Namespace Serialization (Phase 3) ----

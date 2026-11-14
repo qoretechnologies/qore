@@ -60,6 +60,7 @@
 #include "qore/intern/DebugStatement.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/typed_hash_decl_private.h"
@@ -7251,6 +7252,9 @@ bool UserVariantBase::materializeAOTDebugIR(const char* name, ExceptionSink* xsi
     }
 
     std::string error;
+    // the types of the IR can name the type parameters of the function (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(getUserSignature()
+        ? getUserSignature()->getTypeParamOwner() : nullptr);
     std::unique_ptr<QoreIRFunction> ir = ctx->materializeDebugIR(name, error);
     if (!ir) {
         xsink->raiseException("AOT-DEBUG-IR-ERROR",
