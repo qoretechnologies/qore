@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+# test-platform: macos - JIT and AOT code generation and linking of the hash + operator and of folded constants
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HashdeclPlusInheritedTest
+
+#! issue #6023: the result of hash + hash keeps a hashdecl when one hashdecl inherits the other
+/** The parse type of <tt>hash<D> + hash<D></tt> is <tt>hash<D></tt>, but a value of type <tt>hash<D></tt> can be a
+    hash of a hashdecl that inherits \c D, and the result of the operator kept the hashdecl only when both values had
+    the same one: <tt>hash<D2> + hash<D></tt> gave a <tt>hash<auto></tt>, which a <tt>hash<D></tt> refused, in every
+    execution mode.  The result is now a hash of the more derived of the two hashdecls when one is the other or
+    inherits it; other hashdecls and hashes without a hashdecl give a <tt>hash<auto></tt> as before, and \c += and
+    \c - are unchanged.
+
+    The script next to the test runs in every execution mode, on the IR tier and as AOT executables built with
+    <tt>qcc -O0</tt> and <tt>-O3</tt>, and each run must give the results below.
+*/
+class HashdeclPlusInheritedTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "hashdecl-plus-inherited-cases";
+
+        #! the result of each case
+        const Expected = {
+            "child-plus-parent": "hash<D2> {x: 1, s: \"r\", y: 5}",
+            "parent-plus-child": "hash<D2> {x: 1, s: \"r\", y: 2}",
+            "same": "hash<D> {x: 1, s: \"r\"}",
+            "same-child": "hash<D2> {x: 1, s: \"r\", y: 2}",
+            "grandchild-plus-parent": "hash<D3> {x: 1, s: \"r\", y: 2, z: 3}",
+            "parent-plus-grandchild": "hash<D3> {x: 1, s: \"r\", y: 2, z: 3}",
+            "grandchild-plus-child": "hash<D3> {x: 1, s: \"a\", y: 9, z: 3}",
+            "siblings": "hash<auto> {x: 1, s: \"a\", y: 2, w: 4}",
+            "unrelated": "hash<auto> {x: 2, s: \"a\"}",
+            "plain-right": "hash<auto> {x: 3, s: \"a\", y: 2}",
+            "plain-left": "hash<auto> {x: 1, s: \"a\", y: 2}",
+            "auto-right": "hash<auto> {x: 3, s: \"a\"}",
+            "auto-left": "hash<auto> {x: 1, s: \"a\"}",
+            "generic-child-plus-parent": "hash<C<int>> {value: 2, name: \"n\"}",
+            "generic-parent-plus-child": "hash<C<int>> {value: 2, name: \"n\"}",
+            "generic-other-argument": "hash<auto> {value: \"v\", name: \"n\"}",
+            "map": "hash<D2>,hash<D>",
+            "typed-local": "hash<D2> {x: 1, s: \"a\", y: 2}",
+            "return-child-parent": "hash<D2> {x: 1, s: \"r\", y: 2}",
+            "return-parent-child": "hash<D2> {x: 1, s: \"r\", y: 2}",
+            "return-siblings": "RUNTIME-TYPE-ERROR",
+            "fold-child-parent": "hash<D2> {x: 1, s: \"c\", y: 5}",
+            "fold-parent-child": "hash<D2> {x: 1, s: \"a\", y: 5}",
+            "fold-siblings": "hash<auto> {x: 1, s: \"a\", y: 2, w: 4}",
+            "plus-equals-parent": "hash<D2> {x: 1, s: \"r\", y: 2}",
+            "plus-equals-child": "HASHDECL-KEY-ERROR",
+            "plus-equals-undeclared": "HASHDECL-KEY-ERROR",
+            "plus-equals-unrelated": "hash<D> {x: 2, s: \"a\"}",
+            "minus-key": "hash<D2> {x: 1, y: 2}",
+            "minus-list": "hash<D2> {x: 1}",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("hashdecl plus inherited", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode, sub () { modeTest(mode); });
+        }
+        addTestCase(ExecModeHarness::IRTierName, \irTierTest());
+        foreach string opt in ("-O0", "-O3") {
+            addTestCase("AOT " + opt, sub () { aotTest(opt); });
+        }
+        set_return_value(main());
+    }
+
+    #! runs the script in an execution mode
+    private modeTest(string mode) {
+        checkOutput(mode, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+            scriptPath())));
+    }
+
+    #! runs the script on the IR tier
+    private irTierTest() {
+        checkOutput(ExecModeHarness::IRTierName, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s",
+            env, qore_bin, scriptPath())));
+    }
+
+    #! compiles the script with qcc and the given optimization level and checks the executable
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("hashdecl-plus-inherited-aot-");
+        string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+        assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+        checkOutput("AOT " + opt, ExecModeHarness::run_any(sprintf("%s %s", env, exe)));
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! parses the "name=result" lines of the script and checks them
+    private checkOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        # the cases that do not give their expected result, so that a failure shows all of them
+        hash<string, string> wrong = map {$1.key: $1.value}, Expected.pairIterator(), results{$1.key} !== $1.value;
+        assertEq({}, map {$1: results{$1} ?? "<not run>"}, keys wrong, label + ": cases with other results");
+        assertEq(keys Expected, keys results, label + ": cases run");
+    }
+}

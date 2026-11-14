@@ -1334,7 +1334,7 @@ public class VscDebugAdapterTest inherits QUnit::Test {
         TmpDir tmp("qore-vda-test-");
         string path = writeProgram(tmp, "%modern\n"                     # 1
             "sub f() {\n"                                                # 2
-            "    *int src;\n"                                            # 3
+            "    *int src = (*int sub () { return; })();\n"              # 3
             "    int count = src;\n"                                     # 4
             "    printf(\"%d\\n\", count);\n"                             # 5
             "}\n"                                                        # 6

@@ -91,6 +91,10 @@ int SummarizeStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Exc
 }
 
 int SummarizeStatement::parseInitImpl(QoreParseContext& parse_context) {
+    // code of the loop can run more than once, so a read in it can follow an assignment parsed after it (qore#5937)
+    ParseDeferredScopeHelper deferred_scope;
+    // the code may run for no element, and leave before its end; see ParseLoopAssignedStateHelper
+    ParseLoopAssignedStateHelper loop_assigned_state;
     QORE_TRACE("SummarizeStatement::parseInit()");
 
     // turn off top-level flag for statement vars

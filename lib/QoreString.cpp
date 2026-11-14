@@ -2279,11 +2279,10 @@ private:
 }
 
 int QoreString::compare(const QoreString* str) const {
-    // empty strings are always equal even if the character encoding is different
+    // empty strings are always equal even if the character encoding is different; an empty string is less than any
+    // other string (qore#6090)
     if (!priv->len) {
-        if (!str->priv->len)
-            return 0;
-        return 1;
+        return str->priv->len ? -1 : 0;
     }
 
     if (str->priv->getEncoding() != priv->getEncoding())
@@ -2311,15 +2310,15 @@ int QoreString::compare(const QoreString* str) const {
 }
 
 int QoreString::compare(const char* str) const {
-   // empty strings are always equal even if the character encoding is different
-   if (!priv->len) {
-      if (!str)
-         return 0;
-      else
-         return 1;
-   }
+    // an empty string is equal to an empty or null string and less than any other string (qore#6090)
+    if (!priv->len) {
+        return str && *str ? -1 : 0;
+    }
+    if (!str) {
+        return 1;
+    }
 
-   return strcmp(priv->effective_buf(), str);
+    return strcmp(priv->effective_buf(), str);
 }
 
 bool QoreString::equal(const QoreString& str) const {

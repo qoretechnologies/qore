@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class TryReturnInHandlerTest
+
+our list<string> log;
+
+class T {
+    public {
+        string n;
+    }
+    constructor(string n) {
+        self.n = n;
+    }
+    destructor() {
+        log += "~" + n;
+    }
+}
+
+T sub mk(string n) {
+    return new T(n);
+}
+
+auto sub thrower() {
+    log += "thr";
+    throw "EV";
+}
+
+# a return in the try block of a handler
+auto sub t1() {
+    on_exit { try { log += "h"; return new T("t1-h"); } catch () { log += "c"; } }
+    return new T("t1-body");
+}
+# a return in the catch block of a handler
+auto sub t2() {
+    on_exit { try { thrower(); } catch () { log += "c"; return new T("t2-c"); } }
+    return new T("t2-body");
+}
+# nested try statements
+auto sub t3() {
+    on_exit { try { try { return new T("t3-in"); } catch () {} log += "never"; } catch () {} }
+    return new T("t3-body");
+}
+# a local variable and a call
+auto sub t4() {
+    T a("t4-a");
+    on_exit { try { return a; } catch () {} }
+    return new T("t4-body");
+}
+auto sub t5() {
+    on_exit { try { return mk("t5-call"); } catch () {} }
+    return mk("t5-body");
+}
+# an on_success handler before another handler
+auto sub t6() {
+    on_exit { log += "x"; }
+    on_success { try { return new T("t6-s"); } catch () {} }
+    return new T("t6-body");
+}
+# a block that ends without a return, and a return without a value: no value to replace
+auto sub t8() {
+    on_exit { try { return new T("t8-h"); } catch () {} }
+    log += "body";
+}
+auto sub t9() {
+    on_exit { try { return new T("t9-h"); } catch () {} }
+    return;
+}
+# a return without a value in the try statement replaces the value with no value
+auto sub t10() {
+    on_exit { try { log += "h"; return; } catch () {} }
+    return new T("t10-body");
+}
+# the try block's locals and handlers end before the replaced value is released
+auto sub t11() {
+    on_exit { log += "o"; }
+    on_exit { try { T l("t11-l"); on_exit { log += "ti"; } return new T("t11-h"); } catch () {} }
+    return new T("t11-body");
+}
+# a try statement that does not return keeps the value
+auto sub t12() {
+    on_exit { try { log += "h"; } catch () {} }
+    return new T("t12-body");
+}
+# a later handler's return replaces the try statement's
+auto sub t13() {
+    on_exit { return new T("t13-last"); }
+    on_exit { try { return new T("t13-try"); } catch () {} }
+    return new T("t13-body");
+}
+# a return that the declared type rejects is interrupted and gives no value (qore#5941)
+T sub t14() {
+    on_exit { try { auto v = 1; return v; } catch () { log += "c"; } }
+    return new T("t14-body");
+}
+
+#! A return in a try statement in a handler replaces the value of the return that the handler runs after (#5992)
+/** The try statement gives the value of a return in its try or catch block to the block that encloses it, replacing
+    a value that a return left there, which is released when the try statement ends, as a return statement replaces
+    it; it kept the value of the function's return before.
+*/
+class TryReturnInHandlerTest inherits QUnit::Test {
+    constructor() : QUnit::Test("TryReturnInHandlerTest", "1.0", \ARGV) {
+        addTestCase("a return in a try statement in a handler", \tryReturnTest());
+        set_return_value(main());
+    }
+
+    tryReturnTest() {
+        check("t1", \t1(), ("h", "~t1-body", "rv:t1-h", "~t1-h"));
+        check("t2", \t2(), ("thr", "c", "~t2-body", "rv:t2-c", "~t2-c"));
+        check("t3", \t3(), ("~t3-body", "rv:t3-in", "~t3-in"));
+        check("t4", \t4(), ("~t4-body", "rv:t4-a", "~t4-a"));
+        check("t5", \t5(), ("~t5-body", "rv:t5-call", "~t5-call"));
+        check("t6", \t6(), ("~t6-body", "x", "rv:t6-s", "~t6-s"));
+        check("t8", \t8(), ("body", "rv:t8-h", "~t8-h"));
+        check("t9", \t9(), ("rv:t9-h", "~t9-h"));
+        check("t10", \t10(), ("h", "~t10-body", "rv:nothing"));
+        check("t11", \t11(), ("ti", "~t11-l", "~t11-body", "o", "rv:t11-h", "~t11-h"));
+        check("t12", \t12(), ("h", "rv:t12-body", "~t12-body"));
+        check("t13", \t13(), ("~t13-body", "~t13-try", "rv:t13-last", "~t13-last"));
+        check("t14", \t14(), ("c", "rv:t14-body", "~t14-body"));
+    }
+
+    private check(string label, code c, list<string> expected) {
+        for (int i = 0; i < 2; ++i) {
+            log = ();
+            {
+                auto v = c();
+                log += "rv:" + (v instanceof T ? v.n : (exists v ? sprintf("%s", v) : "nothing"));
+            }
+            assertEq(expected, log, label);
+        }
+    }
+}

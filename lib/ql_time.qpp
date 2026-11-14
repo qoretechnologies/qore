@@ -37,8 +37,22 @@
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <cstdio>
+#include <limits>
 #include <ctime>
 #include <sys/time.h>
+
+// checks that a component of a relative date (in unit: "years", "hours", ...) fits its int field, or raises
+// INVALID-DATE for the function and its argument (qore#6101)
+static int check_relative_component(const char* func, int64 arg, const char* unit, int64 value,
+        ExceptionSink* xsink) {
+    if (value < std::numeric_limits<int>::min() || value > std::numeric_limits<int>::max()) {
+        xsink->raiseException("INVALID-DATE", "%s(" QLLD ") gives " QLLD " %s, which is outside the range of a "
+            "relative date (%d to %d %s)", func, arg, value, unit, std::numeric_limits<int>::min(),
+            std::numeric_limits<int>::max(), unit);
+        return -1;
+    }
+    return 0;
+}
 
 static int qd_get_digit(unsigned& rv, const char*& p, unsigned factor) {
     if (*p < '0' || *p > '9') {
@@ -759,6 +773,8 @@ nothing mktime() [flags=RUNTIME_NOOP] {
 
     @return a @ref relative_dates "relative date/time value" in years based on the integer argument passed to be used in date arithmetic
 
+    @throw INVALID-DATE the number of years does not fit a signed 32-bit integer (since %Qore 3.0)
+
     @par Example:
     @code{.py}
 date y = years(100);
@@ -774,6 +790,9 @@ date y = years(100);
     - microseconds(softint)
 */
 date years(softint years) [flags=CONSTANT,NAMED_ARGS] {
+    if (check_relative_component("years", years, "years", years, xsink)) {
+        return QoreValue();
+    }
     return new DateTimeNode((int)years, 0, 0, 0, 0, 0, 0, true);
 }
 
@@ -788,6 +807,8 @@ nothing years() [flags=RUNTIME_NOOP] {
     @param months the number of months to return
 
     @return a @ref relative_dates "relative date/time value" in months based on the integer argument passed to be used in date arithmetic
+
+    @throw INVALID-DATE the number of months does not fit a signed 32-bit integer (since %Qore 3.0)
 
     @par Example:
     @code{.py}
@@ -804,6 +825,9 @@ date rd = months(100);
     - microseconds(softint)
 */
 date months(softint months) [flags=CONSTANT,NAMED_ARGS] {
+    if (check_relative_component("months", months, "months", months, xsink)) {
+        return QoreValue();
+    }
     return new DateTimeNode(0, (int)months, 0, 0, 0, 0, 0, true);
 }
 
@@ -818,6 +842,8 @@ nothing months() [flags=RUNTIME_NOOP] {
     @param days the number of days to return
 
     @return a @ref relative_dates "relative date/time value" in days based on the integer argument passed to be used in date arithmetic
+
+    @throw INVALID-DATE the number of days does not fit a signed 32-bit integer (since %Qore 3.0)
 
     @par Example:
     @code{.py}
@@ -834,6 +860,9 @@ date rd = days(100);
     - microseconds(softint)
 */
 date days(softint days) [flags=CONSTANT,NAMED_ARGS] {
+    if (check_relative_component("days", days, "days", days, xsink)) {
+        return QoreValue();
+    }
     return new DateTimeNode(0, 0, (int)days, 0, 0, 0, 0, true);
 }
 
@@ -848,6 +877,8 @@ nothing days() [flags=RUNTIME_NOOP] {
     @param hours the number of hours to return
 
     @return a @ref relative_dates "relative date/time value" in hours based on the integer argument passed to be used in date arithmetic
+
+    @throw INVALID-DATE the number of hours does not fit a signed 32-bit integer (since %Qore 3.0)
 
     @par Example:
     @code{.py}
@@ -864,6 +895,9 @@ date rd = hours(100);
     - microseconds(softint)
 */
 date hours(softint hours) [flags=CONSTANT,NAMED_ARGS] {
+    if (check_relative_component("hours", hours, "hours", hours, xsink)) {
+        return QoreValue();
+    }
     return new DateTimeNode(0, 0, 0, (int)hours, 0, 0, 0, true);
 }
 
@@ -878,6 +912,8 @@ nothing hours() [flags=RUNTIME_NOOP] {
     @param minutes the number of minutes to return
 
     @return a @ref relative_dates "relative date/time value" in minutes based on the integer argument passed to be used in date arithmetic
+
+    @throw INVALID-DATE the whole hours of the value do not fit a signed 32-bit integer (since %Qore 3.0)
 
     @par Example:
     @code{.py}
@@ -894,7 +930,12 @@ date rd = minutes(100);
     - microseconds(softint)
 */
 date minutes(softint minutes) [flags=CONSTANT,NAMED_ARGS] {
-    return new DateTimeNode(0, 0, 0, 0, (int)minutes, 0, 0, true);
+    // the minutes are split into hours and minutes before they are narrowed: the hours must fit their field
+    int64 hours = minutes / 60;
+    if (check_relative_component("minutes", minutes, "hours", hours, xsink)) {
+        return QoreValue();
+    }
+    return new DateTimeNode(0, 0, 0, (int)hours, (int)(minutes % 60), 0, 0, true);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -908,6 +949,8 @@ nothing minutes() [flags=RUNTIME_NOOP] {
     @param seconds the number of seconds to return
 
     @return a @ref relative_dates "relative date/time value" in seconds based on the integer argument passed to be used in date arithmetic
+
+    @throw INVALID-DATE the whole hours of the value do not fit a signed 32-bit integer (since %Qore 3.0)
 
     @par Example:
     @code{.py}
@@ -927,6 +970,9 @@ date rd = seconds(100);
     - microseconds(softint)
 */
 date seconds(softint seconds) [flags=CONSTANT,NAMED_ARGS] {
+    if (check_relative_component("seconds", seconds, "hours", seconds / 3600, xsink)) {
+        return QoreValue();
+    }
     return DateTimeNode::makeRelativeFromSeconds(seconds);
 }
 
@@ -941,6 +987,8 @@ nothing seconds() [flags=RUNTIME_NOOP] {
     @param milliseconds the number of milliseconds to return
 
     @return a @ref relative_dates "relative date/time value" in milliseconds based on the integer argument passed to be used in date arithmetic
+
+    @throw INVALID-DATE the whole hours of the value do not fit a signed 32-bit integer (since %Qore 3.0)
 
     @par Example:
     @code{.py}
@@ -957,12 +1005,16 @@ date rd = milliseconds(100);
     - microseconds(softint)
 */
 date milliseconds(softint milliseconds) [flags=CONSTANT,NAMED_ARGS] {
+    int64 arg = milliseconds;
     int64 secs = milliseconds / 1000;
     milliseconds -= (secs * 1000);
     int64 minutes = secs / 60;
     secs -= (minutes * 60);
     int64 hours = minutes / 60;
     minutes -= (hours * 60);
+    if (check_relative_component("milliseconds", arg, "hours", hours, xsink)) {
+        return QoreValue();
+    }
 
     return new DateTimeNode(0, 0, 0, (int)hours, (int)minutes, (int)secs, (int)milliseconds, true);
 }
@@ -979,6 +1031,8 @@ nothing milliseconds() [flags=RUNTIME_NOOP] {
 
     @return a @ref relative_dates "relative date/time value" in microseconds based on the integer argument passed to be used in date arithmetic
 
+    @throw INVALID-DATE the whole hours of the value do not fit a signed 32-bit integer (since %Qore 3.0)
+
     @par Example:
     @code{.py}
 date rd = microseconds(100);
@@ -994,12 +1048,16 @@ date rd = microseconds(100);
     - milliseconds(softint)
 */
 date microseconds(softint microseconds) [flags=CONSTANT,NAMED_ARGS] {
+    int64 arg = microseconds;
     int64 secs = microseconds / 1000000;
     microseconds -= (secs * 1000000);
     int64 minutes = secs / 60;
     secs -= (minutes * 60);
     int64 hours = minutes / 60;
     minutes -= (hours * 60);
+    if (check_relative_component("microseconds", arg, "hours", hours, xsink)) {
+        return QoreValue();
+    }
 
     return DateTimeNode::makeRelative(0, 0, 0, hours, minutes, secs, (int)microseconds);
 }

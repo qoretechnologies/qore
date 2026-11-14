@@ -51,6 +51,13 @@ enum class plus_equals_lvalue_e {
 
 // returns how the += operator treats the given lvalue type and its dereferenced type
 plus_equals_lvalue_e get_plus_equals_lvalue_kind(const QoreTypeInfo* ti, const QoreTypeInfo* check_ti) {
+    // a value of a type parameter has its bound, or a type known only at run time (qore#5774)
+    if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(ti)) {
+        ti = src;
+    }
+    if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(check_ti)) {
+        check_ti = src;
+    }
     if (QoreTypeInfo::isType(check_ti, NT_LIST)
         || QoreTypeInfo::isType(check_ti, NT_HASH)
         || QoreTypeInfo::isType(check_ti, NT_OBJECT)

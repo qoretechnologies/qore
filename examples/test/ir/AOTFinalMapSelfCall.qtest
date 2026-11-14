@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTFinalMapSelfCallTest
+
+#! map, select and fold expressions in a method of a final class call a method of the object (qore#6081)
+/** qcc called the method through its fast entry, whose parameter rejects NOTHING: the guard that checks the argument
+    took the boxed form of the implicit element, a native value with a boxed source, which the argument setup had not
+    boxed, and qcc crashed (a null LLVM value).
+*/
+class AOTFinalMapSelfCallTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/AOTFinalMapSelfCall/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("AOT final class map self call", "1.0", \ARGV) {
+        addTestCase("AST runs the expressions", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        assertEq("map self: [10, 11]\nmap unqualified: [10, 11]\nmap private: [2, 4, 6]\nmap string: [\"a!\", \"b!\"]\n"
+            "map two args: [70, 81]\nmap hash values: [2, 3]\nselect: [10, 11]\nfoldl: 8\nnested: [[2, 3], [2, 3]]\n"
+            "assigned: [2, 3]\nnothing: RUNTIME-OVERLOAD-ERROR\nselect nothing: RUNTIME-OVERLOAD-ERROR\nfoldl nothing: 6\n"
+            "not final: [10, 11]\nfunction: [10, 11]\n", getAst());
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-final-map-self-call-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

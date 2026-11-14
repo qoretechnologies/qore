@@ -60,6 +60,11 @@ DLLLOCAL Sequence classIDSeq(1);
 // class IDs can be allocated in a child process created with fork() (see QoreForkHandlers.h)
 static QoreForkThreadLock class_id_fork_handler(classIDSeq, QFLR_LEAF, "class_ids");
 
+uint64_t qore_class_next_allocation_id() {
+    static std::atomic<uint64_t> seq{0};
+    return seq.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 static std::atomic<uint64_t> qore_method_dispatch_epoch{1};
 
 uint64_t qore_get_method_dispatch_epoch() {
@@ -1006,6 +1011,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         raw_accepts_parameterized(old.raw_accepts_parameterized),
         raw_construction_defaults_to_auto(old.raw_construction_defaults_to_auto),
         type_params(old.type_params),
+        type_param_bound_types(old.type_param_bound_types),
         parameterized_vparents(old.parameterized_vparents),
         domain(old.domain),
         num_methods(old.num_methods),
@@ -1047,6 +1053,13 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     // create new class object
     cls = old.cls->copyImport();
     cls->priv = this;
+
+    // a class imported from another Program uses the types of its source, which must not be freed with the source
+    // Program (issue #5790)
+    if (deref_source_program) {
+        old.ref();
+        import_source = const_cast<qore_class_private*>(&old);
+    }
 
     printd(5, "qore_class_private::qore_class_private() this: %p creating copy of '%s' (old: '%s') ID:%d cls: %p " \
         "old: %p sys: %d pgm: %p -> %p\n", this, name.c_str(), old.name.c_str(), classID, cls, old.cls, sys,
@@ -1120,6 +1133,45 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
 
 qore_class_private::~qore_class_private() {
     printd(5, "qore_class_private::~qore_class_private() this: %p %s\n", this, name.c_str());
+    releaseMethodsAndData(false);
+
+    // the next class allocated can reuse these addresses and this class's
+    qore_purge_derived_types(cls, owns_typeinfo ? typeInfo : nullptr,
+        owns_ornothingtypeinfo ? orNothingTypeInfo : nullptr);
+
+    if (owns_typeinfo)
+        delete typeInfo;
+
+    if (owns_ornothingtypeinfo)
+        delete orNothingTypeInfo;
+
+    if (mud) {
+        try {
+            mud->doDeref();
+        } catch (AbstractException& e) {
+            // there is currently no way to handle these exceptions
+#ifdef DEBUG
+            // this will result in the exception being printed out on the console
+            ExceptionSink xsink;
+            e.convert(&xsink);
+#endif
+        }
+    }
+
+    // the base classes are kept by a retired class, as the type checks of its types read them (issue #5790)
+    delete scl;
+    scl = nullptr;
+
+    // the source of an imported class is released after its types are no longer used (issue #5790)
+    if (import_source) {
+        import_source->deref(false, false, false);
+    }
+
+    // the declarations named by this class's types are no longer kept for it
+    qore_type_owner_destroyed(&type_owner);
+}
+
+void qore_class_private::releaseMethodsAndData(bool retiring) {
     // dispatch caches keyed by this class's address, its methods or its types must miss from now on, before the
     // memory can be reused for another class
     qore_bump_method_dispatch_epoch();
@@ -1132,7 +1184,9 @@ qore_class_private::~qore_class_private() {
     }
     //assert(!spgm);
 
-    assert(!refs.reference_count());
+    // a class being retired can be referenced by code that reached it through a derived type (ex: the reflection
+    // API, issue #5790); such code does not use what is released here
+    assert(retiring || !refs.reference_count());
     assert(!var_refs.reference_count());
     assert(var_ref_wrappers.empty());
     assert(!data_refs.reference_count());
@@ -1157,38 +1211,105 @@ qore_class_private::~qore_class_private() {
         //printd(5, "qore_class_private::~qore_class_private() deleting method %p %s::%s()\n", m, name, m->getName());
         delete i.second;
     }
+    hm.clear();
 
     // delete static methods
     for (auto& i : shm) {
         //printd(5, "qore_class_private::~qore_class_private() deleting static method %p %s::%s()\n", m, name, m->getName());
         delete i.second;
     }
+    shm.clear();
 
-    delete scl;
     delete system_constructor;
+    system_constructor = nullptr;
+}
 
-    // the next class allocated can reuse these addresses and this class's
-    qore_purge_derived_types(cls, owns_typeinfo ? typeInfo : nullptr,
-        owns_ornothingtypeinfo ? orNothingTypeInfo : nullptr);
+__attribute__((noinline)) void qore_class_private::derefLast(bool in_del) {
+    // a class whose types are still named is retired, not freed (issue #5790); not possible when the class object is
+    // being deleted
+    if (!in_del && qore_type_owner_released(&type_owner)) {
+        return;
+    }
+    // remove the private data pointer, delete the class object, then delete ourselves
+    cls->priv = nullptr;
+    if (!in_del) {
+        delete cls;
+    }
 
-    if (owns_typeinfo)
-        delete typeInfo;
+    // delete all linked QoreClass objects
+    for (auto& i : qcrefs) {
+        i.first->priv = nullptr;
+        delete i.first;
+    }
 
-    if (owns_ornothingtypeinfo)
-        delete orNothingTypeInfo;
+    delete this;
+}
 
+void qore_class_private::retireTypeOwner() {
+    printd(5, "qore_class_private::retireTypeOwner() this: %p %s\n", this, name.c_str());
+    // what the type checks of the class's types read is kept; see the header
+    releaseMethodsAndData(true);
+    constlist.reset();
+    for (auto& i : members.member_list) {
+        free(i.first);
+        delete i.second;
+    }
+    members.member_list.clear();
+    member_init_list.clear();
+    for (auto& i : ahm) {
+        delete i.second;
+    }
+    ahm.clear();
     if (mud) {
         try {
             mud->doDeref();
         } catch (AbstractException& e) {
-            // there is currently no way to handle these exceptions
 #ifdef DEBUG
-            // this will result in the exception being printed out on the console
             ExceptionSink xsink;
             e.convert(&xsink);
 #endif
         }
+        mud = nullptr;
     }
+}
+
+void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+    for (auto& i : members.member_list) {
+        if (i.second) {
+            qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+        }
+    }
+    for (auto& i : vars.member_list) {
+        if (i.second) {
+            qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+        }
+    }
+    for (const hm_method_t* m : {&hm, &shm}) {
+        for (auto& i : *m) {
+            QoreFunctionIterator fi(*qore_method_private::get(*i.second)->getFunction());
+            while (fi.next()) {
+                const AbstractFunctionSignature* sig = fi.getVariant()->getSignature();
+                if (!sig) {
+                    continue;
+                }
+                qore_type_owner_add_name(names, sig->getReturnTypeInfo(), &type_owner);
+                for (unsigned p = 0; p < sig->numParams(); ++p) {
+                    qore_type_owner_add_name(names, sig->getParamTypeInfo(p), &type_owner);
+                }
+            }
+        }
+    }
+}
+
+void qore_class_private::freeTypeOwner() {
+    assert(!refs.reference_count());
+    cls->priv = nullptr;
+    delete cls;
+    for (auto& i : qcrefs) {
+        i.first->priv = nullptr;
+        delete i.first;
+    }
+    delete this;
 }
 
 void qore_class_private::addBuiltinStaticVar(const char* vname, QoreValue value, ClassAccess access, const QoreTypeInfo* vTypeInfo) {
@@ -1371,6 +1492,26 @@ int qore_class_private::initializeIntern() {
     // is empty when initializing classes (which can be done at any time during parsing)
     LVarStackBreakHelper lvar_stack_helper;
 
+    int bound_err = 0;
+    // the bounds of the type parameters are resolved before the methods' code is parsed: a value of a bounded type
+    // parameter has its bound in the class's code (qore#5774)
+    if (!type_params.empty() && type_param_bound_types.empty()) {
+        type_param_bound_types.assign(type_params.size(), nullptr);
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (!type_params[i].hasBound()) {
+                continue;
+            }
+            std::unique_ptr<QoreParseTypeInfo> pti(qore_parse_type_string_to_pti(type_params[i].getBoundType()));
+            if (!pti) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot parse bound type '%s' for generic class '%s' type "
+                    "parameter '%s'", type_params[i].getBoundType(), name.c_str(), type_params[i].name.c_str());
+                bound_err = -1;
+                continue;
+            }
+            type_param_bound_types[i] = QoreParseTypeInfo::resolveAny(pti.get(), loc, bound_err);
+        }
+    }
+
     // first resolve types in pending variants in all method signatures (incl. return types)
     // since abstract method functions are copied by reference from the normal list; this resolves all pending
     // method function signatures as well
@@ -1381,7 +1522,7 @@ int qore_class_private::initializeIntern() {
         i.second->priv->func->resolvePendingSignatures();
     }
 
-    int err = 0;
+    int err = bound_err;
 
     QoreProgram* pgm = getProgram();
     if (pgm && !sys && (qore_program_private::parseAddDomain(pgm, domain))) {
@@ -1781,8 +1922,12 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
         if (*xsink) {
             return -1;
         }
+        // the type arguments of the object: those of its instantiation, or else its class, whose parent classes give the
+        // type arguments of the generic classes that it inherits (class IntBox inherits Box<int>, qore#6027); as the
+        // members are accessed (see qore_object_private::getMemberValueRefForAssignment())
+        qore_object_private* opriv = qore_object_private::get(o);
         const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(info.getInitializerTypeInfo(),
-            qore_object_private::get(o)->instantiated_type);
+            opriv->instantiated_type ? opriv->instantiated_type : opriv->theclass->getTypeInfo());
         printd(5, "qore_class_private::initMember() this: %p '%s::%s' type %s val: %s filter: %d\n", this, name.c_str(),
             member_name, QoreTypeInfo::getPath(member_type),
             val->getFullTypeName(true),
@@ -2446,6 +2591,8 @@ void BCNode::setClassPointer(QoreClass* qc) {
 
 int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
     if (!sclass) {
+        // the parent class is named without type arguments (qore#6082)
+        const bool raw_parent = !parsed_type;
         if (parsed_type) {
             QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, raise_error);
             if (qc) {
@@ -2547,6 +2694,17 @@ int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
         setClassPointer(sclass);
         if (cls == sclass) {
             parse_error(*cls->priv->loc, "class '%s' cannot inherit itself", cls->getName());
+            assert(cls->priv->scl);
+            cls->priv->scl->valid = false;
+            sclass = nullptr;
+        }
+        // a generic class is inherited with type arguments, as it is instantiated with them; the classes that
+        // default to a value-erased instance for raw use (legacy_raw) can be inherited without (qore#6082)
+        if (sclass && raw_parent && sclass->hasTypeParameters()
+            && !qore_class_private::get(*sclass)->rawConstructionDefaultsToAuto()) {
+            parseException(*loc, "MISSING-TYPE-ARGUMENTS", "cannot inherit generic class '%s' without type "
+                "arguments; use '%s<auto>' for an explicitly value-erased parent", sclass->getName(),
+                sclass->getName());
             assert(cls->priv->scl);
             cls->priv->scl->valid = false;
             sclass = nullptr;
@@ -5827,6 +5985,11 @@ int qore_class_private::parseInit() {
         err = -1;
     }
 
+    // qore#6027: a generic parent class that is inherited through two paths has the same type arguments in both
+    if (!err && parseCheckGenericParentInstantiations()) {
+        err = -1;
+    }
+
     // issue #5838: a variant that a call typed against a parent class can select must return a compatible type
     if (!err && parseCheckReturnTypeHierarchy()) {
         err = -1;
@@ -6160,6 +6323,91 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
 }
 
 } // namespace
+
+namespace {
+
+//! an instantiation of a generic class that a class inherits, and the direct parent class through which it does
+struct GenericParentSeen {
+    const QoreClass* base;
+    const QoreTypeInfo* type;
+    std::string via;
+};
+
+//! the name of a class type without the "object<>" of its type name: Box<int>
+std::string generic_parent_name(const QoreTypeInfo* type) {
+    std::string str = QoreTypeInfo::getName(type);
+    if (str.compare(0, 7, "object<") == 0 && !str.empty() && str.back() == '>') {
+        return str.substr(7, str.size() - 8);
+    }
+    return str;
+}
+
+//! collects the instantiations of the generic classes that \a cls inherits through all paths, in the order of the
+//! parent classes; returns false and fills \a first and \a second if one class has two different instantiations
+bool collect_generic_parents(const qore_class_private& cls, const QoreTypeInfo* source, const std::string& via,
+        std::vector<GenericParentSeen>& seen, std::unordered_set<const qore_class_private*>& path,
+        GenericParentSeen*& first, GenericParentSeen& second) {
+    if (!cls.scl || !cls.scl->valid) {
+        return true;
+    }
+    for (auto& i : *cls.scl) {
+        QoreClass* pc = i->sclass;
+        if (!pc) {
+            continue;
+        }
+        const qore_class_private* pcp = qore_class_private::get(*pc);
+        // the direct parent of the class that is checked, through which the path goes
+        const std::string pvia = via.empty() ? std::string(pc->getName()) : via;
+        const QoreTypeInfo* subst = nullptr;
+        if (i->type_info) {
+            subst = source ? qore_substitute_type_params_if_needed(i->type_info, source) : i->type_info;
+        }
+        const QoreParameterizedClassTypeInfo* pti = subst ? QoreTypeInfo::getParameterizedClassType(subst) : nullptr;
+        if (pti) {
+            // type arguments that contain a type parameter are known when the class is instantiated
+            const bool concrete = !qore_type_contains_type_parameter(subst);
+            for (auto& s : seen) {
+                if (qore_class_private::sameDeclaration(s.base, pti->getBaseClass()) && concrete
+                        && !qore_type_contains_type_parameter(s.type)
+                        && strcmp(QoreTypeInfo::getName(s.type), QoreTypeInfo::getName(subst))) {
+                    first = &s;
+                    second = {pti->getBaseClass(), subst, pvia};
+                    return false;
+                }
+            }
+            seen.push_back({pti->getBaseClass(), subst, pvia});
+        }
+        if (!path.insert(pcp).second) {
+            continue;
+        }
+        const bool ok = collect_generic_parents(*pcp, pti ? subst : nullptr, pvia, seen, path, first, second);
+        path.erase(pcp);
+        if (!ok) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+int qore_class_private::parseCheckGenericParentInstantiations() const {
+    if (!scl || !scl->valid) {
+        return 0;
+    }
+    std::vector<GenericParentSeen> seen;
+    std::unordered_set<const qore_class_private*> path;
+    path.insert(this);
+    GenericParentSeen* first = nullptr;
+    GenericParentSeen second;
+    if (collect_generic_parents(*this, nullptr, std::string(), seen, path, first, second)) {
+        return 0;
+    }
+    parse_error(*loc, "class '%s' inherits generic class '%s' with different type arguments: '%s' through '%s' and "
+        "'%s' through '%s'", name.c_str(), second.base->getName(), generic_parent_name(first->type).c_str(),
+        first->via.c_str(), generic_parent_name(second.type).c_str(), second.via.c_str());
+    return -1;
+}
 
 int qore_class_private::parseCheckFinalHierarchy() const {
     // a hierarchy that was rejected (a class that is its own ancestor) has its parse error already

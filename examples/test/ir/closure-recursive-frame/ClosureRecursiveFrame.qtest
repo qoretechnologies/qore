@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation, background compiles in threads
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ClosureRecursiveFrameTest
+
+#! issue #6050: a closure called in a deeper recursive frame of its creator uses its own captured binding
+/** The IR interpreter's inline closure call had no frame boundary, so a captured variable resolved to the variable of
+    the same name in the calling frame (a recursive frame of the function that created the closure), for reads and
+    writes; its integer shortcuts also preferred a variable of the same name found on the thread's stack.  JIT
+    execution with background compiles reached it on the first call (the closure's IR is made with its creator's batch
+    compile), the IR and tiered modes once the closure had IR.  The script calls closures created in frames of
+    recursive functions, a method and a closure from a deeper frame, reads, writes (also with a body that only
+    increments it) and uses a captured variable in integer, float and string expressions and in a default argument
+    value, three times, so that the code also runs once it has IR or is compiled.
+*/
+class ClosureRecursiveFrameTest inherits QUnit::Test {
+    public {
+        const Iteration = "reads in the innermost frame: n=3 n=2 n=1\n"
+            "writes: the closure returns 2; the inner frame keeps n=0\n"
+            "writes: frame 1 sees n=2 after the call in the inner frame\n"
+            "arith: n + 100 = 101\n"
+            "increment only: the inner frame keeps n=0\n"
+            "increment only: frame 1 sees n=2\n"
+            "leaves: 2.0 outer!\n"
+            "default x=1\n"
+            "method n=1\n"
+            "nested n=1\n";
+        const Expected = Iteration + Iteration + Iteration;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("closure in a recursive frame", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/ClosureRecursiveFrame.qr";
+
+        addTestCase("execution modes, low tier thresholds", \modesTest());
+        addTestCase("JIT, background compiles", \asyncTest());
+        addTestCase("JIT, synchronous compiles", \syncTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! every mode, with tier thresholds of 1: the closures get IR at once (the IR interpreter's inline closure call)
+    private modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s "
+                "--exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+    }
+
+    #! JIT execution with background compiles and the default thresholds, as in the issue
+    private asyncTest() {
+        foreach string thresholds in (("", "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ")) {
+            assertEq(Expected, backquote(sprintf("env -u QORE_JIT_SYNC_COMPILE -u QORE_IR_THRESHOLD "
+                "-u QORE_JIT_THRESHOLD %s %s%s --exec-mode=jit %s 2>&1", env, thresholds, qore_bin, script)),
+                "jit " + (thresholds ? "with thresholds of 1" : "with the default thresholds"));
+        }
+    }
+
+    #! JIT execution with synchronous compiles
+    private syncTest() {
+        assertEq(Expected, backquote(sprintf("%s QORE_JIT_SYNC_COMPILE=1 %s --exec-mode=jit %s 2>&1", env, qore_bin,
+            script)));
+    }
+
+    #! compiled with qcc
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("closure-recursive-frame-aot-");
+        string exe = dir.path + "/closure-recursive-frame";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(Expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+}

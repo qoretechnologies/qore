@@ -2633,12 +2633,29 @@ static const QoreMethod* findAOTVariantClassLocalMethod(const QoreClass* qc, con
     return is_static ? qcp->parseFindLocalStaticMethod(name) : qcp->parseFindLocalMethod(name);
 }
 
+// documented in QoreAOT.h
+const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const char* method_name) {
+    if (!qc || !method_name || !*method_name) {
+        return nullptr;
+    }
+    qore_class_private* qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+    if (const QoreMethod* method = findAOTInstanceMethod(qc, method_name, qcp)) {
+        return method;
+    }
+    ClassAccess access = Public;
+    return qcp->runtimeFindCommittedStaticMethodIntern(method_name, access, qcp);
+}
+
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
     }
     const QoreMethod* method = qc->findMethod(method_name);
-    return method ? method : findAOTStaticMethod(qc, method_name);
+    if (!method) {
+        method = findAOTStaticMethod(qc, method_name);
+    }
+    // a method whatever its access, which the compiler checked (qore#5975)
+    return method ? method : qore_aot_find_named_method(qc, method_name);
 }
 
 static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
@@ -5836,6 +5853,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                 for (uint16_t c = 0; c < num_captured; ++c) {
                     const char* cname = reader.readStringRef(ptr);
                     captured_names[c] = cname ? cname : "";
+                    // a top-level local that a default argument's closure captures is written as "top:<index>:<name>"
+                    // (qore#5998; see read_expr_closure_create()): here the variable is found by its name, as before
+                    if (cname && !strncmp(cname, "top:", 4)) {
+                        const char* colon = strchr(cname + 4, ':');
+                        if (colon && colon[1]) {
+                            captured_names[c] = colon + 1;
+                        }
+                    }
                     captured_parent_slots[c] = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
                 }
 
@@ -14464,7 +14489,10 @@ DLLLOCAL void qore_aot_clear_all_module_opaque_targets(ExceptionSink& xsink) {
         }
     }
     for (QoreProgram* pgm : programs) {
-        qore_program_private::get(*pgm)->clearOpaqueTargets(&xsink);
+        // the targets of a Program that a foreign thread runs in are not destroyed under it
+        if (!qore_program_private::get(*pgm)->leaveForeignThreads()) {
+            qore_program_private::get(*pgm)->clearOpaqueTargets(&xsink);
+        }
     }
 }
 
@@ -14501,7 +14529,10 @@ DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink) {
     }
     for (QoreProgram* pgm : programs) {
         pgm->waitForTermination();
-        qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
+        // the data of a Program that a foreign thread runs in is not destroyed under it
+        if (!qore_program_private::get(*pgm)->leaveForeignThreads()) {
+            qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
+        }
     }
 }
 

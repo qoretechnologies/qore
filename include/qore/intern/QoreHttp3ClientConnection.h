@@ -372,6 +372,8 @@ private:
     //! Error details from the most recently failed attempt (for diagnostics
     //! when all attempts fail).  Protected by @c attempts_mu_.
     std::string last_err_, last_desc_;
+    //! true if @ref last_err_ is an error of an attempt that never reached a server (see is_unreached_error())
+    bool last_err_unreached_ = false;
     //! @}
 
     DLLLOCAL int buildAndSubmit(ExceptionSink* xsink);
