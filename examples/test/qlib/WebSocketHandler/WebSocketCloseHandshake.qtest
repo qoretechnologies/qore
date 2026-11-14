@@ -138,6 +138,8 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
         addTestCase("a close frame without a status code has the close code 1005", \serverNoStatusCloseTest());
         addTestCase("a close the server starts waits for the client's close frame", \serverCloseWaitsTest());
         addTestCase("a close the server starts ends at the close timeout", \serverCloseTimeoutTest());
+        addTestCase("a close the server starts does not end before the close timeout",
+            \serverCloseTimeoutNotEarlyTest());
         addTestCase("without a close timeout, the server does not wait", \serverCloseNoWaitTest());
         addTestCase("the server sends one close frame and no data frame after it", \serverOneCloseTest());
         addTestCase("stop() closes with the handshake, and the server closes first", \handlerStopTest());
@@ -285,6 +287,36 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
         hash<WsMsgInfo> close = ws_read_message(p.client, HangGuard);
         # 1006 is never sent in a close frame (RFC 6455 section 7.4.1)
         assertEq(WSCC_GoingAway, close.close, "the client gets the server's close frame with its own code");
+    }
+
+    #! A close the server starts waits for the client's close frame for the whole close timeout
+    /** The close deadline is kept in microseconds: one in whole milliseconds, taken from a truncated clock reading,
+        ended the wait up to a millisecond early.  With a close timeout of 1 ms that loss is most of the wait, so
+        each close below ended early unless it started right at a millisecond boundary.  The steps are run one after
+        the other without waiting for the poll timeout hint, as when other events on the socket wake the operation
+        before its deadline.  The time is measured with the monotonic clock, as the deadline is.
+    */
+    serverCloseTimeoutNotEarlyTest() {
+        for (int i = 0; i < 20; ++i) {
+            SocketPair p();
+            HttpWebSocketPollOperationBase op(p.server);
+            op.setCloseTimeout(1ms);
+            # taken before the close is started, so before its deadline is set
+            int start = clock_get_monotonic_us();
+            op.sendClose(WSCC_GoingAway, "going away");
+            int hang_guard = start + HangGuard.durationMicroseconds();
+            while (!op.goalReached()) {
+                op.continuePoll();
+                if (clock_get_monotonic_us() > hang_guard) {
+                    throw "CLOSE-TIMEOUT-ERROR", sprintf("the close did not end within %y", HangGuard);
+                }
+            }
+            int elapsed = clock_get_monotonic_us() - start;
+
+            assertEq("close handshake timed out", op.getCloseReason(), sprintf("%d: the close timed out", i));
+            assertGe(1000, elapsed, sprintf("%d: the close does not end before its close timeout (%d us)", i,
+                elapsed));
+        }
     }
 
     #! With a close timeout of 0, the server does not wait for the client's close frame
