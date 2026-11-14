@@ -5800,7 +5800,10 @@ void QoreModuleManager::delUser() {
         // opaque reference refers to schema objects, for example); breaking the cycle only when the owning module
         // is deleted would run the destructors of those objects after the programs of their classes are gone
         for (QoreUserModule* um : user_modules) {
-            qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+            // the targets of a Program that a foreign thread runs in are not destroyed under it
+            if (!qore_program_private::get(*um->getProgram())->leaveForeignThreads()) {
+                qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+            }
         }
         // AOT user modules are binary modules, deleted after all user modules in cleanup()
         qore_aot_clear_all_module_opaque_targets(xsink);

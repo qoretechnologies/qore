@@ -2309,19 +2309,6 @@ public:
         return thread_count;
     }
 
-    //! Returns true if a thread other than the calling thread is running Qore code in this Program
-    /** Such a thread is one that the library does not control: a thread of another runtime (a daemon thread of the
-        Python module, for example) that is registered as a foreign thread and is blocked in Qore code when the
-        process ends.  Waiting for it (see waitForAllThreadsToTerminateIntern()) would never end
-    */
-    DLLLOCAL bool hasOtherThreads() {
-        int tid = q_gettid();
-        AutoLocker al(plock);
-        ptid_map_t::iterator i = tidmap.find(tid);
-        unsigned adj = (i != tidmap.end() ? i->second : 0);
-        return thread_count > adj;
-    }
-
     //! Returns the number of threads other than the calling thread that are foreign threads running in this Program
     /** A foreign thread is a thread of another runtime (a daemon thread of the Python module, for example) registered
         with q_register_foreign_thread(); called with plock held

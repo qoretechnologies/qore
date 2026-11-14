@@ -14464,7 +14464,10 @@ DLLLOCAL void qore_aot_clear_all_module_opaque_targets(ExceptionSink& xsink) {
         }
     }
     for (QoreProgram* pgm : programs) {
-        qore_program_private::get(*pgm)->clearOpaqueTargets(&xsink);
+        // the targets of a Program that a foreign thread runs in are not destroyed under it
+        if (!qore_program_private::get(*pgm)->leaveForeignThreads()) {
+            qore_program_private::get(*pgm)->clearOpaqueTargets(&xsink);
+        }
     }
 }
 
@@ -14501,7 +14504,10 @@ DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink) {
     }
     for (QoreProgram* pgm : programs) {
         pgm->waitForTermination();
-        qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
+        // the data of a Program that a foreign thread runs in is not destroyed under it
+        if (!qore_program_private::get(*pgm)->leaveForeignThreads()) {
+            qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
+        }
     }
 }
 

@@ -2127,22 +2127,37 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 #endif
     }
 
+    bool leave_late = false;
     if (need_cleanup) {
         AutoLocker al(plock);
-        // mark the program so that only code from this thread can run during data destruction
-        ptid = q_gettid();
-        // the fast paths that run the code of its variants without entering it take the call path from now on,
-        // which refuses the calls of other threads and of other Programs (qore#5822)
-        markUserVariantsDeleted();
+        // a foreign thread can have entered the Program while the cleanup callback ran: it is not waited for, and the
+        // data that it uses is not destroyed (see leaveForeignThreads()); no thread can enter once ptid is set, so the
+        // decision is final
+        if (qore_shutdown.load(std::memory_order_acquire) && getOtherForeignThreadCountIntern() > 0) {
+            // the Program is kept allocated for the thread
+            depRef();
+            leave_late = true;
+        } else {
+            // mark the program so that only code from this thread can run during data destruction
+            ptid = q_gettid();
+            // the fast paths that run the code of its variants without entering it take the call path from now on,
+            // which refuses the calls of other threads and of other Programs (qore#5822)
+            markUserVariantsDeleted();
 #ifdef DEBUG
-        if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
-            hook(pgm, DbgTeardownPoint::BeforeFinalWait);
-        }
+            if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
+                hook(pgm, DbgTeardownPoint::BeforeFinalWait);
+            }
 #endif
-        // threads could enter the Program while the cleanup callback ran (ptid was not set yet): wait for them to
-        // leave it, as its data is destroyed below; no other thread can enter it now
-        waitForAllThreadsToTerminateIntern();
-        clr = true;
+            // threads could enter the Program while the cleanup callback ran (ptid was not set yet): wait for them to
+            // leave it, as its data is destroyed below; no other thread can enter it now
+            waitForAllThreadsToTerminateIntern();
+            clr = true;
+        }
+    }
+    if (leave_late) {
+        printd(5, "qore_program_private::waitForTerminationAndClear() leaving pgm: %p: a foreign thread entered it\n",
+            pgm);
+        return;
     }
 
     if (clr) {
