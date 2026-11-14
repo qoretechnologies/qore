@@ -32,6 +32,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Test read receipt header parsing", \testReadReceipt(), NOTHING);
         addTestCase("Test character encoding of serialized messages", \testEncoding(), NOTHING);
         addTestCase("Test names of unnamed attachments", \testUnnamedAttachmentNames(), NOTHING);
+        addTestCase("Test the sender's display name", \testSenderDisplayName(), NOTHING);
 
         set_return_value(main());
     }
@@ -391,7 +392,7 @@ lorem ipsum\r
             # getFrom() should return just the email address
             assertEq("john@example.com", msg.getFrom(), "getFrom() extracts email from display format");
             # getSender() returns the full display format
-            assertEq("john@example.com", msg.getSender(), "getSender() returns extracted email");
+            assertEq(displaySender, msg.getSender(), "getSender() returns the display format");
         }
 
         # Test that getFrom() is not empty after construction
@@ -1318,5 +1319,102 @@ lorem ipsum\r
         assertRegex("charset=ISO-8859-1", ser);
         Message parsed(ser);
         assertEq(convert_encoding(body, "UTF-8"), convert_encoding(parsed.getBody(), "UTF-8"));
+    }
+
+    #! returns the From header line of a message created to be sent with the given sender
+    private static string getFromHeader(string sender, bool encode = True) {
+        Message msg(sender, Subject);
+        msg.addTO(To);
+        msg.setBody("body");
+        return getFromLine(msg.getHeaderString("\r\n", encode));
+    }
+
+    #! returns the From header line, with its folded lines, from a header string
+    private static string getFromLine(string hdr) {
+        return (hdr =~ x/^(From: .*?\r\n)(?![ \t])/s)[0] ?? "";
+    }
+
+    # issue #6019: the sender's display name is written in the From header; the address is the envelope sender
+    testSenderDisplayName() {
+        # a display name in ASCII
+        string sender = "Qorus Cloud <notifications@mail.qorus.cloud>";
+        Message msg(sender, Subject);
+        assertEq("notifications@mail.qorus.cloud", msg.getFrom());
+        assertEq(sender, msg.getSender());
+        assertEq("notifications@mail.qorus.cloud", msg.getInfo().sender);
+        assertEq(sender, msg.getInfo().from);
+        assertEq("From: Qorus Cloud <notifications@mail.qorus.cloud>\r\n", getFromHeader(sender));
+        assertEq("From: Qorus Cloud <notifications@mail.qorus.cloud>\r\n", getFromHeader(sender, False));
+        # extra white space is not kept
+        assertEq("From: Qorus Cloud <notifications@mail.qorus.cloud>\r\n",
+            getFromHeader("  Qorus Cloud   <notifications@mail.qorus.cloud>  "));
+        # an encoded word given as the name is written as it is
+        assertEq("From: =?UTF-8?Q?J=C3=B6rg?= <j@example.com>\r\n", getFromHeader("=?UTF-8?Q?J=C3=B6rg?= <j@example.com>"));
+
+        # a display name that is not ASCII is an RFC 2047 encoded word; the address is not encoded
+        sender = "Jörg Müller <j@example.com>";
+        msg = new Message(sender, Subject);
+        assertEq("j@example.com", msg.getFrom());
+        assertEq(sender, msg.getSender());
+        assertEq("From: " + mime_encode_header_word_b("Jörg Müller") + " <j@example.com>\r\n", getFromHeader(sender));
+        # not encoded
+        assertEq("From: Jörg Müller <j@example.com>\r\n", getFromHeader(sender, False));
+        # with specials, the name is encoded as it is, without quotes
+        assertEq("From: " + mime_encode_header_word_b("Müller, Jörg") + " <j@example.com>\r\n",
+            getFromHeader("Müller, Jörg <j@example.com>"));
+        assertEq("From: " + mime_encode_header_word_b("Müller, Jörg") + " <j@example.com>\r\n",
+            getFromHeader("\"Müller, Jörg\" <j@example.com>"));
+        assertEq("\"Müller, Jörg\" <j@example.com>", (new Message("Müller, Jörg <j@example.com>", Subject)).getSender());
+
+        # a display name with specials is a quoted string (RFC 5322)
+        assertEq("From: \"Doe, John\" <john@example.com>\r\n", getFromHeader("Doe, John <john@example.com>"));
+        assertEq("From: \"Doe, John\" <john@example.com>\r\n", getFromHeader("\"Doe, John\" <john@example.com>"));
+        assertEq("From: \"John Q. Public\" <john@example.com>\r\n", getFromHeader("John Q. Public <john@example.com>"));
+        assertEq("From: \"Say \\\"Hi\\\" \\\\ bye\" <a@example.com>\r\n",
+            getFromHeader("\"Say \\\"Hi\\\" \\\\ bye\" <a@example.com>"));
+        assertEq("From: \"Say \\\"Hi\\\"\" <a@example.com>\r\n", getFromHeader("Say \"Hi\" <a@example.com>"));
+        assertEq("\"Doe, John\" <john@example.com>", (new Message("Doe, John <john@example.com>", Subject)).getSender());
+        # a quoted name without specials is written without quotes
+        assertEq("From: John Doe <john@example.com>\r\n", getFromHeader("\"John Doe\" <john@example.com>"));
+
+        # a bare address, and an address in angle brackets alone, are written as the address
+        assertEq("From: foo@bar.cz\r\n", getFromHeader("foo@bar.cz"));
+        assertEq("foo@bar.cz", (new Message("foo@bar.cz", Subject)).getSender());
+        assertEq("From: foo@bar.cz\r\n", getFromHeader("<foo@bar.cz>"));
+        assertEq("From: foo@bar.cz\r\n", getFromHeader("\"\" <foo@bar.cz>"));
+        msg = new Message("<foo@bar.cz>", Subject);
+        assertEq("foo@bar.cz", msg.getSender());
+        assertEq("foo@bar.cz", msg.getFrom());
+
+        # a line break in the name cannot end the header line
+        sender = "A\r\nBcc: victim@example.com <a@example.com>";
+        msg = new Message(sender, Subject);
+        assertEq("a@example.com", msg.getFrom());
+        assertEq("From: " + mime_encode_header_word_b("A\r\nBcc: victim@example.com") + " <a@example.com>\r\n",
+            getFromHeader(sender));
+        msg.addTO(To);
+        msg.setBody("body");
+        assertThrows("HEADER-ERROR", \msg.getHeaderString(), ("\r\n", False));
+
+        # the receipt headers have the display name too
+        msg = new Message("Qorus Cloud <notifications@mail.qorus.cloud>", Subject);
+        msg.addTO(To);
+        msg.setBody("body");
+        msg.receiptRead(True);
+        msg.receiptDelivery(True);
+        string hdr = msg.getHeaderString();
+        assertRegex("\r\nReturn-Receipt-To: Qorus Cloud <notifications@mail\\.qorus\\.cloud>\r\n", hdr);
+        assertRegex("\r\nDisposition-Notification-To: Qorus Cloud <notifications@mail\\.qorus\\.cloud>\r\n", hdr);
+
+        # a serialized message is parsed with the display name, and a long encoded name is decoded again
+        foreach string name in ("Qorus Cloud", "Jörg Müller", "Doe, John", strmul("Jörg Müller ", 10, 1)) {
+            msg = new Message(sprintf("%s <j@example.com>", name), Subject);
+            msg.addTO(To);
+            msg.setBody("body");
+            Message parsed(msg.serializeRaw());
+            assertEq("j@example.com", parsed.getFrom(), name);
+            assertEq(msg.getSender(), parsed.getSender(), name);
+            assertEq(getFromLine(msg.getHeaderString()), getFromLine(parsed.getHeaderString()), name);
+        }
     }
 }

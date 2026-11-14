@@ -151,6 +151,12 @@ msg.addTO("My Best Friend <you@friend.com>");
       - \c is_multipart, \c multipart_type, \c is_signed, \c is_encrypted, \c is_digest
     - Now requires Mime module version 1.7 or later
       (<a href="https://github.com/qoretechnologies/qore/issues/5162">issue 5162</a>)
+    - The \c From header of a message created to be sent has the sender's display name; it was dropped, and the
+      header had the email address alone.  @ref MailMessage::Message::getSender() "Message::getSender()" returns the
+      sender in display format, a display name with RFC 5322 specials is written as a quoted string, a non-ASCII
+      display name is written as an RFC 2047 encoded word, and
+      @ref MailMessage::Message::getFrom() "Message::getFrom()", the sender of the SMTP envelope, is still the email
+      address alone (<a href="https://github.com/qoretechnologies/qore/issues/6019">issue 6019</a>)
 
     @subsection mailmessage_v1_4 MailMessage 1.4
     - Added the @ref MailMessage::Message::getInfo() "MailMessage::getInfo()" method
@@ -237,7 +243,7 @@ public hashdecl PartInfo {
 
 #! Message info
 public hashdecl MailMessageInfo {
-    #! The From: address
+    #! The sender in display format, as returned by @ref MailMessage::Message::getSender() "Message::getSender()"
     *string from;
 
     #! The sender's email address
@@ -591,12 +597,18 @@ public class Message {
 
         Use the Message::addTo() method to add message recipients
 
-        @param sender the sender's email address; can be in the format \c "Full Display Name <name@example.com>"
+        @param sender the sender's email address; can be in the format \c "Full Display Name <name@example.com>",
+        and the display name can be a quoted string (ex: <tt>"Doe, John" \<john@example.com\></tt>); the display name
+        is written in the \c From header (see @ref getHeaderString()), and the email address alone is the sender of
+        the SMTP envelope (see @ref getFrom())
         @param subject the subject line for the email; the subject will be encoded with
         <a href="http://tools.ietf.org/html/rfc2047">"Q" encoding</a>
         @param smtp_mode if True then a single "." will not be serialized alone on a line
 
         @throw MESSAGE-CONSTRUCTOR-ERROR the sender's email address is not valid; the subject is empty
+
+        @since MailMessage 1.5.1 the display name of the sender is kept; it was dropped, and the \c From header had
+        the email address alone
     */
     constructor(string sender, string subject, bool smtp_mode = True) {
         *string se = Message::getEmailAddress(sender);
@@ -608,7 +620,9 @@ public class Message {
             throw "MESSAGE-CONSTRUCTOR-ERROR", "subject must be not empty string";
 
         self.sender = se;   # used for sending
-        from = self.sender; # used for displaying
+        # used for displaying: the display name with the address, if there is a name
+        *string name = Message::getDisplayName(sender, se);
+        from = name.val() ? Message::formatMailbox(name, se) : se;
         self.subject = subject;
         self.smtp_mode = smtp_mode;
     }
@@ -1211,6 +1225,53 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         return !Message::getEmailAddress(str).empty();
     }
 
+    #! @cond nodoc
+    # returns the display name of a mailbox in the name-addr form ("Name <addr>", RFC 5322 section 3.4) if the
+    # address in angle brackets is the given address: without the quotes and quoting backslashes of a quoted string,
+    # and an empty string if there is no name; NOTHING if the mailbox is not in this form
+    private static *string getDisplayName(string mailbox, string addr) {
+        *list<*string> m = mailbox =~ x/^\s*(.*?)\s*<([^<>]*)>\s*$/s;
+        if (!m || m[1] != addr) {
+            return;
+        }
+        string name = m[0] ?? "";
+        if (name =~ /^".*"$/s) {
+            name = name.substr(1, -1);
+            name =~ s/\\(.)/$1/gs;
+            trim name;
+        }
+        return name;
+    }
+
+    # returns a mailbox in display format: "Name <addr>", with the name as a quoted string if it has specials
+    private static string formatMailbox(string name, string addr) {
+        if (name =~ /[()<>\[\]:;@\\,."]/) {
+            name = "\"" + replace(replace(name, "\\", "\\\\"), "\"", "\\\"") + "\"";
+        }
+        return sprintf("%s <%s>", name, addr);
+    }
+
+    # returns a header with the sender in display format: the display name is encoded as an RFC 2047 "B" encoded word
+    # if it is not printable ASCII and encode is True, and the address is never encoded
+    private string doSenderHeader(string hdr, string eol, bool encode) {
+        *string name = sender.val() ? Message::getDisplayName(from, sender) : NOTHING;
+        if (!exists name) {
+            # no display name with the sender's address: written as it is
+            return Message::doHeaderValue(hdr, from, eol, encode);
+        }
+        if (name.empty()) {
+            return Message::doHeaderValue(hdr, sender, eol, encode);
+        }
+        if (!encode || name.isDataPrintableAscii()) {
+            return Message::doHeaderValue(hdr, Message::formatMailbox(name, sender), eol, encode);
+        }
+        # an encoded word cannot be in a quoted string, and the "B" encoding has no specials (RFC 2047 section 5),
+        # so the name is encoded as it is; a line break in the name is encoded and cannot end the header line
+        check_line_text(hdr, "message header name", "HEADER-ERROR");
+        return sprintf("%s: %s <%s>%s", hdr, mime_encode_header_word_b(name), sender, eol);
+    }
+    #! @endcond
+
     #! add a recipient to the Message's recipient list
     /** @param recipient the email address to send the message to
         @return the list of "To:" addresses
@@ -1251,11 +1312,25 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     }
 
     #! returns the sender's address in display format
+    /** @return the sender's address in display format: for a message created to be sent, the display name and the
+        email address (ex: \c "Qorus Cloud <notifications@mail.qorus.cloud>"), with the name as a quoted string if it
+        has characters that a display name cannot have outside quotes (RFC 5322 \c specials, ex:
+        <tt>"Doe, John" \<john@example.com\></tt>), or the email address alone if the sender has no display name; for
+        a parsed message, the decoded \c From header.  The value is not encoded; non-ASCII display names are
+        encoded in the \c From header written by @ref getHeaderString().  Use @ref getFrom() for the email address
+        alone.
+
+        @since MailMessage 1.5.1 a message created to be sent returns the display name with the address; it returned
+        the email address alone
+    */
     *string getSender() {
         return from;
     }
 
     #! returns the sender's email address
+    /** @return the sender's email address alone; this is the sender of the SMTP envelope (the \c MAIL \c FROM
+        command); use @ref getSender() for the sender in display format
+    */
     *string getFrom() {
         return sender;
     }
@@ -1612,16 +1687,22 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         header given for the message is then the type of the body unless a type is set for the body.  The multipart
         MIME headers of a message with alternative parts or attachments are not included.
 
+        The \c From header (and the \c Return-Receipt-To and \c Disposition-Notification-To headers) has the sender
+        in display format (see @ref getSender()); a display name that is not printable ASCII is encoded as an
+        <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a> \c "B" encoded word when \a encode is
+        @ref True "True", and the email address is never encoded.
+
         @param eol the End-Of-Line marker for the string
         @param encode encode non-ASCII values with quoted printable encoding (http://tools.ietf.org/html/rfc2047)
 
         @return a string with all the message headers separated by the EOL marker
 
         @since MailMessage 1.5.1 the message is not changed: a \c Content-Type header was removed or taken as the
-        type of the body
+        type of the body; the \c From header has the display name of the sender, and only the display name is
+        encoded
     */
     string getHeaderString(string eol = "\r\n", bool encode = True) {
-        string hdr = Message::doHeaderValue("From", from, eol, encode);
+        string hdr = doSenderHeader("From", eol, encode);
 
         # To:
         foreach string l in (to)
@@ -1643,10 +1724,10 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
             hdr += sprintf("Importance: high%sX-Priority: 1%sPriority: Urgent%s", eol, eol, eol);
 
         if (deliveryReceipt)
-            hdr += Message::doHeaderValue("Return-Receipt-To", from, eol, encode);
+            hdr += doSenderHeader("Return-Receipt-To", eol, encode);
 
         if (readReceipt)
-            hdr += Message::doHeaderValue("Disposition-Notification-To", from, eol, encode);
+            hdr += doSenderHeader("Disposition-Notification-To", eol, encode);
 
         # the MIME headers are generated if the message has a MIME structure (a body with a content transfer encoding,
         # alternative parts or attachments); MIME headers given or parsed with the message are then not written,
