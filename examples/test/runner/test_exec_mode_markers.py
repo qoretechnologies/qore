@@ -186,10 +186,13 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   WebSocket client in the test's own process only drives it
         # - callref-object-method-program and reflection-typed-hash-visibility (#5692): their probes run in child
         #   processes that set their own --exec-mode
+        # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
+        #   their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
                                  "examples/test/qore/misc/callref-object-method-program.qtest",
+                                 "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",

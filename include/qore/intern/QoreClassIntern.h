@@ -34,6 +34,7 @@
 #define _QORE_QORECLASSINTERN_H
 
 #include "qore/safe_dslist"
+#include "qore/intern/QoreTypeOwner.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
@@ -2609,6 +2610,7 @@ DLLLOCAL bool qore_program_has_module_lifetime(const QoreProgram* pgm);
 DLLLOCAL bool qore_module_lifetime_active();
 
 class qore_class_private {
+    template <class> friend class QoreTypeOwnerOf;
 public:
     template <bool Lexical, typename... Args>
     DLLLOCAL QoreValue evalMethodWithPolicy(LexicalSemanticPolicy policy, Args&&... args) const {
@@ -2836,6 +2838,12 @@ public:
 
     const qore_class_private* injectedClass = nullptr;
 
+    //! The class that this class was imported from in another Program, referenced by this class (issue #5790)
+    /** An imported class shares the types of its source (the type of "self", the types of its members and method
+        signatures, its parent classes), which the source Program frees when it is deleted otherwise
+    */
+    qore_class_private* import_source = nullptr;
+
     // common "self" local variable for all constructors
     mutable LocalVar selfid;
 
@@ -3060,23 +3068,17 @@ public:
         }
 
         if (refs.ROdereference()) {
-            // remove the private data pointer, delete the class object, then delete ourselves
-            cls->priv = nullptr;
-            if (!in_del) {
-                delete cls;
-            }
-
-            // delete all linked QoreClass objects
-            for (auto& i : qcrefs) {
-                i.first->priv = nullptr;
-                delete i.first;
-            }
-
-            delete this;
+            derefLast(in_del);
             return true;
         }
         return false;
     }
+
+    //! Releases the class after its last reference was released (see deref())
+    /** Not inline, so that the release of a reference that is not the last one costs no more than before
+        (issue #5790)
+    */
+    DLLLOCAL void derefLast(bool in_del);
 
     //! References a specific QoreClass pointer (handle) along with the private data
     /** Every reference to a copied QoreClass wrapper (i.e. a handle that is not \c priv->cls) must be acquired
@@ -5072,6 +5074,60 @@ public:
 
 protected:
         DLLLOCAL ~qore_class_private();
+
+    //! Releases the methods, the static variables and their values and the source Program
+    /** Called by the destructor, and when the class is retired (\a retiring); can be called again
+    */
+    DLLLOCAL void releaseMethodsAndData(bool retiring);
+
+    // QoreTypeOwner (issue #5790)
+    DLLLOCAL const void* getTypeOwnerKey() const {
+        return cls;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeOwnerType() const {
+        // a class that does not own its types does not keep them
+        return owns_typeinfo ? typeInfo : nullptr;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeOwnerOrNothingType() const {
+        return owns_ornothingtypeinfo ? orNothingTypeInfo : nullptr;
+    }
+
+    DLLLOCAL int getTypeOwnerReferenceCount() const {
+        return refs.reference_count();
+    }
+
+    DLLLOCAL bool isTypeOwnerSystem() const {
+        return sys;
+    }
+
+    DLLLOCAL bool keepsTypeOwnerMembers() const {
+        return false;
+    }
+
+    //! A retired class keeps only what the type checks of its types read
+    /** Its name, ID, signature hash, type parameters, types and base class list (with the classes it holds); its
+        methods, members, constants and static variables are released
+    */
+    DLLLOCAL void retireTypeOwner();
+
+    DLLLOCAL void freeTypeOwner();
+
+    //! The declarations named by the types of the members, static variables and method signatures
+    DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const;
+
+    DLLLOCAL void refTypeOwner() {
+        ref();
+    }
+
+    DLLLOCAL void derefTypeOwner() {
+        deref(false, false, false);
+    }
+
+public:
+    //! the declaration's QoreTypeOwner (issue #5790); the last member, so the layout of the others is not changed
+    QoreTypeOwnerOf<qore_class_private> type_owner{this};
 };
 
 //! Holds the Program that user code runs in while the calling thread runs it: the source Program of a class or the
