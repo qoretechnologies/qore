@@ -443,6 +443,37 @@ sub k5() {
     background sub () { on_exit c.dec(); k5i(); }();
     c.waitForZero();
 }
+# a call that raises an exception in a catch block with only simple statements in a try block: the catch block is
+# left before the exception is caught, and before the locals of the blocks around it are released
+sub k6() {
+    try {
+        try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) { thrower(); }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+    log += "after";
+}
+sub k7() {
+    try {
+        D loc("local");
+        {
+            D inner("inner");
+            try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) { thrower(); }
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+# a thread_exit in a catch block with only simple statements in a loop in a try block
+sub k8i() {
+    try {
+        D loc("local");
+        while (True) {
+            try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) { thread_exit; }
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+sub k8() {
+    Counter c(1);
+    background sub () { on_exit c.dec(); k8i(); }();
+    c.waitForZero();
+}
 # a statement of a catch block that can raise in a try statement in another try block, after a partial removal
 sub s2() {
     list<int> m = (0, 1, 2, 3, 4);
@@ -506,12 +537,16 @@ sub call(string fn) {
         case "k3": k3(); break;
         case "k4": k4(); break;
         case "k5": k5(); break;
+        case "k6": k6(); break;
+        case "k7": k7(); break;
+        case "k8": k8(); break;
         case "s2": s2(); break;
     }
 }
 foreach string fn in (("h1", "h2", "h3", "h4", "h5", "n1", "n2", "n3", "n4", "d1", "d2", "e1", "f1", "f2", "t1", "o1",
         "o2", "a1", "r1", "r2", "r3", "r4", "w1", "w2", "w3", "c1", "c2", "c3", "v1", "v2", "v3", "s1",
-        "x1", "x2", "k1", "k2", "k3", "k4", "k5", "s2")) {
+        "x1", "x2", "k1", "k2", "k3", "k4", "k5", "k6",
+        "k7", "k8", "s2")) {
     for (int i = 0; i < 2; ++i) {
         log = ();
         call(fn);

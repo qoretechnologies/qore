@@ -3978,8 +3978,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             pushBlockCleanup(scope_entry);
         }
         builder.createScopeEnter(try_scope_id);
+        // the catch blocks without exit blocks in the try block whose statements' exceptions go to its landing pad
+        // are left there (see lowerStatementBlock())
+        anchor_catch_stack.push_back({catch_block, catch_cleanup_depth, {}, false});
 
         if (try_stmt->getTryBlock() && !lowerStatementBlock(try_stmt->getTryBlock(), error)) {
+            anchor_catch_stack.pop_back();
             scope_stack.pop_back();
             cleanup_stack.pop_back();
             exception_stack.pop_back();
@@ -3988,6 +3992,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             guard_exception_target_override = prev_guard_override;
             return false;
         }
+        AnchorCatchInfo try_catches = std::move(anchor_catch_stack.back());
+        anchor_catch_stack.pop_back();
         exception_stack.pop_back();
         exception_scope_depth_stack.pop_back();
         try_catch_cleanup_depth_stack.pop_back();
@@ -4021,6 +4027,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Pass the scope_stack depth and try_scope_id so the LandingPad can
         // execute on_error/on_exit handlers for scopes entered within the try body
         builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
+        // a catch block without an exit block in the try block whose statement raised the exception is left before
+        // the exception is caught: its catch variable is released, which does nothing if it did not run or was left
+        // already; the landing pad closed the catch blocks opened in the try block (#5968)
+        for (LocalVar* var : try_catches.vars) {
+            auto* ui = builder.createUninstantiateLocal(var, stmt->loc);
+            ui->is_block_exit = true;
+        }
         QoreIRInstruction* catch_inst = builder.createCatchException(stmt->loc);
         // the returns of the try block, whose value the try statement releases when it catches an exception that
         // interrupted one of them (qore#5941); those of the catch block are those of the enclosing try statement
