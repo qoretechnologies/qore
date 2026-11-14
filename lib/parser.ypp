@@ -2097,20 +2097,26 @@ public:
         char* p0 = strchr(id, '<');
         if (p0) {
             // Check if this is a callable signature with form: ReturnType(Params...)
-            // where ReturnType may be a complex type like hash<string, int>
-            // In this case, we should NOT parse it as a complex type - keep the raw string
-            char* paren = strchr(id, '(');
-            if (paren) {
-                // Find where angle brackets end
+            // where ReturnType may be a complex type like hash<string, int>, or a callable type itself with a
+            // parameter list of its own, like code<*hash<auto>()> in code<*hash<auto>()>() (#6022)
+            // In this case, we should NOT parse it as a complex type - keep the raw string: it is a signature if a
+            // parameter list starts at the top level, outside angle brackets and parentheses
+            {
                 int angle_depth = 0;
-                for (char* p = id; p < paren; ++p) {
-                    if (*p == '<') ++angle_depth;
-                    else if (*p == '>') --angle_depth;
-                }
-                // If parentheses come after angle brackets are balanced (or there are none),
-                // this is a callable signature - don't parse as complex type
-                if (angle_depth == 0) {
-                    return new QoreParseTypeInfo(id, or_nothing);
+                int paren_depth = 0;
+                for (char* p = id; *p; ++p) {
+                    if (*p == '<') {
+                        ++angle_depth;
+                    } else if (*p == '>') {
+                        --angle_depth;
+                    } else if (*p == '(') {
+                        if (!angle_depth && !paren_depth) {
+                            return new QoreParseTypeInfo(id, or_nothing);
+                        }
+                        ++paren_depth;
+                    } else if (*p == ')') {
+                        --paren_depth;
+                    }
                 }
             }
             char* p1 = strrchr(id, '>');

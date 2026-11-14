@@ -65,8 +65,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+// a token scanned again in the generic_rescan start condition is one token: the scanner goes back to INITIAL before
+// the rule's action runs (see QORE_GENERIC_STATIC_REF_CUT())
 #define YY_USER_ACTION { yylloc->update(yylineno, yyleng, yytext); \
-    set_native_token_info(yylloc, yyextra); }
+    set_native_token_info(yylloc, yyextra); \
+    if (YY_START == generic_rescan) { BEGIN(INITIAL); } }
 
 int yyparse(yyscan_t yyscanner);
 
@@ -1133,6 +1136,108 @@ static bool angle_balanced(const char* p) {
     return ob == cb;
 }
 
+//! Returns the position after the '>' that closes the '<' at \a p, or nullptr if it is not closed
+static const char* angle_close(const char* p) {
+    assert(*p == '<');
+    int depth = 0;
+    for (; *p; ++p) {
+        if (*p == '<') {
+            ++depth;
+        } else if (*p == '>' && !--depth) {
+            return p + 1;
+        }
+    }
+    return nullptr;
+}
+
+//! what the rules of static calls of generic classes do with their match (see generic_static_ref_cut())
+enum class GenericStaticRefCut {
+    //! the match is the token (or is not terminated, which the rule reports)
+    Keep,
+    //! the match is cut back to a static call without method type arguments (a SCOPED_REF)
+    Scoped,
+    //! the match is cut back to a static call with method type arguments (an ANGLE_IDENTIFIER)
+    Angle,
+    //! the match is not a static call: it is scanned again without these rules
+    Rescan,
+};
+
+//! Returns what a rule of static calls of generic classes does with its match
+/** A static call is "<class path><type arguments>::<method>", optionally followed by the method's own type
+    arguments.  The patterns of the rules allow '>', parentheses and commas in type arguments (for nested and callable
+    types), so their longest match can run on over the rest of an expression with balanced angle brackets (qore#6037):
+    - "Holder<int>::m(1), Holder<int>::m" in "(Holder<int>::m(1), Holder<int>::m(2))": the type arguments of the
+      class end with the '>' that closes their '<', so the match is cut back to the call ("Holder<int>::m", or
+      "Holder<int>::m<int>" with the method's type arguments)
+    - "Holder<int>(Holder<int>::m" in "new Holder<int>(Holder<int>::m(1))", or "cast<list<int>>(Holder<int>::m" in a
+      cast: the type arguments are closed before something other than "::<method>", so the match is not a static
+      call and is scanned again without these rules (also if its angle brackets are not balanced, as in
+      "new Cell<int>(a < b, Holder<int>::m(1))")
+
+    A match whose first type arguments, or whose method's type arguments, are not closed is kept, and the rule
+    reports it.
+
+    @param text the text matched
+    @param leng the length of the text matched
+    @param len set to the length of the call for GenericStaticRefCut::Scoped and GenericStaticRefCut::Angle
+*/
+static GenericStaticRefCut generic_static_ref_cut(const char* text, size_t leng, size_t& len) {
+    len = 0;
+    const char* p = strchr(text, '<');
+    const char* e = p ? angle_close(p) : nullptr;
+    if (!e) {
+        return GenericStaticRefCut::Keep;
+    }
+    if (e[0] != ':' || e[1] != ':' || !(isalpha(e[2]) || e[2] == '_')) {
+        // not a static call, whatever the rest of the text has: scanned again, the token ends where the type
+        // arguments are closed, and a type that is not terminated later in the text is reported by its own match
+        return GenericStaticRefCut::Rescan;
+    }
+    p = e + 2;
+    while (isalnum(*p) || *p == '_') {
+        ++p;
+    }
+    bool angle = false;
+    if (*p == '<') {
+        const char* c = angle_close(p);
+        if (!c) {
+            // the method's type arguments are not closed: the rule reports it
+            return GenericStaticRefCut::Keep;
+        }
+        p = c;
+        angle = true;
+    }
+    if ((size_t)(p - text) >= leng) {
+        return GenericStaticRefCut::Keep;
+    }
+    len = p - text;
+    return angle ? GenericStaticRefCut::Angle : GenericStaticRefCut::Scoped;
+}
+
+//! Applies generic_static_ref_cut() in a rule of static calls of generic classes
+/** A cut match gives the rest back with yyless(), and its location is that of the token left; a match that is scanned
+    again is given back whole, and the scanner goes on in the generic_rescan start condition, where these rules are
+    not active, for one token (see YY_USER_ACTION).  The "break" ends the rule's action without a token.
+*/
+#define QORE_GENERIC_STATIC_REF_CUT() { \
+    size_t cut_len_; \
+    GenericStaticRefCut cut_ = generic_static_ref_cut(yytext, yyleng, cut_len_); \
+    if (cut_ == GenericStaticRefCut::Rescan) { \
+        yylloc->revertUpdate(); \
+        yyless(0); \
+        BEGIN(generic_rescan); \
+        break; \
+    } \
+    if (cut_ != GenericStaticRefCut::Keep) { \
+        yylloc->revertUpdate(); \
+        yyless(cut_len_); \
+        yylloc->update(yylineno, yyleng, yytext); \
+        set_native_token_info(yylloc, yyextra); \
+        yylval->string = strdup(yytext); \
+        return cut_ == GenericStaticRefCut::Angle ? ANGLE_IDENTIFIER : SCOPED_REF; \
+    } \
+}
+
 #define DO_DOT_KW_IDENTIFIER(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_KW_IDENTIFIER; }
 #define DO_DOT_HARD_KEYWORD(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_HARD_KEYWORD; }
 
@@ -1157,6 +1262,11 @@ static bool angle_balanced(const char* p) {
 %option yylineno
 %option noyy_push_state
 %option noyy_pop_state
+
+/* the start condition in which a match of the rules of static calls of generic classes that is not a static call
+   is scanned again, without those rules (see QORE_GENERIC_STATIC_REF_CUT()); inclusive: every other rule of INITIAL
+   is active */
+%s generic_rescan
 
 %x str_state char_dq_state char_sq_state regex_state incl p_def p_ifdef p_ifndef p_if p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires_state regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state prepend_module_state module_cmd set_zone try_module try_child_module p_skip_to_endtry angle_state p_skip_assert p_skip_debug_block regex_brace_state regex_extract_brace_state regex_subst1_brace regex_subst2_brace_wait regex_subst2_brace regex_trans1_brace regex_trans2_brace_wait regex_trans2_brace find_state
 
@@ -3245,7 +3355,8 @@ hash\<{WORD}\>\{                        {
 #endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
-({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+<INITIAL>({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+                                           QORE_GENERIC_STATIC_REF_CUT();
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return ANGLE_IDENTIFIER;
@@ -3255,7 +3366,8 @@ hash\<{WORD}\>\{                        {
                                            yylval->string = strdup(yytext);
                                            return ANGLE_IDENTIFIER;
                                         }
-(::{WORD})+{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+<INITIAL>(::{WORD})+{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+                                           QORE_GENERIC_STATIC_REF_CUT();
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return ANGLE_IDENTIFIER;
@@ -3265,7 +3377,8 @@ hash\<{WORD}\>\{                        {
                                            yylval->string = strdup(yytext);
                                            return ANGLE_IDENTIFIER;
                                         }
-({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD} {
+<INITIAL>({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD} {
+                                           QORE_GENERIC_STATIC_REF_CUT();
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return SCOPED_REF;
@@ -3275,7 +3388,8 @@ hash\<{WORD}\>\{                        {
                                            yylval->string = strdup(yytext);
                                            return SCOPED_REF;
                                         }
-(::{WORD})+{TYPE_ARGS_NESTED}::{WORD} {
+<INITIAL>(::{WORD})+{TYPE_ARGS_NESTED}::{WORD} {
+                                           QORE_GENERIC_STATIC_REF_CUT();
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return SCOPED_REF;

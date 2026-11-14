@@ -1,0 +1,33 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a module that is not %modern, with %broken-soft-types; used by instanceof-broken-soft-types.qtest
+
+%old-style
+%broken-soft-types
+
+module BrokenSoftTypesInstanceof {
+    version = "1.0";
+    desc = "instanceof under %broken-soft-types, called from %modern code";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace BrokenSoftTypesInstanceof {
+    auto sub null_value() {
+        return NULL;
+    }
+
+    #! returns whether SQL NULL is an instance of softint and softstring, which it is under %broken-soft-types
+    public list sub check() {
+        my auto $v = null_value();
+        return ($v instanceof softint, $v instanceof softstring);
+    }
+
+    #! returns a closure that makes the same check, to be called by the caller
+    public code sub checker() {
+        return list sub () {
+            my auto $v = null_value();
+            return ($v instanceof softint, $v instanceof softstring);
+        };
+    }
+}

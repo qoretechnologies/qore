@@ -1,0 +1,62 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+
+class CopyNames {
+    public {
+        int value = 7;
+    }
+
+    copy() {
+        ++value;
+    }
+
+    int c() { return 1; }
+    int co() { return 2; }
+    int cop() { return 3; }
+    int cops() { return 4; }
+    int cope() { return 5; }
+    int copycat() { return 6; }
+    int Copy() { return 7; }
+    int copyx() { return 8; }
+    int copylongname() { return 9; }
+}
+
+class CopyFailure inherits CopyNames {
+    copy() {
+        throw "COPY-NAME-ERROR", "copy hook failed";
+    }
+}
+
+int sub names(auto receiver) {
+    return receiver.c() + receiver.co() + receiver.cop() + receiver.cops() + receiver.cope()
+        + receiver.copycat() + receiver.Copy() + receiver.copyx() + receiver.copylongname();
+}
+
+auto sub duplicate(auto receiver) {
+    return receiver.copy();
+}
+
+CopyNames original();
+CopyFailure failure();
+int total = 0;
+int failures = 0;
+# Reuse the same dynamic call sites so both cold and cached dispatch are checked.
+for (int i = 0; i < 64; ++i) {
+    total += names(original);
+    auto result = duplicate(original);
+    if (result === original || !(result instanceof CopyNames) || result.value != 8 || original.value != 7) {
+        throw "COPY-NAME-RESULT", "copy must create an independent object and run its copy hook";
+    }
+    try {
+        duplicate(failure);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "COPY-NAME-ERROR" || ex.desc != "copy hook failed") {
+            rethrow;
+        }
+        ++failures;
+    }
+}
+if (total != 64 * 45 || failures != 64 || failure.value != 7) {
+    throw "COPY-NAME-PARITY", sprintf("names=%d failures=%d original=%d", total, failures, failure.value);
+}
+printf("names=2880 copies=64 failures=64\n");

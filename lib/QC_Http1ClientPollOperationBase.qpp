@@ -640,7 +640,10 @@ void Http1ClientPollOperationPriv::startReady(bool protocol_switched, ExceptionS
     // req_state is set first, so the release store of h1_state publishes it
     if (protocol_switched) {
         req_state = ReqState::PROTOCOL_SWITCHED;
-        setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "ready-switched");
+        // the waiter woken below takes the socket over; an operation closed before does not hand it over
+        if (setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "ready-switched")) {
+            switched_protocol.store(true, std::memory_order_release);
+        }
     } else {
         req_state = ReqState::IDLE;
         setStateUnlessClosed(H1State::READING, "ready");
@@ -1916,9 +1919,16 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             if (streaming_active_io) {
                 // Deliver the 101 response headers to the Channel so the
                 // stream handle caller can validate the upgrade.
-                dispatchStreamingHeaders(xsink);
+                bool delivered = dispatchStreamingHeaders(xsink);
                 if (*xsink) {
                     return nullptr;
+                }
+                // the caller takes the socket over with the 101 response, also if the operation is aborted or closed
+                // from now on; the completion of the operation, which follows on a worker, then leaves the socket
+                // alone (issue #5985); a response that no stream received (the request was canceled) hands nothing
+                // over
+                if (delivered) {
+                    switched_protocol.store(true, std::memory_order_release);
                 }
             } else {
                 // Non-streaming: dispatch as a normal response with no body
@@ -2756,7 +2766,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
 }
 
-void Http1ClientPollOperationPriv::dispatchStreamingHeaders(ExceptionSink* xsink) {
+bool Http1ClientPollOperationPriv::dispatchStreamingHeaders(ExceptionSink* xsink) {
     AbstractAsyncAction* action = nullptr;
     int stream_id;
     {
@@ -2787,7 +2797,9 @@ void Http1ClientPollOperationPriv::dispatchStreamingHeaders(ExceptionSink* xsink
         hdr_resp->setKeyValue("stream_id", (int64_t)stream_id, xsink);
         action->execute(hdr_resp.release(), xsink);
         action->deref(xsink);
+        return !*xsink;
     }
+    return false;
 }
 
 void Http1ClientPollOperationPriv::dispatchStreamingData(const BinaryNode* data,
@@ -3812,8 +3824,12 @@ bool Http1ClientPollOperationBase::isReady() [flags=RET_VALUE_ONLY] {
     return priv->isReady();
 }
 
-//! Returns True if the connection is in protocol-switched state (after 101)
-/** @return True if the HTTP protocol has been switched (e.g., WebSocket upgrade)
+//! Returns True if the HTTP protocol was switched on the connection
+/** That is, after a 101 Switching Protocols response was delivered (e.g., WebSocket upgrade), or after HTTP/2 was
+    negotiated with ALPN in a proxy tunnel; the socket belongs to the new protocol from then on, so this stays True
+    when the operation is aborted or closed afterwards
+
+    @return True if the HTTP protocol was switched
     @since %Qore 3.0
 */
 bool Http1ClientPollOperationBase::isProtocolSwitched() [flags=RET_VALUE_ONLY] {

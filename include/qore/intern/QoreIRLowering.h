@@ -864,6 +864,9 @@ private:
         a handler compiled to an IR function of its own is the root block of that function, which has none (#5870)
     */
     bool handler_body = false;
+    //! the handler body that lowerHandlerAtExit() lowers inline next: its block gets an exception path of its own for
+    //! its locals (see lowerStatementBlock(), #6002)
+    const StatementBlock* inline_handler_block = nullptr;
     int loop_depth = 0;  //!< Nesting depth of loop bodies (for is_block_exit detection)
     QoreIRBasicBlock* guard_exception_target_override = nullptr;
 

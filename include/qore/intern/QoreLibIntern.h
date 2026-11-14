@@ -520,6 +520,13 @@ DLLLOCAL int64 q_get_list_create_count();
 */
 DLLLOCAL int64 q_get_cancel_check_count();
 
+//! Returns the number of cancellation checks of the current thread that looked up its governing sandbox manager
+/** A check looks up the manager only while an interrupt is requested of a sandbox manager (see
+    qore_sandbox_interrupt_count), so tests use the count to verify that a check with no request pending makes no
+    lookup; see dbg_get_cancel_sandbox_lookup_count().
+*/
+DLLLOCAL int64 q_get_cancel_sandbox_lookup_count();
+
 //! Returns the number of times a cancellation request woke a registered wait of the given thread (debug builds)
 /** A wait that a request wakes through its registered condition or wakeup channel is counted once per request; a
     wait that only noticed a request at a periodic check would not be counted.  A negative TID means the current
