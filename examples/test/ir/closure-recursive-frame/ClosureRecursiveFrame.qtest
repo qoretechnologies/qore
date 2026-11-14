@@ -20,8 +20,8 @@
     execution with background compiles reached it on the first call (the closure's IR is made with its creator's batch
     compile), the IR and tiered modes once the closure had IR.  The script calls closures created in frames of
     recursive functions, a method and a closure from a deeper frame, reads, writes (also with a body that only
-    increments it) and uses a captured variable in integer, float and string expressions, three times, so that the code
-    also runs once it has IR or is compiled.
+    increments it) and uses a captured variable in integer, float and string expressions and in a default argument
+    value, three times, so that the code also runs once it has IR or is compiled.
 */
 class ClosureRecursiveFrameTest inherits QUnit::Test {
     public {
@@ -32,6 +32,7 @@ class ClosureRecursiveFrameTest inherits QUnit::Test {
             "increment only: the inner frame keeps n=0\n"
             "increment only: frame 1 sees n=2\n"
             "leaves: 2.0 outer!\n"
+            "default x=1\n"
             "method n=1\n"
             "nested n=1\n";
         const Expected = Iteration + Iteration + Iteration;

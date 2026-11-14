@@ -69,6 +69,17 @@ sub leaves(int n, float f, string s) {
     }
 }
 
+# a default argument of a closure that refers to a captured variable
+code dflt;
+sub defaults(int n) {
+    if (n > 0) {
+        dflt = string sub (int x = n) { return sprintf("default x=%d", x); };
+        defaults(n - 1);
+    } else {
+        printf("%s\n", dflt());
+    }
+}
+
 # a closure created in a method's recursive frame
 class C {
     private {
@@ -105,6 +116,7 @@ for (int i = 0; i < 3; ++i) {
     arith(1);
     incs(1);
     leaves(1, 1.5, "outer");
+    defaults(1);
     (new C()).m(2);
     outer(2);
 }
