@@ -32,6 +32,7 @@ class DataFrameStringPredicatesTest inherits QUnit::Test {
     constructor() : Test("DataFrameStringPredicatesTest", "1.0", \ARGV) {
         addTestCase("string column", \stringColumnTest());
         addTestCase("auto column", \autoColumnTest());
+        addTestCase("conversion error", \conversionErrorTest());
         set_return_value(main());
     }
 
@@ -44,6 +45,25 @@ class DataFrameStringPredicatesTest inherits QUnit::Test {
         # a char cell first makes the column hold any value
         list<hash<auto>> rows = ({"id": -1, "v": c'z'},) + map ("id": $#, "v": $1), cells;
         checkColumn(new DataFrame::DataFrame(rows), "auto");
+    }
+
+    #! a value that cannot be converted to the encoding of the cells raises the conversion error if a cell is not
+    #! null, as for a column that holds any value
+    conversionErrorTest() {
+        # a single byte is not a UTF-16 character
+        string value = binary_to_string(<41>, "UTF-16LE");
+        DataFrame::DataFrame typed(({"v": "x"},));
+        DataFrame::DataFrame any(({"v": c'z'}, {"v": "x"}));
+        # a string column whose only cell is null
+        DataFrame::DataFrame nulls = (new DataFrame::DataFrame(({"v": "x"}, {"v": NOTHING}))).filter("v", "is_null",
+            NOTHING);
+        assertEq(("string", "auto", "string"), (typed.dtypes()[0], any.dtypes()[0], nulls.dtypes()[0]),
+            "column types");
+        foreach string op in (("contains", "startswith", "endswith")) {
+            assertThrows("ENCODING-CONVERSION-ERROR", \typed.filter(), ("v", op, value), "string column " + op);
+            assertThrows("ENCODING-CONVERSION-ERROR", \any.filter(), ("v", op, value), "auto column " + op);
+            assertEq(0, nulls.filter("v", op, value).numRows(), "string column of null cells " + op);
+        }
     }
 
     #! checks every predicate with every value; the expected rows are computed from the cells

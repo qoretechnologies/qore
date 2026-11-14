@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
 %requires QUnit
+%requires FsUtil
 
 %requires dataframe
 
@@ -19,6 +20,7 @@ class DataFrameDenseRowsTest inherits QUnit::Test {
     constructor() : Test("DataFrameDenseRowsTest", "1.0", \ARGV) {
         addTestCase("decimal scale", \decimalScaleTest());
         addTestCase("float32 non-finite values", \float32NonFiniteTest());
+        addTestCase("sliced nullable column", \slicedNullableTest());
         set_return_value(main());
     }
 
@@ -63,6 +65,28 @@ class DataFrameDenseRowsTest inherits QUnit::Test {
         checkDecimal(df.filter("id", "in", (1, 0, 3)), (1.25n, -1n, NOTHING), "filter()");
         checkDecimal(df.filter("id", ">", 0), (-1n, 2.5n, NOTHING), "filter() with an int first");
         checkDecimal(df.sortBy(("id",), (False,)), (NOTHING, 2.5n, -1n, 1.25n), "sortBy()");
+
+        # a decimal column read from a Parquet file
+        TmpDir tmp("dataframe-dense-rows");
+        string path = tmp.path + DirSep + "decimal.parquet";
+        df.writeParquet(path);
+        DataFrame::DataFrame read = DataFrame::DataFrame::readParquet(path);
+        checkDecimal(read.takeRows((1, 0, 3)), (-1n, 1.25n, NOTHING), "takeRows() of rows read from Parquet");
+    }
+
+    #! the rows selected from a view of a nullable column at an offset that is not a multiple of 8 keep their values
+    #! and null elements, whose validity bits are read at the offset of the view
+    slicedNullableTest() {
+        list<auto> cells = map $1 % 3 ? ($1 + 0.25n) : NOTHING, xrange(40);
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": range(cells.size()),
+            "v": cells,
+        }, {
+            "v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2, "nullable": True}},
+        }));
+        DataFrame::DataFrame view = df.slice(5, 35);
+        list<int> rows = (29, 0, 1, 2, 3, 17, 16, 15, 4, 28);
+        checkDecimal(view.takeRows(rows), (map cells[$1 + 5], rows), "takeRows() of a slice");
     }
 
     private checkDecimal(DataFrame::DataFrame df, list<auto> expected, string label) {
