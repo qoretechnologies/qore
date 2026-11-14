@@ -60,6 +60,7 @@
 #include "qore/intern/DebugStatement.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/typed_hash_decl_private.h"
@@ -160,12 +161,7 @@ const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(const Qor
     return old;
 }
 
-bool AbstractFunctionSignature::needsTypeParameterSubstitution() const {
-    signed char cached = type_param_substitution_cache.load(std::memory_order_relaxed);
-    if (cached != -1) {
-        return cached != 0;
-    }
-
+bool AbstractFunctionSignature::computeTypeParameterSubstitution() const {
     bool rv = qore_type_contains_type_parameter(returnTypeInfo);
     if (!rv) {
         for (const QoreTypeInfo* ti : typeList) {
@@ -1247,13 +1243,13 @@ QORE_CEH_CONSTRUCTOR_INLINE CodeEvaluationHelper::CodeEvaluationHelper(Exception
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
         const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
-        bool n_hide_call_site)
+        bool n_hide_call_site, const QoreClosureBase* n_closure)
     : ct(n_ct), call_flags(n_call_flags), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(n_hide_call_site ? hide_runtime_call_site(hidden_call_site_slot, hidden_call_site)
             : take_runtime_call_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
         receiver_type_info(n_explicit_receiver_type_info),
-        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation), closure(n_closure) {
     if (self && !self->isValid()) {
         assert(n_qc);
         qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been " \
@@ -6925,7 +6921,10 @@ void qore_program_private::markUserVariantsDeleted() {
 }
 
 //! Marks the helpers of the background expressions in \a func, and in its helpers and handlers, as code of \a s
-static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpecializedIR* s) {
+/** @param visited_handlers the handler functions already walked (they can be shared, #6087)
+*/
+static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpecializedIR* s,
+        std::unordered_set<const QoreIRFunction*>& visited_handlers) {
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
@@ -6934,12 +6933,12 @@ static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpe
                 const auto* bi = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get());
                 if (bi && bi->helper_ir) {
                     bi->helper_ir->specialization_owner = s;
-                    qore_mark_specialization_helpers(*bi->helper_ir, s);
+                    qore_mark_specialization_helpers(*bi->helper_ir, s, visited_handlers);
                 }
             } else if (inst->opcode == QoreIROpcode::OnBlockExit) {
                 const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
-                if (obei->handler_ir) {
-                    qore_mark_specialization_helpers(*obei->handler_ir, s);
+                if (obei->handler_ir && visited_handlers.insert(obei->handler_ir.get()).second) {
+                    qore_mark_specialization_helpers(*obei->handler_ir, s, visited_handlers);
                 }
             }
         }
@@ -7154,6 +7153,9 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
     // losing writer cannot clobber the fields describing the generation that did win.
     IRContextFlags derived_flags;
     if (ir) {
+        // Deserialized debug IR has no source-variant pointer. Restore its owner before classifying constructor
+        // argument locals, just as source lowering does (#6086).
+        ir->source_variant = getAbstractFunctionVariant();
         ir->computeIROnlyLocals();
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
@@ -7248,6 +7250,9 @@ bool UserVariantBase::materializeAOTDebugIR(const char* name, ExceptionSink* xsi
     }
 
     std::string error;
+    // the types of the IR can name the type parameters of the function (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(getUserSignature()
+        ? getUserSignature()->getTypeParamOwner() : nullptr);
     std::unique_ptr<QoreIRFunction> ir = ctx->materializeDebugIR(name, error);
     if (!ir) {
         xsink->raiseException("AOT-DEBUG-IR-ERROR",
@@ -7390,7 +7395,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
 
             const QoreTypeInfo* paramTypeInfo
                 = needs_type_param_substitution
-                    ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
+                    ? qore_substitute_type_params_if_needed_inline(signature.getParamTypeInfo(i))
                     : signature.getParamTypeInfo(i);
             // the value's type is read once for the checks below (QoreValue::getType() is not inlined)
             qore_type_t val_type = val.getType();
@@ -7432,7 +7437,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
         //    i, signature.lv[i], signature.lv[i]->getName(), np.getType(), np.getTypeName());
 
         const QoreTypeInfo* paramTypeInfo = needs_type_param_substitution
-            ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
+            ? qore_substitute_type_params_if_needed_inline(signature.getParamTypeInfo(i))
             : signature.getParamTypeInfo(i);
         signature.lv[i]->instantiate(QoreValue(), paramTypeInfo);
     }
@@ -8476,6 +8481,21 @@ void UserVariantBase::attemptJITCompilation() const {
         return;
     }
 
+    // the same for a function whose handlers and locals make its native code expensive to compile (qore#6104)
+    const size_t jit_handler_budget = static_cast<size_t>(QoreJIT::getMaxJITHandlerCost());
+    if (jit_handler_budget) {
+        const size_t handler_cost = ir->getHandlerCostEstimate();
+        if (handler_cost > jit_handler_budget) {
+            jit_compile_failed.store(true, std::memory_order_release);
+            jit_compile_state.store(2, std::memory_order_release);
+            if (q_env_is_set("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (handler budget exceeded; about %zu "
+                    "instructions; limit %zu)\n", ir->name.c_str(), handler_cost, jit_handler_budget);
+            }
+            return;
+        }
+    }
+
     // Enqueue for background JIT compilation instead of compiling synchronously.
     // This allows I/O threads and other critical threads to continue executing IR code
     // while the background thread performs expensive LLVM compilation.
@@ -8652,7 +8672,8 @@ void UserVariantBase::attemptJITRecompilation() const {
         orig_name.c_str());
 }
 
-static bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver_type_info,
+// The default call path tests only two null pointers; keep this predicate inline across evaluator specializations.
+static QORE_INTERN_ALWAYS_INLINE bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* type_param_instantiation) {
     return (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info))
         || (type_param_instantiation && !type_param_instantiation->empty());
@@ -8737,7 +8758,10 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     ir.release();
     QoreSpecializedIRRef rv(entry);
     // a thread that runs a background helper of the specialization takes a reference to it
-    qore_mark_specialization_helpers(*rv.get(), rv.getEntry());
+    {
+        std::unordered_set<const QoreIRFunction*> visited_handlers;
+        qore_mark_specialization_helpers(*rv.get(), rv.getEntry(), visited_handlers);
+    }
     SpecializedIRCache* registration;
     {
         std::lock_guard<std::mutex> lock(specialized_ir_mutex);
@@ -8785,9 +8809,22 @@ void UserVariantBase::SpecializedIRCache::evictDeadTypes(const std::set<const Qo
     }
 }
 
-QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
+QORE_INTERN_ALWAYS_INLINE void QoreConstructorCompletion::capture(ExceptionSink* xsink) const {
+    const qore_es_private* es = qore_es_private::get(*xsink);
+    completed = !es->head && !es->thread_exit;
+}
+
+template <typename Completion>
+QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunction* ir,
         ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink,
-        bool caller_has_frame_boundary) const {
+        bool caller_has_frame_boundary, Completion completion) const {
+    if constexpr (Completion::constructor) {
+        // Constructor wrappers already instantiated self for base-argument evaluation. The body must neither
+        // instantiate it again nor carry a dynamic receiver through its ordinary-call cleanup paths.
+        assert(!self);
+        self = nullptr;
+    }
+
     ThreadFrameBoundaryHelper tfbh(!caller_has_frame_boundary);
 
     if (self && signature.selfid) {
@@ -8870,6 +8907,7 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
             if (gate) {
                 gate->exit();
             }
+            completion.capture(xsink);
         }
     }
 
@@ -8947,8 +8985,16 @@ static bool qore_ir_test_promote_in_call() {
     return promote_in_call.get();
 }
 
+template <typename Completion>
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-        ExceptionSink* xsink, bool caller_has_frame_boundary) const {
+        ExceptionSink* xsink, bool caller_has_frame_boundary, Completion completion) const {
+    if constexpr (Completion::constructor) {
+        // Constructor wrappers already instantiated self for base-argument evaluation. The body must neither
+        // instantiate it again nor carry a dynamic receiver through its ordinary-call cleanup paths.
+        assert(!self);
+        self = nullptr;
+    }
+
     assert(pgm);
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
@@ -8988,7 +9034,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             QoreSpecializedIRRef specialized_ir = getOrCreateSpecializedIR(name, specialization_receiver_type_info,
                 specialization_type_param_instantiation, false);
             if (specialized_ir) {
-                return evalSpecializedIR(name, specialized_ir.get(), argv, self, xsink, caller_has_frame_boundary);
+                return evalSpecializedIR(name, specialized_ir.get(), argv, self, xsink, caller_has_frame_boundary, completion);
             }
             if (pgm) {
                 pgm->recordIRFallback("generic specialization unavailable");
@@ -9034,8 +9080,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             std::optional<ArgvContextHelper> argv_helper;
             if (call_uses_argv) {
                 argv_helper.emplace(argv.release(), xsink);
-            } else {
-                // argv not used - just discard the reference without creating context
+            } else if constexpr (!Completion::constructor) {
+                // Ordinary calls retain their existing unused-argv release point. A constructor must finish its
+                // body before releasing arguments, and capture that completion before their destructors run.
                 if (argv) {
                     argv.release()->deref(xsink);
                 }
@@ -9143,6 +9190,13 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (gate) {
                     gate->exit();
                 }
+                completion.capture(xsink);
+            }
+        }
+
+        if constexpr (Completion::constructor) {
+            if (!call_uses_argv) {
+                argv = nullptr;
             }
         }
 
@@ -9290,6 +9344,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (gate) {
                     gate->exit();
                 }
+                completion.capture(xsink);
             }
         }
 
@@ -9387,7 +9442,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // promoted it further in the meantime: the call then runs on the tier that the function has
     if (promotable && current_tier.load(std::memory_order_acquire) != TIER_AST) {
         exec_count.fetch_sub(1, std::memory_order_relaxed);
-        return evalTiered(name, argv, self, xsink, caller_has_frame_boundary);
+        return evalTiered(name, argv, self, xsink, caller_has_frame_boundary, completion);
     }
 
     // Fall through to AST execution (bypass the tiered check)
@@ -9413,6 +9468,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             if (gate) {
                 gate->exit();
             }
+            completion.capture(xsink);
         }
     }
 
@@ -9434,8 +9490,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     return val;
 }
 
+template <typename Completion>
 QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-        ExceptionSink* xsink) const {
+        ExceptionSink* xsink, Completion completion) const {
+    if constexpr (Completion::constructor) {
+        // Constructor wrappers already instantiated self for base-argument evaluation. The body must neither
+        // instantiate it again nor carry a dynamic receiver through its ordinary-call cleanup paths.
+        assert(!self);
+        self = nullptr;
+    }
+
     //QORE_TRACE("UserVariantBase::evalIntern()");
     if (!statements && hasLazyAOTFunctionIR()
             && !materializeLazyAOTFunctionIR(name, xsink)) {
@@ -9456,12 +9520,12 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             // evalTiered() materializes any deferred AOT context before binding
             // arguments or executing the native function.
             if (has_aot) {
-                return evalTiered(name, argv, self, xsink, true);
+                return evalTiered(name, argv, self, xsink, true, completion);
             }
             // IR-only dispatch: closure variants reconstructed from AOT binary
             // with cached IR but no AST body and no native AOT function
             if (!statements && ir) {
-                return evalTiered(name, argv, self, xsink, true);
+                return evalTiered(name, argv, self, xsink, true, completion);
             }
             // Tiered promotion for JIT/IR/tiered modes with %modern code.
             // Skip if function already has an AOT fn registered — the AOT path
@@ -9471,7 +9535,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
                     && (mode == QEM_TIERED || mode == QEM_JIT || mode == QEM_IR)) {
                 QoreParseOptions po = getParseOptions(pgm->getParseOptions());
                 if (qore_parse_options_support_ir(po)) {
-                    return evalTiered(name, argv, self, xsink, true);
+                    return evalTiered(name, argv, self, xsink, true, completion);
                 }
             }
         }
@@ -9523,6 +9587,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
                 if (gate) {
                     gate->exit();
                 }
+                completion.capture(xsink);
             }
         }
 
@@ -9531,6 +9596,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
 
         // self uninstantiation now handled by SelfInstantiationHelper RAII above
     } else {
+        completion.capture(xsink);
         argv = nullptr; // dereference argv now
     }
 
@@ -9552,6 +9618,15 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
 
     return val;
 }
+
+// These entries have callers outside Function.cpp in non-SCU builds. Keep their out-of-line template bodies
+// available independently of whether this translation unit's ordinary calls were inlined.
+template QoreValue UserVariantBase::evalIntern<QoreCallCompletion>(const char*,
+    ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*, QoreCallCompletion) const;
+template QoreValue UserVariantBase::evalTiered<QoreCallCompletion>(const char*,
+    ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*, bool, QoreCallCompletion) const;
+template QoreValue UserVariantBase::evalIntern<QoreConstructorCompletion>(const char*,
+    ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*, QoreConstructorCompletion) const;
 
 // primary function for executing user code
 QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
@@ -10067,7 +10142,9 @@ int QoreFunction::parseInitIntern(qore_ns_private* ns) {
     return err;
 }
 
-QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink,
+        bool tmp_args) const {
     RuntimeConfig& rc = rc_get_current_ref();
     // closures cannot be overloaded
     assert(vlist.singular());
@@ -10082,10 +10159,19 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     // the receiver type of a generic class that created the closure binds the type parameters of the class in the
     // closure's parameter and return types (qore#5733)
     const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
+    const QoreTypeInfo* receiver_type_info = closure_type_context ? closure_type_context->receiver_type_info : nullptr;
+    if (tmp_args) {
+        // the parameters take the values of the temporary argument list over
+        CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", const_cast<QoreListNode*>(args),
+            nullptr, class_ctx, CT_USER, false, nullptr, pgm, receiver_type_info, nullptr, 0, false, &closure_base);
+        if (*xsink) {
+            return QoreValue();
+        }
+        return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+    }
     // Pass pgm to set up program context - this ensures tlpd is set up for thread pool threads
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, CT_USER,
-        false, nullptr, pgm, closure_type_context ? closure_type_context->receiver_type_info : nullptr,
-        nullptr, 0, &closure_base);
+        false, nullptr, pgm, receiver_type_info, nullptr, 0, &closure_base);
     if (*xsink) {
         return QoreValue();
     }

@@ -338,3 +338,18 @@ remain the responsibility of the host crash collector.
 Run the isolated runner regression tests with:
 
     python3 -B -W error examples/test/runner/test_timeout_diagnostics.py -v
+
+Faster library builds for CI images
+-----------------------------------
+
+By default (-DSINGLE_COMPILATION_UNIT=ON) libqore is compiled as one translation unit, which takes 10 to 20
+minutes on one core.  -DSINGLE_COMPILATION_UNIT_CHUNKS=N (N > 1) splits it into N unity chunks of roughly equal
+compile cost that compile in parallel, for builds that have N cores, such as the qore-test-base image builds.  The
+assignment of sources to chunks is deterministic (see cmake/QoreScuChunks.cmake and cmake/scu-chunk-costs.txt),
+so incremental builds stay effective.  A chunked library is larger, loses cross-file inlining, and reports
+SingleCompilationUnit as False in get_qore_library_info(), so release packages, performance measurements and the
+stack usage budgets use the default.  The option is ignored (with a warning) when SINGLE_COMPILATION_UNIT is OFF.
+The chunks compile concurrently and each needs several GB of memory (about 5 to 8 GB at N=4), so N is limited by the
+memory as well as by the cores.  N is limited to 256.  Dynamic initialization of namespace-scope objects is not
+ordered between chunks, as it is not between the translation units of a build with SINGLE_COMPILATION_UNIT=OFF.
+Adding, removing or re-costing a source can move other sources to other chunks, which recompiles those chunks once.

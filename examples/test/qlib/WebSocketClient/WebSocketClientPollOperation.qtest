@@ -190,6 +190,9 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
                 \abortedDuringRecvReleaseTest());
             addTestCase("an operation aborted while a send is in progress ends once, as closed",
                 \abortedDuringSendTest());
+            addTestCase("a step forward of the system clock does not close an idle connection",
+                \clockStepIdleTest());
+            addTestCase("a step back of the system clock does not stop the heartbeat", \clockStepHeartbeatTest());
         }
         addTestCase("no data frame is sent after a close frame", \noDataAfterCloseTest());
         addTestCase("WebSocketClient::startPollSend() sends no data frame after a close frame",
@@ -444,6 +447,65 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
             assertEq(WSCC_NoStatusRcvd, frames[0].close, sprintf("%d: the close frame has no status code", code));
             assertNothing(frames[0].msg, sprintf("%d: the close frame has no reason", code));
         }
+    }
+
+    #! A step forward of the system clock does not close a connection for the idle timeout
+    /** The idle timeout is measured on the monotonic clock: measured on the system clock, a step forward of an hour
+        made the connection look idle for an hour, and the next step of the operation closed it.  The step is made with
+        dbg_set_realtime_offset() (debug builds).
+    */
+    clockStepIdleTest() {
+        RawWsServer server("silent");
+        HTTPClient hc = wsHandshake(server.port);
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, HangGuard, logger);
+        poll_op.setIdleTimeout(60000);
+        on_exit {
+            hc.disconnect();
+            server.getFrames();
+        }
+        poll_op.continuePoll();
+        {
+            call_function("dbg_set_realtime_offset", 3600 * 1000000);
+            on_exit call_function("dbg_set_realtime_offset", 0);
+            *hash<SocketPollInfo> pi = poll_op.continuePoll();
+            assertEq("connected", poll_op.getState(), "the connection stays open");
+            assertEq("", poll_op.getCloseCause(), "the idle timeout did not close the connection");
+            assertGt(1000, pi.poll_timeout_ms ?? 0, "the next idle check is not due");
+        }
+    }
+
+    #! A step back of the system clock does not stop the heartbeat
+    /** The heartbeat is measured on the monotonic clock: measured on the system clock, a step back of an hour made
+        the time since the last frame negative, so no PING was sent until the system clock was back where it was.
+        The step is made with dbg_set_realtime_offset() (debug builds).
+    */
+    clockStepHeartbeatTest() {
+        RawWsServer server("silent");
+        HTTPClient hc = wsHandshake(server.port);
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, HangGuard, logger);
+        on_exit {
+            hc.disconnect();
+            server.getFrames();
+        }
+        # the heartbeat takes its first time of activity now, before the system clock steps back
+        poll_op.setHeartbeat(50);
+        poll_op.continuePoll();
+        call_function("dbg_set_realtime_offset", -3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        # the operation is driven until the server receives the PING, at most for the hang guard
+        int deadline = clock_get_monotonic_us() + HangGuard.durationMicroseconds();
+        *int op;
+        while (!exists op && clock_get_monotonic_us() < deadline) {
+            *hash<SocketPollInfo> pi = poll_op.continuePoll();
+            op = server.received.size() ? server.received.get() : NOTHING;
+            if (!exists op && pi) {
+                # with a poll timeout hint, the wait ends when the hint expires; it is bounded here, as the hint of
+                # a heartbeat measured on the system clock is an hour
+                pi.poll_timeout_ms = min(pi.poll_timeout_ms ?? 100, 100);
+                Socket::poll((pi,), 100ms);
+            }
+        }
+        assertEq(WSOP_Ping, op, "the server receives a PING after the heartbeat interval");
     }
 
     #! A close the client started ends at the close timeout when the server never answers it

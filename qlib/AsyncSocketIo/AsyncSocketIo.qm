@@ -99,6 +99,8 @@ module AsyncSocketIo {
     - new methods to cancel operations by key or owner, to close a socket with its operation, to wait for the
       controller and for an @ref Qore::EventNotifier "EventNotifier", to run tasks and timers on the callback
       workers, and to drain the callbacks of an owner
+    - new @ref AsyncSocketIo::AsyncSocketIoController::addTimerDelay() "addTimerDelay()" methods for timers that fire
+      after a delay measured on the monotonic clock, which a step of the system clock does not move
     - new @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext",
       @ref AsyncSocketIo::AsyncHttp2ServerStream "AsyncHttp2ServerStream" and
       @ref AsyncSocketIo::NotifierPollOperation "NotifierPollOperation" classes for HTTP/2 and HTTP/3 streams and
