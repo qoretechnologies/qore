@@ -245,6 +245,77 @@ void dataFrameSetDurationSchema(ColumnData& col) {
     col.has_columnar_schema = true;
 }
 
+namespace {
+//! appends the length of a part of a key and the part
+void appendKeyBytes(std::string& key, const char* data, size_t len) {
+    uint64_t n = len;
+    key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+    key.append(data, len);
+}
+
+//! appends the key of a value of a column that holds any value (qore#6107)
+/** A float is keyed by its bits, as in a float64 column, as its string form can be the same for different floats; a
+    binary value by its bytes; a list by its elements and a hash by its keys and values, in order, so that two lists
+    or hashes have the same key only if they are equal; an object by its identity; any other value by its string
+    form, which is compared in UTF-8, the encoding of the string cells, so that equal strings in different encodings
+    make the same key.  Each part has its tag and a part of any length its length, so that two different values
+    never make the same key.
+*/
+void appendAutoValueKey(std::string& key, QoreValue v) {
+    switch (v.getType()) {
+        case NT_NOTHING:
+        case NT_NULL:
+            key += 'N';
+            return;
+        case NT_FLOAT:
+            appendDataFrameFloatKey(key, 'g', v.getAsFloat());
+            return;
+        case NT_BINARY: {
+            const BinaryNode* b = v.get<const BinaryNode>();
+            key += 'x';
+            appendKeyBytes(key, static_cast<const char*>(b->getPtr()), b->size());
+            return;
+        }
+        case NT_LIST: {
+            const QoreListNode* l = v.get<const QoreListNode>();
+            key += 'L';
+            uint64_t n = l->size();
+            key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+            for (size_t i = 0; i < l->size(); ++i) {
+                appendAutoValueKey(key, l->retrieveEntry(i));
+            }
+            return;
+        }
+        case NT_HASH: {
+            const QoreHashNode* h = v.get<const QoreHashNode>();
+            key += 'H';
+            uint64_t n = h->size();
+            key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+            ConstHashIterator hi(h);
+            while (hi.next()) {
+                // a hash key is in the default encoding, as in every hash
+                const char* k = hi.getKey();
+                appendKeyBytes(key, k, strlen(k));
+                appendAutoValueKey(key, hi.get());
+            }
+            return;
+        }
+        case NT_OBJECT: {
+            const void* p = v.get<const QoreObject>();
+            key += 'O';
+            key.append(reinterpret_cast<const char*>(&p), sizeof(p));
+            return;
+        }
+        default: {
+            key += 'a';
+            std::string str = dataFrameUtf8Key(v);
+            appendKeyBytes(key, str.data(), str.size());
+            return;
+        }
+    }
+}
+}
+
 std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
     if (cd.isNull(row)) {
         return std::string("\xffnull", 5);
@@ -273,20 +344,9 @@ std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
             key.append(reinterpret_cast<const char*>(&value), sizeof(value));
             return key;
         }
-        case ColumnType::AUTO: {
-            // a float is keyed by its bits, as in a float64 column, as its string form can be the same for
-            // different floats (qore#6107)
-            const QoreValue& v = cd.auto_data[row];
-            if (v.getType() == NT_FLOAT) {
-                appendDataFrameFloatKey(key, 'g', v.getAsFloat());
-                return key;
-            }
-            // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in different
-            // encodings make the same key
-            key.assign("a", 1);
-            key.append(dataFrameUtf8Key(v));
+        case ColumnType::AUTO:
+            appendAutoValueKey(key, cd.auto_data[row]);
             return key;
-        }
         default:
             return {};
     }
@@ -452,6 +512,10 @@ int dataFrameDateOutOfRange(const DateTimeNode* dt, ExceptionSink* xsink) {
         dt->getInfo(parts);
         desc.sprintf("the time value of %d years, %d months, %d days, %d hours, %d minutes, %d seconds and %d "
             "microseconds", parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.us);
+        // a time value is stored as its microseconds (qore#6107)
+        xsink->raiseException("DATAFRAME-DATE-RANGE-ERROR", "%s is outside the range of a DataFrame time value, "
+            "which is stored in microseconds in an int64 (about 292471 years either way)", desc.c_str());
+        return -1;
     } else {
         desc.sprintf("the date " QLLD " seconds after the epoch", (int64)dt->getEpochSecondsUTC());
     }

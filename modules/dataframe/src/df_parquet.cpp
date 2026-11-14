@@ -1771,15 +1771,12 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     us = (val % 1000000000) / 1000;
                     break;
             }
-            // a duration whose microseconds do not fit in an int64 cannot be a duration of a date cell, as a
-            // timestamp of a column cannot (qore#6107)
-            int64_t micros;
-            if (__builtin_mul_overflow(secs, static_cast<int64_t>(1000000), &micros)
-                    || __builtin_add_overflow(micros, static_cast<int64_t>(us), &micros)) {
-                QoreString desc;
-                desc.sprintf("the Arrow duration of " QLLD " %s", static_cast<int64>(val),
+            // the duration is made of days and seconds; a duration of more days than an int holds (about 5.9 million
+            // years) cannot be a Qore duration (qore#6107)
+            if (secs / 86400 > std::numeric_limits<int>::max() || secs / 86400 < std::numeric_limits<int>::min()) {
+                xsink->raiseException("DATAFRAME-IO-ERROR", "the Arrow duration of " QLLD " %s is too long for a "
+                    "Qore duration, whose days are an int", static_cast<int64>(val),
                     arrowTimeUnitName(dur_type->unit()).c_str());
-                dataFrameRaiseDateRangeError(desc.c_str(), xsink);
                 return QoreValue();
             }
             return dataFrameMakeDuration(secs, us);

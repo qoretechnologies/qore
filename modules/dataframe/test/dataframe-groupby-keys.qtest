@@ -22,6 +22,7 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         addTestCase("float keys in a column of any value", \autoTest());
         addTestCase("several key columns", \multiTest());
         addTestCase("count()", \countTest());
+        addTestCase("lists, hashes and binary values", \containerTest());
         set_return_value(main());
     }
 
@@ -66,6 +67,18 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         });
         DataFrame::DataFrame g = df.groupBy(("a", "k")).agg({"v": "sum"});
         assertEq((5.0, 2.0, 8.0), g.getColumn("v"), "sums");
+    }
+
+    #! lists, hashes and binary values in a column that holds any value are grouped by their elements and bytes
+    containerTest() {
+        DataFrame::DataFrame df({
+            "k": (c'z', <0102>, <0304>, (1, 2), (3, 4), {"a": 1}, {"a": 2}, (1, 2), <0102>, {"a": 1}, (1.0000001,),
+                (1.0000002,)),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048),
+        });
+        assertEq((1.0, 258.0, 4.0, 136.0, 16.0, 544.0, 64.0, 1024.0, 2048.0),
+            df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        assertEq(9, df.groupBy(("k",)).count().numRows(), "count()");
     }
 
     #! count() gives the key values of a float64 column and of a column of durations

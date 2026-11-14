@@ -820,7 +820,8 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
     # Result: order_id, customer_id, amount, name
     @endcode
 
-    @throw DATAFRAME-JOIN-ERROR if join type is invalid or key columns not found
+    @throw DATAFRAME-JOIN-ERROR if join type is invalid or key columns not found, or a key column holds durations in
+    one DataFrame and absolute dates in the other
 
 */
 DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *string how) [flags=RET_VALUE_ONLY] {
@@ -847,8 +848,10 @@ DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *stri
 
     Two rows are in one group if their values of each group column are equal: two floats only if they are equal
     (with \c -0.0 equal to \c 0.0) or both NaN, which make one group; the null values of a column make a group of
-    their own.  In a column that holds any value, a float is grouped by its value as in a \c float64 column, and
-    any other value by its string form (so the int \c 1 and the string \c "1" make one group).
+    their own.  In a column that holds any value, a float is grouped by its value as in a \c float64 column, a
+    binary value by its bytes, a list or a hash by its elements (two lists or hashes make one group if their
+    elements, and the keys of a hash, are equal in order), an object by its identity, and any other value by its
+    string form (so the int \c 1 and the string \c "1" make one group).
 
     @throw DATAFRAME-COLUMN-ERROR if a column name is not found
 
@@ -1070,6 +1073,9 @@ static DataFrame DataFrame::concat(list<DataFrame> dataframes, *int axis) [flags
     of the column (an absolute date in a column of absolute dates, a relative date in a column of durations) replaces
     a null value, and other values leave it null
     @return new DataFrame object with nulls filled
+
+    @throw DATAFRAME-DATE-RANGE-ERROR if a date of the kind of a date column with a null value is outside the range
+    of a date cell
 
     @par Example:
     @code{.py}
@@ -1507,7 +1513,8 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the data cannot be parsed as Arrow IPC data, or a struct field name or map key in
-    it has a NUL character, which a hash key cannot hold
+    it has a NUL character, which a hash key cannot hold, or a duration is longer than a Qore duration can be
+    @throw DATAFRAME-DATE-RANGE-ERROR if a timestamp is outside the range of a date cell
 */
 static DataFrame DataFrame::fromArrowIpc(binary data) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = QoreDataFrame::fromArrowIpc(data, xsink);
@@ -1592,7 +1599,9 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened or parsed, or a struct
-    field name or map key in it has a NUL character, which a hash key cannot hold
+    field name or map key in it has a NUL character, which a hash key cannot hold, or a duration is longer than a
+    Qore duration can be
+    @throw DATAFRAME-DATE-RANGE-ERROR if a timestamp is outside the range of a date cell
     @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be read
     @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 */

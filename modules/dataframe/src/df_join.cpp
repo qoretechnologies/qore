@@ -102,6 +102,36 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
     return key;
 }
 
+//! Gives a key column of a join the columnar schema of its dates (qore#6107)
+/** Its values come from the left key column and, in a right or outer join, also from the right one: then the time
+    unit is "us" if the units of the two differ, and the time zone "UTC" if their zones differ, as in concat(), so
+    that the dates of both keep their values on export.  The two hold dates of one kind (checked before).
+*/
+static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const ColumnData& right, bool right_values) {
+    if (!right_values || right.type != ColumnType::DATE) {
+        dataFrameCopyDateSchema(dest, left);
+        return;
+    }
+    const ColumnData& src = left.has_columnar_schema ? left : right;
+    if (src.type != ColumnType::DATE || !src.has_columnar_schema) {
+        return;
+    }
+    dataFrameCopyDateSchema(dest, src);
+    auto unit = [] (const ColumnData& cd) -> std::string {
+        return cd.has_columnar_schema && !cd.columnar_schema.time_unit.empty()
+            ? cd.columnar_schema.time_unit : std::string("us");
+    };
+    auto zone = [] (const ColumnData& cd) -> std::string {
+        return cd.has_columnar_schema ? cd.columnar_schema.timezone : std::string();
+    };
+    if (unit(left) != unit(right)) {
+        dest.columnar_schema.time_unit = "us";
+    }
+    if (zone(left) != zone(right)) {
+        dest.columnar_schema.timezone = "UTC";
+    }
+}
+
 // Append a row from src columns to dest columns (or null if row_idx < 0)
 static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
         const std::vector<Column>& src_cols,
@@ -284,6 +314,16 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
             return nullptr;
         }
         right_key_indices.push_back(rit->second);
+
+        // a key column of durations cannot be matched with one of absolute dates (qore#6107)
+        const ColumnData& lkey = *columns[lit->second].data;
+        const ColumnData& rkey = *other->columns[rit->second].data;
+        if (lkey.type == ColumnType::DATE && rkey.type == ColumnType::DATE && lkey.isDuration() != rkey.isDuration()) {
+            xsink->raiseException("DATAFRAME-JOIN-ERROR", "join key column '%s' holds durations in the %s DataFrame "
+                "and absolute dates in the %s DataFrame, which cannot be matched", name.c_str(),
+                lkey.isDuration() ? "left" : "right", lkey.isDuration() ? "right" : "left");
+            return nullptr;
+        }
     }
 
     bool single_int64_key = left_key_indices.size() == 1
@@ -528,7 +568,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         const Column& lc = columns[left_key_indices[i]];
         auto cd = std::make_shared<ColumnData>();
         cd->type = lc.data->type;
-        dataFrameCopyDateSchema(*cd, *lc.data);
+        setJoinKeySchema(*cd, *lc.data, *other->columns[right_key_indices[i]].data, how == "right" || how == "outer");
         cd->n_rows = 0;
         Column out_col;
         out_col.name = lc.name;

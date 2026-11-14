@@ -92,8 +92,9 @@ class DataFramePlainDurationsTest inherits QUnit::Test {
         assertEq(expected, map get_duration_microseconds($1), df.getColumn("v"), "column");
         assertEq(expected, map get_duration_microseconds($1),
             DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()).getColumn("v"), "Arrow IPC");
-        # an Arrow duration in seconds whose microseconds do not fit in an int64: 123456789 s is exported, and
-        # patched to 10000000000000 s
+        # an Arrow duration in seconds whose microseconds do not fit in an int64 keeps its length (as a value of a
+        # column that holds any value), and one of more days than an int holds raises an error: 123456789 s is
+        # exported, and patched to 10000000000000 s, -10000000000000 s and 1000000000000000 s
         DataFrame::DataFrame secs = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
             "v": (123456789s,),
         }, {
@@ -101,12 +102,18 @@ class DataFramePlainDurationsTest inherits QUnit::Test {
         }));
         string hex = make_hex_string(secs.toArrowIpc());
         assertEq(1, (hex =~ x/(15cd5b0700000000)/g).size(), "the value in the IPC data");
-        binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", "00a0724e18090000"));
-        assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () {
+        # (the microseconds of these durations do not fit in an int64, so they are compared by their parts)
+        foreach list<string> patch in ((("00a0724e18090000", "<time: 115740740 days 17 hours 46 minutes 40 seconds>")),
+                (("00608db1e7f6ffff", "<time: -115740740 days -17 hours -46 minutes -40 seconds>"))) {
+            binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", patch[0]));
+            date v = DataFrame::DataFrame::fromArrowIpc(patched).getColumn("v")[0];
+            assertEq(patch[1], sprintf("%y", v), "a duration of 10000000000000 s");
+        }
+        binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", "0080c6a47e8d0300"));
+        assertThrows("DATAFRAME-IO-ERROR", sub () {
             DataFrame::DataFrame back = DataFrame::DataFrame::fromArrowIpc(patched);
-            # the value may be converted when it is read
             back.getColumn("v");
-        }, (), "a duration in seconds outside the range");
+        }, (), "a duration of more days than an int holds");
     }
 
     #! the columns of a join keep their durations
@@ -123,9 +130,32 @@ class DataFramePlainDurationsTest inherits QUnit::Test {
                 }
             }
         }
-        # a key column of durations
-        DataFrame::DataFrame j = left.join(new DataFrame::DataFrame({"d": (1h, 3h), "x": (1, 2)}), ("d",));
-        assertTrue(is_date_relative(j.getColumn("d")[0]), "a key column of durations");
+        # a key column of durations, in every join, with a key found only on the right
+        foreach string how in (("inner", "left", "right", "outer")) {
+            DataFrame::DataFrame j = left.join(new DataFrame::DataFrame({"d": (1h, 5h), "x": (1, 2)}), ("d",), how);
+            foreach auto v in (j.getColumn("d")) {
+                assertTrue(is_date_relative(v), sprintf("%s join, a key column of durations: %y", how, v));
+            }
+            # the columns are exported as durations
+            DataFrame::DataFrame back = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc());
+            foreach auto v in (back.getColumn("d")) {
+                assertTrue(is_date_relative(v), sprintf("%s join, exported: %y", how, v));
+            }
+        }
+        # a key column of durations cannot be matched with one of absolute dates
+        DataFrame::DataFrame dates({"d": (1970-01-01T01:00:00Z,), "x": (1,)});
+        assertThrows("DATAFRAME-JOIN-ERROR", \left.join(), (dates, ("d",)), "durations and dates");
+        assertThrows("DATAFRAME-JOIN-ERROR", \dates.join(), (left, ("d",), "outer"), "dates and durations");
+        # key columns of timestamps in different units: a key found only on the right keeps its milliseconds
+        DataFrame::DataFrame ts_s = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "t": (2024-01-01T00:00:00Z,), "x": (1,),
+        }, {"t": {"schema": {"kind": "timestamp", "time_unit": "s", "timezone": "UTC", "nullable": True}}}));
+        DataFrame::DataFrame ts_ms = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "t": (2024-01-01T00:00:00.5Z,), "y": (2,),
+        }, {"t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True}}}));
+        list<auto> tkeys = DataFrame::DataFrame::fromArrowIpc(ts_s.join(ts_ms, ("t",), "outer").toArrowIpc())
+            .getColumn("t");
+        assertTrue(tkeys[1] == 2024-01-01T00:00:00.5Z, sprintf("a right key in milliseconds: %y", tkeys));
     }
 
     #! checks that the values are durations equal to the expected ones

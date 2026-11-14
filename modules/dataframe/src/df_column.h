@@ -387,6 +387,9 @@ static inline void appendDataFrameFloatKey(std::string& key, char tag, double va
 
 //! Makes a duration of the given seconds and microseconds; the seconds of a relative date are an int, so a duration
 //! of more seconds than an int holds (about 68 years) is made of days and seconds (qore#6107)
+/** The days must fit in an int, as they do for the microseconds of a date cell; a caller with more seconds checks
+    them first.
+*/
 static inline DateTimeNode* dataFrameMakeDuration(int64_t seconds, int microseconds) {
     if (seconds >= std::numeric_limits<int>::min() && seconds <= std::numeric_limits<int>::max()) {
         return DateTimeNode::makeRelative(0, 0, 0, 0, 0, static_cast<int>(seconds), microseconds);
