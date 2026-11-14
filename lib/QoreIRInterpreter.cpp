@@ -9524,14 +9524,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 setPhiValue(phi, incoming_value);
                 ++ip;
             }
-        }
-        if (ip >= block->instructions.size()) {
-            if (xsink) {
-                xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block after phi");
+            // Only phi processing can advance ip after the block-entry check above.
+            if (ip >= block->instructions.size()) {
+                if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block after phi");
+                }
+                unwindForException();
+                cleanupLocalCaches();
+                return exitAfterUnwind();
             }
-            unwindForException();
-            cleanupLocalCaches();
-            return exitAfterUnwind();
         }
         {
         // Save current block pointer to detect block changes (branches) after switch
