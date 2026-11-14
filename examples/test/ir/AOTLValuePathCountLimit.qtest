@@ -39,10 +39,10 @@ class AOTLValuePathCountLimitTest inherits QUnit::Test {
 
         foreach string name in (keys scripts) {
             foreach string mode in (ExecModeHarness::ExecModes) {
-                addTestCase(name + " in " + mode, \testMode(), name, mode);
+                addTestCase(name + " in " + mode, \testMode(), (name, mode));
             }
             foreach string opt in ("-O0", "-O3") {
-                addTestCase(name + " with qcc " + opt, \testAot(), name, opt);
+                addTestCase(name + " with qcc " + opt, \testAot(), (name, opt));
             }
         }
         set_return_value(main());
