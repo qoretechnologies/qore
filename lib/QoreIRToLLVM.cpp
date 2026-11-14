@@ -167,6 +167,21 @@ static bool qore_ir_use_unique_hash_literal_insert() {
     return enabled;
 }
 
+//! Returns true if AOT code can call the runtime helper of a plugin instruction with the given helper ABI directly
+//! (QoreIRToLLVM::emitAOTPluginHelperCall()): a unary, binary or subscript value operation
+static bool qore_ir_aot_plugin_helper_call_supported(const QoreIRInstruction* inst, QorePluginHelperAbi helper_abi) {
+    switch (inst->opcode) {
+        case QoreIROpcode::PluginUnary:
+            return helper_abi == QorePluginHelperAbi::UnaryValue && inst->operands.size() == 1;
+        case QoreIROpcode::PluginBinary:
+            return helper_abi == QorePluginHelperAbi::BinaryValue && inst->operands.size() == 2;
+        case QoreIROpcode::PluginSubscript:
+            return helper_abi == QorePluginHelperAbi::SubscriptValue && inst->operands.size() == 2;
+        default:
+            return false;
+    }
+}
+
 static bool qore_ir_use_typed_map_fusion(bool aot_mode, const char* aot_disable_env) {
     return !q_env_is_set(aot_mode ? aot_disable_env : "QORE_DISABLE_JIT_TYPED_MAP_FUSION");
 }
@@ -11898,6 +11913,54 @@ llvm::CallInst* QoreIRToLLVM::emitPushNativeCallFrameAOTNamed(const std::string&
             {native_call_frame_storage, native_call_thread_data,
              qore_ir_create_global_string_ptr(builder, call_name), name_cache, getAotCallLocation(inst, module),
              callee_loc});
+}
+
+llvm::Value* QoreIRToLLVM::emitAOTPluginHelperCall(const QoreIRPluginInstruction* inst,
+        const QorePluginLLVMCodegenInfo& info, const std::vector<llvm::Value*>& operands, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    assert(aot_mode && qore_ir_aot_plugin_helper_call_supported(inst, info.signature.helper_abi));
+    // the helper is resolved on the first call of the site and cached in this global
+    auto* null_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    auto* cache = new llvm::GlobalVariable(module, ptr_type, false, llvm::GlobalValue::InternalLinkage, null_ptr,
+            "plugin_helper_cache");
+    llvm::LoadInst* cached = builder->CreateAlignedLoad(ptr_type, cache, llvm::Align(8));
+    cached->setAtomic(llvm::AtomicOrdering::Acquire);
+    llvm::BasicBlock* cached_bb = builder->GetInsertBlock();
+    llvm::BasicBlock* resolve_bb = llvm::BasicBlock::Create(ctx, "plugin_helper_resolve", llvm_func);
+    llvm::BasicBlock* call_bb = llvm::BasicBlock::Create(ctx, "plugin_helper_call", llvm_func);
+    // the block of the call is dominated by the block of the test (see dominates())
+    immediate_dominator[call_bb] = cached_bb;
+    builder->CreateCondBr(builder->CreateICmpEQ(cached, null_ptr), resolve_bb, call_bb,
+            llvm::MDBuilder(ctx).createBranchWeights(1, 999));
+
+    builder->SetInsertPoint(resolve_bb);
+    // the signature that the code was compiled for: that of the instruction's reference, if it has one, or else
+    // that of the operation registered in the compiling process
+    bool have_ref = inst->operation.module_name == info.module_name
+        && inst->operation.local_operation_id == info.local_operation_id && inst->operation.signature_hash;
+    uint64_t signature_hash = have_ref ? inst->operation.signature_hash
+        : qore_plugin_compute_signature_hash_v1(info.signature);
+    uint8_t canonical_signature_version = have_ref ? inst->operation.canonical_signature_version
+        : QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1;
+    llvm::Value* resolved = builder->CreateCall(module.getOrInsertFunction("qore_rt_plugin_operation_helper_aot",
+            llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, i32_type, i64_type, i32_type, ptr_type, ptr_type},
+                false)),
+            {qore_ir_create_global_string_ptr(builder, info.module_name),
+             llvm::ConstantInt::get(i32_type, info.local_operation_id),
+             llvm::ConstantInt::get(i32_type, canonical_signature_version),
+             llvm::ConstantInt::get(i64_type, signature_hash),
+             llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(info.signature.helper_abi)), cache, xsink_arg});
+    builder->CreateBr(call_bb);
+
+    builder->SetInsertPoint(call_bb);
+    llvm::PHINode* helper = builder->CreatePHI(ptr_type, 2, "plugin_helper");
+    helper->addIncoming(cached, cached_bb);
+    helper->addIncoming(resolved, resolve_bb);
+    std::vector<llvm::Type*> param_types(operands.size(), i64_type);
+    param_types.push_back(ptr_type);
+    std::vector<llvm::Value*> args(operands.begin(), operands.end());
+    args.push_back(xsink_arg);
+    return builder->CreateCall(llvm::FunctionType::get(i64_type, param_types, false), helper, args);
 }
 
 bool QoreIRToLLVM::mayRunWithCallerContext() const {
@@ -35046,8 +35109,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* gid = llvm::ConstantInt::get(i32_type, global_id);
             llvm::Value* result = nullptr;
             QorePluginLLVMCodegenInfo codegen_info;
-            if (!qore_plugin_get_llvm_codegen_info(global_id, codegen_info, nullptr) && codegen_info.codegen) {
-                std::vector<llvm::Value*> boxed_operands;
+            auto box_operands = [&](std::vector<llvm::Value*>& boxed_operands) -> bool {
                 boxed_operands.reserve(inst->operands.size());
                 for (const QoreIRValue& operand : inst->operands) {
                     llvm::Value* value = getVal(operand.id, error);
@@ -35055,6 +35117,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return false;
                     }
                     boxed_operands.push_back(boxValue(value, operand.id));
+                }
+                return true;
+            };
+            bool have_codegen = !qore_plugin_get_llvm_codegen_info(global_id, codegen_info, nullptr)
+                && codegen_info.codegen;
+            if (have_codegen && aot_mode) {
+                // the extension's code can name a symbol of the plugin module, which AOT code cannot link
+                // (qore#6130): AOT code calls the operation's runtime helper through a pointer resolved at run time
+                // if it can, or else dispatches the operation generically
+                if (qore_ir_aot_plugin_helper_call_supported(inst, codegen_info.signature.helper_abi)) {
+                    std::vector<llvm::Value*> boxed_operands;
+                    if (!box_operands(boxed_operands)) {
+                        return false;
+                    }
+                    result = emitAOTPluginHelperCall(pinst, codegen_info, boxed_operands, module, llvm_func);
+                }
+            } else if (have_codegen) {
+                std::vector<llvm::Value*> boxed_operands;
+                if (!box_operands(boxed_operands)) {
+                    return false;
                 }
 
                 const char* codegen_error = nullptr;

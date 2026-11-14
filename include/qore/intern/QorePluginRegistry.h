@@ -14,6 +14,7 @@
 #include <qore/QoreParseOptions.h>
 #include <qore/QoreValue.h>
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -207,6 +208,19 @@ DLLEXPORT uint64_t qore_rt_plugin_dense_buffer_binary_values(uint32_t global_ope
     uint64_t result_buffer_bits, uint64_t lhs_bits, uint64_t rhs_bits, ExceptionSink* xsink);
 DLLEXPORT int64_t qore_rt_guard_plugin_type_profiled(uint64_t value_bits, const QoreTypeInfo* type_info,
     const char* module_name, uint32_t local_type_id);
+//! Returns the runtime helper of a plugin operation for AOT code, which calls it in place of the operation's LLVM
+//! codegen extension (qore#6130)
+/** AOT code cannot call the symbol that an extension names: the symbol is in the plugin module, which is loaded at
+    run time, and not in libqore or the executable.  The operation is resolved by its module-local reference, as the
+    process-global operation id is assigned at run time, and the helper is stored in \a cache, which the call site
+    reads first.
+
+    @return the helper, or, if the operation cannot be resolved, a helper of the given ABI that returns NOTHING (with
+    the exception raised in \a xsink; it is not cached)
+*/
+DLLEXPORT void* qore_rt_plugin_operation_helper_aot(const char* module_name, uint32_t local_operation_id,
+    uint32_t canonical_signature_version, uint64_t signature_hash, uint32_t helper_abi, std::atomic<void*>* cache,
+    ExceptionSink* xsink);
 }
 
 #endif

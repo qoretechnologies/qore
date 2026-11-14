@@ -59,6 +59,7 @@ class QoreIRInstruction;
 class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
 struct AOTSlotMap;
+struct QorePluginLLVMCodegenInfo;
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -2118,6 +2119,16 @@ private:
     //! Returns the location of a call that AOT code makes, for the frame of the call: the constant location of the
     //! instruction, or a null pointer
     llvm::Constant* getAotCallLocation(const QoreIRInstruction* inst, llvm::Module& module);
+    //! Emits the call of the runtime helper of a plugin operation with an LLVM codegen extension in AOT code
+    /** The extension's code names a symbol of the plugin module, which AOT code cannot link (qore#6130); AOT code
+        calls the operation's runtime helper instead, through a pointer that the call site resolves on its first
+        call and caches (qore_rt_plugin_operation_helper_aot()), as the JIT calls it directly.
+
+        @return the call's result (QoreValue bits), or nullptr if the operation's helper ABI is not that of a unary,
+        binary or subscript value operation of the instruction's opcode; the caller then emits the generic dispatch
+    */
+    llvm::Value* emitAOTPluginHelperCall(const QoreIRPluginInstruction* inst, const QorePluginLLVMCodegenInfo& info,
+            const std::vector<llvm::Value*>& operands, llvm::Module& module, llvm::Function* llvm_func);
     //! Emits the pop of the frame pushed by emitPushNativeCallFrame() or emitPushNativeCallFrameAOT()
     void emitPopNativeCallFrame(llvm::Module& module);
     //! Returns true if a direct native call of \a callee from the function being lowered must switch to the

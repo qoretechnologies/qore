@@ -204,6 +204,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   encodings differ
         # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - dataframe-aot-plugin-helpers (#6130): its probes run in child processes that set their own --exec-mode,
+        #   in qcc executables and with a module compiled by qcc
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -235,7 +237,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding.qtest",
-                                 "modules/dataframe/test/dataframe-default-encoding-names.qtest"]),
+                                 "modules/dataframe/test/dataframe-default-encoding-names.qtest",
+                                 "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest"]),
                          sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):
