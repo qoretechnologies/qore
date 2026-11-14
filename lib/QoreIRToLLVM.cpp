@@ -4494,25 +4494,30 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
     // among the scopes that remain, and none if the handler's scope is the innermost one left
     bool scope_closed = inst && (inst->opcode == QoreIROpcode::DiscardTemps
         || inst->opcode == QoreIROpcode::DiscardTempsKeep);
-    if (!inst || (!inst->temp_scope_id && !scope_closed) || temp_cleanup_marks.empty()) {
+    if (!inst || (!inst->temp_scope_id && !scope_closed)) {
         return handler;
     }
-    size_t mark_index = temp_cleanup_marks.size();
+    // the instruction's block can be lowered after the end of its temp scope (see closed_temp_cleanup_marks)
+    const std::vector<TempCleanupMark>& marks = scope_closed ? temp_cleanup_marks : getTempScopeMarks(inst);
+    if (marks.empty()) {
+        return handler;
+    }
+    size_t mark_index = marks.size();
     if (scope_closed) {
         // the first scope after the handler's, below the innermost one left
         uint32_t handler_scope_id = inst->exception_target ? inst->exception_target->getHandlerTempScopeId() : 0;
         size_t i = mark_index;
         for (; i > 0 && handler_scope_id; --i) {
-            if (temp_cleanup_marks[i - 1].scope_id == handler_scope_id) {
+            if (marks[i - 1].scope_id == handler_scope_id) {
                 break;
             }
         }
-        if (!handler_scope_id || !i || i == temp_cleanup_marks.size()) {
+        if (!handler_scope_id || !i || i == marks.size()) {
             return handler;
         }
         mark_index = i + 1;
     } else {
-        while (mark_index > 0 && temp_cleanup_marks[mark_index - 1].scope_id != inst->temp_scope_id) {
+        while (mark_index > 0 && marks[mark_index - 1].scope_id != inst->temp_scope_id) {
             --mark_index;
         }
         if (!mark_index) {
@@ -4529,14 +4534,14 @@ llvm::BasicBlock* QoreIRToLLVM::getExceptionEdgeTarget(llvm::Module& module, llv
         uint32_t handler_scope_id = inst->exception_target->getHandlerTempScopeId();
         if (handler_scope_id && handler_scope_id != inst->temp_scope_id) {
             for (size_t i = mark_index; i > 0; --i) {
-                if (temp_cleanup_marks[i - 1].scope_id == handler_scope_id) {
+                if (marks[i - 1].scope_id == handler_scope_id) {
                     mark_index = i;
                     break;
                 }
             }
         }
     }
-    const TempCleanupMark* mark = &temp_cleanup_marks[mark_index];
+    const TempCleanupMark* mark = &marks[mark_index];
     // the temporaries of the statement must be in cleanup allocas to be released on the exception edge only
     if (pending_ssa_cleanup.size() > mark->pending_ssa_count) {
         promotePendingSsaToAllocas(module, llvm_func);
@@ -4777,19 +4782,38 @@ static constexpr size_t MaxOrderedErrorReturnTemps = 256;
 
 // documented in QoreIRToLLVM.h
 const QoreIRToLLVM::TempCleanupMark* QoreIRToLLVM::getOrderedErrorReturnMark(const QoreIRInstruction* inst) const {
-    if (!inst || !inst->temp_scope_id || temp_cleanup_marks.empty() || exception_release_groups.empty()) {
+    if (!inst || !inst->temp_scope_id || exception_release_groups.empty()) {
         return nullptr;
     }
+    // the instruction's block can be lowered after the end of its temp scope (see closed_temp_cleanup_marks)
+    const std::vector<TempCleanupMark>& marks = getTempScopeMarks(inst);
     const TempCleanupMark* mark = nullptr;
-    for (size_t i = temp_cleanup_marks.size(); i > 0; --i) {
-        if (temp_cleanup_marks[i - 1].scope_id == inst->temp_scope_id) {
-            mark = &temp_cleanup_marks[i - 1];
+    for (size_t i = marks.size(); i > 0; --i) {
+        if (marks[i - 1].scope_id == inst->temp_scope_id) {
+            mark = &marks[i - 1];
             break;
         }
     }
     return mark && pending_ssa_cleanup.size() <= mark->pending_ssa_count
         && invoke_result_allocas.size() - mark->invoke_alloca_count <= MaxOrderedErrorReturnTemps
         ? mark : nullptr;
+}
+
+// documented in QoreIRToLLVM.h
+const std::vector<QoreIRToLLVM::TempCleanupMark>& QoreIRToLLVM::getTempScopeMarks(const QoreIRInstruction* inst)
+        const {
+    if (inst && inst->temp_scope_id && !closed_temp_cleanup_marks.empty()) {
+        for (size_t i = temp_cleanup_marks.size(); i > 0; --i) {
+            if (temp_cleanup_marks[i - 1].scope_id == inst->temp_scope_id) {
+                return temp_cleanup_marks;
+            }
+        }
+        auto i = closed_temp_cleanup_marks.find(inst->temp_scope_id);
+        if (i != closed_temp_cleanup_marks.end()) {
+            return i->second;
+        }
+    }
+    return temp_cleanup_marks;
 }
 
 // documented in QoreIRToLLVM.h
@@ -4991,6 +5015,11 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
             }
         }
         mark = temp_cleanup_marks[idx];
+        // for the blocks of the scope that are lowered after its end (see closed_temp_cleanup_marks)
+        if (mark.scope_id) {
+            closed_temp_cleanup_marks.emplace(mark.scope_id, std::vector<TempCleanupMark>(temp_cleanup_marks.begin(),
+                temp_cleanup_marks.begin() + idx + 1));
+        }
         temp_cleanup_marks.erase(temp_cleanup_marks.begin() + idx);
         // the end of the scope's temporaries (see finalizeOrderedErrorReturnEdges())
         temp_scope_end.emplace(mark.scope_id, invoke_result_allocas.size());
@@ -13250,6 +13279,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     positioned_iterator_allocas.clear();
     positioned_iterator_alloca_set.clear();
     temp_scope_end.clear();
+    closed_temp_cleanup_marks.clear();
     ordered_error_return_sites.clear();
     pending_phis.clear();
 
