@@ -1807,6 +1807,12 @@ DataFrame DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_O
     DataFrame wide = df.pivot("name", "metric", "value");
     @endcode
 
+    The values column must hold numbers: an \c int64 or \c float64 column, or a column that holds any value whose
+    cells are numbers (a decimal column, for example).  The rows are grouped by the string forms of the index and
+    columns values.
+
+    @throw DATAFRAME-ERROR if the values column does not hold numbers, or if \a agg_func is not \c "sum" or
+    \c "mean"
 */
 DataFrame DataFrame::pivot(string index_col, string columns_col, string values_col, *string agg_func) [flags=RET_VALUE_ONLY] {
     std::string func = agg_func ? dataFrameStdString(agg_func) : "sum";

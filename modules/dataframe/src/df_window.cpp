@@ -369,6 +369,50 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
         return df;
     }
 
+    // the values are aggregated as numbers: an int or float column, or a column that holds any value whose cells are
+    // numbers (a decimal column, for example); any other column has no sum or mean (qore#6099)
+    if (val_cd.type != ColumnType::FLOAT64 && val_cd.type != ColumnType::INT64) {
+        bool numbers = val_cd.type == ColumnType::AUTO;
+        for (int64_t i = 0; numbers && i < n_rows; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "checking DataFrame pivot values")) {
+                return nullptr;
+            }
+            if (!val_cd.isNull(i)) {
+                qore_type_t t = val_cd.auto_data[i].getType();
+                numbers = t == NT_INT || t == NT_FLOAT || t == NT_NUMBER;
+            }
+        }
+        if (!numbers) {
+            xsink->raiseException("DATAFRAME-ERROR", "pivot values column '%s' must hold numbers to be aggregated "
+                "with '%s'; it is a %s column", values_col.c_str(), agg_func.c_str(), columnTypeName(val_cd.type));
+            return nullptr;
+        }
+    }
+
+    // the key of the value of an index or columns cell, its string form in UTF-8, the encoding of the string cells of
+    // the index column; a null value has the key of an empty string; the same key is used in both passes
+    auto cell_key = [](const ColumnData& cd, int64_t i) -> std::string {
+        if (cd.isNull(i)) {
+            return std::string();
+        }
+        switch (cd.type) {
+            case ColumnType::STRING:
+                return cd.str_data[i];
+            case ColumnType::INT64:
+                return std::to_string(cd.int_data[i]);
+            default: {
+                std::string key;
+                ExceptionSink value_xsink;
+                {
+                    ValueHolder value(cd.getValueAt(i, &value_xsink), &value_xsink);
+                    key = dataFrameUtf8Key(*value);
+                }
+                value_xsink.clear();
+                return key;
+            }
+        }
+    };
+
     // Collect unique index values and column values
     std::vector<std::string> unique_indices;
     std::unordered_map<std::string, size_t> index_map;
@@ -376,27 +420,16 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
     std::unordered_map<std::string, size_t> col_map;
 
     for (int64_t i = 0; i < n_rows; ++i) {
-        std::string idx_val;
-        if (!idx_cd.isNull(i)) {
-            switch (idx_cd.type) {
-                case ColumnType::STRING: idx_val = idx_cd.str_data[i]; break;
-                case ColumnType::INT64: idx_val = std::to_string(idx_cd.int_data[i]); break;
-                default: idx_val = std::to_string(i); break;
-            }
+        if (i && !(i % 100) && qore_check_cancel(xsink, "pivoting DataFrame keys")) {
+            return nullptr;
         }
+        std::string idx_val = cell_key(idx_cd, i);
         if (!index_map.count(idx_val)) {
             index_map[idx_val] = unique_indices.size();
             unique_indices.push_back(idx_val);
         }
 
-        std::string col_val;
-        if (!col_cd.isNull(i)) {
-            switch (col_cd.type) {
-                case ColumnType::STRING: col_val = col_cd.str_data[i]; break;
-                case ColumnType::INT64: col_val = std::to_string(col_cd.int_data[i]); break;
-                default: col_val = std::to_string(i); break;
-            }
-        }
+        std::string col_val = cell_key(col_cd, i);
         if (!col_map.count(col_val)) {
             col_map[col_val] = unique_cols.size();
             unique_cols.push_back(col_val);
@@ -412,30 +445,25 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
     std::vector<std::vector<int>> counts(out_rows, std::vector<int>(out_cols, 0));
 
     for (int64_t i = 0; i < n_rows; ++i) {
-        std::string idx_val;
-        if (!idx_cd.isNull(i)) {
-            switch (idx_cd.type) {
-                case ColumnType::STRING: idx_val = idx_cd.str_data[i]; break;
-                case ColumnType::INT64: idx_val = std::to_string(idx_cd.int_data[i]); break;
-                default: break;
-            }
+        if (i && !(i % 100) && qore_check_cancel(xsink, "pivoting DataFrame values")) {
+            return nullptr;
         }
-        std::string col_val;
-        if (!col_cd.isNull(i)) {
-            switch (col_cd.type) {
-                case ColumnType::STRING: col_val = col_cd.str_data[i]; break;
-                case ColumnType::INT64: col_val = std::to_string(col_cd.int_data[i]); break;
-                default: break;
-            }
-        }
-
-        size_t ri = index_map[idx_val];
-        size_t ci = col_map[col_val];
+        size_t ri = index_map[cell_key(idx_cd, i)];
+        size_t ci = col_map[cell_key(col_cd, i)];
 
         double val = 0;
         if (!val_cd.isNull(i)) {
-            val = (val_cd.type == ColumnType::FLOAT64) ? val_cd.float_data(i)
-                : (double)val_cd.int_data[i];
+            switch (val_cd.type) {
+                case ColumnType::FLOAT64:
+                    val = val_cd.float_data(i);
+                    break;
+                case ColumnType::INT64:
+                    val = (double)val_cd.int_data[i];
+                    break;
+                default:
+                    val = val_cd.auto_data[i].getAsFloat();
+                    break;
+            }
         }
         sums[ri][ci] += val;
         counts[ri][ci]++;

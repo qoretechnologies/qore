@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-pivot-types.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFramePivotTypesTest
+
+#! pivot() aggregates a values column of numbers and raises an error for any other values column, whatever the type
+#! of the index column, and groups the rows by the values of an index column of any type (qore#6099)
+class DataFramePivotTypesTest inherits QUnit::Test {
+    constructor() : Test("DataFramePivotTypesTest", "1.0", \ARGV) {
+        addTestCase("values that are not numbers", \nonNumericTest());
+        addTestCase("numbers in a column that holds any value", \autoTest());
+        addTestCase("index columns of any type", \indexTest());
+        set_return_value(main());
+    }
+
+    #! a values column of strings, bools or dates raises an error, which crashed with an index column that is not an
+    #! int column
+    nonNumericTest() {
+        list<list<auto>> values = (("s1", "s2"), (True, False), (2024-01-01Z, 2024-01-02Z), (c'a', "x"));
+        foreach list<auto> index in ((("a", "b")), (1, 2)) {
+            foreach list<auto> vals in (values) {
+                DataFrame::DataFrame df({"k": index, "c": ("x", "y"), "v": vals});
+                assertThrows("DATAFRAME-ERROR", \df.pivot(), ("k", "c", "v"), sprintf("index %y, values %y", index,
+                    vals));
+            }
+        }
+    }
+
+    #! numbers in a column that holds any value (a decimal column, for example) are aggregated
+    autoTest() {
+        ColumnarResult cr = ColumnarResult::fromColumnHash({"k": ("a", "a", "b"), "c": ("x", "x", "y"),
+            "v": (1.25n, 2.5n, 4n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}});
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(cr);
+        assertEq("auto", df.dtypes()[2], "a decimal column");
+        DataFrame::DataFrame wide = df.pivot("k", "c", "v");
+        assertEq(("k", "x", "y"), wide.columnNames(), "the columns");
+        assertEq((3.75, NOTHING), wide.getColumn("x"), "the sums of x");
+        assertEq((NOTHING, 4.0), wide.getColumn("y"), "the sums of y");
+    }
+
+    #! the rows are grouped by the values of an index column of any type
+    indexTest() {
+        foreach list<auto> index in ((1.5, 1.5, 2.5), (True, True, False), (2024-01-01, 2024-01-01, 2024-01-02)) {
+            DataFrame::DataFrame df({"k": index, "c": ("x", "y", "x"), "v": (1, 2, 4)});
+            DataFrame::DataFrame wide = df.pivot("k", "c", "v");
+            string label = sprintf("index %y", index);
+            assertEq(2, wide.numRows(), label + ": one row per index value");
+            assertEq((1.0, 4.0), wide.getColumn("x"), label + ": x");
+            assertEq((2.0, NOTHING), wide.getColumn("y"), label + ": y");
+        }
+    }
+}
