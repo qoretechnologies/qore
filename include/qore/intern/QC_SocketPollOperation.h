@@ -2031,6 +2031,12 @@ public:
     */
     DLLLOCAL int getAddressFamily() const { return address_family_.load(std::memory_order_acquire); }
 
+    //! Returns true once the QUIC handshake of the connection has completed, also after it has closed
+    /** Can be called from any thread; set before the HTTP/3 layer is set up, so an error raised while it is set up
+        (such as \c QUIC-SEND-ERROR) is known to be raised after the server was reached
+    */
+    DLLLOCAL bool isHandshakeComplete() const { return handshake_completed_.load(std::memory_order_acquire); }
+
     //! Migrate the QUIC connection to a new socket (client-side active migration)
     /** Creates a new connected UDP socket, calls QuicSession::initiateMigration(),
         and swaps the fd on the underlying socket object.
@@ -2094,6 +2100,8 @@ private:
     std::vector<int> avoid_families_;
     //! the address family of the remote address once resolved; read from other threads
     std::atomic<int> address_family_{AF_UNSPEC};
+    //! set by the I/O thread when the QUIC handshake completes; never cleared (see isHandshakeComplete())
+    std::atomic<bool> handshake_completed_{false};
 
     //! Soft deadline (ngtcp2 timestamp, ns) after which a handshake that has
     //! seen at least one ICMP port-unreachable (ECONNREFUSED on a connected
