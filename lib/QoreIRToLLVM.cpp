@@ -2323,8 +2323,11 @@ llvm::Value* QoreIRToLLVM::emitCallTargetCacheHitInline(const QoreCallTargetChec
         load->setAtomic(order);
         return load;
     };
+    // the acquire loads of QoreCallTargetCheckCache::hit() are relaxed loads followed by acquire fences: an acquire
+    // load is LDAPR on AArch64 CPUs with RCpc, which valgrind cannot run
     llvm::Value* seq = atomic_load(i32_type, field(QoreCallTargetCheckCache::getSeqOffset()), 4,
-        llvm::AtomicOrdering::Acquire, "cache.seq");
+        llvm::AtomicOrdering::Monotonic, "cache.seq");
+    builder->CreateFence(llvm::AtomicOrdering::Acquire);
     llvm::Value* even = builder->CreateICmpEQ(builder->CreateAnd(seq, llvm::ConstantInt::get(i32_type, 1)),
         llvm::ConstantInt::get(i32_type, 0));
     llvm::Value* entry_class = atomic_load(ptr_type, field(QoreCallTargetCheckCache::getClassOffset()), 8,
@@ -2334,7 +2337,7 @@ llvm::Value* QoreIRToLLVM::emitCallTargetCacheHitInline(const QoreCallTargetChec
     llvm::Value* entry_epoch = atomic_load(i64_type, field(QoreCallTargetCheckCache::getEpochOffset()), 8,
         llvm::AtomicOrdering::Monotonic, "cache.epoch");
     llvm::Value* epoch = atomic_load(i64_type, const_ptr(qore_get_method_dispatch_epoch_addr()), 8,
-        llvm::AtomicOrdering::Acquire, "dispatch.epoch");
+        llvm::AtomicOrdering::Monotonic, "dispatch.epoch");
     builder->CreateFence(llvm::AtomicOrdering::Acquire);
     llvm::Value* seq2 = atomic_load(i32_type, field(QoreCallTargetCheckCache::getSeqOffset()), 4,
         llvm::AtomicOrdering::Monotonic, "cache.seq2");
