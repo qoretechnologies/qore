@@ -473,7 +473,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"REGEX_SUBST", 125, true, write_slot_REGEX_SUBST, "Regex substitution operator"},
     {"TRANSLIT", 126, true, write_slot_TRANSLIT, "Transliteration operator"},
     {"FIND", 127, true, write_slot_FIND, "Find expression"},
-    {nullptr, 128, false, nullptr, nullptr},
+    // 128: CALLREF_CALL_NAMED
+    {"CALLREF_CALL_NAMED", 128, true, write_slot_CALLREF_CALL, "Named call reference call"},
     {nullptr, 129, false, nullptr, nullptr},
     {nullptr, 130, false, nullptr, nullptr},
     {nullptr, 131, false, nullptr, nullptr},

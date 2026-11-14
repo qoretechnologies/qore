@@ -37,6 +37,13 @@ function, and a nested handler is named after the handler containing it, such as
 The handler reads the locals of its function from the thread-local variable stack, to which the function publishes
 them before it runs its handlers (`syncLocalsToRuntimeForHandlers()`), and the function reloads them afterwards.
 
+At each pending handler call, `finalizeHandlerSites()` releases the parent's cached owners of locals that its
+handlers can access. This includes the entry-time owner of a pre-instantiated local, as well as its reload tracker
+and deferred reload value: an inherited local of an outlined handler can have all three. The runtime local must
+be the only owner contributed by these caches when a nested handler replaces it, so its old value is destroyed at
+the replacement. The cache is then reloaded into an existing tracker or entry owner. Finalization creates no
+storage, and this work stays on the pending-handler path; an ordinary exit runs its handlers inline.
+
 If a handler cannot be lowered, the function cannot be compiled: there is no other way to run the handler. The IR
 interpreter runs handlers only as part of IR it executes itself (the IR tier, and the debug IR of a compiled module
 under a debugger).
