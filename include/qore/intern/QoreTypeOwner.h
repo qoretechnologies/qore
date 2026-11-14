@@ -78,7 +78,16 @@ struct QoreTypeOwnerGroup;
 */
 class QoreTypeOwner {
 public:
+#ifdef DEBUG
+    //! registers the declaration as live, so that the bookkeeping of the declarations that name each other can
+    //! assert that it never reads one that was freed (qore_type_owner_is_live())
+    DLLLOCAL QoreTypeOwner();
+    DLLLOCAL QoreTypeOwner(const QoreTypeOwner&) = delete;
+    DLLLOCAL QoreTypeOwner& operator=(const QoreTypeOwner&) = delete;
+    DLLLOCAL virtual ~QoreTypeOwner();
+#else
     DLLLOCAL virtual ~QoreTypeOwner() = default;
+#endif
 
     //! The key of the declaration in the parameterized-class caches: its class or hashdecl object; nullptr for an enum
     DLLLOCAL virtual const void* getTypeOwnerKey() const = 0;
@@ -209,6 +218,11 @@ public:
 private:
     T* owner;
 };
+
+#ifdef DEBUG
+//! Returns true if \a owner is a declaration that has not been freed (debug builds)
+DLLLOCAL bool qore_type_owner_is_live(const QoreTypeOwner* owner);
+#endif
 
 //! Called by a declaration whose last reference was released; see QoreTypeOwner
 /** @return true if the declaration was retired (or is kept as already retired): the caller must not free it; false if
