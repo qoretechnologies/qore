@@ -890,7 +890,10 @@ private:
         QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord/ForeachElement
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries
-        LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
+        LocalVar* catch_var = nullptr;             //!< the local of a CatchVar entry (the catch block's parameter), if any
+        //! the value of the CatchException of the catch block of a CatchVar entry, which closes it (see
+        //! QoreIRFunction::catch_cleanup_results)
+        uint32_t catch_result_id = 0;
         QoreIRValue foreach_iterator;              //!< iterator handle released by a ForeachSource entry, if any
         QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
         QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any

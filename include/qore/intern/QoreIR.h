@@ -4489,6 +4489,15 @@ public:
         serialized: IR read back keeps them until the end of the try statement (qore#5941)
     */
     std::unordered_map<const QoreIRInstruction*, std::vector<uint32_t>> catch_interrupted_returns;
+    //! the value of the CatchException of the catch block that each CatchCleanup of a break, continue or return
+    //! closes
+    /** Set by the lowering and read by the LLVM lowering, which releases the value (the exception's information, which
+        holds its argument) when the jump leaves the catch block, as the AST interpreter releases it with the catch
+        block: native code does not release the temporaries of the scopes that a jump leaves (UnwindTemps), and kept
+        it until the value was overwritten or the function ended; the IR interpreter releases it with the try
+        statement's temp scope; not serialized: IR read back keeps it until then (#6079)
+    */
+    std::unordered_map<const QoreIRInstruction*, uint32_t> catch_cleanup_results;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
     mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;
     mutable bool interpreter_needs_slot_cache_tls = false;

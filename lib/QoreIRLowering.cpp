@@ -1764,10 +1764,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (blockHasTerminator(builder.getBlock())) {
                 return true;
             }
-            // Emit CatchCleanup for all active catch scopes before returning
-            for (int i = 0; i < catch_cleanup_depth; ++i) {
-                builder.createCatchCleanup(stmt->loc);
-            }
+            // the catch blocks that the return leaves were closed by the cleanups, each after the code in it
             builder.createReturnNothing();
             return true;
         }
@@ -1852,10 +1849,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // value of the return that the exception interrupts for the IR interpreter (its return slot) and for the try
         // statements that can catch the exception (try_return_value_stack, qore#5941); emitBlockCleanups() lowers
         // nothing after such a handler (#6030)
-        // Emit CatchCleanup for all active catch scopes before returning
-        for (int i = 0; i < catch_cleanup_depth; ++i) {
-            builder.createCatchCleanup(stmt->loc);
-        }
+        // the catch blocks that the return leaves were closed by the cleanups, each after the code in it
         QoreIRReturnInstruction* ret = builder.createReturn(lowered);
         // every try statement that the return leaves can catch an exception that interrupts it (qore#5941)
         for (std::vector<uint32_t>& try_returns : try_return_value_stack) {
@@ -3391,7 +3385,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRBasicBlock* target = nullptr;
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
-        int target_catch_depth = 0;
         QoreIRBasicBlock* target_exception_target = nullptr;
         QoreIRValue old_elem;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
@@ -3399,7 +3392,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 target = it->break_target;
                 target_cleanup_depth = it->cleanup_stack_depth;
                 target_temp_depth = it->temp_scope_depth;
-                target_catch_depth = it->catch_cleanup_depth;
                 target_exception_target = it->loop_exception_target;
                 old_elem = it->old_implicit_element;
                 break;
@@ -3421,9 +3413,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             return true;
         }
         // Emit CatchCleanup for catch scopes entered since the loop started
-        for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
-            builder.createCatchCleanup(stmt->loc);
-        }
+        // the catch blocks that the jump leaves were closed by the cleanups, each after the code in it
         // Restore $# for foreach loops before breaking out
         if (old_elem.isValid()) {
             builder.createPopImplicitElement(old_elem, stmt->loc);
@@ -3441,14 +3431,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRBasicBlock* target = nullptr;
         size_t target_cleanup_depth = 0;
         size_t target_temp_depth = 0;
-        int target_catch_depth = 0;
         QoreIRBasicBlock* target_exception_target = nullptr;
         for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
             if (it->continue_target) {
                 target = it->continue_target;
                 target_cleanup_depth = it->cleanup_stack_depth;
                 target_temp_depth = it->temp_scope_depth;
-                target_catch_depth = it->catch_cleanup_depth;
                 target_exception_target = it->loop_exception_target;
                 break;
             }
@@ -3469,9 +3457,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             return true;
         }
         // Emit CatchCleanup for catch scopes entered since the loop started
-        for (int i = 0; i < catch_cleanup_depth - target_catch_depth; ++i) {
-            builder.createCatchCleanup(stmt->loc);
-        }
+        // the catch blocks that the jump leaves were closed by the cleanups, each after the code in it
         // Note: no need to pop $# here for foreach loops — the continue target
         // (latch_block) already calls PopImplicitElement before incrementing the
         // index and branching back to the header.
@@ -3952,16 +3938,21 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (parse_context) {
                 parse_context->markLocalAssignment(catch_var, true, catch_var->getTypeInfo());
             }
-            // Push a CatchVar cleanup entry so non-local exits (break, continue,
-            // return, throw) within the catch block uninstantiate the catch_var
-            // before unwinding.  The thread local-var stack is strictly LIFO —
-            // if we leave the catch_var on the stack, the enclosing block's
-            // UninstantiateLocal for its own lvars will pop the catch_var
-            // instead, leading to thread_find_lvar asserts when the catch
-            // fires again (identity mismatch between expected and actual top).
+        }
+        // Push a CatchVar cleanup entry so non-local exits (break, continue,
+        // return) within the catch block uninstantiate the catch_var, if any, and
+        // close the catch block after the cleanups of the blocks in it and before
+        // those of the enclosing blocks, as the AST interpreter leaves the catch
+        // block (#6079).  The thread local-var stack is strictly LIFO —
+        // if we leave the catch_var on the stack, the enclosing block's
+        // UninstantiateLocal for its own lvars will pop the catch_var
+        // instead, leading to thread_find_lvar asserts when the catch
+        // fires again (identity mismatch between expected and actual top).
+        {
             BlockCleanupEntry catch_var_entry;
             catch_var_entry.type = BlockCleanupEntry::CatchVar;
             catch_var_entry.catch_var = catch_var;
+            catch_var_entry.catch_result_id = catch_inst->result.id;
             catch_var_entry.loc = stmt->loc;
             pushBlockCleanup(catch_var_entry);
         }
@@ -3998,15 +3989,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         catch_exit_stack.pop_back();
         if (!catch_ok) {
             --catch_cleanup_depth;
-            if (catch_var) {
-                cleanup_stack.pop_back();
-            }
+            cleanup_stack.pop_back();
             return false;
         }
         --catch_cleanup_depth;
-        if (catch_var) {
-            cleanup_stack.pop_back();
-        }
+        cleanup_stack.pop_back();
         if (!blockHasTerminator(builder.getBlock())) {
             // Fallthrough path: uninstantiate catch_var before CatchCleanup so
             // the stack pop order matches the push order (LIFO invariant).
@@ -4700,13 +4687,19 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                     }
                 }
                 break;
-            case BlockCleanupEntry::CatchVar:
-                if (!(flags & CF_SKIP_LVARS)) {
-                    assert(entry.catch_var);
+            case BlockCleanupEntry::CatchVar: {
+                if (entry.catch_var && !(flags & CF_SKIP_LVARS)) {
                     auto* ui = builder.createUninstantiateLocal(entry.catch_var, entry.loc);
                     ui->is_block_exit = true;
                 }
+                // the catch block is closed, and the exception's information that its CatchException made, which
+                // holds the exception's argument, is released with it, as the AST interpreter releases it (#6079)
+                QoreIRInstruction* cleanup = builder.createCatchCleanup(entry.loc);
+                if (entry.catch_result_id) {
+                    builder.getFunction()->catch_cleanup_results[cleanup] = entry.catch_result_id;
+                }
                 break;
+            }
             case BlockCleanupEntry::ForeachElement:
                 // Value (iterator-based) foreach: restore $# to the caller's value
                 // on a non-local exit (return / thread_exit) out of the loop body.
