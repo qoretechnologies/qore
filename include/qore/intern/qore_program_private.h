@@ -2026,13 +2026,18 @@ public:
         the Program, as those of the destructors run while it is in the Program (see enterWithoutContext()), must not
         fail while the Program's data is valid.  After the teardown (ptid is -1), no thread can enter it.
     */
+    DLLLOCAL bool foreignEntryRefusedIntern(int tid) const {
+        return foreign_teardown_tid && tid != foreign_teardown_tid && ptid != tid && tid == q_gettid()
+            && q_thread_is_foreign() && tidmap.find(tid) == tidmap.end();
+    }
+
+    //! see canEnterIntern()
     DLLLOCAL bool canEnterIntern(int tid) const {
         // once the teardown has found no foreign thread in the Program at the end of the process (foreign_teardown), none
         // can enter it: it is not waited for, and the data that it would use is destroyed meanwhile
         // (the thread that performs the teardown, which can be a foreign thread itself, and the threads already in the
         // Program are not refused)
-        if (foreign_teardown_tid && tid != foreign_teardown_tid && ptid != tid && tid == q_gettid()
-            && q_thread_is_foreign() && tidmap.find(tid) == tidmap.end()) {
+        if (foreignEntryRefusedIntern(tid)) {
             return false;
         }
         return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
@@ -2152,7 +2157,8 @@ public:
         // declared before the lock, so that a transition is published after it is released
         ProgramThreadActivityPublisher activity;
         AutoLocker al(plock);
-        if (ptid) {
+        // a foreign thread is refused once the teardown at the end of the process has begun, as by canEnterIntern()
+        if (ptid || foreignEntryRefusedIntern(tid)) {
             xsink->raiseException("PROGRAM-ERROR", "the Program has already been deleted; its code cannot be "
                 "inherited");
             return -1;
