@@ -1885,6 +1885,10 @@ DataFrame DataFrame::pivot(string index_col, string columns_col, string values_c
     @param value_name name for the value column (default "value")
     @return new DataFrame in long format
 
+    The identifier columns keep their types.  The value column is a \c float64 column if every value column is an
+    \c int64 or \c float64 column, and otherwise the column that the column hash constructor makes of the values
+    (see @ref dataframeintro): a column of their type if they are all of one type, or a column that holds any value.
+
     @par Example:
     @code{.py}
     DataFrame long_df = df.melt(("name",), ("score", "age"), "metric", "value");

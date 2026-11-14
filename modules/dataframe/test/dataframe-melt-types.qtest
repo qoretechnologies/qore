@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-melt-types.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameMeltTypesTest
+
+#! melt() keeps the types of its identifier columns and of non-numeric value columns (qore#6116)
+class DataFrameMeltTypesTest inherits QUnit::Test {
+    constructor() : Test("DataFrameMeltTypesTest", "1.0", \ARGV) {
+        addTestCase("melt() of columns of any type", \meltTest());
+        set_return_value(main());
+    }
+
+    #! melt() of identifier and value columns of every type
+    meltTest() {
+        # the issue: an int and a string value column
+        DataFrame::DataFrame d(({"id": 1, "x": 10, "y": "s"}, {"id": 2, "x": 20, "y": "t"}));
+        DataFrame::DataFrame m = d.melt(("id",), ("x", "y"));
+        assertEq(("10", "s", "20", "t"), m.getColumn("value"), "int and string values");
+        # identifier columns of every type keep their types and values
+        DataFrame::DataFrame all({
+            "b": (True, NOTHING),
+            "d": (2024-01-01T00:00:00Z, 2024-01-02T00:00:00Z),
+            "u": (1h, NOTHING),
+            "a": (c'z', (1, 2)),
+            "s": ("x", "y"),
+            "f": (1.5, NOTHING),
+            "v": (1, 2),
+            "w": (3, 4),
+        });
+        m = all.melt(("b", "d", "u", "a", "s", "f"), ("v", "w"));
+        assertEq(4, m.numRows());
+        assertEq((True, True, NOTHING, NOTHING), m.getColumn("b"), "bool");
+        list<auto> dates = m.getColumn("d");
+        assertTrue(dates[0] == 2024-01-01T00:00:00Z && dates[3] == 2024-01-02T00:00:00Z, sprintf("dates: %y", dates));
+        list<auto> durations = m.getColumn("u");
+        assertTrue(is_date_relative(durations[0]) && durations[1] == 1h && !exists durations[2],
+            sprintf("durations: %y", durations));
+        assertEq((c'z', c'z', (1, 2), (1, 2)), m.getColumn("a"), "any value");
+        assertEq(("x", "x", "y", "y"), m.getColumn("s"), "string");
+        assertEq((1.5, 1.5, NOTHING, NOTHING), m.getColumn("f"), "float");
+        assertEq((1.0, 3.0, 2.0, 4.0), m.getColumn("value"), "numeric values");
+        # value columns of one type keep it; of durations, durations
+        DataFrame::DataFrame dur({"id": (1, 2), "p": (1h, 2h), "q": (3h, NOTHING)});
+        list<auto> dv = dur.melt(("id",)).getColumn("value");
+        assertTrue(is_date_relative(dv[0]) && dv[0] == 1h && dv[2] == 2h && !exists dv[3],
+            sprintf("duration values: %y", dv));
+        DataFrame::DataFrame bools({"id": (1,), "p": (True,), "q": (False,)});
+        assertEq((True, False), bools.melt(("id",)).getColumn("value"), "bool values");
+        # values of a column that holds any value
+        DataFrame::DataFrame anyv({"id": (1, 2), "p": (c'z', (1, 2)), "q": (1, 2)});
+        assertEq((c'z', 1, (1, 2), 2), anyv.melt(("id",)).getColumn("value"), "any values");
+    }
+}
