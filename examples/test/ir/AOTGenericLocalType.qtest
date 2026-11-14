@@ -27,6 +27,7 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
         string probe = get_script_dir() + "/AOTGenericLocalType/probe.q";
         string debug_probe = get_script_dir() + "/AOTGenericLocalType/probe-debug.q";
+        string ref_probe = get_script_dir() + "/AOTGenericLocalType/probe-ref.q";
         string lazy_provider = get_script_dir() + "/AOTGenericLocalType/lazy-provider.qc";
         string lazy_consumer = get_script_dir() + "/AOTGenericLocalType/lazy-consumer.qc";
         *string ast_out;
@@ -38,6 +39,7 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         addTestCase("qcc executables match AST", \compiled());
         addTestCase("qcc executables with a debugger attached match AST", \debugged());
         addTestCase("lazy function IR of a preloaded qcc object matches AST", \lazyFunctionIr());
+        addTestCase("references to selected elements of generic locals load in qcc", \referencedElements());
         set_return_value(main());
     }
 
@@ -122,6 +124,22 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         run((qcc_bin, "-c", "-L", dir.path, "--parse-option=PO_MODERN", "-o", consumer_qo, lazy_consumer));
         run((qcc_bin, "-o", exe, provider_qo, consumer_qo));
         assertEq("parse: " + expected + "\nrun: " + expected + "\n", run((exe, "-b", "--enable-debug")));
+    }
+
+    #! the result type of a selection from a local whose type names a type parameter is resolved with the function's
+    #! signature (qore#6121); before, the executable failed to load
+    referencedElements() {
+        string expected = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", ref_probe));
+        assertRegex("(?m)^read list element => ", expected, expected);
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, ref_probe)), mode);
+        }
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-generic-local-type-ref-");
+            string exe = dir.path + "/probe-ref";
+            run((qcc_bin, level, "-o", exe, ref_probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
     }
 
     private string getAst() {
