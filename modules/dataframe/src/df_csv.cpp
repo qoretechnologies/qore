@@ -13,6 +13,7 @@
 #include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -505,6 +506,9 @@ void QoreDataFrame::writeCSV(const std::string& path,
                     std::string converted;
                     if (QCS_DEFAULT != QCS_UTF8) {
                         if (dataFrameConvertFromUtf8(*cell, QCS_DEFAULT, converted, xsink)) {
+                            // no partial file is left
+                            file.close();
+                            std::remove(path.c_str());
                             return;
                         }
                         cell = &converted;

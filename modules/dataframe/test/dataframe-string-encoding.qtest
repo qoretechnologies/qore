@@ -111,6 +111,14 @@ class DataFrameStringEncodingTest inherits QUnit::Test {
         DataFrame::DataFrame records(({"v": invalid}, {"v": {}}));
         assertEq(("auto", "UTF-16LE"), (records.dtypes()[0], records.getColumn("v")[0].encoding()),
             "records: auto");
+        # a column that stays a string column raises the error
+        assertThrows("DATAFRAME-ENCODING-ERROR", sub () { new DataFrame::DataFrame({"v": (invalid, "x")}); }, (),
+            "column hash: string");
+        assertThrows("DATAFRAME-ENCODING-ERROR", sub () { new DataFrame::DataFrame({"v": (invalid, 1)}); }, (),
+            "column hash: string with an int");
+        assertThrows("DATAFRAME-ENCODING-ERROR", sub () {
+            new DataFrame::DataFrame(({"v": invalid}, {"v": "x"}));
+        }, (), "records: string");
     }
 
     #! checks the cells of the column \c v: their values and their encoding, UTF-8

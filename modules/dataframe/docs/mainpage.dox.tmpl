@@ -29,10 +29,11 @@
     as UTF-8 strings.  A string that cannot be converted to UTF-8 (one whose bytes are not valid in its encoding)
     raises \c DATAFRAME-ENCODING-ERROR, and is not stored.  A string in a column that holds any value
     (\c auto) is kept as it is, and is compared with the other values, and used in a group or join key, in UTF-8,
-    so that equal strings in different encodings are equal.  Column names, like CSV files, which are read and
-    written in the default character encoding, are in the default encoding: a column name made from a string cell
-    (by @ref Qore::DataFrame::DataFrame::pivot() "DataFrame::pivot()") is converted to it, and a cell or name that
-    it cannot represent raises \c DATAFRAME-ENCODING-ERROR.
+    so that equal strings in different encodings are equal.  CSV files are read and written in the default
+    character encoding, and a column name made from a string cell (by
+    @ref Qore::DataFrame::DataFrame::pivot() "DataFrame::pivot()") is converted to it; a cell that it cannot
+    represent raises \c DATAFRAME-ENCODING-ERROR (and @ref Qore::DataFrame::DataFrame::writeCSV()
+    "DataFrame::writeCSV()" leaves no file).
 
     The cells of a \c date column are stored as the microseconds since the epoch in an int64, which holds the dates
     from \c -290308-12-21T19:59:05.224192Z to \c 294247-01-10T04:00:54.775807Z (and time values of the same

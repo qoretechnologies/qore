@@ -74,6 +74,10 @@ class DataFrameDateRangeTest inherits QUnit::Test {
         DataFrame::DataFrame df({"v": (in_range,)});
         assertEq((9223372036854000100,), map get_epoch_microseconds($1), df.getColumn("v"),
             "a time value near the end of the range");
+        # a time value whose parts have different signs
+        assertEq((9223365456000000000,), map get_epoch_microseconds($1),
+            (new DataFrame::DataFrame({"v": (years(292472) - days(365),)})).getColumn("v"),
+            "a time value with parts of different signs");
         foreach date d in ((years(300000), -years(300000), years(292471) + days(1000))) {
             string label = sprintf("%y", d);
             assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (d,)}); }, (),
@@ -94,6 +98,12 @@ class DataFrameDateRangeTest inherits QUnit::Test {
         assertEq("string", str.dtypes()[0], "column hash: string");
         DataFrame::DataFrame records(({"v": far_future}, {"v": {}}));
         assertEq(("auto", far_future), (records.dtypes()[0], records.getColumn("v")[0]), "records: auto");
+        # a column that stays a date column raises the error
+        assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (far_future, first)}); },
+            (), "column hash: date");
+        assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () {
+            new DataFrame::DataFrame(({"v": far_future}, {"v": first}));
+        }, (), "records: date");
     }
 
     #! a Parquet timestamp in seconds or milliseconds outside the range raises an error when it is read, and one in

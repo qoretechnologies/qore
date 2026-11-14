@@ -43,9 +43,28 @@ DataFrame::DataFrame read = DataFrame::DataFrame::readCSV(dir + \"/out.csv\");
 out(\"csv-read\", read.getColumn(\"v\")[0]);
 out(\"csv-read-encoding\", read.getColumn(\"v\")[0].encoding());
 
-# a pivot makes column names, in the default encoding, from string cells
+# a pivot makes column names, in the default encoding, from string cells, with an int index and with a string index
 DataFrame::DataFrame long_df({\"i\": (1, 1), \"k\": (iso_cafe, \"x\"), \"n\": (1.0, 2.0)});
 out(\"pivot-name\", long_df.pivot(\"i\", \"k\", \"n\").columnNames()[1]);
+DataFrame::DataFrame string_index({\"i\": (\"a\", \"a\"), \"k\": (iso_cafe, \"x\"), \"n\": (1.0, 2.0)});
+out(\"pivot-name-string-index\", string_index.pivot(\"i\", \"k\", \"n\").columnNames()[1]);
+
+# a cell that the default encoding cannot represent (a euro sign) raises an error, and leaves no CSV file
+string euro = binary_to_string(<e282ac>, \"UTF-8\");
+DataFrame::DataFrame euro_df({\"v\": (\"a\", euro)});
+try {
+    euro_df.writeCSV(dir + \"/euro.csv\");
+    out(\"euro-csv-error\", \"none\");
+} catch (hash<ExceptionInfo> ex) {
+    out(\"euro-csv-error\", ex.err);
+}
+out(\"euro-csv-file\", is_file(dir + \"/euro.csv\") ? \"exists\" : \"none\");
+try {
+    (new DataFrame::DataFrame({\"i\": (1,), \"k\": (euro,), \"n\": (1.0,)})).pivot(\"i\", \"k\", \"n\");
+    out(\"euro-pivot-error\", \"none\");
+} catch (hash<ExceptionInfo> ex) {
+    out(\"euro-pivot-error\", ex.err);
+}
 
 # a melt makes string cells, in UTF-8, from column names
 DataFrame::DataFrame wide = long_df.pivot(\"i\", \"k\", \"n\");
@@ -86,6 +105,12 @@ out(\"melt-cell\", wide.melt((\"i\",), (wide.columnNames()[1],), \"var\", \"val\
         assertEq(utf8, results."csv-read", "a CSV file is read in the default encoding");
         assertEq(make_hex_string(binary("UTF-8")), results."csv-read-encoding", "a cell read from CSV is in UTF-8");
         assertEq(iso, results."pivot-name", "a pivot column name is in the default encoding");
+        assertEq(iso, results."pivot-name-string-index",
+            "a pivot column name is in the default encoding (string index)");
+        string error = make_hex_string(binary("DATAFRAME-ENCODING-ERROR"));
+        assertEq(error, results."euro-csv-error", "a cell that the default encoding cannot represent: CSV");
+        assertEq(make_hex_string(binary("none")), results."euro-csv-file", "no partial CSV file is left");
+        assertEq(error, results."euro-pivot-error", "a cell that the default encoding cannot represent: pivot");
         assertEq(utf8, results."melt-cell", "a melt cell made from a column name is in UTF-8");
     }
 }
