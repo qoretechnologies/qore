@@ -578,7 +578,18 @@ void qore_program_private::clearRemainingPrograms() {
         last_id = p->priv->programId;
         printd(5, "qore_program_private::clearRemainingPrograms() clearing pgm: %p pgmid: " QLLD "\n", p,
             (int64)last_id);
-        p->priv->waitForTerminationAndClear(&xsink);
+        // a thread that another runtime owns (registered with q_register_foreign_thread()) can still be running Qore
+        // code in the Program, blocked in a call that nothing will end (a daemon thread of the Python module that waits
+        // in Queue::get(), for example): waiting for it would hang the process at its normal end, and the data of the
+        // Program cannot be cleared while the thread uses it, so the Program is left as it is (deliberately, also for a thread that would end soon: the library's threads have been
+        // waited for already; the owner must not wait for the thread when it releases the Program), as it was before its
+        // data was cleared here at all
+        if (p->priv->hasOtherThreads()) {
+            printd(5, "qore_program_private::clearRemainingPrograms() not clearing pgm: %p pgmid: " QLLD
+                ": other threads are running in it\n", p, (int64)last_id);
+        } else {
+            p->priv->waitForTerminationAndClear(&xsink);
+        }
         // the owner's references keep the Program; if the Program has lost them while it was cleared, it is released
         // here as by any other last reference
         p->deref(&xsink);

@@ -2295,6 +2295,19 @@ public:
         return thread_count;
     }
 
+    //! Returns true if a thread other than the calling thread is running Qore code in this Program
+    /** Such a thread is one that the library does not control: a thread of another runtime (a daemon thread of the
+        Python module, for example) that is registered as a foreign thread and is blocked in Qore code when the
+        process ends.  Waiting for it (see waitForAllThreadsToTerminateIntern()) would never end
+    */
+    DLLLOCAL bool hasOtherThreads() {
+        int tid = q_gettid();
+        AutoLocker al(plock);
+        ptid_map_t::iterator i = tidmap.find(tid);
+        unsigned adj = (i != tidmap.end() ? i->second : 0);
+        return thread_count > adj;
+    }
+
     //! Claims parse ownership, which serializes namespace writers for this Program
     /** Parse ownership excludes other writers but not runtime readers in other threads.  Readers
         are fenced separately, by RuntimeNamespaceMergeLocker around each committed-namespace merge

@@ -84,6 +84,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             \staticProgramThreadStartTest());
         addTestCase("a sandbox time limit cannot be enforced for a call made when the library is cleaned up",
             \staticProgramSandboxLimitTest());
+        addTestCase("a thread of another runtime that is blocked in Qore code does not hold up the end of the process",
+            \staticProgramForeignThreadTest());
         set_return_value(main());
     }
 
@@ -222,6 +224,32 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options, \output), "exit(0): " + mode);
             assertRegex(TeardownMarker, output, "exit(0): the destructor ran to its end: " + mode);
             assertEq(7, runChild("exit(7);", 7, "staticpgmcode", options), "exit(7): " + mode);
+        }
+    }
+
+    #! a thread that the library did not start (a daemon thread of the Python module, for example) is blocked in Qore
+    #! code of a Program that outlives the modules when the process ends normally
+    /** qore_cleanup() cleared the data of such a Program (qore#6045) by waiting for all of its threads to end, which a
+        thread blocked in Queue::get() never does: every python3 process that ended with a blocked daemon thread hung
+        forever.  The module "staticpgmcode" starts such a thread when QORE_STATICPGM_FOREIGN_THREAD is set and returns
+        when the thread is in the call, so the state at the end of the process is the same at every run.  A hang is
+        ended by timeout(1), which gives 124 instead of the status 0 expected
+    */
+    private staticProgramForeignThreadTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        string tenv = "QORE_STATICPGM_FOREIGN_THREAD=1 timeout -s KILL 120 ";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            string output = "";
+            assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgmcode", options, \output, tenv),
+                "normal end: " + mode);
+            assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
+            assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options, NOTHING, tenv), "exit(0): " + mode);
+            assertEq(7, runChild("exit(7);", 7, "staticpgmcode", options, NOTHING, tenv), "exit(7): " + mode);
         }
     }
 

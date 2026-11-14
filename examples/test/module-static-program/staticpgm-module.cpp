@@ -38,6 +38,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <thread>
 
 static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void staticpgm_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -84,6 +85,22 @@ static ExceptionSink module_xsink;
 static std::unique_ptr<QoreProgramHelper> qph;
 
 #ifdef STATICPGM_CODE
+//! true if a thread that the library does not control is blocked in the Program (QORE_STATICPGM_FOREIGN_THREAD)
+static bool foreign_thread_started = false;
+
+//! gives up the Program of the helper above at static destruction when a foreign thread is blocked in it
+/** Declared after the helper, so it is destroyed before it.  Deleting a Program waits for its threads, and the thread
+    never ends, so the module, like the Python module (whose Program is never deleted while a daemon thread is blocked),
+    must not wait for it: the process ends with the thread blocked in the Program
+*/
+static struct ForeignThreadLeak {
+    ~ForeignThreadLeak() {
+        if (foreign_thread_started) {
+            (void)qph.release();
+        }
+    }
+} foreign_thread_leak;
+
 //! the code of the Program: a global object whose destructor runs code (closures, recursion, exceptions, containers)
 //! when the Program is deleted by a static destructor, after the main thread's thread-local objects were destroyed
 static const char* staticpgm_code = R"QORE(
@@ -161,6 +178,20 @@ class Teardown {
     }
 }
 
+# a thread of another runtime that is blocked in Qore code (QORE_STATICPGM_FOREIGN_THREAD, see below)
+our Counter foreign_ready(1);
+our Queue foreign_queue();
+sub foreign_block() {
+    foreign_ready.dec();
+    foreign_queue.get();
+}
+sub foreign_release() {
+    foreign_ready.dec();
+}
+sub foreign_wait_ready() {
+    foreign_ready.waitForZero();
+}
+
 const TeardownConst = (1, 2, 3, "a", {"b": 1});
 const TeardownConst2 = {"first": TeardownConst[4], "second": (TeardownConst, 5)};
 
@@ -189,6 +220,25 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     (*qph)->parse(code.c_str(), "staticpgmcode", &xsink, &xsink);
     if (!xsink) {
         (*qph)->run(&xsink);
+    }
+    // QORE_STATICPGM_FOREIGN_THREAD: a thread that this module does not tell the library about starts in the Program
+    // and blocks in Qore code that nothing ends, as a daemon thread of the Python module does when it waits in
+    // Queue::get() at the end of the process; the module returns when the thread is in the Qore call (the Program
+    // counts the thread), so the state at the end of the process does not depend on timing
+    if (!xsink && getenv("QORE_STATICPGM_FOREIGN_THREAD")) {
+        foreign_thread_started = true;
+        std::thread([]() {
+            // the thread never ends: the exceptions it can raise before it blocks are reported with its sink
+            ExceptionSink thread_xsink;
+            if (q_register_foreign_thread() == QFT_ERROR) {
+                // let the module init return, it fails the test with the missing thread
+                (*qph)->callFunction("foreign_release", nullptr, &thread_xsink);
+                return;
+            }
+            (*qph)->callFunction("foreign_block", nullptr, &thread_xsink);
+            thread_xsink.handleExceptions();
+        }).detach();
+        (*qph)->callFunction("foreign_wait_ready", nullptr, &xsink);
     }
 #endif
 }
