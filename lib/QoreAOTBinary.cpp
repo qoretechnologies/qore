@@ -12405,6 +12405,10 @@ void qoreAOTAppendClosureCapture(std::vector<QoreAOTClosureCaptureInfo>& capture
     captures.push_back({lv, parent_slot});
 }
 
+template <typename F>
+static bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f,
+        std::unordered_set<const QoreIRFunction*>& visited_handlers);
+
 //! Calls \a f for each parameter that a background helper in \a func owns, in instruction order
 /** These are the parameters that hold the values that a background expression takes when its thread starts
     (QoreIRLowering::lowerBackgroundLeaf()); the other parameters of a helper are local variables of the code that
@@ -12415,6 +12419,14 @@ void qoreAOTAppendClosureCapture(std::vector<QoreAOTClosureCaptureInfo>& capture
 */
 template <typename F>
 bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f) {
+    // each handler function once: they can be shared (#6087)
+    std::unordered_set<const QoreIRFunction*> visited_handlers;
+    return qoreAOTForEachBackgroundHelperParam(func, f, visited_handlers);
+}
+
+template <typename F>
+static bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f,
+        std::unordered_set<const QoreIRFunction*>& visited_handlers) {
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
@@ -12429,12 +12441,13 @@ bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f) {
                         return false;
                     }
                 }
-                if (!qoreAOTForEachBackgroundHelperParam(*bi->helper_ir, f)) {
+                if (!qoreAOTForEachBackgroundHelperParam(*bi->helper_ir, f, visited_handlers)) {
                     return false;
                 }
             } else if (inst->opcode == QoreIROpcode::OnBlockExit) {
                 const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
-                if (obei->handler_ir && !qoreAOTForEachBackgroundHelperParam(*obei->handler_ir, f)) {
+                if (obei->handler_ir && visited_handlers.insert(obei->handler_ir.get()).second
+                        && !qoreAOTForEachBackgroundHelperParam(*obei->handler_ir, f, visited_handlers)) {
                     return false;
                 }
             }

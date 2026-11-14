@@ -43,6 +43,7 @@
 #include <memory>
 #include <list>
 #include <mutex>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -522,6 +523,11 @@ struct AOTSlotMap {
         instruction evaluates for them (qore#5939)
     */
     std::unordered_set<uint64_t> ast_expr_bits;
+    //! the handler functions whose slots buildAOTSlotMap() has added, with the function whose handler each is
+    /** A handler function can be shared by several handlers (QoreIROnBlockExitInstruction::handler_ir, #6087); its
+        slots are added once for each function that it is a handler of.
+    */
+    std::set<std::pair<const void*, const void*>> handler_slot_maps_built;
 
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {

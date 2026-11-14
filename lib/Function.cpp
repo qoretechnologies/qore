@@ -6922,7 +6922,10 @@ void qore_program_private::markUserVariantsDeleted() {
 }
 
 //! Marks the helpers of the background expressions in \a func, and in its helpers and handlers, as code of \a s
-static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpecializedIR* s) {
+/** @param visited_handlers the handler functions already walked (they can be shared, #6087)
+*/
+static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpecializedIR* s,
+        std::unordered_set<const QoreIRFunction*>& visited_handlers) {
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
@@ -6931,12 +6934,12 @@ static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpe
                 const auto* bi = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get());
                 if (bi && bi->helper_ir) {
                     bi->helper_ir->specialization_owner = s;
-                    qore_mark_specialization_helpers(*bi->helper_ir, s);
+                    qore_mark_specialization_helpers(*bi->helper_ir, s, visited_handlers);
                 }
             } else if (inst->opcode == QoreIROpcode::OnBlockExit) {
                 const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
-                if (obei->handler_ir) {
-                    qore_mark_specialization_helpers(*obei->handler_ir, s);
+                if (obei->handler_ir && visited_handlers.insert(obei->handler_ir.get()).second) {
+                    qore_mark_specialization_helpers(*obei->handler_ir, s, visited_handlers);
                 }
             }
         }
@@ -8734,7 +8737,10 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     ir.release();
     QoreSpecializedIRRef rv(entry);
     // a thread that runs a background helper of the specialization takes a reference to it
-    qore_mark_specialization_helpers(*rv.get(), rv.getEntry());
+    {
+        std::unordered_set<const QoreIRFunction*> visited_handlers;
+        qore_mark_specialization_helpers(*rv.get(), rv.getEntry(), visited_handlers);
+    }
     SpecializedIRCache* registration;
     {
         std::lock_guard<std::mutex> lock(specialized_ir_mutex);
