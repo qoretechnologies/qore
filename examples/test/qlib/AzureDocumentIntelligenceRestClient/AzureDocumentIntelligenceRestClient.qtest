@@ -18,8 +18,11 @@ class FakeAzureDocIntelClient
         list<hash<auto>> calls = ();
         list<string> poll_sequence = ("running", "running", "succeeded");
         int poll_index = 0;
-        int post_delay;
-        int get_delay;
+        #! the time that a request takes on the fake clock, in milliseconds
+        int post_delay = 0;
+        int get_delay = 0;
+        #! the fake clock that the client measures its deadline with; only the requests advance it
+        date clock_time = 2026-01-01T00:00:00Z;
         *string retry_after;
         list<int> deadlines = ();
     }
@@ -28,10 +31,11 @@ class FakeAzureDocIntelClient
             {"url": "https://my-docint.cognitiveservices.azure.com",
              "apikey": "key"}) {
         setSleeper(nothing sub (timeout to) {});
+        setClock(date sub () { return clock_time; });
     }
 
     hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
-        if (post_delay) { usleep(post_delay * 1000); }
+        clock_time += milliseconds(post_delay);
         push calls, {"method": "POST", "path": path, "body": body};
         return <RestClient::RestResponseInfo>{
             "headers": {
@@ -43,7 +47,7 @@ class FakeAzureDocIntelClient
     }
 
     hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
-        if (get_delay) { usleep(get_delay * 1000); }
+        clock_time += milliseconds(get_delay);
         push calls, {"method": "GET", "path": path};
         string status = poll_sequence[poll_index];
         if (poll_index < poll_sequence.size() - 1) {
@@ -165,19 +169,36 @@ public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
         }
     }
 
+    #! a submission or a fetch that ends after the deadline fails the analysis
+    /** The requests take 40 ms of the fake clock, so a request that starts within the deadline of 20 ms ends after
+        it, whatever time the test itself takes (issue #6068)
+    */
     private deadlineTest() {
         foreach string phase in ("post", "get") {
             FakeAzureDocIntelClient fake();
             fake.poll_sequence = ("succeeded",);
-            if (phase == "post") { fake.post_delay = 40; } else { fake.get_delay = 40; }
-            try {
-                fake.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/a"}, {"analysis_timeout": 20ms});
-                fail("late success exceeded the deadline");
-            } catch (hash<ExceptionInfo> ex) {
-                assertTrue(ex.arg.poll_url.val());
-                if (phase == "get") { assertEq("succeeded", ex.arg.last_status.status); }
+            if (phase == "post") {
+                fake.post_delay = 40;
+            } else {
+                fake.get_delay = 40;
             }
-            foreach int deadline in (fake.deadlines) { assertTrue(deadline > 0 && deadline <= 20); }
+            try {
+                fake.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/a"},
+                    {"analysis_timeout": 20ms});
+                fail(phase + ": late success exceeded the deadline");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("AZURE-DOCUMENT-INTELLIGENCE-ERROR", ex.err, phase);
+                assertTrue(ex.arg.poll_url.val(), phase);
+                if (phase == "get") {
+                    # the fetch started within the deadline and ended after it
+                    assertEq("succeeded", ex.arg.last_status.status, phase);
+                } else {
+                    # no fetch is started after the deadline
+                    assertEq(NOTHING, ex.arg.last_status, phase);
+                }
+            }
+            # each request is given the time left of the deadline
+            assertEq(phase == "get" ? (20, 20) : (20,), fake.deadlines, phase);
         }
     }
 
@@ -187,8 +208,8 @@ public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
         list<int> waits = ();
         fake.setSleeper(nothing sub (timeout delay) { waits += int(delay); });
         fake.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/a"}, {"analysis_timeout": 1s});
-        assertEq(3, waits.size());
-        foreach int delay in (waits) { assertTrue(delay > 0 && delay <= 1000); }
+        # the fake clock does not advance, so each wait is bounded by the whole deadline
+        assertEq((1000, 1000, 1000), waits);
         assertEq(0, AzureDocumentIntelligenceRestClientBase::retryAfter("invalid"));
         assertEq(2000, AzureDocumentIntelligenceRestClientBase::retryAfter("2"));
     }
