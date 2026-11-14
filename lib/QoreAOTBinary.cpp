@@ -4599,7 +4599,7 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
                     error = "compressed section has an invalid zero decompressed size";
                     return false;
                 }
-                if (sec.size > 100 * 1024 * 1024) {
+                if (sec.size > QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) {
                     error = "decompressed section exceeds maximum allowed size";
                     return false;
                 }
@@ -4613,7 +4613,7 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         }
         if (header.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
             sectioned_uncompressed_size += sec.size;
-            if (sectioned_uncompressed_size > 100 * 1024 * 1024) {
+            if (sectioned_uncompressed_size > QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) {
                 error = "decompressed sectioned metadata exceeds maximum allowed size";
                 return false;
             }
@@ -14484,6 +14484,9 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     if (has_debug_ir) {
         debug_ir_patches.reserve(funcs.size());
     }
+    // the size of the slot map entry and debug IR of each function
+    std::vector<size_t> func_metadata_sizes;
+    func_metadata_sizes.reserve(funcs.size());
 
     for (auto& func : funcs) {
         AOTConstantReverseMap filtered_crm;
@@ -14795,6 +14798,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         // Patch the entry size field
         uint32_t entry_end_pos = writer.position();
         writer.patchU32(entry_size_pos, entry_end_pos - entry_size_pos - 4);
+        func_metadata_sizes.push_back(entry_end_pos - entry_size_pos);
         traceEntryOffset("entry end");
     }
 
@@ -14853,8 +14857,16 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             }
             writer.patchU32(debug_ir_patches[i].offset_pos, payload_offset);
             writer.patchU32(debug_ir_patches[i].size_pos, writer.position() - payload_start);
+            func_metadata_sizes[i] += writer.position() - payload_start;
         }
         writer.endSection(debug_sec_idx);
+    }
+
+    for (size_t i = 0; i < funcs.size(); ++i) {
+        if (func_metadata_sizes[i] > writer.largest_func_metadata_size) {
+            writer.largest_func_metadata_size = func_metadata_sizes[i];
+            writer.largest_func_metadata_name = funcs[i].name;
+        }
     }
 
     return serializeCallRelocations(writer, funcs, error);
@@ -22034,7 +22046,7 @@ bool decompressMetadata(const uint8_t* input, size_t input_len,
     }
 
     // Sanity check: decompressed size shouldn't be larger than a reasonable limit
-    const size_t MAX_DECOMPRESSED = 100 * 1024 * 1024;  // 100 MB limit
+    const size_t MAX_DECOMPRESSED = QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE;
     if (orig_size > MAX_DECOMPRESSED) {
         error = "decompressed metadata size " + std::to_string(orig_size) +
                 " exceeds maximum allowed (" + std::to_string(MAX_DECOMPRESSED) + " bytes)";
@@ -22081,7 +22093,7 @@ bool decompressMetadataZstd(const uint8_t* input, size_t input_len,
         return true;
     }
 
-    static constexpr size_t MAX_DECOMPRESSED = 100 * 1024 * 1024;
+    static constexpr size_t MAX_DECOMPRESSED = QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE;
     if (orig_size > MAX_DECOMPRESSED) {
         error = "decompressed metadata size " + std::to_string(orig_size)
             + " exceeds maximum allowed (" + std::to_string(MAX_DECOMPRESSED) + " bytes)";
