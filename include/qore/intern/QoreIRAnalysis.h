@@ -37,6 +37,14 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
 //! @param visitor callback invoked once per successor
 void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVisitor& visitor);
 
+//! Returns the returns of the try block of the try statement whose catch block an exception at an instruction whose
+//! exception target is \a target reaches first, if any (QoreIRFunction::catch_interrupted_returns, #6074)
+/** Searches the exception path from \a target, breadth first, for the first CatchException; nullptr if there is none
+    (the exception leaves the function), an empty list if its try block has no interrupted returns.
+*/
+DLLLOCAL const std::vector<uint32_t>* qore_ir_exception_catch_returns(const QoreIRFunction& func,
+        const QoreIRBasicBlock* target);
+
 //! Returns true for a release that only runs once a functional operator's loop has ended on an exception
 /** A ReleaseOwnedTemp of the exception cleanup of a functional operator (QoreIRInstruction::exception_cleanup_release):
     a value that it releases and that a Phi or a container took over is released there through its new owner, so the

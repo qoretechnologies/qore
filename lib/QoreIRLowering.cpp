@@ -1752,6 +1752,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // no value, releasing it at once (#5992)
             releaseReplacedReturn(stmt->loc);
             pending_return_restore.set(QoreIRValue());
+            // in a handler run out of line, the return replaces the return value of the function that the handler
+            // runs for with no value (#6074)
+            if (handler_body) {
+                emitHandlerReturn(QoreIRValue(), stmt->loc);
+            }
             // Emit block cleanups for all active scopes before returning.
             // Include lvar cleanup here so object destructors run before the
             // source-level caller resumes.  The function wrapper still pops
@@ -1760,7 +1765,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Also handles RefForeach cleanup: record the current element, then write the
             // referenced list back with its unvisited elements unchanged, as break does.
             // the catch blocks that the return leaves are closed in their places among the cleanups (qore#6017)
-            if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES)) {
+            bool cleanups_ok = emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES);
+            handover_try_active = false;
+            if (!cleanups_ok) {
                 return false;
             }
             // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a
@@ -1871,6 +1878,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // at the end of the return statement (#5992)
         releaseReplacedReturn(stmt->loc);
         finish_replaced_release();
+        // in a handler run out of line, the value replaces the return value of the function that the handler runs
+        // for when the statement executes, before the handler's own handlers run, as the AST interpreter's handler
+        // has a reference to it (#6074)
+        if (handler_body) {
+            emitHandlerReturn(lowered, stmt->loc);
+        }
         if (ret_temp_scope) {
             QoreIRInstruction* keep = builder.createDiscardTempsKeep(lowered, stmt->loc);
             if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
@@ -1902,7 +1915,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // its unvisited elements unchanged); the catch blocks that the return leaves are closed in their places
         // among them, so the handlers of the blocks enclosing a catch block run after it is closed (qore#6017)
         pending_return_restore.set(lowered, ret_base);
-        if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES)) {
+        if (handover_try_active) {
+            // the value that the outermost try statement of the handler hands over when it ends (see emitHandlerReturn())
+            handover_try_value = lowered;
+        }
+        bool cleanups_ok = emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES);
+        handover_try_active = false;
+        if (!cleanups_ok) {
             return false;
         }
         // the Return is emitted even when a handler that the cleanups lowered inline ended the block (a throw or a
@@ -4977,11 +4996,32 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             }
             try_replaced_depth = 0;
         }
+        // a return in a try statement of a handler run out of line leaves the outermost try statement of the handler
+        // here: its value is handed to the function that the handler runs for, as the AST interpreter's try statement
+        // gives it to the enclosing block when it ends, only once the try statement has ended without an exception
+        // (see above, #6074)
+        if (handover_try_active && entry.try_end_depth == 1 && !blockHasTerminator(builder.getBlock())) {
+            builder.createCheckException(entry.loc)->exception_target = getCurrentExceptionTarget();
+            builder.createHandlerReturn(handover_try_value, entry.loc)->exception_target = getCurrentExceptionTarget();
+            handover_try_active = false;
+        }
     }
     if (unwind_temp_depth != SIZE_MAX && unwind_temp_depth < unwound_temp_depth) {
         builder.createUnwindTemps(unwound_temp_depth, unwind_temp_depth, unwind_loc);
     }
     return true;
+}
+
+// documented in QoreIRLowering.h
+void QoreIRLowering::emitHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    if (!try_depth) {
+        builder.createHandlerReturn(value, loc)->exception_target = getCurrentExceptionTarget();
+        return;
+    }
+    // in a try statement of the handler: the value is handed over when the outermost one ends (see
+    // emitBlockCleanups())
+    handover_try_active = true;
+    handover_try_value = value;
 }
 
 bool QoreIRLowering::shouldRunHandler(const InlineHandler& handler, bool is_error) {

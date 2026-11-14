@@ -501,6 +501,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::ToFloatChecked, "ToFloatChecked"                 , false, true , false,  1, "float() of a value that the builtin may not accept", false, true , "FunctionCallNode", true , false, true , false, false }, // 429
     { QoreIROpcode::IteratorCreateSource, "IteratorCreateSource"           , false, false, false,  4, "Create the iterator of a foreach statement over keys, a slice or a list of indices, as the AST interpreter iterates it", false, true , "ParseNode", true , false, true , false, false }, // 430
     { QoreIROpcode::CheckCallTarget, "CheckCallTarget"                , false, false, false, -1, "Check the target of a call before its arguments are evaluated", true , true , "QoreDotEvalOperatorNode", false, false, false, false, false }, // 431
+    { QoreIROpcode::HandlerReturn, "HandlerReturn"                  , false, false, false, OPCODE_MIN_OPERANDS(0), "Hand the value of a return in a handler run out of line to its function", true , true , "ReturnStatement", false, false, false, false, false }, // 432
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row

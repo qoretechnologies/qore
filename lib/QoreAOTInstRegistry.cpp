@@ -530,6 +530,7 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::ToFloatChecked, {G::Base, G::Expr}, true},
     {O::IteratorCreateSource, {G::IteratorCreate}},
     {O::CheckCallTarget, {G::Expr}},
+    {O::HandlerReturn, {G::Base}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {

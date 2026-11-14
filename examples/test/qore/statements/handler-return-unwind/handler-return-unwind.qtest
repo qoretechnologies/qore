@@ -22,8 +22,13 @@
     it ended, before the interrupted value and the locals (#6074, item 1), and the value of the interrupted return of a
     function whose blocks keep their locals for the unwind was released after the locals, also with an exception
     pending (#6074, item 2).  A handler's value replaced by a later handler that ends in a thread_exit leaked in the IR
-    interpreter (#6073).  HandlerReturnUnwind.q gives the output of the AST interpreter in every execution mode and
-    compiled with qcc, except for the cases of KnownDiffs, which are pinned until they are fixed.
+    interpreter (#6073).  A handler run out of line hands the value of each of its return statements to its function when the
+    statement executes (QoreIROpcode::HandlerReturn): before the handler's own handlers and the block's later handlers
+    run, a return in a handler of a handler also releases the function's interrupted return, a return in a try
+    statement of the handler replaces the value when the try statement ends, a return without a value replaces it
+    with no value, and with a try statement of the function catching the exception, it replaces the value of the try
+    block's return (the review cases k1-k7).  HandlerReturnUnwind.q gives the output of the AST interpreter in every
+    execution mode and compiled with qcc.
 */
 class HandlerReturnUnwindTest inherits QUnit::Test {
     public {
@@ -66,26 +71,18 @@ k6[0]: [\"out\", \"in\", \"~k6-body\", \"~k6-q\", \"~k6-l\", \"~k6-hin\", \"ex:K
 k6[1]: [\"out\", \"in\", \"~k6-body\", \"~k6-q\", \"~k6-l\", \"~k6-hin\", \"ex:K6\"]
 k7[0]: [\"x\", \"~k7-bodyin\", \"~k7-m\", \"~k7-h\", \"caught\", \"~k7-l\", \"rv:k7-body\", \"~k7-body\"]
 k7[1]: [\"x\", \"~k7-bodyin\", \"~k7-m\", \"~k7-h\", \"caught\", \"~k7-l\", \"rv:k7-body\", \"~k7-body\"]
+rn1[0]: [\"te\", \"x\", \"~rn1-body\", \"~rn1-l\"]
+rn1[1]: [\"te\", \"x\", \"~rn1-body\", \"~rn1-l\"]
+rn2[0]: [\"thr\", \"x\", \"~rn2-body\", \"~rn2-l\", \"ex:RN2\"]
+rn2[1]: [\"thr\", \"x\", \"~rn2-body\", \"~rn2-l\", \"ex:RN2\"]
+rn3[0]: [\"thr\", \"y\", \"~rn3-body\", \"x\", \"~rn3-h\", \"~rn3-l\", \"ex:RN3\"]
+rn3[1]: [\"thr\", \"y\", \"~rn3-body\", \"x\", \"~rn3-h\", \"~rn3-l\", \"ex:RN3\"]
+tr1[0]: [\"te\", \"x\", \"~tr1-t\", \"~tr1-body\", \"~tr1-l\", \"~tr1-h\"]
+tr1[1]: [\"te\", \"x\", \"~tr1-t\", \"~tr1-body\", \"~tr1-l\", \"~tr1-h\"]
+tr2[0]: [\"thr\", \"x\", \"~tr2-body\", \"~tr2-l\", \"~tr2-h\", \"ex:TR2\"]
+tr2[1]: [\"thr\", \"x\", \"~tr2-body\", \"~tr2-l\", \"~tr2-h\", \"ex:TR2\"]
 ";
 
-        #! the lines of the output (\c "<case>[<call>]") that are known to differ from the AST interpreter's
-        /** The cases of the review of #6074 (k1-k7 in HandlerReturnUnwind.q), pinned until they are fixed: each line
-            listed must still differ from the AST interpreter's output, and every other line must be the same; a fix
-            makes the check fail until its lines are removed here.  The first call of a function runs as IR in jit and
-            tiered mode and the second one as native code (see ExecModeHarness).
-            - k1, k2: native code releases the replaced value only after the block's remaining handlers have run
-            - k3, k4: a handler's return replaces the value only after the handler's own handlers have run
-            - k5, k6: the return of a handler of a handler does not release the function's interrupted return (IR)
-            - k7: a try statement of the function that catches the exception releases the replaced value only at the
-              catch (IR), or after the try block's locals (native code, since #5992's b459b78be9)
-        */
-        const KnownDiffs = {
-            "ir": ("k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k5[1]", "k6[0]", "k6[1]", "k7[0]", "k7[1]"),
-            "jit": ("k1[1]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k6[0]", "k7[0]", "k7[1]"),
-            "tiered": ("k1[1]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k6[0]", "k7[0]", "k7[1]"),
-            "qcc -O0": ("k1[0]", "k1[1]", "k2[0]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k7[0]", "k7[1]"),
-            "qcc -O3": ("k1[0]", "k1[1]", "k2[0]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k7[0]", "k7[1]"),
-        };
 
         #! the optimization levels of the AOT compiles
         const OptLevels = (0, 3);
@@ -129,19 +126,13 @@ k7[1]: [\"x\", \"~k7-bodyin\", \"~k7-m\", \"~k7-h\", \"caught\", \"~k7-l\", \"rv
         checkOutput(sprintf("qcc -O%d", opt), output);
     }
 
-    #! Checks the output of a run against the AST interpreter's, line by line, with the lines of KnownDiffs differing
+    #! Checks the output of a run against the AST interpreter's, line by line
     private checkOutput(string mode, string output) {
         hash<string, string> expected = parseOutput(Expected);
         hash<string, string> actual = parseOutput(output);
         assertEq(keys expected, keys actual, mode + ": the cases of the output");
-        hash<string, bool> known = map {$1: True}, KnownDiffs{mode} ?? ();
         foreach hash<auto> i in (expected.pairIterator()) {
-            if (known{i.key}) {
-                assertNeq(i.value, actual{i.key}, sprintf("%s: %s is known to differ from the AST interpreter; if it "
-                    "no longer does, remove it from KnownDiffs", mode, i.key));
-            } else {
-                assertEq(i.value, actual{i.key}, sprintf("%s: %s as with the AST interpreter", mode, i.key));
-            }
+            assertEq(i.value, actual{i.key}, sprintf("%s: %s as with the AST interpreter", mode, i.key));
         }
     }
 

@@ -85,8 +85,8 @@ auto sub ex3() {
     throw "EX3";
 }
 
-# Known differences from the AST interpreter, pinned by handler-return-unwind.qtest (KnownDiffs) until they are fixed
-# finding 1: native code releases the replaced value only after the block's remaining handlers have run
+# the cases of the review of #6074
+# a handler's return replaces the value when it executes, before the block's remaining handlers run
 auto sub k1() {
     T l("k1-l");
     on_exit { lg += "y"; }
@@ -101,7 +101,7 @@ auto sub k2() {
     on_exit { lg += "thr"; throw "K2"; }
     return new T("k2-body");
 }
-# finding 2: a handler's return replaces the value only after the handler's own handlers have run
+# a handler's return replaces the value when it executes, before the handler's own handlers run
 auto sub k3() {
     T l("k3-l");
     on_exit {
@@ -122,7 +122,7 @@ auto sub k4() {
     on_exit { lg += "thr"; throw "K4"; }
     return new T("k4-body");
 }
-# finding 3: the return of a handler of a handler does not release the function's interrupted return (IR)
+# the return of a handler of a handler releases the function's interrupted return
 auto sub k5() {
     T l("k5-l");
     on_exit {
@@ -143,8 +143,8 @@ auto sub k6() {
     }
     return new T("k6-body");
 }
-# finding 4: with a try statement of the function catching the exception, the replaced value is released at the catch
-# (IR)
+# with a try statement of the function catching the exception, the handler's return replaces the value of the try
+# block's return when it executes
 auto sub k7() {
     T l("k7-l");
     try {
@@ -156,6 +156,54 @@ auto sub k7() {
         lg += "caught";
     }
     return new T("k7-body");
+}
+
+
+# a return without a value in a handler replaces the value with no value (#6074)
+auto sub rn1() {
+    T l("rn1-l");
+    on_exit { lg += "x"; return; }
+    on_exit { lg += "te"; thread_exit; }
+    return new T("rn1-body");
+}
+auto sub rn2() {
+    T l("rn2-l");
+    on_exit { lg += "x"; return; }
+    on_exit { lg += "thr"; throw "RN2"; }
+    return new T("rn2-body");
+}
+auto sub rn3() {
+    T l("rn3-l");
+    on_exit { lg += "x"; return; }
+    on_exit { lg += "y"; return new T("rn3-h"); }
+    on_exit { lg += "thr"; throw "RN3"; }
+    return new T("rn3-body");
+}
+# a return in a try statement of a handler replaces the value when the try statement ends (#6074)
+auto sub tr1() {
+    T l("tr1-l");
+    on_exit {
+        try {
+            T t("tr1-t");
+            lg += "x";
+            return new T("tr1-h");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+    on_exit { lg += "te"; thread_exit; }
+    return new T("tr1-body");
+}
+auto sub tr2() {
+    T l("tr2-l");
+    on_exit {
+        try {
+            lg += "x";
+            return new T("tr2-h");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+    on_exit { lg += "thr"; throw "TR2"; }
+    return new T("tr2-body");
 }
 
 # runs the function twice in a thread of its own, which a thread_exit ends
@@ -195,3 +243,8 @@ show("k4", \k4());
 show("k5", \k5());
 show("k6", \k6());
 show("k7", \k7());
+show("rn1", \rn1());
+show("rn2", \rn2());
+show("rn3", \rn3());
+show("tr1", \tr1());
+show("tr2", \tr2());
