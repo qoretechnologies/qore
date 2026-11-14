@@ -724,6 +724,13 @@
     relative date raise \c INVALID-DATE for a result that a date cannot hold, and a relative date literal out of range
     (ex: \c 2147483648h) is a parse error; the result wrapped to another, often negative, duration (issue #6103).
 
+    @par Multiplying a Relative Date Gives a Relative Date
+    The @ref multiplication_operator "* operator" and \c *= with a @ref relative_dates "relative date" and a number
+    give a relative date with each of its components multiplied (ex: <tt>months(1) * 2</tt> is 2 months; a float
+    factor carries fractions as \c date("P...") does); they gave an int, and \c *= assigned it.  An \c int,
+    \c float or \c number lvalue multiplied by a date with \c *= raises an exception at run time, as it cannot hold
+    the result (issue #6109).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Parse Errors
     The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the
