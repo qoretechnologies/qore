@@ -468,7 +468,7 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      arguments (AOTExprKind::CALLREF_CALL_NAMED, 128: the CALLREF_CALL layout followed by a name string ref per
 //!      argument; its node form EN_CALLREF_CALL_NAMED, 27), so that the names are bound when the call is made (M4
 //!      phase 3); the earlier formats have no such expression, and a reader of them refuses the kind.
-//! v37: the name of a capture of a closure that is the default argument of a function, and whose variable is a
+//! v36: the name of a capture of a closure that is the default argument of a function, and whose variable is a
 //!      top-level local of the Program, is "top:<index>:<name>" (the index in the Program's top-level local list), as
 //!      the reference of a default argument expression to one is (v34); the reader binds the capture to that variable
 //!      and reads the closure again when the Program has its top-level locals.  An earlier reader takes the text as
@@ -506,8 +506,8 @@ constexpr uint16_t QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION = 34;
 constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
 //! First format version with named call reference calls (see v35 above).
 constexpr uint16_t QORE_AOT_NAMED_CALLREF_VERSION = 35;
-//! First format version whose closure captures can name a top-level local by its index (see v37 above).
-constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 37;
+//! First format version whose closure captures can name a top-level local by its index (see v36 above).
+constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
 constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION;
