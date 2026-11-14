@@ -3826,8 +3826,16 @@ static QoreAOTContext* buildContextFromSlotMap(
             // of the function (qore#6121)
             if (!initially_unsupported && has_unsupported && slot_read_error.empty()
                     && !aot_expr_read_error.empty()) {
-                slot_read_error = "expression slot " + std::to_string(slot) + " ("
-                    + (kind_name ? kind_name : "UNKNOWN") + "): " + aot_expr_read_error;
+                // a description of the failure recorded for this slot names the part of the expression that could
+                // not be read; a description of another slot is stale
+                std::string prefix = "expr slot " + std::to_string(slot) + " (";
+                if (!aot_slot_resolve_error.compare(0, prefix.size(), prefix)) {
+                    // "expr slot N (KIND): ..." -> "expression slot N (KIND): ..."
+                    slot_read_error = "expression" + aot_slot_resolve_error.substr(4);
+                } else {
+                    slot_read_error = "expression slot " + std::to_string(slot) + " ("
+                        + (kind_name ? kind_name : "UNKNOWN") + "): " + aot_expr_read_error;
+                }
             }
         }
     };
@@ -5042,11 +5050,21 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (type_path && *type_path) {
                         QoreAOTTypeResolver type_resolver(pgm);
                         std::string type_error;
-                        result_type_info = type_resolver.resolve(type_path, type_error);
+                        // the type can name the type parameters of the generic function (qore#6121)
+                        result_type_info = type_resolver.resolveForSignature(type_path, type_error,
+                            qore_aot_get_type_param_owner());
                         if (!result_type_info || !type_error.empty()) {
                             if (trace_slot_reg) {
                                 fprintf(stderr, "[aot-slot-reg] '%s': HASH_DEREF expr[%d] cannot resolve "
                                     "result type '%s': %s\n", name, i, type_path, type_error.c_str());
+                            }
+                            // the operands are not read, so the reader is at an unknown position in the entry
+                            if (slot_read_error.empty()) {
+                                slot_read_error = "expression slot " + std::to_string(i) + " (HASH_DEREF): "
+                                    "cannot resolve hash-dereference result type '" + type_path + "'";
+                                if (!type_error.empty()) {
+                                    slot_read_error += ": " + type_error;
+                                }
                             }
                             has_unsupported = true;
                             continue;
