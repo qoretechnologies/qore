@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-dense-rows.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameDenseRowsTest
+
+#! The rows selected from a column with dense buffer storage keep every value of the column (qore#6092)
+class DataFrameDenseRowsTest inherits QUnit::Test {
+    constructor() : Test("DataFrameDenseRowsTest", "1.0", \ARGV) {
+        addTestCase("decimal scale", \decimalScaleTest());
+        set_return_value(main());
+    }
+
+    #! the selected rows of a decimal column keep its precision and scale, whatever value comes first
+    decimalScaleTest() {
+        list<auto> cells = (1.25n, -1n, 2.5n, NOTHING);
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": range(cells.size()),
+            "v": cells,
+        }, {
+            "v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2, "nullable": True}},
+        }));
+        checkDecimal(df.takeRows((1, 0)), (-1n, 1.25n), "takeRows() with an int first");
+        checkDecimal(df.takeRows((3, 1, 0, 2)), (NOTHING, -1n, 1.25n, 2.5n), "takeRows() with a null first");
+        checkDecimal(df.filter("id", "in", (1, 0, 3)), (1.25n, -1n, NOTHING), "filter()");
+        checkDecimal(df.filter("id", ">", 0), (-1n, 2.5n, NOTHING), "filter() with an int first");
+        checkDecimal(df.sortBy(("id",), (False,)), (NOTHING, 2.5n, -1n, 1.25n), "sortBy()");
+    }
+
+    private checkDecimal(DataFrame::DataFrame df, list<auto> expected, string label) {
+        assertEq(expected, df.getColumn("v"), label + ": values");
+        hash<auto> schema = df.toColumnarResult().schemaV2()[1];
+        assertEq(("decimal128", 10, 2), (schema.kind, schema.precision, schema.scale), label + ": decimal type");
+    }
+}

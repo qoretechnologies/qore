@@ -1726,8 +1726,12 @@ QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
         if (identity_selection) {
             new_data = src_col.data;
         } else if (src_col.data->hasDenseBuffer()) {
+            // the buffer of the selected rows has the decimal precision and scale of the source buffer, so that
+            // each decimal value of the source can be stored in it
             ReferenceHolder<QoreBufferNode> buffer(new QoreBufferNode(src_col.data->dense_buffer_type,
-                src_col.data->dense_buffer->hasNullableElements(), static_cast<size_t>(count)), xsink);
+                src_col.data->dense_buffer->hasNullableElements(), static_cast<size_t>(count),
+                src_col.data->dense_buffer->getDecimalPrecision(), src_col.data->dense_buffer->getDecimalScale()),
+                xsink);
             for (int64_t i = 0; i < count; ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
                     delete df;
