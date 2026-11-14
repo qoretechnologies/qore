@@ -1767,9 +1767,18 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // removes the checks whose value facts prove the value is accepted as it is.  A return type with type
         // parameters is checked by the caller, which knows the arguments that instantiate it.
         const QoreTypeInfo* return_type = builder.getFunction()->return_type_info;
-        if (QoreTypeInfo::hasType(return_type) && return_type != anyTypeInfo
-                && !qore_type_contains_type_parameter(return_type)
-                && returnCleanupObservesError(qore_ir_get_returned_local(expr))) {
+        bool check_return = QoreTypeInfo::hasType(return_type) && return_type != anyTypeInfo
+            && !qore_type_contains_type_parameter(return_type)
+            && returnCleanupObservesError(qore_ir_get_returned_local(expr));
+        // a value that the return type rejects is the value of the return that the exception interrupts, which the
+        // AST interpreter releases after the locals of the blocks that the exception leaves: a value that is not a
+        // temp of the statement can be borrowed from one of them - a local variable's value - so the return takes its
+        // reference before the check, not after it, and native code keeps it in its cleanup slot until then (#5996)
+        bool ref_before_check = check_return && !ret_temp_scope;
+        if (ref_before_check) {
+            lowered = builder.createRefSelf(lowered, stmt->loc)->result;
+        }
+        if (check_return) {
             builder.createCheckReturnValue(lowered, return_type, getCurrentExceptionTarget(), stmt->loc);
         }
         if (ret_temp_scope) {
@@ -1794,7 +1803,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 }
             }
         }
-        if (cleanup_before_return) {
+        if (cleanup_before_return && !ref_before_check) {
             lowered = builder.createRefSelf(lowered, stmt->loc)->result;
         }
         // Emit block cleanups for all active scopes (fires on_exit handlers,
