@@ -3299,6 +3299,30 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
     }
 }
 
+//! Returns true if a handler of \a func, run out of line, can return a value (see handler_return_hold, #5992)
+static bool qore_ir_handlers_return_value(const QoreIRFunction& func) {
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode != QoreIROpcode::OnBlockExit) {
+                continue;
+            }
+            const auto* obe = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+            if (!obe->handler_ir) {
+                continue;
+            }
+            for (const auto& hblock : obe->handler_ir->blocks) {
+                for (const auto& hinst : hblock->instructions) {
+                    if (hinst->opcode == QoreIROpcode::Return
+                            && static_cast<const QoreIRReturnInstruction*>(hinst.get())->has_value) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 // documented in QoreIRToLLVM.h
 llvm::CallInst* QoreIRToLLVM::emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count) {
     if (!handler_return_hold) {
@@ -3364,12 +3388,6 @@ void QoreIRToLLVM::finalizeCatchReturnReleases(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     for (auto& [block, ids] : catch_return_release_blocks) {
         builder->SetInsertPoint(block, block->getFirstInsertionPt());
-        // the value of a handler's return that replaced the interrupted return (#5992)
-        if (handler_return_hold) {
-            llvm::Value* val = builder->CreateLoad(i64_type, handler_return_hold);
-            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), handler_return_hold);
-            builder->CreateCall(helper, {val, xsink_arg});
-        }
         // the values of the returns, and those that they hold a reference of their own to
         std::vector<uint32_t> release;
         for (uint32_t rid : *ids) {
@@ -13577,7 +13595,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // assigned.
         if (has_on_block_exit_handlers) {
             getOrCreateLocalReloadEpoch(llvm_func);
-            // see handler_return_hold (#5992)
+        }
+        // see handler_return_hold (#5992): only a function with a handler that can return a value has it
+        if (has_on_block_exit_handlers && qore_ir_handlers_return_value(func)) {
             llvm::IRBuilder<> hold_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
             handler_return_hold = hold_builder.CreateAlloca(i64_type, nullptr, "handler_return_hold");
             hold_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), handler_return_hold);
@@ -22473,6 +22493,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Catch exception ===
         case QoreIROpcode::CatchException: {
+            // the value that a handler run while the exception was pending returned (see handler_return_hold) is the
+            // value of the return that the exception interrupted, which the try statement releases first (qore#5941,
+            // #5992)
+            if (handler_return_hold) {
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                llvm::Value* held = builder->CreateLoad(i64_type, handler_return_hold);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), handler_return_hold);
+                builder->CreateCall(decref_fn, {held, xsink_arg});
+            }
             // the value of a return of the try block that the exception (or a thread_exit) interrupted is released
             // first, as TryStatement::execImpl() does (qore#5941); the block is filled once the try block is lowered
             if (current_ir_func) {

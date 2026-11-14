@@ -190,6 +190,17 @@ auto sub xr3() {
     }
     return "xr3-after";
 }
+# a try statement catches the exception after the handler's return
+auto sub xr4() {
+    for (int i = 0; i < 2; ++i) {
+        try {
+            { on_error { return new T("xr4-h" + i); } throw "E4"; }
+        } catch (hash<ExceptionInfo> ex) {
+            log += "caught" + i;
+        }
+    }
+    return "xr4-after";
+}
 # in a method and a closure
 class C {
     auto m() {
@@ -246,5 +257,6 @@ show("tr7", \tr7());
 show("xr1", \xr1());
 show("xr2", \xr2());
 show("xr3", \xr3());
+show("xr4", \xr4());
 show("m", auto sub () { C c(); return c.m(); });
 show("cl", cl);
