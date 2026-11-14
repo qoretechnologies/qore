@@ -65,7 +65,8 @@ static ColumnType finishRecordColumnType(const RecordColumnInference& inf) {
     if (inf.has_string) {
         return ColumnType::STRING;
     }
-    if (inf.has_float) {
+    // a float with a bool or a date makes a string column, as the list constructor infers it (qore#6097)
+    if (inf.has_float && !inf.has_bool && !inf.has_date) {
         return ColumnType::FLOAT64;
     }
     if (inf.has_int && !inf.has_bool && !inf.has_date) {
@@ -139,8 +140,31 @@ static bool fastRecordValueCompatible(ColumnType type, QoreValue value) {
             return value.getType() == NT_FLOAT || value.getType() == NT_NUMBER || value.getType() == NT_INT;
         case ColumnType::INT64:
             return value.getType() == NT_INT;
+        // a string column stores a scalar value as its string form; any other value (a list, a hash, a char) makes
+        // a column that holds any value, as mergeRecordColumnType() infers it (qore#6097)
         case ColumnType::STRING:
-            return true;
+            // the scalar values are told with no call into the library, as QoreValue::getType() costs more than
+            // storing a short string: a value held in the value itself (a short string, an int, a float, a bool),
+            // and a value in a node
+            if (value.isPointer()) {
+                qore_type_t t = value.getPtr()->getType();
+                return t == NT_STRING || t == NT_NUMBER || t == NT_DATE || t == NT_INT || t == NT_FLOAT
+                    || t == NT_BOOLEAN;
+            }
+            if (value.isShortString() || value.isInt() || value.isFloat() || value.isBool()) {
+                return true;
+            }
+            switch (value.getType()) {
+                case NT_STRING:
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_BOOLEAN:
+                case NT_DATE:
+                    return true;
+                default:
+                    return false;
+            }
         case ColumnType::BOOL:
             return value.getType() == NT_BOOLEAN;
         case ColumnType::DATE:
@@ -180,13 +204,16 @@ static void initializeRecordColumnData(ColumnData& data, ColumnType type, int64_
     }
 }
 
-static void storeRecordValue(ColumnData& data, int64_t i, QoreValue value) {
+//! stores a value of a record in a cell
+/** @return 0 for success, -1 if an exception was raised
+*/
+static int storeRecordValue(ColumnData& data, int64_t i, QoreValue value, ExceptionSink* xsink) {
     if (value.isNullOrNothing()) {
         data.null_mask[i] = 1;
         if (data.type == ColumnType::FLOAT64) {
             data.float_data(i) = std::numeric_limits<double>::quiet_NaN();
         }
-        return;
+        return 0;
     }
 
     switch (data.type) {
@@ -196,20 +223,16 @@ static void storeRecordValue(ColumnData& data, int64_t i, QoreValue value) {
         case ColumnType::INT64:
             data.int_data[i] = value.getAsBigInt();
             break;
-        case ColumnType::STRING: {
-            QoreStringValueHelper str(value);
-            data.str_data[i] = dataFrameStdString(*str);
-            break;
-        }
+        case ColumnType::STRING:
+            return dataFrameUtf8String(value, data.str_data[i], xsink);
         case ColumnType::BOOL:
             data.bool_data[i] = value.getAsBool() ? 1 : 0;
             break;
         case ColumnType::DATE:
             if (value.getType() == NT_DATE) {
-                data.date_data[i] = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
-            } else {
-                data.null_mask[i] = 1;
+                return dataFrameDateMicros(value.get<const DateTimeNode>(), data.date_data[i], xsink);
             }
+            data.null_mask[i] = 1;
             break;
         case ColumnType::AUTO:
             data.setAutoValue(i, value, nullptr);
@@ -217,6 +240,7 @@ static void storeRecordValue(ColumnData& data, int64_t i, QoreValue value) {
         default:
             break;
     }
+    return 0;
 }
 
 static QoreColumnarColumnType columnarTypeFromDataFrameType(ColumnType type) {
@@ -552,7 +576,8 @@ static bool qoreDataFrameListContainsValue(const QoreListNode* values, QoreValue
 
 static bool qoreDataFrameListContainsString(const QoreListNode* values, const std::string& value,
         ExceptionSink* xsink) {
-    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(value));
+    // the string cells are in UTF-8
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(value, QCS_UTF8));
     return qoreDataFrameListContainsValue(values, QoreValue(*str), xsink);
 }
 
@@ -765,6 +790,7 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         }
 
         bool fast_failed = false;
+        ExceptionSink fast_xsink;
         for (int64_t i = 0; i < n; ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame from records")) {
                 delete df;
@@ -783,7 +809,13 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
                     fast_failed = true;
                     break;
                 }
-                storeRecordValue(*df->columns[c].data, i, value);
+                // a value that cannot be stored in the column's cell is stored by the path that infers the type of
+                // every column first, as a later value can make the column one that stores it, or raise its error
+                if (storeRecordValue(*df->columns[c].data, i, value, &fast_xsink)) {
+                    fast_xsink.clear();
+                    fast_failed = true;
+                    break;
+                }
             }
             if (fast_failed) {
                 break;
@@ -837,7 +869,10 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         }
         const QoreHashNode* row = rows[i];
         for (size_t c = 0; c < num_cols; ++c) {
-            storeRecordValue(*df->columns[c].data, i, row->getKeyValue(col_keys[c]));
+            if (storeRecordValue(*df->columns[c].data, i, row->getKeyValue(col_keys[c]), xsink)) {
+                delete df;
+                return nullptr;
+            }
         }
     }
 
@@ -1082,7 +1117,7 @@ QoreDataFrame* QoreDataFrame::sliceRows(int64_t start, int64_t count,
         if (src_col.data->hasDenseBuffer()) {
             ReferenceHolder<QoreBufferNode> buffer(src_col.data->dense_buffer->view(
                 static_cast<size_t>(start), static_cast<size_t>(count)), xsink);
-            new_data = buildColumnDataFromBuffer(*buffer, xsink);
+            new_data = buildColumnDataFromDenseRows(*src_col.data, *buffer, xsink);
             if (*xsink) {
                 delete df;
                 return nullptr;
@@ -1448,12 +1483,19 @@ QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) 
     std::ostringstream oss;
     oss << "DataFrame(" << n_rows << " rows x " << columns.size() << " cols)\n";
 
-    // Column headers
+    // Column headers; the string is in UTF-8, the encoding of the string cells, and the names, which are in the
+    // default encoding, are converted to it
     for (size_t c = 0; c < columns.size(); ++c) {
         if (c > 0) {
             oss << "\t";
         }
-        oss << columns[c].name;
+        std::string name;
+        ExceptionSink name_xsink;
+        if (dataFrameUtf8Bytes(columns[c].name.data(), columns[c].name.size(), QCS_DEFAULT, name, &name_xsink)) {
+            name_xsink.clear();
+            name = columns[c].name;
+        }
+        oss << name;
     }
     oss << "\n";
 
@@ -1484,11 +1526,9 @@ QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) 
                     case ColumnType::DATE:
                         oss << cd.date_data[i];
                         break;
-                    case ColumnType::AUTO: {
-                        QoreStringValueHelper sh(cd.auto_data[i]);
-                        oss.write(sh->c_str(), sh->size());
+                    case ColumnType::AUTO:
+                        oss << dataFrameUtf8Key(cd.auto_data[i]);
                         break;
-                    }
                     default:
                         oss << "?";
                         break;
@@ -1502,7 +1542,7 @@ QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) 
         oss << "... (" << (n_rows - show) << " more rows)\n";
     }
 
-    return new QoreStringNode(oss.str());
+    return new QoreStringNode(oss.str(), QCS_UTF8);
 }
 
 // --- ML Integration ---
@@ -1710,22 +1750,61 @@ QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
         if (identity_selection) {
             new_data = src_col.data;
         } else if (src_col.data->hasDenseBuffer()) {
+            // the buffer of the selected rows has the decimal precision and scale of the source buffer, so that
+            // each decimal value of the source can be stored in it
             ReferenceHolder<QoreBufferNode> buffer(new QoreBufferNode(src_col.data->dense_buffer_type,
-                src_col.data->dense_buffer->hasNullableElements(), static_cast<size_t>(count)), xsink);
-            for (int64_t i = 0; i < count; ++i) {
-                if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
-                    delete df;
-                    return nullptr;
+                src_col.data->dense_buffer->hasNullableElements(), static_cast<size_t>(count),
+                src_col.data->dense_buffer->getDecimalPrecision(), src_col.data->dense_buffer->getDecimalScale()),
+                xsink);
+            const QoreBufferNode* src_buffer = src_col.data->dense_buffer;
+            QoreBufferElementType element_type = src_col.data->dense_buffer_type;
+            // a fixed-width element is copied as it is stored, not as a Qore value, which a buffer cannot always
+            // store again: a buffer<float32> does not accept a NaN or infinite value; a bool buffer is bit-packed,
+            // and a string buffer does not store its elements in place
+            size_t width = element_type == QoreBufferElementType::Bool || element_type == QoreBufferElementType::String
+                ? 0 : qore_buffer_element_storage_size(element_type);
+            const uint8_t* src_data = width ? static_cast<const uint8_t*>(src_buffer->getRawData()) : nullptr;
+            uint8_t* dst_data = src_data && count ? static_cast<uint8_t*>(buffer->getRawData()) : nullptr;
+            if (dst_data) {
+                for (int64_t i = 0; i < count; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    memcpy(dst_data + static_cast<size_t>(i) * width,
+                        src_data + static_cast<size_t>(indices[i]) * width, width);
                 }
-                ValueHolder value(src_col.data->dense_buffer->getReferencedEntry(static_cast<size_t>(indices[i]),
-                    xsink), xsink);
-                if (buffer->setEntry(static_cast<size_t>(i), *value, xsink)) {
-                    delete df;
-                    return nullptr;
+                // the null elements are set after the values are copied
+                const uint8_t* src_validity = src_buffer->getRawValidityData();
+                size_t validity_offset = src_buffer->getRawValidityBitOffset();
+                for (int64_t i = 0; src_validity && i < count; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    size_t bit = validity_offset + static_cast<size_t>(indices[i]);
+                    if (!(src_validity[bit / 8] & (uint8_t(1) << (bit % 8)))
+                            && buffer->setEntry(static_cast<size_t>(i), QoreValue(), xsink)) {
+                        delete df;
+                        return nullptr;
+                    }
+                }
+            } else {
+                for (int64_t i = 0; i < count; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    ValueHolder value(src_buffer->getReferencedEntry(static_cast<size_t>(indices[i]), xsink),
+                        xsink);
+                    if (buffer->setEntry(static_cast<size_t>(i), *value, xsink)) {
+                        delete df;
+                        return nullptr;
+                    }
                 }
             }
 
-            new_data = buildColumnDataFromBuffer(*buffer, xsink);
+            new_data = buildColumnDataFromDenseRows(*src_col.data, *buffer, xsink);
             if (*xsink) {
                 delete df;
                 return nullptr;
@@ -1952,10 +2031,10 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
                 break;
             case ColumnType::STRING:
                 if (op_core) {
-                    // a cell is a string in the default encoding; the core operators convert the value to the
-                    // encoding of the cell and compare the bytes of strings in UTF-8, so the typed comparison is used
-                    // when the default encoding is UTF-8 and the value can be converted to it
-                    if (cmp_type == NT_STRING && QCS_DEFAULT == QCS_UTF8) {
+                    // a cell is a string in UTF-8; the core operators convert the value to the encoding of the cell
+                    // and compare the bytes of strings in UTF-8, so the typed comparison is used when the value can
+                    // be converted to UTF-8
+                    if (cmp_type == NT_STRING) {
                         ExceptionSink conv_xsink;
                         QoreStringValueHelper sh(cmp_value, QCS_UTF8, &conv_xsink);
                         if (conv_xsink) {
@@ -1969,8 +2048,20 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
                         cmp_kind = ColumnType::AUTO;
                     }
                 } else if (op_contains || op_startswith || op_endswith) {
-                    QoreStringValueHelper sh(value);
-                    cmp_string = dataFrameStdString(*sh);
+                    // the value is converted to the encoding of the cells, UTF-8, as for a column that holds any
+                    // value (qoreDataFrameStringPredicate()), which raises a conversion error for the first cell that
+                    // is not null
+                    ExceptionSink conv_xsink;
+                    QoreStringValueHelper sh(value, QCS_UTF8, &conv_xsink);
+                    if (conv_xsink) {
+                        if (cd.countNonNull()) {
+                            xsink->assimilate(conv_xsink);
+                            return {};
+                        }
+                        conv_xsink.clear();
+                    } else {
+                        cmp_string = dataFrameStdString(*sh);
+                    }
                 }
                 break;
             case ColumnType::BOOL:
@@ -2161,6 +2252,130 @@ QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::strin
     return filterMask(mask, xsink);
 }
 
+//! Compares two values as the core <=> operator does (QoreLogicalComparisonOperatorNode::doComparison()) (qore#6097)
+/** @param cmp the result: -1, 0 or 1
+    @return 0 for success, -1 if the operator raises an exception (NAN-COMPARE-ERROR for a NaN value)
+*/
+int qoreDataFrameCompareValues(QoreValue lhs, QoreValue rhs, int& cmp, ExceptionSink* xsink) {
+    QoreValue l = lhs.isEnum() ? lhs.getEnumMember()->getValue() : lhs;
+    QoreValue r = rhs.isEnum() ? rhs.getEnumMember()->getValue() : rhs;
+    qore_type_t lt = l.getType();
+    qore_type_t rt = r.getType();
+
+    if (lt == NT_STRING || rt == NT_STRING) {
+        QoreStringValueHelper ls(l);
+        QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        int rc = ls->compare(*rs);
+        cmp = rc < 0 ? -1 : (rc > 0 ? 1 : 0);
+        return 0;
+    }
+
+    // the result of a comparison with a number, as the operator computes it
+    auto number_cmp = [&cmp](bool less, bool equal) {
+        cmp = less ? -1 : (equal ? 0 : 1);
+    };
+    auto nan_error = [xsink](const char* what, const char* side) {
+        xsink->raiseException("NAN-COMPARE-ERROR", "NaN in %s value on %s hand side of logical comparison operator",
+            what, side);
+        return -1;
+    };
+
+    if (lt == NT_NUMBER) {
+        const QoreNumberNode* ln = l.get<const QoreNumberNode>();
+        if (ln->nan()) {
+            return nan_error("arbitrary-precision", "left");
+        }
+        switch (rt) {
+            case NT_NUMBER: {
+                const QoreNumberNode* rn = r.get<const QoreNumberNode>();
+                if (rn->nan()) {
+                    return nan_error("arbitrary-precision", "right");
+                }
+                number_cmp(ln->lessThan(*rn), ln->equals(*rn));
+                return 0;
+            }
+            case NT_FLOAT: {
+                double f = r.getAsFloat();
+                if (std::isnan(f)) {
+                    return nan_error("floating-point", "right");
+                }
+                number_cmp(ln->lessThan(f), ln->equals(f));
+                return 0;
+            }
+            case NT_CHAR:
+            case NT_INT:
+            case NT_BOOLEAN: {
+                int64 ri = r.getAsBigInt();
+                number_cmp(ln->lessThan(ri), ln->equals(ri));
+                return 0;
+            }
+            default: {
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
+                number_cmp(ln->lessThan(**rn), ln->equals(**rn));
+                return 0;
+            }
+        }
+    }
+
+    if (rt == NT_NUMBER) {
+        const QoreNumberNode* rn = r.get<const QoreNumberNode>();
+        if (rn->nan()) {
+            return nan_error("arbitrary-precision", "right");
+        }
+        switch (lt) {
+            case NT_FLOAT: {
+                double lf = l.getAsFloat();
+                if (std::isnan(lf)) {
+                    return nan_error("floating-point", "left");
+                }
+                number_cmp(rn->greaterThan(lf), rn->equals(lf));
+                return 0;
+            }
+            case NT_CHAR:
+            case NT_INT:
+            case NT_BOOLEAN: {
+                int64 li = l.getAsBigInt();
+                number_cmp(rn->greaterThan(li), rn->equals(li));
+                return 0;
+            }
+            default: {
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
+                number_cmp(ln->lessThan(*rn), ln->equals(*rn));
+                return 0;
+            }
+        }
+    }
+
+    if (lt == NT_FLOAT || rt == NT_FLOAT) {
+        double lf = l.getAsFloat();
+        if (std::isnan(lf)) {
+            return nan_error("floating-point", "left");
+        }
+        double rf = r.getAsFloat();
+        if (std::isnan(rf)) {
+            return nan_error("floating-point", "right");
+        }
+        cmp = lf < rf ? -1 : (lf == rf ? 0 : 1);
+        return 0;
+    }
+
+    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
+        int64 li = l.getAsBigInt();
+        int64 ri = r.getAsBigInt();
+        cmp = li < ri ? -1 : (li == ri ? 0 : 1);
+        return 0;
+    }
+
+    DateTimeValueHelper ld(l);
+    DateTimeValueHelper rd(r);
+    int rc = DateTime::compareDates(*ld, *rd);
+    cmp = rc < 0 ? -1 : (rc > 0 ? 1 : 0);
+    return 0;
+}
+
 QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
         const QoreListNode* asc_list, ExceptionSink* xsink) const {
     if (qore_check_cancel(xsink, "sorting DataFrame")) {
@@ -2203,6 +2418,11 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
         perm[i] = i;
     }
 
+    // the cells of a column that holds any value are ordered as the core <=> operator orders them, which raises an
+    // exception for a NaN value; the first one is raised after the sort, and the comparisons of such cells return
+    // false after it
+    ExceptionSink cmp_xsink;
+    bool cmp_failed = false;
     std::stable_sort(perm.begin(), perm.end(), [&](int64_t a, int64_t b) -> bool {
         for (const auto& key : keys) {
             const ColumnData& cd = *columns[key.col_idx].data;
@@ -2218,6 +2438,17 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
                 case ColumnType::FLOAT64: {
                     double va = cd.float_data(a), vb = cd.float_data(b);
                     cmp = (va < vb) ? -1 : (va > vb) ? 1 : 0;
+                    // a NaN value compares neither less nor greater; it raises NAN-COMPARE-ERROR, as with the <=>
+                    // operator, which is checked only for values that are not ordered, so that it costs nothing
+                    // for the others
+                    if (!cmp && (std::isnan(va) || std::isnan(vb))) {
+                        if (!cmp_failed) {
+                            cmp_xsink.raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on %s hand "
+                                "side of logical comparison operator", std::isnan(va) ? "left" : "right");
+                            cmp_failed = true;
+                        }
+                        return false;
+                    }
                     break;
                 }
                 case ColumnType::INT64: {
@@ -2238,6 +2469,17 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
                     cmp = (va < vb) ? -1 : (va > vb) ? 1 : 0;
                     break;
                 }
+                case ColumnType::AUTO:
+                    assert(a < static_cast<int64_t>(cd.auto_data.size())
+                        && b < static_cast<int64_t>(cd.auto_data.size()));
+                    if (cmp_failed) {
+                        return false;
+                    }
+                    if (qoreDataFrameCompareValues(cd.auto_data[a], cd.auto_data[b], cmp, &cmp_xsink)) {
+                        cmp_failed = true;
+                        return false;
+                    }
+                    break;
                 default:
                     break;
             }
@@ -2247,8 +2489,52 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
         }
         return false;  // equal
     });
+    if (cmp_failed) {
+        xsink->assimilate(cmp_xsink);
+        return nullptr;
+    }
 
     return selectRows(perm, xsink);
+}
+
+//! Copies the rows of a dense buffer to a dense buffer of the same element type, from the given row of the target
+/** A fixed-width element is copied as it is stored (see selectRows()); a bool or string element is copied as a
+    value.
+
+    @return 0 for success, -1 if an exception was raised
+*/
+static int copyDenseBufferRows(const QoreBufferNode& src, QoreBufferNode& dst, size_t offset, ExceptionSink* xsink) {
+    size_t n = src.size();
+    QoreBufferElementType element_type = src.getElementType();
+    size_t width = element_type == QoreBufferElementType::Bool || element_type == QoreBufferElementType::String
+        ? 0 : qore_buffer_element_storage_size(element_type);
+    const uint8_t* src_data = width ? static_cast<const uint8_t*>(src.getRawData()) : nullptr;
+    uint8_t* dst_data = src_data && n ? static_cast<uint8_t*>(dst.getRawData()) : nullptr;
+    if (!dst_data) {
+        for (size_t i = 0; i < n; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "concatenating dense DataFrame rows")) {
+                return -1;
+            }
+            ValueHolder value(src.getReferencedEntry(i, xsink), xsink);
+            if (*xsink || dst.setEntry(offset + i, *value, xsink)) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+    memcpy(dst_data + offset * width, src_data, n * width);
+    const uint8_t* src_validity = src.getRawValidityData();
+    size_t validity_offset = src.getRawValidityBitOffset();
+    for (size_t i = 0; src_validity && i < n; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "concatenating dense DataFrame rows")) {
+            return -1;
+        }
+        size_t bit = validity_offset + i;
+        if (!(src_validity[bit / 8] & (uint8_t(1) << (bit % 8))) && dst.setEntry(offset + i, QoreValue(), xsink)) {
+            return -1;
+        }
+    }
+    return 0;
 }
 
 QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
@@ -2299,6 +2585,79 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
         const std::vector<Column>& first_columns = snapshots[0].columns;
         size_t num_cols = first_columns.size();
 
+        // a column with dense storage (a float32 or decimal128 column, for example) whose source columns all have
+        // dense storage of the same element type and decimal metadata (or are missing, which gives nulls) is
+        // concatenated as dense storage, which keeps its element type and columnar schema (qore#6097)
+        std::vector<bool> dense(num_cols, false);
+        for (size_t c = 0; c < num_cols; ++c) {
+            const ColumnData& first = *first_columns[c].data;
+            if (!first.hasDenseBuffer()) {
+                continue;
+            }
+            bool same = true;
+            for (size_t d = 1; same && d < snapshots.size(); ++d) {
+                auto it = snapshots[d].col_index.find(first_columns[c].name);
+                if (it == snapshots[d].col_index.end()) {
+                    continue;
+                }
+                const ColumnData& src = *snapshots[d].columns[it->second].data;
+                // a timestamp and a duration column both have a buffer<int64> of microseconds (whatever the time
+                // unit of their schema), which mean other values: absolute dates and time values
+                same = src.hasDenseBuffer() && src.type == first.type
+                    && src.dense_buffer_type == first.dense_buffer_type
+                    && src.dense_buffer->getDecimalPrecision() == first.dense_buffer->getDecimalPrecision()
+                    && src.dense_buffer->getDecimalScale() == first.dense_buffer->getDecimalScale()
+                    && src.isDuration() == first.isDuration();
+            }
+            dense[c] = same;
+        }
+        // the columnar schema of a concatenated date column: the first column's, with the time unit that the cells
+        // hold, microseconds, if the columns have different time units (a column without a schema holds
+        // microseconds), and UTC if they have different time zones, as an export writes the cells in the schema's
+        // time unit and time zone (qore#6097)
+        auto concatSchema = [](const ColumnData& first, const std::string& name,
+                const std::vector<Snapshot>& snapshots) -> QoreColumnarTypeDescriptor {
+            QoreColumnarTypeDescriptor schema = first.columnar_schema;
+            if (first.type != ColumnType::DATE) {
+                return schema;
+            }
+            bool other_unit = false;
+            bool other_zone = false;
+            for (const Snapshot& snapshot : snapshots) {
+                auto it = snapshot.col_index.find(name);
+                if (it == snapshot.col_index.end()) {
+                    continue;
+                }
+                const ColumnData& src = *snapshot.columns[it->second].data;
+                std::string unit = src.has_columnar_schema && !src.columnar_schema.time_unit.empty()
+                    ? src.columnar_schema.time_unit : std::string("us");
+                std::string zone = src.has_columnar_schema ? src.columnar_schema.timezone : std::string();
+                std::string first_unit = schema.time_unit.empty() ? std::string("us") : schema.time_unit;
+                if (unit != first_unit) {
+                    other_unit = true;
+                }
+                if (zone != schema.timezone) {
+                    other_zone = true;
+                }
+            }
+            if (other_unit) {
+                schema.time_unit = "us";
+            }
+            if (other_zone) {
+                schema.timezone = "UTC";
+            }
+            return schema;
+        };
+
+        // the columns concatenated as lists of values
+        std::vector<size_t> list_cols;
+        list_cols.reserve(num_cols);
+        for (size_t c = 0; c < num_cols; ++c) {
+            if (!dense[c]) {
+                list_cols.push_back(c);
+            }
+        }
+
         // the value lists of the result columns, dereferenced on every exit
         struct ColumnValues {
             std::vector<QoreListNode*> lists;
@@ -2341,10 +2700,11 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                 if (r && !(r % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame rows")) {
                     return nullptr;
                 }
-                for (size_t c = 0; c < num_cols; ++c) {
-                    if (c && !(c % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame columns")) {
+                for (size_t k = 0; k < list_cols.size(); ++k) {
+                    if (k && !(k % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame columns")) {
                         return nullptr;
                     }
+                    size_t c = list_cols[k];
                     if (sources[c]) {
                         QoreValue v = sources[c]->getValueAt(r, xsink);
                         if (*xsink) {
@@ -2368,9 +2728,69 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
             }
             Column col;
             col.name = first_columns[c].name;
-            col.data = buildColumnData(col_values.lists[c], first_columns[c].data->type, xsink);
-            if (*xsink) {
-                return nullptr;
+            if (dense[c]) {
+                const ColumnData& first = *first_columns[c].data;
+                ReferenceHolder<QoreBufferNode> buffer(new QoreBufferNode(first.dense_buffer_type, true,
+                    static_cast<size_t>(total_rows), first.dense_buffer->getDecimalPrecision(),
+                    first.dense_buffer->getDecimalScale()), xsink);
+                size_t offset = 0;
+                for (size_t d = 0; d < snapshots.size(); ++d) {
+                    auto it = snapshots[d].col_index.find(col.name);
+                    if (it == snapshots[d].col_index.end()) {
+                        // a DataFrame without the column gives null values
+                        for (int64_t r = 0; r < snapshots[d].n_rows; ++r) {
+                            if (buffer->setEntry(offset + static_cast<size_t>(r), QoreValue(), xsink)) {
+                                return nullptr;
+                            }
+                        }
+                    } else if (copyDenseBufferRows(*snapshots[d].columns[it->second].data->dense_buffer, **buffer,
+                            offset, xsink)) {
+                        return nullptr;
+                    }
+                    offset += static_cast<size_t>(snapshots[d].n_rows);
+                }
+                col.data = buildColumnDataFromDenseRows(first, *buffer, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (first.has_columnar_schema) {
+                    preserveColumnarSchema(*col.data, col.name, concatSchema(first, col.name, snapshots));
+                }
+            } else {
+                // columns of different types make the column that the column hash constructor makes of their
+                // values (qore#6100), not one of the first column's type, which would convert the other values to
+                // it; a date column of absolute dates and one of time values (durations) make a column that holds
+                // any value, as a date column would make dates of time values or time values of dates; date columns
+                // of time values only keep the schema of the first one, which makes their cells time values
+                const ColumnData& first = *first_columns[c].data;
+                ColumnType type = first.type;
+                bool same_types = true;
+                bool keep_schema = false;
+                bool duration = type == ColumnType::DATE && first.isDuration();
+                for (size_t d = 1; d < snapshots.size(); ++d) {
+                    auto it = snapshots[d].col_index.find(col.name);
+                    if (it == snapshots[d].col_index.end()) {
+                        continue;
+                    }
+                    const ColumnData& src = *snapshots[d].columns[it->second].data;
+                    if (src.type != first.type) {
+                        same_types = false;
+                    } else if (type == ColumnType::DATE && src.isDuration() != duration) {
+                        type = ColumnType::AUTO;
+                    }
+                }
+                if (!same_types) {
+                    col.data = buildColumnDataAuto(col_values.lists[c], xsink);
+                } else {
+                    keep_schema = type == ColumnType::DATE && duration;
+                    col.data = buildColumnData(col_values.lists[c], type, xsink);
+                }
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (keep_schema) {
+                    preserveColumnarSchema(*col.data, col.name, concatSchema(first, col.name, snapshots));
+                }
             }
             result->col_index[col.name] = result->columns.size();
             result->columns.push_back(std::move(col));
@@ -2484,18 +2904,23 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
                     case ColumnType::INT64:
                         new_data->int_data[i] = value.getAsBigInt();
                         break;
-                    case ColumnType::STRING: {
-                        QoreStringValueHelper sh(value);
-                        new_data->str_data[i] = dataFrameStdString(*sh);
+                    case ColumnType::STRING:
+                        if (dataFrameUtf8String(value, new_data->str_data[i], xsink)) {
+                            delete df;
+                            return nullptr;
+                        }
                         break;
-                    }
                     case ColumnType::BOOL:
                         new_data->bool_data[i] = value.getAsBool() ? 1 : 0;
                         break;
                     case ColumnType::DATE:
                         // as when a column is built: a value that is not a date leaves the value null
                         if (value.getType() == NT_DATE) {
-                            new_data->date_data[i] = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                            if (dataFrameDateMicros(value.get<const DateTimeNode>(), new_data->date_data[i],
+                                    xsink)) {
+                                delete df;
+                                return nullptr;
+                            }
                         } else {
                             new_data->null_mask[i] = 1;
                         }

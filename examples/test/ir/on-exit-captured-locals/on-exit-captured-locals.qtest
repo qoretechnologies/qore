@@ -67,6 +67,7 @@ class OnExitCapturedLocalsTest inherits QUnit::Test {
             "qore_rt_sync_local_aot",
             "qore_rt_exec_on_block_exit",
             "qore_rt_exec_on_block_exit_impl",
+            "qore_rt_exec_on_block_exit_hold",
         );
 
         #! the prefix of the names of the blocks that run handlers out of line when one is pending

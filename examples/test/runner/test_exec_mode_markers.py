@@ -180,6 +180,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - JitTeardownAtExit: JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
         # - qlib-module-domains: each module is loaded first by a restricted Program in a child process, as a loaded
         #   module is not checked again for the next Program (#5803)
+        # - qlib-all-modules-load: each qlib module is loaded by a restricted Program in a child process of its own, as
+        #   a loaded module is not checked again for the next Program (#5803)
         # - nested-module-parse: the module is loaded in a child process whose module path holds it (#5803, #5938)
         # - RestSchemaModuleLazyTypes-<n>: the modules are loaded and compared in child processes
         # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
@@ -194,6 +196,14 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   executables
         # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
         #   processes that set their own --exec-mode
+        # - foreach-enum-element-release (#6091): its probes run in child processes that set their own --exec-mode and
+        #   in qcc executables
+        # - dataframe-default-encoding (#6092): its checks run in a child process whose default character encoding is
+        #   ISO-8859-1
+        # - dataframe-default-encoding-names (#6100): its checks run in child processes whose default character
+        #   encodings differ
+        # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -202,6 +212,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
+                                 "examples/test/qore/misc/foreach-enum-element-release.qtest",
+                                 "examples/test/qore/functions/relative-date-range.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
@@ -212,6 +224,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest",
                                  "examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/qlib-all-modules-load.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-3.qtest",
@@ -220,7 +233,9 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-6.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
-                                 "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest"]),
+                                 "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
+                                 "modules/dataframe/test/dataframe-default-encoding.qtest",
+                                 "modules/dataframe/test/dataframe-default-encoding-names.qtest"]),
                          sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):

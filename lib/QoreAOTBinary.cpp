@@ -12600,7 +12600,15 @@ bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vli
     });
     writer.writeU16(static_cast<uint16_t>(captures.size()));
     for (const QoreAOTClosureCaptureInfo& capture : captures) {
-        writer.writeStringRef(capture.lv->getName() ? capture.lv->getName() : "");
+        // a closure in a default argument has no enclosing function: a top-level local that it reads is written by
+        // its index in the Program's top-level local list, which the reader resolves (and waits for) as it does for
+        // the default argument expressions that read one (qore#5868, qore#5998)
+        std::string top_ref;
+        if (capture.parent_slot < 0 && qore_aot_top_level_local_ref(writer, capture.lv, top_ref)) {
+            writer.writeStringRef(top_ref.c_str());
+        } else {
+            writer.writeStringRef(capture.lv->getName() ? capture.lv->getName() : "");
+        }
         writer.writeU32(static_cast<uint32_t>(capture.parent_slot));
     }
     return true;
@@ -16531,10 +16539,13 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
 }
 
 bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const VarRefNode* varref, std::string& ref) {
-    if (!writer.allow_top_level_local_ref || !writer.serialization_program || !varref) {
+    return varref && qore_aot_top_level_local_ref(writer, varref->ref.id, ref);
+}
+
+bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const LocalVar* lv, std::string& ref) {
+    if (!writer.allow_top_level_local_ref || !writer.serialization_program) {
         return false;
     }
-    const LocalVar* lv = varref->ref.id;
     if (!lv || !lv->isTopLevel() || !lv->getName()) {
         return false;
     }

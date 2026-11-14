@@ -76,6 +76,12 @@ int QoreListAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_cont
 
         QoreValue v = li.parseInit(parse_context);
         const QoreTypeInfo* prototypeInfo = parse_context.typeInfo;
+        // A failed parse (including a stack-limit error) can leave a declaration without its LocalVar. Only
+        // validate initialized lvalues; keep parsing the right-hand side to collect its errors as usual.
+        if (li.hasError()) {
+            ri.parseInit(parse_context);
+            continue;
+        }
         //printd(5, "QoreListAssignmentOperatorNode::parseInitImpl() paI: '%s' (%s)\n", QoreTypeInfo::getName(prototypeInfo),
         //    v.getFullTypeName());
         if (int lvalue_err = check_lvalue(v)) {
