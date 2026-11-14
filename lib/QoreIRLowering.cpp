@@ -6794,6 +6794,19 @@ bool QoreIRLowering::ensureBuilderContext(std::string& error) const {
     return true;
 }
 
+// documented in QoreIRLowering.h
+void QoreIRLowering::setJoinBlock(QoreIRBasicBlock* join_block) {
+    QoreIRFunction* func = builder.getFunction();
+    // the join block is the last one unless an operand created blocks, which follow it
+    auto& blocks = func->blocks;
+    auto i = std::find_if(blocks.rbegin(), blocks.rend(),
+        [join_block](const std::unique_ptr<QoreIRBasicBlock>& b) { return b.get() == join_block; });
+    if (i != blocks.rbegin() && i != blocks.rend()) {
+        std::rotate(std::prev(i.base()), i.base(), blocks.end());
+    }
+    builder.setBlock(join_block);
+}
+
 QoreIRBasicBlock* QoreIRLowering::createBlock(const std::string& prefix) {
     QoreIRFunction* func = builder.getFunction();
     if (!func) {
@@ -11086,7 +11099,7 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
     assert(result.isValid());
     if (merge_block) {
         builder.createBranch(merge_block);
-        builder.setBlock(merge_block);
+        setJoinBlock(merge_block);
     }
     // the result of the Begin step, to which the steps have added what the selectors selected
     return result;
@@ -23900,7 +23913,7 @@ QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& 
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {false_value, left_block},
         {right_bool, rhs_exit_block},
@@ -23951,7 +23964,7 @@ QoreIRValue QoreIRLowering::lowerLogicalOr(const QoreValue& expr, std::string& e
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {true_value, left_block},
         {right_bool, rhs_exit_block},
@@ -24014,7 +24027,7 @@ QoreIRValue QoreIRLowering::lowerNullCoalescing(const QoreValue& expr, std::stri
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {left_value, left_block},
         {right_value, rhs_exit_block},
@@ -24059,7 +24072,7 @@ QoreIRValue QoreIRLowering::lowerValueCoalescing(const QoreValue& expr, std::str
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {left_value, left_block},
         {right_value, rhs_exit_block},
@@ -24112,7 +24125,7 @@ QoreIRValue QoreIRLowering::lowerQuestionMark(const QoreValue& expr, std::string
     QoreIRBasicBlock* right_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {left_value, left_exit_block},
         {right_value, right_exit_block},

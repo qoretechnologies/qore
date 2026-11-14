@@ -570,6 +570,17 @@ private:
     bool ensureBuilderContext(std::string& error) const;
     QoreIRValue tryPluginLowering(const QoreValue& expr, std::string& error);
     QoreIRBasicBlock* createBlock(const std::string& prefix);
+    //! Continues lowering in the join block of an operator whose operands are lowered in blocks of their own (?:, ??,
+    //! ?*, &&, ||, a list of selectors), after laying it out after the blocks that the operands created
+    /** The native tiers lower the blocks of a function in layout order, and assign the temporaries of a block to the
+        temp scopes open when it is lowered: an operand that calls a function in a try block (or in a block with
+        local variables) continues in a block created after the join block, which holds the end of the statement
+        (its DiscardTemps), so a temporary that the statement releases at its end (a receiver, or an argument of a
+        call that qcc folds) was released only when the next statement ended (qore#6080), and its exception edges
+        had no mark of the statement's temp scope (qore#5997).  An if statement lays out its merge block in the same
+        way.
+    */
+    void setJoinBlock(QoreIRBasicBlock* join_block);
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);
     //! Gives the load of a variable that can hold a reference the exception target in effect, if any
