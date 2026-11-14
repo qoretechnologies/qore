@@ -10,6 +10,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires Util
 %requires FsUtil
 
 %exec-class AOTRuntimeNamedCallReturnTypeTest
@@ -51,12 +52,19 @@ printf(\"%y %y %y %y %y\\n\", namedSize(1), namedSize(1.5), positionalSize(2), n
     }
 
     constructor() : Test("AOTRuntimeNamedCallReturnTypeTest", "1.0") {
-        qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
-        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? ENV.QCC ?? ENV.QORE_QCC ?? (libqore_dir + DirSep + "qcc");
+        # the paths are made absolute, because the compiler runs in a temporary directory
+        qore_bin = AOTRuntimeNamedCallReturnTypeTest::absolutePath(ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        libqore_dir = normalize_dir(ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qcc_bin = AOTRuntimeNamedCallReturnTypeTest::absolutePath(ENV.QORE_QCC_EXECUTABLE ?? ENV.QCC ?? ENV.QORE_QCC
+            ?? (libqore_dir + DirSep + "qcc"));
         addTestCase("native shape", \testNativeShape());
         addTestCase("values", \testValues());
         set_return_value(main());
+    }
+
+    #! Returns \a path as an absolute path if it names a directory component, otherwise unchanged (a command name)
+    private static string absolutePath(string path) {
+        return path =~ /\// ? normalize_dir(path) : path;
     }
 
     private write(string path, string body) {
