@@ -37,7 +37,9 @@
     @ref Qore::DataFrame::DataFrame::readCSV() "DataFrame::readCSV()" is compared with the fields in the default
     encoding.  Column names, struct field names and map keys, which are in UTF-8 in Parquet and Arrow data, are
     converted to the default encoding, the encoding of column names and hash keys, when they are read, and back when
-    they are written.
+    they are written (as are the column names of the \c columns and \c filters options of
+    @ref Qore::DataFrame::DataFrame::readParquet() "DataFrame::readParquet()"); a name that the default encoding
+    cannot represent raises \c DATAFRAME-ENCODING-ERROR.
 
     The cells of a \c date column are stored as the microseconds since the epoch in an int64, which holds the dates
     from \c -290308-12-21T19:59:05.224192Z to \c 294247-01-10T04:00:54.775807Z (and time values of the same

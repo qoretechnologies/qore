@@ -243,12 +243,14 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
         }
         v = options->getKeyValue("null_string");
         if (v.getType() == NT_STRING) {
-            // the fields are compared in the default encoding, in which they are read (qore#6100)
-            QoreStringValueHelper str(v, QCS_DEFAULT, xsink);
-            if (*xsink) {
+            // the fields are compared in the default encoding, in which they are read; a string that it cannot
+            // represent raises DATAFRAME-ENCODING-ERROR (qore#6100)
+            const QoreStringNode* str = v.get<const QoreStringNode>();
+            std::string utf8;
+            if (dataFrameUtf8Bytes(str->c_str(), str->size(), str->getEncoding(), utf8, xsink)
+                    || dataFrameDefaultString(utf8, null_string, xsink)) {
                 return nullptr;
             }
-            null_string.assign(str->c_str(), str->size());
         }
         v = options->getKeyValue("skip_rows");
         if (!v.isNullOrNothing()) {

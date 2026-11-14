@@ -132,12 +132,18 @@ static std::shared_ptr<arrow::Buffer> wrapQoreBufferMemory(const uint8_t* data, 
 
 struct QoreParquetReadOptions {
     struct Filter {
+        //! the column name, in the default encoding, for the DataFrame filter
         std::string column;
         std::string op;
         QoreValue value;
+        //! the column name in UTF-8, the encoding of Arrow names, for the Arrow and Parquet lookups (qore#6100)
+        std::string arrow_column;
     };
 
+    //! the column names in the default encoding, for the DataFrame projection
     std::vector<std::string> columns;
+    //! the column names in UTF-8, the encoding of Arrow names, for the Arrow and Parquet lookups (qore#6100)
+    std::vector<std::string> arrow_columns;
     std::vector<int> row_groups;
     std::vector<Filter> filters;
     int64_t batch_size = 0;
@@ -277,6 +283,10 @@ static bool qoreParquetReadFilterHash(const QoreHashNode* filter, int64_t index,
             "Parquet option 'filters' entry " QLLD " key 'column' must not be empty", (int64)index);
         return false;
     }
+    // a column name is in the default encoding, and an Arrow name in UTF-8 (qore#6100)
+    if (dataFrameUtf8Bytes(out.column.data(), out.column.size(), QCS_DEFAULT, out.arrow_column, xsink)) {
+        return false;
+    }
 
     QoreValue op = filter->getKeyValue("op");
     if (op.getType() != NT_STRING) {
@@ -356,6 +366,14 @@ static bool qoreParquetReadOptions(const QoreHashNode* options, QoreParquetReadO
             || !qoreParquetReadIntListOption(options, "row_groups", parsed.row_groups, parsed.has_row_groups, xsink)
             || !qoreParquetReadFiltersOption(options, parsed.filters, parsed.has_filters, xsink)) {
         return false;
+    }
+    // a column name is in the default encoding, and an Arrow name in UTF-8 (qore#6100)
+    parsed.arrow_columns.resize(parsed.columns.size());
+    for (size_t i = 0; i < parsed.columns.size(); ++i) {
+        if (dataFrameUtf8Bytes(parsed.columns[i].data(), parsed.columns[i].size(), QCS_DEFAULT,
+                parsed.arrow_columns[i], xsink)) {
+            return false;
+        }
     }
 
     QoreValue batch_size = options->getKeyValue("batch_size");
@@ -532,7 +550,7 @@ static void qoreParquetAppendFilterColumns(std::vector<std::string>& names,
         if (i && !(i % 100) && qore_check_cancel(xsink, "adding Parquet filter columns")) {
             return;
         }
-        const std::string& name = filters[i].column;
+        const std::string& name = filters[i].arrow_column;
         if (std::find(names.begin(), names.end(), name) == names.end()) {
             names.push_back(name);
         }
@@ -913,7 +931,8 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column, co
         ExceptionSink* xsink = nullptr) {
     // the core operators compare an enum member as its value
     const QoreParquetReadOptions::Filter filter{orig_filter.column, orig_filter.op,
-        orig_filter.value.isEnum() ? orig_filter.value.getEnumMember()->getValue() : orig_filter.value};
+        orig_filter.value.isEnum() ? orig_filter.value.getEnumMember()->getValue() : orig_filter.value,
+        orig_filter.arrow_column};
     bool cmp_is_null = filter.value.isNullOrNothing();
     bool has_null_count = stats && stats->HasNullCount();
     int64_t null_count = has_null_count ? stats->null_count() : 0;
@@ -937,7 +956,8 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column, co
                     && qore_check_cancel(xsink, "checking Parquet list filter statistics")) {
                 return true;
             }
-            QoreParquetReadOptions::Filter eq_filter{filter.column, "==", values->retrieveEntry(i)};
+            QoreParquetReadOptions::Filter eq_filter{filter.column, "==", values->retrieveEntry(i),
+                filter.arrow_column};
             if (qoreParquetStatsMayMatch(column, type, stats, row_count, eq_filter, xsink)) {
                 return true;
             }
@@ -1033,13 +1053,13 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column, co
 static bool qoreParquetRowGroupMayMatch(const std::unique_ptr<parquet::arrow::FileReader>& reader,
         const arrow::Schema& schema, int row_group, const QoreParquetReadOptions::Filter& filter,
         ExceptionSink* xsink) {
-    int column_index = qoreParquetUniqueLeafIndexForTopLevelName(reader, filter.column, xsink);
+    int column_index = qoreParquetUniqueLeafIndexForTopLevelName(reader, filter.arrow_column, xsink);
     if (*xsink || column_index < 0) {
         return true;
     }
 
     // the Arrow type of the column gives the type of the DataFrame column that the rows are read into
-    std::shared_ptr<arrow::Field> field = schema.GetFieldByName(filter.column);
+    std::shared_ptr<arrow::Field> field = schema.GetFieldByName(filter.arrow_column);
     if (!field) {
         return true;
     }
@@ -1250,6 +1270,23 @@ static std::string qoreName(const std::string& name, ExceptionSink* xsink) {
     std::string rv;
     dataFrameDefaultString(name, rv, xsink);
     return rv;
+}
+
+//! returns an Arrow name in the default encoding with no copy when the default encoding is UTF-8, for the struct
+//! field names of each value (qore#6100)
+/** @param buf the string that holds the name when it is converted
+
+    @return the name in the default encoding (\a name or \a buf), or an empty string if a DATAFRAME-ENCODING-ERROR
+    exception was raised
+*/
+static const std::string& qoreNameRef(const std::string& name, std::string& buf, ExceptionSink* xsink) {
+    if (QCS_DEFAULT == QCS_UTF8) {
+        return name;
+    }
+    if (dataFrameConvertFromUtf8(name, QCS_DEFAULT, buf, xsink)) {
+        buf.clear();
+    }
+    return buf;
 }
 
 static QoreColumnarTypeDescriptor arrowTypeToColumnarDescriptor(const std::string& name,
@@ -1758,7 +1795,8 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     return QoreValue();
                 }
                 // a field name with a NUL character cannot be a hash key; the value cannot be read to a hash
-                std::string field_name = qoreName(struct_type->field(i)->name(), xsink);
+                std::string name_buf;
+                const std::string& field_name = qoreNameRef(struct_type->field(i)->name(), name_buf, xsink);
                 if (*xsink || QoreHashNode::checkKey(field_name.data(), field_name.size(), "DATAFRAME-IO-ERROR",
                         "struct field name", xsink)) {
                     child_val.discard(xsink);
@@ -1839,18 +1877,31 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                 if (*xsink) {
                     return QoreValue();
                 }
-                // a hash key is in the default encoding
-                QoreStringValueHelper key_str(*key_val, QCS_DEFAULT, xsink);
+                // a hash key is in the default encoding; a key that it cannot represent raises
+                // DATAFRAME-ENCODING-ERROR, as a column or field name does (qore#6100)
+                std::string key_utf8;
+                std::string key_buf;
+                const std::string* key;
+                // a string read from Arrow is in UTF-8
+                if (key_val->getType() == NT_STRING
+                        && key_val->get<const QoreStringNode>()->getEncoding() == QCS_UTF8) {
+                    key_utf8 = dataFrameStdString(key_val->get<const QoreStringNode>());
+                    key = &qoreNameRef(key_utf8, key_buf, xsink);
+                } else {
+                    QoreStringValueHelper key_str(*key_val, QCS_DEFAULT, xsink);
+                    key_buf = dataFrameStdString(*key_str);
+                    key = &key_buf;
+                }
                 // a map key with a NUL character cannot be a hash key; the value cannot be read to a hash
-                if (*xsink || QoreHashNode::checkKey(key_str->c_str(), key_str->size(), "DATAFRAME-IO-ERROR",
-                        "map key", xsink)) {
+                if (*xsink || QoreHashNode::checkKey(key->data(), key->size(), "DATAFRAME-IO-ERROR", "map key",
+                        xsink)) {
                     return QoreValue();
                 }
                 QoreValue item_val = arrowScalarToQore(items, start + i, xsink);
                 if (*xsink) {
                     return QoreValue();
                 }
-                hash->setKeyValue(key_str->c_str(), item_val, xsink);
+                hash->setKeyValue(key->c_str(), item_val, xsink);
             }
             return hash.release();
         }
@@ -2139,7 +2190,8 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                 auto child_field = struct_type->field(i);
                 // the value of a field is the value of the key of the field name in the hash; a field name with a NUL
                 // character cannot be a key, and would otherwise select the value of another key
-                std::string field_name = qoreName(child_field->name(), xsink);
+                std::string name_buf;
+                const std::string& field_name = qoreNameRef(child_field->name(), name_buf, xsink);
                 if (*xsink || QoreHashNode::checkKey(field_name.data(), field_name.size(), xsink)) {
                     return false;
                 }
@@ -2951,7 +3003,7 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
     std::vector<std::string> read_columns;
     bool has_read_columns = read_options.has_columns;
     if (read_options.has_columns) {
-        read_columns = read_options.columns;
+        read_columns = read_options.arrow_columns;
         if (read_options.has_filters) {
             qoreParquetAppendFilterColumns(read_columns, read_options.filters, xsink);
             if (*xsink) {

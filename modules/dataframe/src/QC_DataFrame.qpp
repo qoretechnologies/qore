@@ -1302,6 +1302,8 @@ nothing DataFrame::renameColumn(string old_name, string new_name) {
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened
+    @throw DATAFRAME-ENCODING-ERROR if the \c null_string option has a character that the default character
+    encoding cannot represent
     @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be read
     @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 

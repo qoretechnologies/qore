@@ -8,7 +8,7 @@
     test; it has only ASCII characters, so that it means the same in any default encoding, and prints each result as
     "<name>=<hex bytes>".
 
-    usage: default-encoding-names.q write|read <dir>
+    usage: default-encoding-names.q write|read|read-iso <dir>
 */
 
 %modern
@@ -25,22 +25,61 @@ sub out(string name, data value) {
     printf("%s=%s\n", name, make_hex_string(binary(value)));
 }
 
+# prints the error code of the call as a hex string, or "none"
+sub err(string name, code c) {
+    try {
+        c();
+        out(name, "none");
+    } catch (hash<ExceptionInfo> ex) {
+        out(name, ex.err);
+    }
+}
+
+# a frame with a column name, a struct field name and a map key in the default encoding
+DataFrame::DataFrame sub names_frame(string name) {
+    return DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+        name: (1,),
+        "h": ({name: 2},),
+        "m": ({name: 3},),
+    }, {
+        "h": {"schema": {"kind": "struct", "nullable": False, "children": (
+            {"name": name, "kind": "int", "nullable": False},
+        )}},
+        "m": {"schema": {"kind": "map", "nullable": False, "children": (
+            {"name": "key", "kind": "string", "nullable": False},
+            {"name": "value", "kind": "int", "nullable": True},
+        )}},
+    }));
+}
+
 out("default", get_default_encoding());
 
 if (mode == "write") {
-    # a column name and a hash key (the name of a struct field) in the default encoding
-    DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
-        cafe: (1,),
-        "h": ({cafe: 2},),
-    }, {
-        "h": {"schema": {"kind": "struct", "nullable": False, "children": (
-            {"name": cafe, "kind": "int", "nullable": False},
-        )}},
-    }));
+    # a column name and hash keys (the name of a struct field, a map key) in the default encoding
+    DataFrame::DataFrame df = names_frame(cafe);
     df.writeParquet(dir + "/names.parquet");
     DataFrame::DataFrame read = DataFrame::DataFrame::readParquet(dir + "/names.parquet");
     out("write-column", read.columnNames()[0]);
     out("write-key", (keys read.getColumn("h")[0])[0]);
+    out("write-map-key", (keys read.getColumn("m")[0])[0]);
+    # the columns and filters options name a column in the default encoding
+    read = DataFrame::DataFrame::readParquet(dir + "/names.parquet",
+        <DataFrame::ParquetReadOptions>{"columns": (cafe,)});
+    out("write-columns-option", read.columnNames()[0]);
+    read = DataFrame::DataFrame::readParquet(dir + "/names.parquet",
+        <DataFrame::ParquetReadOptions>{"columns": ("h",), "filters": (
+        {"column": cafe, "op": "==", "value": 1},
+    )});
+    out("write-filters-option", sprintf("%y:%d", read.columnNames(), read.numRows()));
+    # Arrow IPC
+    binary ipc = df.toArrowIpc();
+    File ipc_file();
+    ipc_file.open2(dir + "/names.arrow", O_CREAT | O_WRONLY | O_TRUNC);
+    ipc_file.write(ipc);
+    ipc_file.close();
+    read = DataFrame::DataFrame::fromArrowIpc(ipc);
+    out("write-ipc-column", read.columnNames()[0]);
+    out("write-ipc-map-key", (keys read.getColumn("m")[0])[0]);
 
     # a CSV file in the default encoding with a null string given in UTF-8
     File f();
@@ -50,8 +89,38 @@ if (mode == "write") {
     DataFrame::DataFrame csv = DataFrame::DataFrame::readCSV(dir + "/null.csv",
         <DataFrame::CsvOptions>{"null_string": convert_encoding(iso_cafe, "UTF-8")});
     out("csv-null", exists csv.getColumn("v")[0] ? "value" : "null");
-} else {
+    # a null string that the default encoding cannot represent: a euro sign
+    err("csv-null-euro", sub () {
+        DataFrame::DataFrame euro_csv = DataFrame::DataFrame::readCSV(dir + "/null.csv",
+            <DataFrame::CsvOptions>{"null_string": binary_to_string(<e282ac>, "UTF-8")});
+    });
+} else if (mode == "read") {
     DataFrame::DataFrame read = DataFrame::DataFrame::readParquet(dir + "/names.parquet");
     out("read-column", read.columnNames()[0]);
     out("read-key", (keys read.getColumn("h")[0])[0]);
+    out("read-map-key", (keys read.getColumn("m")[0])[0]);
+    read = DataFrame::DataFrame::readParquet(dir + "/names.parquet",
+        <DataFrame::ParquetReadOptions>{"columns": (cafe,)});
+    out("read-columns-option", read.columnNames()[0]);
+    read = DataFrame::DataFrame::fromArrowIpc(ReadOnlyFile::readBinaryFile(dir + "/names.arrow"));
+    out("read-ipc-column", read.columnNames()[0]);
+    out("read-ipc-map-key", (keys read.getColumn("m")[0])[0]);
+    # names that ISO-8859-1 cannot represent, for read-iso
+    string euro = binary_to_string(<e282ac>, "UTF-8");
+    names_frame(euro).writeParquet(dir + "/euro-column.parquet");
+    DataFrame::DataFrame euro_key = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+        "m": ({euro: 3},),
+    }, {
+        "m": {"schema": {"kind": "map", "nullable": False, "children": (
+            {"name": "key", "kind": "string", "nullable": False},
+            {"name": "value", "kind": "int", "nullable": True},
+        )}},
+    }));
+    euro_key.writeParquet(dir + "/euro-key.parquet");
+} else {
+    # names in the file that the default encoding cannot represent
+    err("iso-euro-column", sub () { DataFrame::DataFrame df = DataFrame::DataFrame::readParquet(dir
+        + "/euro-column.parquet"); });
+    err("iso-euro-map-key", sub () { DataFrame::DataFrame df = DataFrame::DataFrame::readParquet(dir
+        + "/euro-key.parquet"); });
 }
