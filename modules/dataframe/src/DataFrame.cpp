@@ -440,6 +440,10 @@ static bool qoreDataFrameLessThan(QoreValue lhs, QoreValue rhs, ExceptionSink* x
         QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
         return *xsink ? false : ls->compare(*rs) < 0;
     }
+    // a char is compared with any other value but a string as its code point, as an int is (qore#6040)
+    if (lt == NT_CHAR || rt == NT_CHAR) {
+        return l.getAsBigInt() < r.getAsBigInt();
+    }
     if (lt == NT_DATE || rt == NT_DATE) {
         DateTimeValueHelper ld(l);
         DateTimeValueHelper rd(r);
