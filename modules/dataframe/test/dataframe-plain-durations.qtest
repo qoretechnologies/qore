@@ -109,11 +109,22 @@ class DataFramePlainDurationsTest inherits QUnit::Test {
             date v = DataFrame::DataFrame::fromArrowIpc(patched).getColumn("v")[0];
             assertEq(patch[1], sprintf("%y", v), "a duration of 10000000000000 s");
         }
-        binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", "0080c6a47e8d0300"));
-        assertThrows("DATAFRAME-IO-ERROR", sub () {
-            DataFrame::DataFrame back = DataFrame::DataFrame::fromArrowIpc(patched);
-            back.getColumn("v");
-        }, (), "a duration of more days than an int holds");
+        # more days than an int holds: 1e15 s and -1e15 s; the first days that do not fit:
+        # (2147483647 + 1) * 86400 s = 185542587187200 s, and -(2147483648 + 1) * 86400 s = -185542587273600 s
+        foreach string patch in (("0080c6a47e8d0300", "0080395b8172fcff", "00000000c0a80000", "80aefeff3f57ffff")) {
+            binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", patch));
+            assertThrows("DATAFRAME-IO-ERROR", sub () {
+                DataFrame::DataFrame back = DataFrame::DataFrame::fromArrowIpc(patched);
+                back.getColumn("v");
+            }, (), "a duration of more days than an int holds: " + patch);
+        }
+        # the last days that fit: 2147483647 days and -2147483648 days
+        foreach list<string> patch in ((("80aefeffbfa80000", "<time: 2147483647 days>")),
+                (("000000004057ffff", "<time: -2147483648 days>"))) {
+            binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", patch[0]));
+            date v = DataFrame::DataFrame::fromArrowIpc(patched).getColumn("v")[0];
+            assertEq(patch[1], sprintf("%y", v), "the last days that fit");
+        }
     }
 
     #! the columns of a join keep their durations

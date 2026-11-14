@@ -79,6 +79,25 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         assertEq((1.0, 258.0, 4.0, 136.0, 16.0, 544.0, 64.0, 1024.0, 2048.0),
             df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
         assertEq(9, df.groupBy(("k",)).count().numRows(), "count()");
+        # nunique counts the same values
+        DataFrame::DataFrame u = (new DataFrame::DataFrame({"g": (map 1, df.getColumn("k")), "k": df.getColumn("k")}))
+            .groupBy(("g",)).agg({"k": "nunique"});
+        assertEq((9,), u.getColumn("k"), "nunique");
+        # equal hashes with their keys in another order make one group; two closures make two
+        code c1 = sub () {};
+        code c2 = sub () {};
+        DataFrame::DataFrame h({
+            "k": (c'z', {"a": 1, "b": 2}, {"b": 2, "a": 1}, c1, c2, c1),
+            "v": (1, 2, 4, 8, 16, 32),
+        });
+        assertEq((1.0, 6.0, 40.0, 16.0), h.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "hashes and closures");
+        # a deeply nested value is keyed with no recursion
+        auto deep = 1;
+        for (int i = 0; i < 100000; ++i) {
+            deep = (deep,);
+        }
+        DataFrame::DataFrame d({"k": (c'z', deep, deep), "v": (1, 2, 4)});
+        assertEq((1.0, 6.0), d.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "deeply nested lists");
     }
 
     #! count() gives the key values of a float64 column and of a column of durations

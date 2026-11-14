@@ -10,6 +10,7 @@
 
 #include "df_column.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <limits>
@@ -253,64 +254,108 @@ void appendKeyBytes(std::string& key, const char* data, size_t len) {
     key.append(data, len);
 }
 
-//! appends the key of a value of a column that holds any value (qore#6107)
-/** A float is keyed by its bits, as in a float64 column, as its string form can be the same for different floats; a
-    binary value by its bytes; a list by its elements and a hash by its keys and values, in order, so that two lists
-    or hashes have the same key only if they are equal; an object by its identity; any other value by its string
-    form, which is compared in UTF-8, the encoding of the string cells, so that equal strings in different encodings
-    make the same key.  Each part has its tag and a part of any length its length, so that two different values
-    never make the same key.
-*/
-void appendAutoValueKey(std::string& key, QoreValue v) {
+//! appends the key of a value that is not a list or a hash (see appendAutoValueKey())
+void appendScalarValueKey(std::string& key, QoreValue v) {
     switch (v.getType()) {
         case NT_NOTHING:
         case NT_NULL:
             key += 'N';
-            return;
+            break;
         case NT_FLOAT:
             appendDataFrameFloatKey(key, 'g', v.getAsFloat());
-            return;
+            break;
         case NT_BINARY: {
             const BinaryNode* b = v.get<const BinaryNode>();
             key += 'x';
             appendKeyBytes(key, static_cast<const char*>(b->getPtr()), b->size());
-            return;
+            break;
         }
-        case NT_LIST: {
-            const QoreListNode* l = v.get<const QoreListNode>();
-            key += 'L';
-            uint64_t n = l->size();
-            key.append(reinterpret_cast<const char*>(&n), sizeof(n));
-            for (size_t i = 0; i < l->size(); ++i) {
-                appendAutoValueKey(key, l->retrieveEntry(i));
-            }
-            return;
-        }
-        case NT_HASH: {
-            const QoreHashNode* h = v.get<const QoreHashNode>();
-            key += 'H';
-            uint64_t n = h->size();
-            key.append(reinterpret_cast<const char*>(&n), sizeof(n));
-            ConstHashIterator hi(h);
-            while (hi.next()) {
-                // a hash key is in the default encoding, as in every hash
-                const char* k = hi.getKey();
-                appendKeyBytes(key, k, strlen(k));
-                appendAutoValueKey(key, hi.get());
-            }
-            return;
-        }
-        case NT_OBJECT: {
-            const void* p = v.get<const QoreObject>();
+        case NT_OBJECT:
+        case NT_RUNTIME_CLOSURE:
+        case NT_FUNCREF: {
+            // keyed by identity
+            const void* p = v.getInternalNode();
             key += 'O';
             key.append(reinterpret_cast<const char*>(&p), sizeof(p));
-            return;
+            break;
         }
         default: {
             key += 'a';
             std::string str = dataFrameUtf8Key(v);
             appendKeyBytes(key, str.data(), str.size());
-            return;
+            break;
+        }
+    }
+}
+
+//! appends the key of a value of a column that holds any value (qore#6107)
+/** A float is keyed by its bits, as in a float64 column, as its string form can be the same for different floats; a
+    binary value by its bytes; a list by its elements and a hash by its keys and values (in the order of its sorted
+    keys, so that equal hashes with their keys in another order make the same key), so that two lists or hashes have
+    the same key only if they are equal; an object, a closure or a call reference by its identity; any other value
+    by its string form, which is compared in UTF-8, the encoding of the string cells, so that equal strings in
+    different encodings make the same key.  Each part has its tag and a part of any length its length, so that two
+    different values never make the same key.  The elements are walked with a stack of their own, so that a deeply
+    nested value cannot exhaust the thread's stack.
+*/
+void appendAutoValueKey(std::string& key, QoreValue top) {
+    // a value that is not a list or a hash needs no stack
+    qore_type_t top_type = top.getType();
+    if (top_type != NT_LIST && top_type != NT_HASH) {
+        appendScalarValueKey(key, top);
+        return;
+    }
+    // a value to key, after the bytes of the hash key of the value, if any
+    struct Item {
+        QoreValue v;
+        const char* hash_key;
+    };
+    std::vector<Item> pending;
+    pending.push_back({top, nullptr});
+    while (!pending.empty()) {
+        Item item = pending[pending.size() - 1];
+        pending.pop_back();
+        if (item.hash_key) {
+            appendKeyBytes(key, item.hash_key, strlen(item.hash_key));
+        }
+        QoreValue v = item.v;
+        switch (v.getType()) {
+            case NT_LIST: {
+                const QoreListNode* l = v.get<const QoreListNode>();
+                key += 'L';
+                uint64_t n = l->size();
+                key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+                // the elements are keyed in order: they are pushed in reverse
+                for (size_t i = l->size(); i > 0; --i) {
+                    pending.push_back({l->retrieveEntry(i - 1), nullptr});
+                }
+                break;
+            }
+            case NT_HASH: {
+                const QoreHashNode* h = v.get<const QoreHashNode>();
+                key += 'H';
+                uint64_t n = h->size();
+                key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+                // a hash key is in the default encoding, as in every hash; the members are keyed in the order of
+                // their sorted keys
+                std::vector<std::pair<const char*, QoreValue>> members;
+                members.reserve(h->size());
+                ConstHashIterator hi(h);
+                while (hi.next()) {
+                    members.emplace_back(hi.getKey(), hi.get());
+                }
+                std::sort(members.begin(), members.end(), [] (const std::pair<const char*, QoreValue>& a,
+                        const std::pair<const char*, QoreValue>& b) {
+                    return strcmp(a.first, b.first) < 0;
+                });
+                for (size_t i = members.size(); i > 0; --i) {
+                    pending.push_back({members[i - 1].second, members[i - 1].first});
+                }
+                break;
+            }
+            default:
+                appendScalarValueKey(key, v);
+                break;
         }
     }
 }
