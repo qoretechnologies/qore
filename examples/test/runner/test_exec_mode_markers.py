@@ -200,6 +200,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   ISO-8859-1
         # - dataframe-default-encoding-names (#6100): its checks run in child processes whose default character
         #   encodings differ
+        # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -209,6 +211,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/empty-string-order.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
+                                 "examples/test/qore/functions/relative-date-range.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",

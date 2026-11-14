@@ -1753,6 +1753,10 @@
     - a Program that outlives the library cleanup (such as one a module holds in a static object) no longer crashes
       a normal process exit, a thread started during the cleanup raises \c THREAD-CREATION-FAILURE, and the exit no
       longer hangs when a foreign thread (such as a Python daemon thread) is blocked in Qore code (issue #6045)
+    - @ref Qore::years() "years()", @ref Qore::months() "months()", @ref Qore::days() "days()",
+      @ref Qore::hours() "hours()", @ref Qore::minutes() "minutes()", @ref Qore::seconds() "seconds()",
+      @ref Qore::milliseconds() "milliseconds()" and @ref Qore::microseconds() "microseconds()" now raise
+      \c INVALID-DATE for a value that a relative date cannot hold; it wrapped to another duration (issue #6101)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled
