@@ -193,8 +193,20 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         parse_qc = parse_get_class_priv();
         parse_ns = parse_get_ns();
         //printd(5, "QoreClosureParseNode::parseInitImpl() this: %p set deferred\n", this);
-        // Use generic closure type for deferred initialization
+        // the code and the default values of the closure can refer to constants, so their initialization is
+        // deferred (#4903), but the types of its signature are resolved now: the closure has the code type of its
+        // signature in the expression, as outside a constant expression, also behind an operator and as the value
+        // of a constant (qore#6046); the generic closure type is left for a signature whose types cannot be resolved
         parse_context.typeInfo = runTimeClosureTypeInfo;
+        if (uf->getUniqueSignature()) {
+            UserSignature* sig = static_cast<UserSignature*>(uf->getUniqueSignature());
+            // as for the deferred initialization: a constant can be initialized while generic code is parsed, whose
+            // type parameters the closure does not name (qore#5733)
+            UserSignatureTypeParamContextHelper type_param_context(nullptr);
+            if (!sig->resolveTypes()) {
+                parse_context.typeInfo = qore_get_complex_code_type_from_signature(sig);
+            }
+        }
     } else {
         // in generic code, the closure names its type parameters (see UserSignatureTypeParamContextHelper), or
         // those of its class

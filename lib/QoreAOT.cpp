@@ -187,6 +187,7 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreStreamingOperatorNode.h"
+#include "qore/intern/FindNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
@@ -5150,7 +5151,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledInitFunc>& compiled_init_funcs,
         const AOTConstantReverseMap* const_reverse_map,
-        std::string& error, const char* module_path = nullptr) {
+        std::string& error, const char* module_path = nullptr, bool is_del = false) {
     const QoreFunction* source_qf = nullptr;
     UserVariantBase* uvb = getModuleInitUserVariant(init_c, mod_name, module_path, source_qf, error);
     if (!uvb) {
@@ -5160,7 +5161,9 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
         return false;
     }
 
-    std::string init_name = std::string("__module_init::") + mod_name;
+    // the module's \c del closure is compiled the same way; it is loaded with the module and run by
+    // qore_aot_module_delete() (#6015)
+    std::string init_name = std::string(is_del ? "__module_del::" : "__module_init::") + mod_name;
 
     QoreIRFunction* ir_func = nullptr;
     std::string lower_error;
@@ -5222,7 +5225,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
     cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
     cif.feature_flags = scanIRFeatureFlags(*ir_func);
-    cif.target_type = AOTCompiledInitFunc::MODULE_INIT;
+    cif.target_type = is_del ? AOTCompiledInitFunc::MODULE_DEL : AOTCompiledInitFunc::MODULE_INIT;
     cif.ns_path = mod_name;
     cif.item_name = module_path ? module_path : "";
 
@@ -23970,6 +23973,73 @@ bool QoreAOT::compile(QoreProgram* pgm,
             return false;
         }
     }
+    // the del closures of the local modules run when the compiled script's Program is cleared (qore#6015); a module
+    // without an init closure can have one.  The closure of a module can use the modules that it requires, so the
+    // closures are compiled, and run, in the order that puts a module before the modules it requires
+    {
+        std::vector<std::string> del_modules;
+        for (auto& root : local_module_roots) {
+            QoreAbstractModule* mod = QMM.findModule(root.first.c_str());
+            QoreUserModule* user_mod = mod && mod->isUser() ? dynamic_cast<QoreUserModule*>(mod) : nullptr;
+            if (!user_mod) {
+                continue;
+            }
+            QoreValue del_c = user_mod->refDelClosure();
+            if (del_c) {
+                del_modules.push_back(root.first);
+            }
+            del_c.discard(nullptr);
+        }
+        // the modules that each module requires, directly or through other modules
+        std::map<std::string, std::set<std::string>> requires_map;
+        for (const std::string& name : del_modules) {
+            std::set<std::string> all;
+            std::vector<std::string> todo{name};
+            while (!todo.empty()) {
+                std::string cur = std::move(todo.back());
+                todo.pop_back();
+                std::set<std::string> deps;
+                QMM.getModuleDependencies(cur.c_str(), deps);
+                for (const std::string& d : deps) {
+                    if (all.insert(d).second) {
+                        todo.push_back(d);
+                    }
+                }
+            }
+            requires_map[name] = std::move(all);
+        }
+        std::vector<std::string> ordered;
+        while (!del_modules.empty()) {
+            size_t pick = 0;
+            for (size_t i = 0; i < del_modules.size(); ++i) {
+                bool required = false;
+                for (size_t j = 0; j < del_modules.size() && !required; ++j) {
+                    required = i != j && requires_map[del_modules[j]].count(del_modules[i]);
+                }
+                if (!required) {
+                    pick = i;
+                    break;
+                }
+            }
+            ordered.push_back(del_modules[pick]);
+            del_modules.erase(del_modules.begin() + pick);
+        }
+        for (const std::string& name : ordered) {
+            QoreAbstractModule* mod = QMM.findModule(name.c_str());
+            QoreUserModule* user_mod = dynamic_cast<QoreUserModule*>(mod);
+            assert(user_mod);
+            QoreValue del_c = user_mod->refDelClosure();
+            std::string del_error;
+            bool del_ok = compileModuleInitClosureAsInitFunc(del_c, name.c_str(), user_mod->getProgram(),
+                ctx, *module, di_builder, di_cu, compiled_init_funcs, &const_reverse_map,
+                del_error, user_mod->getFileName(), true);
+            del_c.discard(nullptr);
+            if (!del_ok) {
+                error = del_error;
+                return false;
+            }
+        }
+    }
 
     // Step 2: Try to compile top-level code with AOT mode
     {
@@ -26494,6 +26564,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // Capture the module init closure value here so it survives past mod_ctx
     // scope end (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     QoreParseOptions parsed_po;
     {
         // the module is parsed only to be compiled and is never registered: closing its context
@@ -26516,6 +26589,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             init_c_holder = mod_ctx.init_c.refSelf();
         }
 
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
     }
 
@@ -26613,6 +26689,17 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
             &const_reverse_map, init_error)) {
             error = init_error;
+            return false;
+        }
+    }
+
+    // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+    if (del_c_holder) {
+        std::string del_error;
+        if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+            *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+            &const_reverse_map, del_error, nullptr, true)) {
+            error = del_error;
             return false;
         }
     }
@@ -26917,6 +27004,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     // Capture the module init closure value so it survives past mod_ctx scope end
     // (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -27020,6 +27110,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             init_c_holder = mod_ctx.init_c.refSelf();
         }
 
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
 
         // Handle warnings
@@ -27109,6 +27202,17 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
                 &const_reverse_map, init_error)) {
                 error = init_error;
+                return false;
+            }
+        }
+
+        // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+        if (del_c_holder) {
+            std::string del_error;
+            if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map, del_error, nullptr, true)) {
+                error = del_error;
                 return false;
             }
         }
@@ -30776,6 +30880,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -30915,6 +31022,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             if (is_primary) {
                 init_c_holder = mod_ctx.init_c.refSelf();
             }
+        }
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
         }
         mod_ctx.close();
 
@@ -31346,6 +31456,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -31432,6 +31545,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         if (mod_ctx.hasInit()) {
             init_c_holder = mod_ctx.init_c.refSelf();
         }
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
 
         if (qoreAotHandleWarnings(wsink, error, "module object aggregation parsing")) {
@@ -31496,6 +31612,17 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
                 &const_reverse_map, init_error)) {
                 error = init_error;
+                return false;
+            }
+        }
+
+        // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+        if (del_c_holder) {
+            std::string del_error;
+            if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map, del_error, nullptr, true)) {
+                error = del_error;
                 return false;
             }
         }
@@ -31900,6 +32027,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -31986,6 +32116,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         if (mod_ctx.hasInit()) {
             init_c_holder = mod_ctx.init_c.refSelf();
         }
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
 
         if (qoreAotHandleWarnings(wsink, error, "module archive aggregation parsing")) {
@@ -32039,6 +32172,17 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
                 &const_reverse_map, init_error)) {
                 error = init_error;
+                return false;
+            }
+        }
+
+        // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+        if (del_c_holder) {
+            std::string del_error;
+            if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map, del_error, nullptr, true)) {
+                error = del_error;
                 return false;
             }
         }
@@ -35045,6 +35189,12 @@ class ExprTreeSerializer {
         if (auto* op = dynamic_cast<const QoreIterateOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_ITERATE, op->getExp());
         }
+        if (auto* op = dynamic_cast<const FindNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FIND));
+            writeU8(static_cast<uint8_t>(op->getMode()));
+            writeU16(3);
+            return serializeValue(op->exp) && serializeValue(op->find_exp) && serializeValue(op->where);
+        }
         if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STREAMING));
             writeU8(static_cast<uint8_t>(op->getKind()));
@@ -36016,6 +36166,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (dynamic_cast<const QoreIterateOperatorNode*>(node)) {
         id.kind = AOTExprKind::ITERATE;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const FindNode*>(node)) {
+        id.kind = AOTExprKind::FIND;
         id.child_expr = v;
         return id;
     }

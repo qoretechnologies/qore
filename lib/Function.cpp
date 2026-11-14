@@ -2676,12 +2676,12 @@ void UserSignature::parseInitPopLocalVars() {
     }
 }
 
-int UserSignature::resolve() {
-    if (resolved) {
-        return 0;
+// documented in Function.h
+int UserSignature::resolveTypes() {
+    if (types_resolved) {
+        return types_err;
     }
-
-    resolved = true;
+    types_resolved = true;
     // a closure names the type parameters of the code that it is in (qore#5733)
     if (closure && type_params.empty() && !enclosing_signature) {
         enclosing_signature = parse_get_signature_type_param_context();
@@ -2726,49 +2726,57 @@ int UserSignature::resolve() {
 #endif
 
     // issue #3644: to fix recursive errors in signature resolution, first resolve types, then args
-    bool has_def_args = true;
     for (unsigned i = 0; i < parseTypeList.size(); ++i) {
         if (parseTypeList[i]) {
             assert(!typeList[i]);
             typeList[i] = QoreParseTypeInfo::resolveAndDelete(parseTypeList[i], loc, err);
-        }
-        if (!has_def_args && defaultArgList[i]) {
-            has_def_args = true;
+            parseTypeList[i] = nullptr;
         }
     }
 
+    types_err = err;
+    return err;
+}
+
+int UserSignature::resolve() {
+    if (resolved) {
+        return 0;
+    }
+
+    resolved = true;
+    int err = resolveTypes();
+    UserSignatureTypeParamContextHelper type_param_context(this);
+
     // now resolve default args
-    if (has_def_args) {
-        for (unsigned i = 0; i < parseTypeList.size(); ++i) {
-            // initialize default arguments
-            if (defaultArgList[i]) {
-                QoreParseContext parse_context(selfid);
-                if (default_value_pflag) {
-                    parse_context.setFlags(default_value_pflag);
+    for (unsigned i = 0; i < parseTypeList.size(); ++i) {
+        // initialize default arguments
+        if (defaultArgList[i]) {
+            QoreParseContext parse_context(selfid);
+            if (default_value_pflag) {
+                parse_context.setFlags(default_value_pflag);
+            }
+            if (parse_init_value(defaultArgList[i], parse_context) && !err) {
+                err = -1;
+            }
+            const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
+            if (parse_context.lvids) {
+                parse_error(*loc, "illegal local variable declaration in default value expression in parameter " \
+                    "'%s'", names[i].c_str());
+                while (parse_context.lvids--) {
+                    pop_local_var();
                 }
-                if (parse_init_value(defaultArgList[i], parse_context) && !err) {
+            }
+            // check type compatibility
+            if (!QoreTypeInfo::parseAccepts(typeList[i], argTypeInfo)) {
+                QoreStringNode* desc = new QoreStringNode;
+                desc->sprintf("parameter '%s' expects ", names[i].c_str());
+                QoreTypeInfo::getThisType(typeList[i], *desc);
+                desc->concat(", but the default value is ");
+                QoreTypeInfo::getThisType(argTypeInfo, *desc);
+                desc->concat(" instead");
+                qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+                if (!err) {
                     err = -1;
-                }
-                const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
-                if (parse_context.lvids) {
-                    parse_error(*loc, "illegal local variable declaration in default value expression in parameter " \
-                        "'%s'", names[i].c_str());
-                    while (parse_context.lvids--) {
-                        pop_local_var();
-                    }
-                }
-                // check type compatibility
-                if (!QoreTypeInfo::parseAccepts(typeList[i], argTypeInfo)) {
-                    QoreStringNode* desc = new QoreStringNode;
-                    desc->sprintf("parameter '%s' expects ", names[i].c_str());
-                    QoreTypeInfo::getThisType(typeList[i], *desc);
-                    desc->concat(", but the default value is ");
-                    QoreTypeInfo::getThisType(argTypeInfo, *desc);
-                    desc->concat(" instead");
-                    qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
-                    if (!err) {
-                        err = -1;
-                    }
                 }
             }
         }
@@ -8822,7 +8830,11 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
 
             if (ok && !*xsink) {
                 val = ir_return_value;
-            } else if (!*xsink) {
+            } else if (*xsink) {
+                // a return that an exception raised after it (by the destructor of a local) leaves the value it
+                // returns to be released here, after the locals, as the AST interpreter releases it (#6029)
+                ir_return_value.discard(xsink);
+            } else {
                 if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
                     QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
                 }
@@ -9221,7 +9233,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (ok && !*xsink) {
                     val = ir_return_value;
                 } else if (*xsink) {
-                    // exception raised — propagate
+                    // exception raised: propagate; a return that an exception raised after it (by the destructor of a
+                    // local) leaves the value it returns to be released here, after the locals, as the AST interpreter
+                    // releases it (#6029)
+                    ir_return_value.discard(xsink);
                 } else {
                     // IR execution failed without raising an exception.  Under %modern
                     // (which is guaranteed on this path — ensureIrExecMode downgrades

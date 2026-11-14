@@ -3517,6 +3517,11 @@ static bool methodVariantInlineEligibleForInterpreter(const AbstractQoreFunction
 }
 
 static inline bool exactPrimitiveTypeAcceptsValue(const QoreTypeInfo* type_info, const QoreValue& value) {
+    // an enum member has the type of its base value, but is not a value of the plain type: the assignment converts it
+    // to the declared type (qore#6042)
+    if (value.isEnum()) {
+        return false;
+    }
     qore_type_t value_type = value.getType();
     return (type_info == bigIntTypeInfo && value_type == NT_INT)
         || (type_info == floatTypeInfo && value_type == NT_FLOAT)
@@ -7686,6 +7691,39 @@ static QORE_INTERN_NOINLINE bool qore_ir_dbg_dismissed_exit(QoreIRDebugFrameStat
     return true;
 }
 
+struct IRCatchEntry {
+    QoreException* caught;  // the caught exception
+    QoreException* saved;   // the previous td->catchException value
+    //! the number of scopes open when the catch block was entered (those that enclose the try statement): the
+    //! catch block is in every scope below that depth, and is left when one of them is (#5969)
+    size_t scope_depth;
+};
+
+//! Restores enclosing caught exceptions on the exceptional exit from a scope (#5969).
+static QORE_INTERN_NOINLINE void qore_ir_close_catch_scopes_pending(std::vector<IRCatchEntry>& stack,
+        size_t scope_count, ExceptionSink* xsink) {
+    while (!stack.empty() && stack.back().scope_depth >= scope_count) {
+        IRCatchEntry entry = stack.back();
+        stack.pop_back();
+        if (entry.caught) {
+            catch_swap_exception(entry.saved);
+            entry.caught->del(xsink);
+        }
+    }
+}
+
+//! Keeps the empty-stack/depth checks inline, with no persistent closure object in each interpreter frame.
+/** Only a pending exception or thread_exit closes these catch scopes here. Normal break/continue/return exits
+    close them with CatchCleanup. The uncommon unwind loop lives outside the per-invocation execute() frame.
+*/
+static QORE_INTERN_ALWAYS_INLINE void qore_ir_close_catch_scopes(std::vector<IRCatchEntry>& stack,
+        size_t scope_count, ExceptionSink* xsink) {
+    if (stack.empty() || stack.back().scope_depth < scope_count || !xsink || !*xsink) {
+        return;
+    }
+    qore_ir_close_catch_scopes_pending(stack, scope_count, xsink);
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -8030,14 +8068,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         val.refSelf();
                     }
 
-                    // Apply type filter like JIT path: match instantiateFastCallParams in JITRuntime.cpp
+                    // Apply type filter like JIT path: match instantiateFastCallParams in JITRuntime.cpp; an enum
+                    // member takes the parameter's type (the base value for a plain type), which needs no filter of
+                    // the type, so it is converted too (qore#6042)
                     const LocalVar* lv = i < static_cast<int>(func.interpreter_param_local_vars.size())
                         ? func.interpreter_param_local_vars[static_cast<size_t>(i)]
                         : nullptr;
                     if (lv) {
                         const QoreTypeInfo* paramTypeInfo = lv->getTypeInfo();
                         if (!exactPrimitiveTypeAcceptsValue(paramTypeInfo, val)
-                                && QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+                                && (val.isEnum() || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val))) {
                             QoreTypeInfo::acceptInputParam(paramTypeInfo, i, lv->getName(), val, xsink);
                             if (*xsink) {
                                 val.discard(xsink);
@@ -8089,14 +8129,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     };
     auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
-    struct CatchEntry {
-        QoreException* caught;  // the caught exception
-        QoreException* saved;   // the previous td->catchException value
-    };
-    std::vector<CatchEntry> catch_exception_stack;
+    std::vector<IRCatchEntry> catch_exception_stack;
     // RAII cleanup for catch_exception_stack — ensures proper cleanup on all exit paths
     struct CatchStackCleanup {
-        std::vector<CatchEntry>& stack;
+        std::vector<IRCatchEntry>& stack;
         ExceptionSink* xsink;
         ~CatchStackCleanup() {
             while (!stack.empty()) {
@@ -8137,6 +8173,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto fireScopeExits = [&](size_t target_depth = 0) {
         while (scope_stack.size() > target_depth) {
             size_t scope_start = scope_stack.back().handler_start;
+            qore_ir_close_catch_scopes(catch_exception_stack, scope_stack.size(), xsink);
             scope_stack.pop_back();
             if (on_block_exit_handlers.size() > scope_start) {
                 // a scope left without an exception, such as by a thread_exit, runs its on_success handlers, as
@@ -10646,6 +10683,7 @@ next_instruction:
                     // exception released its own temporaries when it branched here
                     releaseScopeTemps(scope_stack.back());
                     size_t scope_start = scope_stack.back().handler_start;
+                    qore_ir_close_catch_scopes(catch_exception_stack, scope_stack.size(), xsink);
                     scope_stack.pop_back();
                     // Execute on_error/on_exit/on_success handlers in reverse order (LIFO); a block left by a
                     // thread_exit, which is not an exception, runs its on_success handlers, as in the AST
@@ -10751,7 +10789,7 @@ next_instruction:
                 if (!xsink || !xsink->isException()) {
                     setValueSlot(values, inst->result.id, QoreValue(), xsink);
                     // Push empty entry for consistent push/pop with CatchCleanup
-                    catch_exception_stack.push_back({nullptr, nullptr});
+                    catch_exception_stack.push_back({nullptr, nullptr, scope_stack.size()});
                     ++ip;
                     break;
                 }
@@ -10762,7 +10800,7 @@ next_instruction:
                     fflush(stderr);
                 }
                 QoreException* saved = catch_swap_exception(caught);
-                catch_exception_stack.push_back({caught, saved});
+                catch_exception_stack.push_back({caught, saved, scope_stack.size()});
                 QoreHashNode* info = caught->makeExceptionObject();
                 setValueSlot(values, inst->result.id, QoreValue(info), xsink);
                 cleanup.push_back(inst->result.id);
@@ -15414,6 +15452,12 @@ load_local_done:
                     }
                     // Skip handler execution if inline_lowered=true; just flush the vector
                     if (!scope_inst->inline_lowered) {
+                        // the catch blocks entered in the scope are left before its handlers run (the scope count
+                        // includes the one just left); a scope left by the normal exit of its block (lowered inline)
+                        // closes none: a break, continue or return out of a catch block closes it with CatchCleanup,
+                        // and a scope without handlers leaves them to the scopes, landing pads and frame exit after it
+                        // (#5969)
+                        qore_ir_close_catch_scopes(catch_exception_stack, scope_stack.size() + 1, xsink);
                         ExceptionSink obe_xsink;
                         bool error = scope_inst->is_error || (xsink && xsink->isException());
                         for (size_t i = on_block_exit_handlers.size(); i > scope_start; --i) {
@@ -21207,6 +21251,32 @@ private:
     LValueHelper& lvalue;
 };
 
+template <bool Lexical>
+static __attribute__((noinline)) QoreValue mergeExternalObjectMembers(LValueHelper& v, QoreObject* o,
+        const QoreValue& right, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    // Preserve an opaque target tag as well as its ownership when returning the compound result.
+    ValueHolder target(v.getReferencedValue(), xsink);
+    v.finishForCallback();
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        LValueHelper object_scan(*o, xsink, LValueHelper::ObjectScan{});
+        LValueMergeDerefHelper sdh(object_scan, xsink);
+        if constexpr (Lexical) {
+            qore_object_private::get(*o)->plusEquals(right.getInternalNode(), object_scan.vl, sdh, xsink, policy);
+        } else {
+            qore_object_private::get(*o)->plusEquals(right.getInternalNode(), object_scan.vl, sdh, xsink);
+        }
+    }
+    // ValueHolder::release() converts opaque references to ordinary pointers. Transfer the full value instead.
+    QoreValue result;
+    if (!*xsink) {
+        result.swap(*target);
+    }
+    return result;
+}
+
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
@@ -21307,8 +21377,12 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             }
         }
     } else if (vtype == NT_OBJECT) {
-        LValueMergeDerefHelper sdh(v, xsink);
         QoreObject* o = v.getValue().get<QoreObject>();
+        if (qore_class_private::get(*o->getClass())->has_member_accessors
+                && (right.getType() == NT_HASH || right.getType() == NT_OBJECT)) {
+            return mergeExternalObjectMembers<Lexical>(v, o, right, xsink, policy);
+        }
+        LValueMergeDerefHelper sdh(v, xsink);
         if constexpr (Lexical) {
             qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink, policy);
         } else {
@@ -21378,7 +21452,60 @@ static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right,
     return doPlusEqualsOnLValue(v, right_holder, xsink);
 }
 
-// Inner function: perform -= on an already-navigated LValueHelper.
+// The target is either still held by its lvalue lock or explicitly pinned by the native-callback path.
+static QORE_INTERN_ALWAYS_INLINE void removeObjectMembers(LValueHelper& v, QoreObject* o,
+        const QoreValue& right, ExceptionSink* xsink) {
+    auto remove_member = [&](const QoreValue& key) {
+        QoreHashKeyHelper str(key, xsink);
+        if (*xsink) {
+            return;
+        }
+        QoreValue removed = qore_object_private::takeMember(*o, xsink, str.c_str());
+        // The lvalue still contains the same object, even when its last scannable member is removed.
+        // Record the object's changed graph without applying a delta to the lvalue's parent container.
+        bool scan_removed = needs_scan(removed);
+        v.objectRemoved(*qore_object_private::get(*o), scan_removed);
+        v.saveTemp(removed);
+    };
+
+    const QoreListNode* nrl = (right.getType() == NT_LIST)
+        ? right.get<const QoreListNode>()
+        : nullptr;
+    if (nrl && nrl->size()) {
+        ConstListIterator li(nrl);
+        while (li.next()) {
+            remove_member(li.getValue());
+            if (*xsink) {
+                return;
+            }
+        }
+    } else {
+        remove_member(right);
+    }
+}
+
+// Native gates/accessors can replace the parent. Finish that lvalue before the callback, and keep only the
+// original object's identity and graph bookkeeping. Neither success nor failure reads the former parent slot.
+static __attribute__((noinline)) QoreValue removeExternalObjectMembers(LValueHelper& v, QoreObject* o,
+        const QoreValue& right, ExceptionSink* xsink) {
+    // Preserve an opaque target tag as well as its ownership when returning the compound result.
+    ValueHolder target(v.getReferencedValue(), xsink);
+    v.finishForCallback();
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        LValueHelper object_scan(*o, xsink, LValueHelper::ObjectScan{});
+        removeObjectMembers(object_scan, o, right, xsink);
+    }
+    // ValueHolder::release() converts opaque references to ordinary pointers. Transfer the full value instead.
+    QoreValue result;
+    if (!*xsink) {
+        result.swap(*target);
+    }
+    return result;
+}
+
 QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
     if (right.isNothing()) {
         return v.getReferencedValue();
@@ -21474,33 +21601,11 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             v.startContainerRemoval();
             QoreObject* o = v.getValue().get<QoreObject>();
 
-            auto remove_member = [&](const QoreValue& key) {
-                QoreHashKeyHelper str(key, xsink);
-                if (*xsink) {
-                    return;
-                }
-                QoreValue removed = qore_object_private::takeMember(*o, xsink, str.c_str());
-                // The lvalue still contains the same object, even when its last scannable member is removed.
-                // Record the object's changed graph without applying a delta to the lvalue's parent container.
-                bool scan_removed = needs_scan(removed);
-                v.objectRemoved(*qore_object_private::get(*o), scan_removed);
-                v.saveTemp(removed);
-            };
-
-            const QoreListNode* nrl = (right.getType() == NT_LIST)
-                ? right.get<const QoreListNode>()
-                : nullptr;
-            if (nrl && nrl->size()) {
-                ConstListIterator li(nrl);
-                while (li.next()) {
-                    remove_member(li.getValue());
-                    if (*xsink) {
-                        return QoreValue();
-                    }
-                }
-            } else {
-                remove_member(right);
+            const qore_class_private* cls = qore_class_private::get(*o->getClass());
+            if (cls->has_member_accessors || cls->member_write_gate) {
+                return removeExternalObjectMembers(v, o, right, xsink);
             }
+            removeObjectMembers(v, o, right, xsink);
         }
     } else {
         if (right.getType() == NT_DATE) {

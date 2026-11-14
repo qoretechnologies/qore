@@ -5751,6 +5751,9 @@ void QoreModuleManager::delUser() {
         for (QoreUserModule* um : user_modules) {
             um->runDelCallback(xsink);
         }
+        // AOT user modules are binary modules, deleted after all user modules in cleanup(), but their del closures
+        // run here too, while all module data exists (qore#6015)
+        qore_aot_run_all_module_del_closures();
     }
 
     // calls into module code take the thread count of the module's Program again from now on, and the threads in

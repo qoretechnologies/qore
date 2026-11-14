@@ -104,6 +104,7 @@
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreStreamingOperatorNode.h"
+#include "qore/intern/FindNode.h"
 #include "qore/intern/QoreElementsOperatorNode.h"
 #include "qore/intern/QoreDeleteOperatorNode.h"
 #include "qore/intern/QoreRemoveOperatorNode.h"
@@ -10347,8 +10348,22 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
         static const std::vector<AOTLocalSlotId> no_locals;
         static const std::vector<AOTGlobalSlotId> no_globals;
         qoreAOTClearExprSerializationError();
-        bool ok = classifyAndWriteExpr(writer, dv, no_locals, no_globals,
-            writer.const_reverse_map);
+        // a top-level local that the default argument reads is written by its index (qore#5868)
+        struct TopLevelLocalRefScope {
+            QoreAOTBinaryWriter& writer;
+            bool old;
+            TopLevelLocalRefScope(QoreAOTBinaryWriter& w) : writer(w), old(w.allow_top_level_local_ref) {
+                writer.allow_top_level_local_ref = true;
+            }
+            ~TopLevelLocalRefScope() {
+                writer.allow_top_level_local_ref = old;
+            }
+        };
+        bool ok;
+        {
+            TopLevelLocalRefScope scope(writer);
+            ok = classifyAndWriteExpr(writer, dv, no_locals, no_globals, writer.const_reverse_map);
+        }
         std::string expr_error;
         bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
         if (!ok || expr_error_set || writer.position() == payload_pos) {
@@ -13077,6 +13092,12 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
             if (found) {
                 return true;
             }
+            std::string top_ref;
+            if (qore_aot_top_level_local_ref(writer, varref, top_ref)) {
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOCAL_VARREF));
+                writer.writeStringRef(top_ref.c_str());
+                return true;
+            }
         } else if (varref->getType() == VT_GLOBAL || varref->getType() == VT_THREAD_LOCAL) {
             Var* global_var = varref->ref.var;
             if (global_var) {
@@ -13716,6 +13737,13 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::ITERATE));
         return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
             parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const FindNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::FIND));
+        writer.writeU8(static_cast<uint8_t>(op->getMode()));
+        return classifyAndWriteExpr(writer, op->exp, parent_locals, parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->find_exp, parent_locals, parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->where, parent_locals, parent_globals, const_reverse_map);
     }
     if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STREAMING));
@@ -16488,6 +16516,27 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
     return true;
 }
 
+bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const VarRefNode* varref, std::string& ref) {
+    if (!writer.allow_top_level_local_ref || !writer.serialization_program || !varref) {
+        return false;
+    }
+    const LocalVar* lv = varref->ref.id;
+    if (!lv || !lv->isTopLevel() || !lv->getName()) {
+        return false;
+    }
+    const LVList* top = qore_program_private::get(*writer.serialization_program)->sb.getLVList();
+    if (!top) {
+        return false;
+    }
+    for (unsigned i = 0; i < top->size(); ++i) {
+        if (top->lv[i] == lv) {
+            ref = "top:" + std::to_string(i) + ":" + lv->getName();
+            return true;
+        }
+    }
+    return false;
+}
+
 bool QoreAOTBinaryDeserializer::finalizePostIndex(std::string& error) {
     LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     // Resolve deferred BCA (base class constructor argument) blobs.
@@ -16570,6 +16619,14 @@ bool QoreAOTBinaryDeserializer::resolveNativeExprDefaults(std::string& error) {
             QoreAOTDefaultTypeParamSignatureHelper type_param_signature(pd.uvb->getUserSignature());
             v = readOneExpr(reader, p, pend, expr_error, pgm, nullptr, 0, nullptr, 0);
         }
+        if (expr_error.find(QORE_AOT_DEFER_TOP_LEVEL_LOCAL) != std::string::npos) {
+            // reads a top-level local, which the Program has when its top-level code is registered (the enclosing
+            // expression readers add their own context to the error and stop, so the whole expression is read again
+            // from its start)
+            v.discard(nullptr);
+            pending_top_level_ned.push_back(std::move(pd));
+            continue;
+        }
         if (!expr_error.empty() || p != pend) {
             v.discard(nullptr);
             error = "cannot deserialize deferred default-argument expression for parameter "
@@ -16595,6 +16652,40 @@ bool QoreAOTBinaryDeserializer::resolveNativeExprDefaults(std::string& error) {
         }
     }
     pending_ned.clear();
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveTopLevelNativeExprDefaults(std::string& error) {
+    for (auto& pd : pending_top_level_ned) {
+        const uint8_t* p = pd.blob.data();
+        const uint8_t* pend = p + pd.blob.size();
+        std::string expr_error;
+        QoreValue v;
+        {
+            QoreAOTTypeParamOwnerHelper type_param_owner_helper(pd.uvb->getUserSignature()->getTypeParamOwner());
+            v = readOneExpr(reader, p, pend, expr_error, pgm, nullptr, 0, nullptr, 0);
+        }
+        if (!expr_error.empty() || p != pend) {
+            v.discard(nullptr);
+            error = "cannot deserialize the default-argument expression that reads a top-level local, parameter "
+                + std::to_string(pd.param_index);
+            if (!expr_error.empty()) {
+                error += ": ";
+                error += expr_error;
+            }
+            pending_top_level_ned.clear();
+            return false;
+        }
+        UserSignature* sig = pd.uvb->getUserSignature();
+        arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
+        if (pd.param_index < defaults.size()) {
+            defaults[pd.param_index].discard(nullptr);
+            defaults[pd.param_index] = v;
+        } else {
+            v.discard(nullptr);
+        }
+    }
+    pending_top_level_ned.clear();
     return true;
 }
 
