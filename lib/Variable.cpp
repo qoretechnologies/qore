@@ -47,6 +47,7 @@
 #include <memory>
 #include <set>
 #include <utility>
+#include <unordered_set>
 
 #include <qore/QoreType.h>
 #include "qore/intern/ParserSupport.h"
@@ -839,7 +840,7 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), before(o.before),
-        removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
+        removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
         track_write_protection(o.track_write_protection),
@@ -862,11 +863,140 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
 #ifdef DEBUG
 //! the number of recursive-reference scans started by lvalue operations in the current thread
 static thread_local int64 lvalue_scan_count = 0;
+static thread_local int64 lvalue_removal_visit_count = 0;
+static thread_local int64 lvalue_removal_probe_count = 0;
+static thread_local int64 lvalue_removal_allocation_count = 0;
 
 int64 q_get_lvalue_scan_count() {
     return lvalue_scan_count;
 }
+
+int64 q_get_lvalue_removal_visit_count() {
+    return lvalue_removal_visit_count;
+}
+
+int64 q_get_lvalue_removal_probe_count() {
+    return lvalue_removal_probe_count;
+}
+
+int64 q_get_lvalue_removal_allocation_count() {
+    return lvalue_removal_allocation_count;
+}
+
+void q_record_lvalue_removal_probe() {
+    ++lvalue_removal_probe_count;
+}
 #endif
+
+struct QoreRemovedValueTracker::ObjectEqual {
+    bool operator()(const RObject* a, const RObject* b) const noexcept {
+#ifdef DEBUG
+        q_record_lvalue_removal_probe();
+#endif
+        return a == b;
+    }
+};
+
+struct QoreRemovedValueTracker::State {
+    std::unordered_set<const AbstractQoreNode*> containers;
+
+    // Only identities are needed: an open-addressed table avoids one allocation per removed object.  At most
+    // half the buckets are occupied, so every lookup has an empty bucket at which to stop.
+    std::vector<const RObject*> objects;
+    size_t count = 0;
+
+    static size_t hash(const RObject* obj) {
+        // Mix the address before masking: allocator alignment/size classes make the low pointer bits unsuitable
+        // for power-of-two bucket counts.  This finalizer also works for zero-extended 32-bit addresses.
+        uint64_t bits = reinterpret_cast<uintptr_t>(obj);
+        bits ^= bits >> 33;
+        bits *= UINT64_C(0xff51afd7ed558ccd);
+        bits ^= bits >> 33;
+        bits *= UINT64_C(0xc4ceb9fe1a85ec53);
+        bits ^= bits >> 33;
+        return static_cast<size_t>(bits);
+    }
+
+    static size_t slot(const std::vector<const RObject*>& table, const RObject* obj) {
+        size_t mask = table.size() - 1;
+        size_t pos = hash(obj) & mask;
+        while (table[pos]) {
+            if (ObjectEqual{}(table[pos], obj)) {
+                break;
+            }
+            pos = (pos + 1) & mask;
+        }
+        return pos;
+    }
+
+    void grow() {
+        // Build the new table before replacing the old one, so allocation failure leaves its membership intact.
+        std::vector<const RObject*> next(objects.empty() ? 8 : objects.size() * 2, nullptr);
+        for (const RObject* obj : objects) {
+            if (obj) {
+                next[slot(next, obj)] = obj;
+            }
+        }
+        objects.swap(next);
+    }
+
+    void add(const RObject* obj) {
+        if (objects.empty()) {
+            grow();
+        }
+        size_t pos = slot(objects, obj);
+        if (objects[pos]) {
+            return;
+        }
+        if (count == objects.size() / 2) {
+            grow();
+            pos = slot(objects, obj);
+        }
+        objects[pos] = obj;
+        ++count;
+    }
+
+    bool contains(const RObject* obj) const {
+        return !objects.empty() && objects[slot(objects, obj)];
+    }
+};
+
+QoreRemovedValueTracker::State& QoreRemovedValueTracker::getState() {
+    if (!state) {
+        state = new State;
+#ifdef DEBUG
+        ++lvalue_removal_allocation_count;
+#endif
+    }
+    return *state;
+}
+
+void QoreRemovedValueTracker::releaseState() {
+    delete state;
+}
+
+void QoreRemovedValueTracker::add(const RObject* obj) {
+    assert(obj);
+    if (!first) {
+        first = obj;
+    } else if (ObjectEqual{}(first, obj)) {
+        return;
+    } else if (!second) {
+        second = obj;
+    } else if (!ObjectEqual{}(second, obj)) {
+        getState().add(obj);
+    }
+}
+
+bool QoreRemovedValueTracker::contains(const RObject* obj) const {
+    return (first && ObjectEqual{}(first, obj))
+        || (second && ObjectEqual{}(second, obj))
+        || (state && state->contains(obj));
+}
+
+bool QoreRemovedValueTracker::visit(const AbstractQoreNode* container) {
+    return getState().containers.insert(container).second;
+}
 
 LValueHelper::~LValueHelper() {
     // a write whose value was rejected must not leave behind the entries created to reach its target, as a rejected
@@ -1051,25 +1181,61 @@ LValueHelper::~LValueHelper() {
 }
 
 void LValueHelper::removedValue(const QoreValue& v) {
+#ifdef DEBUG
+    ++lvalue_removal_visit_count;
+#endif
+    if (!v.isPointer()) {
+        return;
+    }
+    // Flat containers need no visitation storage: only a nested container can share a traversal path.  Register
+    // the parent before descending so every nested container is entered through the visited set.  Object/scalar
+    // children are handled here without another recursive call.
+    auto child = [this](const QoreValue& value, const AbstractQoreNode* parent) {
+        qore_type_t type = value.getType();
+        if (type == NT_LIST || type == NT_HASH) {
+            removed_objects.visit(parent);
+            removedValue(value);
+        } else {
+#ifdef DEBUG
+            ++lvalue_removal_visit_count;
+#endif
+            if (type == NT_OBJECT) {
+                removed_objects.add(qore_object_private::get(*value.get<const QoreObject>()));
+            }
+        }
+    };
     switch (v.getType()) {
         case NT_OBJECT: {
-            const RObject* o = qore_object_private::get(*v.get<const QoreObject>());
-            if (std::find(removed_objects.begin(), removed_objects.end(), o) == removed_objects.end()) {
-                removed_objects.push_back(o);
-            }
+            removed_objects.add(qore_object_private::get(*v.get<const QoreObject>()));
             break;
         }
         case NT_LIST: {
-            ConstListIterator i(v.get<const QoreListNode>());
+            const QoreListNode* list = v.get<const QoreListNode>();
+            if (removed_objects.tracking() && !removed_objects.visit(list)) {
+                break;
+            }
+            ConstListIterator i(list);
             while (i.next()) {
-                removedValue(i.getValue());
+                child(i.getValue(), list);
+            }
+            // A third object can have started tracking without a nested container.  Remember this root too,
+            // since the same write can report more than one removed value.
+            if (removed_objects.tracking()) {
+                removed_objects.visit(list);
             }
             break;
         }
         case NT_HASH: {
-            ConstHashIterator i(v.get<const QoreHashNode>());
+            const QoreHashNode* hash = v.get<const QoreHashNode>();
+            if (removed_objects.tracking() && !removed_objects.visit(hash)) {
+                break;
+            }
+            ConstHashIterator i(hash);
             while (i.next()) {
-                removedValue(i.get());
+                child(i.get(), hash);
+            }
+            if (removed_objects.tracking()) {
+                removed_objects.visit(hash);
             }
             break;
         }
