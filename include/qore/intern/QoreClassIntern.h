@@ -373,8 +373,12 @@ public:
     DLLLOCAL ConstructorMethodVariant(ClassAccess n_access, int64 n_flags, bool n_is_user = false) : MethodVariantBase(n_access, false, n_flags, n_is_user) {
     }
     DLLLOCAL virtual const BCAList* getBaseClassArgumentList() const = 0;
-    DLLLOCAL virtual void evalConstructor(const QoreClass &thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
-    DLLLOCAL virtual void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+    //! Returns whether construction completed, before releasing its arguments (#6086).
+    /** A true result can accompany an exception from parameter or argument cleanup.  In that case the completed
+        object must be released normally, rather than obliterated as a partially constructed object.
+    */
+    DLLLOCAL virtual bool evalConstructor(const QoreClass &thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
+    DLLLOCAL virtual bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
 };
 
@@ -510,18 +514,18 @@ public:
         return bcal;
     }
 
-    DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
+    DLLLOCAL virtual bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
         BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override;
 
-    DLLLOCAL void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+    DLLLOCAL bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
             CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
-        evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
+        return evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
     }
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
@@ -546,9 +550,9 @@ class LexicalBaseConstructorVariant : public UserConstructorVariant {
 public:
     using UserConstructorVariant::UserConstructorVariant;
 
-    DLLLOCAL void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
+    DLLLOCAL bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
             BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
-        evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+        return evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
     }
 };
 
@@ -786,17 +790,17 @@ public:
     DLLLOCAL BuiltinConstructorValueVariant(q_constructor_t m, ClassAccess n_access, int64 n_flags = QCF_USES_EXTRA_ARGS, int64 n_functionality = QDOM_DEFAULT, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t()) : BuiltinConstructorVariantBase(n_access, n_flags, n_functionality, n_typeList, n_defaultArgList, n_names), constructor(m) {
     }
 
-    DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL virtual bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
-    DLLLOCAL void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+    DLLLOCAL bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
             CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
-        evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
+        return evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
     }
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 };
 
 class BuiltinExternalConstructorValueVariant : public BuiltinConstructorVariantBase {
@@ -808,17 +812,17 @@ public:
     DLLLOCAL BuiltinExternalConstructorValueVariant(const void* n_ptr, q_external_constructor_t m, ClassAccess n_access, int64 n_flags = QCF_USES_EXTRA_ARGS, int64 n_functionality = QDOM_DEFAULT, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t()) : BuiltinConstructorVariantBase(n_access, n_flags, n_functionality, n_typeList, n_defaultArgList, n_names), constructor(m), ptr(n_ptr) {
     }
 
-    DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL virtual bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
-    DLLLOCAL void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+    DLLLOCAL bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
             CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
-        evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
+        return evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
     }
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 };
 
 class BuiltinDestructorVariantBase : public DestructorMethodVariant, public BuiltinFunctionVariantBase {
@@ -1073,16 +1077,16 @@ public:
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     //! @param tmp_args true if \a args is a temporary list with one reference, whose values the call takes over
     //! (see CodeEvaluationHelper), instead of copying the list to convert an argument
-    DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
+    DLLLOCAL bool evalConstructor(const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
             QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
             ExceptionSink* xsink, bool tmp_args = false) const;
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
             QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
             ExceptionSink* xsink, bool tmp_args = false) const;
 
     template <bool Lexical>
-    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
+    DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
             QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
             ExceptionSink* xsink, bool tmp_args = false) const;
 
@@ -5412,22 +5416,22 @@ public:
     }
 
     template <bool Lexical, typename... Args>
-    DLLLOCAL void evalConstructorWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
-        if constexpr (Lexical) evalConstructor(policy, std::forward<Args>(args)...);
-        else evalConstructor(std::forward<Args>(args)...);
+    DLLLOCAL bool evalConstructorWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
+        if constexpr (Lexical) return evalConstructor(policy, std::forward<Args>(args)...);
+        else return evalConstructor(std::forward<Args>(args)...);
     }
 
-    DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, QoreObject* self,
+    DLLLOCAL bool evalConstructor(const AbstractQoreFunctionVariant* variant, QoreObject* self,
             const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink,
             bool tmp_args = false) {
-        CONMF(func)->evalConstructor(variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
+        return CONMF(func)->evalConstructor(variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
             tmp_args);
     }
 
-    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, QoreObject* self,
+    DLLLOCAL bool evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, QoreObject* self,
             const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink,
             bool tmp_args = false) {
-        CONMF(func)->evalConstructor(policy, variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
+        return CONMF(func)->evalConstructor(policy, variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
             tmp_args);
     }
 
