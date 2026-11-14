@@ -71,15 +71,59 @@ static bool parseWindowSpec(const QoreHashNode* spec, WindowSpec& ws,
     return true;
 }
 
+//! Compares the cells of two rows of a column that are not null, as sortBy() compares them (qore#6100)
+/** A NaN value of a float64 column or of a column that holds any value raises NAN-COMPARE-ERROR, as with the <=>
+    operator.
+
+    @param cmp the result: -1, 0 or 1
+    @return 0 for success, -1 if an exception was raised
+*/
+__attribute__((always_inline)) static inline int windowCompareCells(const ColumnData& cd, int64_t a, int64_t b,
+        int& cmp, ExceptionSink* xsink) {
+    switch (cd.type) {
+        case ColumnType::FLOAT64: {
+            double va = cd.float_data(a), vb = cd.float_data(b);
+            cmp = (va < vb) ? -1 : (va > vb) ? 1 : 0;
+            if (!cmp && (std::isnan(va) || std::isnan(vb))) {
+                xsink->raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on %s hand side of logical "
+                    "comparison operator", std::isnan(va) ? "left" : "right");
+                return -1;
+            }
+            return 0;
+        }
+        case ColumnType::INT64:
+            cmp = (cd.int_data[a] < cd.int_data[b]) ? -1 : (cd.int_data[a] > cd.int_data[b]) ? 1 : 0;
+            return 0;
+        case ColumnType::STRING: {
+            int rc = cd.str_data[a].compare(cd.str_data[b]);
+            cmp = rc < 0 ? -1 : (rc > 0 ? 1 : 0);
+            return 0;
+        }
+        case ColumnType::BOOL:
+            cmp = (cd.bool_data[a] < cd.bool_data[b]) ? -1 : (cd.bool_data[a] > cd.bool_data[b]) ? 1 : 0;
+            return 0;
+        case ColumnType::DATE:
+            cmp = (cd.date_data[a] < cd.date_data[b]) ? -1 : (cd.date_data[a] > cd.date_data[b]) ? 1 : 0;
+            return 0;
+        case ColumnType::AUTO:
+            return qoreDataFrameCompareValues(cd.auto_data[a], cd.auto_data[b], cmp, xsink);
+        default:
+            cmp = 0;
+            return 0;
+    }
+}
+
 // Helper: partition rows by the partition_by columns, then sort within each partition
 // Returns a vector of row indices in window order (all partitions concatenated)
-// and a mapping from original row index to output position
+// and a mapping from original row index to output position; the rows are ordered as sortBy() orders them: null
+// values last, and a NaN value raises NAN-COMPARE-ERROR (qore#6100), in which case the vector is empty
 static std::vector<int64_t> computeWindowOrder(
         const std::vector<Column>& columns,
         const std::unordered_map<std::string, size_t>& col_index,
         int64_t n_rows,
         const WindowSpec& ws,
-        std::vector<int64_t>& original_to_output) {
+        std::vector<int64_t>& original_to_output,
+        ExceptionSink* xsink) {
     // Start with all row indices
     std::vector<int64_t> indices(n_rows);
     for (int64_t i = 0; i < n_rows; ++i) {
@@ -103,58 +147,60 @@ static std::vector<int64_t> computeWindowOrder(
         }
     }
 
-    // Sort indices by partition columns then order columns
+    // the keys: the partition columns, ascending, then the order columns; a column with no null value is not
+    // checked for null values
+    struct WindowKey {
+        const ColumnData* cd;
+        bool asc;
+        bool nullable;
+    };
+    std::vector<WindowKey> keys;
+    for (size_t ci : part_col_idx) {
+        const ColumnData* cd = columns[ci].data.get();
+        keys.push_back({cd, true, cd->countNull() > 0});
+    }
+    for (size_t oi = 0; oi < order_col_idx.size(); ++oi) {
+        const ColumnData* cd = columns[order_col_idx[oi]].data.get();
+        keys.push_back({cd, (oi < ws.ascending.size()) ? ws.ascending[oi] : true, cd->countNull() > 0});
+    }
+
+    // the first error of a comparison, raised after the sort, whose comparisons return false after it
+    ExceptionSink cmp_xsink;
+    bool cmp_failed = false;
+
+    // Sort indices by partition columns then order columns; null values are equal and come after any other value,
+    // in either direction
     std::stable_sort(indices.begin(), indices.end(), [&](int64_t a, int64_t b) -> bool {
-        // Compare partition columns first
-        for (size_t ci : part_col_idx) {
-            const ColumnData& cd = *columns[ci].data;
-            int cmp = 0;
-            switch (cd.type) {
-                case ColumnType::INT64:
-                    cmp = (cd.int_data[a] < cd.int_data[b]) ? -1
-                        : (cd.int_data[a] > cd.int_data[b]) ? 1 : 0;
-                    break;
-                case ColumnType::STRING:
-                    cmp = cd.str_data[a].compare(cd.str_data[b]);
-                    break;
-                case ColumnType::FLOAT64:
-                    cmp = (cd.float_data(a) < cd.float_data(b)) ? -1
-                        : (cd.float_data(a) > cd.float_data(b)) ? 1 : 0;
-                    break;
-                default:
-                    break;
-            }
-            if (cmp != 0) {
-                return cmp < 0;
-            }
+        if (cmp_failed) {
+            return false;
         }
-        // Then order columns
-        for (size_t oi = 0; oi < order_col_idx.size(); ++oi) {
-            size_t ci = order_col_idx[oi];
-            const ColumnData& cd = *columns[ci].data;
-            bool asc = (oi < ws.ascending.size()) ? ws.ascending[oi] : true;
-            int cmp = 0;
-            switch (cd.type) {
-                case ColumnType::INT64:
-                    cmp = (cd.int_data[a] < cd.int_data[b]) ? -1
-                        : (cd.int_data[a] > cd.int_data[b]) ? 1 : 0;
-                    break;
-                case ColumnType::FLOAT64:
-                    cmp = (cd.float_data(a) < cd.float_data(b)) ? -1
-                        : (cd.float_data(a) > cd.float_data(b)) ? 1 : 0;
-                    break;
-                case ColumnType::STRING:
-                    cmp = cd.str_data[a].compare(cd.str_data[b]);
-                    break;
-                default:
-                    break;
+        for (const WindowKey& key : keys) {
+            const ColumnData& cd = *key.cd;
+            if (key.nullable) {
+                bool a_null = cd.isNull(a);
+                bool b_null = cd.isNull(b);
+                if (a_null || b_null) {
+                    if (a_null == b_null) {
+                        continue;
+                    }
+                    return b_null;
+                }
             }
-            if (cmp != 0) {
-                return asc ? (cmp < 0) : (cmp > 0);
+            int cmp = 0;
+            if (windowCompareCells(cd, a, b, cmp, &cmp_xsink)) {
+                cmp_failed = true;
+                return false;
+            }
+            if (cmp) {
+                return key.asc ? (cmp < 0) : (cmp > 0);
             }
         }
         return false;
     });
+    if (cmp_failed) {
+        xsink->assimilate(cmp_xsink);
+        return {};
+    }
 
     // Build reverse mapping: original row → position in sorted order
     original_to_output.resize(n_rows);
@@ -165,23 +211,31 @@ static std::vector<int64_t> computeWindowOrder(
     return indices;
 }
 
-// Check if two rows are in the same partition
+// Check if two rows are in the same partition: their partition cells are equal as sortBy() compares them, null
+// values being equal only to null values (qore#6100)
 static bool samePartition(const std::vector<Column>& columns,
         const std::vector<size_t>& part_col_idx, int64_t a, int64_t b) {
     for (size_t ci : part_col_idx) {
         const ColumnData& cd = *columns[ci].data;
-        switch (cd.type) {
-            case ColumnType::INT64:
-                if (cd.int_data[a] != cd.int_data[b]) { return false; }
-                break;
-            case ColumnType::STRING:
-                if (cd.str_data[a] != cd.str_data[b]) { return false; }
-                break;
-            case ColumnType::FLOAT64:
-                if (cd.float_data(a) != cd.float_data(b)) { return false; }
-                break;
-            default:
-                break;
+        bool a_null = cd.isNull(a);
+        bool b_null = cd.isNull(b);
+        if (a_null || b_null) {
+            if (a_null != b_null) {
+                return false;
+            }
+            continue;
+        }
+        // the cells were compared when the rows were ordered, so a comparison error cannot happen here; it would
+        // make other partitions; the sink is made only for the columns that can raise one (a NaN value)
+        int cmp = 0;
+        if (cd.type == ColumnType::AUTO || cd.type == ColumnType::FLOAT64) {
+            ExceptionSink cmp_xsink;
+            if (windowCompareCells(cd, a, b, cmp, &cmp_xsink) || cmp) {
+                cmp_xsink.clear();
+                return false;
+            }
+        } else if (windowCompareCells(cd, a, b, cmp, nullptr) || cmp) {
+            return false;
         }
     }
     return true;
@@ -861,7 +915,10 @@ QoreListNode* QoreDataFrame::rowNumber(const QoreHashNode* spec,
         return nullptr;
     }
     std::vector<int64_t> orig_to_out;
-    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
+    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
 
     // Resolve partition columns
     std::vector<size_t> part_col_idx;
@@ -904,7 +961,10 @@ QoreListNode* QoreDataFrame::lag(const std::string& column, int64_t offset,
         return nullptr;
     }
     std::vector<int64_t> orig_to_out;
-    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
+    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
 
     std::vector<size_t> part_col_idx;
     for (const auto& pc : ws.partition_by) {
@@ -950,7 +1010,10 @@ QoreListNode* QoreDataFrame::lead(const std::string& column, int64_t offset,
         return nullptr;
     }
     std::vector<int64_t> orig_to_out;
-    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
+    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
 
     std::vector<size_t> part_col_idx;
     for (const auto& pc : ws.partition_by) {
@@ -994,7 +1057,10 @@ QoreListNode* QoreDataFrame::cumSum(const std::string& column,
         return nullptr;
     }
     std::vector<int64_t> orig_to_out;
-    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
+    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
 
     std::vector<size_t> part_col_idx;
     for (const auto& pc : ws.partition_by) {
@@ -1042,7 +1108,10 @@ QoreListNode* QoreDataFrame::rollingMean(const std::string& column,
         return nullptr;
     }
     std::vector<int64_t> orig_to_out;
-    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
+    auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
 
     std::vector<size_t> part_col_idx;
     for (const auto& pc : ws.partition_by) {

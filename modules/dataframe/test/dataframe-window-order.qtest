@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-window-order.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameWindowOrderTest
+
+#! Window functions order and partition the rows by keys of any column type as sortBy() orders them, with null
+#! values last and in a partition of their own (qore#6100)
+class DataFrameWindowOrderTest inherits QUnit::Test {
+    constructor() : Test("DataFrameWindowOrderTest", "1.0", \ARGV) {
+        addTestCase("order keys", \orderTest());
+        addTestCase("partition keys", \partitionTest());
+        addTestCase("NaN", \nanTest());
+        set_return_value(main());
+    }
+
+    #! row numbers ordered by keys of every column type, ascending and descending
+    orderTest() {
+        ColumnarResult cr = ColumnarResult::fromColumnHash({"v": (1.25n, NOTHING, -1n, 2.5n)},
+            {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2, "nullable": True}}});
+        list<DataFrame::DataFrame> frames = (
+            new DataFrame::DataFrame({"v": (2024-03-01, 2024-01-01, NOTHING, 2024-02-01)}),
+            new DataFrame::DataFrame({"v": (True, NOTHING, False, True)}),
+            new DataFrame::DataFrame({"v": (3, NOTHING, 1, 2)}),
+            new DataFrame::DataFrame({"v": ("b", "a", NOTHING, "c")}),
+            new DataFrame::DataFrame({"v": (1.5, NOTHING, -1.0, 0.5)}),
+            new DataFrame::DataFrame({"v": (c'z', 2, NOTHING, 1.5n)}),
+            DataFrame::DataFrame::fromColumnarResult(cr),
+        );
+        foreach DataFrame::DataFrame df in (frames) {
+            foreach bool asc in ((True, False)) {
+                hash<auto> spec = {"order_by": ("v",), "ascending": (asc,)};
+                assertEq(expectedRanks(df, (), "v", asc), df.rowNumber(spec), sprintf("%s %s", df.dtypes()[0],
+                    asc ? "ascending" : "descending"));
+            }
+        }
+    }
+
+    #! row numbers in partitions by keys of every column type, nulls making a partition of their own
+    partitionTest() {
+        ColumnarResult cr = ColumnarResult::fromColumnHash({"p": (1.25n, 2.5n, 1.25n, NOTHING, NOTHING)},
+            {"p": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2, "nullable": True}}});
+        list<DataFrame::DataFrame> frames = (
+            new DataFrame::DataFrame({"p": (2024-01-01, 2024-01-02, 2024-01-01, NOTHING, NOTHING)}),
+            new DataFrame::DataFrame({"p": (True, False, True, NOTHING, NOTHING)}),
+            new DataFrame::DataFrame({"p": (1, 2, 1, NOTHING, NOTHING)}),
+            new DataFrame::DataFrame({"p": (c'z', 2, c'z', NOTHING, NOTHING)}),
+            DataFrame::DataFrame::fromColumnarResult(cr),
+        );
+        foreach DataFrame::DataFrame df in (frames) {
+            df = df.withColumn("v", (5, 4, 3, 2, 1));
+            hash<auto> spec = {"partition_by": ("p",), "order_by": ("v",)};
+            assertEq(expectedRanks(df, ("p",), "v", True), df.rowNumber(spec), df.dtypes()[0]);
+        }
+    }
+
+    #! a NaN value of an order key raises NAN-COMPARE-ERROR, as in sortBy()
+    nanTest() {
+        DataFrame::DataFrame df({"v": (1.0, @nan@, 0.5)});
+        assertThrows("NAN-COMPARE-ERROR", \df.rowNumber(), {"order_by": ("v",)}, "a float64 NaN");
+        DataFrame::DataFrame any({"v": (c'z', @nan@, 0.5)});
+        assertThrows("NAN-COMPARE-ERROR", \any.rowNumber(), {"order_by": ("v",)}, "a NaN in an auto column");
+    }
+
+    #! returns the row numbers that sortBy() gives: the position of each row in its partition
+    private list<int> expectedRanks(DataFrame::DataFrame df, list<string> partition, string order, bool asc) {
+        DataFrame::DataFrame ids = df.withColumn("id", range(df.numRows()));
+        DataFrame::DataFrame sorted = ids.sortBy(partition + (order,), (map True, partition) + (asc,));
+        list<int> ranks = map 0, range(df.numRows());
+        list<auto> prev;
+        int rank = 0;
+        foreach hash<auto> row in (sorted.toRecords()) {
+            list<auto> key = map row{$1}, partition;
+            if ($# && samePartition(key, prev)) {
+                ++rank;
+            } else {
+                rank = 1;
+            }
+            ranks[row.id] = rank;
+            prev = key;
+        }
+        return ranks;
+    }
+
+    private bool samePartition(list<auto> a, list<auto> b) {
+        foreach auto v in (a) {
+            auto w = b[$#];
+            if (exists v != exists w || (exists v && (v <=> w))) {
+                return False;
+            }
+        }
+        return True;
+    }
+}

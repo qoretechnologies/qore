@@ -144,6 +144,12 @@ static inline int dataFrameDateMicros(const DateTimeNode* dt, int64_t& out, Exce
     return dataFrameDateOutOfRange(dt, xsink);
 }
 
+//! Compares two values as the core <=> operator does (qore#6097)
+/** @param cmp the result: -1, 0 or 1
+    @return 0 for success, -1 if the operator raises an exception (NAN-COMPARE-ERROR for a NaN value)
+*/
+DLLLOCAL int qoreDataFrameCompareValues(QoreValue lhs, QoreValue rhs, int& cmp, ExceptionSink* xsink);
+
 //! Safely extracts a Qore string value, including short-string values and NUL characters.
 static inline bool getDataFrameString(QoreValue v, std::string& out) {
     if (v.getType() != NT_STRING) {

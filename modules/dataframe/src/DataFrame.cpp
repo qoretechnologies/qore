@@ -2271,7 +2271,7 @@ QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::strin
 /** @param cmp the result: -1, 0 or 1
     @return 0 for success, -1 if the operator raises an exception (NAN-COMPARE-ERROR for a NaN value)
 */
-static int qoreDataFrameCompareValues(QoreValue lhs, QoreValue rhs, int& cmp, ExceptionSink* xsink) {
+int qoreDataFrameCompareValues(QoreValue lhs, QoreValue rhs, int& cmp, ExceptionSink* xsink) {
     QoreValue l = lhs.isEnum() ? lhs.getEnumMember()->getValue() : lhs;
     QoreValue r = rhs.isEnum() ? rhs.getEnumMember()->getValue() : rhs;
     qore_type_t lt = l.getType();

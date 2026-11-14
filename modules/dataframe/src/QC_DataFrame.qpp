@@ -1867,6 +1867,11 @@ DataFrame DataFrame::melt(list<string> id_vars, *list<string> value_vars, *strin
     DataFrame df2 = df.withColumn("row_num", rn);
     @endcode
 
+    The rows of this and the other window functions (lag(), lead(), cumSum(), rollingMean()) are partitioned and
+    ordered by columns of any type as sortBy() orders them: null values come last and make a partition of their
+    own, and a NaN value raises \c NAN-COMPARE-ERROR when it is compared.
+
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<int> DataFrame::rowNumber(*hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->rowNumber(spec, xsink);
