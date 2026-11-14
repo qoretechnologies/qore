@@ -1,6 +1,6 @@
 # probes of foreach-enum-element-release.qtest (qore#6091): a foreach loop releases the reference to its declaration
-# that each enum element holds when its iteration ends; probes() returns one line per pass, so that the code runs on
-# every tier with tiered execution
+# that each enum element holds when its iteration ends, as native code does for an enum value read through a reference
+# local; probes() returns one line per pass, so that the code runs on every tier with tiered execution
 
 %modern
 
@@ -46,6 +46,16 @@ string sub enum_only_list() {
     return str;
 }
 
+#! reads an enum value through a reference local four times in one statement
+/** Native code keeps the value read at a site and the one read before it until the end of the statement, and
+    releases the older one at the next read: it released only a node there, not an enum value (qore#6091)
+*/
+int sub reference_read() {
+    auto x = E::One;
+    auto r = \x;
+    return foldl $1 + (r == E::One ? 1 : 0), (0, 1, 2, 3, 4);
+}
+
 #! returns the number of references to the declaration of E
 /** In a function of its own, so that the call releases the enum value that it passes before it returns, in every
     mode
@@ -77,5 +87,6 @@ string sub probes() {
     parts += leaked("literal", \literal_list());
     parts += leaked("argument", string sub () { return enum_list((E::Two, "x", E::One, S::A, 2)); });
     parts += leaked("enum-only", \enum_only_list());
+    parts += leaked("reference-read", string sub () { return sprintf("%d", reference_read()); });
     return parts.join(" ");
 }

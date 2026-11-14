@@ -1475,6 +1475,10 @@ private:
     // Check if value has a node (inline NaN-boxing check) - returns bool (i1)
     llvm::Value* hasNodeInline(llvm::Value* qv);
 
+    //! Returns an i1 that is true if the value holds a reference to release: a node, an inline enum value (which
+    //! holds its declaration) or an opaque reference, as QoreValue::needsRef()
+    llvm::Value* needsRefInline(llvm::Value* qv);
+
     //! Emits the inline test that @a qv is an object that has not been deleted, with the layout of the running
     //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
     llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func);

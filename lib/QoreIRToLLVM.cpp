@@ -2148,6 +2148,18 @@ llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
 }
 
 // documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::needsRefInline(llvm::Value* qv) {
+    // a pointer (0xFFFA), an inline enum value (0xFFFD), which holds its declaration, or an opaque reference (the
+    // 0xFFD tag family), as QoreValue::needsRef() and ReleaseOwnedTemp
+    llvm::Value* tag16 = builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 48));
+    llvm::Value* is_pointer = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFFA));
+    llvm::Value* is_enum = builder->CreateICmpEQ(tag16, llvm::ConstantInt::get(i64_type, 0xFFFD));
+    llvm::Value* is_opaque = builder->CreateICmpEQ(builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 52)),
+        llvm::ConstantInt::get(i64_type, TAG12_OPAQUE));
+    return builder->CreateOr(builder->CreateOr(is_pointer, is_enum), is_opaque);
+}
+
+// documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout,
         llvm::Function* llvm_func) {
     // JIT only: the layout is the running libqore's (issue #5784)
@@ -6659,10 +6671,11 @@ llvm::Value* QoreIRToLLVM::emitReferenceLocalRead(const void* key, llvm::Value* 
     llvm::Value* old_previous = builder->CreateLoad(i64_type, previous);
     builder->CreateStore(builder->CreateLoad(i64_type, current), previous);
     builder->CreateStore(read, current);
-    // the value released is often not a node (an int read through the reference), which is checked inline
+    // the value released often holds no reference (an int read through the reference), which is checked inline; an
+    // enum value holds a reference to its declaration (qore#6091)
     llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "reference_local_release", llvm_func);
     llvm::BasicBlock* released_bb = llvm::BasicBlock::Create(ctx, "reference_local_released", llvm_func);
-    builder->CreateCondBr(hasNodeInline(old_previous), release_bb, released_bb);
+    builder->CreateCondBr(needsRefInline(old_previous), release_bb, released_bb);
     builder->SetInsertPoint(release_bb);
     builder->CreateCall(decref_fn, {old_previous, xsink_arg});
     builder->CreateBr(released_bb);
