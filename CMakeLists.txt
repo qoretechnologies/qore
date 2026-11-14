@@ -2875,6 +2875,10 @@ add_executable(qore-aot-builtin-type-path-test examples/test/ir/aot_builtin_type
 target_include_directories(qore-aot-builtin-type-path-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-builtin-type-path-test PRIVATE libqore)
+add_executable(qore-aot-concrete-hashdecl-test examples/test/ir/aot_concrete_hashdecl_cache.cpp)
+target_include_directories(qore-aot-concrete-hashdecl-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-concrete-hashdecl-test PRIVATE libqore)
 add_executable(qore-declaration-owner-test examples/test/qore/misc/declaration_owner.cpp)
 target_include_directories(qore-declaration-owner-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)

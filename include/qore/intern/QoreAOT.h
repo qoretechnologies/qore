@@ -351,6 +351,28 @@ struct QoreAOTCallTarget {
 //! Global builtin path entries are immutable and never replaced; contexts remember validated slots.
 static constexpr size_t QORE_AOT_BUILTIN_TYPE_PATH_TABLE_SIZE = 256;
 
+//! Concrete hashdecl paths are immutable AOT globals; their declarations belong to the context's Program.
+//! Slots are published once and never replaced. Collisions use the existing bounded path cache.
+struct QoreAOTConcreteHashDeclCache {
+    static constexpr size_t Size = 32;
+    struct Entry {
+        const char* path;
+        const TypedHashDecl* hd;
+    };
+    std::array<std::atomic<const Entry*>, Size> entries{};
+
+    static size_t slot(const char* path) {
+        uintptr_t address = reinterpret_cast<uintptr_t>(path);
+        return (address ^ (address >> 4) ^ (address >> 9)) & (Size - 1);
+    }
+
+    ~QoreAOTConcreteHashDeclCache() {
+        for (auto& entry : entries) {
+            delete entry.load(std::memory_order_relaxed);
+        }
+    }
+};
+
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.
 /** At compile time, each process-specific pointer (LocalVar*, Var*, QoreValue expr)
     is assigned a numeric slot index. At runtime, the fresh AST is re-lowered in the
@@ -409,6 +431,11 @@ struct QoreAOTContext {
     //! The keys of hashdecl_path_cache in the order they were added, evicted first in first out once it is full
     //! (they point into the map's nodes, which do not move); guarded by hashdecl_path_cache_mutex
     QoreAOTPathCacheOrder hashdecl_path_cache_order;
+
+    //! Allocated only for concrete hashdecl construction. Entries need neither TLS nor receiver epoch checks:
+    //! this context owns the cache and its Program owns the declarations. No-Program contexts do not use it.
+    //! Publication is guarded by hashdecl_path_cache_mutex; readers acquire the immutable cache/entry pointers.
+    std::atomic<QoreAOTConcreteHashDeclCache*> concrete_hashdecl_cache{nullptr};
 
     //! Lazily resolved full type paths used by source-stripped AOT typed-container helpers.
     std::mutex type_path_cache_mutex;

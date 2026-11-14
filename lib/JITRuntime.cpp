@@ -5096,9 +5096,54 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path_cached(Qor
     return qore_rt_new_hash_decl_from_hash(hd, hash_bits, runtime_check, xsink);
 }
 
+//! Populate the concrete cache only on a miss, keeping allocation, locking and environment reads off its hit path.
+static QORE_INTERN_NOINLINE const TypedHashDecl* qore_rt_resolve_concrete_hashdecl_path_slow(QoreAOTContext* ctx,
+        const char* hd_path, ExceptionSink* xsink) {
+    const TypedHashDecl* hd = qore_rt_resolve_hashdecl_path_cached(ctx, hd_path, false, xsink);
+    if (!hd || (xsink && *xsink) || !ctx->pgm) {
+        return hd;
+    }
+    if (auto* cache = ctx->concrete_hashdecl_cache.load(std::memory_order_acquire)) {
+        if (cache->entries[QoreAOTConcreteHashDeclCache::slot(hd_path)].load(std::memory_order_acquire)) {
+            return hd;
+        }
+    }
+    static constinit QoreEnvFlag disable_front_cache_env("QORE_DISABLE_AOT_HASHDECL_FRONT_CACHE");
+    if (disable_front_cache_env.get()) {
+        return hd;
+    }
+    std::lock_guard<std::mutex> lock(ctx->hashdecl_path_cache_mutex);
+    auto* cache = ctx->concrete_hashdecl_cache.load(std::memory_order_relaxed);
+    if (!cache) {
+        std::unique_ptr<QoreAOTConcreteHashDeclCache> new_cache(new (std::nothrow) QoreAOTConcreteHashDeclCache);
+        if (!new_cache) {
+            return hd;
+        }
+        cache = new_cache.release();
+        ctx->concrete_hashdecl_cache.store(cache, std::memory_order_release);
+    }
+    auto& slot = cache->entries[QoreAOTConcreteHashDeclCache::slot(hd_path)];
+    if (!slot.load(std::memory_order_relaxed)) {
+        // A failed allocation just leaves this optimization unused; the resolved declaration is still valid.
+        slot.store(new (std::nothrow) QoreAOTConcreteHashDeclCache::Entry{hd_path, hd}, std::memory_order_release);
+    }
+    return hd;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_concrete_path_cached(QoreAOTContext* ctx,
         const char* hd_path, uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink) {
-    const TypedHashDecl* hd = qore_rt_resolve_hashdecl_path_cached(ctx, hd_path, false, xsink);
+    const TypedHashDecl* hd = nullptr;
+    if (ctx) {
+        if (auto* cache = ctx->concrete_hashdecl_cache.load(std::memory_order_acquire)) {
+            auto* entry = cache->entries[QoreAOTConcreteHashDeclCache::slot(hd_path)].load(std::memory_order_acquire);
+            if (entry && entry->path == hd_path) {
+                hd = entry->hd;
+            }
+        }
+    }
+    if (!hd) {
+        hd = qore_rt_resolve_concrete_hashdecl_path_slow(ctx, hd_path, xsink);
+    }
     if (!hd || (xsink && *xsink)) {
         return toBits(QoreValue());
     }
