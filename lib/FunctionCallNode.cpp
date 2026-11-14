@@ -642,7 +642,11 @@ static void warn_deprecated(const QoreProgramLocation* loc, QoreFunction* func) 
 }
 
 static void check_flags(const QoreProgramLocation* loc, QoreFunction* func, int64 flags, int64 pflag) {
-    if (pflag & (PF_RETURN_VALUE_IGNORED | PF_BACKGROUND)) {
+    // the background operator sets both flags for its expression; an operator that uses the value of an operand
+    // turns off PF_RETURN_VALUE_IGNORED for it, but PF_BACKGROUND stays set in the whole expression, so only the
+    // former decides whether the value of the call is ignored, and the latter only names it a background call
+    // (qore#6143)
+    if (pflag & PF_RETURN_VALUE_IGNORED) {
         bool is_bg_call = (pflag & PF_BACKGROUND);
         // the stronger diagnostic is warranted when the call neither has side effects nor can raise
         // a domain exception.  QCF_CONSTANT is the legacy, unchecked spelling of that pair;
