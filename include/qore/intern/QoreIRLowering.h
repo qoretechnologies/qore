@@ -891,6 +891,9 @@ private:
         //! for a HandlerBarrier entry: the number of handlers of the protected scope that stay registered while the
         //! handler runs (those registered before it), which a return in the handler runs after it (#5992)
         size_t keep_handlers = 0;
+        //! for the last entry of a try statement that an exit leaves (the Scope entry of its try block, the
+        //! CatchScope entry of its catch block): try_depth in the statement, 0 for the other entries (#5992)
+        int try_end_depth = 0;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
@@ -1076,6 +1079,14 @@ private:
     //! the handler bodies lowered inline since the outermost exit being lowered began
     size_t inline_handlers_lowered = 0;
     class ExitLoweringNesting;
+    //! the value of the return that a return in a try statement in a handler replaces when the walk of its
+    //! cleanups leaves the outermost try statement in the handler (try_end_depth == try_replaced_depth), as the AST
+    //! interpreter's try statement replaces it when it ends (TryStatement::execImpl(), #5992)
+    QoreIRValue try_replaced_return;
+    //! the value that try_replaced_return took a reference of its own to (see pending_return_base)
+    QoreIRValue try_replaced_return_base;
+    //! the try_depth of the try statement whose end releases try_replaced_return, or 0
+    int try_replaced_depth = 0;
     //! Returns true if a return at the current point replaces the value of pending_return (see there)
     DLLLOCAL bool replacesPendingReturn() const;
     //! Releases the value of the return that a return in a handler replaces (see pending_return)

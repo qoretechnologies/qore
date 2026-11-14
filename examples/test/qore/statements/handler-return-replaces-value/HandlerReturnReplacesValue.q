@@ -122,6 +122,48 @@ auto sub ev3() {
     }
     return "after";
 }
+# a return in a try statement in a handler replaces the value when the try statement ends
+auto sub tr1() {
+    on_exit { try { log += "h"; return new T("tr1-h"); } catch (hash<ExceptionInfo> ex) { log += "c"; } }
+    return new T("tr1-body");
+}
+auto sub tr2() {
+    on_exit { try { thrower(); } catch (hash<ExceptionInfo> ex) { log += "c"; return new T("tr2-c"); } }
+    return new T("tr2-body");
+}
+auto sub tr3() {
+    on_exit {
+        try {
+            try { return new T("tr3-in"); } catch (hash<ExceptionInfo> ex) {}
+            log += "never";
+        } catch (hash<ExceptionInfo> ex) {}
+    }
+    return new T("tr3-body");
+}
+auto sub tr4() {
+    on_exit { try { log += "h"; return; } catch (hash<ExceptionInfo> ex) {} }
+    return new T("tr4-body");
+}
+auto sub tr5() {
+    on_exit { log += "o"; }
+    on_exit {
+        try {
+            T l("tr5-l");
+            on_exit { log += "ti"; }
+            return new T("tr5-h");
+        } catch (hash<ExceptionInfo> ex) {}
+    }
+    return new T("tr5-body");
+}
+auto sub tr6() {
+    on_exit { return new T("tr6-last"); }
+    on_exit { try { return new T("tr6-try"); } catch (hash<ExceptionInfo> ex) {} }
+    return new T("tr6-body");
+}
+auto sub tr7() {
+    on_exit { try { return "tr7-h"; } catch (hash<ExceptionInfo> ex) {} }
+    log += "body";
+}
 # in a method and a closure
 class C {
     auto m() {
@@ -168,5 +210,12 @@ show("hh5", \hh5());
 show("tc1", \tc1());
 show("ev1", \ev1());
 show("ev3", \ev3());
+show("tr1", \tr1());
+show("tr2", \tr2());
+show("tr3", \tr3());
+show("tr4", \tr4());
+show("tr5", \tr5());
+show("tr6", \tr6());
+show("tr7", \tr7());
 show("m", auto sub () { C c(); return c.m(); });
 show("cl", cl);

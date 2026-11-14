@@ -1710,16 +1710,36 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreIRValue base;
             bool active;
             int try_depth;
+            QoreIRValue try_replaced;
+            QoreIRValue try_replaced_base;
+            int try_replaced_depth;
             PendingReturnRestore(QoreIRLowering& l) : l(l), value(l.pending_return), base(l.pending_return_base),
-                    active(l.pending_return_active), try_depth(l.pending_return_try_depth) {
+                    active(l.pending_return_active), try_depth(l.pending_return_try_depth),
+                    try_replaced(l.try_replaced_return), try_replaced_base(l.try_replaced_return_base),
+                    try_replaced_depth(l.try_replaced_depth) {
             }
             ~PendingReturnRestore() {
                 l.pending_return = value;
                 l.pending_return_base = base;
                 l.pending_return_active = active;
                 l.pending_return_try_depth = try_depth;
+                l.try_replaced_return = try_replaced;
+                l.try_replaced_return_base = try_replaced_base;
+                l.try_replaced_depth = try_replaced_depth;
             }
             void set(QoreIRValue v, QoreIRValue b = QoreIRValue()) {
+                // a return in a try statement in a handler replaces the value of the return that the handler runs
+                // after when the outermost try statement in the handler ends, as the AST interpreter's try
+                // statement gives the value of its return to the enclosing block (TryStatement::execImpl())
+                if (l.pending_return_active && l.try_depth > l.pending_return_try_depth) {
+                    l.try_replaced_return = l.pending_return;
+                    l.try_replaced_return_base = l.pending_return_base;
+                    l.try_replaced_depth = l.pending_return_try_depth + 1;
+                } else {
+                    l.try_replaced_return = QoreIRValue();
+                    l.try_replaced_return_base = QoreIRValue();
+                    l.try_replaced_depth = 0;
+                }
                 l.pending_return = v;
                 l.pending_return_base = b;
                 l.pending_return_active = true;
@@ -3907,6 +3927,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // try scope does NOT re-inline handlers belonging to ENCLOSING
             // blocks (which would fire them twice).
             scope_entry.handler_start = block_handlers.size();
+            // the end of the try statement for an exit from its try block (#5992)
+            scope_entry.try_end_depth = try_depth;
             pushBlockCleanup(scope_entry);
         }
         builder.createScopeEnter(try_scope_id);
@@ -3977,6 +3999,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             BlockCleanupEntry catch_scope_entry;
             catch_scope_entry.type = BlockCleanupEntry::CatchScope;
             catch_scope_entry.loc = stmt->loc;
+            // the end of the try statement for an exit from its catch block (#5992)
+            catch_scope_entry.try_end_depth = try_depth;
             pushBlockCleanup(catch_scope_entry);
         }
         LocalVar* catch_var = try_stmt->getCatchVar();
@@ -4935,6 +4959,19 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                     builder.createCatchCleanup(entry.loc);
                 }
                 break;
+        }
+        // a return in a try statement in a handler leaves the outermost try statement in the handler here: the
+        // value of the return that the handler runs after, which it replaces, is released, as the AST interpreter's
+        // try statement releases it when it ends (TryStatement::execImpl(), #5992)
+        if (entry.try_end_depth && entry.try_end_depth == try_replaced_depth
+                && !blockHasTerminator(builder.getBlock())) {
+            if (try_replaced_return.isValid()) {
+                builder.createReleaseOwnedTemp(try_replaced_return, entry.loc);
+                if (try_replaced_return_base.isValid() && try_replaced_return_base.id != try_replaced_return.id) {
+                    builder.createReleaseOwnedTemp(try_replaced_return_base, entry.loc);
+                }
+            }
+            try_replaced_depth = 0;
         }
     }
     if (unwind_temp_depth != SIZE_MAX && unwind_temp_depth < unwound_temp_depth) {

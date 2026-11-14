@@ -303,6 +303,16 @@ Skips the rest of a loop and jumps right to the evaluation of the iteration expr
     A single variable can be specified in the catch block to be instantiated with the exception hash, giving information about the exception that has occurred. For detailed information about the exception hash, see @ref exception_handling .\n\n
     If no variable is given in the <tt><b>catch</b></tt> declaration, it will not be possible to access any information about the exception in the <b><tt>catch</tt></b> block. However, the @ref rethrow "rethrow statement" can be used to rethrow exceptions at any time in a <tt><b>catch</b></tt> block.
 
+    @anchor try_return
+    @par Return Statements in try and catch Blocks
+    A @ref return "return statement" in the <tt><b>try</b></tt> or <tt><b>catch</b></tt> block gives its value to the
+    block that contains the <tt><b>try</b></tt> statement when the statement ends, after the locals and the handlers of
+    the blocks inside it: in the code of an @ref on_exit "on_exit", @ref on_success "on_success" or
+    @ref on_error "on_error" statement, it replaces the value of the return that left the handler's block, which is
+    released then (see @ref on_exit_return).  A return that an exception interrupts (a value that the declared return
+    type rejects, or an exception raised after the return in a handler of a block inside the
+    <tt><b>try</b></tt> block) gives no value.
+
     <hr>
     @section rethrow rethrow Statements
 
@@ -542,6 +552,14 @@ string name = getName();@endcode
     for each iteration of the loop.\n\n
     By using this statement, programmers ensure that necessary cleanup will be performed regardless of the exit status
     of the block (exception, @ref return "return", etc).
+
+    @anchor on_exit_return
+    @par Return Statements in Handlers
+    The code of <tt><b>on_exit</b></tt>, <tt><b>on_success</b></tt> and <tt><b>on_error</b></tt> statements runs with
+    the return value of the block: a @ref return "return statement" in it replaces the value of a return that left
+    the block, which is released at the end of the return statement, and a return without a value replaces it with no
+    value; a handler that runs later can replace it again.  A return in a @ref try "try statement" in the handler
+    replaces it when the try statement ends (see @ref try_return).
 
     @par Example
 @code{.py}

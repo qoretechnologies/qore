@@ -22,8 +22,9 @@
     discarded their returns, as were the handlers of a block with on_exit and on_error handlers that ends without a
     return; the replaced value was released only when the frame ended; and a return in a handler of an inner block
     whose handler returned too, or of a block in the body of another handler, made the lowering lower the handlers
-    again without end.  HandlerReturnReplacesValue.q gives the output of the AST interpreter in every execution mode
-    and compiled with qcc.
+    again without end.  A return in a try statement in a handler replaces the value when the try statement ends, in
+    every mode (TryStatement::execImpl() kept the function's value).  HandlerReturnReplacesValue.q gives the output of
+    the AST interpreter in every execution mode and compiled with qcc.
 */
 class HandlerReturnReplacesValueTest inherits QUnit::Test {
     public {
@@ -64,6 +65,20 @@ ev1: [\"thr\", \"~body\", \"x\", \"ex:EV\"]
 ev1: [\"thr\", \"~body\", \"x\", \"ex:EV\"]
 ev3: [\"thr\", \"~body\", \"x\", \"catch\", \"rv:after\"]
 ev3: [\"thr\", \"~body\", \"x\", \"catch\", \"rv:after\"]
+tr1: [\"h\", \"~tr1-body\", \"rv:tr1-h\", \"~tr1-h\"]
+tr1: [\"h\", \"~tr1-body\", \"rv:tr1-h\", \"~tr1-h\"]
+tr2: [\"thr\", \"c\", \"~tr2-body\", \"rv:tr2-c\", \"~tr2-c\"]
+tr2: [\"thr\", \"c\", \"~tr2-body\", \"rv:tr2-c\", \"~tr2-c\"]
+tr3: [\"~tr3-body\", \"rv:tr3-in\", \"~tr3-in\"]
+tr3: [\"~tr3-body\", \"rv:tr3-in\", \"~tr3-in\"]
+tr4: [\"h\", \"~tr4-body\", \"rv:nothing\"]
+tr4: [\"h\", \"~tr4-body\", \"rv:nothing\"]
+tr5: [\"ti\", \"~tr5-l\", \"~tr5-body\", \"o\", \"rv:tr5-h\", \"~tr5-h\"]
+tr5: [\"ti\", \"~tr5-l\", \"~tr5-body\", \"o\", \"rv:tr5-h\", \"~tr5-h\"]
+tr6: [\"~tr6-body\", \"~tr6-try\", \"rv:tr6-last\", \"~tr6-last\"]
+tr6: [\"~tr6-body\", \"~tr6-try\", \"rv:tr6-last\", \"~tr6-last\"]
+tr7: [\"body\", \"rv:tr7-h\"]
+tr7: [\"body\", \"rv:tr7-h\"]
 m: [\"~m-body\", \"mexit\", \"rv:m-s\", \"~m-s\"]
 m: [\"~m-body\", \"mexit\", \"rv:m-s\", \"~m-s\"]
 cl: [\"~cl-body\", \"cx\", \"rv:cl-s\", \"~cl-s\"]
