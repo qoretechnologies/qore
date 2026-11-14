@@ -752,17 +752,17 @@ static size_t qore_short_string_utf8_length(QoreValue v);
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
-// Empty strings sort at end (both "" vs "x" and "x" vs "" return 1)
+// An empty string is less than any other string (qore#6090)
 static inline int fast_string_compare(const QoreStringNode* ls, const QoreStringNode* rs) {
     size_t llen = ls->size();
     size_t rlen = rs->size();
 
-    // Handle empty strings - empty sorts at end (returns 1 if either is empty but not both)
+    // empty strings are equal whatever their encodings, and less than any other string
     if (!llen) {
-        return rlen ? 1 : 0;
+        return rlen ? -1 : 0;
     }
     if (!rlen) {
-        return 1;  // right is empty, left is not -> left > right (empty at end)
+        return 1;
     }
 
     // Compare bytes

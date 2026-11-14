@@ -1640,7 +1640,7 @@ if (x < y)
     |@ref number_type "number"|If \a expression1 is numerically less than \a expression2, returns @ref True "True", otherwise returns @ref False "False"
     |@ref float_type "float"|If \a expression1 is numerically less than \a expression2, returns @ref True "True", otherwise returns @ref False "False"
     |@ref int_type "int"|If \a expression1 is numerically less than \a expression2, returns @ref True "True", otherwise returns @ref False "False"
-    |@ref string_type "string"|If \a expression1 comes before \a expression2 in string sort order, returns @ref True "True", otherwise returns @ref False "False"
+    |@ref string_type "string"|If \a expression1 comes before \a expression2 in string sort order (an empty string comes before every other string), returns @ref True "True", otherwise returns @ref False "False"
     |@ref date_type "date"|If \a expression1 is before (or a shorter amount of time than of the arguments are @ref relative_dates) \a expression2, returns @ref True "True", otherwise returns @ref False "False"
 
     This operator does not throw any exceptions.

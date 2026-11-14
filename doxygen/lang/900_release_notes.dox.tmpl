@@ -79,6 +79,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par An Empty String Sorts Before Every Other String
+    The @ref logical_less_than_operator "comparison operators", @ref logical_comparison_operator "<=>" and the
+    functions that order strings with them (such as @ref Qore::sort() "sort()", \c min() and \c max()) now order an
+    empty string before every other string; it was ordered after every other string, and also before the other string
+    when it was on the right-hand side, so <tt>"" > "a"</tt> and <tt>"a" > ""</tt> were both @ref True "True".
+
     @par Functional-Domain Attribute Lists
     <tt>[dom=</tt> after a parameter list starts a @ref function_domains "functional-domain attribute list", so an
     index expression that assigns to a variable named \c dom (<tt>x[dom = y]</tt>) must be written

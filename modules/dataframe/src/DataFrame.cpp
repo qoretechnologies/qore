@@ -461,8 +461,7 @@ static bool qoreDataFrameOrderNumber(const QoreNumberNode* l, const T& r) {
 /** As the core operators' implementations (QoreLogicalLessThanOperatorNode::doLessThan(),
     QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals(), QoreLogicalGreaterThanOperatorNode::doGreaterThan()
     and QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals()), each operator is applied as it is, never
-    as the negation or the swap of another one: a float NaN is unordered, so that <= is not the negation of >, and a
-    string comparison is not symmetric when one string is empty (QoreString::compare())
+    as the negation or the swap of another one: a float NaN is unordered, so that <= is not the negation of >
 */
 template <QoreDataFrameOrder O>
 static bool qoreDataFrameOrderValues(QoreValue lhs, QoreValue rhs, ExceptionSink* xsink) {
@@ -525,21 +524,6 @@ static bool qoreDataFrameOrderValues(QoreValue lhs, QoreValue rhs, ExceptionSink
         return qoreDataFrameOrderScalar<O>(DateTime::compareDates(*ld, *rd), 0);
     }
     return qoreDataFrameOrderScalar<O>(l.getAsFloat(), r.getAsFloat());
-}
-
-//! compares two strings as QoreString::compare() does for strings in the same encoding
-/** An empty string compares as greater than any other string, as by QoreString::compare(), so that the core
-    ordering operators give, for example, <tt>"" > "a"</tt>
-*/
-static int qoreDataFrameStringCompare(const std::string& l, const std::string& r) {
-    if (l.empty()) {
-        return r.empty() ? 0 : 1;
-    }
-    int rc = memcmp(l.data(), r.data(), std::min(l.size(), r.size()));
-    if (!rc) {
-        return l.size() < r.size() ? -1 : (l.size() > r.size() ? 1 : 0);
-    }
-    return rc < 0 ? -1 : 1;
 }
 
 static bool qoreDataFrameListContainsValue(const QoreListNode* values, QoreValue value,
@@ -2079,11 +2063,12 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
             if (op_in || op_not_in) { match = qoreDataFrameListContainsString(cmp_list, cell, xsink); }
             else if (op_eq) { match = cell == cmp_string; }
             else if (op_ne) { match = cell != cmp_string; }
-            // the strings are ordered as QoreString::compare() orders them, as by the core operators
-            else if (op_lt) { match = qoreDataFrameStringCompare(cell, cmp_string) < 0; }
-            else if (op_le) { match = qoreDataFrameStringCompare(cell, cmp_string) <= 0; }
-            else if (op_gt) { match = qoreDataFrameStringCompare(cell, cmp_string) > 0; }
-            else if (op_ge) { match = qoreDataFrameStringCompare(cell, cmp_string) >= 0; }
+            // byte order (std::char_traits<char> compares unsigned), as QoreString::compare() orders strings in the
+            // same encoding, as by the core operators
+            else if (op_lt) { match = cell < cmp_string; }
+            else if (op_le) { match = cell <= cmp_string; }
+            else if (op_gt) { match = cell > cmp_string; }
+            else if (op_ge) { match = cell >= cmp_string; }
             else if (op_contains) { match = cell.find(cmp_string) != std::string::npos; }
             else if (op_startswith) { match = cell.compare(0, cmp_string.size(), cmp_string) == 0; }
             else if (op_endswith) {
