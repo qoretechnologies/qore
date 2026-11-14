@@ -747,6 +747,15 @@ public:
         return by_type.size();
     }
 
+    //! Returns true if an entry of a cache names one of the given types
+    bool hasType(const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
+        if (empty.load(std::memory_order_acquire)) {
+            return false;
+        }
+        std::lock_guard<std::mutex> lock(m);
+        return (ti1 && by_type.count(ti1)) || (ti2 && by_type.count(ti2));
+    }
+
     //! Evicts the entries that name a dead type from every cache that registered one
     /** @param release receives what the caches removed, to be released by the caller after the lock is released
     */
@@ -923,6 +932,596 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
     }
 }
 
+//! The class, hashdecl and enum declarations retired and not freed yet (issue #5790; see QoreTypeOwner), guarded by
+//! ctl
+static std::vector<QoreTypeOwner*> retired_type_owners;
+//! true once library cleanup frees the retired declarations: no declaration is retired anymore
+/** Read without the lock first: a Program held at static scope can be deleted by a static destructor after library
+    cleanup, when the containers above can already have been destroyed
+*/
+static std::atomic<bool> type_owner_cleanup{false};
+
+//! Returns true if a derived type or a generic cache entry names the types of the declaration; the caller holds ctl
+static bool type_owner_derived(const QoreTypeOwner* o) {
+    const void* key = o->getTypeOwnerKey();
+    const QoreTypeInfo* t1 = o->getTypeOwnerType();
+    const QoreTypeInfo* t2 = o->getTypeOwnerOrNothingType();
+    if ((key && derived_type_keys.count(key)) || (t1 && derived_type_keys.count(t1))
+            || (t2 && derived_type_keys.count(t2))) {
+        return true;
+    }
+    // a generic cache entry is keyed by the types it names (ex: hash<HD<*Foo>>)
+    return qore_generic_cache_registry().hasType(t1, t2);
+}
+
+#ifdef DEBUG
+namespace {
+//! the declarations that are not freed, for the assertions of the bookkeeping of the declarations that name each other
+struct QoreTypeOwnerRegistry {
+    std::mutex m;
+    std::set<const QoreTypeOwner*> live;
+};
+
+// not destroyed: declarations are freed at library cleanup and at static destruction
+QoreTypeOwnerRegistry& type_owner_registry() {
+    static QoreTypeOwnerRegistry* registry = new QoreTypeOwnerRegistry;
+    return *registry;
+}
+}
+
+QoreTypeOwner::QoreTypeOwner() {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.insert(this);
+}
+
+QoreTypeOwner::~QoreTypeOwner() {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.erase(this);
+}
+
+bool qore_type_owner_is_live(const QoreTypeOwner* owner) {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    return r.live.count(owner) > 0;
+}
+
+namespace {
+//! the types that are not freed
+struct QoreTypeInfoRegistry {
+    std::mutex m;
+    std::set<const QoreTypeInfo*> live;
+};
+
+// not destroyed: types are freed at library cleanup and at static destruction
+QoreTypeInfoRegistry& type_info_registry() {
+    static QoreTypeInfoRegistry* registry = new QoreTypeInfoRegistry;
+    return *registry;
+}
+}
+
+void qore_type_info_created(const QoreTypeInfo* ti) {
+    QoreTypeInfoRegistry& r = type_info_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.insert(ti);
+}
+
+void qore_type_info_destroyed(const QoreTypeInfo* ti) {
+    QoreTypeInfoRegistry& r = type_info_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.erase(ti);
+}
+
+bool qore_type_info_is_live(const QoreTypeInfo* ti) {
+    QoreTypeInfoRegistry& r = type_info_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    return r.live.count(ti) > 0;
+}
+#endif
+
+//! A group of declarations that survived the deletion of their Program together; guarded by ctl (see QoreTypeOwner)
+struct QoreTypeOwnerGroup {
+    //! the members
+    std::vector<QoreTypeOwner*> members;
+    //! the number of live members
+    size_t live = 0;
+    //! the number of holds since the last sweep (type_owner_group_hold())
+    size_t holds_since_sweep = 0;
+};
+
+//! The groups not collected yet, guarded by ctl
+static std::set<QoreTypeOwnerGroup*> type_owner_groups;
+
+//! References the declarations that a declaration names, if they are known, except the members of its group; the
+//! caller holds ctl
+static void type_owner_count_names(QoreTypeOwner* o) {
+    if (o->type_owner_names_counted || !o->type_owner_names_known) {
+        return;
+    }
+    for (QoreTypeOwner* n : o->type_owner_names) {
+        if (o->type_owner_group && n->type_owner_group == o->type_owner_group) {
+            continue;
+        }
+        n->refTypeOwner();
+        o->type_owner_refs.push_back(n);
+    }
+    o->type_owner_names_counted = true;
+}
+
+//! Marks the declarations that a declaration kept until library cleanup names, which are retired, not freed; the
+//! caller holds ctl
+static void type_owner_mark_forever_names(QoreTypeOwner* o) {
+    // transitively: a declaration marked so is retired, and a retired hashdecl keeps what it names in turn
+    std::vector<QoreTypeOwner*> work;
+    work.push_back(o);
+    while (!work.empty()) {
+        QoreTypeOwner* m = work.back();
+        work.pop_back();
+        if (!m->type_owner_names_known || !m->keepsTypeOwnerMembers()) {
+            continue;
+        }
+        for (QoreTypeOwner* n : m->type_owner_names) {
+            if (!n->type_owner_forever_named) {
+                n->type_owner_forever_named = true;
+                work.push_back(n);
+            }
+        }
+    }
+}
+
+//! Gives the references to the declarations that a declaration names to \a release_list; the caller holds ctl
+/** The caller releases them after the lock is released (type_owner_release())
+*/
+static void type_owner_uncount_names(QoreTypeOwner* o, std::vector<QoreTypeOwner*>& release_list) {
+    if (!o->type_owner_names_counted) {
+        return;
+    }
+    o->type_owner_names_counted = false;
+    release_list.insert(release_list.end(), o->type_owner_refs.begin(), o->type_owner_refs.end());
+    o->type_owner_refs.clear();
+}
+
+//! Returns true if a member of a group that is not retired is referenced other than by its own hold for the group;
+//! the caller holds ctl (a retired member names the members that it keeps without references: they are marked)
+static bool type_owner_group_referenced(const QoreTypeOwner* m) {
+    return !m->type_owner_retired && m->getTypeOwnerReferenceCount() > (m->type_owner_group_hold ? 1 : 0);
+}
+
+//! Returns the members of a group that its live members, or the members referenced otherwise, name, transitively,
+//! with those roots; the caller holds ctl
+static std::set<QoreTypeOwner*> type_owner_group_reach(QoreTypeOwnerGroup* g) {
+    std::set<QoreTypeOwner*> reach;
+    std::vector<QoreTypeOwner*> work;
+    for (QoreTypeOwner* m : g->members) {
+        if (m->type_owner_group_live || type_owner_group_referenced(m)) {
+            work.push_back(m);
+        }
+    }
+    while (!work.empty()) {
+        QoreTypeOwner* m = work.back();
+        work.pop_back();
+        if (!reach.insert(m).second) {
+            continue;
+        }
+        // a retired declaration keeps what it names until library cleanup itself (type_owner_mark_forever_names())
+        if (m->type_owner_retired || !m->type_owner_names_known) {
+            continue;
+        }
+        for (QoreTypeOwner* n : m->type_owner_names) {
+            // a declaration that a member of a group names must not be freed while the member exists: its references
+            // are held for the member, except those of the members of the group itself
+            assert(qore_type_owner_is_live(n));
+            if (n->type_owner_group == g) {
+                work.push_back(n);
+            }
+        }
+    }
+    return reach;
+}
+
+//! Releases the members of a group with live members that no live or referenced member names anymore; the caller
+//! holds ctl
+/** A member that is reached keeps its hold; the others leave the group, and their holds are given to
+    \a release_list, to be released by the caller after the lock is released
+*/
+static void type_owner_group_sweep(QoreTypeOwnerGroup* g, const std::set<QoreTypeOwner*>& reach,
+        std::vector<QoreTypeOwner*>& release_list) {
+    std::vector<QoreTypeOwner*> members;
+    members.swap(g->members);
+    for (QoreTypeOwner* m : members) {
+        if (reach.count(m)) {
+            g->members.push_back(m);
+            continue;
+        }
+        m->type_owner_group = nullptr;
+        if (m->type_owner_group_hold) {
+            m->type_owner_group_hold = false;
+            release_list.push_back(m);
+        }
+    }
+}
+
+//! A member of a group with live members that was released holds a reference to itself for the group; the caller
+//! holds ctl
+/** The group is swept (type_owner_group_sweep()) when the holds since the last sweep reach half the number of its
+    members (at the first hold for a group of up to three members), so the cost of a sweep, which is proportional to
+    the size of the group, is paid by as many holds and the cost of a release is constant on average however large the
+    group, and a member that no live or referenced member reaches anymore is released after a bounded number of holds
+*/
+static void type_owner_group_hold(QoreTypeOwnerGroup* g, QoreTypeOwner* owner,
+        std::vector<QoreTypeOwner*>& release_list) {
+    owner->refTypeOwner();
+    owner->type_owner_group_hold = true;
+    if (++g->holds_since_sweep < std::max<size_t>(1, g->members.size() / 2)) {
+        return;
+    }
+    g->holds_since_sweep = 0;
+    type_owner_group_sweep(g, type_owner_group_reach(g), release_list);
+}
+
+//! Collects a group whose last live member was released; the caller holds ctl
+/** A member that is referenced again (beyond its hold: ex: by the reflection API) becomes a live member again, and its
+    hold is given to \a release_list (the release of that reference decides it again); if there is none, the group is
+    dissolved and the holds of its members are given to \a release_list, to be released by the caller after the lock
+    is released, which frees the members that nothing references then (or retires the marked ones)
+*/
+static void type_owner_collect_group(QoreTypeOwnerGroup* g, std::vector<QoreTypeOwner*>& release_list) {
+    for (QoreTypeOwner* m : g->members) {
+        if (type_owner_group_referenced(m)) {
+            m->type_owner_group_live = true;
+            ++g->live;
+            if (m->type_owner_group_hold) {
+                m->type_owner_group_hold = false;
+                release_list.push_back(m);
+            }
+        }
+    }
+    if (g->live) {
+        return;
+    }
+    for (QoreTypeOwner* m : g->members) {
+        m->type_owner_group = nullptr;
+        m->type_owner_group_live = false;
+        if (m->type_owner_group_hold) {
+            m->type_owner_group_hold = false;
+            release_list.push_back(m);
+        }
+    }
+    type_owner_groups.erase(g);
+    delete g;
+}
+
+namespace {
+//! The releases of the current thread that wait for the release being made (type_owner_release())
+struct QoreTypeOwnerReleaseQueue {
+    bool active = false;
+    std::vector<QoreTypeOwner*> pending;
+};
+
+//! Marks the queue of the thread active while it is drained, also if a release throws
+class QoreTypeOwnerReleaseQueueHelper {
+public:
+    DLLLOCAL QoreTypeOwnerReleaseQueueHelper(QoreTypeOwnerReleaseQueue& q) : q(q) {
+        q.active = true;
+    }
+
+    DLLLOCAL ~QoreTypeOwnerReleaseQueueHelper() {
+        q.active = false;
+    }
+
+private:
+    QoreTypeOwnerReleaseQueue& q;
+};
+}
+
+static thread_local QoreTypeOwnerReleaseQueue type_owner_release_queue;
+
+//! Releases references to declarations; the caller does not hold ctl
+/** A release can free a declaration whose destructor releases others in turn: they are queued and released here, so a
+    chain of declarations is freed without recursion
+*/
+static void type_owner_release(std::vector<QoreTypeOwner*>& release_list) {
+    if (release_list.empty()) {
+        return;
+    }
+    QoreTypeOwnerReleaseQueue& q = type_owner_release_queue;
+    if (q.active) {
+        q.pending.insert(q.pending.end(), release_list.begin(), release_list.end());
+        return;
+    }
+    QoreTypeOwnerReleaseQueueHelper qh(q);
+    std::vector<QoreTypeOwner*> work;
+    work.swap(release_list);
+    while (!work.empty()) {
+        for (QoreTypeOwner* o : work) {
+            o->derefTypeOwner();
+        }
+        work.clear();
+        work.swap(q.pending);
+    }
+}
+
+bool qore_type_owner_released(QoreTypeOwner* owner) {
+    if (type_owner_cleanup.load(std::memory_order_acquire) || owner->isTypeOwnerSystem()) {
+        return false;
+    }
+    std::vector<QoreTypeOwner*> release_list;
+    bool rv;
+    {
+        AutoLocker al(ctl);
+        // a reference taken meanwhile in another thread (ex: by the reflection API) decides when it is released
+        if (owner->hasTypeOwnerReferences()) {
+            return true;
+        }
+        if (owner->type_owner_retired) {
+            // a reference taken to the declaration while it was being retired was released; the retiring thread
+            // decides
+            return true;
+        }
+        bool derived = owner->type_owner_forever_named || type_owner_derived(owner);
+        QoreTypeOwnerGroup* g = owner->type_owner_group;
+        if (g && owner->type_owner_group_live) {
+            owner->type_owner_group_live = false;
+            --g->live;
+            if (!derived) {
+                if (g->live) {
+                    // live members can name it: it is kept for the group until a sweep finds that none does
+                    type_owner_group_hold(g, owner, release_list);
+                    rv = true;
+                    goto release;
+                }
+                // the last live member: the group is collected unless a member is referenced again; this
+                // declaration is freed then (it is not referenced: checked above)
+                type_owner_collect_group(g, release_list);
+                if (owner->type_owner_group_live) {
+                    // a reference to it was taken meanwhile in another thread: it is live again, and that reference
+                    // decides it when it is released
+                    rv = true;
+                } else if (owner->type_owner_group) {
+                    // a referenced member keeps the group, and this one is kept for it
+                    type_owner_group_hold(g, owner, release_list);
+                    rv = true;
+                } else {
+                    rv = false;
+                }
+                goto release;
+            }
+        } else if (!derived) {
+            // a declaration that other declarations name directly is referenced by them; only a derived type, which
+            // is never freed before library cleanup, can name the types of a declaration without a reference
+            return false;
+        }
+        owner->type_owner_retired = true;
+        // no other thread frees it while it is retired without the lock
+        owner->type_owner_retiring = true;
+        retired_type_owners.push_back(owner);
+        // a retired declaration that keeps its members keeps what they name until library cleanup, without
+        // references, which would keep them whole: they are retired when they are released; marked now, while the
+        // lock decides them
+        if (owner->keepsTypeOwnerMembers()) {
+            type_owner_mark_forever_names(owner);
+        }
+    }
+    // the caches drop the entries built on the types; the derived types are retired, as their addresses are kept
+    qore_purge_derived_types(owner->getTypeOwnerKey(), owner->getTypeOwnerType(), owner->getTypeOwnerOrNothingType());
+    owner->retireTypeOwner();
+    {
+        AutoLocker al(ctl);
+        owner->type_owner_retiring = false;
+        // what it names is marked (above), or it names nothing (a retired class keeps no members)
+        type_owner_uncount_names(owner, release_list);
+        // the references taken and released by other code from now on never bring its count to zero, so the
+        // declaration is decided only at library cleanup
+        owner->refTypeOwner();
+        owner->type_owner_retirement_ref = true;
+        // a group whose last live member was this one is collected; otherwise, the members that only it kept are
+        // released
+        QoreTypeOwnerGroup* g = owner->type_owner_group;
+        if (g && !g->live) {
+            type_owner_collect_group(g, release_list);
+        }
+    }
+    rv = true;
+release:
+    type_owner_release(release_list);
+    return rv;
+}
+
+void qore_type_owner_destroyed(QoreTypeOwner* owner) {
+    if (type_owner_cleanup.load(std::memory_order_acquire)) {
+        // at library cleanup (or after it, at static destruction), the declarations that this one referenced are
+        // released directly: the lock and the release queue may be gone; no other thread decides then
+        if (owner->type_owner_names_counted) {
+            owner->type_owner_names_counted = false;
+            std::vector<QoreTypeOwner*> refs;
+            refs.swap(owner->type_owner_refs);
+            for (QoreTypeOwner* n : refs) {
+                n->derefTypeOwner();
+            }
+        }
+        return;
+    }
+    std::vector<QoreTypeOwner*> release_list;
+    {
+        AutoLocker al(ctl);
+        type_owner_uncount_names(owner, release_list);
+        // a member of a group is freed only when the group has been collected, unless it is deleted with its class
+        // object (qore_class_private::deref() with in_del): it leaves its group then
+        QoreTypeOwnerGroup* g = owner->type_owner_group;
+        if (g) {
+            auto i = std::find(g->members.begin(), g->members.end(), owner);
+            assert(i != g->members.end());
+            g->members.erase(i);
+            if (owner->type_owner_group_live) {
+                --g->live;
+            }
+            owner->type_owner_group = nullptr;
+            if (!g->live) {
+                type_owner_collect_group(g, release_list);
+            }
+        }
+    }
+    type_owner_release(release_list);
+}
+
+void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreTypeInfo* ti, const QoreTypeOwner* self) {
+    if (!ti) {
+        return;
+    }
+    // a declaration names the types of its members by pointer: the owner of a type that it names must outlive it, or
+    // be kept by a reference or retired (QoreTypeOwnerBatch)
+    assert(qore_type_info_is_live(ti));
+    QoreTypeOwner* o = nullptr;
+    if (dynamic_cast<const QoreClassTypeInfo*>(ti)) {
+        const QoreClass* qc = QoreTypeInfo::getReturnClass(ti);
+        if (qc) {
+            qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(qc));
+            if (priv && !priv->type_owner.isTypeOwnerSystem()) {
+                o = &priv->type_owner;
+            }
+        }
+    } else if (dynamic_cast<const QoreHashDeclTypeInfo*>(ti)) {
+        const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti);
+        if (hd) {
+            typed_hash_decl_private* priv = typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd));
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                o = &priv->type_owner;
+            }
+        }
+    } else if (dynamic_cast<const QoreEnumTypeInfo*>(ti)) {
+        const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(ti);
+        if (ed) {
+            qore_enum_decl_private* priv = qore_enum_decl_private::get(*const_cast<QoreEnumDecl*>(ed));
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                o = &priv->type_owner;
+            }
+        }
+    }
+    if (o && o != self) {
+        names.push_back(o);
+    }
+}
+
+QoreTypeOwnerBatch::QoreTypeOwnerBatch(qore_ns_private& ns) {
+    // after library cleanup, declarations are freed when their last reference is released
+    if (type_owner_cleanup.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::set<QoreTypeOwner*> seen;
+    std::vector<QoreTypeOwner*> all;
+    ns.getTypeOwners(all);
+    owners.reserve(all.size());
+    for (QoreTypeOwner* o : all) {
+        if (seen.insert(o).second) {
+            o->refTypeOwner();
+            owners.push_back(o);
+        }
+    }
+    // what each declaration names is taken now, while every type is valid; a declaration whose names are counted
+    // (one that survived another Program sharing it) keeps them
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : owners) {
+        if (!o->type_owner_names_counted) {
+            o->type_owner_names.clear();
+            o->getTypeOwnerNames(o->type_owner_names);
+            o->type_owner_names_known = true;
+        }
+    }
+}
+
+QoreTypeOwnerBatch::~QoreTypeOwnerBatch() {
+    if (owners.empty()) {
+        return;
+    }
+    std::vector<QoreTypeOwner*> release_list;
+    {
+        AutoLocker al(ctl);
+        // the declarations that something other than this batch still references survive the Program, and so do
+        // the hashdecls retired below (derived types name their types), which keep their members; each one keeps
+        // what it names with a reference, and a declaration of the Program kept so survives in turn; the others are
+        // destroyed together and do not keep each other
+        std::set<QoreTypeOwner*> batch(owners.begin(), owners.end());
+        std::set<QoreTypeOwner*> survivors;
+        std::vector<QoreTypeOwner*> work;
+        for (QoreTypeOwner* o : owners) {
+            if (o->getTypeOwnerReferenceCount() > 1) {
+                survivors.insert(o);
+                work.push_back(o);
+            } else if (o->keepsTypeOwnerMembers() && (o->type_owner_forever_named || type_owner_derived(o))) {
+                // a hashdecl retired below keeps what it names until library cleanup
+                type_owner_mark_forever_names(o);
+            }
+        }
+
+        while (!work.empty()) {
+            QoreTypeOwner* o = work.back();
+            work.pop_back();
+            if (o->type_owner_names_counted) {
+                continue;
+            }
+            for (QoreTypeOwner* n : o->type_owner_names) {
+                if (batch.count(n) && survivors.insert(n).second) {
+                    work.push_back(n);
+                }
+            }
+        }
+        // the survivors whose names are not counted yet (declarations that survived another Program sharing them
+        // already belong to it) and that name or are named by another one form a group, in which they name each
+        // other without references
+        std::set<QoreTypeOwner*> linked;
+        for (QoreTypeOwner* o : survivors) {
+            if (o->type_owner_names_counted || o->type_owner_group || !o->type_owner_names_known) {
+                continue;
+            }
+            for (QoreTypeOwner* n : o->type_owner_names) {
+                if (n != o && survivors.count(n) && !n->type_owner_names_counted && !n->type_owner_group) {
+                    linked.insert(o);
+                    linked.insert(n);
+                }
+            }
+        }
+        QoreTypeOwnerGroup* g = nullptr;
+        for (QoreTypeOwner* o : linked) {
+            if (!g) {
+                g = new QoreTypeOwnerGroup;
+                type_owner_groups.insert(g);
+            }
+            g->members.push_back(o);
+            o->type_owner_group = g;
+            o->type_owner_group_live = true;
+            ++g->live;
+        }
+        for (QoreTypeOwner* o : survivors) {
+            type_owner_count_names(o);
+        }
+        // a declaration destroyed with the Program no longer keeps what it named as a survivor of another Program;
+        // one that is a member of a group of another Program's survivors is released below like the others, but the
+        // group can keep it (type_owner_group_hold()) with the names that it lists: it keeps its references to them,
+        // which it gives up when it is freed (qore_type_owner_destroyed()) or retired, as the names that a group
+        // sweeps are read while it exists
+        for (QoreTypeOwner* o : owners) {
+            if (!survivors.count(o) && !o->type_owner_group) {
+                type_owner_uncount_names(o, release_list);
+            }
+        }
+    }
+    type_owner_release(release_list);
+    for (QoreTypeOwner* o : owners) {
+        o->derefTypeOwner();
+    }
+}
+
+size_t qore_retired_type_owner_count() {
+    AutoLocker al(ctl);
+    return retired_type_owners.size();
+}
+
+size_t qore_type_owner_group_count() {
+    AutoLocker al(ctl);
+    return type_owner_groups.size();
+}
+
 void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
     std::set<const QoreTypeInfo*> dead;
     if (ti1) {
@@ -944,6 +1543,46 @@ void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const 
 }
 
 void delete_qore_types() {
+    // the retired class, hashdecl and enum declarations are freed first, as their destructors purge their types
+    // from the caches deleted below; from now on, a declaration whose last reference is released is freed
+    {
+        std::vector<QoreTypeOwner*> owners;
+        std::vector<QoreTypeOwner*> holds;
+        {
+            AutoLocker al(ctl);
+            type_owner_cleanup.store(true, std::memory_order_release);
+            owners.swap(retired_type_owners);
+            // the groups not collected yet are dissolved, and the holds of their members released below
+            for (QoreTypeOwnerGroup* g : type_owner_groups) {
+                for (QoreTypeOwner* m : g->members) {
+                    m->type_owner_group = nullptr;
+                    m->type_owner_group_live = false;
+                    if (m->type_owner_group_hold) {
+                        m->type_owner_group_hold = false;
+                        holds.push_back(m);
+                    }
+                }
+                delete g;
+            }
+            type_owner_groups.clear();
+        }
+        for (QoreTypeOwner* o : holds) {
+            o->derefTypeOwner();
+        }
+        for (QoreTypeOwner* o : owners) {
+            // the retirement reference is released: a declaration that is still referenced otherwise (ex: by a
+            // reflection object of a Program deleted later) is freed when its last reference is released, as the
+            // cleanup flag is set
+            if (o->type_owner_retirement_ref) {
+                o->type_owner_retirement_ref = false;
+                o->derefTypeOwner();
+            } else if (!o->hasTypeOwnerReferences() && !o->type_owner_retiring) {
+                // one that another thread is retiring is freed when its last reference is released
+                o->freeTypeOwner();
+            }
+        }
+    }
+
     // dereference global default values
     NullString->deref();
     piNumber->deref();
@@ -1518,6 +2157,47 @@ static q_return_vec_t make_type_parameter_return_vec(const QoreTypeParameterType
     return rv;
 }
 
+const QoreTypeInfo* QoreTypeParameterTypeInfo::getBoundTypeInfo() const {
+    if (owner_signature) {
+        return owner_signature->getTypeParameterBoundTypeInfo(index);
+    }
+    if (owner_class) {
+        return qore_class_private::get(*owner_class)->getTypeParamBoundTypeInfo(index);
+    }
+    return nullptr;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getTypeParameterSourceType(const QoreTypeInfo* ti) {
+    if (!ti || ti->return_vec.size() > 2) {
+        return nullptr;
+    }
+    const QoreTypeParameterTypeInfo* tp = ti->return_vec[0].spec.getTypeParameterTypeInfo();
+    if (!tp) {
+        return nullptr;
+    }
+    bool or_nothing = false;
+    if (ti->return_vec.size() > 1) {
+        // *T: the type parameter and NOTHING (see make_type_parameter_return_vec())
+        if (ti->return_vec[1].spec.getTypeSpec() != QTS_TYPE || ti->return_vec[1].spec.getType() != NT_NOTHING) {
+            return nullptr;
+        }
+        or_nothing = true;
+    }
+    const QoreTypeInfo* bound = tp->getBoundTypeInfo();
+    if (!bound) {
+        return autoTypeInfo;
+    }
+    // a bound that accepts values with a conversion (softint, number, softlist<...>) accepts type arguments that it
+    // converts (C<string> for T: softint), but a value bound to T is not converted, so its type is only known at run
+    // time
+    for (auto& i : bound->getAcceptSpecs()) {
+        if (i.map) {
+            return autoTypeInfo;
+        }
+    }
+    return or_nothing ? get_or_nothing_type(bound) : bound;
+}
+
 QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const QoreClass* owner, size_t n_index, const char* name,
         bool n_or_nothing, const QoreTypeParameterTypeInfo* value_type)
         : QoreTypeInfo(
@@ -1975,6 +2655,10 @@ private:
 QoreExternalTypeDeclRefs::QoreExternalTypeDeclRefs(const QoreTypeInfo* ti) {
     // nothing is allocated for a type without declarations, such as a builtin type
     std::unique_ptr<qore_type_decl_refs_private> p;
+    // the references are taken under the type lock: a declaration reached through a type can be a member of a group
+    // of declarations of a deleted Program, whose collection and sweeps read the references of its members under the
+    // lock (issue #5790)
+    AutoLocker al(ctl);
     qore_type_decl_refs_private::add(p, ti, 0);
     priv = p.release();
 }
@@ -3688,6 +4372,12 @@ bool QoreTypeSpec::acceptInputComplexHashImpl(ExceptionSink* xsink, const QoreTy
             && !qore_container_value_may_convert_to(u.ti, ti)) {
         return false;
     }
+    // a hash with a hashdecl type is not a hash with a specific value type, as for the selection of a variant
+    // (runtimeAcceptsValue()): its member values are not folded into the value type (folding the values of a hash
+    // with no other reference would break the member types of its hashdecl) (issue #5916)
+    if (h->getHashDecl()) {
+        return false;
+    }
 
     // try to fold values into our type; value types are not identical;
     // we have to get a new hash
@@ -3938,8 +4628,11 @@ public:
             assert(object);
             // The caller's receiver remains active until the constructor's call frame is installed. Use the
             // object being initialized explicitly, just as the canonical initMember() entry does.
+            // (an object of a class without type arguments gives those of the generic classes that it inherits:
+            // qore#6027)
+            const qore_object_private* opriv = qore_object_private::get(*object);
             target = qore_substitute_type_params_if_needed(declared_type,
-                qore_object_private::get(*object)->instantiated_type);
+                opriv->instantiated_type ? opriv->instantiated_type : opriv->theclass->getTypeInfo());
         }
         if (QoreTypeInfo::hasType(target)) {
             target->acceptInputIntern(xsink, arg_type, obj, param_num, param_name, value, policy, lvhelper);
@@ -5015,6 +5708,16 @@ static int qore_check_parse_type_arg_bound(const QoreProgramLocation* loc, const
         return 0;
     }
 
+    // a bound that names its own generic type (class Self<T: Self<int>>) is checked again while it is resolved here;
+    // the check in progress decides it with the bound resolved, so a nested check of the same bound is not made,
+    // which would never end (qore#5774)
+    thread_local std::vector<const char*> bounds_in_check;
+    if (std::find(bounds_in_check.begin(), bounds_in_check.end(), bound_type) != bounds_in_check.end()) {
+        return 0;
+    }
+    bounds_in_check.push_back(bound_type);
+    ON_BLOCK_EXIT([] () { bounds_in_check.pop_back(); });
+
     int err = 0;
     std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
     if (!bound_pti) {
@@ -5044,6 +5747,15 @@ static bool qore_runtime_type_arg_satisfies_bound(const char* bound_type, const 
     if (!bound_type || !*bound_type) {
         return true;
     }
+
+    // as in qore_check_parse_type_arg_bound(): a bound that names its own generic type is decided by the check in
+    // progress, not checked again while it is resolved (qore#5774)
+    thread_local std::vector<const char*> bounds_in_check;
+    if (std::find(bounds_in_check.begin(), bounds_in_check.end(), bound_type) != bounds_in_check.end()) {
+        return true;
+    }
+    bounds_in_check.push_back(bound_type);
+    ON_BLOCK_EXIT([] () { bounds_in_check.pop_back(); });
 
     std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
     if (!bound_pti) {
@@ -7038,6 +7750,13 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
         return QTI_IDENT;
     }
     */
+    // a value of a type parameter (in generic code) has its bound, or any type if it has none (a may-match checked at
+    // run time), unless the target is a type parameter, which matches it by identity (qore#5774)
+    if (second && first && !first->return_vec.empty() && !first->return_vec[0].spec.getTypeParameterTypeInfo()) {
+        if (const QoreTypeInfo* src = getTypeParameterSourceType(second)) {
+            second = src;
+        }
+    }
     if (first == autoTypeInfo) {
         // If parameter is auto and argument is untyped (also auto),
         // require runtime matching so specific types can be preferred
@@ -7472,9 +8191,34 @@ namespace {
 // a result of an arithmetic operator that has no parse type here (a buffer, or SQL NULL)
 constexpr qore_type_t QORE_ARITH_UNTYPED = -1;
 
-// the value types that can be the value of an operand of the given type, as their runtime type codes
+// a value type that can be the value of an operand, with the type of the member of the operand type that gives it
+struct qore_arith_value_t {
+    qore_type_t type;
+    //! the type of the member: a type of values of this value type only (ex: hash<X>), or nullptr if it is not known
+    //! more precisely than the base type
+    const QoreTypeInfo* member;
+};
+
+// the member type of an operand type for its values of one value type, if a value of the member type has that type
+// itself: a base type, a hash type, a hashdecl, a class or a list type, but not a soft list type (ex: softlist<int>),
+// whose values are lists of another type
+const QoreTypeInfo* qore_arith_member_type(const QoreTypeSpec& spec) {
+    switch (spec.getTypeSpec()) {
+        case QTS_TYPE:
+        case QTS_CLASS:
+        case QTS_HASHDECL:
+        case QTS_COMPLEXHASH:
+        case QTS_COMPLEXLIST:
+            return spec.getTypeInfo();
+        default:
+            return nullptr;
+    }
+}
+
+// the value types that can be the value of an operand of the given type, as their runtime type codes, with the member
+// types that give them
 // returns false if the type does not restrict them: then every type is possible
-bool qore_arith_value_types(const QoreTypeInfo* ti, std::vector<qore_type_t>& types) {
+bool qore_arith_value_types(const QoreTypeInfo* ti, std::vector<qore_arith_value_t>& types) {
     if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || ti == autoNoNarrowTypeInfo || ti == anyTypeInfo) {
         return false;
     }
@@ -7483,18 +8227,31 @@ bool qore_arith_value_types(const QoreTypeInfo* ti, std::vector<qore_type_t>& ty
         if (t == NT_ALL || t < 0) {
             return false;
         }
-        if (std::find(types.begin(), types.end(), t) == types.end()) {
-            types.push_back(t);
+        const QoreTypeInfo* member = t == NT_NOTHING ? nothingTypeInfo : qore_arith_member_type(r.spec);
+        bool found = false;
+        for (qore_arith_value_t& v : types) {
+            if (v.type == t) {
+                found = true;
+                // two members of one value type: the value type is not known more precisely
+                if (v.member != member) {
+                    v.member = nullptr;
+                }
+                break;
+            }
+        }
+        if (!found) {
+            types.push_back({t, member});
         }
     }
     return !types.empty();
 }
 
 // every value type, for an operand whose type does not restrict its values
-const std::vector<qore_type_t>& qore_arith_all_value_types() {
-    static const std::vector<qore_type_t> all = {
-        NT_NOTHING, NT_INT, NT_FLOAT, NT_NUMBER, NT_STRING, NT_DATE, NT_BOOLEAN, NT_BINARY, NT_LIST, NT_HASH,
-        NT_OBJECT, NT_NULL, NT_BUFFER,
+const std::vector<qore_arith_value_t>& qore_arith_all_value_types() {
+    static const std::vector<qore_arith_value_t> all = {
+        {NT_NOTHING, nothingTypeInfo}, {NT_INT, nullptr}, {NT_FLOAT, nullptr}, {NT_NUMBER, nullptr},
+        {NT_STRING, nullptr}, {NT_DATE, nullptr}, {NT_BOOLEAN, nullptr}, {NT_BINARY, nullptr}, {NT_LIST, nullptr},
+        {NT_HASH, nullptr}, {NT_OBJECT, nullptr}, {NT_NULL, nullptr}, {NT_BUFFER, nullptr},
     };
     return all;
 }
@@ -7620,21 +8377,23 @@ bool qore_arith_is_container(qore_type_t t) {
 }
 
 QoreArithParseResult qore_arith_parse_result_type(QoreArithParseOp op, const QoreTypeInfo* lti,
-        const QoreTypeInfo* rti, const QoreTypeInfo*& result, bool& single) {
+        const QoreTypeInfo* rti, const QoreTypeInfo*& result, bool& single,
+        qore_arith_container_rule_t container_rule) {
     result = nullptr;
-    std::vector<qore_type_t> lv, rv;
+    std::vector<qore_arith_value_t> lv, rv;
     bool lk = qore_arith_value_types(lti, lv);
     bool rk = qore_arith_value_types(rti, rv);
-    const std::vector<qore_type_t>& lvals = lk ? lv : qore_arith_all_value_types();
-    const std::vector<qore_type_t>& rvals = rk ? rv : qore_arith_all_value_types();
+    const std::vector<qore_arith_value_t>& lvals = lk ? lv : qore_arith_all_value_types();
+    const std::vector<qore_arith_value_t>& rvals = rk ? rv : qore_arith_all_value_types();
     single = lk && rk && lv.size() == 1 && rv.size() == 1;
 
-    type_vec_t types;
+    // the result types with the value types that they are types of
+    std::vector<std::pair<qore_type_t, const QoreTypeInfo*>> types;
     bool has_nothing = false;
     bool container = false;
-    for (qore_type_t lt : lvals) {
-        for (qore_type_t rt : rvals) {
-            qore_type_t t = qore_arith_runtime_result(op, lt, rt);
+    for (const qore_arith_value_t& l : lvals) {
+        for (const qore_arith_value_t& r : rvals) {
+            qore_type_t t = qore_arith_runtime_result(op, l.type, r.type);
             if (t == NT_NOTHING) {
                 has_nothing = true;
                 continue;
@@ -7645,23 +8404,50 @@ QoreArithParseResult qore_arith_parse_result_type(QoreArithParseOp op, const Qor
             }
             if (qore_arith_is_container(t)) {
                 container = true;
+                // the container that the operator gives for the members, if it is known more precisely (ex: the
+                // left hash of hash<X> - string has the type of the left operand)
+                if (container_rule) {
+                    const QoreTypeInfo* member_ti = container_rule(l.type, l.member, r.type, r.member);
+                    if (member_ti && QoreTypeInfo::isType(member_ti, t)) {
+                        ti = member_ti;
+                    }
+                }
             }
-            if (std::find(types.begin(), types.end(), ti) == types.end()) {
-                types.push_back(ti);
+            std::pair<qore_type_t, const QoreTypeInfo*> entry(t, ti);
+            if (std::find(types.begin(), types.end(), entry) == types.end()) {
+                types.push_back(entry);
             }
         }
     }
+    // a result of a value type with the base type of the value type takes every value of the value type, so the other
+    // result types of the value type are not needed
+    std::vector<qore_type_t> base_types;
+    for (const auto& e : types) {
+        if (e.second == qore_arith_result_type(e.first)) {
+            base_types.push_back(e.first);
+        }
+    }
+    types.erase(std::remove_if(types.begin(), types.end(), [&base_types](const std::pair<qore_type_t,
+            const QoreTypeInfo*>& e) {
+        return e.second != qore_arith_result_type(e.first)
+            && std::find(base_types.begin(), base_types.end(), e.first) != base_types.end();
+    }), types.end());
     // the members are ordered so that a value of each result type is taken by its own member: a union takes a value
     // with its first member that accepts it, and a float accepts an int by converting it, so an int result type comes
     // before a float result type (ex: union<int, float> for *float + int, not union<float, int>, which made 2.0 of 2)
-    static const std::vector<const QoreTypeInfo*> order = {
-        bigIntTypeInfo, floatTypeInfo, numberTypeInfo, stringTypeInfo, dateTypeInfo, boolTypeInfo, binaryTypeInfo,
-        autoListTypeInfo, autoHashTypeInfo, objectTypeInfo,
+    static const std::vector<qore_type_t> order = {
+        NT_INT, NT_FLOAT, NT_NUMBER, NT_STRING, NT_DATE, NT_BOOLEAN, NT_BINARY, NT_LIST, NT_HASH, NT_OBJECT,
     };
-    std::sort(types.begin(), types.end(), [](const QoreTypeInfo* a, const QoreTypeInfo* b) {
-        return std::find(order.begin(), order.end(), a) < std::find(order.begin(), order.end(), b);
+    std::stable_sort(types.begin(), types.end(), [](const std::pair<qore_type_t, const QoreTypeInfo*>& a,
+            const std::pair<qore_type_t, const QoreTypeInfo*>& b) {
+        return std::find(order.begin(), order.end(), a.first) < std::find(order.begin(), order.end(), b.first);
     });
-    result = types.empty() ? nothingTypeInfo : qore_get_union_type(types, has_nothing);
+    type_vec_t result_types;
+    result_types.reserve(types.size());
+    for (const auto& e : types) {
+        result_types.push_back(e.second);
+    }
+    result = result_types.empty() ? nothingTypeInfo : qore_get_union_type(result_types, has_nothing);
     return container ? QoreArithParseResult::Container : QoreArithParseResult::Scalar;
 }
 

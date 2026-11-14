@@ -8,6 +8,8 @@
 
 %modern
 %loose-types
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 class C {
     int m(int v) { return v; }
     static int sm(int v) { return v; }

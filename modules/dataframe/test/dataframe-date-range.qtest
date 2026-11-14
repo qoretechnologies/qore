@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-date-range.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameDateRangeTest
+
+#! A date column stores the microseconds since the epoch in an int64; a date outside that range raises
+#! DATAFRAME-DATE-RANGE-ERROR instead of being stored as another date (qore#6092)
+class DataFrameDateRangeTest inherits QUnit::Test {
+    private {
+        #! the first and last dates of the range, and the dates just outside it
+        date first = gmtime(-9223372036855, 224192);
+        date last = gmtime(9223372036854, 775807);
+        date before_first = gmtime(-9223372036855, 224191);
+        date after_last = gmtime(9223372036854, 775808);
+        #! dates far outside the range
+        date far_future = 1970-01-01Z + years(300000);
+        date far_past = 1970-01-01Z - years(300000);
+    }
+
+    constructor() : Test("DataFrameDateRangeTest", "1.0", \ARGV) {
+        addTestCase("range limits", \limitTest());
+        addTestCase("store paths", \storeTest());
+        addTestCase("Parquet timestamps", \parquetTest());
+        addTestCase("time values", \timeValueTest());
+        addTestCase("column type from later values", \laterTypeTest());
+        set_return_value(main());
+    }
+
+    #! the first and last dates of the range are stored as they are
+    limitTest() {
+        DataFrame::DataFrame df({"v": (first, last)});
+        assertEq("date", df.dtypes()[0], "a date column");
+        assertEq((-9223372036854775807 - 1, 9223372036854775807), map get_epoch_microseconds($1), df.getColumn("v"),
+            "the limits of the range");
+        # the seconds at the edges of the range that is checked with no overflow check, and just outside it
+        foreach list<int> parts in ((-9223372036853, 0), (-9223372036853, 999999), (9223372036853, 999999),
+                (-9223372036854, 0), (-9223372036854, 1), (-9223372036854, 999999), (9223372036854, 0),
+                (-9223372036855, 999999)) {
+            date d = gmtime(parts[0], parts[1]);
+            assertEq((get_epoch_microseconds(d),), map get_epoch_microseconds($1),
+                (new DataFrame::DataFrame({"v": (d,)})).getColumn("v"), sprintf("%y", parts));
+        }
+        foreach list<int> parts in ((9223372036854775807, 0), (-9223372036854775807 - 1, 0), (-9223372036856, 0)) {
+            date d = gmtime(parts[0], parts[1]);
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (d,)}); }, (),
+                sprintf("%y", parts));
+        }
+    }
+
+    #! every way of storing a date in a date column raises an error for a date outside the range
+    storeTest() {
+        foreach date d in ((before_first, after_last, far_future, far_past)) {
+            string label = sprintf("%y", d);
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame(({"v": d},)); }, (),
+                label + ": records");
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (d,)}); }, (),
+                label + ": column hash");
+            # a column that becomes a date column with its first value
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (first, d)}); }, (),
+                label + ": inferred date column");
+            # records whose first row has a date
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () {
+                new DataFrame::DataFrame(({"v": first}, {"v": d}));
+            }, (), label + ": records after a date");
+            DataFrame::DataFrame df({"id": (1, 2)});
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", \df.addColumn(), ("v", (first, d)), label + ": addColumn()");
+            DataFrame::DataFrame nulls({"v": (first, NOTHING)});
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", \nulls.fillna(), d, label + ": fillna()");
+        }
+    }
+
+    #! a time value (a relative date) is checked with its microseconds, which can overflow before its seconds
+    timeValueTest() {
+        # the microseconds of a time value in the range, near its end
+        date in_range = years(292471) + hours(1828) + seconds(54) + microseconds(100);
+        DataFrame::DataFrame df({"v": (in_range,)});
+        assertEq((9223372036854000100,), map get_epoch_microseconds($1), df.getColumn("v"),
+            "a time value near the end of the range");
+        # a time value whose parts have different signs
+        assertEq((9223365456000000000,), map get_epoch_microseconds($1),
+            (new DataFrame::DataFrame({"v": (years(292472) - days(365),)})).getColumn("v"),
+            "a time value with parts of different signs");
+        foreach date d in ((years(300000), -years(300000), years(292471) + days(1000))) {
+            string label = sprintf("%y", d);
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (d,)}); }, (),
+                label + ": column hash");
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame(({"v": d},)); }, (),
+                label + ": records");
+            DataFrame::DataFrame nulls({"v": (first, NOTHING)});
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", \nulls.fillna(), d, label + ": fillna()");
+        }
+    }
+
+    #! a date outside the range is stored if a later value makes the column one that holds it: a column that holds
+    #! any value, or a string column
+    laterTypeTest() {
+        DataFrame::DataFrame any({"v": (far_future, {})});
+        assertEq(("auto", far_future), (any.dtypes()[0], any.getColumn("v")[0]), "column hash: auto");
+        DataFrame::DataFrame str({"v": (far_future, "x")});
+        assertEq("string", str.dtypes()[0], "column hash: string");
+        DataFrame::DataFrame records(({"v": far_future}, {"v": {}}));
+        assertEq(("auto", far_future), (records.dtypes()[0], records.getColumn("v")[0]), "records: auto");
+        # a column that stays a date column raises the error
+        assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (far_future, first)}); },
+            (), "column hash: date");
+        assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () {
+            new DataFrame::DataFrame(({"v": far_future}, {"v": first}));
+        }, (), "records: date");
+    }
+
+    #! a Parquet timestamp in seconds or milliseconds outside the range raises an error when it is read, and one in
+    #! the range is read (data/gen-filter-fixtures.cpp)
+    parquetTest() {
+        string dir = get_script_dir() + DirSep + "data" + DirSep;
+        assertThrows("DATAFRAME-DATE-RANGE-ERROR", \DataFrame::DataFrame::readParquet(),
+            dir + "date_range_seconds.parquet", "timestamp[s] outside the range");
+        assertThrows("DATAFRAME-DATE-RANGE-ERROR", \DataFrame::DataFrame::readParquet(),
+            dir + "date_range_millis.parquet", "timestamp[ms] outside the range");
+        DataFrame::DataFrame df = DataFrame::DataFrame::readParquet(dir + "date_range_seconds.parquet",
+            <DataFrame::ParquetReadOptions>{"row_groups": (0,)});
+        assertEq((9223372036854000000,), map get_epoch_microseconds($1), df.getColumn("v"),
+            "the last second of the range");
+    }
+}

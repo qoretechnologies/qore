@@ -563,7 +563,7 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
         if (*hash<auto> ping = getRateLimitedPing()) {
             try {
-                ping.limiter.settle(ping.limiter.admit(ping.tokens, clock_get_monotonic_us()));
+                ping.limiter.settle(ping.limiter.admit(ping.tokens, ping.limiter.getClockUs()));
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err != "EMBEDDER-RATE-LIMIT-ERROR") {
                     rethrow;
@@ -587,7 +587,7 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
         }
         ping.limiter.call(<QoreRagUtils::RateLimitedCallInfo>{
             "tokens": ping.tokens,
-            "deadline_us": clock_get_monotonic_us() + PingMaxWaitMs * 1000,
+            "deadline_us": ping.limiter.getClockUs() + PingMaxWaitMs * 1000,
             "max_retries": 0,
             "error_code": "VOYAGE-RATE-LIMITED",
             "error_prefix": sprintf("ping model %y", ping.model),
@@ -970,7 +970,7 @@ public class VoyageEmbedder inherits AbstractEmbedder {
         try {
             resp = limiter.call(<RateLimitedCallInfo>{
                 "tokens": slice.tokens,
-                "deadline_us": clock_get_monotonic_us() + rate_limit_budget_ms * 1000,
+                "deadline_us": limiter.getClockUs() + rate_limit_budget_ms * 1000,
                 "max_retries": max_rate_limit_retries,
                 "error_code": "EMBEDDER-RATE-LIMIT-ERROR",
                 "error_prefix": sprintf("%s: model %y", Backend, model_name),
@@ -1327,9 +1327,10 @@ public class VoyageReranker inherits AbstractReranker {
             }
         }
 
-        hash<auto> resp = getRateLimiter().call(<RateLimitedCallInfo>{
+        EmbedderRateLimiter limiter = getRateLimiter();
+        hash<auto> resp = limiter.call(<RateLimitedCallInfo>{
             "tokens": VoyageRestClient::VoyageRestClientBase::estimateRerankTokens(query, documents),
-            "deadline_us": clock_get_monotonic_us() + rateLimitBudgetMs(opts) * 1000,
+            "deadline_us": limiter.getClockUs() + rateLimitBudgetMs(opts) * 1000,
             "max_retries": opts.rate_limit_max_retries ?? config.rate_limit_max_retries,
             "error_code": "RERANKER-RATE-LIMIT-ERROR",
             "error_prefix": sprintf("voyage: rerank model %y", model_name),

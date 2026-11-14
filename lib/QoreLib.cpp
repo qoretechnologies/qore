@@ -2524,6 +2524,9 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
         }
         if (assignment) {
             vrn->parseAssigned();
+        } else {
+            // code that changes the lvalue, or a reference to it, can give the variable a value (qore#5937)
+            vrn->parseMayBeAssigned();
         }
         return 0;
     }

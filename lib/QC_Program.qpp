@@ -1007,10 +1007,13 @@ const PO_NO_USER_CLASSES = PO_NO_INHERIT_USER_CLASSES;
  */
 const PO_NO_THREADS = PO_NO_THREADS;
 
-//! mask of all parse options allowing for more freedom (instead of less)
+//! mask of all parse options allowing for more freedom (instead of less) that an integer can hold (bits 0-63)
 /** made up of a binary-or'ed combination of:
     - @ref PO_NO_CHILD_PO_RESTRICTIONS
     - @ref PO_ALLOW_INJECTION
+
+    @note the extended positive options (above bit 63, such as \c allow-opaque-references) are not in this mask; use
+    @ref Qore::ParseOptions::positiveOptions() "ParseOptions::positiveOptions()" for all positive options
  */
 const PO_POSITIVE_OPTIONS = PO_POSITIVE_OPTIONS;
 

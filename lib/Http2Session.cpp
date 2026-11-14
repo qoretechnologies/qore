@@ -3168,6 +3168,19 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
         return -1;
     }
 
+    // a close frame was sent on the stream (by its WebSocket frame state or by the application): no data frame may
+    // follow it (RFC 6455 section 5.5.1), so a data frame (an opcode below the control frames') is refused under the
+    // lock the close was buffered with; a control frame (a ping) and an end of the stream without data are not
+    // (issue #6077)
+    if (!ignore_limit && data && len > 0 && !close_frame_streams.empty()
+            && (static_cast<const uint8_t*>(data)[0] & 0x0f) < WSOP_CLOSE
+            && close_frame_streams.find(stream_id) != close_frame_streams.end()) {
+        xsink->raiseException("WEBSOCKET-CLOSING-ERROR", "cannot send data on HTTP/2 stream %d: its WebSocket "
+            "connection sent a close frame; no data frame may follow a close frame (RFC 6455 section 5.5.1)",
+            stream_id);
+        return -1;
+    }
+
     // Check if there's already too much buffered data (flow control backpressure)
     // Limit to 1MB per stream to prevent unbounded memory growth
     // Allow zero-length end_stream sends through — they just set the flag without
@@ -3249,16 +3262,11 @@ bool Http2Session::hasSendRoomUnlocked(int32_t stream_id, size_t pending, size_t
 int Http2Session::sendStreamControlFrame(int32_t stream_id, const void* data, size_t len, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     uint8_t opcode = (data && len) ? (static_cast<const uint8_t*>(data)[0] & 0x0f) : 0;
-    // a close frame is buffered past the send limit once per stream: a close is never dropped (issue #5900)
-    if (opcode == WSOP_CLOSE && close_frame_streams.insert(stream_id).second) {
-        int rv = sendStreamData(stream_id, data, len, false, xsink, true);
-        if (rv) {
-            close_frame_streams.erase(stream_id);
-        } else {
-            // a pong kept before is not sent after the close frame
-            pending_pongs.erase(stream_id);
-        }
-        return rv;
+    // a close frame is buffered past the send limit once per stream: a close is never dropped (issue #5900); one
+    // sent before, also by the application (sendStreamCloseFrame()), is not followed by another (issue #6077)
+    if (opcode == WSOP_CLOSE) {
+        int rv = sendStreamCloseFrame(stream_id, data, len, false, xsink);
+        return rv == 2 ? 0 : rv;
     }
     int rv = sendStreamData(stream_id, data, len, false, xsink);
     // no pong is kept to follow a close frame queued before it
@@ -3273,6 +3281,26 @@ int Http2Session::sendStreamControlFrame(int32_t stream_id, const void* data, si
     }
     if (!rv && opcode == WSOP_PONG) {
         // a pong kept before is answered by this newer one
+        pending_pongs.erase(stream_id);
+    }
+    return rv;
+}
+
+int Http2Session::sendStreamCloseFrame(int32_t stream_id, const void* data, size_t len, bool end_stream,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (!close_frame_streams.insert(stream_id).second) {
+        // a close frame was sent on the stream before: no other follows it (RFC 6455 section 5.5.1)
+        if (end_stream && sendStreamData(stream_id, nullptr, 0, true, xsink) < 0) {
+            return -1;
+        }
+        return 2;
+    }
+    int rv = sendStreamData(stream_id, data, len, end_stream, xsink, true);
+    if (rv) {
+        close_frame_streams.erase(stream_id);
+    } else {
+        // a pong kept before is not sent after the close frame
         pending_pongs.erase(stream_id);
     }
     return rv;

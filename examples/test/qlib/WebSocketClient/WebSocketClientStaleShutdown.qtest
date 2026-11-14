@@ -1969,7 +1969,9 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         ctx.wsc.inBackground("disconnected", sub () { ctx.wsc.disconnect(); });
         assertEq("gated", ctx.wsc.events.get(LifecycleWsClient::HandoffTimeout));
 
-        date start = now_us();
+        # measured with the monotonic clock, as the action timeout is: a change of the system clock while the call
+        # waits (a VM's time synchronization) must not change the elapsed time
+        int start = clock_get_monotonic_us();
         if (call == "connect") {
             ctx.wsc.setConnectTimeoutForTest(300);
             on_exit ctx.wsc.setConnectTimeoutForTest(LifecycleWsClient::HandoffTimeout);
@@ -1977,7 +1979,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         } else {
             assertThrows("WEBSOCKET-ACTION-TIMEOUT", \ctx.wsc.disconnect());
         }
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         assertTrue(elapsed >= 300ms, sprintf("the wait lasted %y, at least the timeout", elapsed));
 
         ctx.wsc.gate_handshake.dec();
