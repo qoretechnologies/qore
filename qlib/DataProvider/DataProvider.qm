@@ -1746,7 +1746,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     @section dataprovider_v3_12 DataProvider v3.12
     - @ref DataProvider::AbstractDataProvider::upsertRecordsBulk() "AbstractDataProvider::upsertRecordsBulk()" with a
       list of records raises the error the provider raised, as it does for every other shape of records; it wrapped
-      every failure as \c CREATE-RECORD-ERROR, so the same upsert raised another code by the shape of its records
+      every failure as \c CREATE-RECORD-ERROR, so the same upsert raised another code by the shape of its records;
+      a record in the list that is not a hash raises \c UPSERT-RECORD-ERROR instead of \c CREATE-RECORD-ERROR
     - the process-wide registration and setter APIs (factories, types, apps, actions, file APIs, discovery inventory
       providers, webhook APIs, the global logger and options, template and dynamic value callbacks, the generic API
       call builders, the scheme lookup callback, static initialization and shutdown handlers) declare the \c PROCESS

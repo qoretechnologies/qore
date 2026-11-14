@@ -308,7 +308,7 @@
     @par An Upsert of a List of Records Raises the Error Its Provider Raised
     @ref DataProvider::AbstractDataProvider::upsertRecordsBulk() "AbstractDataProvider::upsertRecordsBulk()" with a
     list of records raises the error the provider raised, as for every other shape of records, instead of
-    \c CREATE-RECORD-ERROR.
+    \c CREATE-RECORD-ERROR; a record in the list that is not a hash raises \c UPSERT-RECORD-ERROR.
 
     @par The Opacity of an RGB Color Is a Number From 0 to 1
     The \c a member of @ref DataProvider::RgbColorDataType "RgbColorDataType" is an opacity from \c 0 to \c 1 (default
