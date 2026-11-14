@@ -161,12 +161,7 @@ const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(const Qor
     return old;
 }
 
-bool AbstractFunctionSignature::needsTypeParameterSubstitution() const {
-    signed char cached = type_param_substitution_cache.load(std::memory_order_relaxed);
-    if (cached != -1) {
-        return cached != 0;
-    }
-
+bool AbstractFunctionSignature::computeTypeParameterSubstitution() const {
     bool rv = qore_type_contains_type_parameter(returnTypeInfo);
     if (!rv) {
         for (const QoreTypeInfo* ti : typeList) {

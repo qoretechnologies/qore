@@ -342,8 +342,14 @@ public:
     bool read_only = false;
 
     DLLLOCAL ClosureVarValue(const char* n_id, const QoreTypeInfo* varTypeInfo, QoreValue& nval, bool assign,
-            bool n_read_only = false) : VarValueBase(n_id, varTypeInfo), RObject(references), typeInfo(varTypeInfo),
-            refTypeInfo(QoreTypeInfo::getReferenceTarget(varTypeInfo)), references(1), read_only(n_read_only) {
+            bool n_read_only = false) : ClosureVarValue(n_id, varTypeInfo,
+                QoreTypeInfo::getReferenceTarget(varTypeInfo), nval, assign, n_read_only) {
+    }
+
+    //! The LocalVar already records the reference target; do not look it up again for every invocation.
+    DLLLOCAL ClosureVarValue(const char* n_id, const QoreTypeInfo* varTypeInfo, const QoreTypeInfo* refTypeInfo,
+            QoreValue& nval, bool assign, bool n_read_only) : VarValueBase(n_id, varTypeInfo), RObject(references),
+            typeInfo(varTypeInfo), refTypeInfo(refTypeInfo), references(1), read_only(n_read_only) {
         //printd(5, "ClosureVarValue::ClosureVarValue() this: %p refs: 0 -> 1 val: %s\n", this, val.getTypeName());
         val.setClosure();
 
@@ -903,17 +909,27 @@ public:
     }
 
     DLLLOCAL void instantiateIntern(QoreValue nval, bool assign, const QoreTypeInfo* runtimeTypeInfo = nullptr) {
-        const QoreTypeInfo* ti = runtimeTypeInfo ? runtimeTypeInfo : typeInfo;
         if (!closure_use) {
+            const QoreTypeInfo* ti = runtimeTypeInfo ? runtimeTypeInfo : typeInfo;
             LocalVarValue* val = thread_instantiate_lvar();
             val->set(name.c_str(), this, ti, nval, assign, false);
         } else {
             // Closure/thread-safe storage must retain the lvalue-only auto! marker. Without it,
             // merely creating a reference to a hash<auto!>/list<auto!> local changes the storage
             // path and lets its initializer keep a narrowed runtime container type.
-            const QoreTypeInfo* lvalue_ti = runtimeTypeInfo ? runtimeTypeInfo : getTypeInfoForLValue();
-            thread_instantiate_closure_var(name.c_str(), lvalue_ti, nval, assign, read_only);
+            thread_instantiate_closure_var(this, runtimeTypeInfo, nval, assign);
         }
+    }
+
+    //! Creates storage whose constraint belongs to this invocation, before publishing it on the thread stack.
+    DLLLOCAL ClosureVarValue* createClosureValue(const QoreTypeInfo* runtimeTypeInfo, QoreValue& nval,
+            bool assign) const {
+        const QoreTypeInfo* ti = runtimeTypeInfo ? runtimeTypeInfo : getTypeInfoForLValue();
+        if (type_info_needs_substitution) {
+            return createGenericClosureValue(ti, nval, assign);
+        }
+        return new ClosureVarValue(name.c_str(), ti,
+            runtimeTypeInfo ? QoreTypeInfo::getReferenceTarget(ti) : refTypeInfo, nval, assign, read_only);
     }
 
     DLLLOCAL void instantiateSelf(QoreObject* value) const {
@@ -1397,6 +1413,9 @@ private:
     const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred (parse-time only)
     bool type_info_needs_substitution = false;
     bool ref_type_info_needs_substitution = false;
+    //! Binds generic storage and retains any declarations named by the resulting constraint.
+    DLLLOCAL QORE_INTERN_NOINLINE ClosureVarValue* createGenericClosureValue(const QoreTypeInfo* ti,
+        QoreValue& nval, bool assign) const;
     //! how the AOT-compiled function that declares the variable keeps it in native storage; see setAOTNativeStorage()
     std::atomic<uint8_t> aot_native_storage{0};
 

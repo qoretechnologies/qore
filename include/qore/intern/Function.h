@@ -212,7 +212,11 @@ public:
         return num >= typeList.size() ? 0 : typeList[num];
     }
 
-    DLLLOCAL bool needsTypeParameterSubstitution() const;
+    //! The signature's cached answer is on every call path; scan types only on a cache miss.
+    DLLLOCAL bool needsTypeParameterSubstitution() const {
+        signed char cached = type_param_substitution_cache.load(std::memory_order_relaxed);
+        return cached == -1 ? computeTypeParameterSubstitution() : cached != 0;
+    }
 
     //! Set while parsing or loading a generic declaration, including parameters used only in its body.
     DLLLOCAL bool declaresTypeParameters() const {
@@ -268,6 +272,8 @@ protected:
 
     bool declares_type_parameters = false;
     mutable std::atomic<signed char> type_param_substitution_cache {-1};
+
+    DLLLOCAL QORE_INTERN_NOINLINE bool computeTypeParameterSubstitution() const;
 };
 
 struct QoreNamedArgBinding {

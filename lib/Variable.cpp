@@ -4658,6 +4658,24 @@ void LocalVarValue::TypeSubstitutionCache::set(const QoreTypeInfo* typeInfo, con
     this->resolvedRefTypeInfo = resolvedRefTypeInfo;
 }
 
+//! Only generic storage needs to retain a runtime-selected declaration; ordinary storage has no extra state.
+class GenericClosureVarValue : private QoreExternalTypeDeclRefs, public ClosureVarValue {
+public:
+    DLLLOCAL GenericClosureVarValue(const char* id, const QoreTypeInfo* ti, QoreValue& nval, bool assign,
+            bool read_only) : QoreExternalTypeDeclRefs(ti), ClosureVarValue(id, ti, nval, assign, read_only) {
+    }
+};
+
+ClosureVarValue* LocalVar::createGenericClosureValue(const QoreTypeInfo* ti, QoreValue& nval, bool assign) const {
+    // The caller transfers the initializer. Keep it owned if substitution or declaration retention throws.
+    ValueOptionalRefHolder initializer(nval, assign, nullptr);
+    ti = qore_substitute_type_params_if_needed(ti);
+    // Declaration references are acquired before the base constructor takes ownership of nval.
+    ClosureVarValue* value = new GenericClosureVarValue(name.c_str(), ti, nval, assign, read_only);
+    initializer.clearTemp();
+    return value;
+}
+
 void LocalVarValue::resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const QoreTypeInfo*& refTypeInfo,
         bool typeInfoNeedsSubstitution, bool refTypeInfoNeedsSubstitution) const {
     const QoreTypeInfo* receiverTypeInfo = qore_get_current_receiver_type_info();

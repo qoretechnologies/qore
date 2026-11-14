@@ -1,0 +1,9 @@
+typed: 7
+untyped: 7
+direct: 7
+closure: 7
+no-narrow: [1, "s"]
+default-int: [null, null, null]
+default-string: [null, null, null]
+copied-reference: "s"
+copied-reference-reject: ["RUNTIME-TYPE-ERROR", "s"]

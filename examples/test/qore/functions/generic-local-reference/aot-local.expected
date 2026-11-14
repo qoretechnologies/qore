@@ -1,0 +1,6 @@
+aliases: 15
+unassigned: 42
+escaped: 10
+no-narrow: [1, "s"]
+self: 17
+rejected: ["RUNTIME-TYPE-ERROR", 1]
