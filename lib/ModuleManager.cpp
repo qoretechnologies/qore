@@ -1945,6 +1945,8 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     // a user module importing a binary module can hold objects of its classes, so it is deleted first; a module is
     // applied to a Program without the module manager's mutex, which the record takes (#5953)
     QMM.trySetUserBinaryModuleDependencyLocked(name.c_str());
+    // the module whose Program it is applied to at run time requires it too (qore#5790)
+    QMM.trySetModuleProgramBinaryDependencyLocked(tpgm, name.c_str());
 
     // Make sure getProgram() returns this Program when module_ns_init() is called.
     // A call-only context is not enough when a child Program loads a module from

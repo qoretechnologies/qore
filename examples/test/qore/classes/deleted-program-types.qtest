@@ -98,6 +98,10 @@ class DeletedProgramTypesTest inherits QUnit::Test {
             addTestCase("the declarations of module Programs are freed in order at the end: " + mode,
                 sub () { testModuleTeardown(mode); });
         }
+        foreach string mode in (ExecModes) {
+            addTestCase("a module that loads a native module at run time is deleted first: " + mode,
+                sub () { testRuntimeLoad(mode); });
+        }
         set_return_value(main());
     }
 
@@ -179,6 +183,35 @@ class DeletedProgramTypesTest inherits QUnit::Test {
         assertEq(0, status, out);
         # warnings of the load path (ex: a stale AOT module) can precede the output
         assertRegex("(^|\n)ok\n$", out);
+    }
+
+    #! A module that loads a native module at run time is deleted before it (qore#5790)
+    /** Util's get_file_from_sftp() loads the ssh2 module from the module's own Program, which imports the declarations
+        of the loaded module.  The load is not in the load context of the module, so the module was not recorded as
+        requiring the native module, which the library cleanup deletes first: the declarations that the module's
+        Program imported named types that were freed, and the teardown of its Program read them (a debug libqore
+        asserts, valgrind reports an invalid read, and a release build crashed at exit depending on the memory).
+        RuntimeLoadTest is compiled into an AOT module here and loads the yaml module.
+    */
+    testRuntimeLoad(string mode) {
+        TmpDir tmp("qore-runtime-load-");
+        string dir = get_script_dir() + DirSep + "deleted-program-types";
+        string qmod = tmp.path + DirSep + "RuntimeLoadTest.qmod";
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        # the module is compiled with the module path of the run
+        int status;
+        string out = backquote(sprintf("%s %s --module -o %s %s/RuntimeLoadTest.qm 2>&1", env, qcc_bin, qmod, dir),
+            \status);
+        assertEq(0, status, out);
+        assertTrue(is_file(qmod), "the AOT module was compiled: " + out);
+
+        string path = tmp.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        out = backquote(sprintf("%s QORE_MODULE_DIR=%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 %s "
+            "--exec-mode=%s %s/runtime-load.qr 2>&1", env, path, qore_bin, mode, dir), \status);
+        assertEq(0, status, out);
+        # warnings of the load path (ex: a stale AOT module) can precede the output
+        assertRegex("(^|\n)1\n$", out);
     }
 
     private writeFile(string path, string data) {

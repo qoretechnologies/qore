@@ -98,6 +98,17 @@ static inline void validate_date_variant(QoreValue& n, ExceptionSink* xsink, boo
     }
 }
 
+class QoreTypeInfo;
+
+#ifdef DEBUG
+//! Registers and unregisters the types that exist, for the assertions of the bookkeeping of the declarations that
+//! outlive their Program, which name types by pointer (debug builds; see qore_type_info_is_live())
+DLLLOCAL void qore_type_info_created(const QoreTypeInfo* ti);
+DLLLOCAL void qore_type_info_destroyed(const QoreTypeInfo* ti);
+//! Returns true if \a ti is a type that has not been freed
+DLLLOCAL bool qore_type_info_is_live(const QoreTypeInfo* ti);
+#endif
+
 class QoreTypeInfo {
 public:
     const q_return_vec_t return_vec;
@@ -105,9 +116,18 @@ public:
     DLLLOCAL QoreTypeInfo(const char* name, const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec)
             : accept_vec(a_vec), return_vec(r_vec), tname(name) {
         setSimpleName();
+#ifdef DEBUG
+        qore_type_info_created(this);
+#endif
     }
 
+#ifdef DEBUG
+    DLLLOCAL virtual ~QoreTypeInfo() {
+        qore_type_info_destroyed(this);
+    }
+#else
     DLLLOCAL virtual ~QoreTypeInfo() = default;
+#endif
 
     DLLLOCAL signed char getContainsTypeParameterCache() const {
         return contains_type_parameter_cache.load(std::memory_order_relaxed);
@@ -1227,6 +1247,9 @@ protected:
     DLLLOCAL QoreTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname)
             : accept_vec(a_vec), return_vec(r_vec), tname(tname) {
         setSimpleName();
+#ifdef DEBUG
+        qore_type_info_created(this);
+#endif
     }
 
     DLLLOCAL void setSimpleName() {
