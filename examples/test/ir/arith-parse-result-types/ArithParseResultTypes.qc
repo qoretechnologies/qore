@@ -19,7 +19,7 @@
       soft, or-nothing, typed and untyped), with the result in a list literal in a named function
     - arith-container-cases.q (part 5): map expressions over typed lists, whose element type is the parse result type
       of the operator, with containers, unions, or-nothing, soft, untyped, timeout, date, bool, binary and char
-      operands
+      operands, and optional hashdecl, hash, list and object operands, whose container type the result keeps
 
     A list that + gives has a parse-time type only when it does not depend on the types of the values at runtime (a
     list of int, float, number, string, bool or binary and a value of one of these types); otherwise it has none, and
@@ -60,7 +60,7 @@ class ArithParseResultTypesBase inherits QUnit::Test {
         #! the container case script, without its extension
         const ContainerScript = "arith-container-cases";
         #! the number of cases that the container case script prints
-        const ContainerCount = 66;
+        const ContainerCount = 83;
         #! results of the AST interpreter checked for the container case script: the list, its full type and the full
         #! type of its first element
         const ContainerExpected = {
@@ -101,6 +101,20 @@ class ArithParseResultTypesBase inherits QUnit::Test {
             "auto + int": "[2, 3.5, 4, \"41\", <time: 3 seconds>, 2, 1] list<auto> integer",
             "timeout + date": "[2026-01-01 00:00:01.000000 +00:00, 2026-01-01 00:00:02.500000 +00:00] list<date> date",
             "char + int": "[98, 99] list<int> integer",
+            # an optional container operand gives its container type, or NOTHING: an optional hashdecl keeps the
+            # hashdecl, as its value does at runtime, also as the value returned with a *hash<D> return type
+            "*hash<D> - list<string>": "[{x: 2}, null] list<*hash<D>> hash<D>",
+            "*hash<D> - *string": "[{x: 2}, null] list<*hash<D>> hash<D>",
+            "*hash<D> - list<string> (function)": "[{x: 2}, null] list<*hash<D>> hash<D>",
+            "*hash<D> + hash<D>": "[{x: 3, s: \"a\"}, {x: 3, s: \"a\"}] list<hash<D>> hash<D>",
+            "hash<D> + *hash<D>": "[{x: 2, s: \"a\"}, {x: 3, s: \"a\"}] list<hash<D>> hash<D>",
+            "*hash<D> + *hash<D>": "[{x: 3, s: \"a\"}, {x: 3, s: \"a\"}] list<hash<D>> hash<D>",
+            "*hash<string, int> - string": "[{b: 2}, null] list<*hash<string, int>> hash<string, int>",
+            "*list<int> + int": "[[1, 2, 3], 3] list<union<int, list<int>>> list<int>",
+            # a value of a hashdecl type can be a hash of a hashdecl that inherits it, which the result keeps
+            "*hash<D> (hash<D2>) - string": "[{x: 1, y: 2}, null] list<*hash<D2>> hash<D2>",
+            "*OptObj - *string (NOTHING)":
+                "[{<OptObj object>: {m: 1}}, null] list<*object<OptObj>> object<OptObj>",
             "char / int": "[48, 49] list<int> integer",
         };
 

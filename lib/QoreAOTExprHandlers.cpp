@@ -1425,6 +1425,55 @@ static bool write_expr_local_varref(AOTExprWriteCtx& ctx) {
     return false;
 }
 
+//! The result of finding a top-level local of a Program from its serialized reference
+enum class AOTTopLevelLocalResult {
+    Found,
+    //! the Program has no such top-level local yet: they exist when its top-level code is registered
+    Deferred,
+    Error,
+};
+
+//! Finds the top-level local of the Program that a reference "top:<index>:<name>" names (qore#5868)
+/** The index names the variable if the name is that of the variable at the index; else the variable that has the
+    name, if it is the only one (a name that two top-level locals have cannot be told apart).  \a ref is the text
+    after "top:".
+*/
+static AOTTopLevelLocalResult aot_find_top_level_local(QoreProgram* pgm, const char* ref, LocalVar*& found,
+        std::string& error) {
+    char* end = nullptr;
+    unsigned long index = strtoul(ref, &end, 10);
+    if (!end || *end != ':' || !end[1]) {
+        error = "invalid top-level local reference 'top:";
+        error += ref;
+        error += "'";
+        return AOTTopLevelLocalResult::Error;
+    }
+    const char* name = end + 1;
+    const LVList* top = pgm ? qore_program_private::get(*pgm)->sb.getLVList() : nullptr;
+    found = nullptr;
+    if (top) {
+        if (index < top->size() && top->lv[index] && top->lv[index]->getName()
+                && !strcmp(top->lv[index]->getName(), name)) {
+            found = top->lv[index];
+        } else {
+            unsigned matches = 0;
+            for (unsigned i = 0; i < top->size(); ++i) {
+                if (top->lv[i] && top->lv[i]->getName() && !strcmp(top->lv[i]->getName(), name)) {
+                    found = top->lv[i];
+                    ++matches;
+                }
+            }
+            if (matches > 1) {
+                error = "ambiguous top-level local '";
+                error += name;
+                error += "'";
+                return AOTTopLevelLocalResult::Error;
+            }
+        }
+    }
+    return found ? AOTTopLevelLocalResult::Found : AOTTopLevelLocalResult::Deferred;
+}
+
 static QoreValue read_expr_local_varref(AOTExprReadCtx& ctx) {
     const char* index_str = ctx.reader.readStringRef(ctx.ptr);
     if (!index_str) {
@@ -1432,43 +1481,16 @@ static QoreValue read_expr_local_varref(AOTExprReadCtx& ctx) {
     }
     if (!strncmp(index_str, "top:", 4)) {
         // a top-level local of the Program, by its index in the top-level local list and its name (qore#5868)
-        char* end = nullptr;
-        unsigned long index = strtoul(index_str + 4, &end, 10);
-        if (!end || *end != ':' || !end[1]) {
-            ctx.error = "invalid top-level local reference '";
-            ctx.error += index_str;
-            ctx.error += "'";
-            return QoreValue();
-        }
-        const char* name = end + 1;
-        const LVList* top = ctx.pgm ? qore_program_private::get(*ctx.pgm)->sb.getLVList() : nullptr;
         LocalVar* found = nullptr;
-        if (top) {
-            if (index < top->size() && top->lv[index] && top->lv[index]->getName()
-                    && !strcmp(top->lv[index]->getName(), name)) {
-                found = top->lv[index];
-            } else {
-                // the index does not name the variable: the variable that has the name, if it is the only one (a
-                // name that two top-level locals have cannot be told apart here)
-                unsigned matches = 0;
-                for (unsigned i = 0; i < top->size(); ++i) {
-                    if (top->lv[i] && top->lv[i]->getName() && !strcmp(top->lv[i]->getName(), name)) {
-                        found = top->lv[i];
-                        ++matches;
-                    }
-                }
-                if (matches > 1) {
-                    ctx.error = "ambiguous top-level local '";
-                    ctx.error += name;
-                    ctx.error += "'";
-                    return QoreValue();
-                }
-            }
-        }
-        if (!found) {
-            // the top-level locals exist when the top-level code is registered: the expression is read again then
-            ctx.error = QORE_AOT_DEFER_TOP_LEVEL_LOCAL;
-            return QoreValue();
+        switch (aot_find_top_level_local(ctx.pgm, index_str + 4, found, ctx.error)) {
+            case AOTTopLevelLocalResult::Error:
+                return QoreValue();
+            case AOTTopLevelLocalResult::Deferred:
+                // the top-level locals exist when the top-level code is registered: the expression is read again then
+                ctx.error = QORE_AOT_DEFER_TOP_LEVEL_LOCAL;
+                return QoreValue();
+            case AOTTopLevelLocalResult::Found:
+                break;
         }
         return QoreValue(new VarRefNode(&loc_builtin, found->getName(), found, false));
     }
@@ -1810,6 +1832,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     uint16_t num_captured = QoreAOTBinaryReader::readU16(ctx.ptr);
     std::vector<std::string> captured_names(num_captured);
     std::vector<int32_t> captured_parent_slots(num_captured, -1);
+    // the top-level locals that the closure captures by their index (a closure in a default argument, qore#5998)
+    std::vector<LocalVar*> captured_top_locals(num_captured, nullptr);
     for (uint16_t c = 0; c < num_captured; ++c) {
         if (!have(8)) {
             return fail("capture");
@@ -1817,6 +1841,29 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         const char* cname = ctx.reader.readStringRef(ctx.ptr);
         captured_names[c] = cname ? cname : "";
         captured_parent_slots[c] = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ctx.ptr));
+        if (cname && !strncmp(cname, "top:", 4)) {
+            std::string top_error;
+            switch (aot_find_top_level_local(ctx.pgm, cname + 4, captured_top_locals[c], top_error)) {
+                case AOTTopLevelLocalResult::Error:
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
+                    ctx.ptr = ctx.end;
+                    ctx.error = std::move(top_error);
+                    return QoreValue();
+                case AOTTopLevelLocalResult::Deferred:
+                    // the top-level locals exist when the top-level code is registered: the closure is read again then
+                    for (QoreValue& v : defaults) {
+                        v.discard(nullptr);
+                    }
+                    ctx.ptr = ctx.end;
+                    ctx.error = QORE_AOT_DEFER_TOP_LEVEL_LOCAL;
+                    return QoreValue();
+                case AOTTopLevelLocalResult::Found:
+                    captured_names[c] = captured_top_locals[c]->getName();
+                    break;
+            }
+        }
     }
 
     // Read closure body IR
@@ -1899,6 +1946,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         if (parent_slot >= 0 && parent_slot < ctx.num_locals
                 && ctx.locals[parent_slot]) {
             enclosing_locals[captured_names[ci]] = ctx.locals[parent_slot];
+        } else if (captured_top_locals[ci]) {
+            enclosing_locals[captured_names[ci]] = captured_top_locals[ci];
         }
     }
     // 1c. Top-level locals live in the program LVList, not in the enclosing
@@ -1974,6 +2023,8 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         if (parent_slot >= 0 && parent_slot < ctx.num_locals
                 && ctx.locals[parent_slot]) {
             lv = ctx.locals[parent_slot];
+        } else if (captured_top_locals[ci]) {
+            lv = captured_top_locals[ci];
         } else {
             auto it = enclosing_locals.find(captured_names[ci]);
             if (it != enclosing_locals.end()) {
@@ -3831,6 +3882,10 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
             resolved_m = resolved_qc->findMethod(method_name);
             if (!resolved_m) {
                 resolved_m = resolved_qc->findStaticMethod(method_name);
+            }
+            if (!resolved_m && !is_pseudo) {
+                // a method of the class whatever its access, which the compiler checked (qore#5975)
+                resolved_m = qore_aot_find_named_method(resolved_qc, method_name);
             }
         }
     }

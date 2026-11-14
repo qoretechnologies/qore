@@ -710,7 +710,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                     out << ")";
                     if (bg_inst->helper_uses_self) {
-                        out << " uses-self";
+                        out << (bg_inst->helper_uses_self == QBHS_CHECKED ? " uses-self" : " holds-self");
                     }
                 } else {
                     const char* kind = "unknown";

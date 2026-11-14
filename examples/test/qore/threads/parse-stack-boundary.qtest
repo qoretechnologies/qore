@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - foreign thread stack sizes and parse-time native stack limits
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ParseStackBoundaryTest
+
+#! A parse stopped at its stack limit never uses an uninitialized local declaration
+/** The native fixture sizes a foreign thread and varies live stack padding to locate the transition from a
+    successful parse to the parse-time stack exception. It covers list assignment, references, lvalue paths,
+    nested list/hash literals and closures, and parses again after the failed parse unwinds (#6047).
+*/
+public class ParseStackBoundaryTest inherits QUnit::Test {
+    constructor() : Test("ParseStackBoundaryTest", "1.0") {
+        addTestCase("parse-init stack boundary", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private check() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-parse-stack-boundary-");
+        string exe = dir.path + "/parse-stack-boundary";
+        list<string> args = (ENV.CXX ?? "c++", "-std=c++17", "-pthread", "-g", "-O2", "-I" + root + "/include",
+            "-I" + libdir + "/include", get_script_dir() + "/parse_stack_boundary.cpp", "-L" + libdir,
+            "-Wl,-rpath," + libdir, "-lqore", "-o", exe);
+        *list<*string> target = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        if (target) {
+            push args, target[0];
+        }
+        int status;
+        string output = backquote((map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " " + quote(exe) + " 2>&1", \status);
+        assertEq(0, status, output);
+        foreach string name in ("list-assignment", "reference-declaration", "reference-local", "lvalue-path",
+                "list-assignment-path", "nested-list", "nested-hash", "nested-closure") {
+            assertRegex(name + ": [1-9][0-9]* accepted, [1-9][0-9]* rejected", output, name);
+        }
+        assertRegex("parse-stack-boundary: ok\n$", output);
+    }
+}

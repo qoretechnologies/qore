@@ -885,6 +885,7 @@ public class DataProviderTest inherits QUnit::Test {
         DataProviderTypeEntry::setEpheremalIdStart(-1);
 
         addTestCase("expression tests", \expressionTests());
+        addTestCase("an upsert of a record that is not a hash raises an upsert error", \upsertRecordTypeErrorTest());
         # the $args substitution of a render template reads each argument's info by the argument's position
         addTestCase("template rendering: list arguments", \renderTemplateListArgTest());
         addTestCase("template rendering: scalar arguments", \renderTemplateScalarArgTest());
@@ -927,6 +928,14 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
+    }
+
+    #! A list of records to upsert holding something other than a hash is refused as an upsert's input error
+    upsertRecordTypeErrorTest() {
+        BulkShapeTestProvider provider(NOTHING, NOTHING);
+        assertThrows("UPSERT-RECORD-ERROR", "Each record to upsert must be a hash",
+            \provider.upsertRecordsBulk(), (({"id": 1}, "not-a-record"),));
+        assertEq(0, provider.bulk_upsert_calls + provider.shape_upsert_calls, "nothing was upserted");
     }
 
     genericRecordIteratorTest() {
