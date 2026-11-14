@@ -191,7 +191,9 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     A socket bound to a specific address of a port also receives the clients of that address instead of a socket on
     a wildcard address of the port.  Linux refuses a bind with \c SO_REUSEADDR of a specific address to a given port
     if a socket on a wildcard address that covers it holds the port and listens or does not reuse the address; macOS
-    allows it.  On macOS, therefore, such a bind fails with \c EADDRINUSE, as found in the system's socket table:
+    allows it.  On macOS, therefore, such a bind fails with \c EADDRINUSE, as found in the system's socket table or,
+    where macOS filters the table (macOS 27 lists only the caller's own sockets there), in the accessible process
+    descriptors:
     - of a stream socket, if a socket that is not connected holds a wildcard address that covers the address on the
       port, whether it listens or not, because a connection request to a stream socket that is bound but not
       listening is dropped on macOS, while Linux gives it to the socket that listens
@@ -236,6 +238,15 @@ DLLLOCAL int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, 
     @return 0 for success, \c QORE_SOCKET_ERROR for an error, with the system error number set
 */
 DLLLOCAL int qore_socket_listen_unshadowed(int sock, int backlog, ExceptionSink* xsink = nullptr);
+#ifdef DARWIN
+//! For the unit tests: the number of scans of the process descriptors that the port checks of macOS have made
+DLLLOCAL size_t qore_socket_descriptor_scan_count();
+//! For the unit tests: how the port checks of macOS find the sockets of a type (\c SOCK_STREAM or \c SOCK_DGRAM)
+/** @return 1 if from the system's socket table alone, -1 if from the process descriptors as well, 0 if not decided
+    yet
+*/
+DLLLOCAL int qore_socket_table_check_mode(int socktype);
+#endif
 DLLLOCAL int sock_get_error();
 DLLLOCAL void sock_set_raw_error(int rc);
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,

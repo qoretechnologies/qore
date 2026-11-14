@@ -5699,6 +5699,7 @@ public:
         runMappedAddress(c);
 #ifdef DARWIN
         runCancelledScan(c);
+        runDescriptorScans(c);
 #endif
     }
 
@@ -5841,6 +5842,45 @@ private:
             "specific bind: a bind without a sink is checked against the socket table");
         UT_ASSERT(c, qore_is_thread_cancel_requested(),
             "specific bind: a scan without a sink leaves the cancellation request pending");
+    }
+
+    //! The process descriptors are scanned for a port check only if the socket table can omit a socket
+    /** Whether the table lists the sockets of the accessible processes is decided once for each socket type, by the
+        first check that finds no holder in the table (the checks above have made it).  If the table lists them, a
+        check scans no descriptors; otherwise, a check that finds no holder scans them once.  Either way the port is
+        refused as before.
+    */
+    static void runDescriptorScans(UnitTestCounters& c) {
+        int mode = qore_socket_table_check_mode(SOCK_STREAM);
+        UT_ASSERT(c, mode == 1 || mode == -1 || mode == 0,
+            "specific bind: the socket table check mode is a known value");
+        printf("  specific bind: TCP port checks use %s\n", mode == 1 ? "the socket table alone"
+            : (mode == -1 ? "the socket table and the process descriptors" : "an undecided socket table check"));
+        for (int i = 0; i < 3; ++i) {
+            Fd l{open(AF_INET, false, true)};
+            UT_ASSERT(c, l.fd >= 0, "specific bind: the scan count socket is opened");
+            if (l.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(l.fd, AF_INET, "0.0.0.0", 0), "specific bind: the scan count socket is bound");
+            mode = qore_socket_table_check_mode(SOCK_STREAM);
+            size_t before = qore_socket_descriptor_scan_count();
+            UT_ASSERT_EQ(c, 0, listenOn(l.fd), "specific bind: the scan count socket listens");
+            size_t scans = qore_socket_descriptor_scan_count() - before;
+            if (mode == 1) {
+                UT_ASSERT_EQ(c, (size_t)0, scans,
+                    "specific bind: a listen scans no process descriptors when the socket table lists their sockets");
+            } else if (mode == -1) {
+                UT_ASSERT_EQ(c, (size_t)1, scans,
+                    "specific bind: a listen that finds no holder scans the process descriptors once when the socket "
+                    "table can omit sockets");
+            }
+            // a specific address of the port of the listener on the wildcard address is refused, as before, by the
+            // check that finds the listener
+            Fd s{open(AF_INET, false, true)};
+            UT_ASSERT_EQ(c, EADDRINUSE, s.fd >= 0 ? bindTo(s.fd, AF_INET, "127.0.0.1", portOf(l.fd)) : -1,
+                "specific bind: 127.0.0.1 with SO_REUSEADDR is refused the port of a listener on 0.0.0.0");
+        }
     }
 #endif
 
