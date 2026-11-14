@@ -180,13 +180,16 @@ static void initializeRecordColumnData(ColumnData& data, ColumnType type, int64_
     }
 }
 
-static void storeRecordValue(ColumnData& data, int64_t i, QoreValue value) {
+//! stores a value of a record in a cell
+/** @return 0 for success, -1 if an exception was raised
+*/
+static int storeRecordValue(ColumnData& data, int64_t i, QoreValue value, ExceptionSink* xsink) {
     if (value.isNullOrNothing()) {
         data.null_mask[i] = 1;
         if (data.type == ColumnType::FLOAT64) {
             data.float_data(i) = std::numeric_limits<double>::quiet_NaN();
         }
-        return;
+        return 0;
     }
 
     switch (data.type) {
@@ -196,11 +199,8 @@ static void storeRecordValue(ColumnData& data, int64_t i, QoreValue value) {
         case ColumnType::INT64:
             data.int_data[i] = value.getAsBigInt();
             break;
-        case ColumnType::STRING: {
-            QoreStringValueHelper str(value);
-            data.str_data[i] = dataFrameStdString(*str);
-            break;
-        }
+        case ColumnType::STRING:
+            return dataFrameUtf8String(value, data.str_data[i], xsink);
         case ColumnType::BOOL:
             data.bool_data[i] = value.getAsBool() ? 1 : 0;
             break;
@@ -217,6 +217,7 @@ static void storeRecordValue(ColumnData& data, int64_t i, QoreValue value) {
         default:
             break;
     }
+    return 0;
 }
 
 static QoreColumnarColumnType columnarTypeFromDataFrameType(ColumnType type) {
@@ -568,7 +569,8 @@ static bool qoreDataFrameListContainsValue(const QoreListNode* values, QoreValue
 
 static bool qoreDataFrameListContainsString(const QoreListNode* values, const std::string& value,
         ExceptionSink* xsink) {
-    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(value));
+    // the string cells are in UTF-8
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(value, QCS_UTF8));
     return qoreDataFrameListContainsValue(values, QoreValue(*str), xsink);
 }
 
@@ -799,7 +801,10 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
                     fast_failed = true;
                     break;
                 }
-                storeRecordValue(*df->columns[c].data, i, value);
+                if (storeRecordValue(*df->columns[c].data, i, value, xsink)) {
+                    delete df;
+                    return nullptr;
+                }
             }
             if (fast_failed) {
                 break;
@@ -853,7 +858,10 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         }
         const QoreHashNode* row = rows[i];
         for (size_t c = 0; c < num_cols; ++c) {
-            storeRecordValue(*df->columns[c].data, i, row->getKeyValue(col_keys[c]));
+            if (storeRecordValue(*df->columns[c].data, i, row->getKeyValue(col_keys[c]), xsink)) {
+                delete df;
+                return nullptr;
+            }
         }
     }
 
@@ -1464,12 +1472,19 @@ QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) 
     std::ostringstream oss;
     oss << "DataFrame(" << n_rows << " rows x " << columns.size() << " cols)\n";
 
-    // Column headers
+    // Column headers; the string is in UTF-8, the encoding of the string cells, and the names, which are in the
+    // default encoding, are converted to it
     for (size_t c = 0; c < columns.size(); ++c) {
         if (c > 0) {
             oss << "\t";
         }
-        oss << columns[c].name;
+        std::string name;
+        ExceptionSink name_xsink;
+        if (dataFrameUtf8Bytes(columns[c].name.data(), columns[c].name.size(), QCS_DEFAULT, name, &name_xsink)) {
+            name_xsink.clear();
+            name = columns[c].name;
+        }
+        oss << name;
     }
     oss << "\n";
 
@@ -1500,11 +1515,9 @@ QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) 
                     case ColumnType::DATE:
                         oss << cd.date_data[i];
                         break;
-                    case ColumnType::AUTO: {
-                        QoreStringValueHelper sh(cd.auto_data[i]);
-                        oss.write(sh->c_str(), sh->size());
+                    case ColumnType::AUTO:
+                        oss << dataFrameUtf8Key(cd.auto_data[i]);
                         break;
-                    }
                     default:
                         oss << "?";
                         break;
@@ -1518,7 +1531,7 @@ QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) 
         oss << "... (" << (n_rows - show) << " more rows)\n";
     }
 
-    return new QoreStringNode(oss.str());
+    return new QoreStringNode(oss.str(), QCS_UTF8);
 }
 
 // --- ML Integration ---
@@ -2007,10 +2020,10 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
                 break;
             case ColumnType::STRING:
                 if (op_core) {
-                    // a cell is a string in the default encoding; the core operators convert the value to the
-                    // encoding of the cell and compare the bytes of strings in UTF-8, so the typed comparison is used
-                    // when the default encoding is UTF-8 and the value can be converted to it
-                    if (cmp_type == NT_STRING && QCS_DEFAULT == QCS_UTF8) {
+                    // a cell is a string in UTF-8; the core operators convert the value to the encoding of the cell
+                    // and compare the bytes of strings in UTF-8, so the typed comparison is used when the value can
+                    // be converted to UTF-8
+                    if (cmp_type == NT_STRING) {
                         ExceptionSink conv_xsink;
                         QoreStringValueHelper sh(cmp_value, QCS_UTF8, &conv_xsink);
                         if (conv_xsink) {
@@ -2024,11 +2037,11 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
                         cmp_kind = ColumnType::AUTO;
                     }
                 } else if (op_contains || op_startswith || op_endswith) {
-                    // the value is converted to the encoding of the cells, the default encoding, as for a column
-                    // that holds any value (qoreDataFrameStringPredicate()), which raises a conversion error for the
-                    // first cell that is not null
+                    // the value is converted to the encoding of the cells, UTF-8, as for a column that holds any
+                    // value (qoreDataFrameStringPredicate()), which raises a conversion error for the first cell that
+                    // is not null
                     ExceptionSink conv_xsink;
-                    QoreStringValueHelper sh(value, QCS_DEFAULT, &conv_xsink);
+                    QoreStringValueHelper sh(value, QCS_UTF8, &conv_xsink);
                     if (conv_xsink) {
                         if (cd.countNonNull()) {
                             xsink->assimilate(conv_xsink);
@@ -2550,11 +2563,12 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
                     case ColumnType::INT64:
                         new_data->int_data[i] = value.getAsBigInt();
                         break;
-                    case ColumnType::STRING: {
-                        QoreStringValueHelper sh(value);
-                        new_data->str_data[i] = dataFrameStdString(*sh);
+                    case ColumnType::STRING:
+                        if (dataFrameUtf8String(value, new_data->str_data[i], xsink)) {
+                            delete df;
+                            return nullptr;
+                        }
                         break;
-                    }
                     case ColumnType::BOOL:
                         new_data->bool_data[i] = value.getAsBool() ? 1 : 0;
                         break;

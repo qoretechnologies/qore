@@ -409,6 +409,32 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
         }
     }
 
+    // the fields are read in the default encoding, and the string cells are in UTF-8, so the string cells are
+    // converted after they are read unless the default encoding is UTF-8, which reads them with no conversion
+    if (QCS_DEFAULT != QCS_UTF8) {
+        for (auto& col : df->columns) {
+            if (col.data->type != ColumnType::STRING) {
+                continue;
+            }
+            for (int64_t i = 0; i < col.data->n_rows; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "converting CSV string fields")) {
+                    delete df;
+                    return nullptr;
+                }
+                if (col.data->isNull(i)) {
+                    continue;
+                }
+                std::string& cell = col.data->str_data[i];
+                std::string utf8;
+                if (dataFrameConvertUtf8Bytes(cell.data(), cell.size(), QCS_DEFAULT, utf8, xsink)) {
+                    delete df;
+                    return nullptr;
+                }
+                cell = std::move(utf8);
+            }
+        }
+    }
+
     // Set final row count from first column
     df->n_rows = df->columns.empty() ? 0 : df->columns[0].data->n_rows;
     return df;

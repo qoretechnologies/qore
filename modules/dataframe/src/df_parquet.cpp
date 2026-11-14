@@ -838,8 +838,8 @@ static bool qoreParquetStatsMayMatchDecimal(const parquet::ColumnDescriptor* col
     rows read as the core comparison operators compare the cell that the DataFrame gets and the value (qore#6061); so
     the statistics are used only where they order the column's values as the core operators do for the value, which
     is for the values with which DataFrame::filter() uses the typed comparison of the column: a value of the column's
-    own type (an absolute date for a date or timestamp column, a string for a string column in UTF-8, the default
-    encoding of its cells) and an int for a float column, and an int, which the core operators compare exactly, for a
+    own type (an absolute date for a date or timestamp column, a string for a string column, whose cells are in
+    UTF-8) and an int for a float column, and an int, which the core operators compare exactly, for a
     decimal column
 
     A timestamp column in nanoseconds is not pruned, as its cells are truncated to microseconds when they are read,
@@ -863,7 +863,7 @@ static bool qoreParquetStatsCanPrune(const arrow::DataType& type, QoreValue valu
             return vt == NT_FLOAT || vt == NT_INT;
         case arrow::Type::STRING:
         case arrow::Type::LARGE_STRING:
-            return vt == NT_STRING && QCS_DEFAULT == QCS_UTF8;
+            return vt == NT_STRING;
         case arrow::Type::DATE32:
         case arrow::Type::TIMESTAMP: {
             if (vt != NT_DATE) {

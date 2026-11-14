@@ -517,6 +517,9 @@ static int qdfExecRowInsert(QoreObject* ds, const std::string& sql,
 /** Provides a column-oriented data structure with typed columns (float64, int64,
     string, bool, date), null/missing value support, and SQL-like operations.
 
+    The cells of a \c string column are stored and returned in UTF-8; a string in another encoding is converted when
+    it is stored, and one that cannot be converted raises \c DATAFRAME-ENCODING-ERROR (see @ref dataframeintro).
+
     @par Example:
     @code{.py}
     %requires dataframe

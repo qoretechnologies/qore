@@ -53,6 +53,46 @@ static inline std::string dataFrameStdString(const QoreString* str) {
     return std::string(str->c_str(), str->size());
 }
 
+//! Stores a value as the UTF-8 bytes of a string cell: a string in another encoding converted (qore#6092)
+/** @param v the value; a value that is not a string is stored as its string form
+    @param out the bytes of the cell; the cells of a string column are always in UTF-8
+    @param xsink for a DATAFRAME-ENCODING-ERROR exception if the string cannot be converted to UTF-8
+
+    @return 0 for success, -1 if an exception was raised
+
+    A conversion error raises the exception from a function of its own, so that the inline part that stores a
+    UTF-8 string adds nothing to the code that stores a cell.
+*/
+DLLLOCAL int dataFrameConvertUtf8String(QoreValue v, std::string& out, ExceptionSink* xsink);
+
+static inline int dataFrameUtf8String(QoreValue v, std::string& out, ExceptionSink* xsink) {
+    QoreStringDataHelper str(v);
+    if (str && str.getEncoding() == QCS_UTF8) {
+        out.assign(str.c_str(), str.size());
+        return 0;
+    }
+    return dataFrameConvertUtf8String(v, out, xsink);
+}
+
+DLLLOCAL int dataFrameConvertUtf8Bytes(const char* data, size_t len, const QoreEncoding* enc, std::string& out,
+        ExceptionSink* xsink);
+
+//! Converts the bytes of a string in the given encoding to the UTF-8 bytes of a string cell (qore#6092)
+/** @return 0 for success, -1 if a DATAFRAME-ENCODING-ERROR exception was raised
+*/
+static inline int dataFrameUtf8Bytes(const char* data, size_t len, const QoreEncoding* enc, std::string& out,
+        ExceptionSink* xsink) {
+    if (enc == QCS_UTF8) {
+        out.assign(data, len);
+        return 0;
+    }
+    return dataFrameConvertUtf8Bytes(data, len, enc, out, xsink);
+}
+
+//! Returns the UTF-8 form of a value for a group or join key, so that equal strings in different encodings make
+//! the same key; a string that cannot be converted keeps its bytes
+DLLLOCAL std::string dataFrameUtf8Key(QoreValue v);
+
 //! Safely extracts a Qore string value, including short-string values and NUL characters.
 static inline bool getDataFrameString(QoreValue v, std::string& out) {
     if (v.getType() != NT_STRING) {

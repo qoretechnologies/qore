@@ -22,6 +22,15 @@
     - ML integration: toMatrix/toVector/fromMatrix for zero-overhead ML feeding
     - Thread-safe with cooperative cancellation support
 
+    The cells of a \c string column are stored in UTF-8: a string in another encoding is converted to UTF-8 when it
+    is stored, from a list or hash, a CSV file (whose fields are read in the default character encoding), a
+    database or columnar result, @ref Qore::DataFrame::DataFrame::addColumn() "DataFrame::addColumn()",
+    @ref Qore::DataFrame::DataFrame::fillna() "DataFrame::fillna()" or any other operation, and the cells come back
+    as UTF-8 strings.  A string that cannot be converted to UTF-8 (one whose bytes are not valid in its encoding)
+    raises \c DATAFRAME-ENCODING-ERROR, and is not stored.  A string in a column that holds any value
+    (\c auto) is kept as it is, and is compared with the other values, and used in a group or join key, in UTF-8,
+    so that equal strings in different encodings are equal.
+
     String values and column names are kept whole, including any NUL characters: a NUL character is data, and it
     is kept through every operation, CSV, Parquet and Arrow IPC, and conversion back to %Qore values.  A column name
     with a NUL character cannot be a hash key, so the methods returning column names as hash keys (such as

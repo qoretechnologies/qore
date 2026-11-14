@@ -586,8 +586,16 @@ QoreDataFrame* QoreDataFrame::melt(const QoreListNode* id_vars,
     var_cd->n_rows = out_rows;
     var_cd->null_mask.resize(out_rows, 0);
     var_cd->str_data.reserve(out_rows);
+    // the names are in the default encoding, and the string cells in UTF-8
+    std::vector<std::string> val_cells(val_names.size());
+    for (size_t v = 0; v < val_names.size(); ++v) {
+        if (dataFrameUtf8Bytes(val_names[v].data(), val_names[v].size(), QCS_DEFAULT, val_cells[v], xsink)) {
+            delete df;
+            return nullptr;
+        }
+    }
     for (int64_t r = 0; r < n_rows; ++r) {
-        for (const auto& vn : val_names) {
+        for (const auto& vn : val_cells) {
             var_cd->str_data.push_back(vn);
         }
     }
