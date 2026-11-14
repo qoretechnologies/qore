@@ -155,7 +155,8 @@ those members to the scanner, so the cycle is found and collected when nothing o
   `!Program` parameters that take it from its object (`load_user_module_with_program()`,
   `Program::loadUserModuleWithProgram()`, and the C++ API `QoreObject::getAndClearPrivateData()`), and an object
   whose constructor failed, which releases its private data without a destructor. `qore_program_private::del()`
-  asserts that the holder is gone. It is held with a weak reference and changed under `tlock`. Only this object reports the values, so each value is
+  clears the holder if the object still holds the Program when its data is deleted (a Program cleared at the end of
+  the process by `qore_cleanup()` while its owner holds the object). It is held with a weak reference and changed under `tlock`. Only this object reports the values, so each value is
   reported once. A Program without a Program object (the main Program, one created in C++) reports nothing: no
   object of the cycle could hold it.
 - **Scanning.** `qore_object_private::scanMembers()` probes `CID_PROGRAM` and calls

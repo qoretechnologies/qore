@@ -260,12 +260,27 @@ static QoreValue f_staticpgm_foreign_call(const QoreListNode* args, RuntimeConfi
     t.detach();
     return QoreValue();
 }
+
+//! the object that staticpgm_keep_object() keeps for the life of the process
+static QoreObject* kept_object = nullptr;
+
+//! staticpgm_keep_object(object o): keeps a reference to the object, so that it outlives qore_cleanup() as the object of
+//! a host that releases it only after the library has been cleaned up does (a Program object that Python holds)
+static QoreValue f_staticpgm_keep_object(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    HARD_QORE_VALUE_PARAM(o, QoreObject, args, 0);
+    if (!kept_object) {
+        kept_object = static_cast<QoreObject*>(o->refSelf());
+    }
+    return QoreValue();
+}
 #endif
 
 static void staticpgm_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
 #ifdef STATICPGM_CODE
     rns->addBuiltinVariant("staticpgm_foreign_call", f_staticpgm_foreign_call, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+    rns->addBuiltinVariant("staticpgm_keep_object", f_staticpgm_keep_object, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
 #endif
 }
 

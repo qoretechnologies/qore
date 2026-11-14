@@ -3264,10 +3264,22 @@ void qore_program_private::del(ExceptionSink* xsink) {
     }
     extmap.clear();
 
-    // the Program object released the Program after it had stopped reporting its code (clearScanHolder())
+    // the Program object released the Program after it had stopped reporting its code (clearScanHolder()), unless the
+    // data of the Program is deleted while the object still holds it (a Program cleared at the end of the process by
+    // qore_cleanup(), see clearRemainingPrograms(), while its owner holds the object): the object reports only the
+    // thread initialization code and the thread entry handlers, which are released below, so it stops reporting first;
+    // its later release of the Program finds nothing to clear
+    clearScanHolder();
     assert(!scan_holder);
-    if (thr_init) {
-        thr_init->deref(xsink);
+    ResolvedCallReferenceNode* old_thr_init;
+    {
+        // the object that survives can still set or get the code (Program::setThreadInit())
+        AutoLocker al(tlock);
+        old_thr_init = thr_init;
+        thr_init = nullptr;
+    }
+    if (old_thr_init) {
+        old_thr_init->deref(xsink);
     }
 
     // a Program that never ran waitForTerminationAndClear() can still have handlers
