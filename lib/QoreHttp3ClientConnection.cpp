@@ -700,9 +700,14 @@ void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* 
 }
 
 //! Returns true if a handshake error means that the attempt never reached a server
-static bool is_unreached_error(const char* err) {
-    return !strcmp(err, "QUIC-CONNECT-REFUSED") || !strcmp(err, "QUIC-HANDSHAKE-TIMEOUT")
-        || !strcmp(err, "QUIC-SEND-ERROR");
+/** A send error is one only before the QUIC handshake completed: raised while the HTTP/3 layer is set up after it,
+    the server was reached (issue #5944)
+*/
+static bool is_unreached_error(const char* err, bool handshake_complete) {
+    if (!strcmp(err, "QUIC-SEND-ERROR")) {
+        return !handshake_complete;
+    }
+    return !strcmp(err, "QUIC-CONNECT-REFUSED") || !strcmp(err, "QUIC-HANDSHAKE-TIMEOUT");
 }
 
 void Http3ClientConnection::onInnerHandshakeFailed(Http3ClientPollOperationPriv* inner,
@@ -714,9 +719,11 @@ void Http3ClientConnection::onInnerHandshakeFailed(Http3ClientPollOperationPriv*
     // because its certificate was rejected, explains the failure, while an attempt to another address of the host
     // that never reached a server (such as an IPv6 address that the server does not listen on) does not
     const char* new_err = err ? err : "HTTP3-CONNECT-ERROR";
-    if (last_err_.empty() || !is_unreached_error(new_err) || is_unreached_error(last_err_.c_str())) {
+    bool new_unreached = is_unreached_error(new_err, inner && inner->isHandshakeComplete());
+    if (last_err_.empty() || !new_unreached || last_err_unreached_) {
         last_err_ = new_err;
         last_desc_ = desc ? desc : "QUIC handshake failed";
+        last_err_unreached_ = new_unreached;
     }
 
     // Mark this attempt finished.  If the winner has already been chosen,

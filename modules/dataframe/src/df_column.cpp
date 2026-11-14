@@ -63,7 +63,7 @@ static void splitMicros(int64_t micros, int64_t& seconds, int& microseconds) {
 }
 
 static bool isDurationColumn(const ColumnData& col) {
-    return col.has_columnar_schema && col.columnar_schema.kind == QoreColumnarTypeKind::Duration;
+    return col.isDuration();
 }
 
 static DateTimeNode* makeDateFromMicros(int64_t micros, bool duration) {
@@ -272,12 +272,12 @@ std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
             key.append(reinterpret_cast<const char*>(&value), sizeof(value));
             return key;
         }
-        case ColumnType::AUTO: {
-            QoreStringValueHelper sh(cd.auto_data[row]);
+        case ColumnType::AUTO:
+            // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in different
+            // encodings make the same key
             key.assign("a", 1);
-            key.append(sh->c_str(), sh->size());
+            key.append(dataFrameUtf8Key(cd.auto_data[row]));
             return key;
-        }
         default:
             return {};
     }
@@ -382,6 +382,74 @@ const char* columnTypeName(ColumnType type) {
     }
 }
 
+int dataFrameConvertUtf8String(QoreValue v, std::string& out, ExceptionSink* xsink) {
+    ExceptionSink conv_xsink;
+    QoreStringValueHelper str(v, QCS_UTF8, &conv_xsink);
+    if (conv_xsink) {
+        conv_xsink.clear();
+        QoreStringDataHelper src(v);
+        xsink->raiseException("DATAFRAME-ENCODING-ERROR", "a string in encoding '%s' cannot be converted to UTF-8, "
+            "the encoding of the string cells of a DataFrame", src ? src.getEncoding()->getCode() : "unknown");
+        return -1;
+    }
+    out.assign(str->c_str(), str->size());
+    return 0;
+}
+
+int dataFrameConvertUtf8Bytes(const char* data, size_t len, const QoreEncoding* enc, std::string& out,
+        ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(data, len, enc));
+    return dataFrameConvertUtf8String(QoreValue(*str), out, xsink);
+}
+
+int dataFrameConvertFromUtf8(const std::string& utf8, const QoreEncoding* enc, std::string& out,
+        ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(utf8, QCS_UTF8));
+    ExceptionSink conv_xsink;
+    QoreStringValueHelper converted(QoreValue(*str), enc, &conv_xsink);
+    if (conv_xsink) {
+        conv_xsink.clear();
+        xsink->raiseException("DATAFRAME-ENCODING-ERROR", "a DataFrame string cannot be converted from UTF-8 to "
+            "encoding '%s'", enc->getCode());
+        return -1;
+    }
+    out.assign(converted->c_str(), converted->size());
+    return 0;
+}
+
+std::string dataFrameUtf8Key(QoreValue v) {
+    std::string out;
+    ExceptionSink xsink;
+    if (dataFrameUtf8String(v, out, &xsink)) {
+        xsink.clear();
+        QoreStringValueHelper str(v);
+        out.assign(str->c_str(), str->size());
+    }
+    return out;
+}
+
+void dataFrameRaiseDateRangeError(const char* desc, ExceptionSink* xsink) {
+    xsink->raiseException("DATAFRAME-DATE-RANGE-ERROR", "%s is outside the range of a DataFrame date, which is "
+        "stored in microseconds since the epoch in an int64 (from -290308-12-21T19:59:05.224192Z to "
+        "294247-01-10T04:00:54.775807Z)", desc);
+}
+
+int dataFrameDateOutOfRange(const DateTimeNode* dt, ExceptionSink* xsink) {
+    QoreString desc;
+    if (dt->isRelative()) {
+        // the parts are read with getInfo(), as DateTime::getYear() returns a short, which cannot hold the years of
+        // a long time value
+        qore_tm parts;
+        dt->getInfo(parts);
+        desc.sprintf("the time value of %d years, %d months, %d days, %d hours, %d minutes, %d seconds and %d "
+            "microseconds", parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.us);
+    } else {
+        desc.sprintf("the date " QLLD " seconds after the epoch", (int64)dt->getEpochSecondsUTC());
+    }
+    dataFrameRaiseDateRangeError(desc.c_str(), xsink);
+    return -1;
+}
+
 int64_t ColumnData::countNonNull() const {
     int64_t count = 0;
     for (int64_t i = 0; i < n_rows; ++i) {
@@ -412,7 +480,7 @@ QoreValue ColumnData::getValueAt(int64_t i, ExceptionSink* xsink) const {
         case ColumnType::INT64:
             return QoreValue(int_data[i]);
         case ColumnType::STRING:
-            return QoreValue::makeStringValue(str_data[i]);
+            return QoreValue::makeStringValue(str_data[i], QCS_UTF8);
         case ColumnType::BOOL:
             return QoreValue((bool)bool_data[i]);
         case ColumnType::DATE:
@@ -423,78 +491,6 @@ QoreValue ColumnData::getValueAt(int64_t i, ExceptionSink* xsink) const {
         default:
             return QoreValue();
     }
-}
-
-ColumnType inferColumnType(const QoreListNode* values) {
-    if (!values || values->empty()) {
-        return ColumnType::STRING;  // default for empty
-    }
-
-    bool has_int = false;
-    bool has_float = false;
-    bool has_string = false;
-    bool has_bool = false;
-    bool has_date = false;
-    bool has_auto = false;
-
-    for (size_t i = 0; i < values->size(); ++i) {
-        QoreValue v = values->retrieveEntry(i);
-        if (v.isNullOrNothing()) {
-            continue;  // nulls don't affect type inference
-        }
-
-        qore_type_t t = v.getType();
-        switch (t) {
-            case NT_INT:
-                has_int = true;
-                break;
-            case NT_FLOAT:
-            case NT_NUMBER:
-                has_float = true;
-                break;
-            case NT_STRING:
-                has_string = true;
-                break;
-            case NT_BOOLEAN:
-                has_bool = true;
-                break;
-            case NT_DATE:
-                has_date = true;
-                break;
-            default:
-                has_auto = true;
-                break;
-        }
-    }
-
-    if (has_auto) {
-        return ColumnType::AUTO;
-    }
-    // Priority: if mixed numeric, widen to float64
-    if (has_string) {
-        return ColumnType::STRING;
-    }
-    if (has_float && has_int) {
-        return ColumnType::FLOAT64;
-    }
-    if (has_float) {
-        return ColumnType::FLOAT64;
-    }
-    if (has_int && !has_bool && !has_date) {
-        return ColumnType::INT64;
-    }
-    if (has_bool && !has_int && !has_float && !has_date) {
-        return ColumnType::BOOL;
-    }
-    if (has_date && !has_int && !has_float && !has_bool) {
-        return ColumnType::DATE;
-    }
-    // Mixed primitive types → string
-    if (has_int || has_float || has_bool || has_date) {
-        return ColumnType::STRING;
-    }
-    // All nulls
-    return ColumnType::FLOAT64;
 }
 
 std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
@@ -538,9 +534,8 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
                 QoreValue v = values->retrieveEntry(i);
                 if (v.isNullOrNothing()) {
                     col->null_mask[i] = 1;
-                } else {
-                    QoreStringValueHelper str(v);
-                    col->str_data[i] = dataFrameStdString(*str);
+                } else if (dataFrameUtf8String(v, col->str_data[i], xsink)) {
+                    return nullptr;
                 }
             }
             break;
@@ -566,8 +561,9 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
                     col->null_mask[i] = 1;
                     col->date_data[i] = 0;
                 } else if (v.getType() == NT_DATE) {
-                    const DateTimeNode* dt = v.get<const DateTimeNode>();
-                    col->date_data[i] = dt->getEpochMicrosecondsUTC();
+                    if (dataFrameDateMicros(v.get<const DateTimeNode>(), col->date_data[i], xsink)) {
+                        return nullptr;
+                    }
                 } else {
                     // Non-date value in a date column → treat as null
                     // (type inference should prevent this; if it happens,
@@ -598,6 +594,34 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
     }
 
     return col;
+}
+
+//! Builds a column of values of two scalar types, found at the given value: a string column, which stores a scalar
+//! value as its string form, unless a later value is not a scalar, which makes a column that holds any value
+//! (qore#6097)
+static std::shared_ptr<ColumnData> buildMixedColumnData(const QoreListNode* values, int64_t start,
+        ExceptionSink* xsink) {
+    for (size_t i = static_cast<size_t>(start); i < values->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
+            return nullptr;
+        }
+        QoreValue v = values->retrieveEntry(i);
+        if (v.isNullOrNothing()) {
+            continue;
+        }
+        switch (v.getType()) {
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+            case NT_STRING:
+            case NT_BOOLEAN:
+            case NT_DATE:
+                break;
+            default:
+                return buildColumnData(values, ColumnType::AUTO, xsink);
+        }
+    }
+    return buildColumnData(values, ColumnType::STRING, xsink);
 }
 
 std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
@@ -667,6 +691,19 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
         return false;
     };
 
+    // the error of a string or date that cannot be stored in a string or date cell is raised only if the column
+    // keeps its type to the end: a later value can make it a string column, which stores a date as a string, or a
+    // column that holds any value, which stores any string and date
+    struct DeferredError {
+        ExceptionSink xsink;
+        //! true if the sink holds an error, which is not checked with the sink itself, a call into the library
+        bool raised = false;
+
+        ~DeferredError() {
+            xsink.clear();
+        }
+    } deferred;
+
     for (int64_t i = 0; i < n; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
             return nullptr;
@@ -691,7 +728,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                     col->float_data(i) = v.getAsFloat();
                     continue;
                 } else if (col->type != ColumnType::INT64) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
                 col->int_data[i] = v.getAsBigInt();
                 break;
@@ -707,7 +744,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                         return nullptr;
                     }
                 } else if (col->type != ColumnType::FLOAT64) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
                 col->float_data(i) = v.getAsFloat();
                 break;
@@ -718,10 +755,11 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                         return nullptr;
                     }
                 } else if (col->type != ColumnType::STRING) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
-                QoreStringValueHelper str(v);
-                col->str_data[i] = dataFrameStdString(*str);
+                if (!deferred.raised && dataFrameUtf8String(v, col->str_data[i], &deferred.xsink)) {
+                    deferred.raised = true;
+                }
                 break;
             }
 
@@ -731,7 +769,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                         return nullptr;
                     }
                 } else if (col->type != ColumnType::BOOL) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
                 col->bool_data[i] = v.getAsBool() ? 1 : 0;
                 break;
@@ -742,14 +780,22 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                         return nullptr;
                     }
                 } else if (col->type != ColumnType::DATE) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
-                col->date_data[i] = v.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                if (!deferred.raised
+                        && dataFrameDateMicros(v.get<const DateTimeNode>(), col->date_data[i], &deferred.xsink)) {
+                    deferred.raised = true;
+                }
                 break;
 
             default:
                 return buildColumnData(values, ColumnType::AUTO, xsink);
         }
+    }
+
+    if (deferred.raised) {
+        xsink->assimilate(deferred.xsink);
+        return nullptr;
     }
 
     if (col->type == ColumnType::AUTO) {
@@ -973,9 +1019,12 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
                     col->null_mask[i] = 1;
                 } else {
                     ValueHolder value(values->getReferencedEntry(i, xsink), xsink);
-                    if (!getDataFrameString(*value, col->str_data[i])) {
+                    if (value->getType() != NT_STRING) {
                         xsink->raiseException("DATAFRAME-ERROR",
                             "buffer<string> element " QLLD " could not be converted to a DataFrame string", (int64)i);
+                        return nullptr;
+                    }
+                    if (dataFrameUtf8String(*value, col->str_data[i], xsink)) {
                         return nullptr;
                     }
                 }
@@ -1016,6 +1065,13 @@ std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* valu
     }
 
     return col;
+}
+
+std::shared_ptr<ColumnData> buildColumnDataFromDenseRows(const ColumnData& src, const QoreBufferNode* values,
+        ExceptionSink* xsink) {
+    return src.type == ColumnType::DATE
+        ? buildColumnDataFromTemporalBuffer(values, xsink)
+        : buildColumnDataFromBuffer(values, xsink);
 }
 
 std::shared_ptr<ColumnData> buildColumnDataFromTemporalBuffer(const QoreBufferNode* values,
@@ -1081,7 +1137,7 @@ QoreListNode* columnToQoreList(const ColumnData& col, ExceptionSink* xsink) {
                     list->push(col.int_data[i], xsink);
                     break;
                 case ColumnType::STRING:
-                    list->push(new QoreStringNode(col.str_data[i]), xsink);
+                    list->push(new QoreStringNode(col.str_data[i], QCS_UTF8), xsink);
                     break;
                 case ColumnType::BOOL:
                     list->push((bool)col.bool_data[i], xsink);
@@ -1139,7 +1195,7 @@ QoreListNode* columnToQoreListRange(const ColumnData& col, int64_t start,
                     list->push(col.int_data[i], xsink);
                     break;
                 case ColumnType::STRING:
-                    list->push(new QoreStringNode(col.str_data[i]), xsink);
+                    list->push(new QoreStringNode(col.str_data[i], QCS_UTF8), xsink);
                     break;
                 case ColumnType::BOOL:
                     list->push((bool)col.bool_data[i], xsink);
@@ -1227,7 +1283,7 @@ QoreBufferNode* columnToQoreBuffer(const ColumnData& col, ExceptionSink* xsink) 
                 value = QoreValue(static_cast<bool>(col.bool_data[i]));
                 break;
             case ColumnType::STRING:
-                value = QoreValue::makeStringValue(col.str_data[i]);
+                value = QoreValue::makeStringValue(col.str_data[i], QCS_UTF8);
                 break;
             default:
                 assert(false);

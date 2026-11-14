@@ -621,10 +621,73 @@ enum class LocalVarLValueLookup {
     Error,
 };
 
+//! Returns the number of parse scopes on the current thread whose code can run more than once or later than the code
+//! after it: loop bodies, the iterated expressions of map, select and fold operators, and on_exit blocks
+/** A read of a local variable declared outside such a scope cannot be proven to precede every assignment of the
+    variable: the code that assigns it can run before the read, in an earlier iteration or before the block exits,
+    although it is parsed after the read (qore#5937).
+*/
+DLLLOCAL int parse_get_deferred_depth();
+
+//! Returns the next number of the sequence of changes of the assignment state of local variables on the current
+//! thread at parse time; see AssignedStateHelper::applyChangesSinceSave()
+DLLLOCAL uint64_t parse_next_assignment_seq();
+
+//! Returns the last number of the sequence of changes of the assignment state of local variables on the current
+//! thread at parse time
+DLLLOCAL uint64_t parse_get_assignment_seq();
+
+//! Returns true if the code being parsed is directly in a deferred scope (see parse_get_deferred_depth()), not in a
+//! statement block in it
+/** A local variable declared there (in the expression of a map operator, or in the initialization of a for statement,
+    for example) is not created anew when the code of the scope runs again: it keeps its value, as one declared before
+    the scope does, unlike one declared in a statement block in the scope, which the block instantiates each time.
+*/
+DLLLOCAL bool parse_in_deferred_expression();
+
+//! Returns the deferred depth of a local variable declared in the code being parsed; see LocalVar::getDeclDeferredDepth()
+DLLLOCAL int parse_get_decl_deferred_depth();
+
+//! Enters a parse scope that counts in parse_get_deferred_depth() while it is in scope
+class ParseDeferredScopeHelper {
+public:
+    DLLLOCAL ParseDeferredScopeHelper();
+    DLLLOCAL ~ParseDeferredScopeHelper();
+
+    ParseDeferredScopeHelper(const ParseDeferredScopeHelper&) = delete;
+    ParseDeferredScopeHelper& operator=(const ParseDeferredScopeHelper&) = delete;
+
+private:
+    bool old_in_expression;
+};
+
+//! Parses a statement block: the local variables declared in it are created anew each time it runs, and the effects of
+//! its on_exit, on_success and on_error blocks are applied to the assignment state when its parse ends (qore#5937)
+class ParseStatementBlockScopeHelper {
+public:
+    DLLLOCAL ParseStatementBlockScopeHelper();
+    DLLLOCAL ~ParseStatementBlockScopeHelper();
+
+    ParseStatementBlockScopeHelper(const ParseStatementBlockScopeHelper&) = delete;
+    ParseStatementBlockScopeHelper& operator=(const ParseStatementBlockScopeHelper&) = delete;
+
+private:
+    bool old_in_expression;
+};
+
+//! Records the effect of an on_exit, on_success or on_error block on a local variable, which applies when the block
+//! that contains the statement exits; see ParseStatementBlockScopeHelper
+/** @param lvar the variable
+    @param assigned true if the block may assign the variable
+    @param cleared true if the block may clear the variable with \c delete or \c remove
+*/
+DLLLOCAL void parse_add_block_exit_effect(LocalVar* lvar, bool assigned, bool cleared);
+
 // now shared between parent and child Program objects for top-level local variables with global scope
 class LocalVar {
 public:
-    DLLLOCAL LocalVar(const char* n_name, const QoreTypeInfo* ti) : name(n_name), decl_seq(getNextDeclarationSeq()) {
+    DLLLOCAL LocalVar(const char* n_name, const QoreTypeInfo* ti) : name(n_name), decl_seq(getNextDeclarationSeq()),
+            decl_deferred_depth(parse_get_decl_deferred_depth()) {
         const QoreTypeInfo* base_ti;
         no_narrowing = isNoNarrowMarkerType(ti, base_ti);
         is_auto_type = isAutoTypeInfo(base_ti);
@@ -633,8 +696,10 @@ public:
         updateTypeSubstitutionFlags();
     }
 
-    DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), decl_seq(old.decl_seq), closure_use(old.closure_use),
-            parse_assigned(old.parse_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
+    DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), decl_seq(old.decl_seq),
+            decl_deferred_depth(old.decl_deferred_depth), parse_assign_seq(old.parse_assign_seq),
+            parse_clear_seq(old.parse_clear_seq), closure_use(old.closure_use),
+            parse_assigned(old.parse_assigned), parse_may_be_assigned(old.parse_may_be_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
             is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing), read_only(old.read_only),
             weak_assigned(old.weak_assigned), ever_deleted(old.ever_deleted),
             typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
@@ -674,6 +739,62 @@ public:
         if (!parse_assigned) {
             parse_assigned = true;
         }
+        parseMayBeAssigned();
+    }
+
+    //! Records that the variable may have a value from here on: it is the root of an lvalue that code changes, or
+    //! the state of a branch in which it may have been assigned is merged
+    DLLLOCAL void parseMayBeAssigned() {
+        if (!parse_may_be_assigned) {
+            parse_may_be_assigned = true;
+        }
+        parse_assign_seq = parse_next_assignment_seq();
+    }
+
+    //! Records that the variable has no value on any path from here on: it is the operand of \c delete or
+    //! \c remove
+    DLLLOCAL void parseCleared() {
+        parseUnassigned();
+        if (parse_may_be_assigned) {
+            parse_may_be_assigned = false;
+        }
+        parse_clear_seq = parse_next_assignment_seq();
+    }
+
+    //! Returns true if the variable may have been assigned after the given point of the sequence of changes of the
+    //! assignment state; see parse_get_assignment_seq()
+    DLLLOCAL bool parseAssignedSince(uint64_t seq) const {
+        return parse_assign_seq > seq;
+    }
+
+    //! Returns true if the variable was the operand of \c delete or \c remove after the given point of the sequence
+    //! of changes of the assignment state; see parse_get_assignment_seq()
+    DLLLOCAL bool parseClearedSince(uint64_t seq) const {
+        return parse_clear_seq > seq;
+    }
+
+    //! Sets the flow-sensitive assignment state; used to restore and merge the state of branches
+    DLLLOCAL void parseSetAssignedState(bool assigned, bool may_be_assigned) {
+        if (parse_assigned != assigned) {
+            parse_assigned = assigned;
+        }
+        if (parse_may_be_assigned != may_be_assigned) {
+            parse_may_be_assigned = may_be_assigned;
+        }
+    }
+
+    //! Returns true if an assignment of the variable can have run on some path to the code being parsed
+    /** Unlike isAssigned(), which is true when the variable is assigned on every path, this is false only when no
+        path assigns it: from its declaration, or from a \c delete or \c remove of the variable that every path
+        passes.
+    */
+    DLLLOCAL bool mayBeAssigned() const {
+        return parse_may_be_assigned;
+    }
+
+    //! Returns the value of parse_get_deferred_depth() when the variable was declared
+    DLLLOCAL int getDeclDeferredDepth() const {
+        return decl_deferred_depth;
     }
 
     DLLLOCAL void parseUnassigned() {
@@ -1245,8 +1366,17 @@ private:
     bool parse_scope_set = false;
     //! the order of the variable's creation at parse time
     uint64_t decl_seq;
+    //! the value of parse_get_deferred_depth() when the variable was declared; see getDeclDeferredDepth()
+    int decl_deferred_depth;
+    //! the number of the last change of the assignment state that may have assigned the variable; see
+    //! parseAssignedSince()
+    uint64_t parse_assign_seq = 0;
+    //! the number of the last change of the assignment state that cleared the variable; see parseClearedSince()
+    uint64_t parse_clear_seq = 0;
     bool closure_use = false,
         parse_assigned = false,
+        //! true if some path to the code being parsed may have assigned the variable; see mayBeAssigned()
+        parse_may_be_assigned = false,
         //! \c parse_assigned as it stood when the variable left the parse stack; see
         //! parseFinalizeAssigned()
         parse_assigned_final = false,

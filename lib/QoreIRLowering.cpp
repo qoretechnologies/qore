@@ -3222,8 +3222,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             msg = builder.createConstString("assertion failed", stmt->loc)->result;
         }
         QoreIRValue throw_list = builder.createMakeList({err, msg}, stmt->loc)->result;
-        // Emit CatchCleanup for the catch scopes that the exception leaves before throwing
-        for (int i = 0, e = catchScopesLeftByThrow(); i < e; ++i) {
+        // Emit CatchCleanup for the catch scopes that the exception leaves before throwing, except those whose
+        // handlers run with their exception (see catchScopesClosedByThrow(), #5968)
+        for (int i = 0, e = catchScopesClosedByThrow(); i < e; ++i) {
             builder.createCatchCleanup(stmt->loc);
         }
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
@@ -4024,6 +4025,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             pushBlockCleanup(catch_var_entry);
         }
         ++catch_cleanup_depth;
+        catch_scope_depth_stack.push_back(handlerScopeCount());
         // the statements of the catch block are marked for the debugger's exception events (#5816)
         int old_debug_catch_child_depth = debug_catch_child_depth;
         debug_catch_child_depth = debug_nest_depth;
@@ -4031,6 +4033,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         debug_catch_child_depth = old_debug_catch_child_depth;
         if (!catch_ok) {
             --catch_cleanup_depth;
+            catch_scope_depth_stack.pop_back();
             if (catch_var) {
                 cleanup_stack.pop_back();
             }
@@ -4039,6 +4042,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             return false;
         }
         --catch_cleanup_depth;
+        catch_scope_depth_stack.pop_back();
         if (catch_var) {
             cleanup_stack.pop_back();
         }
@@ -4081,8 +4085,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // For no-exception-target case: the Throw handler fires scope exits after raising.
         // Emit CatchCleanup for the catch scopes that the exception leaves before throwing: a throw in a try
         // statement nested in a catch block lands in that try statement's catch block, and the enclosing catch block
-        // keeps running with its exception (which a rethrow there reads)
-        for (int i = 0, e = catchScopesLeftByThrow(); i < e; ++i) {
+        // keeps running with its exception (which a rethrow there reads); a catch scope with handlers between it and
+        // the throw stays open for them, and the exception path of that block closes it after them (see
+        // catchScopesClosedByThrow(), #5968)
+        for (int i = 0, e = catchScopesClosedByThrow(); i < e; ++i) {
             builder.createCatchCleanup(stmt->loc);
         }
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
@@ -4103,7 +4109,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // AFTER rethrowing.
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
             auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
-            rethrow_inst->catch_depth = catchScopesLeftByThrow();
+            rethrow_inst->catch_depth = catchScopesClosedByThrow();
             // Attach args to the Rethrow instruction so the interpreter/JIT can
             // call catch_get_exception()->replaceTop() with the new err/desc/arg.
             rethrow_inst->operands.push_back(value);
@@ -4112,10 +4118,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Don't emit CatchCleanup before rethrow — rethrow needs td->catchException
             // intact to get the exception to rethrow.  Instead, store catch_cleanup_depth
             // in the instruction so the rethrow handler can clean up all catch scopes
-            // AFTER rethrowing.  Only the catch scopes that the exception leaves are cleaned up (see Throw above).
+            // AFTER rethrowing.  Only the catch scopes that the exception leaves and that no handler sees are cleaned
+            // up (see Throw above).
             QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
             auto* rethrow_inst = builder.createRethrow(handler, stmt->loc);
-            rethrow_inst->catch_depth = catchScopesLeftByThrow();
+            rethrow_inst->catch_depth = catchScopesClosedByThrow();
         }
         return true;
     }
@@ -4301,6 +4308,20 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // Phase 2a: Emit ScopeEnter so scope_stack has watermark for exception-path handler execution
         scope_enter = builder.createScopeEnter(scope_id);
     }
+    // the catch blocks that this block is in with no other block with handlers and no try block between them and
+    // it, innermost first: an exception that leaves the block leaves them too, and they are closed on the block's
+    // exception path after its handlers and the release of its locals, as the AST interpreter leaves a catch block
+    // after the blocks in it (#5968); the scopes of reference foreach and context statements between them do not
+    // count, as a throw in them closes the catch blocks before raising the exception (catchScopesClosedByThrow())
+    int catch_exit_count = 0;
+    if (has_on_block_exit) {
+        const int left = catchScopesLeftByThrow();
+        const size_t outer_handler_scopes = left ? handlerScopeCount() - 1 : 0;
+        while (catch_exit_count < left
+                && catch_scope_depth_stack[catch_cleanup_depth - 1 - catch_exit_count] == outer_handler_scopes) {
+            ++catch_exit_count;
+        }
+    }
 
     QoreIRBasicBlock* lvar_exception_cleanup_block = nullptr;
     QoreIRBasicBlock* lvar_exception_cleanup_continue_block = nullptr;
@@ -4332,11 +4353,14 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // path of its own, which the blocks in it take as theirs
     const bool inline_handler_body = inline_handler_block == block;
     inline_handler_block = nullptr;
-    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget() || inline_handler_body)) {
+    // a block with handlers in a catch block has an exception path of its own as well, which closes the catch block
+    // after the handlers (see catch_exit_count above)
+    if (scope_enter && lvars && !(needs_handler_anchor || getCurrentExceptionTarget() || inline_handler_body
+            || catch_exit_count)) {
         scope_enter->locals = lvars->lv;
     }
     if (needs_handler_anchor || ((lvars || has_on_block_exit) && getCurrentExceptionTarget())
-            || (inline_handler_body && (lvars || qoreIrBlockEnclosesScopeLocals(block)))) {
+            || (inline_handler_body && (lvars || qoreIrBlockEnclosesScopeLocals(block))) || catch_exit_count) {
         // Exceptions raised inside this lexical block must destroy its block-scoped
         // locals before control reaches the enclosing catch.  Normal fall-through
         // cleanup below only handles non-exception exits.
@@ -4397,6 +4421,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 && (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements)) {
             dbg_block->block_locals = std::make_unique<QoreIRDebugBlockLocals>();
             dbg_block->block_locals->locals = lvars->lv;
+            // the depth of the statement that contains the block, which the locals are recorded on: the frame can
+            // still have the statements of another block of the statement in it whose ends did not run, as with the
+            // try block of a catch block (#5999)
+            if (debug_nest_depth) {
+                dbg_block->nest_depth = static_cast<uint16_t>(debug_nest_depth - 1);
+                dbg_block->nest_flags = QORE_IR_DEBUG_NEST_VALID;
+            }
         }
     } else if (handler_body && (builder.getFunction()->source_dpgm_addr
             || builder.getFunction()->emit_debug_statements)) {
@@ -4648,6 +4679,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 auto* ui = builder.createUninstantiateLocal(lvars->lv[i], block->loc);
                 ui->is_block_exit = true;
             }
+        }
+        // the catch blocks that the exception leaves with the block, whose handlers ran with their exception (#5968)
+        for (int i = 0; i < catch_exit_count; ++i) {
+            builder.createCatchCleanup(block->loc);
         }
         if (saved_exception_target) {
             auto* check_inst = builder.createCheckException(block->loc);
@@ -6099,6 +6134,20 @@ bool QoreIRLowering::guaranteedStringType(const QoreValue* expr) const {
     return true;
 }
 
+bool QoreIRLowering::typedOpNeedsNothingFallback(QoreIROpcode int_op, const QoreValue& left,
+        const QoreValue& right) const {
+    // the int division of the AST interpreter, which it takes for two operands of int types, takes NOTHING as 0 as the
+    // typed division does
+    switch (int_op) {
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::MulInt:
+            return valueMayBeNothingDespiteType(left) && valueMayBeNothingDespiteType(right);
+        default:
+            return false;
+    }
+}
+
 QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op) {
     if (isIntConstant(left) && isIntConstant(right)) {
@@ -6111,6 +6160,12 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
     if ((isIntConstant(left) && isFloatConstant(right))
             || (isFloatConstant(left) && isIntConstant(right))) {
         return float_op;
+    }
+    // an operand read from an lvalue that may have no value despite its type (qore#5937): the typed operations take
+    // NOTHING as 0, which gives the result of the AST interpreter for one such operand of +, - and *, and for any of
+    // the other operations; two such operands of +, - or * give NOTHING there
+    if (typedOpNeedsNothingFallback(int_op, left, right)) {
+        return any_op;
     }
     if (guaranteedIntType(&left) && guaranteedIntType(&right)) {
         return int_op;
@@ -7067,9 +7122,11 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
                 }
                 // a local that delete or remove leaves without a value (also through a reference to it) can be
                 // NOTHING at a read that the single forward parse saw as assigned, as the read before a delete later
-                // in a loop body is in the next iteration, so the read's type is its type or NOTHING (qore#5710)
+                // in a loop body is in the next iteration, so the read's type is its type or NOTHING (qore#5710); so
+                // can a read where the local may not have been assigned, whatever its declared type (qore#5937)
                 if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS)
-                        && var->ref.id && var->ref.id->everDeleted()) {
+                        && var->ref.id && (var->ref.id->everDeleted()
+                            || var->getReadState() != qore_local_read_state_e::Assigned)) {
                     analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
                     analysis.clearFlag(QoreParseAnalysis::NeverNothing);
                     if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && analysis.known_type) {
@@ -7194,6 +7251,19 @@ bool QoreIRLowering::ensureBuilderContext(std::string& error) const {
         return false;
     }
     return true;
+}
+
+// documented in QoreIRLowering.h
+void QoreIRLowering::setJoinBlock(QoreIRBasicBlock* join_block) {
+    QoreIRFunction* func = builder.getFunction();
+    // the join block is the last one unless an operand created blocks, which follow it
+    auto& blocks = func->blocks;
+    auto i = std::find_if(blocks.rbegin(), blocks.rend(),
+        [join_block](const std::unique_ptr<QoreIRBasicBlock>& b) { return b.get() == join_block; });
+    if (i != blocks.rbegin() && i != blocks.rend()) {
+        std::rotate(std::prev(i.base()), i.base(), blocks.end());
+    }
+    builder.setBlock(join_block);
 }
 
 QoreIRBasicBlock* QoreIRLowering::createBlock(const std::string& prefix) {
@@ -7813,7 +7883,9 @@ void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, co
             || var->getType() == VT_CLOSURE) && var->ref.id && var->ref.id->everDeleted();
         bool definitely_assigned = !ever_deleted && (analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
             || (local_definitely_assigned && plain_local));
-        if (ever_deleted && facts.type_info) {
+        // a read where the local may not have a value has its type or NOTHING (qore#5710, qore#5937): the type
+        // without NOTHING would let the optimizers take the value as one of the type
+        if ((ever_deleted || !definitely_assigned) && facts.type_info) {
             facts.type_info = get_or_nothing_type_check(facts.type_info);
         }
         facts.assigned_state = definitely_assigned
@@ -8049,8 +8121,10 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
     if (LocalVar* local = getLocalVarFromValue(*expr)) {
         const QoreTypeInfo* type = parse_context->guaranteedType(local);
         // a local that is the operand of delete or remove anywhere in its scope can be NOTHING when it is read, also
-        // when its declared type does not accept NOTHING, as the AST interpreter reads it (qore#5710)
-        if (type && local->everDeleted()) {
+        // when its declared type does not accept NOTHING, as the AST interpreter reads it (qore#5710); so can a read
+        // where it may not have been assigned (qore#5937)
+        const VarRefNode* var = expr->hasNode() ? dynamic_cast<const VarRefNode*>(expr->getInternalNode()) : nullptr;
+        if (type && (local->everDeleted() || (var && var->getReadState() != qore_local_read_state_e::Assigned))) {
             return get_or_nothing_type_check(type);
         }
         return type;
@@ -10219,14 +10293,15 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
 
     // Lambda to check if a leaf expression has string type using AST type info
     // Note: We check VarRefNode specifically because ParseNode::getTypeInfo() is protected
-    auto isStringTypedExpr = [](QoreValue e) -> bool {
+    auto isStringTypedExpr = [this](QoreValue e) -> bool {
         // Check for string literal
         if (e.getType() == NT_STRING) {
             return true;
         }
-        // Check VarRefNode's type info (public method)
+        // Check VarRefNode's type info (public method); a variable that may have no value despite its type is not a
+        // string operand (qore#5937): NOTHING + NOTHING is NOTHING, and the typed concatenation gives a string
         auto* var_node = dynamic_cast<const VarRefNode*>(e.getInternalNode());
-        if (var_node) {
+        if (var_node && !valueMayBeNothingDespiteType(e)) {
             const QoreTypeInfo* type_info = var_node->getTypeInfo();
             if (type_info && QoreTypeInfo::isType(type_info, NT_STRING)) {
                 return true;
@@ -10715,9 +10790,15 @@ QoreIRValue QoreIRLowering::lowerDivision(const QoreValue& expr, std::string& er
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectNumericOpcode(div->getLeft(), div->getRight(),
-        QoreIROpcode::DivInt, QoreIROpcode::DivFloat, QoreIROpcode::DivAny,
-        QoreIROpcode::DivNumber);
+    // the AST interpreter divides with the int or float division that the parse chose from the parse types of the
+    // operands, for every value, which converts NOTHING to 0 as the typed operations do (qore#5937): an operand that
+    // may have no value despite its type does not change the operation
+    QoreIROpcode op = div->parseUsesIntDivision()
+        ? QoreIROpcode::DivInt
+        : div->parseUsesFloatDivision()
+            ? QoreIROpcode::DivFloat
+            : selectNumericOpcode(div->getLeft(), div->getRight(), QoreIROpcode::DivInt, QoreIROpcode::DivFloat,
+                QoreIROpcode::DivAny, QoreIROpcode::DivNumber);
     return lowerBinaryOpOrInvoke(op, expr, left, right, div->loc, error);
 }
 
@@ -11488,7 +11569,7 @@ QoreIRValue QoreIRLowering::lowerListSelectorSteps(const QoreSquareBracketsOpera
     assert(result.isValid());
     if (merge_block) {
         builder.createBranch(merge_block);
-        builder.setBlock(merge_block);
+        setJoinBlock(merge_block);
     }
     // the result of the Begin step, to which the steps have added what the selectors selected
     return result;
@@ -13384,7 +13465,15 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     inst->helper_ir = std::move(helper);
     inst->helper_params = std::move(params);
     inst->owned_params = std::move(state.params);
-    inst->helper_uses_self = state.uses_self;
+    // the object is checked when the thread starts only when the expression is a call of a method of the object, as
+    // the AST interpreter runs only that thread with the object as its context; a call elsewhere in the expression
+    // checks it when it is made (qore#5973)
+    if (state.uses_self) {
+        const SelfFunctionCallNode* root_call = dynamic_cast<const SelfFunctionCallNode*>(
+            op->getExp().getInternalNode());
+        inst->helper_uses_self = root_call && (!root_call->getMethod() || !root_call->getMethod()->isStatic())
+            ? QBHS_CHECKED : QBHS_HELD;
+    }
     if (!exception_stack.empty()) {
         inst->exception_target = exception_stack.back();
     }
@@ -13696,6 +13785,42 @@ static bool qoreIrListLiteralElementTypeIsExact(const QoreTypeInfo* elem_type) {
         || elem_type == boolTypeInfo || elem_type == numberTypeInfo || elem_type == binaryTypeInfo;
 }
 
+bool QoreIRLowering::valueMayBeNothingDespiteType(const QoreValue& elem) const {
+    if (!elem.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = elem.getInternalNode();
+    switch (node->getType()) {
+        case NT_VARREF: {
+            const VarRefNode* var = static_cast<const VarRefNode*>(node);
+            qore_var_t var_type = var->getType();
+            if (var_type != VT_LOCAL && var_type != VT_CLOSURE && var_type != VT_LOCAL_TS) {
+                // a global or thread-local variable
+                return true;
+            }
+            QoreParseAnalysis analysis;
+            return !getAnalysis(elem, analysis) || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned);
+        }
+        case NT_SELF_VARREF:
+        case NT_CLASS_VARREF:
+            return true;
+        default:
+            break;
+    }
+    if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
+            || dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return true;
+    }
+    // +, - and * give NOTHING only for two operands without a value (one is taken as 0)
+    if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)
+            || dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
+        const QoreBinaryOperatorNode<>* op = static_cast<const QoreBinaryOperatorNode<>*>(
+            static_cast<const QoreOperatorNode*>(node));
+        return valueMayBeNothingDespiteType(op->getLeft()) && valueMayBeNothingDespiteType(op->getRight());
+    }
+    return false;
+}
+
 QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     // Phase 3b diag: trace the pre-dynamic_cast pointer so a crashing
@@ -13734,6 +13859,17 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(parse_ti);
         if (!qoreIrListLiteralElementTypeIsExact(elem_type)) {
             parse_ti = nullptr;
+        } else {
+            // a value read from an lvalue whose type does not accept NOTHING can still be NOTHING: a local variable
+            // that may not have been assigned, and a member, static or global variable or a container element, which
+            // other code can clear at any time (qore#5937); the literal is then typed from its values, as the AST
+            // interpreter types it
+            for (size_t i = 0; i < list->size(); ++i) {
+                if (valueMayBeNothingDespiteType(list->get(i))) {
+                    parse_ti = nullptr;
+                    break;
+                }
+            }
         }
     }
     auto* inst = builder.createMakeList(values, list->loc, parse_ti);
@@ -24322,7 +24458,7 @@ QoreIRValue QoreIRLowering::lowerLogicalAnd(const QoreValue& expr, std::string& 
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {false_value, left_block},
         {right_bool, rhs_exit_block},
@@ -24373,7 +24509,7 @@ QoreIRValue QoreIRLowering::lowerLogicalOr(const QoreValue& expr, std::string& e
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {true_value, left_block},
         {right_bool, rhs_exit_block},
@@ -24436,7 +24572,7 @@ QoreIRValue QoreIRLowering::lowerNullCoalescing(const QoreValue& expr, std::stri
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {left_value, left_block},
         {right_value, rhs_exit_block},
@@ -24481,7 +24617,7 @@ QoreIRValue QoreIRLowering::lowerValueCoalescing(const QoreValue& expr, std::str
     QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {left_value, left_block},
         {right_value, rhs_exit_block},
@@ -24534,7 +24670,7 @@ QoreIRValue QoreIRLowering::lowerQuestionMark(const QoreValue& expr, std::string
     QoreIRBasicBlock* right_exit_block = builder.getBlock();
     builder.createBranch(merge_block);
 
-    builder.setBlock(merge_block);
+    setJoinBlock(merge_block);
     std::vector<QoreIRPhiIncoming> incoming = {
         {left_value, left_exit_block},
         {right_value, right_exit_block},

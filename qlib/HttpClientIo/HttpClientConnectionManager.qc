@@ -151,10 +151,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! How long an address family in which an HTTP/3 connection failed without reaching a server is avoided
         const H3FamilyFailureTtl = 5m;
 
-        #! Errors of HTTP/3 connections that never reached a server
+        #! Errors of HTTP/3 connections that never reached a server, when raised before the QUIC handshake completed
+        /** A send failure (\c QUIC-SEND-ERROR, as for an IPv6 address with no route) is one only during the
+            handshake: on an established connection, the server was reached in that family
+        */
         const H3UnreachedErrors = {
             "QUIC-CONNECT-REFUSED": True,
             "QUIC-HANDSHAKE-TIMEOUT": True,
+            "QUIC-SEND-ERROR": True,
         };
 
         #! Interval before re-probing HTTP/3 + HTTP/2 for hosts that fell back to HTTP/1.1
@@ -2550,7 +2554,10 @@ printf("%d connection(s) migrated\n", migrated);
     }
 
     #! Internal: records that an HTTP/3 connection failed without reaching a server; @ref pool_lock must be held
-    /** @param key the origin pool key
+    /** A connection whose QUIC handshake completed reached the server, whatever its error (see
+        @ref H3UnreachedErrors), so its family is not recorded
+
+        @param key the origin pool key
         @param conn the connection
         @param err the error code of the failure
         @param now the current time
@@ -2559,7 +2566,13 @@ printf("%d connection(s) migrated\n", migrated);
         if (conn.getProtocol() != "h3" || !H3UnreachedErrors{err}) {
             return;
         }
-        *int family = cast<Http3ClientConnection>(conn).getAddressFamily();
+        Http3ClientConnection h3conn = cast<Http3ClientConnection>(conn);
+        # a connection whose QUIC handshake completed reached the server, also if it failed while it set up HTTP/3
+        # (issue #5944)
+        if (h3conn.isHandshakeComplete()) {
+            return;
+        }
+        *int family = h3conn.getAddressFamily();
         if (!family) {
             return;
         }

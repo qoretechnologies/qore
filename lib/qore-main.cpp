@@ -81,6 +81,7 @@ std::atomic<bool> qore_initialized = {false};
 // shutdown flag
 std::atomic<bool> qore_shutdown = {false};
 std::atomic<bool> qore_thread_start_closed = {false};
+std::atomic<bool> qore_foreign_threads_in_module_code = {false};
 std::atomic<bool> qore_types_deleted = {false};
 
 // exiting flag
@@ -463,13 +464,21 @@ void qore_cleanup() {
     QSM.del();
 #endif
 
-    // no other thread can run Qore code any more (the signal thread has stopped as well; threads registered with
-    // q_register_foreign_thread() must have ended): the Programs of the modules no longer need module lifetime, and
-    // the Programs of the user modules, which delUser() deleted, are freed now, before the binary modules are deleted
-    qore_release_module_program_pins();
+    // no other thread of the library runs Qore code any more (the signal thread has stopped as well); a thread
+    // registered with q_register_foreign_thread() can be blocked in Qore code still, and the Programs it runs in are
+    // left as they are (see qore_program_private::leaveForeignThreads()).  The Programs of the modules no longer need
+    // module lifetime, and the Programs of the user modules, which delUser() deleted, are freed now, before the binary
+    // modules are deleted
+    // a foreign thread runs module code that nothing will end: the modules and their Programs are left as they are,
+    // reachable, until the process ends (see qore_program_private::leaveForeignThreads()); the other Programs are
+    // cleared as usual
+    const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire);
+    if (!modules_left) {
+        qore_release_module_program_pins();
 
-    // delete all loadable modules
-    QMM.cleanup();
+        // delete all loadable modules
+        QMM.cleanup();
+    }
 
     // the Programs that their owners keep beyond this point (ex: a module's Program with static storage duration,
     // deleted by a static destructor after this function has freed the types) have their data cleared now, while
@@ -478,6 +487,15 @@ void qore_cleanup() {
     // no thread can be started by that code: the threads have been waited for and are not waited for again
     qore_thread_start_closed.store(true, std::memory_order_release);
     qore_program_private::clearRemainingPrograms();
+
+    // a Program that a foreign thread runs in was left as it is (see qore_program_private::leaveForeignThreads()): the
+    // thread can be blocked in Qore code for as long as the process lives and uses the library's data (the types, the
+    // system namespace, the thread data), so the library is not torn down any further; everything that remains is
+    // reachable and is released with the process
+    if (modules_left || qore_program_private::hasLeftPrograms()) {
+        printd(5, "qore_cleanup() leaving the library as it is: a Program was left for a foreign thread\n");
+        return;
+    }
 
     // All module programs and their callable UserVariantBase objects are gone, so native entry
     // points can no longer be reached and the LLVM execution engine may now be released safely.

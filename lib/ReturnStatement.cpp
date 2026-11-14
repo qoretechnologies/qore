@@ -160,6 +160,13 @@ int ReturnStatement::parseInitImpl(QoreParseContext& parse_context) {
 
     //printd(5, "ReturnStatement::parseInitImpl() arg=%s rt=%s\n", argTypeInfo->getTypeName(), returnTypeInfo->getTypeName());
 
+    // a local variable that cannot have been assigned gives NOTHING (qore#5937)
+    if (!QoreTypeInfo::isType(returnTypeInfo, NT_NOTHING)
+            && qore_parse_check_unassigned_read(parse_context.pgm, loc, exp, returnTypeInfo, "the return value")
+            && !err) {
+        err = -1;
+    }
+
     // check return type and throw a parse exception or warning
     if (!QoreTypeInfo::parseAccepts(returnTypeInfo, argTypeInfo)) {
         // check if a warning should be generated, if require-types is not set and it is a class-special method

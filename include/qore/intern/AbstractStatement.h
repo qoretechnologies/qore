@@ -61,6 +61,9 @@
 //! parsing code that an operator or a foreach statement runs for each element with the element's index as the
 //! implicit element (\c $#); a \c $# parsed without it is unset (qore#5690)
 #define PF_IMPLICIT_ELEMENT      (1 << 14)
+//! parsing the operand of the reference (\\x), delete or remove operator, which does not read a variable that is the
+//! operand (qore#5937)
+#define PF_LVALUE_NOT_READ       (1 << 15)
 
 // all definitions in this file are private to the library and subject to change
 // forward references

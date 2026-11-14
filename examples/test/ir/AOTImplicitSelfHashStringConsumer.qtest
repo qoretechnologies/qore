@@ -14,6 +14,8 @@ if (!is_file(qcc_bin)) {
 }
 
 string source = "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 final class HashStringFormatter {
     string format(hash<string, string> row) {

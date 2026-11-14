@@ -159,6 +159,18 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     return QoreValue();
 }
 
+//! the type of the container that the operator gives for operand values of the given value types and member types,
+//! if it is known more precisely than the base type of the container; see qore_arith_container_rule_t
+static const QoreTypeInfo* qore_minus_container_type(qore_type_t lt, const QoreTypeInfo* lti, qore_type_t rt,
+        const QoreTypeInfo* /* rti */) {
+    // a value minus NOTHING is the value itself, and a hash minus a key or a list of keys is the hash without them, of
+    // the type of the hash (ex: hash<X>)
+    if (rt == NT_NOTHING || (lt == NT_HASH && (rt == NT_LIST || rt == NT_STRING))) {
+        return lti;
+    }
+    return nullptr;
+}
+
 int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     // turn off "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
@@ -281,7 +293,8 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     {
         const QoreTypeInfo* arith_ti;
         bool single;
-        switch (qore_arith_parse_result_type(QoreArithParseOp::Minus, leftTypeInfo, rightTypeInfo, arith_ti, single)) {
+        switch (qore_arith_parse_result_type(QoreArithParseOp::Minus, leftTypeInfo, rightTypeInfo, arith_ti, single,
+                qore_minus_container_type)) {
             case QoreArithParseResult::Scalar:
                 returnTypeInfo = arith_ti;
                 break;

@@ -79,6 +79,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par An Empty String Sorts Before Every Other String
+    The @ref logical_less_than_operator "comparison operators", @ref logical_comparison_operator "<=>" and the
+    functions that order strings with them (such as @ref Qore::sort() "sort()", \c min() and \c max()) now order an
+    empty string before every other string; it was ordered after every other string, and also before the other string
+    when it was on the right-hand side, so <tt>"" > "a"</tt> and <tt>"a" > ""</tt> were both @ref True "True".
+
     @par A Return in a try Statement in a Handler Replaces the Return Value
     A @ref return "return" in a @ref try "try statement" in the code of an @ref on_exit "on_exit",
     @ref on_success "on_success" or @ref on_error "on_error" statement replaces the value of the return that left the
@@ -102,6 +108,12 @@
     The @ref plus_operator "+" operator gives a list of the type of a typed list when it adds a value in front of it,
     as it does when it adds the value at the end (ex: \c list&lt;int&gt; for <tt>1 + l</tt> for a \c list&lt;int&gt;
     \c l); it gave a \c list&lt;auto&gt;, so a value of another type could be assigned to an element of the result.
+
+    @par Type-Safe Hashes Are Not Hashes With a Specific Value Type
+    Assigning a type-safe hash to a @ref hash_complex_type "hash with a declared value type" such as
+    <tt>hash&lt;string, string&gt;</tt> is an error also when every member has that type, which 2.2.1 allowed for a
+    hash with another reference by copying it; @ref cast "cast<>" still converts it (see
+    @ref hashdecl_type_compatibility).
 
     @par Child Class Methods Must Return a Type Compatible With the Parent Class Method
     A child class method variant that overrides a parent class variant, or that a call typed against the parent class
@@ -310,6 +322,11 @@
     @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" raise \c ENCODING-CONVERSION-ERROR
     for such a character, as @ref Qore::convert_encoding() "convert_encoding()" does, instead of transliterating it;
     the \c ICONV_TRANSLIT build option is removed (qoretechnologies/qore#5479).
+
+    @par An Upsert of a List of Records Raises the Error Its Provider Raised
+    @ref DataProvider::AbstractDataProvider::upsertRecordsBulk() "AbstractDataProvider::upsertRecordsBulk()" with a
+    list of records raises the error the provider raised, as for every other shape of records, instead of
+    \c CREATE-RECORD-ERROR; a record in the list that is not a hash raises \c UPSERT-RECORD-ERROR.
 
     @par The Opacity of an RGB Color Is a Number From 0 to 1
     The \c a member of @ref DataProvider::RgbColorDataType "RgbColorDataType" is an opacity from \c 0 to \c 1 (default
@@ -531,6 +548,11 @@
     @ref modern "%modern" be set while one of them is in effect; legacy code that needs them is parsed without
     @ref modern "%modern" (see @ref modern_option_consistency).
 
+    @par Unassigned Local Variable Values Rejected Under \%modern
+    @ref modern "%modern" implies @ref strict-parse-errors "%strict-parse-errors", so a local variable that cannot
+    have been assigned whose value is returned, assigned or passed where @ref nothing "NOTHING" is not accepted fails
+    to parse; @ref no-strict-parse-errors "%no-strict-parse-errors" restores the run-time error.
+
     @par summarize Statement Rejected Under \%modern
     @ref modern "%modern" implies @ref no-summarize "%no-summarize", so the \c summarize statement fails to parse in
     files parsed in @ref modern "%modern" mode; rewrite it as a @ref context "context" loop or use
@@ -688,6 +710,12 @@
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Strict Parse Errors
+    The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the
+    errors that the parser can prove as parse errors, starting with a local variable that cannot have been assigned
+    whose value is given to a type that does not accept @ref nothing "NOTHING"
+    (<a href="https://github.com/qoretechnologies/qore/issues/5937">issue 5937</a>).
+
     @par Warning for a User Symbol that Unqualified Resolution Cannot Reach
     The strict @ref warning-language-traps "language-traps" warning is raised at the declaration of a user function,
     class, constant, hashdecl or global variable named like a @ref Qore "Qore" namespace symbol, which
@@ -1238,6 +1266,11 @@
       - memory-based backpressure for @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
       - see @ref logger_v1_1 for all changes
 
+    - @ref mailmessageintro "MailMessage" module
+      - the \c From header of a message created to be sent keeps the sender's display name, which was dropped
+        (<a href="https://github.com/qoretechnologies/qore/issues/6019">issue 6019</a>)
+      - see @ref mailmessage_v1_5_1 for all changes
+
     - @ref mapperintro "Mapper" module
       - the documented @ref mapperoptions "trunc_all" option is accepted; it was rejected with \c MAP-ERROR
       - see @ref mapperv1_8 for all changes
@@ -1716,9 +1749,19 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
-    - the objects of a Program that outlives the library cleanup (such as a Program that a module holds in a static
-      object) are now destroyed while the library can run their destructors, which crashed at a normal process exit;
-      a thread started while the library is cleaned up now raises \c THREAD-CREATION-FAILURE (issue #6045)
+    - a @ref background "background expression" nested in another one that calls methods of the object no longer
+      crashes the AST interpreter: the calls are made on the object of the code that started the outer one (issue
+      #5971)
+    - a @ref call_reference "call reference" to an object method now refers to the method of each object's class
+      when it is created, as compiled code does, and raises \c OBJECT-METHOD-REFERENCE-ERROR for a class without it,
+      also one with a \c methodGate() method; the result depended on the objects evaluated before (issue #6062)
+    - a Program that outlives the library cleanup (such as one a module holds in a static object) no longer crashes
+      a normal process exit, a thread started during the cleanup raises \c THREAD-CREATION-FAILURE, and the exit no
+      longer hangs when a foreign thread (such as a Python daemon thread) is blocked in Qore code (issue #6045)
+    - @ref Qore::years() "years()", @ref Qore::months() "months()", @ref Qore::days() "days()",
+      @ref Qore::hours() "hours()", @ref Qore::minutes() "minutes()", @ref Qore::seconds() "seconds()",
+      @ref Qore::milliseconds() "milliseconds()" and @ref Qore::microseconds() "microseconds()" now raise
+      \c INVALID-DATE for a value that a relative date cannot hold; it wrapped to another duration (issue #6101)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled
@@ -1726,6 +1769,9 @@
     - the @ref astparserintro "astparser" module parses the explicit type arguments of a generic function call that
       contain an or-nothing type or a nested callable type, such as \c id<code<*hash<auto>(int)>>(c), so that
       \c qdx and the documentation builds accept it (issue #6024)
+    - a value whose type or member types name a class, hashdecl or enum of a deleted @ref Qore::Program "Program"
+      (such as \c list<*Foo>), and a class imported from such a Program, used the freed types of the Program and could
+      crash; the declarations are now kept with their types (see @ref program_deletion_types) (issue #5790)
     - releasing the last @ref references_overview "reference" to a captured local now propagates exceptions from
       destruction of its value instead of reporting an unhandled exception or aborting the process (issue #6013)
     - values replaced by @ref plus_equals_operator "+=" or removed by @ref minus_equals_operator "-=" from a hash

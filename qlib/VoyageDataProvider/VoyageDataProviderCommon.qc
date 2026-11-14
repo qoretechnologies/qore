@@ -129,7 +129,7 @@ public class VoyageDataProviderCommon inherits DataProvider::AbstractDataProvide
             }
             return limited.limiter.call(<QoreRagUtils::RateLimitedCallInfo>{
                 "tokens": limited.tokens,
-                "deadline_us": clock_get_monotonic_us() + RateLimitTimeoutMs * 1000,
+                "deadline_us": limited.limiter.getClockUs() + RateLimitTimeoutMs * 1000,
                 "error_code": limited.error_code,
                 "error_prefix": sprintf("voyage: %s model %y", path, limited.model),
                 "error_arg": {"backend": "voyage", "model": limited.model},

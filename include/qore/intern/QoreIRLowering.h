@@ -367,6 +367,14 @@ public:
     QoreIRValue lowerContainerLiteral(const QoreValue& expr, std::string& error);
     QoreIRValue lowerContainerElement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
+    //! Returns true if a value can be NOTHING although its parse type does not accept NOTHING: a read of an lvalue
+    //! that may have no value, or +, - or * of two such values (qore#5937)
+    DLLLOCAL bool valueMayBeNothingDespiteType(const QoreValue& value) const;
+
+    //! Returns true if the typed operation (given by its int opcode) of the operands does not give the result of the
+    //! AST interpreter when an operand has no value, so the generic operation must be used (qore#5937)
+    DLLLOCAL bool typedOpNeedsNothingFallback(QoreIROpcode int_op, const QoreValue& left,
+        const QoreValue& right) const;
     QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
     QoreIRValue lowerElements(const QoreValue& expr, std::string& error);
@@ -570,6 +578,17 @@ private:
     bool ensureBuilderContext(std::string& error) const;
     QoreIRValue tryPluginLowering(const QoreValue& expr, std::string& error);
     QoreIRBasicBlock* createBlock(const std::string& prefix);
+    //! Continues lowering in the join block of an operator whose operands are lowered in blocks of their own (?:, ??,
+    //! ?*, &&, ||, a list of selectors), after laying it out after the blocks that the operands created
+    /** The native tiers lower the blocks of a function in layout order, and assign the temporaries of a block to the
+        temp scopes open when it is lowered: an operand that calls a function in a try block (or in a block with
+        local variables) continues in a block created after the join block, which holds the end of the statement
+        (its DiscardTemps), so a temporary that the statement releases at its end (a receiver, or an argument of a
+        call that qcc folds) was released only when the next statement ended (qore#6080), and its exception edges
+        had no mark of the statement's temp scope (qore#5997).  An if statement lays out its merge block in the same
+        way.
+    */
+    void setJoinBlock(QoreIRBasicBlock* join_block);
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);
     //! Gives the load of a variable that can hold a reference the exception target in effect, if any
@@ -1042,6 +1061,11 @@ private:
     //! Depth of active catch scopes that need CatchCleanup on non-local exit
     int catch_cleanup_depth = 0;
 
+    //! the number of the scopes of blocks with handlers (handlerScopeCount()) where each active catch block was
+    //! entered, innermost last (one for each catch scope that catch_cleanup_depth counts); see
+    //! catchScopesClosedByThrow()
+    std::vector<size_t> catch_scope_depth_stack;
+
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
         leaves only the catch scopes entered since the try body began; the catch scopes that enclose the try statement
@@ -1103,6 +1127,45 @@ private:
     */
     int catchScopesLeftByThrow() const {
         return catch_cleanup_depth - (try_catch_cleanup_depth_stack.empty() ? 0 : try_catch_cleanup_depth_stack.back());
+    }
+
+    //! Returns the number of the catch scopes left by a throw or rethrow statement at the current point that it closes
+    //! before it raises the exception
+    /** These are the innermost of the catch scopes that the statement leaves (catchScopesLeftByThrow()) up to the
+        first one that a block with handlers separates from the statement: the catch block of the AST interpreter runs
+        its handlers, and those of the blocks in it, with its exception the current one (td->catchException), so that
+        a rethrow in them raises it again (#5968).  The catch scopes that a block with handlers separates from the
+        statement stay open, and the exception path of the outermost such block in each closes it after the block's
+        handlers ran and its locals were released (see lowerStatementBlock()).  A catch scope with no block with
+        handlers between it and the statement (only the scopes of reference foreach and context statements, if any)
+        has no code that can see its exception after the statement, and is closed before it, as before.
+    */
+    int catchScopesClosedByThrow() const {
+        int left = catchScopesLeftByThrow();
+        if (!left) {
+            return 0;
+        }
+        const size_t handler_scopes = handlerScopeCount();
+        int closed = 0;
+        while (closed < left && catch_scope_depth_stack[catch_cleanup_depth - 1 - closed] >= handler_scopes) {
+            ++closed;
+        }
+        return closed;
+    }
+
+    //! Returns the number of the open scopes of blocks with handlers (the Scope entries of cleanup_stack with
+    //! block_scope set)
+    /** The other scopes (those of try statements, reference foreach and context statements) run no code of the
+        program when an exception leaves them.
+    */
+    size_t handlerScopeCount() const {
+        size_t count = 0;
+        for (const BlockCleanupEntry& entry : cleanup_stack) {
+            if (entry.type == BlockCleanupEntry::Scope && entry.block_scope) {
+                ++count;
+            }
+        }
+        return count;
     }
 
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr

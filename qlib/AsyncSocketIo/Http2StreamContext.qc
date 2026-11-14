@@ -208,6 +208,29 @@ public class Http2StreamContext inherits AbstractStreamContext {
         }
     }
 
+    #! Sends the close frame of a WebSocket connection on the stream, unless one was sent on it before
+    /** See @ref Qore::Socket::sendHttp2StreamWebSocketClose() "Socket::sendHttp2StreamWebSocketClose()"
+
+        @param frame the encoded close frame
+        @param end_stream if @ref True, ends the stream after the frame (also if the frame is not sent)
+
+        @return @ref True if the frame was sent; @ref False if a close frame was sent on the stream before
+
+        @since AsyncSocketIo 1.0
+    */
+    bool sendWebSocketClose(binary frame, bool end_stream = False) {
+        on_exit {
+            if (wake_callback) {
+                wake_callback();
+            }
+        }
+        int rc = sock.sendHttp2StreamWebSocketClose(stream_id, frame, end_stream);
+        if (end_stream) {
+            ended = True;
+        }
+        return !rc;
+    }
+
     #! Attempts to send data on the HTTP/2 stream without blocking on backpressure
     /** @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()" discards the frame and throws
         @c HTTP2-FLOW-CONTROL when the stream send buffer is full; this method maps that condition to a @ref False

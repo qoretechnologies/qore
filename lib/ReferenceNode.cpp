@@ -448,12 +448,15 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
     int err = 0;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
+        QoreParseContextFlagScope fs(parse_context, PF_LVALUE_NOT_READ);
         err = parse_init_value(lvexp, parse_context);
         operand_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
     parse_context.typeInfo = typeInfo;
-    if (!lvexp) {
+    // A failed operand initialization can leave a declaration without a LocalVar; neither lvalue validation nor
+    // promotion to a thread-safe local is valid until initialization succeeds.
+    if (err || !lvexp) {
         return err;
     }
     if (parse_lvalue_root_read_only(lvexp)) {

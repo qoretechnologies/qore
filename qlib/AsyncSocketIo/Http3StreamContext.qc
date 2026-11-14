@@ -222,6 +222,29 @@ public class Http3StreamContext inherits AbstractStreamContext {
         }
     }
 
+    #! Sends the close frame of a WebSocket connection on the stream, unless one was sent on it before
+    /** See @ref Qore::Socket::submitQuicStreamWebSocketClose() "Socket::submitQuicStreamWebSocketClose()"
+
+        @param frame the encoded close frame
+        @param end_stream if @ref True, ends the stream after the frame (also if the frame is not sent)
+
+        @return @ref True if the frame was sent; @ref False if a close frame was sent on the stream before
+
+        @since AsyncSocketIo 1.0
+    */
+    bool sendWebSocketClose(binary frame, bool end_stream = False) {
+        on_exit {
+            if (wake_callback) {
+                wake_callback();
+            }
+        }
+        int rc = sock.submitQuicStreamWebSocketClose(session_id, stream_id, frame, end_stream);
+        if (end_stream) {
+            ended = True;
+        }
+        return !rc;
+    }
+
     #! Flush pending HTTP/3 writes for this session through the async I/O controller
     /** @throw QUIC-ERROR if no QUIC session with the context's session ID is active
         @throw QUIC-SEND-ERROR if the UDP send fails

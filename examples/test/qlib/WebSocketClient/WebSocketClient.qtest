@@ -191,9 +191,9 @@ class WebSocketClientTest inherits QUnit::Test {
     }
 
     private bool waitForConnectionState(WebSocketClientDelayedDataProvider prov, bool expected, date timeout = 5s) {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         while (prov.isConnected() != expected) {
-            if (now_us() - start > timeout) {
+            if (microseconds(clock_get_monotonic_us() - start) > timeout) {
                 return False;
             }
             sleep(100ms);
@@ -705,8 +705,8 @@ class WebSocketClientTest inherits QUnit::Test {
             # Without the fix: handleAsyncShutdown() rethrows out of the
             # ThreadPool task and the wedge silently locks in.  With the fix:
             # the throw is caught + logged, tid==0, do_reconnect==False.
-            date deadline = now_us() + 3s;
-            while ((c.isOpen() || c.getTidForTest()) && now_us() < deadline) {
+            int deadline_us = clock_get_monotonic_us() + 3000000;
+            while ((c.isOpen() || c.getTidForTest()) && clock_get_monotonic_us() < deadline_us) {
                 sleep(50ms);
             }
             assertFalse(c.isOpen(), "expected closed state after server stop");
@@ -917,10 +917,10 @@ class WebSocketClientTest inherits QUnit::Test {
     }
 
     private hash<auto> waitForWebSocketPingPoll(AbstractPollOperation poll_op) {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         date timeout = 10s;
         while (!poll_op.goalReached()) {
-            if (now_us() - start > timeout) {
+            if (microseconds(clock_get_monotonic_us() - start) > timeout) {
                 throw "TIMEOUT", "WebSocket poll operation timed out";
             }
             *hash<SocketPollInfo> info = poll_op.continuePoll();
@@ -1507,8 +1507,8 @@ class WebSocketClientTest inherits QUnit::Test {
             assertTrue(wsc.isHttp2(), "External HTTP/2 WebSocket should negotiate HTTP/2");
 
             wsc.ping("test-ping");
-            date start = now_us();
-            while (!got_pong && (now_us() - start) < 5s) {
+            int start = clock_get_monotonic_us();
+            while (!got_pong && microseconds(clock_get_monotonic_us() - start) < 5s) {
                 sleep(100ms);
             }
             assertTrue(got_pong, "External HTTP/2 WebSocket should receive pong");
@@ -1712,7 +1712,7 @@ class MyObserver inherits Observer {
     }
 
     wait(*string msg) {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
 
         m.lock();
         on_exit m.unlock();
@@ -1734,7 +1734,7 @@ class MyObserver inherits Observer {
             }
             if (!found) {
                 cond.wait(m, 1s);
-                date d = now_us() - start;
+                date d = microseconds(clock_get_monotonic_us() - start);
                 if (d > 5s) {
                     throw "ERROR", sprintf("no matching data received in timeout; msg: %y l: %y", msg, l);
                 }
