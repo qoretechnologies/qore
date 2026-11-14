@@ -25,6 +25,7 @@ public class ParseStackBoundaryTest inherits QUnit::Test {
     constructor() : Test("ParseStackBoundaryTest", "1.0") {
         addTestCase("parse-time stack boundary", \check());
         addTestCase("nested module loads", \moduleCheck());
+        addTestCase("nested optional module loads", \tryModuleCheck());
         set_return_value(main());
     }
 
@@ -110,5 +111,91 @@ public class ParseStackBoundaryTest inherits QUnit::Test {
         }
         assertGt(0, parsed, "the chain is parsed with a large stack");
         assertGt(0, stack_errors, "the chain runs short of a small stack");
+    }
+    #! runs the fixture on a source file in a foreign thread with each stack size from 64KB to 1MB in 16KB steps
+    /** Each run must parse the source and return the expected value from its run() function, or fail with the parse
+        stack error; both must occur within the range of sizes.  Code that was parsed can still run short of stack
+        when it runs (\c STACK-LIMIT-EXCEEDED).  A process loads a module once, so each size runs in a process of its
+        own.
+
+        @param exe the fixture
+        @param libdir the directory of libqore
+        @param source the file to parse
+        @param expected the value that run() must return
+        @param mdir the module directory, if any
+    */
+    private runSource(string exe, string libdir, string source, int expected, *string mdir) {
+        int parsed;
+        int stack_errors;
+        int run_stack_errors;
+        for (int kb = 64; kb <= 1024; kb += 16) {
+            int status;
+            string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+                + (mdir ? " QORE_MODULE_DIR=" + quote(mdir) : "") + " " + quote(exe) + " --source " + quote(source)
+                + " " + kb + " 2>&1", \status);
+            string label = sprintf("%s %dK", basename(source), kb);
+            assertEq(0, status, label + ": " + output);
+            if (output == "stack error\n") {
+                ++stack_errors;
+            } else if (output == "run stack error\n") {
+                ++run_stack_errors;
+            } else {
+                # a load that leaves out a module, or code that is parsed with only part of its classes, is never
+                # the result of a parse in a small stack
+                assertEq(sprintf("parsed %d\n", expected), output, label);
+                ++parsed;
+            }
+        }
+        assertGt(0, parsed, basename(source) + ": the code is parsed with a large stack");
+        assertGt(0, stack_errors, basename(source) + ": the code runs short of a small stack");
+    }
+
+    #! writes a file
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(data);
+    }
+
+    #! Modules that load each other with %try-module, each with a fallback for the module that it cannot load
+    /** A module that is not available is replaced by its fallback, but one that cannot be parsed in the thread's stack
+        is not unavailable: the parse stack error of the module at any depth of the chain must be the error of the
+        parse of the code that loads the first module, whether it loads it with %try-module or with load_module() at
+        run time, and the chain must never be loaded in part.  Each module's count() returns the number of modules
+        loaded from it to the end of the chain.
+    */
+    private tryModuleCheck() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-parse-stack-try-");
+        string exe = build(dir.path, root, libdir);
+        string mdir = dir.path + "/modules";
+        mkdir(mdir);
+        for (int i = 0; i < ChainLength; ++i) {
+            string next = sprintf("StackTry%d", i + 1);
+            writeFile(sprintf("%s/StackTry%d.qm", mdir, i), sprintf("%%modern\n%s"
+                "module StackTry%d { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+                "public namespace StackTry%d {\n"
+                "public int sub count() { return %s + 1; }\n"
+                "}\n",
+                i + 1 < ChainLength
+                    ? sprintf("%%try-module %s\npublic namespace %s { public int sub count() { return 0; } }\n"
+                        "%%endtry\n", next, next)
+                    : "",
+                i, i, i + 1 < ChainLength ? next + "::count()" : "0"));
+        }
+        string source = dir.path + "/try-module.q";
+        writeFile(source, "%try-module StackTry0\n"
+            "public namespace StackTry0 { public int sub count() { return 0; } }\n"
+            "%endtry\n"
+            "int sub run() { return StackTry0::count(); }\n");
+        runSource(exe, libdir, source, ChainLength, mdir);
+
+        source = dir.path + "/load-module.q";
+        writeFile(source, "int sub run() { load_module(\"StackTry0\"); return call_function(\"StackTry0::count\"); }\n");
+        runSource(exe, libdir, source, ChainLength, mdir);
     }
 }

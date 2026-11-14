@@ -3122,6 +3122,9 @@ module SalesforceRestDataProvider {
     @note
     - There is one special feature name: \c "qore". This pseudo-feature can be used to check the minimum %Qore version; if this feature is requested with version information, then the %Qore library's version information is used for the version number comparison.
     - No type can be given with the \c %%try-module variable declaration; the value assigned to the variable will be a @ref hash_type "hash".
+    - A module that cannot be parsed within the stack of the parsing thread, or that loads such a module, is not handled
+      as a module that is not available: its \c PARSE-STACK-LIMIT-EXCEEDED error is a parse error of the code with the
+      directive (see @ref parse_nesting_limit)
 
     @see @ref requires "%requires" for a similar parse directive where errors are handled with the default parse exception handler
 

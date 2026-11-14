@@ -4244,12 +4244,9 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
     // the load stops while enough stack remains (issue #6047)
     if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
         if (loc) {
-            // a parse error of the parse that requires the module, which the parse directive of the scanner does not
-            // treat as a module that is not available (as for %try-module)
             parse_check_stack(loc);
         } else {
-            xsink.raiseException("PARSE-EXCEPTION", "the code is nested too deeply to be parsed within the stack of "
-                "this thread");
+            xsink.raiseException(QORE_PARSE_STACK_ERR, QORE_PARSE_STACK_DESC);
         }
         return -1;
     }
@@ -4278,6 +4275,17 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
     if (mod) {
         assert(!xsink);
         qore_program_private::get(*pgm)->addParseModule(mod->getName());
+    }
+
+    if (loc && xsink && qore_has_parse_stack_error(xsink)) {
+        // the module, or a module that it loads, could not be parsed within the stack of this thread: this is not a
+        // module that is not available, so the error is a parse error of the parse that loads it, which the parse
+        // directive does not handle as the error of its load (as for %try-module, whose module would be replaced by
+        // its fallback code depending on the thread's stack)
+        qore_program_private::get(*pgm)->collectModuleLoadErrors(*loc, xsink);
+        // the exceptions keep the locations where the parse ran short of stack
+        qore_program_private::addParseException(pgm, xsink);
+        return -1;
     }
 
     return xsink ? -1 : 0;
@@ -4477,6 +4485,14 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
             c.status = CMS_ABSENT;
             cx.clear();
             continue;
+        }
+
+        if (qore_has_parse_stack_error(cx)) {
+            // the child could not be parsed within the stack of this thread, which says nothing about the child:
+            // the extensions of a module must not depend on the thread that loads it, so the child stays pending,
+            // to be attached by a load of the module in a thread with a larger stack, and the load fails
+            xsink.assimilate(cx);
+            return -1;
         }
 
         // The child is present but could not be loaded.  The declaration is optional, so this does not fail

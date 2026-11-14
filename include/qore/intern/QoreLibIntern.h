@@ -405,13 +405,30 @@ DLLLOCAL int parse_init_value(QoreValue& val, QoreParseContext& parse_context);
 */
 constexpr size_t QORE_PARSE_STACK_RESERVE = 64 * 1024;
 
+//! The error code of the parse error raised for code that cannot be parsed within the stack of the parsing thread
+/** Distinct from the other parse errors, as it depends on the thread that parses the code and not on the code: a
+    module that cannot be parsed for this reason is not a module that is unavailable, so the error of its load is
+    the error of the parse that loads it also with %%try-module (see QoreModuleManager::parseLoadModule())
+*/
+#define QORE_PARSE_STACK_ERR "PARSE-STACK-LIMIT-EXCEEDED"
+
+//! The description of the parse error QORE_PARSE_STACK_ERR
+#define QORE_PARSE_STACK_DESC "the code is nested too deeply to be parsed within the stack of this thread"
+
 //! Raises a parse error and returns -1 if the thread's stack has reached QORE_PARSE_STACK_RESERVE, otherwise 0
 /** Called before parse initialization recurses into a nested expression or statement: the parser accepts nesting
     that a thread with a small stack cannot initialize, which would otherwise overflow the stack
 
+    The error is QORE_PARSE_STACK_ERR.
+
     @param loc the location of the code being initialized, if known
 */
 DLLLOCAL int parse_check_stack(const QoreProgramLocation* loc);
+
+//! Returns true if the exception sink holds the parse error QORE_PARSE_STACK_ERR
+/** Raised where the parse of the code or of a module that it loads ran short of the stack of the thread
+*/
+DLLLOCAL bool qore_has_parse_stack_error(const ExceptionSink& xsink);
 
 //! Parse-initializes a node that is not a level of nesting of its own
 /** For a node that parse initialization replaces with another node in the same place, and for a node that the

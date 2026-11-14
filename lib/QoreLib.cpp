@@ -583,8 +583,17 @@ int parse_check_stack(const QoreProgramLocation* loc) {
     if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
         return 0;
     }
-    parse_error(loc ? *loc : loc_builtin, "the code is nested too deeply to be parsed within the stack of this thread");
+    parseException(loc ? *loc : loc_builtin, QORE_PARSE_STACK_ERR, new QoreStringNode(QORE_PARSE_STACK_DESC));
     return -1;
+}
+
+bool qore_has_parse_stack_error(const ExceptionSink& xsink) {
+    for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
+        if (e->err.getType() == NT_STRING && *e->err.get<const QoreStringNode>() == QORE_PARSE_STACK_ERR) {
+            return true;
+        }
+    }
+    return false;
 }
 
 #ifndef NDEBUG

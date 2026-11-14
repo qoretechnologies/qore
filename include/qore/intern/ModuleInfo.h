@@ -751,7 +751,12 @@ public:
         @param name the module name with an optional version specification
         @param pgm the Program being parsed
         @param reexport if the module is reexported
-        @param loc the location of the directive, if known, for the warnings of the module loader
+        @param loc the location of the directive, if known, for the warnings of the module loader; when it is given,
+        a parse of this or another module that ran short of the stack of this thread (QORE_PARSE_STACK_ERR) is a parse
+        error of \a pgm, and not an error of the load in \a xsink, so that a parse directive that handles the errors of
+        its load (\c %%try-module) does not handle it as a module that is not available
+
+        @return 0 if the module was loaded, -1 if not
     */
     DLLLOCAL int parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             bool reexport = false, const QoreProgramLocation* loc = nullptr);
@@ -1103,15 +1108,18 @@ public:
         design/qore-module-structure.md "Child Modules" for the contract implemented here.
 
         A child declaration is optional, so no child status fails the parent; a child that is present but
-        cannot be loaded is reported and skipped.
+        cannot be loaded is reported and skipped.  A child that cannot be parsed within the stack of this thread
+        (QORE_PARSE_STACK_ERR) is not one that cannot be loaded: it stays pending, and the attach fails with the
+        error.
 
         @param mi the parent module
-        @param xsink exception sink; used only for interruptions of the attach itself
+        @param xsink exception sink; used only for interruptions of the attach itself and the parse stack error of a
+        child
         @param wsink warning sink for children that could not be attached
         @param warning_mask the warning mask in effect for the load
 
         @return 0 for OK (including for absent, skipped, and failed children), -1 if the attach was
-        interrupted
+        interrupted or a child could not be parsed within the stack of this thread
     */
     DLLLOCAL int attachChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
             int warning_mask);

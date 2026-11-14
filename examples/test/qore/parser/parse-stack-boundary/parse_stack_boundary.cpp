@@ -21,7 +21,8 @@ static constexpr size_t MIN_STACK_SIZE = 160 * 1024;
 static constexpr size_t MAX_STACK_SIZE = 640 * 1024;
 static constexpr size_t STACK_SIZE_STEP = 4 * 1024;
 
-//! the parse error raised when parse initialization runs short of stack
+//! the code and the description of the parse error raised when parsing runs short of stack
+static const char* stack_parse_err = "PARSE-STACK-LIMIT-EXCEEDED";
 static const char* stack_parse_error = "the code is nested too deeply to be parsed within the stack of this thread";
 
 static unsigned failures = 0;
@@ -74,6 +75,16 @@ static std::string describe(ExceptionSink& xsink) {
         + (desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "?");
 }
 
+//! returns true if the first exception is the parse stack error
+static bool is_stack_error(ExceptionSink& xsink) {
+    QoreValue err = xsink.getExceptionErr();
+    QoreValue desc = xsink.getExceptionDesc();
+    return err.getType() == NT_STRING && desc.getType() == NT_STRING
+        && !strcmp(err.get<const QoreStringNode>()->c_str(), stack_parse_err)
+        // the load of each module that loads the one that could not be parsed adds its name to the description
+        && !strncmp(desc.get<const QoreStringNode>()->c_str(), stack_parse_error, strlen(stack_parse_error));
+}
+
 //! the stack size of the thread running work()
 static size_t current_size = 0;
 
@@ -102,7 +113,7 @@ static void* work(void*) {
         if (xsink) {
             std::string desc = describe(xsink);
             xsink.clear();
-            if (desc == std::string("PARSE-EXCEPTION: ") + stack_parse_error) {
+            if (desc == std::string(stack_parse_err) + ": " + stack_parse_error) {
                 ++kind.stack_errors;
             } else {
                 std::fprintf(stderr, "%zuK %s: unexpected parse error: %s\n", current_size / 1024, kind.name,
@@ -182,10 +193,11 @@ static void* load_module(void*) {
         std::puts("parsed");
         return nullptr;
     }
+    // the parse error of the module that cannot be parsed is the parse error of the code that requires it
+    bool stack_error = is_stack_error(xsink);
     std::string desc = describe(xsink);
     xsink.clear();
-    // the error of the module that cannot be parsed is reported as the error of its load
-    if (desc.find(stack_parse_error) != std::string::npos) {
+    if (stack_error) {
         std::puts("stack error");
     } else {
         std::fprintf(stderr, "%zuK modules: unexpected parse error: %s\n", current_size / 1024, desc.c_str());
@@ -194,11 +206,93 @@ static void* load_module(void*) {
     return nullptr;
 }
 
+//! the file whose source load_source() parses
+static const char* source_path = nullptr;
+
+//! reads a file; returns false if it cannot be read
+static bool read_file(const char* path, std::string& rv) {
+    FILE* f = std::fopen(path, "rb");
+    if (!f) {
+        return false;
+    }
+    char buf[4096];
+    size_t n;
+    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) {
+        rv.append(buf, n);
+    }
+    bool ok = !std::ferror(f);
+    std::fclose(f);
+    return ok;
+}
+
+//! Parses the source of source_path in a foreign thread and calls its run() function, which returns an integer:
+//! prints "parsed <value>", "stack error" if the parse or the run (a module that it loads at run time) failed with
+//! the parse stack error as the first exception, or "run stack error" if the run raised STACK-LIMIT-EXCEEDED
+static void* load_source(void*) {
+    QoreForeignThreadHelper foreign;
+    std::string code;
+    if (!read_file(source_path, code)) {
+        std::fprintf(stderr, "%s: cannot be read\n", source_path);
+        ++failures;
+        return nullptr;
+    }
+    ExceptionSink xsink;
+    QoreProgramHelper program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, xsink);
+    QoreExternalProgramContextHelper context(&xsink, *program);
+    if (xsink) {
+        std::fprintf(stderr, "%zuK source: program context: %s\n", current_size / 1024, describe(xsink).c_str());
+        xsink.clear();
+        ++failures;
+        return nullptr;
+    }
+    {
+        ProgramRuntimeExternalParseContextHelper parse(*program);
+        if (!parse) {
+            std::fprintf(stderr, "%zuK source: the program cannot be parsed\n", current_size / 1024);
+            ++failures;
+            return nullptr;
+        }
+        program->parse(code.c_str(), source_path, &xsink);
+    }
+    if (!xsink) {
+        ValueHolder rv(program->callFunction("run", nullptr, &xsink), &xsink);
+        if (!xsink) {
+            std::printf("parsed %lld\n", (long long)rv->getAsBigInt());
+            return nullptr;
+        }
+    }
+    if (is_stack_error(xsink)) {
+        std::puts("stack error");
+    } else {
+        std::string desc = describe(xsink);
+        if (!desc.compare(0, strlen("STACK-LIMIT-EXCEEDED:"), "STACK-LIMIT-EXCEEDED:")) {
+            // code that was parsed can still run short of stack
+            std::puts("run stack error");
+        } else {
+            std::fprintf(stderr, "%zuK source: unexpected error: %s\n", current_size / 1024, desc.c_str());
+            ++failures;
+        }
+    }
+    xsink.clear();
+    return nullptr;
+}
+
 //! parse_stack_boundary: parses the nested code with each stack size
 //! parse_stack_boundary <module> <stack KB>: parses code that requires the module with the given stack size, and
 //! prints "parsed" or "stack error" (a process can load a module once, so each size runs in a process of its own)
+//! parse_stack_boundary --source <file> <stack KB>: parses the file with the given stack size and runs its run()
+//! function (see load_source())
 int main(int argc, char** argv) {
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
+    if (argc > 3 && !strcmp(argv[1], "--source")) {
+        source_path = argv[2];
+        current_size = strtoul(argv[3], nullptr, 10) * 1024;
+        if (run_in_thread(current_size, load_source)) {
+            ++failures;
+        }
+        qore_cleanup();
+        return failures ? 1 : 0;
+    }
     if (argc > 2) {
         module_name = argv[1];
         current_size = strtoul(argv[2], nullptr, 10) * 1024;

@@ -846,6 +846,14 @@ Nothing is added to the caller's exception sink and the parent's load return cod
 is unaffected. A broken child is always reported, though — unlike `skipped`,
 which reflects a deliberate restriction in the container `Program`.
 
+A child that cannot be parsed within the stack of the loading thread
+(`PARSE-STACK-LIMIT-EXCEEDED`, issue #6047) is not broken: that outcome is a
+function of the thread, not of what is installed, and recording it as `failed`
+(final for the process) would make the module's extensions depend on the stack
+of the first thread that loaded it. The child stays pending and the load fails
+with the error, as the parse of a module that `%try-module` loads does (see
+`QoreModuleManager::parseLoadModule()`).
+
 ### Teardown, cycles, and concurrency
 
 A child holds references to the parent's classes and registers data into the
