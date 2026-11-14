@@ -596,7 +596,7 @@ public class DebugUtilTest inherits QUnit::Test {
     runtimeDiagnosticTests() {
         hash<ExceptionInfo> ex;
         try {
-            *int i;
+            *int i = (*int sub () { return; })(); # a NOTHING the parser could see is a parse error
             int j = i;
             remove j;
         } catch (hash<ExceptionInfo> e) {

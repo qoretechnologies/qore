@@ -164,6 +164,11 @@ struct ColumnData {
         return i < (int64_t)null_mask.size() && null_mask[i];
     }
 
+    //! Returns true if the column is a date column of durations, whose cells are relative dates
+    bool isDuration() const {
+        return has_columnar_schema && columnar_schema.kind == QoreColumnarTypeKind::Duration;
+    }
+
     //! Returns the count of non-null values
     int64_t countNonNull() const;
 

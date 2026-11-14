@@ -752,17 +752,17 @@ static size_t qore_short_string_utf8_length(QoreValue v);
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
-// Empty strings sort at end (both "" vs "x" and "x" vs "" return 1)
+// An empty string is less than any other string (qore#6090)
 static inline int fast_string_compare(const QoreStringNode* ls, const QoreStringNode* rs) {
     size_t llen = ls->size();
     size_t rlen = rs->size();
 
-    // Handle empty strings - empty sorts at end (returns 1 if either is empty but not both)
+    // empty strings are equal whatever their encodings, and less than any other string
     if (!llen) {
-        return rlen ? 1 : 0;
+        return rlen ? -1 : 0;
     }
     if (!rlen) {
-        return 1;  // right is empty, left is not -> left > right (empty at end)
+        return 1;
     }
 
     // Compare bytes
@@ -22476,7 +22476,7 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
 
 //! starts a background helper thread with the values given by native or interpreted starting code
 static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const uint64_t* values, int nvalues, bool uses_self, ExceptionSink* xsink) {
+        const uint64_t* values, int nvalues, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink) {
     assert(nvalues >= 0);
     std::vector<QoreValue> vals;
     vals.reserve(nvalues);
@@ -22487,7 +22487,7 @@ static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& cod
     const QoreProgramLocation* loc = get_runtime_location();
     QoreProgramLocationHelper loc_helper(loc ? loc : &loc_builtin);
     return toBits(do_op_background_helper(code, params, vals.empty() ? nullptr : vals.data(), vals.size(),
-        uses_self, xsink));
+        self_mode, xsink));
 }
 
 QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& inst, const QoreValue* values,
@@ -22524,8 +22524,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
     QoreBackgroundHelperCode code;
     code.aot_fn = helper_fn;
     code.aot_ctx = ctx;
+    // the mode is a QoreBackgroundHelperSelf value of the instruction that the native code was compiled from
+    assert(uses_self >= QBHS_NONE && uses_self <= QBHS_HELD);
     return qore_background_helper_start(code, params.empty() ? nullptr : params.data(), values, nvalues,
-        uses_self != 0, xsink);
+        static_cast<QoreBackgroundHelperSelf>(uses_self), xsink);
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_throwing(

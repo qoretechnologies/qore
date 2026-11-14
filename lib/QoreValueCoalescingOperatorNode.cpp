@@ -97,6 +97,10 @@ int QoreValueCoalescingOperatorNode::parseInitImpl(QoreValue& val, QoreParseCont
     int err = 0;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
+        // a variable that is the left operand itself may have no value: the operator gives the right operand then,
+        // as exists inspects it (qore#5937); with %new-style, a variable is a bareword until it is parsed
+        QoreParseContextFlagScope fs(parse_context, PF_EXISTENCE_CHECK,
+            left.getType() == NT_VARREF || left.getType() == NT_BAREWORD);
         err = parse_init_value(left, parse_context);
         left_analysis = parse_context.analysis;
     }

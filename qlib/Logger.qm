@@ -288,6 +288,8 @@ if (laq.isFull()) {
     @tableofcontents
 
     @section logger_v1_1 v1.1
+    - the \c isTraceEnabled() ... \c isFatalEnabled() methods of @ref Logger::LoggerWrapper "LoggerWrapper" return
+      \c False without a logger instead of raising \c RUNTIME-TYPE-ERROR
     - searchable appenders can describe their search sources with hashes whose values all have the same type,
       such as \c {"name": "x", "kind": "memory"}
     - Added memory-based backpressure support to @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
@@ -2704,6 +2706,7 @@ public class LoggerWrapper inherits LoggerInterface {
         if (logger) {
             return logger.isTraceEnabled();
         }
+        return False;
     }
 
     #! Checks whether this Logger is enabled for the DEBUG Level
@@ -2712,6 +2715,7 @@ public class LoggerWrapper inherits LoggerInterface {
         if (logger) {
             return logger.isDebugEnabled();
         }
+        return False;
     }
 
     #! Checks whether this Logger is enabled for the INFO Level
@@ -2720,6 +2724,7 @@ public class LoggerWrapper inherits LoggerInterface {
         if (logger) {
             return logger.isInfoEnabled();
         }
+        return False;
     }
 
     #! Checks whether this Logger is enabled for the WARN Level
@@ -2728,6 +2733,7 @@ public class LoggerWrapper inherits LoggerInterface {
         if (logger) {
             return logger.isWarnEnabled();
         }
+        return False;
     }
 
     #! Checks whether this Logger is enabled for the ERROR Level
@@ -2736,6 +2742,7 @@ public class LoggerWrapper inherits LoggerInterface {
         if (logger) {
             return logger.isErrorEnabled();
         }
+        return False;
     }
 
     #! Checks whether this Logger is enabled for the FATAL Level
@@ -2744,6 +2751,7 @@ public class LoggerWrapper inherits LoggerInterface {
         if (logger) {
             return logger.isFatalEnabled();
         }
+        return False;
     }
 
     #! Sets the logging level
