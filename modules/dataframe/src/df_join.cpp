@@ -119,6 +119,14 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
     that the dates of both keep their values on export.  The two hold dates of one kind (checked before).
 */
 static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const ColumnData& right, bool right_values) {
+    // a key column of another type keeps the schema of the left key column if its values come from it only, or if
+    // the right key column has the same schema (a decimal128 column, for example; qore#6116)
+    if (left.type != ColumnType::DATE) {
+        if (!right_values || dataFrameSameColumnType(left, right)) {
+            dataFrameCopySchema(dest, left);
+        }
+        return;
+    }
     if (!right_values || right.type != ColumnType::DATE) {
         dataFrameCopyDateSchema(dest, left);
         return;
@@ -149,66 +157,69 @@ static void appendKeyRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols, co
         const std::vector<size_t>& col_indices, int64_t row_idx);
 
 // Append a row from src columns to dest columns (or null if row_idx < 0)
-static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
+// Append the cell of a row of a source column to a column of the same type (or null if row_idx < 0)
+static inline void appendCell(ColumnData& dest, const ColumnData& src, int64_t row_idx) {
+    int64_t idx = dest.n_rows;
+    ++dest.n_rows;
+
+    if (row_idx < 0 || src.isNull(row_idx)) {
+        dest.null_mask.push_back(1);
+        switch (dest.type) {
+            case ColumnType::INT64:
+                dest.int_data.push_back(0);
+                break;
+            case ColumnType::FLOAT64:
+                ensureFloatCapacity(dest.float_data, dest.n_rows);
+                dest.float_data(idx) = std::numeric_limits<double>::quiet_NaN();
+                break;
+            case ColumnType::STRING:
+                dest.str_data.emplace_back();
+                break;
+            case ColumnType::BOOL:
+                dest.bool_data.push_back(0);
+                break;
+            case ColumnType::DATE:
+                dest.date_data.push_back(0);
+                break;
+            case ColumnType::AUTO:
+                dest.appendAutoValue(QoreValue());
+                break;
+            default:
+                break;
+        }
+    } else {
+        dest.null_mask.push_back(0);
+        switch (dest.type) {
+            case ColumnType::INT64:
+                dest.int_data.push_back(src.int_data[row_idx]);
+                break;
+            case ColumnType::FLOAT64:
+                ensureFloatCapacity(dest.float_data, dest.n_rows);
+                dest.float_data(idx) = src.float_data(row_idx);
+                break;
+            case ColumnType::STRING:
+                dest.str_data.push_back(src.str_data[row_idx]);
+                break;
+            case ColumnType::BOOL:
+                dest.bool_data.push_back(src.bool_data[row_idx]);
+                break;
+            case ColumnType::DATE:
+                dest.date_data.push_back(src.date_data[row_idx]);
+                break;
+            case ColumnType::AUTO:
+                dest.appendAutoValue(src.auto_data[row_idx]);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+__attribute__((noinline)) static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
         const std::vector<Column>& src_cols,
         const std::vector<size_t>& col_indices, int64_t row_idx) {
     for (size_t i = 0; i < col_indices.size(); ++i) {
-        ColumnData& dest = *dest_cols[i];
-        const ColumnData& src = *src_cols[col_indices[i]].data;
-        int64_t idx = dest.n_rows;
-        ++dest.n_rows;
-
-        if (row_idx < 0 || src.isNull(row_idx)) {
-            dest.null_mask.push_back(1);
-            switch (dest.type) {
-                case ColumnType::INT64:
-                    dest.int_data.push_back(0);
-                    break;
-                case ColumnType::FLOAT64:
-                    ensureFloatCapacity(dest.float_data, dest.n_rows);
-                    dest.float_data(idx) = std::numeric_limits<double>::quiet_NaN();
-                    break;
-                case ColumnType::STRING:
-                    dest.str_data.emplace_back();
-                    break;
-                case ColumnType::BOOL:
-                    dest.bool_data.push_back(0);
-                    break;
-                case ColumnType::DATE:
-                    dest.date_data.push_back(0);
-                    break;
-                case ColumnType::AUTO:
-                    dest.appendAutoValue(QoreValue());
-                    break;
-                default:
-                    break;
-            }
-        } else {
-            dest.null_mask.push_back(0);
-            switch (dest.type) {
-                case ColumnType::INT64:
-                    dest.int_data.push_back(src.int_data[row_idx]);
-                    break;
-                case ColumnType::FLOAT64:
-                    ensureFloatCapacity(dest.float_data, dest.n_rows);
-                    dest.float_data(idx) = src.float_data(row_idx);
-                    break;
-                case ColumnType::STRING:
-                    dest.str_data.push_back(src.str_data[row_idx]);
-                    break;
-                case ColumnType::BOOL:
-                    dest.bool_data.push_back(src.bool_data[row_idx]);
-                    break;
-                case ColumnType::DATE:
-                    dest.date_data.push_back(src.date_data[row_idx]);
-                    break;
-                case ColumnType::AUTO:
-                    dest.appendAutoValue(src.auto_data[row_idx]);
-                    break;
-                default:
-                    break;
-            }
-        }
+        appendCell(*dest_cols[i], *src_cols[col_indices[i]].data, row_idx);
     }
 }
 
@@ -218,9 +229,7 @@ static void appendKeyRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols, co
         ColumnData& dest = *dest_cols[i];
         const ColumnData& src = *src_cols[col_indices[i]].data;
         if (dest.type == src.type) {
-            std::vector<std::shared_ptr<ColumnData>> one(1, dest_cols[i]);
-            std::vector<size_t> one_index(1, col_indices[i]);
-            appendRow(one, src_cols, one_index, row_idx);
+            appendCell(dest, src, row_idx);
             continue;
         }
         assert(dest.type == ColumnType::AUTO);
@@ -276,7 +285,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         for (const auto& col : columns) {
             auto cd = std::make_shared<ColumnData>();
             cd->type = col.data->type;
-            dataFrameCopyDateSchema(*cd, *col.data);
+            dataFrameCopySchema(*cd, *col.data);
             cd->n_rows = 0;
             Column out_col;
             out_col.name = col.name;
@@ -289,7 +298,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         for (const auto& col : other->columns) {
             auto cd = std::make_shared<ColumnData>();
             cd->type = col.data->type;
-            dataFrameCopyDateSchema(*cd, *col.data);
+            dataFrameCopySchema(*cd, *col.data);
             cd->n_rows = 0;
             std::string name = col.name;
             if (df->col_index.count(name)) {
@@ -490,7 +499,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
                 const ColumnData& src = *src_col.data;
                 auto cd = std::make_shared<ColumnData>();
                 cd->type = src.type;
-                dataFrameCopyDateSchema(*cd, src);
+                dataFrameCopySchema(*cd, src);
                 cd->n_rows = n_rows;
                 cd->null_mask.resize(n_rows, 0);
 
@@ -646,7 +655,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         }
         auto cd = std::make_shared<ColumnData>();
         cd->type = columns[i].data->type;
-        dataFrameCopyDateSchema(*cd, *columns[i].data);
+        dataFrameCopySchema(*cd, *columns[i].data);
         cd->n_rows = 0;
         Column out_col;
         out_col.name = columns[i].name;
@@ -665,7 +674,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         }
         auto cd = std::make_shared<ColumnData>();
         cd->type = other->columns[i].data->type;
-        dataFrameCopyDateSchema(*cd, *other->columns[i].data);
+        dataFrameCopySchema(*cd, *other->columns[i].data);
         cd->n_rows = 0;
         std::string name = other->columns[i].name;
         if (df->col_index.count(name)) {

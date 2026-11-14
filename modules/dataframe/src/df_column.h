@@ -409,6 +409,32 @@ static inline void dataFrameCopyDateSchema(ColumnData& dest, const ColumnData& s
     }
 }
 
+//! Gives a column made of the cells of another the columnar schema of the other (a decimal128, float32 or timestamp
+//! schema, for example), with no name, so that its cells are returned and exported as those of the other (qore#6116)
+static inline void dataFrameCopySchema(ColumnData& dest, const ColumnData& src) {
+    if (src.has_columnar_schema) {
+        dest.columnar_schema = src.columnar_schema;
+        dest.columnar_schema.name.clear();
+        dest.has_columnar_schema = true;
+    }
+}
+
+//! Returns true if two columns have the same type and the same columnar schema (but for its name), so that the
+//! cells of both can be stored in one column with that schema (qore#6116)
+static inline bool dataFrameSameColumnType(const ColumnData& a, const ColumnData& b) {
+    if (a.type != b.type || a.has_columnar_schema != b.has_columnar_schema) {
+        return false;
+    }
+    if (!a.has_columnar_schema) {
+        return true;
+    }
+    const QoreColumnarTypeDescriptor& x = a.columnar_schema;
+    const QoreColumnarTypeDescriptor& y = b.columnar_schema;
+    return x.kind == y.kind && x.buffer_type == y.buffer_type && x.precision == y.precision && x.scale == y.scale
+        && x.fixed_size == y.fixed_size && x.time_unit == y.time_unit && x.timezone == y.timezone
+        && x.native_type == y.native_type && x.children.empty() && y.children.empty();
+}
+
 //! Makes a date column a column of durations: gives it the columnar schema of durations in microseconds, so that
 //! its cells are returned as relative dates (qore#6107)
 DLLLOCAL void dataFrameSetDurationSchema(ColumnData& col);

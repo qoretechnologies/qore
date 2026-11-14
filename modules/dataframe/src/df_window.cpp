@@ -743,6 +743,127 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
 
 // --- melt ---
 
+//! Returns the value column of melt() (qore#6116)
+static std::shared_ptr<ColumnData> meltValueColumn(const std::vector<Column>& columns,
+        const std::vector<size_t>& val_indices, int64_t n_rows, ExceptionSink* xsink) {
+    int64_t out_rows = n_rows * static_cast<int64_t>(val_indices.size());
+    // Value column: a float64 column of the values of int64 and float64 columns; a column of the type and the
+    // columnar schema of value columns of one type and schema; or the column that the column hash constructor makes
+    // of the values of other columns (qore#6116)
+    bool numeric = true;
+    bool same = !val_indices.empty();
+    for (size_t vi = 0; vi < val_indices.size(); ++vi) {
+        const ColumnData& vcd = *columns[val_indices[vi]].data;
+        if (vcd.type != ColumnType::FLOAT64 && vcd.type != ColumnType::INT64) {
+            numeric = false;
+        }
+        if (vi && !dataFrameSameColumnType(vcd, *columns[val_indices[0]].data)) {
+            same = false;
+        }
+    }
+    std::shared_ptr<ColumnData> val_cd;
+    if (numeric) {
+        val_cd = std::make_shared<ColumnData>();
+        // float64 columns of one schema (float32 columns, for example) keep it
+        if (same && columns[val_indices[0]].data->type == ColumnType::FLOAT64) {
+            dataFrameCopySchema(*val_cd, *columns[val_indices[0]].data);
+        }
+        val_cd->type = ColumnType::FLOAT64;
+        val_cd->n_rows = out_rows;
+        val_cd->null_mask.resize(out_rows, 0);
+        val_cd->float_data.resize(out_rows);
+        for (int64_t r = 0; r < n_rows; ++r) {
+            if (r && !(r % 100) && qore_check_cancel(xsink, "melting DataFrame values")) {
+                return nullptr;
+            }
+            for (size_t vi = 0; vi < val_indices.size(); ++vi) {
+                int64_t oi = r * val_indices.size() + vi;
+                const ColumnData& src = *columns[val_indices[vi]].data;
+                if (src.isNull(r)) {
+                    val_cd->null_mask[oi] = 1;
+                    val_cd->float_data(oi) = std::numeric_limits<double>::quiet_NaN();
+                } else {
+                    val_cd->float_data(oi) = (src.type == ColumnType::FLOAT64)
+                        ? src.float_data(r) : (double)src.int_data[r];
+                }
+            }
+        }
+    } else if (same) {
+        // the cells of value columns of one type and schema are copied with their type and schema
+        const ColumnData& first = *columns[val_indices[0]].data;
+        val_cd = std::make_shared<ColumnData>();
+        val_cd->type = first.type;
+        val_cd->n_rows = out_rows;
+        val_cd->null_mask.assign(out_rows, 0);
+        dataFrameCopySchema(*val_cd, first);
+        switch (first.type) {
+            case ColumnType::STRING:
+                val_cd->str_data.resize(out_rows);
+                break;
+            case ColumnType::BOOL:
+                val_cd->bool_data.resize(out_rows);
+                break;
+            case ColumnType::DATE:
+                val_cd->date_data.resize(out_rows);
+                break;
+            case ColumnType::AUTO:
+                val_cd->auto_data.resize(out_rows);
+                break;
+            default:
+                break;
+        }
+        size_t k = val_indices.size();
+        for (int64_t r = 0; r < n_rows; ++r) {
+            if (r && !(r % 100) && qore_check_cancel(xsink, "melting DataFrame values")) {
+                return nullptr;
+            }
+            for (size_t vi = 0; vi < k; ++vi) {
+                int64_t oi = r * k + vi;
+                const ColumnData& src = *columns[val_indices[vi]].data;
+                if (src.isNull(r)) {
+                    val_cd->null_mask[oi] = 1;
+                    continue;
+                }
+                switch (first.type) {
+                    case ColumnType::STRING:
+                        val_cd->str_data[oi] = src.str_data[r];
+                        break;
+                    case ColumnType::BOOL:
+                        val_cd->bool_data[oi] = src.bool_data[r];
+                        break;
+                    case ColumnType::DATE:
+                        val_cd->date_data[oi] = src.date_data[r];
+                        break;
+                    case ColumnType::AUTO:
+                        val_cd->setAutoValue(oi, src.auto_data[r], xsink);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    } else {
+        ReferenceHolder<QoreListNode> values(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t r = 0; r < n_rows; ++r) {
+            if (r && !(r % 100) && qore_check_cancel(xsink, "melting DataFrame values")) {
+                return nullptr;
+            }
+            for (size_t vi = 0; vi < val_indices.size(); ++vi) {
+                const ColumnData& src = *columns[val_indices[vi]].data;
+                values->push(src.isNull(r) ? QoreValue() : src.getValueAt(r, xsink), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+            }
+        }
+        val_cd = buildColumnDataAuto(*values, xsink);
+        if (!val_cd) {
+            return nullptr;
+        }
+    }
+    return val_cd;
+}
+
 //! Returns an identifier column of melt(): each value of the source column repeated for each value column, in a
 //! column of the type and the columnar schema of the source column (qore#6116)
 static std::shared_ptr<ColumnData> meltIdColumn(const ColumnData& src, int64_t n_rows, size_t reps,
@@ -942,61 +1063,10 @@ QoreDataFrame* QoreDataFrame::melt(const QoreListNode* id_vars,
     df->col_index[var_col.name] = df->columns.size();
     df->columns.push_back(std::move(var_col));
 
-    // Value column: a float64 column of the values of int64 and float64 columns, or the column that the column hash
-    // constructor makes of the values of other columns (qore#6116)
-    bool numeric = true;
-    for (size_t vi = 0; vi < val_indices.size(); ++vi) {
-        ColumnType t = columns[val_indices[vi]].data->type;
-        if (t != ColumnType::FLOAT64 && t != ColumnType::INT64) {
-            numeric = false;
-            break;
-        }
-    }
-    std::shared_ptr<ColumnData> val_cd;
-    if (numeric) {
-        val_cd = std::make_shared<ColumnData>();
-        val_cd->type = ColumnType::FLOAT64;
-        val_cd->n_rows = out_rows;
-        val_cd->null_mask.resize(out_rows, 0);
-        val_cd->float_data.resize(out_rows);
-        for (int64_t r = 0; r < n_rows; ++r) {
-            if (r && !(r % 100) && qore_check_cancel(xsink, "melting DataFrame values")) {
-                delete df;
-                return nullptr;
-            }
-            for (size_t vi = 0; vi < val_indices.size(); ++vi) {
-                int64_t oi = r * val_indices.size() + vi;
-                const ColumnData& src = *columns[val_indices[vi]].data;
-                if (src.isNull(r)) {
-                    val_cd->null_mask[oi] = 1;
-                    val_cd->float_data(oi) = std::numeric_limits<double>::quiet_NaN();
-                } else {
-                    val_cd->float_data(oi) = (src.type == ColumnType::FLOAT64)
-                        ? src.float_data(r) : (double)src.int_data[r];
-                }
-            }
-        }
-    } else {
-        ReferenceHolder<QoreListNode> values(new QoreListNode(autoTypeInfo), xsink);
-        for (int64_t r = 0; r < n_rows; ++r) {
-            if (r && !(r % 100) && qore_check_cancel(xsink, "melting DataFrame values")) {
-                delete df;
-                return nullptr;
-            }
-            for (size_t vi = 0; vi < val_indices.size(); ++vi) {
-                const ColumnData& src = *columns[val_indices[vi]].data;
-                values->push(src.isNull(r) ? QoreValue() : src.getValueAt(r, xsink), xsink);
-                if (*xsink) {
-                    delete df;
-                    return nullptr;
-                }
-            }
-        }
-        val_cd = buildColumnDataAuto(*values, xsink);
-        if (!val_cd) {
-            delete df;
-            return nullptr;
-        }
+    std::shared_ptr<ColumnData> val_cd = meltValueColumn(columns, val_indices, n_rows, xsink);
+    if (!val_cd) {
+        delete df;
+        return nullptr;
     }
     Column val_col;
     val_col.name = value_name;

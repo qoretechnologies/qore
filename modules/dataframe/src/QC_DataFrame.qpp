@@ -1890,9 +1890,13 @@ DataFrame DataFrame::pivot(string index_col, string columns_col, string values_c
     @param value_name name for the value column (default "value")
     @return new DataFrame in long format
 
-    The identifier columns keep their types.  The value column is a \c float64 column if every value column is an
-    \c int64 or \c float64 column, and otherwise the column that the column hash constructor makes of the values
-    (see @ref dataframeintro): a column of their type if they are all of one type, or a column that holds any value.
+    The identifier columns keep their types and columnar schemas.  The value column is a \c float64 column if every
+    value column is an \c int64 or \c float64 column; a column of the type and the columnar schema of the value
+    columns if they all have one type and schema (strings, bools, dates, durations, decimals, for example); and
+    otherwise the column that the column hash constructor makes of the values (see @ref dataframeintro), which stores
+    scalar values of different types as their string forms (an int and a string value column make a string column)
+    and holds any value if a value is not a scalar.  Without rows, the value column of value columns of different
+    types is a string column.
 
     @par Example:
     @code{.py}

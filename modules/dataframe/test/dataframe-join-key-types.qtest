@@ -76,5 +76,31 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
         DataFrame::DataFrame lm({"a": ("x", NOTHING, "x"), "k": (1.5, 1.5, NOTHING)});
         DataFrame::DataFrame rm({"a": ("x", NOTHING, "x"), "k": (1.5, 1.5, NOTHING), "b": (1, 2, 4)});
         assertEq((1, 2, 4), lm.join(rm, ("a", "k")).getColumn("b"), "several keys with null values");
+        # which rows match: an int64 key column and a column that holds any value
+        DataFrame::DataFrame il({"k": (1, 2, 3)});
+        DataFrame::DataFrame ar({"k": (c'z', 1, 1.0, "1", True, (1,), NOTHING, 3), "b": (1, 2, 4, 8, 16, 32, 64, 128)});
+        assertEq((2, 128), il.join(ar, ("k",)).getColumn("b"), "int64 and any-value keys: matches");
+        assertEq(9, il.join(ar, ("k",), "outer").numRows(), "int64 and any-value keys: outer join rows");
+        # durations of the same length match, in a column of durations and a column that holds any value
+        DataFrame::DataFrame dl({"k": (1h, 2h)});
+        DataFrame::DataFrame dr({"k": (c'z', 60m, 24h), "b": (1, 2, 4)});
+        assertEq((2,), dl.join(dr, ("k",)).getColumn("b"), "durations of the same length");
+        # NaN keys match NaN keys, as they make one group in groupBy()
+        DataFrame::DataFrame nl({"k": (@nan@, 1.0)});
+        DataFrame::DataFrame nr({"k": (@nan@, 2.0), "b": (1, 2)});
+        assertEq((1,), nl.join(nr, ("k",)).getColumn("b"), "NaN keys");
+        # two key columns, one of different types, in an outer join
+        DataFrame::DataFrame tl({"a": ("x", "y"), "k": (1, 2), "l": (10, 20)});
+        DataFrame::DataFrame tr({"a": ("x", "z"), "k": ("1", "3"), "r": (100, 300)});
+        DataFrame::DataFrame t = tl.join(tr, ("a", "k"), "outer");
+        assertEq(("string", "auto"), t.dtypes()[0..1], "key column types");
+        assertEq(4, t.numRows(), "rows");
+        # a decimal key column keeps its schema
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.25n, 2.5n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}}));
+        foreach string how in (("inner", "outer")) {
+            list<auto> v = DataFrame::DataFrame::fromArrowIpc(dec.join(dec, ("v",), how).toArrowIpc()).getColumn("v");
+            assertTrue(v[0].typeCode() == NT_NUMBER && v[0] == 1.25n, sprintf("%s join of decimal keys: %y", how, v));
+        }
     }
 }

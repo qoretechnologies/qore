@@ -60,5 +60,22 @@ class DataFrameMeltTypesTest inherits QUnit::Test {
         # values of a column that holds any value
         DataFrame::DataFrame anyv({"id": (1, 2), "p": (c'z', (1, 2)), "q": (1, 2)});
         assertEq((c'z', 1, (1, 2), 2), anyv.melt(("id",)).getColumn("value"), "any values");
+        # an int and a bool value column make a string column, as the column hash constructor makes it
+        DataFrame::DataFrame ib({"id": (1,), "x": (10,), "b": (True,)});
+        assertEq(("10", "1"), ib.melt(("id",)).getColumn("value"), "int and bool values");
+        # decimal value columns keep their values and type
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "p": (12345678901234567.89n,), "q": (2.5n,),
+        }, {
+            "p": {"schema": {"kind": "decimal128", "precision": 20, "scale": 2}},
+            "q": {"schema": {"kind": "decimal128", "precision": 20, "scale": 2}},
+        }));
+        list<auto> dv2 = DataFrame::DataFrame::fromArrowIpc(dec.melt(("id",)).toArrowIpc()).getColumn("value");
+        assertTrue(dv2[0] == 12345678901234567.89n && dv2[1] == 2.5n, sprintf("decimal values: %y", dv2));
+        # an empty frame, and identifier columns only
+        DataFrame::DataFrame empty({"id": (), "x": (), "y": ()});
+        assertEq(0, empty.melt(("id",)).numRows(), "an empty frame");
+        DataFrame::DataFrame ids({"id": (1, 2)});
+        assertEq(0, ids.melt(("id",)).numRows(), "identifier columns only");
     }
 }
