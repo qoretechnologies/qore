@@ -42,6 +42,11 @@ class DataFrameMixedInferenceTest inherits QUnit::Test {
             (("a", 1.5), "string"),
             (("a", True), "string"),
             (("a", "b"), "string"),
+            # a float with a bool or a date
+            ((1.5, True), "string"),
+            ((1.5, 2024-01-01Z), "string"),
+            ((True, NOTHING, 1.5), "string"),
+            ((1, 1.5), "float64"),
         );
         foreach list<auto> column in (columns) {
             list<auto> values = column[0];

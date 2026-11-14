@@ -65,7 +65,8 @@ static ColumnType finishRecordColumnType(const RecordColumnInference& inf) {
     if (inf.has_string) {
         return ColumnType::STRING;
     }
-    if (inf.has_float) {
+    // a float with a bool or a date makes a string column, as the list constructor infers it (qore#6097)
+    if (inf.has_float && !inf.has_bool && !inf.has_date) {
         return ColumnType::FLOAT64;
     }
     if (inf.has_int && !inf.has_bool && !inf.has_date) {
@@ -2604,17 +2605,13 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                     continue;
                 }
                 const ColumnData& src = *snapshots[d].columns[it->second].data;
-                // the columns must also have the same logical type: a timestamp and a duration column both have
-                // a buffer<int64> of microseconds, which mean other values
+                // a timestamp and a duration column both have a buffer<int64> of microseconds (whatever the time
+                // unit of their schema), which mean other values: absolute dates and time values
                 same = src.hasDenseBuffer() && src.type == first.type
                     && src.dense_buffer_type == first.dense_buffer_type
                     && src.dense_buffer->getDecimalPrecision() == first.dense_buffer->getDecimalPrecision()
                     && src.dense_buffer->getDecimalScale() == first.dense_buffer->getDecimalScale()
-                    && src.has_columnar_schema == first.has_columnar_schema
-                    && (!first.has_columnar_schema
-                        || (src.columnar_schema.kind == first.columnar_schema.kind
-                            && src.columnar_schema.time_unit == first.columnar_schema.time_unit
-                            && src.columnar_schema.timezone == first.columnar_schema.timezone));
+                    && src.isDuration() == first.isDuration();
             }
             dense[c] = same;
         }
@@ -2726,9 +2723,34 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                     preserveColumnarSchema(*col.data, col.name, first.columnar_schema);
                 }
             } else {
-                col.data = buildColumnData(col_values.lists[c], first_columns[c].data->type, xsink);
+                // a date column of absolute dates and one of time values (durations) make a column that holds any
+                // value, as the date column of the first DataFrame would make dates of time values or time values of
+                // dates; date columns of time values only keep the schema of the first one, which makes their
+                // cells time values
+                const ColumnData& first = *first_columns[c].data;
+                ColumnType type = first.type;
+                bool keep_schema = false;
+                if (type == ColumnType::DATE) {
+                    bool duration = first.isDuration();
+                    for (size_t d = 1; d < snapshots.size(); ++d) {
+                        auto it = snapshots[d].col_index.find(col.name);
+                        if (it == snapshots[d].col_index.end()) {
+                            continue;
+                        }
+                        const ColumnData& src = *snapshots[d].columns[it->second].data;
+                        if (src.type != ColumnType::DATE || src.isDuration() != duration) {
+                            type = ColumnType::AUTO;
+                            break;
+                        }
+                    }
+                    keep_schema = type == ColumnType::DATE && duration;
+                }
+                col.data = buildColumnData(col_values.lists[c], type, xsink);
                 if (*xsink) {
                     return nullptr;
+                }
+                if (keep_schema) {
+                    preserveColumnarSchema(*col.data, col.name, first.columnar_schema);
                 }
             }
             result->col_index[col.name] = result->columns.size();

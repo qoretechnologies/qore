@@ -23,6 +23,7 @@ class DataFrameConcatTypesTest inherits QUnit::Test {
         addTestCase("timestamp", \timestampTest());
         addTestCase("duration", \durationTest());
         addTestCase("sliced nullable source", \slicedTest());
+        addTestCase("float32 buffer", \float32BufferTest());
         set_return_value(main());
     }
 
@@ -76,10 +77,51 @@ class DataFrameConcatTypesTest inherits QUnit::Test {
         }, {
             "v": {"schema": {"kind": "timestamp", "time_unit": "us", "timezone": "UTC", "nullable": True}},
         }));
-        assertTrue(DataFrame::DataFrame::concat((ts, du)).getColumn("v")[0] == 2024-01-01T10:00:00Z,
-            "a timestamp before durations");
-        assertTrue(DataFrame::DataFrame::concat((du, ts)).getColumn("v")[3] == 2024-01-01T10:00:00Z,
-            "a timestamp after durations");
+        foreach list<DataFrame::DataFrame> frames in (((ts, du), (du, ts))) {
+            DataFrame::DataFrame mixed = DataFrame::DataFrame::concat(frames);
+            list<auto> expected = frames[0].getColumn("v") + frames[1].getColumn("v");
+            list<auto> actual = mixed.getColumn("v");
+            assertEq("auto", mixed.dtypes()[0], "a timestamp and durations make a column that holds any value");
+            assertEq(expected.size(), actual.size(), "rows");
+            foreach auto value in (expected) {
+                # an absolute date and a time value are never equal
+                assertTrue(value === actual[$#] || (exists value && value == actual[$#]),
+                    sprintf("row %d: %y", $#, actual[$#]));
+            }
+        }
+        # the time unit of a duration column's schema does not change its buffer of microseconds
+        DataFrame::DataFrame du_ms = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "v": (7s,),
+        }, {
+            "v": {"schema": {"kind": "duration", "time_unit": "ms", "nullable": True}},
+        }));
+        DataFrame::DataFrame units = DataFrame::DataFrame::concat((du, du_ms));
+        assertEq("duration", getSchema(units, "v").kind, "durations of two time units");
+        assertTrue(units.getColumn("v")[0] == 5s && units.getColumn("v")[3] == 7s,
+            "time values of two time units");
+        # timestamps of two time zones are absolute dates
+        DataFrame::DataFrame ts_cet = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "v": (2024-06-01T10:00:00+02:00,),
+        }, {
+            "v": {"schema": {"kind": "timestamp", "time_unit": "us", "timezone": "Europe/Prague",
+                "nullable": True}},
+        }));
+        DataFrame::DataFrame zones = DataFrame::DataFrame::concat((ts, ts_cet));
+        assertEq("date", zones.dtypes()[0], "timestamps of two time zones");
+        assertTrue(zones.getColumn("v")[0] == 2024-01-01T10:00:00Z
+            && zones.getColumn("v")[1] == 2024-06-01T08:00:00Z, "the dates of two time zones");
+    }
+
+    #! a float32 column read from Parquet, which has a schema, and one built from a buffer<float32>, which has none
+    float32BufferTest() {
+        DataFrame::DataFrame parquet = DataFrame::DataFrame::readParquet(get_script_dir() + DirSep + "data" + DirSep
+            + "dense_float32.parquet").select(("v",)).slice(1, 2);
+        DataFrame::DataFrame buffer({"v": new buffer<float32>((0.5, 2))});
+        foreach list<DataFrame::DataFrame> frames in (((parquet, buffer), (buffer, parquet))) {
+            DataFrame::DataFrame both = DataFrame::DataFrame::concat(frames);
+            assertEq("float32", getSchema(both, "v").buffer_type, "a float32 buffer");
+            assertEq(frames[0].getColumn("v") + frames[1].getColumn("v"), both.getColumn("v"), "the values");
+        }
     }
 
     #! the validity bits of a view of a nullable source at an offset that is not a multiple of 8
