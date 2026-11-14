@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: MIT
 
 #! The cases of the ParseStackBoundary-<n>.qtest tests: each runs one part of them, so that each takes a short time,
-#! and together they run every case (see addPartCase()); part 1 parses code in a single Program, part 2 loads modules
+#! and together they run every case (see addPartCase()); parts 1 and 3 parse code in a single Program, part 2 loads
+#! modules
 #! Parsing that runs short of stack in a foreign thread fails with a parse exception at every stack size (issue #6047)
 /** The fixture parses nested code in foreign threads with stack sizes from 160KB to 640KB in 4KB steps; each level of
     the code is an expression that inspects the expression it contains after parse-initializing it (a list assignment
@@ -23,8 +24,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         self.part = part;
         addPartCase(1, "parse-time stack boundary", \check());
         addPartCase(1, "class inheritance chain", \classChainCheck());
-        addPartCase(1, "class inheritance chain with methods", \classMethodChainCheck());
-        addPartCase(1, "class inheritance chain with methods, most derived class first", \classMethodChainCheck(),
+        addPartCase(3, "class inheritance chain with methods", \classMethodChainCheck());
+        addPartCase(3, "class inheritance chain with methods, most derived class first", \classMethodChainCheck(),
             True);
         addPartCase(1, "hashdecl inheritance chain", \hashdeclChainCheck());
         addPartCase(2, "nested module loads", \moduleCheck());
