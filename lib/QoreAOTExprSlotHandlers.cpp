@@ -378,7 +378,7 @@ static bool write_slot_PLUS(AOTExprSlotWriteCtx& ctx) {
 
 static bool write_slot_SQUARE_BRACKET(AOTExprSlotWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
-    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!op) {
         return false;
     }
@@ -802,7 +802,8 @@ static bool write_slot_CALLREF_CALL(AOTExprSlotWriteCtx& ctx) {
             return false;
         }
     }
-    return true;
+    // a named call has the names of its arguments after them (AOTExprKind::CALLREF_CALL_NAMED)
+    return !ctx.expr.arg_names || qore_aot_write_callref_arg_names(ctx.writer, *ctx.expr.arg_names);
 }
 
 static bool write_slot_LOG_NOT(AOTExprSlotWriteCtx& ctx) {
@@ -926,6 +927,20 @@ static bool write_slot_STREAMING(AOTExprSlotWriteCtx& ctx) {
             ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
         && classifyAndWriteExpr(ctx.writer, op->getSource(),
             ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_FIND(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const FindNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(op->getMode()));
+    return classifyAndWriteExpr(ctx.writer, op->exp, ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->find_exp, ctx.parent_locals, ctx.parent_globals,
+            ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->where, ctx.parent_locals, ctx.parent_globals,
+            ctx.const_reverse_map);
 }
 
 static bool write_slot_RANGE(AOTExprSlotWriteCtx& ctx) {

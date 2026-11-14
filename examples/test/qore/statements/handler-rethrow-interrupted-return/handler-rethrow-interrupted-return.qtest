@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the release of a return value on an exception
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HandlerRethrowInterruptedReturnTest
+
+#! A return value interrupted by a rethrow in a catch block of a handler is released as in the AST interpreter (#6033)
+/** A return statement whose on_exit or on_success handler has a try statement whose catch block rethrows (or
+    throws, or exits the thread) ends the handler in the merge block of that try statement, which no code reaches:
+    the IR optimizer removed it with the Return after the handler.  Native code then no longer took the value for
+    one that the exception interrupts: a try statement of the function released it after its catch block instead of
+    before it, and the exit of the function before its locals instead of after them.  The Return is kept since #6028;
+    the IR interpreter was not affected.  HandlerRethrowInterruptedReturn.q gives the output of the AST interpreter in
+    every execution mode and compiled with qcc.
+*/
+class HandlerRethrowInterruptedReturnTest inherits QUnit::Test {
+    public {
+        #! the output of HandlerRethrowInterruptedReturn.q with the AST interpreter
+        const Expected = "r1: [\"c\", \"ox\", \"~r1-rv\", \"catch:R1\", \"after\", \"~r1-z\"] live=0
+r1: [\"c\", \"ox\", \"~r1-rv\", \"catch:R1\", \"after\", \"~r1-z\"] live=0
+r2: [\"c\", \"oe\", \"~r2-rv\", \"catch:R2\", \"after\", \"~r2-z\"] live=0
+r2: [\"c\", \"oe\", \"~r2-rv\", \"catch:R2\", \"after\", \"~r2-z\"] live=0
+r3: [\"c\", \"~r3-t\", \"catch:R3\", \"after\", \"~r3-z\"] live=0
+r3: [\"c\", \"~r3-t\", \"catch:R3\", \"after\", \"~r3-z\"] live=0
+r4: [\"c\", \"~r4-rv\", \"catch:R4\", \"after\", \"~r4-z\"] live=0
+r4: [\"c\", \"~r4-rv\", \"catch:R4\", \"after\", \"~r4-z\"] live=0
+r5: [\"c\", \"~r5-rv\", \"inner:R5\", \"outer:R5\", \"after\", \"~r5-z\"] live=0
+r5: [\"c\", \"~r5-rv\", \"inner:R5\", \"outer:R5\", \"after\", \"~r5-z\"] live=0
+r6: [\"c\", \"~r6-rv\", \"inner:R6\", \"mid\", \"after\", \"~r6-z\"] live=0
+r6: [\"c\", \"~r6-rv\", \"inner:R6\", \"mid\", \"after\", \"~r6-z\"] live=0
+r7: [\"c\", \"~r7-z\", \"~r7-rv\", \"caller:R7\"] live=0
+r7: [\"c\", \"~r7-z\", \"~r7-rv\", \"caller:R7\"] live=0
+r8: [\"c\", \"~r8-rv\", \"catch:R8\", \"after\", \"~r8-z\"] live=0
+r8: [\"c\", \"~r8-rv\", \"catch:R8\", \"after\", \"~r8-z\"] live=0
+r9: [\"c\", \"~r9-rv\", \"~r9-z\"] live=0
+r9: [\"c\", \"~r9-rv\", \"~r9-z\"] live=0
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("HandlerRethrowInterruptedReturnTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/HandlerRethrowInterruptedReturn.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the value of a return interrupted by a rethrow in a handler", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the value of a return interrupted by a rethrow in a handler", opt),
+                \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-rethrow-interrupted-return-");
+        string exe = tmp.path + DirSep + "handler-rethrow-interrupted-return";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

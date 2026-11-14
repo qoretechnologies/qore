@@ -452,6 +452,22 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v33: a user variant's signature flags have bit 4 (0x0010) when the variant declares functional domains in Qore
 //!      source (\c [dom=...]); the declared QDOM_* bits follow the variant's parse options as an i64.  A v9-v32
 //!      variant declares none (#5803).
+//! v34: the string of a LOCAL_VARREF expression in the default argument of a parameter is "top:<index>:<name>" for a
+//!      local variable of the top level of the Program (a %modern script's `K k();` at the top level), where <index>
+//!      is the index in the Program's top-level local list and <name> the name of the variable; every other
+//!      LOCAL_VARREF string is the decimal index of a local slot.  A reader that does not know it reads the string as
+//!      the slot 0 (#5868).
+//!      An expression that is a find expression is written natively (AOTExprKind::FIND, with its node form EN_FIND),
+//!      so that a find expression can be nested in the expressions of another one (#5974); the earlier formats have no
+//!      such expression, and a reader of them refuses the kind.
+//!      An init function descriptor can have the target type MODULE_DEL (7): the compiled body of the module's \c del
+//!      closure, which is loaded with the module but run when the module is unloaded (#6015), or, for a local source
+//!      module that a compiled script embeds, when the script's Program is cleared; a reader of the earlier
+//!      formats refuses the type, and a module has none without a \c del closure.
+//! v35: a call through a call reference or closure with named arguments is written natively with the names of its
+//!      arguments (AOTExprKind::CALLREF_CALL_NAMED, 128: the CALLREF_CALL layout followed by a name string ref per
+//!      argument; its node form EN_CALLREF_CALL_NAMED, 27), so that the names are bound when the call is made (M4
+//!      phase 3); the earlier formats have no such expression, and a reader of them refuses the kind.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -479,9 +495,15 @@ constexpr uint8_t QORE_AOT_CONST_FLAG_PENDING = 0x01;
 constexpr uint8_t QORE_AOT_CONST_FLAG_EXPLICIT_TYPE = 0x02;
 //! First format version whose user variant signatures can carry declared functional domains (see v33 above).
 constexpr uint16_t QORE_AOT_DECLARED_DOMAIN_VERSION = 33;
+//! First format version whose LOCAL_VARREF expressions of parameter defaults can name a top-level local (see v34 above).
+constexpr uint16_t QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION = 34;
+//! First format version with native find expressions (see v34 above).
+constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
+//! First format version with named call reference calls (see v35 above).
+constexpr uint16_t QORE_AOT_NAMED_CALLREF_VERSION = 35;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DECLARED_DOMAIN_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_NAMED_CALLREF_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -1158,6 +1180,10 @@ public:
     //! expressions (AOTExprKind::SOURCE_LOCATION), of members and of default arguments are left out, so that a
     //! digest does not depend on lines or on the path of a source file
     bool omit_source_locations = false;
+    //! true while the default argument of a parameter is written: a top-level local that the expression reads is then
+    //! written by its index in the Program's top-level local list ("top:<index>:<name>"), which the loader binds
+    //! once the top-level locals exist (qore#5868)
+    bool allow_top_level_local_ref = false;
 
     //! Header feature flags used by payload-level compatibility choices while
     //! section writers serialize values.
@@ -2364,6 +2390,10 @@ enum class AOTExprKind : uint8_t {
     REGEX_SUBST        = 125,
     //! transliteration (=~ tr///): source(stringref) + target(stringref) + lvalue(AOTExprKind)
     TRANSLIT           = 126,
+    //! Find expression (v34): mode byte (FindNode::Mode) + result expression + find-in expression + where expression
+    FIND               = 127,
+    CALLREF_CALL_NAMED = 128, //!< named call reference call (M4 phase 3): as CALLREF_CALL, then u8 name count + a
+                              //!< string ref per argument name ("" for a positional argument)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -2401,6 +2431,8 @@ enum class AOTExprNodeKind : uint8_t {
     EN_NEW           = 24,  //!< u16 class_len + bytes; children = args
     EN_CALLREF_CALL  = 25,  //!< no metadata; children[0] = callref, [1..] = args
     EN_SCOPED_NEW    = 26,  //!< u16 class_len + bytes; children = args
+    EN_CALLREF_CALL_NAMED = 27, //!< named call reference call (M4 phase 3): u16 name count + (u16 len + bytes) per
+                                //!< argument name ("" for a positional argument); children as EN_CALLREF_CALL
 
     // Access operators (children = operands)
     EN_HASH_DEREF    = 30,  //!< children = [target, key_expr]
@@ -2523,6 +2555,7 @@ enum class AOTExprNodeKind : uint8_t {
     EN_FOLDR         = 165, //!< 2 children: [accumulator_expr, source]
     EN_ITERATE       = 166, //!< 1 child: [source]
     EN_STREAMING     = 167, //!< u8 kind; 2 children: [predicate_or_count, source]
+    EN_FIND          = 168, //!< u8 mode; 3 children: [result_expr, find_expr, where_expr]
 };
 
 //! AOT context local slot flag: the slot is a Program top-level local (from QORE_AOT_LOCAL_BINDING_VERSION)
@@ -2608,6 +2641,7 @@ struct AOTExprSlotId {
     const QoreListNode* call_args = nullptr; //!< call args for NEW_OBJECT/SCOPED_NEW_OBJECT/STATIC_METHOD_CALL
     const QoreParseListNode* parse_args = nullptr; //!< parse args for HASHDECL_NEW
     const UserClosureFunction* closure_func = nullptr; //!< For CLOSURE_CREATE: source closure function
+    const name_vec_t* arg_names = nullptr; //!< For CALLREF_CALL_NAMED: the names of the arguments (interned)
 };
 
 //! Identity for a body local variable (needed for instantiation management)
@@ -2918,6 +2952,9 @@ struct AOTCompiledInitFunc {
                               //!< resolve globals / constants it references.
         GLOBAL_VAR = 5,       //!< namespace-level global or thread-local variable
         GLOBAL_VAR_CONSTRUCT = 6, //!< initializer expression constructs and stores the value
+        MODULE_DEL = 7,       //!< module del closure body (side-effects only): loaded with the module's own Program
+                              //!< like MODULE_INIT but NOT run at load; qore_aot_module_delete() runs it when the
+                              //!< module is unloaded, as the source module runs its del closure
     };
     TargetType target_type = NS_CONSTANT;
     std::string ns_path;            //!< namespace path or class path
@@ -3032,6 +3069,20 @@ struct QoreAOTStringRef {
     bool empty() const { return !*ptr; }
     const char* c_str() const { return ptr; }
 };
+
+//! the error that the reader of an expression sets for a reference to a top-level local that does not exist yet
+/** The reader of a default argument keeps the expression and reads it again when the top-level locals exist (see
+    QoreAOTBinaryDeserializer::resolveTopLevelNativeExprDefaults())
+*/
+#define QORE_AOT_DEFER_TOP_LEVEL_LOCAL "AOT-DEFER-TOP-LEVEL-LOCAL"
+
+class VarRefNode;
+
+//! writes the reference of an expression to a top-level local of the Program being serialized as "top:<index>:<name>"
+/** @return true if the variable is a top-level local that is in the top-level local list of the serialization Program
+    and the writer allows it (a default argument); \a ref then holds the reference
+*/
+bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const VarRefNode* varref, std::string& ref);
 
 class QoreAOTBinaryDeserializer {
     QoreAOTBinaryReader reader;
@@ -3366,6 +3417,8 @@ public:
 private:
     std::vector<PendingStaticMethodDefault> pending_smd;
     std::vector<PendingNativeExprDefault> pending_ned;
+    //! the default arguments that read a top-level local, which are read again when the top-level locals exist
+    std::vector<PendingNativeExprDefault> pending_top_level_ned;
     std::vector<PendingFunctionDefault> pending_fd;
 
     //! Legacy owned copies used only for deterministic borrowed-blob A/B tests.
@@ -3692,6 +3745,12 @@ public:
     //! expression resolution).  Used by the multi-deserializer AFTER
     //! the single cross-session index rebuild.
     bool finalizePostIndex(std::string& error);
+
+    //! reads the default arguments that read a top-level local, once the top-level locals of the Program exist
+    /** The top-level locals of an AOT executable are set when its top-level code is registered
+        (TopLevelStatementBlock::setLVarsFromAOTContext()), after the default arguments were first read (qore#5868)
+    */
+    bool resolveTopLevelNativeExprDefaults(std::string& error);
 
     //! Install lazy executable IR on source-stripped variants for qcc parse-time calls.
     bool installSourceParseIRFallbacks(std::string& error);

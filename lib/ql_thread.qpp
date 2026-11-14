@@ -45,6 +45,7 @@
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRoutes.h"
+#include "qore/intern/QoreThreadScratch.h"
 
 #include <pthread.h>
 #include <thread>
@@ -2077,7 +2078,7 @@ auto result = channel_select((
 ));
     @endcode
 
-    @throw CHANNEL-SELECT-ERROR invalid case specification
+    @throw CHANNEL-SELECT-ERROR invalid case specification, or the thread's random generator cannot be allocated
     @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
 
     @see @ref Qore::Thread::Channel "Channel"
@@ -2191,7 +2192,18 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS,CUR
     // Create randomized index order for fairness
     std::vector<int> indices(num_cases);
     std::iota(indices.begin(), indices.end(), 0);
-    static thread_local std::mt19937 rng(std::random_device{}());
+    // the generator's state (5000 bytes) is per-thread heap scratch: a static thread_local generator would take its
+    // size from the stack of every thread (see QoreThreadScratch)
+    struct ChannelSelectRng {
+        std::mt19937 rng{std::random_device{}()};
+    };
+    QoreThreadScratch<ChannelSelectRng> rng_scratch;
+    if (!rng_scratch) {
+        xsink->raiseErrnoException("CHANNEL-SELECT-ERROR", ENOMEM,
+            "cannot allocate the random generator of this thread");
+        return QoreValue();
+    }
+    std::mt19937& rng = rng_scratch->rng;
 
     // Helper lambda: try all cases non-blocking, return result hash or nullptr
     // Sets all_dead to true if all channels are in a terminal state (no case can ever succeed)

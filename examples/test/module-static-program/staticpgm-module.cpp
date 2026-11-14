@@ -33,7 +33,11 @@
 
 #include <qore/Qore.h>
 
+#include <cstdlib>
+#include <fstream>
 #include <memory>
+#include <sstream>
+#include <string>
 
 static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void staticpgm_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -89,6 +93,15 @@ static const char* staticpgm_code = R"QORE(
 int sub fib(int n) {
     return n < 2 ? n : fib(n - 1) + fib(n - 2);
 }
+# channel_select() between two ready channels (the thread's scratch random generator)
+int sub select_one() {
+    Channel c1(1);
+    Channel c2(1);
+    c1.send(1);
+    c2.send(2);
+    hash<auto> r = channel_select(({"channel": c1, "op": "recv"}, {"channel": c2, "op": "recv"}));
+    return r.value;
+}
 
 class Teardown {
     private {
@@ -132,12 +145,19 @@ class Teardown {
             hash<string, code> hc = {"a": int sub (int x) { return x + total; }, "b": int sub (int x) { return x * 2; }};
             total += hc.a(1) + hc.b(2);
         }
+        # channel_select() in the main thread from a static destructor at exit: exit() ends the process without
+        # qore_cleanup(), so the thread's data, and its generator, are those that the Program used when it ran
+        for (int i = 0; i < 5; ++i) {
+            total += select_one();
+        }
         string utf = convert_encoding("caf\xc3\xa9", "ISO-8859-1");
         total += utf.size() + convert_encoding(utf, "UTF-8").size();
         total += TeardownConst.size() + TeardownConst2.firstKey().size();
         if (total < 0) {
             printf("unexpected %d\n", total);
         }
+        # the marker that program-cleanup-at-exit.qtest checks: the destructor ran to its end
+        printf("staticpgmcode: teardown complete\n");
     }
 }
 
@@ -145,6 +165,8 @@ const TeardownConst = (1, 2, 3, "a", {"b": 1});
 const TeardownConst2 = {"first": TeardownConst[4], "second": (TeardownConst, 5)};
 
 our Teardown teardown_object();
+# channel_select() in the main thread when the Program runs, so its scratch generator exists before exit
+our int selected = select_one();
 )QORE";
 #endif
 
@@ -152,7 +174,19 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     qph.reset(new QoreProgramHelper(PO_NEW_STYLE, module_xsink));
     (*qph)->setScriptPath("staticpgm module global Program context");
 #ifdef STATICPGM_CODE
-    (*qph)->parse(staticpgm_code, "staticpgmcode", &xsink, &xsink);
+    // a test can give other code in a file: QORE_STATICPGM_CODE_FILE (see program-cleanup-at-exit.qtest)
+    std::string code = staticpgm_code;
+    if (const char* file = getenv("QORE_STATICPGM_CODE_FILE")) {
+        std::ifstream in(file);
+        if (!in) {
+            xsink.raiseException("STATICPGM-ERROR", "cannot read QORE_STATICPGM_CODE_FILE '%s'", file);
+            return;
+        }
+        std::ostringstream str;
+        str << in.rdbuf();
+        code = str.str();
+    }
+    (*qph)->parse(code.c_str(), "staticpgmcode", &xsink, &xsink);
     if (!xsink) {
         (*qph)->run(&xsink);
     }
