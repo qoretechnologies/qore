@@ -5831,6 +5831,11 @@ int qore_class_private::parseInit() {
         err = -1;
     }
 
+    // qore#6027: a generic parent class that is inherited through two paths has the same type arguments in both
+    if (!err && parseCheckGenericParentInstantiations()) {
+        err = -1;
+    }
+
     // issue #5838: a variant that a call typed against a parent class can select must return a compatible type
     if (!err && parseCheckReturnTypeHierarchy()) {
         err = -1;
@@ -6164,6 +6169,91 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
 }
 
 } // namespace
+
+namespace {
+
+//! an instantiation of a generic class that a class inherits, and the direct parent class through which it does
+struct GenericParentSeen {
+    const QoreClass* base;
+    const QoreTypeInfo* type;
+    std::string via;
+};
+
+//! the name of a class type without the "object<>" of its type name: Box<int>
+std::string generic_parent_name(const QoreTypeInfo* type) {
+    std::string str = QoreTypeInfo::getName(type);
+    if (str.compare(0, 7, "object<") == 0 && !str.empty() && str.back() == '>') {
+        return str.substr(7, str.size() - 8);
+    }
+    return str;
+}
+
+//! collects the instantiations of the generic classes that \a cls inherits through all paths, in the order of the
+//! parent classes; returns false and fills \a first and \a second if one class has two different instantiations
+bool collect_generic_parents(const qore_class_private& cls, const QoreTypeInfo* source, const std::string& via,
+        std::vector<GenericParentSeen>& seen, std::unordered_set<const qore_class_private*>& path,
+        GenericParentSeen*& first, GenericParentSeen& second) {
+    if (!cls.scl || !cls.scl->valid) {
+        return true;
+    }
+    for (auto& i : *cls.scl) {
+        QoreClass* pc = i->sclass;
+        if (!pc) {
+            continue;
+        }
+        const qore_class_private* pcp = qore_class_private::get(*pc);
+        // the direct parent of the class that is checked, through which the path goes
+        const std::string pvia = via.empty() ? std::string(pc->getName()) : via;
+        const QoreTypeInfo* subst = nullptr;
+        if (i->type_info) {
+            subst = source ? qore_substitute_type_params_if_needed(i->type_info, source) : i->type_info;
+        }
+        const QoreParameterizedClassTypeInfo* pti = subst ? QoreTypeInfo::getParameterizedClassType(subst) : nullptr;
+        if (pti) {
+            // type arguments that contain a type parameter are known when the class is instantiated
+            const bool concrete = !qore_type_contains_type_parameter(subst);
+            for (auto& s : seen) {
+                if (qore_class_private::sameDeclaration(s.base, pti->getBaseClass()) && concrete
+                        && !qore_type_contains_type_parameter(s.type)
+                        && strcmp(QoreTypeInfo::getName(s.type), QoreTypeInfo::getName(subst))) {
+                    first = &s;
+                    second = {pti->getBaseClass(), subst, pvia};
+                    return false;
+                }
+            }
+            seen.push_back({pti->getBaseClass(), subst, pvia});
+        }
+        if (!path.insert(pcp).second) {
+            continue;
+        }
+        const bool ok = collect_generic_parents(*pcp, pti ? subst : nullptr, pvia, seen, path, first, second);
+        path.erase(pcp);
+        if (!ok) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
+int qore_class_private::parseCheckGenericParentInstantiations() const {
+    if (!scl || !scl->valid) {
+        return 0;
+    }
+    std::vector<GenericParentSeen> seen;
+    std::unordered_set<const qore_class_private*> path;
+    path.insert(this);
+    GenericParentSeen* first = nullptr;
+    GenericParentSeen second;
+    if (collect_generic_parents(*this, nullptr, std::string(), seen, path, first, second)) {
+        return 0;
+    }
+    parse_error(*loc, "class '%s' inherits generic class '%s' with different type arguments: '%s' through '%s' and "
+        "'%s' through '%s'", name.c_str(), second.base->getName(), generic_parent_name(first->type).c_str(),
+        first->via.c_str(), generic_parent_name(second.type).c_str(), second.via.c_str());
+    return -1;
+}
 
 int qore_class_private::parseCheckFinalHierarchy() const {
     // a hierarchy that was rejected (a class that is its own ancestor) has its parse error already
