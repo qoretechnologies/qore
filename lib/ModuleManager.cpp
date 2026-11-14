@@ -1854,8 +1854,12 @@ void QoreUserModuleDefContextHelper::setNameInit(const char* name) {
 
     assert(!po);
 
-    po = pgm->pwo.parse_options;
-    pgm->pwo.parse_options |= MOD_HEADER_PO;
+    {
+        // the options saved are the ones that the header's restrictions are added to (issue #6078)
+        std::lock_guard<std::recursive_mutex> lg(pgm->pwo.parse_options.writeLock());
+        po = pgm->pwo.parse_options;
+        pgm->pwo.parse_options |= MOD_HEADER_PO;
+    }
     // the header's own restrictions do not apply to the functional domains declared on user code
     qore_program_private::setModuleHeaderDomains(*pgm->pgm, static_cast<int64>(MOD_HEADER_PO) & ~po.getLo());
 }
@@ -4679,7 +4683,11 @@ int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModu
     }
     mi->addParseOptionMask(mask);
     if (mpgm && !mask.empty()) {
-        qore_program_private::forceReplaceParseOptions(*mpgm, mask.apply(mpgm->getParseOptions()));
+        {
+            // no other change of the options may come between the read and the replacement (issue #6078)
+            std::lock_guard<std::recursive_mutex> lg(qore_program_private::getParseOptionsWriteLock(*mpgm));
+            qore_program_private::forceReplaceParseOptions(*mpgm, mask.apply(mpgm->getParseOptions()));
+        }
         qore_program_private::setAOTInheritedParseOptions(*mpgm,
             mask.apply(qore_program_private::getAOTInheritedParseOptions(*mpgm)));
     }

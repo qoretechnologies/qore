@@ -44,6 +44,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/qore_program_private.h"
 
 // Macro for JIT runtime functions: check xsink and throw C++ exception
 // if a Qore exception was raised. Used at return points of qore_rt_*
@@ -12379,7 +12380,7 @@ static QORE_ALWAYS_INLINE QoreProgram* qore_rt_function_execution_program(QorePr
 }
 
 //! sets the runtime parse options override of a fast call of a user variant as UserVariantBase::eval() does
-/** See qore_get_user_call_runtime_po_override(): a user variant that runs in a Program other than the one that
+/** See qore_set_user_call_runtime_po_override(): a user variant that runs in a Program other than the one that
     defined it is restricted with the executing Program's restrictions, module code runs with its module's options
     (and a sandboxed caller's restrictions), a call of module code by code of the same module keeps the override in
     effect, and otherwise any override of the caller is cleared for the call.

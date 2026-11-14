@@ -50,6 +50,7 @@ extern QoreHashNode* ENV;
 #include "qore/intern/ReturnStatement.h"
 #include "qore/intern/StreamReader.h"
 #include "qore/intern/StreamWriter.h"
+#include "qore/intern/SyncParseOptions.h"
 
 #include "qore/QoreDebugProgram.h"
 #include "qore/QoreRWLock.h"
@@ -637,6 +638,11 @@ public:
     // structured diagnostics captured during the current/last parse action (cleared on each parse start)
     std::vector<QoreDiagnostic> diagnostics;
 
+    //! the parse and warning options; other threads can read the parse options while they change (issue #6078)
+    /** Declared before \a sb: the top-level statement block copies them when it is constructed (AbstractStatement).
+    */
+    ProgramParseWarnOptions pwo;
+
     // top level statements
     TopLevelStatementBlock sb;
     //! AOT checks every source body and initializer, including code that fragment emission does not lower.
@@ -944,8 +950,6 @@ public:
     int exceptions_raised = 0,
         ptid = 0;      // TID of thread destroying the program's private data
 
-    ParseWarnOptions pwo;
-
     QoreParseOptions dom,      // a mask of functional domains used in this Program
         pend_dom;                // a mask of pending function domains used in this Program
 
@@ -1146,6 +1150,7 @@ public:
 
     DLLLOCAL qore_program_private_base(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm = nullptr)
             : plock(&ma_recursive),
+            pwo(n_parse_options),
             sb(this),
             only_first_except(false),
             po_allow_restrict(true),
@@ -1156,7 +1161,6 @@ public:
             ns_vars(false),
             expression_mode(false),
             parsing_stub_declarations(false),
-            pwo(n_parse_options),
             pgm(n_pgm) {
         printd(QPP_DBG_LVL, "qore_program_private_base::qore_program_private_base() this: %p pgm: %p po: " QLLD "/"
             QLLD "\n", this, pgm, n_parse_options.getHi(), n_parse_options.getLo());
@@ -1306,10 +1310,20 @@ public:
         applyModernSourceDefault()); see issue #5682
     */
     DLLLOCAL void applyParseOptionImplications() {
-        if (isModern(pwo.parse_options)) {
-            assert(!(pwo.parse_options & modernIncompatibleOptions()));
-            pwo.parse_options |= modernImpliedOptions();
+        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+        pwo.parse_options = withImplications(pwo.parse_options);
+    }
+
+    //! Returns the options given with the options that they imply
+    /** A change publishes the options with their implications at once, so that a reader never sees %modern without
+        the options that it implies (issue #6078).
+    */
+    DLLLOCAL static QoreParseOptions withImplications(const QoreParseOptions& po) {
+        if (!isModern(po)) {
+            return po;
         }
+        assert(!(po & modernIncompatibleOptions()));
+        return po | modernImpliedOptions();
     }
 
     DLLLOCAL bool hasModernParseOptions() const {
@@ -1414,8 +1428,9 @@ public:
     }
 
     DLLLOCAL void replaceParseOptionsIntern(const QoreParseOptions& po) {
-        pwo.parse_options = po;
-        applyParseOptionImplications();
+        // the execution mode follows the options; another change must not come between them
+        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+        pwo.parse_options = withImplications(po);
         syncExecModeWithParseOptions();
     }
 
@@ -1427,8 +1442,9 @@ public:
     }
 
     DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
-        pwo.parse_options |= po;
-        applyParseOptionImplications();
+        // the execution mode follows the options; another change must not come between them
+        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+        pwo.parse_options = withImplications(pwo.parse_options | po);
         syncExecModeWithParseOptions();
     }
 
@@ -3068,12 +3084,15 @@ public:
         if (!should_auto_enable_modern(filename)) {
             return 0;
         }
-        if (checkModernSourceDefault(pwo.parse_options, filename, xsink)) {
-            return -1;
+        {
+            // the check and the change are atomic
+            std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+            if (checkModernSourceDefault(pwo.parse_options, filename, xsink)) {
+                return -1;
+            }
+            pwo.parse_options = withImplications(pwo.parse_options | PO_MODERN);
+            syncExecModeWithParseOptions();
         }
-        pwo.parse_options |= PO_MODERN;
-        applyParseOptionImplications();
-        syncExecModeWithParseOptions();
         pgm->setWarningMask(QP_WARN_ALL);
         return 0;
     }
@@ -3391,13 +3410,16 @@ public:
     }
 
     DLLLOCAL void disableParseOptionsIntern(const QoreParseOptions& po) {
-        pwo.parse_options &= ~po;
-        applyParseOptionImplications();
+        // the execution mode follows the options; another change must not come between them
+        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+        pwo.parse_options = withImplications(pwo.parse_options & ~po);
         syncExecModeWithParseOptions();
     }
 
     DLLLOCAL int setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
+        // the checks and the change are atomic
+        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         if (checkSetParseOptions(po)) {
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
@@ -3428,6 +3450,8 @@ public:
 
     DLLLOCAL int disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
+        // the checks and the change are atomic
+        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         // only raise the exception if parse options are locked and the option is not a "free option"
         // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
         if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
@@ -3459,6 +3483,8 @@ public:
     }
 
     DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
+        // the checks and the change are atomic
+        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         // only raise the exception if parse options are locked and the option is not a "free option"
         // also check if options may be made more restrictive and the option also does so
         if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
@@ -3475,6 +3501,8 @@ public:
     }
 
     DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
+        // the checks and the change are atomic
+        std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         // only raise the exception if parse options are locked and the option is not a "free option"
         // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
         if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
@@ -3819,10 +3847,13 @@ public:
         ppo_t::iterator i = ppo.find(pf);
         if (i != ppo.end()) {
             //printd(5, "qore_program_private::restoreParseOptions() this: %p %p '%s' restoring %lld\n", this, pf, pf, pwo.parse_options);
-            pwo.parse_options = i->second;
+            {
+                std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
+                pwo.parse_options = i->second;
+                // the options restored may not support an inherited execution mode that the ones of the file did
+                syncExecModeWithParseOptions();
+            }
             ppo.erase(i);
-            // the options restored may not support an inherited execution mode that the ones of the file did
-            syncExecModeWithParseOptions();
         }
     }
 
@@ -4422,8 +4453,8 @@ public:
 
     //! returns the parse options of the Program, as QoreProgram::getParseOptions() does, without a call into the
     //! library's exported interface
-    DLLLOCAL static const QoreParseOptions& getParseOptions(const QoreProgram& pgm) {
-        return pgm.priv->pwo.parse_options;
+    DLLLOCAL static QoreParseOptions getParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->pwo.parse_options.load();
     }
 
     //! returns true if the Program's constructor has run to completion
@@ -4527,8 +4558,8 @@ public:
         return pgm->priv->runtimeGetCallReference(name, xsink);
     }
 
-    DLLLOCAL static const ParseWarnOptions& getParseWarnOptions(const QoreProgram* pgm) {
-        return pgm->priv->pwo;
+    DLLLOCAL static ParseWarnOptions getParseWarnOptions(const QoreProgram* pgm) {
+        return pgm->priv->pwo.get();
     }
 
     //! Returns the warning mask to parse the other files of a separated module with, after its .qm file was parsed
@@ -4542,15 +4573,17 @@ public:
 
     DLLLOCAL static bool setSaveParseWarnOptions(const QoreProgram* pgm, const ParseWarnOptions &new_opts,
             ParseWarnOptions &old_opts) {
-        if (new_opts == pgm->priv->pwo)
+        std::lock_guard<std::recursive_mutex> lg(pgm->priv->pwo.parse_options.writeLock());
+        if (pgm->priv->pwo == new_opts) {
             return false;
-        old_opts = pgm->priv->pwo;
-        pgm->priv->pwo = new_opts;
+        }
+        old_opts = pgm->priv->pwo.get();
+        pgm->priv->pwo.set(new_opts);
         return true;
     }
 
     DLLLOCAL static void setParseWarnOptions(const QoreProgram* pgm, const ParseWarnOptions &new_opts) {
-        pgm->priv->pwo = new_opts;
+        pgm->priv->pwo.set(new_opts);
     }
 
     DLLLOCAL static bool setThreadVarData(QoreProgram* pgm, ThreadProgramData* td, ThreadLocalProgramData* &tlpd,
@@ -4850,10 +4883,18 @@ public:
         pgm.priv->dom |= n_dom;
     }
 
+    //! Returns the lock that serializes the changes to the parse options of the Program (issue #6078)
+    /** Hold it across a read of the options and the change computed from them, so that no other change is lost
+        between them; it is recursive, and the changes take it again.
+    */
+    DLLLOCAL static std::recursive_mutex& getParseOptionsWriteLock(QoreProgram& pgm) {
+        return pgm.priv->pwo.parse_options.writeLock();
+    }
+
     DLLLOCAL static QoreParseOptions forceReplaceParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
+        std::lock_guard<std::recursive_mutex> lg(pgm.priv->pwo.parse_options.writeLock());
         QoreParseOptions rv = pgm.priv->pwo.parse_options;
-        pgm.priv->pwo.parse_options = po;
-        pgm.priv->applyParseOptionImplications();
+        pgm.priv->pwo.parse_options = withImplications(po);
         pgm.priv->syncExecModeWithParseOptions();
         return rv;
     }
@@ -4862,7 +4903,7 @@ public:
     /** @note must be called by the thread that holds the parse lock of the Program
     */
     DLLLOCAL static int getParseWarningMask(const QoreProgram& pgm) {
-        return pgm.priv->warnSink ? pgm.priv->pwo.warn_mask : 0;
+        return pgm.priv->warnSink ? pgm.priv->pwo.warn_mask.load(std::memory_order_relaxed) : 0;
     }
 
     //! Returns the warning sink of the parse action in progress in the Program if it has warnings enabled and a
@@ -5574,6 +5615,48 @@ private:
     static qore_program_id_t programIdCounter;   // to generate programId
     qore_program_id_t programId;
 };
+
+//! returns true if the Program holds the code of a user module; see qore_program_is_module()
+/** Runs on every call of a user variant (see qore_set_user_call_runtime_po_override()), so it is inlined where the
+    Program's private data is known
+*/
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_program_is_module_inline(const QoreProgram* pgm) {
+    return pgm && qore_program_private::getParseOptions(*pgm).hasAny(QoreParseOptions(PO_IN_MODULE));
+}
+
+//! sets the runtime parse options override for a call of a user variant
+/** - a variant that runs in a Program other than the one that defined it (user code whose Program has released it,
+      which runs in its caller's Program) runs with the executing Program's options forced into its runtime parse
+      options;
+    - the code of a user module (a function or a method of the module, which runs in the module's Program) runs with
+      the module's options and, for a sandboxed caller only, also with the restrictions of its caller, except for the
+      options of get_module_own_access_parse_options(), which are those of the module's Program (see
+      qore_get_module_call_runtime_po_override()); a call of module code by code of the same module keeps the
+      override that is in effect (see runtime_module_call_override_in_effect());
+    - otherwise any override of the caller is cleared for the call.
+
+    Every path that calls a user variant applies it in the same way, so that the call behaves as it does with the AST
+    interpreter.
+
+    @param helper the helper that sets the override, created without one; it sets none if the call keeps the
+    thread's override
+    @param exec_pgm the Program that the variant runs in, or nullptr for the Program that defined it
+    @param uvb the variant
+    @param caller_po the effective options of the code making the call, or nullptr if they are those of \a caller_pgm
+    (see runtime_get_effective_parse_options_for()), which are then determined only if they are needed
+    @param caller_pgm the Program making the call, before the call switched to \a exec_pgm
+*/
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE void qore_set_user_call_runtime_po_override(
+        RuntimeParseOptionsOverrideHelper& helper, const QoreProgram* exec_pgm, const UserVariantBase* uvb,
+        const QoreParseOptions* caller_po, const QoreProgram* caller_pgm) {
+    // the usual case: code that is not module code runs in the Program that defined it and clears the caller's
+    // override
+    if ((!exec_pgm || exec_pgm == uvb->pgm) && !qore_program_is_module_inline(uvb->pgm)) {
+        helper.setCleared();
+        return;
+    }
+    qore_set_user_call_runtime_po_override_slow(helper, exec_pgm, uvb, caller_po, caller_pgm);
+}
 
 class ParseWarnHelper : public ParseWarnOptions {
 protected:

@@ -5312,11 +5312,11 @@ public:
             const UserVariantBase* uvb, QoreProgram* caller_pgm)
             : po_override(exec_pgm, uvb, caller_pgm),
             loc_helper(xsink, uvb->getUserSignature()->getParseLocation(), nullptr,
-                uvb->getParseOptions(exec_pgm->getParseOptions())) {
+                uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm))) {
     }
 
 private:
-    //! sets the override of the call (see qore_get_user_call_runtime_po_override()), if it sets one
+    //! sets the override of the call (see qore_set_user_call_runtime_po_override()), if it sets one
     class CalleeOverride {
     public:
         DLLLOCAL CalleeOverride(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm) {

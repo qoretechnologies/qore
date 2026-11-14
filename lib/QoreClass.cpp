@@ -3907,7 +3907,7 @@ int qore_class_private::runtimeCheckInstantiateClassByName(const QoreClass& qc, 
         }
     }
     // code running in its own Program can also be restricted with the restrictions of its caller (module code
-    // called from a restricted Program; see qore_get_user_call_runtime_po_override()), which only the effective
+    // called from a restricted Program; see qore_set_user_call_runtime_po_override()), which only the effective
     // runtime parse options hold
     if (pgm && pgm == ::getProgram()
             && !qore_parse_options_allow_domain(runtime_get_parse_options(), qc.priv->domain)) {
