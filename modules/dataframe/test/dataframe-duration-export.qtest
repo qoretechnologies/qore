@@ -14,11 +14,32 @@
 
 %exec-class DataFrameDurationExportTest
 
-#! A duration column is exported in the time unit of its schema with the values it holds (qore#6102)
+#! A duration or timestamp column is exported in the time unit of its schema with the values it holds (qore#6102)
 class DataFrameDurationExportTest inherits QUnit::Test {
     constructor() : Test("DataFrameDurationExportTest", "1.0", \ARGV) {
         addTestCase("Arrow IPC round trip", \roundTripTest());
+        addTestCase("timestamps in nanoseconds", \nanoTimestampTest());
         set_return_value(main());
+    }
+
+    #! a timestamp in nanoseconds is exported if it fits in an int64, and raises an error if not, instead of wrapping
+    nanoTimestampTest() {
+        DataFrame::DataFrame in_range = timestampFrame((2024-01-01T10:00:00.123456Z, 1677-09-22T00:12:44Z));
+        list<auto> exported = DataFrame::DataFrame::fromArrowIpc(in_range.toArrowIpc()).getColumn("v");
+        assertTrue(exported[0] == 2024-01-01T10:00:00.123456Z && exported[1] == 1677-09-22T00:12:44Z,
+            sprintf("timestamps in the range: %y", exported));
+        foreach date d in ((2300-01-01T00:00:00Z, 1600-01-01T00:00:00Z)) {
+            DataFrame::DataFrame df = timestampFrame((d,));
+            assertThrows("DATAFRAME-IO-ERROR", \df.toArrowIpc(), (), sprintf("%y", d));
+        }
+    }
+
+    private DataFrame::DataFrame timestampFrame(list<auto> values) {
+        return DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "v": values,
+        }, {
+            "v": {"schema": {"kind": "timestamp", "time_unit": "ns", "timezone": "UTC", "nullable": True}},
+        }));
     }
 
     roundTripTest() {

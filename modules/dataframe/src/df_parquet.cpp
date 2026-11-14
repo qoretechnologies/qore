@@ -1853,6 +1853,13 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
     return new QoreStringNode(scalar_result.ValueOrDie()->ToString());
 }
 
+//! returns the error of a date or duration that does not fit in an int64 of nanoseconds, out of line, as it is rare
+__attribute__((noinline, cold)) static arrow::Status arrowNanosecondOverflow(const char* what, int64_t value,
+        const char* unit) {
+    return arrow::Status::Invalid("the ", what, " of ", value, " ", unit, " cannot be stored in nanoseconds in an "
+        "int64");
+}
+
 static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
         const std::shared_ptr<arrow::DataType>& type, QoreValue val, ExceptionSink* xsink) {
     if (val.isNullOrNothing()) {
@@ -1968,6 +1975,7 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
             } else {
                 auto ts_type = std::static_pointer_cast<arrow::TimestampType>(type);
                 int64_t ts_val = 0;
+                bool overflow = false;
                 switch (ts_type->unit()) {
                     case arrow::TimeUnit::SECOND:
                         ts_val = epoch;
@@ -1979,10 +1987,14 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                         ts_val = epoch * 1000000 + us;
                         break;
                     case arrow::TimeUnit::NANO:
-                        ts_val = epoch * 1000000000 + us * 1000;
+                        // a date after 2262 or before 1677 does not fit in an int64 of nanoseconds
+                        overflow = __builtin_mul_overflow(epoch, static_cast<int64_t>(1000000000), &ts_val)
+                            || __builtin_add_overflow(ts_val, us * 1000, &ts_val);
                         break;
                 }
-                status = static_cast<arrow::TimestampBuilder*>(builder)->Append(ts_val);
+                // one call of the builder, which is inlined
+                status = overflow ? arrowNanosecondOverflow("date", epoch, "seconds after the epoch")
+                    : static_cast<arrow::TimestampBuilder*>(builder)->Append(ts_val);
             }
             break;
         }
@@ -1995,6 +2007,7 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
             auto dur_type = std::static_pointer_cast<arrow::DurationType>(type);
             // each of the relative values is the whole duration in its unit (qore#6102)
             int64_t dv = 0;
+            bool overflow = false;
             switch (dur_type->unit()) {
                 case arrow::TimeUnit::SECOND:
                     dv = dt->getRelativeSeconds();
@@ -2006,15 +2019,12 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                     dv = dt->getRelativeMicroseconds();
                     break;
                 case arrow::TimeUnit::NANO:
-                    if (__builtin_mul_overflow(dt->getRelativeMicroseconds(), static_cast<int64_t>(1000), &dv)) {
-                        status = arrow::Status::Invalid("a duration of ", dt->getRelativeMicroseconds(),
-                            " microseconds cannot be stored in nanoseconds in an int64");
-                    }
+                    overflow = __builtin_mul_overflow(dt->getRelativeMicroseconds(), static_cast<int64_t>(1000), &dv);
                     break;
             }
-            if (status.ok()) {
-                status = static_cast<arrow::DurationBuilder*>(builder)->Append(dv);
-            }
+            // one call of the builder, which is inlined
+            status = overflow ? arrowNanosecondOverflow("duration", dt->getRelativeMicroseconds(), "microseconds")
+                : static_cast<arrow::DurationBuilder*>(builder)->Append(dv);
             break;
         }
         case arrow::Type::DECIMAL128: {
