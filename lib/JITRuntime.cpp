@@ -4595,13 +4595,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_parse_ref_aot_resolved_hash_key(Qor
     return qore_rt_create_parse_ref_resolved_hash_key(node, key_bits, xsink);
 }
 
-static const QoreTypeInfo* get_local_parse_ref_type(LocalVar* lv) {
-    const QoreTypeInfo* ti = lv ? lv->parseGetTypeInfoForInitialAssignment() : nullptr;
-    if (!ti) {
-        return referenceTypeInfo;
-    }
+static const QoreTypeInfo* get_local_parse_ref_target(LocalVar* lv) {
+    const QoreTypeInfo* ti = lv->parseGetTypeInfoForInitialAssignment();
     const QoreTypeInfo* ref_target = QoreTypeInfo::getReferenceTarget(ti);
-    return qore_get_complex_hard_reference_type(ref_target ? ref_target : ti);
+    return qore_substitute_type_params_if_needed(ref_target ? ref_target : ti);
 }
 
 static const QoreTypeInfo* resolve_parse_ref_target_type(const char* ref_type_path, ExceptionSink* xsink) {
@@ -4630,10 +4627,10 @@ static const QoreTypeInfo* resolve_parse_ref_target_type(const char* ref_type_pa
     return qore_substitute_type_params_if_needed(QoreTypeInfo::getUniqueReturnComplexReference(ref_ti));
 }
 
-//! AOT: create a reference to a local variable from slot index
-/** Eliminates EXPR_TREE for \var expressions by resolving the LocalVar*
-    from the AOT context's local slot, constructing a temporary VarRefNode
-    and ParseReferenceNode, and evaluating to produce a ReferenceNode.
+//! AOT: create a reference to a local variable from its promoted storage.
+/** This is the VT_LOCAL_TS path of ParseReferenceNode::doPartialEval(), without creating a transient parse tree.
+    The reference target still comes from the declaration, as for the source expression, rather than the current
+    value. In particular, an unassigned reference local keeps its declared target constraint.
 */
 extern "C" DLLEXPORT uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, int32_t local_slot,
         ExceptionSink* xsink) {
@@ -4643,22 +4640,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, 
         return 0;
     }
     LocalVar* lv = ctx->locals[local_slot];
-    const QoreTypeInfo* ref_ti = get_local_parse_ref_type(lv);
-    // Build a temporary VarRefNode + ParseReferenceNode and evaluate.
-    // Mirror the source parser's setThreadSafe() call (ReferenceNode.cpp:281):
-    // switch the VarRefNode to VT_LOCAL_TS and mark the LocalVar closure_use so
-    // doPartialEval resolves through the closure-var stack instead of taking the
-    // VT_LOCAL fallthrough path.  Without this, evalToRef returns a ReferenceNode
-    // whose vexp is the VT_LOCAL VarRefNode itself — and at lvalue-resolution
-    // time inside the callee, VarRefNode::getLValue walks the closure-var stack
-    // and finds the callee's own CVV (which holds this very reference), producing
-    // a self-referential cycle detected by thread_ref_set() as
-    // CIRCULAR-REFERENCE-ERROR.
-    VarRefNode* vrn = new VarRefNode(&loc_builtin, lv->getName(), lv, false);
-    vrn->setThreadSafe();
-    SimpleRefHolder<ParseReferenceNode> prn(new ParseReferenceNode(&loc_builtin, QoreValue(vrn), ref_ti));
-    ReferenceNode* ref = prn->evalToRef(xsink);
-    return ref ? toBits(QoreValue(ref)) : 0;
+    const QoreTypeInfo* ref_target = get_local_parse_ref_target(lv);
+    // Preserve VarRefNode::setThreadSafe()'s promotion and the self reference's class context.
+    lv->setClosureUse();
+    QoreObject* self = nullptr;
+    const qore_class_private* qc = nullptr;
+    if (lv->isSelf()) {
+        runtime_get_object_and_class(self, qc);
+    }
+    const char* name = lv->getName();
+    ClosureVarValue* cvv = thread_find_closure_var(name);
+    const void* lvalue_id = nullptr;
+    ValueOptionalRefHolder target(cvv->getReference(&loc_builtin, name, lvalue_id), true, xsink);
+    ReferenceNode* ref = new ReferenceNode(*target, ref_target, self, lvalue_id, qc);
+    target.clearTemp();
+    return toBits(QoreValue(ref));
 }
 
 //! AOT: create a reference to a member hash element (\member{key})
