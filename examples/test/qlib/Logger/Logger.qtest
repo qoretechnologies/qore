@@ -1044,7 +1044,6 @@ class Test inherits QUnit::Test {
         return {"entries": entries, "scanned": scanned, "calls": calls};
     }
 
-    #! issue #5817: a file larger than max_scanned_bytes is searched within the budget, and next_cursor gets further
     #! writes the given text to a file, replacing its data but keeping its inode
     private static rewriteInPlace(string fn, string text) {
         File f();
@@ -1224,8 +1223,81 @@ class Test inherits QUnit::Test {
             "cursor": sprintf("v2:0:%d:forward:%s", 100, sources[0].source_fingerprint)});
         assertEq(1, res.result_count);
         assertEq(151, res.entries[0].line);
+
+        # the default budget: a call reads about the budget (in chunks and blocks), not the source
+        *string dcursor;
+        int dcalls = 0;
+        while (True) {
+            hash<auto> dreq = {"text": "never matches"};
+            if (dcursor) {
+                dreq.cursor = dcursor;
+            }
+            res = LoggerSearchUtil::searchRenderedEvents(la, dreq);
+            if (++dcalls > 1) {
+                assertTrue(res.read_bytes <= LoggerSearchUtil::DefaultMaxScannedBytes + 8 * 65536,
+                    sprintf("default budget call %d read %d", dcalls, res.read_bytes));
+            }
+            if (!res.next_cursor) {
+                break;
+            }
+            dcursor = res.next_cursor;
+        }
+        assertEq(2, dcalls);
+
+        # context lines across the calls of a v3 chain have the line numbers of the lines they show
+        hash<auto> cr = followSearch(la, {"text": "JI 5856:", "context_before": 2, "context_after": 2}, 4096, 1000);
+        assertEq((9, 10, 11, 12, 13), (map $1.line, cr.entries));
+        assertEq(("before", "before", "match", "after", "after"), (map $1.context, cr.entries));
+        assertEq(size, cr.scanned);
+
+        # forward, the last line of an active source without a terminator is not scanned until it is complete, so
+        # that the cursor after it is not in the middle of a line once the writer completes it
+        string part_fn = tmp_location() + DirSep + unique_name + "-search-v3-partial.log";
+        on_exit unlink(part_fn);
+        f.open2(part_fn, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("m1 needle\nm2 needle\nm3 partial");
+        f.close();
+        LoggerAppenderFile part_la("V3PART", new LoggerLayoutPattern("%m%n"), part_fn);
+        res = LoggerSearchUtil::searchRenderedEvents(part_la, {"text": "needle", "direction": "forward",
+            "max_scanned_bytes": LoggerSearchUtil::UnlimitedScannedBytes});
+        assertEq(2, res.result_count);
+        assertEq(20, res.scanned_bytes);
+        f.open2(part_fn, O_WRONLY | O_APPEND);
+        f.write(" needle\n");
+        f.close();
+        res = LoggerSearchUtil::searchRenderedEvents(part_la, {"text": "needle", "direction": "forward",
+            "limit": 2});
+        string pcursor = res.next_cursor;
+        res = LoggerSearchUtil::searchRenderedEvents(part_la, {"text": "needle", "direction": "forward",
+            "cursor": pcursor});
+        assertEq("ok", res.status, res.reason);
+        assertEq(1, res.result_count);
+        assertEq("m3 partial needle", res.entries[0].message);
+
+        # an inactive source (a rotated file) whose last line has no terminator: a cursor after it, at the end of the
+        # source, is a valid end of its scan
+        string rot_fn = tmp_location() + DirSep + unique_name + "-search-v3-rotated.log";
+        LoggerAppenderFileRotate rota("V3ROT", new LoggerLayoutPattern("%m%n"), rot_fn, 2);
+        list<string> rot_files = (rot_fn, rota.getArchiveFileName(1), rota.getArchiveFileName(2));
+        on_exit map unlink($1), rot_files;
+        f.open2(rota.getArchiveFileName(1), O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("r1 needle\nr2 needle");
+        f.close();
+        f.open2(rot_fn, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("a1 other\n");
+        f.close();
+        list<hash<auto>> rsources = LoggerSearchUtil::getAppenderSearchSources(rota, {"direction": "forward"});
+        assertEq(rota.getArchiveFileName(1), rsources[0].path);
+        res = LoggerSearchUtil::searchRenderedEvents(rota, {"text": "needle", "direction": "forward", "limit": 2});
+        assertEq(2, res.result_count);
+        assertEq("r2 needle", res.entries[1].message);
+        res = LoggerSearchUtil::searchRenderedEvents(rota, {"text": "needle", "direction": "forward",
+            "cursor": res.next_cursor});
+        assertEq("ok", res.status, res.reason);
+        assertEq(0, res.result_count);
     }
 
+    #! issue #5817: a file larger than max_scanned_bytes is searched within the budget, and next_cursor gets further
     testLoggerSearchScanBudget() {
         string fn = tmp_location() + DirSep + unique_name + "-search-budget.log";
         unlink(fn);
@@ -1354,7 +1426,9 @@ class Test inherits QUnit::Test {
             r = followSearch(raw_la, {"text": "needle", "direction": dir}, 5, 10);
             assertEq(1, r.entries.size(), dir);
             assertEq(4, r.entries[0].line, dir);
-            assertEq(raw.size(), r.scanned, dir);
+            # forward, the last line of the active file, which has no terminator, is still being written and is not
+            # scanned (issue #5856)
+            assertEq(dir == "forward" ? raw.size() - "last".size() : raw.size(), r.scanned, dir);
         }
         # context lines are returned with a match and are not counted in the budget
         r = followSearch(raw_la, {"text": "needle", "context_before": 1, "context_after": 1}, 5, 10);
