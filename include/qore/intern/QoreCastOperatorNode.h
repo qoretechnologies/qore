@@ -82,6 +82,7 @@ class QoreCastOperatorNode : public QoreSingleExpressionOperatorNode<> {
 public:
     DLLLOCAL QoreCastOperatorNode(const QoreProgramLocation* loc, QoreValue exp)
             : QoreSingleExpressionOperatorNode<>(loc, exp) {
+        setCastOperator();
     }
 
     DLLLOCAL virtual ~QoreCastOperatorNode() = default;
@@ -386,5 +387,20 @@ protected:
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 };
+
+//! Returns the node as a QoreCastOperatorNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const QoreCastOperatorNode*>(), from a flag that the QoreCastOperatorNode
+    constructor sets, so that it covers all of its subclasses: a dynamic_cast searches the class hierarchy with string
+    comparisons of the type names, which is too slow for the resolution of every lvalue.  Every node with
+    NT_OPERATOR is a QoreOperatorNode.
+*/
+DLLLOCAL inline const QoreCastOperatorNode* qore_get_cast_operator_node(const AbstractQoreNode* n) {
+    const QoreCastOperatorNode* rv = (n && n->getType() == NT_OPERATOR
+            && static_cast<const QoreOperatorNode*>(n)->isCastOperator())
+        ? static_cast<const QoreCastOperatorNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const QoreCastOperatorNode*>(n));
+    return rv;
+}
 
 #endif
