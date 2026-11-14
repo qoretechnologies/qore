@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A closure called while a deeper recursive frame of the function that created it runs uses its own captured
+# binding, not the variable of the same name in the frame that calls it (issue #6050): the IR interpreter's inline
+# closure call had no frame boundary, so the captured variable resolved to the calling frame's variable, for reads
+# and writes, and its integer shortcuts preferred a variable of the same name found on the thread's stack.  See
+# ClosureRecursiveFrame.qtest.
+
+list<code> cbs;
+
+# closures created in frames 3, 2 and 1, all called in the innermost frame
+sub reads(int n) {
+    if (n > 0) {
+        cbs += string sub () { return sprintf("n=%d", n); };
+        reads(n - 1);
+    } else {
+        printf("reads in the innermost frame: %s\n", (map $1(), cbs).join(" "));
+    }
+}
+
+# a closure that writes its captured variable, called in a deeper frame: the creating frame's variable changes
+code inc;
+sub writes(int n) {
+    if (n > 0) {
+        inc = int sub () { return ++n; };
+        writes(n - 1);
+        printf("writes: frame %d sees n=%d after the call in the inner frame\n", 1, n);
+    } else {
+        int r = inc();
+        printf("writes: the closure returns %d; the inner frame keeps n=%d\n", r, n);
+    }
+}
+
+# an integer expression of a captured variable (the IR interpreter's native leaf)
+code add;
+sub arith(int n) {
+    if (n > 0) {
+        add = int sub (int x) { return n + x; };
+        arith(n - 1);
+    } else {
+        printf("arith: n + 100 = %d\n", add(100));
+    }
+}
+
+# a closure whose body only increments its captured variable (the IR interpreter's increment shortcut)
+code inc_only;
+sub incs(int n) {
+    if (n > 0) {
+        inc_only = sub () { ++n; };
+        incs(n - 1);
+        printf("increment only: frame %d sees n=%d\n", 1, n);
+    } else {
+        inc_only();
+        printf("increment only: the inner frame keeps n=%d\n", n);
+    }
+}
+
+# float and string expressions of a captured variable (the IR interpreter's native leaves)
+code addf;
+code adds;
+sub leaves(int n, float f, string s) {
+    if (n > 0) {
+        addf = float sub (float x) { return f + x; };
+        adds = string sub (string x) { return s + x; };
+        leaves(n - 1, 0.0, "inner");
+    } else {
+        printf("leaves: %y %s\n", addf(0.5), adds("!"));
+    }
+}
+
+# a closure created in a method's recursive frame
+class C {
+    private {
+        code cb;
+    }
+
+    m(int n) {
+        if (n > 0) {
+            cb = string sub () { return sprintf("method n=%d", n); };
+            m(n - 1);
+        } else {
+            printf("%s\n", cb());
+        }
+    }
+}
+
+# a nested closure created in a recursive closure call
+code outer;
+code inner;
+outer = sub (int n) {
+    if (n > 0) {
+        inner = string sub () { return sprintf("nested n=%d", n); };
+        outer(n - 1);
+    } else {
+        printf("%s\n", inner());
+    }
+};
+
+# each is run several times, so that the code also runs once it has IR or is compiled
+for (int i = 0; i < 3; ++i) {
+    cbs = ();
+    reads(3);
+    writes(1);
+    arith(1);
+    incs(1);
+    leaves(1, 1.5, "outer");
+    (new C()).m(2);
+    outer(2);
+}
