@@ -217,7 +217,10 @@ static std::vector<int64_t> computeWindowOrder(
 
 // Check if two rows are in the same partition: their partition cells are equal as sortBy() compares them, null
 // values being equal only to null values (qore#6100)
-static bool samePartition(const std::vector<Column>& columns,
+/** @param cmp_xsink a sink for the comparisons of the cells of a column that holds any value, made once by the
+    caller and not per row
+*/
+static bool samePartition(ExceptionSink& cmp_xsink, const std::vector<Column>& columns,
         const std::vector<size_t>& part_col_idx, int64_t a, int64_t b) {
     for (size_t ci : part_col_idx) {
         const ColumnData& cd = *columns[ci].data;
@@ -229,11 +232,10 @@ static bool samePartition(const std::vector<Column>& columns,
             }
             continue;
         }
-        // the cells were compared when the rows were ordered, so a comparison error cannot happen here; it would
-        // make other partitions; the sink is made only for the columns that can raise one (a NaN value)
+        // the cells were compared when the rows were ordered, so a comparison error (a NaN value) cannot happen
+        // here; it would make other partitions; only a column that holds any value needs a sink to compare its cells
         int cmp = 0;
-        if (cd.type == ColumnType::AUTO || cd.type == ColumnType::FLOAT64) {
-            ExceptionSink cmp_xsink;
+        if (cd.type == ColumnType::AUTO) {
             if (windowCompareCells(cd, a, b, cmp, &cmp_xsink) || cmp) {
                 cmp_xsink.clear();
                 return false;
@@ -926,6 +928,7 @@ QoreListNode* QoreDataFrame::rowNumber(const QoreHashNode* spec,
 
     // Resolve partition columns
     std::vector<size_t> part_col_idx;
+    ExceptionSink part_xsink;
     for (const auto& pc : ws.partition_by) {
         auto it = col_index.find(pc);
         if (it != col_index.end()) {
@@ -937,7 +940,7 @@ QoreListNode* QoreDataFrame::rowNumber(const QoreHashNode* spec,
     std::vector<int64_t> result(n_rows);
     int64_t rank = 1;
     for (int64_t i = 0; i < n_rows; ++i) {
-        if (i == 0 || !samePartition(columns, part_col_idx, indices[i], indices[i - 1])) {
+        if (i == 0 || !samePartition(part_xsink, columns, part_col_idx, indices[i], indices[i - 1])) {
             rank = 1;
         }
         result[indices[i]] = rank++;
@@ -971,6 +974,7 @@ QoreListNode* QoreDataFrame::lag(const std::string& column, int64_t offset,
     }
 
     std::vector<size_t> part_col_idx;
+    ExceptionSink part_xsink;
     for (const auto& pc : ws.partition_by) {
         auto it = col_index.find(pc);
         if (it != col_index.end()) {
@@ -987,7 +991,7 @@ QoreListNode* QoreDataFrame::lag(const std::string& column, int64_t offset,
         int64_t pos = orig_to_out[orig];
         int64_t src_pos = pos - offset;
         // a negative offset looks ahead: the source row can be on either side
-        if (src_pos < 0 || src_pos >= n_rows || !samePartition(columns, part_col_idx,
+        if (src_pos < 0 || src_pos >= n_rows || !samePartition(part_xsink, columns, part_col_idx,
                 indices[pos], indices[src_pos])) {
             list->push(QoreValue(), xsink);  // NOTHING — out of partition
         } else {
@@ -1020,6 +1024,7 @@ QoreListNode* QoreDataFrame::lead(const std::string& column, int64_t offset,
     }
 
     std::vector<size_t> part_col_idx;
+    ExceptionSink part_xsink;
     for (const auto& pc : ws.partition_by) {
         auto it = col_index.find(pc);
         if (it != col_index.end()) {
@@ -1034,7 +1039,7 @@ QoreListNode* QoreDataFrame::lead(const std::string& column, int64_t offset,
         int64_t pos = orig_to_out[orig];
         int64_t src_pos = pos + offset;
         // a negative offset looks back: the source row can be on either side
-        if (src_pos < 0 || src_pos >= n_rows || !samePartition(columns, part_col_idx,
+        if (src_pos < 0 || src_pos >= n_rows || !samePartition(part_xsink, columns, part_col_idx,
                 indices[pos], indices[src_pos])) {
             list->push(QoreValue(), xsink);
         } else {
@@ -1067,6 +1072,7 @@ QoreListNode* QoreDataFrame::cumSum(const std::string& column,
     }
 
     std::vector<size_t> part_col_idx;
+    ExceptionSink part_xsink;
     for (const auto& pc : ws.partition_by) {
         auto it = col_index.find(pc);
         if (it != col_index.end()) {
@@ -1079,7 +1085,7 @@ QoreListNode* QoreDataFrame::cumSum(const std::string& column,
     double running = 0;
 
     for (int64_t i = 0; i < n_rows; ++i) {
-        if (i == 0 || !samePartition(columns, part_col_idx, indices[i], indices[i - 1])) {
+        if (i == 0 || !samePartition(part_xsink, columns, part_col_idx, indices[i], indices[i - 1])) {
             running = 0;
         }
         int64_t row = indices[i];
@@ -1118,6 +1124,7 @@ QoreListNode* QoreDataFrame::rollingMean(const std::string& column,
     }
 
     std::vector<size_t> part_col_idx;
+    ExceptionSink part_xsink;
     for (const auto& pc : ws.partition_by) {
         auto it = col_index.find(pc);
         if (it != col_index.end()) {
@@ -1131,7 +1138,7 @@ QoreListNode* QoreDataFrame::rollingMean(const std::string& column,
 
     int64_t part_start = 0;
     for (int64_t i = 0; i < n_rows; ++i) {
-        if (i == 0 || !samePartition(columns, part_col_idx, indices[i], indices[i - 1])) {
+        if (i == 0 || !samePartition(part_xsink, columns, part_col_idx, indices[i], indices[i - 1])) {
             part_start = i;
         }
         int64_t win_start = std::max(part_start, i - window_size + 1);

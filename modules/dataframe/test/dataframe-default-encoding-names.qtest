@@ -44,6 +44,9 @@ class DataFrameDefaultEncodingNamesTest inherits QUnit::Test {
         assertEq(make_hex_string(binary("null")), written."csv-null", "a null string given in UTF-8");
         assertEq(make_hex_string(binary("DATAFRAME-ENCODING-ERROR")), written."csv-null-euro",
             "a null string that ISO-8859-1 cannot represent");
+        assertEq(make_hex_string(binary("null")), written."csv-null-short", "a null string that is a short string");
+        assertEq(make_hex_string(binary("found")), written."missing-column-desc",
+            "a column name from the file in an error message");
         assertEq(utf8, read."read-column", "the column name in the file, read with UTF-8");
         assertEq(utf8, read."read-key", "the hash key in the file, read with UTF-8");
         assertEq(utf8, read."read-map-key", "the map key in the file, read with UTF-8");

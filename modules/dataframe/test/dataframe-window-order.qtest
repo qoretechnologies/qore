@@ -71,6 +71,15 @@ class DataFrameWindowOrderTest inherits QUnit::Test {
         assertThrows("NAN-COMPARE-ERROR", \df.rowNumber(), {"order_by": ("v",)}, "a float64 NaN");
         DataFrame::DataFrame any({"v": (c'z', @nan@, 0.5)});
         assertThrows("NAN-COMPARE-ERROR", \any.rowNumber(), {"order_by": ("v",)}, "a NaN in an auto column");
+        # the other window functions
+        hash<auto> spec = {"order_by": ("v",)};
+        assertThrows("NAN-COMPARE-ERROR", \df.lag(), ("v", 1, spec), "lag");
+        assertThrows("NAN-COMPARE-ERROR", \df.lead(), ("v", 1, spec), "lead");
+        assertThrows("NAN-COMPARE-ERROR", \df.cumSum(), ("v", spec), "cumSum");
+        assertThrows("NAN-COMPARE-ERROR", \df.rollingMean(), ("v", 2, spec), "rollingMean");
+        # a NaN in a partition key
+        DataFrame::DataFrame part({"p": (1.0, @nan@, 1.0), "v": (1, 2, 3)});
+        assertThrows("NAN-COMPARE-ERROR", \part.cumSum(), ("v", {"partition_by": ("p",)}), "a partition key");
     }
 
     #! lag(), lead(), cumSum() and rollingMean() with several partition and order keys of different types

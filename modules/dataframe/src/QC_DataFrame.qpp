@@ -1886,6 +1886,7 @@ list<int> DataFrame::rowNumber(*hash<auto> spec) [flags=RET_VALUE_ONLY] {
     @param spec optional WindowSpec hash
     @return list of values (NOTHING at partition boundaries)
 
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<auto> DataFrame::lag(string column, int offset = 1, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->lag(dataFrameStdString(column), offset, spec, xsink);
@@ -1898,6 +1899,7 @@ list<auto> DataFrame::lag(string column, int offset = 1, *hash<auto> spec) [flag
     @param spec optional WindowSpec hash
     @return list of values (NOTHING at partition boundaries)
 
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<auto> DataFrame::lead(string column, int offset = 1, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->lead(dataFrameStdString(column), offset, spec, xsink);
@@ -1908,6 +1910,7 @@ list<auto> DataFrame::lead(string column, int offset = 1, *hash<auto> spec) [fla
     @param spec optional WindowSpec hash
     @return list of cumulative sums
 
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<auto> DataFrame::cumSum(string column, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->cumSum(dataFrameStdString(column), spec, xsink);
@@ -1919,6 +1922,7 @@ list<auto> DataFrame::cumSum(string column, *hash<auto> spec) [flags=RET_VALUE_O
     @param spec optional WindowSpec hash
     @return list of rolling mean values (NOTHING when window has no data)
 
+    @throw NAN-COMPARE-ERROR if a NaN value of a partition or order column is compared with another value
 */
 list<auto> DataFrame::rollingMean(string column, int window_size, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
     return df->rollingMean(dataFrameStdString(column), static_cast<int64_t>(window_size), spec, xsink);

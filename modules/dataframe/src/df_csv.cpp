@@ -245,9 +245,10 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
         if (v.getType() == NT_STRING) {
             // the fields are compared in the default encoding, in which they are read; a string that it cannot
             // represent raises DATAFRAME-ENCODING-ERROR (qore#6100)
-            const QoreStringNode* str = v.get<const QoreStringNode>();
+            // a short string is stored in the value, with no string node
+            QoreStringDataHelper str(v);
             std::string utf8;
-            if (dataFrameUtf8Bytes(str->c_str(), str->size(), str->getEncoding(), utf8, xsink)
+            if (dataFrameUtf8Bytes(str.c_str(), str.size(), str.getEncoding(), utf8, xsink)
                     || dataFrameDefaultString(utf8, null_string, xsink)) {
                 return nullptr;
             }

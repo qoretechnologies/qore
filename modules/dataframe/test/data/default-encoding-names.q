@@ -94,6 +94,20 @@ if (mode == "write") {
         DataFrame::DataFrame euro_csv = DataFrame::DataFrame::readCSV(dir + "/null.csv",
             <DataFrame::CsvOptions>{"null_string": binary_to_string(<e282ac>, "UTF-8")});
     });
+    # a null string from a string cell, which is a short string with no string node
+    DataFrame::DataFrame cells({"s": ("x", "yz")});
+    DataFrame::DataFrame short_csv = DataFrame::DataFrame::readCSV(dir + "/null.csv",
+        <DataFrame::CsvOptions>{"null_string": cells.toRecords()[0].s});
+    out("csv-null-short", exists short_csv.getColumn("v")[1] ? "value" : "null");
+    # an error message with a column name from the file, which is in UTF-8, in the default encoding
+    try {
+        DataFrame::DataFrame missing = DataFrame::DataFrame::readParquet(dir + "/names.parquet",
+            <DataFrame::ParquetReadOptions>{"columns": ("nope",)});
+        out("missing-column-desc", "none");
+    } catch (hash<ExceptionInfo> ex) {
+        out("missing-column-desc", convert_encoding(ex.desc, get_default_encoding()).find(cafe) >= 0
+            ? "found" : "missing");
+    }
 } else if (mode == "read") {
     DataFrame::DataFrame read = DataFrame::DataFrame::readParquet(dir + "/names.parquet");
     out("read-column", read.columnNames()[0]);

@@ -535,9 +535,11 @@ static std::vector<int> qoreParquetColumnIndicesForNames(
                 }
                 available_names << value;
             }
-            xsink->raiseException("DATAFRAME-IO-ERROR",
-                "Parquet file has no top-level column '%s'; available columns: %s",
-                name.c_str(), available_names.str().c_str());
+            // the names are in UTF-8, the encoding of Arrow names (qore#6100)
+            QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+            desc->sprintf("Parquet file has no top-level column '%s'; available columns: %s", name.c_str(),
+                available_names.str().c_str());
+            xsink->raiseException("DATAFRAME-IO-ERROR", desc);
             return {};
         }
     }
@@ -1145,9 +1147,10 @@ static std::shared_ptr<arrow::Table> qoreParquetReorderTopLevelColumns(
         }
         int index = table->schema()->GetFieldIndex(names[i]);
         if (index < 0) {
-            xsink->raiseException("DATAFRAME-IO-ERROR",
-                "Parquet projection did not produce top-level column '%s'",
-                names[i].c_str());
+            // the name is in UTF-8, the encoding of Arrow names (qore#6100)
+            QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+            desc->sprintf("Parquet projection did not produce top-level column '%s'", names[i].c_str());
+            xsink->raiseException("DATAFRAME-IO-ERROR", desc);
             return nullptr;
         }
         if (std::find(indices.begin(), indices.end(), index) == indices.end()) {
@@ -1879,29 +1882,34 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                 }
                 // a hash key is in the default encoding; a key that it cannot represent raises
                 // DATAFRAME-ENCODING-ERROR, as a column or field name does (qore#6100)
-                std::string key_utf8;
                 std::string key_buf;
-                const std::string* key;
-                // a string read from Arrow is in UTF-8
-                if (key_val->getType() == NT_STRING
-                        && key_val->get<const QoreStringNode>()->getEncoding() == QCS_UTF8) {
-                    key_utf8 = dataFrameStdString(key_val->get<const QoreStringNode>());
-                    key = &qoreNameRef(key_utf8, key_buf, xsink);
+                const char* key;
+                size_t key_len;
+                // a string read from Arrow is in UTF-8; a short string is stored in the value, with no string node
+                QoreStringDataHelper key_data(*key_val);
+                if (key_data && key_data.getEncoding() == QCS_UTF8 && QCS_DEFAULT == QCS_UTF8) {
+                    key = key_data.c_str();
+                    key_len = key_data.size();
                 } else {
-                    QoreStringValueHelper key_str(*key_val, QCS_DEFAULT, xsink);
-                    key_buf = dataFrameStdString(*key_str);
-                    key = &key_buf;
+                    if (key_data && key_data.getEncoding() == QCS_UTF8) {
+                        dataFrameConvertFromUtf8(std::string(key_data.c_str(), key_data.size()), QCS_DEFAULT,
+                            key_buf, xsink);
+                    } else {
+                        QoreStringValueHelper key_str(*key_val, QCS_DEFAULT, xsink);
+                        key_buf = dataFrameStdString(*key_str);
+                    }
+                    key = key_buf.c_str();
+                    key_len = key_buf.size();
                 }
                 // a map key with a NUL character cannot be a hash key; the value cannot be read to a hash
-                if (*xsink || QoreHashNode::checkKey(key->data(), key->size(), "DATAFRAME-IO-ERROR", "map key",
-                        xsink)) {
+                if (*xsink || QoreHashNode::checkKey(key, key_len, "DATAFRAME-IO-ERROR", "map key", xsink)) {
                     return QoreValue();
                 }
                 QoreValue item_val = arrowScalarToQore(items, start + i, xsink);
                 if (*xsink) {
                     return QoreValue();
                 }
-                hash->setKeyValue(key->c_str(), item_val, xsink);
+                hash->setKeyValue(key, item_val, xsink);
             }
             return hash.release();
         }
@@ -2312,8 +2320,10 @@ static QoreBufferNode* tryArrowFixedWidthColumnToDenseBuffer(
     std::shared_ptr<arrow::Array> chunk = arr->chunk(0);
     std::shared_ptr<arrow::ArrayData> data = chunk->data();
     if (!data || data->buffers.size() < 2 || !data->buffers[1]) {
-        xsink->raiseException("DATAFRAME-IO-ERROR",
-            "Arrow column '%s' has no fixed-width data buffer", field->name().c_str());
+        // the name is in UTF-8, the encoding of Arrow names (qore#6100)
+        QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+        desc->sprintf("Arrow column '%s' has no fixed-width data buffer", field->name().c_str());
+        xsink->raiseException("DATAFRAME-IO-ERROR", desc);
         return nullptr;
     }
 
