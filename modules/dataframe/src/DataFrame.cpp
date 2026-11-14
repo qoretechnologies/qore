@@ -2500,6 +2500,46 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
     return selectRows(perm, xsink);
 }
 
+//! Copies the rows of a dense buffer to a dense buffer of the same element type, from the given row of the target
+/** A fixed-width element is copied as it is stored (see selectRows()); a bool or string element is copied as a
+    value.
+
+    @return 0 for success, -1 if an exception was raised
+*/
+static int copyDenseBufferRows(const QoreBufferNode& src, QoreBufferNode& dst, size_t offset, ExceptionSink* xsink) {
+    size_t n = src.size();
+    QoreBufferElementType element_type = src.getElementType();
+    size_t width = element_type == QoreBufferElementType::Bool || element_type == QoreBufferElementType::String
+        ? 0 : qore_buffer_element_storage_size(element_type);
+    const uint8_t* src_data = width ? static_cast<const uint8_t*>(src.getRawData()) : nullptr;
+    uint8_t* dst_data = src_data && n ? static_cast<uint8_t*>(dst.getRawData()) : nullptr;
+    if (!dst_data) {
+        for (size_t i = 0; i < n; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "concatenating dense DataFrame rows")) {
+                return -1;
+            }
+            ValueHolder value(src.getReferencedEntry(i, xsink), xsink);
+            if (*xsink || dst.setEntry(offset + i, *value, xsink)) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+    memcpy(dst_data + offset * width, src_data, n * width);
+    const uint8_t* src_validity = src.getRawValidityData();
+    size_t validity_offset = src.getRawValidityBitOffset();
+    for (size_t i = 0; src_validity && i < n; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "concatenating dense DataFrame rows")) {
+            return -1;
+        }
+        size_t bit = validity_offset + i;
+        if (!(src_validity[bit / 8] & (uint8_t(1) << (bit % 8))) && dst.setEntry(offset + i, QoreValue(), xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
         ExceptionSink* xsink) {
     if (!dataframes || dataframes->empty()) {
@@ -2548,6 +2588,38 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
         const std::vector<Column>& first_columns = snapshots[0].columns;
         size_t num_cols = first_columns.size();
 
+        // a column with dense storage (a float32 or decimal128 column, for example) whose source columns all have
+        // dense storage of the same element type and decimal metadata (or are missing, which gives nulls) is
+        // concatenated as dense storage, which keeps its element type and columnar schema (qore#6097)
+        std::vector<bool> dense(num_cols, false);
+        for (size_t c = 0; c < num_cols; ++c) {
+            const ColumnData& first = *first_columns[c].data;
+            if (!first.hasDenseBuffer()) {
+                continue;
+            }
+            bool same = true;
+            for (size_t d = 1; same && d < snapshots.size(); ++d) {
+                auto it = snapshots[d].col_index.find(first_columns[c].name);
+                if (it == snapshots[d].col_index.end()) {
+                    continue;
+                }
+                const ColumnData& src = *snapshots[d].columns[it->second].data;
+                same = src.hasDenseBuffer() && src.type == first.type
+                    && src.dense_buffer_type == first.dense_buffer_type
+                    && src.dense_buffer->getDecimalPrecision() == first.dense_buffer->getDecimalPrecision()
+                    && src.dense_buffer->getDecimalScale() == first.dense_buffer->getDecimalScale();
+            }
+            dense[c] = same;
+        }
+        // the columns concatenated as lists of values
+        std::vector<size_t> list_cols;
+        list_cols.reserve(num_cols);
+        for (size_t c = 0; c < num_cols; ++c) {
+            if (!dense[c]) {
+                list_cols.push_back(c);
+            }
+        }
+
         // the value lists of the result columns, dereferenced on every exit
         struct ColumnValues {
             std::vector<QoreListNode*> lists;
@@ -2590,10 +2662,11 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                 if (r && !(r % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame rows")) {
                     return nullptr;
                 }
-                for (size_t c = 0; c < num_cols; ++c) {
-                    if (c && !(c % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame columns")) {
+                for (size_t k = 0; k < list_cols.size(); ++k) {
+                    if (k && !(k % 100) && qore_check_cancel(xsink, "vertically concatenating DataFrame columns")) {
                         return nullptr;
                     }
+                    size_t c = list_cols[k];
                     if (sources[c]) {
                         QoreValue v = sources[c]->getValueAt(r, xsink);
                         if (*xsink) {
@@ -2617,9 +2690,39 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
             }
             Column col;
             col.name = first_columns[c].name;
-            col.data = buildColumnData(col_values.lists[c], first_columns[c].data->type, xsink);
-            if (*xsink) {
-                return nullptr;
+            if (dense[c]) {
+                const ColumnData& first = *first_columns[c].data;
+                ReferenceHolder<QoreBufferNode> buffer(new QoreBufferNode(first.dense_buffer_type, true,
+                    static_cast<size_t>(total_rows), first.dense_buffer->getDecimalPrecision(),
+                    first.dense_buffer->getDecimalScale()), xsink);
+                size_t offset = 0;
+                for (size_t d = 0; d < snapshots.size(); ++d) {
+                    auto it = snapshots[d].col_index.find(col.name);
+                    if (it == snapshots[d].col_index.end()) {
+                        // a DataFrame without the column gives null values
+                        for (int64_t r = 0; r < snapshots[d].n_rows; ++r) {
+                            if (buffer->setEntry(offset + static_cast<size_t>(r), QoreValue(), xsink)) {
+                                return nullptr;
+                            }
+                        }
+                    } else if (copyDenseBufferRows(*snapshots[d].columns[it->second].data->dense_buffer, **buffer,
+                            offset, xsink)) {
+                        return nullptr;
+                    }
+                    offset += static_cast<size_t>(snapshots[d].n_rows);
+                }
+                col.data = buildColumnDataFromDenseRows(first, *buffer, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (first.has_columnar_schema) {
+                    preserveColumnarSchema(*col.data, col.name, first.columnar_schema);
+                }
+            } else {
+                col.data = buildColumnData(col_values.lists[c], first_columns[c].data->type, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
             }
             result->col_index[col.name] = result->columns.size();
             result->columns.push_back(std::move(col));

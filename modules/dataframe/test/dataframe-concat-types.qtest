@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-concat-types.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameConcatTypesTest
+
+#! A vertical concat() keeps the element type and columnar schema of a column with dense storage, as a float32 or
+#! decimal128 column, when every DataFrame has the same kind of column or none (qore#6097)
+class DataFrameConcatTypesTest inherits QUnit::Test {
+    constructor() : Test("DataFrameConcatTypesTest", "1.0", \ARGV) {
+        addTestCase("float32", \float32Test());
+        addTestCase("decimal128", \decimalTest());
+        addTestCase("timestamp", \timestampTest());
+        set_return_value(main());
+    }
+
+    float32Test() {
+        # NaN, 1.5, inf, null, -inf and -2.25 in a float32 column (data/gen-filter-fixtures.cpp)
+        DataFrame::DataFrame df = DataFrame::DataFrame::readParquet(get_script_dir() + DirSep + "data" + DirSep
+            + "dense_float32.parquet");
+        DataFrame::DataFrame both = DataFrame::DataFrame::concat((df.slice(1, 3), df.slice(4, 6)));
+        hash<auto> schema = getSchema(both, "v");
+        assertEq("float32", schema.buffer_type, "the column is still a float32 buffer");
+        assertEq((1.5, @inf@, -@inf@, -2.25), both.getColumn("v"), "the values");
+    }
+
+    decimalTest() {
+        DataFrame::DataFrame df = decimalFrame((1.25n, -1n, NOTHING), 10, 2);
+        DataFrame::DataFrame other = decimalFrame((2.5n,), 10, 2);
+        DataFrame::DataFrame both = DataFrame::DataFrame::concat((df, other, df.select(("id",))));
+        hash<auto> schema = getSchema(both, "v");
+        assertEq(("decimal128", 10, 2), (schema.kind, schema.precision, schema.scale), "the decimal type");
+        assertEq((1.25n, -1n, NOTHING, 2.5n, NOTHING, NOTHING, NOTHING), both.getColumn("v"),
+            "the values, and nulls for a DataFrame without the column");
+        # columns with another scale are concatenated as columns that hold any value
+        DataFrame::DataFrame other_scale = decimalFrame((2.5n,), 10, 1);
+        DataFrame::DataFrame mixed = DataFrame::DataFrame::concat((df, other_scale));
+        assertEq((1.25n, -1n, NOTHING, 2.5n), mixed.getColumn("v"), "the values of decimal columns of two scales");
+    }
+
+    timestampTest() {
+        list<auto> dates = (2024-01-01T10:00:00Z, NOTHING, 1969-12-31T23:59:59.5Z);
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "v": dates,
+        }, {
+            "v": {"schema": {"kind": "timestamp", "time_unit": "us", "timezone": "UTC", "nullable": True}},
+        }));
+        DataFrame::DataFrame both = DataFrame::DataFrame::concat((df, df));
+        assertEq("date", both.dtypes()[0], "a date column");
+        assertEq("timestamp", getSchema(both, "v").kind, "a timestamp column");
+        assertEq(dates + dates, both.getColumn("v"), "the values");
+    }
+
+    private DataFrame::DataFrame decimalFrame(list<auto> values, int precision, int scale) {
+        return DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": range(values.size()),
+            "v": values,
+        }, {
+            "v": {"schema": {"kind": "decimal128", "precision": precision, "scale": scale, "nullable": True}},
+        }));
+    }
+
+    private hash<auto> getSchema(DataFrame::DataFrame df, string name) {
+        foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
+            if (column.name == name) {
+                return column;
+            }
+        }
+        return {};
+    }
+}
