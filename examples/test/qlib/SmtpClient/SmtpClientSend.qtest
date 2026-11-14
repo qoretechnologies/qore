@@ -64,6 +64,10 @@ class MockSmtpServer {
         string certificate = CertPem;
         #! If True, advertise the SMTPUTF8 extension (RFC 6531)
         bool offer_smtputf8 = False;
+        #! The EHLO keyword line advertised for SMTPUTF8
+        string smtputf8_keyword = "SMTPUTF8";
+        #! If True, the SMTPUTF8 keyword is the last line of the EHLO reply
+        bool smtputf8_last = False;
     }
 
     constructor(bool require_auth = True, *string certificate) {
@@ -99,9 +103,11 @@ class MockSmtpServer {
         return secure;
     }
 
-    #! Advertises the SMTPUTF8 extension in the EHLO reply
-    setSmtpUtf8(bool offer = True) {
+    #! Advertises the SMTPUTF8 extension in the EHLO reply, with the given keyword line, as the last line or not
+    setSmtpUtf8(bool offer = True, string keyword = "SMTPUTF8", bool last = False) {
         offer_smtputf8 = offer;
+        smtputf8_keyword = keyword;
+        smtputf8_last = last;
     }
 
     setImplicitTls() {
@@ -247,10 +253,14 @@ class MockSmtpServer {
                 if (!auth_after_tls || secure) {
                     client.send(sprintf("250-AUTH %s\r\n", auth_mechanisms));
                 }
-                if (offer_smtputf8) {
-                    client.send("250-SMTPUTF8\r\n");
+                if (offer_smtputf8 && smtputf8_last) {
+                    client.send(sprintf("250 %s\r\n", smtputf8_keyword));
+                } else {
+                    if (offer_smtputf8) {
+                        client.send(sprintf("250-%s\r\n", smtputf8_keyword));
+                    }
+                    client.send("250 OK\r\n");
                 }
-                client.send("250 OK\r\n");
             } else if (line =~ /^HELO /i) {
                 client.send("250 mock.smtp.test Hello\r\n");
             } else if (line =~ /^STARTTLS$/i) {
@@ -281,7 +291,7 @@ class MockSmtpServer {
                 }
             } else if (line =~ /^MAIL FROM:/i) {
                 # RFC 5321 section 4.1.1.11: an unknown parameter is refused
-                if (line =~ / SMTPUTF8$/i && !offer_smtputf8) {
+                if (line =~ / SMTPUTF8$/i && (!offer_smtputf8 || smtputf8_keyword.upr() != "SMTPUTF8")) {
                     client.send("555 5.5.4 SMTPUTF8 not supported\r\n");
                 } else {
                     client.send("250 2.1.0 OK\r\n");
@@ -375,6 +385,8 @@ public class SmtpClientSendTest inherits QUnit::Test {
         addTestCase("envelope addresses (issue #6066)", \testEnvelopeAddresses());
         addTestCase("SMTPUTF8 addresses (issue #6066)", \testSmtpUtf8());
         addTestCase("SMTPUTF8 addresses refused without server support (issue #6066)", \testSmtpUtf8Unsupported());
+        addTestCase("SMTPUTF8 keyword detection (issue #6066)", \testSmtpUtf8Keyword());
+        addTestCase("SMTPUTF8 for non-ASCII header addresses (issue #6066)", \testSmtpUtf8HeaderAddress());
         addTestCase("send poll operation API", \testSendPollOperationApi());
         addTestCase("send with no recipients error", \testNoRecipientsError());
         addTestCase("XOAUTH2 send", \testXoauth2Send());
@@ -957,21 +969,35 @@ public class SmtpClientSendTest inherits QUnit::Test {
 
         MailMessage::Message msg("John <J.O'B@test.com>", "Envelope Test");
         msg.addTO("Ann <a+tag@test.com>");
-        msg.addCC("\"x y\"@test.com");
+        msg.addCC("\"x.y\"@test.com");
         msg.addBCC("Jöhn <j{x}|y~@test.com>");
         msg.setBody("Hello");
 
         hash<auto> reply = smtp.sendMessage(msg);
-        assertEq(("a+tag@test.com", "\"x y\"@test.com", "j{x}|y~@test.com"), keys reply.RCPT);
+        assertEq(("a+tag@test.com", "\"x.y\"@test.com", "j{x}|y~@test.com"), keys reply.RCPT);
 
         list<string> cmds = server.getReceivedCommands();
         assertEq(("MAIL FROM: <J.O'B@test.com>",), (select cmds, $1 =~ /^MAIL FROM:/i));
-        assertEq(("RCPT TO: <a+tag@test.com>", "RCPT TO: <\"x y\"@test.com>", "RCPT TO: <j{x}|y~@test.com>"),
+        assertEq(("RCPT TO: <a+tag@test.com>", "RCPT TO: <\"x.y\"@test.com>", "RCPT TO: <j{x}|y~@test.com>"),
             (select cmds, $1 =~ /^RCPT TO:/i));
         # only the display name is encoded in the BCC header
         assertRegex("\r\nBCC: =\\?UTF-8\\?B\\?[^?]+\\?= <j\\{x\\}\\|y~@test\\.com>\r\n",
             server.getReceivedBody() ?? "");
         assertNothing(server.getServerError(), "no server errors");
+
+        # a quoted local part with a "<", a ">" or white space is not sent in an SMTP command
+        foreach string addr in ("\"x y\"@test.com", "\"a> SMTPUTF8 x\"@test.com", "\"a<b\"@test.com") {
+            MailMessage::Message m("sender@test.com", "Envelope Test");
+            m.addTO(addr);
+            m.setBody("Hello");
+            assertThrows("MESSAGE-ERROR", "quoted local part", sub () { SmtpSendPollOperation op(smtp, m); }, NOTHING,
+                addr);
+            m = new MailMessage::Message(addr, "Envelope Test");
+            m.addTO("a@test.com");
+            m.setBody("Hello");
+            assertThrows("MESSAGE-ERROR", "quoted local part", sub () { SmtpSendPollOperation op(smtp, m); }, NOTHING,
+                addr);
+        }
     }
 
     #! issue #6066: an address with non-ASCII characters is sent with the SMTPUTF8 parameter
@@ -1057,6 +1083,106 @@ public class SmtpClientSendTest inherits QUnit::Test {
             }
         }
         assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! issue #6066: the SMTPUTF8 keyword is found in any case, as a continuation or as the last line of the EHLO
+    #! reply, on a new and on an existing connection, and only as a whole keyword
+    testSmtpUtf8Keyword() {
+        foreach hash<auto> i in ({"keyword": "smtputf8", "last": False, "ok": True},
+                {"keyword": "SmtpUtf8", "last": True, "ok": True},
+                {"keyword": "SMTPUTF8", "last": True, "ok": True},
+                {"keyword": "XSMTPUTF8", "last": False, "ok": False},
+                {"keyword": "SMTPUTF8X", "last": False, "ok": False},
+                {"keyword": "X-SMTPUTF8", "last": False, "ok": False}) {
+            MockSmtpServer server(True);
+            server.setSmtpUtf8(True, i.keyword, i."last");
+            server.start();
+            on_exit server.wait();
+            string url = sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort());
+            string label = sprintf("%y last: %y", i.keyword, i."last");
+
+            foreach string mode in ("implicit", "connected", "poll") {
+                SmtpClient smtp(url);
+                MailMessage::Message msg("s@test.com", "Keyword Test");
+                msg.addTO("jörg@müller.de");
+                msg.setBody("Hello");
+                code send = sub () {
+                    if (mode == "poll") {
+                        SmtpSendPollOperation op(smtp, msg);
+                        runPollOp(op);
+                    } else {
+                        if (mode == "connected") {
+                            smtp.connect();
+                        }
+                        smtp.sendMessage(msg);
+                    }
+                };
+                if (i.ok) {
+                    send();
+                    assertEq("MAIL FROM: <s@test.com> SMTPUTF8",
+                        (select server.getReceivedCommands(), $1 =~ /^MAIL FROM:/i).last(), label + " " + mode);
+                } else {
+                    assertThrows("SMTP-SEND-ERROR", "does not support the SMTPUTF8 extension", send, NOTHING,
+                        label + " " + mode);
+                    smtp.forceDisconnect();
+                }
+            }
+            assertNothing(server.getServerError(), label);
+        }
+    }
+
+    #! issue #6066: a message whose header has an address with non-ASCII characters needs SMTPUTF8, even if its
+    #! envelope addresses are ASCII
+    testSmtpUtf8HeaderAddress() {
+        foreach bool offer in (False, True) {
+            MockSmtpServer server(True);
+            server.setSmtpUtf8(offer);
+            server.start();
+            on_exit server.wait();
+            string url = sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort());
+
+            foreach string mode in ("implicit", "connected", "poll") {
+                SmtpClient smtp(url);
+                MailMessage::Message msg("s@test.com", "Header Test");
+                # the envelope recipient is the first address, a@test.com
+                msg.addTO("Ann <a@test.com>, jörg@müller.de");
+                msg.setBody("Hello");
+                assertEq(("a@test.com",), msg.getRecipients());
+                code send = sub () {
+                    if (mode == "poll") {
+                        SmtpSendPollOperation op(smtp, msg);
+                        runPollOp(op);
+                    } else {
+                        if (mode == "connected") {
+                            smtp.connect();
+                        }
+                        smtp.sendMessage(msg);
+                    }
+                };
+                if (offer) {
+                    send();
+                    assertEq("MAIL FROM: <s@test.com> SMTPUTF8",
+                        (select server.getReceivedCommands(), $1 =~ /^MAIL FROM:/i).last(), mode);
+                    assertRegex("\r\nTo: Ann <a@test\\.com>, jörg@müller\\.de\r\n", server.getReceivedBody() ?? "",
+                        mode);
+                } else {
+                    assertThrows("SMTP-SEND-ERROR", "does not support the SMTPUTF8 extension.*header", send,
+                        NOTHING, mode);
+                    smtp.forceDisconnect();
+                }
+            }
+            assertNothing(server.getServerError());
+        }
+        # an ASCII message is sent without SMTPUTF8 to a server that does not support it
+        MockSmtpServer server(True);
+        server.start();
+        on_exit server.wait();
+        SmtpClient smtp(sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort()));
+        MailMessage::Message msg("Jörg <s@test.com>", "Header Test");
+        msg.addTO("Ann <a@test.com>, Müller <m@test.com>");
+        msg.setBody("Hellö");
+        smtp.sendMessage(msg);
+        assertEq("MAIL FROM: <s@test.com>", (select server.getReceivedCommands(), $1 =~ /^MAIL FROM:/i).last());
     }
 
     #! Execute a poll operation through the global AsyncIoController and block until done

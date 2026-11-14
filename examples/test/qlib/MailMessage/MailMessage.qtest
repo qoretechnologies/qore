@@ -39,6 +39,9 @@ public class Main inherits QUnit::Test {
         addTestCase("Test addresses of parsed messages (issue #6066)", \testParsedAddresses(), NOTHING);
         addTestCase("Test header line endings and control characters (issue #6066)", \testHeaderEncoding(),
             NOTHING);
+        addTestCase("Test address header round trips (issue #6066)", \testAddressRoundTrips(), NOTHING);
+        addTestCase("Test address header folding (issue #6066)", \testAddressFolding(), NOTHING);
+        addTestCase("Test long address headers (issue #6066)", \testLongAddressHeaders(), NOTHING);
 
         set_return_value(main());
     }
@@ -1488,6 +1491,12 @@ lorem ipsum\r
             assertEq(msg.getSender(), (new Message(parsed.serializeRaw())).getSender(), name);
         }
     }
+    #! returns the string with its folded lines unfolded, as a message is parsed
+    private static string unfold(string str) {
+        str =~ s/\r\n[ \t]+/ /g;
+        return str;
+    }
+
     #! returns the header lines with the given name, with their folded lines
     private static list<string> getHeaderLines(string hdr, string name) {
         list<string> l = (hdr =~ x/^([^ \t\r\n:]+: .*?\r\n)(?![ \t])/gms) ?? ();
@@ -1516,7 +1525,38 @@ lorem ipsum\r
         assertNothing(Message::getEmailAddress("\"a\r\nb\"@x.com"));
         # an address in an encoded word is not an address
         assertNothing(Message::getEmailAddress("=?UTF-8?Q?=3Cj@x.com=3E?="));
+        assertNothing(Message::getEmailAddress("=?UTF-8?Q?j@x.com?="));
+        assertNothing(Message::getEmailAddress("=?utf-8?q?x_<j@x.com>?="));
+        assertNothing(Message::getEmailAddress("=?UTF-8?Q?j@x.com_(J=C3=B6rg)?="));
+        assertNothing(Message::getEmailAddress("=?UTF-8?Q?a,b@x.com?="));
+        assertEq("a@x.com", Message::getEmailAddress("=?UTF-8?Q?x_<j@x.com>?= <a@x.com>"));
+        assertEq("a@x.com", Message::getEmailAddress("=?UTF-8?Q?j@x.com_?= a@x.com"));
         assertNothing(Message::getEmailAddress("no address"));
+
+        # an address in quotes, brackets or braces (ex: CSV data), or followed by a URL query or path
+        foreach string str in ("'j@x.com'", "\"j@x.com\"", "[j@x.com]", "{j@x.com}", " \"j@x.com\" ", "j@x.com/",
+                "j@x.com?subject=hi", "<mailto:j@x.com>", "mailto:j@x.com", "John [j@x.com]", "\"John\" j@x.com",
+                "name: j@x.com;", "(c) j@x.com", "j@x.com#x", "j@x.com&y") {
+            assertEq("j@x.com", Message::getEmailAddress(str), str);
+        }
+        # text that is not an address
+        foreach string str in ("abc@def@ghi.com", "j @x.com", "a@@b.com", "@x.com", "j@") {
+            assertNothing(Message::getEmailAddress(str), str);
+        }
+
+        # Unicode white space and control and format characters are not part of an address, and are trimmed
+        foreach string sp in ("\u00a0", "\u2028", "\u2029", "\u0085", "\u3000") {
+            assertEq("a@x.com", Message::getEmailAddress("a@x.com" + sp), sprintf("%y", sp));
+            assertEq("a@x.com", Message::getEmailAddress(sp + "a@x.com"), sprintf("%y", sp));
+            assertEq("a@x.com", Message::getEmailAddress("Ann <a@x.com" + sp + ">"), sprintf("%y", sp));
+            assertEq("b@x.com", Message::getEmailAddress("a" + sp + "b@x.com"), sprintf("%y", sp));
+            # as with an ASCII space
+            assertEq("b@x.com", Message::getEmailAddress("<a" + sp + "b@x.com>"), sprintf("%y", sp));
+            assertFalse(Message::checkEmailAddress("<a" + sp + "@x.com>"), sprintf("%y", sp));
+        }
+        foreach string ch in ("\x01", "\x7f", "\u0080", "\u009f", "\u00ad", "\u200b", "\u200e") {
+            assertFalse(Message::checkEmailAddress("a" + ch + "b@x.com" + ch), sprintf("%y", ch));
+        }
 
         # the recipients and the sender are the whole addresses
         Message msg("Jörg <jörg@müller.de>", Subject);
@@ -1546,7 +1586,7 @@ lorem ipsum\r
         string db = mime_encode_header_word_b("Doe, Jörg");
         assertEq((
             sprintf("To: %s <j@x.com>\r\n", jb),
-            sprintf("To: %s <j@x.com>, %s <d@x.com>, plain@x.com, Ann <a@x.com>\r\n", jb, db),
+            sprintf("To: %s <j@x.com>, %s <d@x.com>,\r\n plain@x.com, Ann <a@x.com>\r\n", jb, db),
             "To: John <jörg@müller.de>\r\n",
             "To: jörg@müller.de\r\n",
         ), getHeaderLines(hdr, "To"));
@@ -1562,14 +1602,15 @@ lorem ipsum\r
         assertEq(msg.getRecipients(), parsed.getRecipients());
         assertEq(("j@x.com", "a@x.com", "jörg@müller.de", "jörg@müller.de", "d@x.com", "d@x.com", "m@x.com"),
             parsed.getRecipients());
-        # and written again as it was parsed
-        assertEq(msg.serializeRaw(), parsed.serializeRaw());
+        # and written again as it was parsed (a folded header is parsed as one line)
+        assertEq(unfold(msg.serializeRaw()), parsed.serializeRaw());
 
-        # a value that is not a list of mailboxes is encoded as a whole, as before
+        # a value that is not a list of mailboxes has only its text encoded, not its address
         msg = new Message(Sender, Subject);
         msg.addTO("Jöhn j@x.com");
         msg.setBody("body");
-        assertEq((Message::doHeaderValue("To", "Jöhn j@x.com"),), getHeaderLines(msg.getHeaderString(), "To"));
+        assertEq((sprintf("To: %s j@x.com\r\n", mime_encode_header_word_b("Jöhn")),),
+            getHeaderLines(msg.getHeaderString(), "To"));
 
         # a line break in a display name or after an address cannot end the header line
         foreach string rcpt in ("Jöhn\r\nBcc: victim@x.com <j@x.com>", "\"Jöhn\r\nBcc: victim@x.com\" <j@x.com>",
@@ -1613,7 +1654,7 @@ lorem ipsum\r
         string hdr = parsed.getHeaderString();
         string jb = mime_encode_header_word_b("Jöhn");
         assertEq(sprintf("From: %s <j@x.com>\r\n", jb), getFromLine(hdr));
-        assertEq((sprintf("To: %s <j@x.com>, %s <m@x.com>, plain@x.com\r\n", jb,
+        assertEq((sprintf("To: %s <j@x.com>,\r\n %s <m@x.com>, plain@x.com\r\n", jb,
             mime_encode_header_word_b("Müller, Jörg")),), getHeaderLines(hdr, "To"));
         assertEq((sprintf("CC: %s <jm@x.com>\r\n", mime_encode_header_word_b("Jörg Müller")),),
             getHeaderLines(hdr, "CC"));
@@ -1622,12 +1663,115 @@ lorem ipsum\r
         assertEq(parsed.getCC(), reparsed.getCC());
         assertEq(parsed.getRecipients(), reparsed.getRecipients());
         # the headers written with encoded display names are written again as they were parsed
-        assertEq(parsed.getHeaderString(), reparsed.getHeaderString());
+        assertEq(unfold(parsed.getHeaderString()), reparsed.getHeaderString());
 
         # a recipient added to a parsed message
         parsed.addTO("Ann <a@x.com>");
         assertEq(("j@x.com", "a@x.com", "jm@x.com"), parsed.getRecipients());
         assertEq("To: Ann <a@x.com>\r\n", getHeaderLines(parsed.getHeaderString(), "To")[1]);
+    }
+
+    # issue #6066: a message created with a recipient that is not a list of mailboxes (a mailbox with a comment, a
+    # group, a display name without angle brackets) is written with its addresses as they are and only its other
+    # text encoded, and it is parsed again with the same recipients
+    testAddressRoundTrips() {
+        foreach hash<auto> i in (
+                {"in": "Jöhn j@x.com", "rcpt": "j@x.com"},
+                {"in": "j@x.com (Jörg)", "rcpt": "j@x.com", "hdr": "To: j@x.com (" + mime_encode_header_word_b("Jörg")
+                    + ")"},
+                {"in": "jörg@müller.de (Jörg)", "rcpt": "jörg@müller.de"},
+                {"in": "Jörg <j@x.com> (c)", "rcpt": "j@x.com"},
+                {"in": "\"Jörg\" <j@x.com>", "rcpt": "j@x.com"},
+                {"in": "Grüppe: a@x.com, b@x.com;", "rcpt": "a@x.com", "hdr": "To: "
+                    + mime_encode_header_word_b("Grüppe") + ": a@x.com, b@x.com;"},
+                {"in": "Müller, Jörg <m@x.com>, Ann <a@x.com>", "rcpt": "a@x.com"},
+                {"in": "Jörg <j@x.com>, ,b@x.com", "rcpt": "j@x.com"},
+                {"in": "Jörg <j@x.com>,", "rcpt": "j@x.com"},
+                {"in": "(a,b) Jörg <j@x.com>", "rcpt": "j@x.com"},
+                {"in": "Jörg <j@[192.0.2.1]>", "rcpt": "j@[192.0.2.1]"},
+                {"in": "\"a,b\" <a@x.com>, Jö <c@x.com>", "rcpt": "c@x.com"},
+                {"in": "Jö <a@x.com>, \"unterminated <b@x.com>", "rcpt": "b@x.com"},
+                {"in": "Jö (x <a@x.com>", "rcpt": "a@x.com"},
+                {"in": "Jö <a@x.com>, plain@x.com, (c) Ann <a2@x.com>", "rcpt": "a2@x.com"},
+                {"in": "Jö =?UTF-8?Q?x?= <a@x.com>", "rcpt": "a@x.com"},
+                {"in": "\"=?UTF-8?Q?=3Cvictim@x.com=3E?=\" Jö <a@x.com>", "rcpt": "a@x.com"},
+                {"in": "Jö \"jö rg\"@x.com", "rcpt": "\"jö rg\"@x.com"},
+                {"in": "\"Jörg j@x.com\"", "rcpt": "j@x.com"},
+                {"in": "Jö'j@x.com'", "rcpt": "Jö'j@x.com"},
+                {"in": "Jö j@x.com/ö", "rcpt": "j@x.com"},
+                {"in": "Jö\tj@x.com (c)", "rcpt": "j@x.com"},
+            ) {
+            Message msg(Sender, Subject);
+            msg.addTO(i."in");
+            msg.setBody("body");
+            assertEq((i.rcpt,), msg.getRecipients(), i."in");
+            string hdr = msg.getHeaderString();
+            list<string> to = getHeaderLines(hdr, "To");
+            assertEq(1, to.size(), i."in");
+            # only printable ASCII text and the addresses are written
+            assertTrue(replace(to[0], i.rcpt, "").substr(0, -2).isDataPrintableAscii(), i."in");
+            if (i.hdr) {
+                assertEq(i.hdr + "\r\n", to[0], i."in");
+            }
+            string ser = msg.serializeRaw();
+            Message parsed(ser);
+            assertEq(msg.getRecipients(), parsed.getRecipients(), i."in");
+            Message reparsed(parsed.serializeRaw());
+            assertEq(msg.getRecipients(), reparsed.getRecipients(), i."in");
+            assertEq(parsed.serializeRaw(), reparsed.serializeRaw(), i."in");
+        }
+    }
+
+    # issue #6066: a list of mailboxes is folded before a mailbox that would make the line longer than 76
+    # characters
+    testAddressFolding() {
+        list<string> l = ();
+        for (int i = 0; i < 40; ++i) {
+            l += sprintf("Jörg Müller %d <joerg.mueller%d@example.com>", i, i);
+        }
+        foreach string eol in ("\r\n", "\n") {
+            Message msg(Sender, Subject);
+            msg.addTO(l.join(", "));
+            msg.addCC("Jörg Müller <j@x.com>, " + (map sprintf("plain%d@x.com", $1), xrange(20)).join(", "));
+            msg.setBody("body");
+            string hdr = msg.getHeaderString(eol);
+            foreach string line in (hdr.split(eol)) {
+                assertLe(78, line.size(), line);
+            }
+            if (eol == "\n") {
+                assertNRegex("\r", hdr);
+            }
+            Message parsed(msg.serializeRaw());
+            assertEq(msg.getRecipients(), parsed.getRecipients());
+            # the recipients are the same mailboxes
+            assertEq(l.join(", "), parsed.getTO()[0]);
+            assertEq(40, (parsed.getTO()[0] =~ x/(<joerg\.mueller[0-9]+@example\.com>)/g).size());
+        }
+    }
+
+    # issue #6066: an address header is parsed and written in a time linear in its length
+    testLongAddressHeaders() {
+        foreach string prefix in ("a", "ö") {
+            foreach string val in (prefix + "<" + strmul("\t", 20000) + ">x", prefix + "<" + strmul(" ", 20000) + "x<",
+                    prefix + strmul("<a", 10000), prefix + strmul(" \"a", 10000), prefix + strmul("a,", 10000)) {
+                date start = now_us();
+                Message parsed("From: a@x.com\r\nTo: " + val + "\r\nSubject: s\r\n\r\nbody\r\n");
+                string hdr = parsed.getHeaderString();
+                parsed.getRecipients();
+                Message reparsed(parsed.serializeRaw());
+                date elapsed = now_us() - start;
+                # a quadratic time would take minutes
+                assertLt(5s, elapsed, sprintf("%y...: %y", val.substr(0, 10), elapsed));
+                assertEq(1, getHeaderLines(hdr, "To").size());
+                assertEq(parsed.getRecipients(), reparsed.getRecipients());
+            }
+        }
+        # several such headers
+        string val = "a<" + strmul("\t", 20000) + ">x";
+        date start = now_us();
+        Message parsed("From: a@x.com\r\n" + strmul("To: " + val + "\r\n", 10) + "Subject: s\r\n\r\nbody\r\n");
+        parsed.serializeRaw();
+        assertLt(20s, now_us() - start);
     }
 
     # issue #6066: encoded words are folded with the line ending of the header, and a header value that is not

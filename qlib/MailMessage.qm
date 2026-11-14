@@ -159,16 +159,21 @@ msg.addTO("My Best Friend <you@friend.com>");
       address alone (<a href="https://github.com/qoretechnologies/qore/issues/6019">issue 6019</a>)
     - Address handling and header encoding fixes
       (<a href="https://github.com/qoretechnologies/qore/issues/6066">issue 6066</a>):
-      - only the display names of the \c To, \c CC and \c BCC headers are encoded (as RFC 2047 \c "B" encoded
-        words), never the addresses; a value with a non-ASCII display name was written as one \c "Q" encoded word
-        with its address, which a mail client cannot read as an address
+      - only the display names and the other text of the \c To, \c CC and \c BCC headers are encoded (as RFC 2047
+        \c "B" encoded words), never the addresses, also in a mailbox with a comment, a group or a name without
+        angle brackets; a value with a non-ASCII display name was written as one \c "Q" encoded word with its
+        address, which a mail client cannot read as an address; a list of mailboxes is folded so that its lines are
+        at most 76 characters long
       - @ref MailMessage::Message::getEmailAddress() "Message::getEmailAddress()" returns the whole address with
-        every RFC 5322 \c atext character (ex: <tt>J.O'B\@x.com</tt> was returned as <tt>B\@x.com</tt>), and
-        accepts quoted local parts and non-ASCII (internationalized) addresses, which were rejected
+        every RFC 5322 \c atext character (ex: <tt>J.O'B\@x.com</tt> was returned as <tt>B\@x.com</tt>), accepts
+        quoted local parts and non-ASCII (internationalized) addresses, which were rejected, and returns an
+        address in quotes, brackets or braces (as in CSV data); an encoded word, white space (including Unicode
+        white space) and text before an address are never part of the address returned
       - the sender and recipient addresses of a parsed message are taken from the raw headers, so that an address
         in an encoded word is not taken as the sender's or a recipient's address, and the \c From, \c To, \c CC
-        and \c BCC headers of a parsed message are written again as they were parsed, or with only their display
-        names encoded if they have raw non-ASCII text; they were written decoded and encoded again as a whole
+        and \c BCC headers of a parsed message are written again as they were parsed, or with only their text
+        encoded if they have raw non-ASCII text; they were written decoded and encoded again as a whole; a header is
+        always written with the address that its value gives, so that a parsed message is sent to the same address
       - encoded words are folded with the line ending given to
         @ref MailMessage::Message::getHeaderString() "Message::getHeaderString()" (it was always CRLF), and a header
         value that is not encoded cannot contain any control character other than horizontal tab (only NUL, CR and LF
@@ -1253,44 +1258,112 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     /** An email address is an RFC 5322 \c addr-spec (section 3.4.1): a local part, which is a sequence of \c atext
         characters (letters, digits and <tt>!#$%&'*+-/=?^_`{|}~</tt>) and dots, or a quoted string (ex:
         <tt>"John Doe"\@example.com</tt>), then \c "@" and a domain, which is a host name or a domain literal in
-        square brackets (ex: \c "[192.0.2.1]"); non-ASCII characters are accepted in the local part and in the
-        domain (internationalized email addresses and domain names, RFC 6531 and RFC 6532).  An address cannot
-        contain control characters, so it cannot end a header or command line.
+        square brackets (ex: \c "[192.0.2.1]").  Non-ASCII letters, marks, digits, punctuation and symbols are
+        accepted in the local part and in the domain (internationalized email addresses and domain names, RFC 6531
+        and RFC 6532), but no white space (such as a no-break space) or control character, so that an address
+        cannot end a header or command line.
 
         @param str an email address, or a display name and an email address in angle brackets (ex:
         \c "John Doe <john@example.com>")
 
-        @return the email address: the address in angle brackets at the end of the string if there is one, otherwise
-        the string if it is an address, otherwise the first email address found in the string that is not part of
-        another word, or @ref nothing if there is none
+        @return the email address, or @ref nothing if there is none; RFC 2047 encoded words in the string are text,
+        never part of an address, and the white space around the string (including Unicode white space) is ignored:
+        - the address in quotes, square brackets or braces, if the string is an address in them (ex:
+          <tt>"j\@x.com"</tt> or <tt>'j\@x.com'</tt>, as in CSV data)
+        - the address in angle brackets at the end of the string
+        - the string, if it is an address
+        - otherwise the first address in the string that starts after white space or one of <tt>,;:<>()[]"</tt> (or
+          at the start of the string) and ends before white space, one of <tt>,;:<>()[]"'/?#&{}</tt> or the end of
+          the string (ex: \c "j@x.com" for <tt>"j\@x.com (John)"</tt> or <tt>"j\@x.com?subject=hi"</tt>)
 
         @note an address with non-ASCII characters can only be sent to an SMTP server that supports the \c SMTPUTF8
         extension (RFC 6531); see @ref SmtpClient::SmtpClient::sendMessage() "SmtpClient::sendMessage()"
 
         @since MailMessage 1.5.1 the address in angle brackets at the end of the string is returned when there is
-        one; the first text that looked like an address was returned, which could be in the display name; an
-        address is returned whole with every \c atext character in its local part (ex: <tt>J.O'B\@x.com</tt>; the
-        text after the last character that was not a letter, a digit or one of <tt>-._+=</tt> was returned:
-        <tt>B\@x.com</tt>), a quoted local part and non-ASCII characters are accepted, and the text before an
-        address is no longer returned with it
+        one; the first text that looked like an address was returned, which could be in the display name or in an
+        encoded word.  An address is returned whole with every \c atext character in its local part (ex:
+        <tt>J.O'B\@x.com</tt>; the text after the last character that was not a letter, a digit or one of
+        <tt>-._+=</tt> was returned: <tt>B\@x.com</tt>), and quoted local parts and non-ASCII characters are
+        accepted.  Text that is not an address is no longer returned: the text before an address separated from it
+        by spaces (<tt>"John Doe john\@x.com"</tt> gave <tt>"John Doe john\@x.com"</tt>, and gives
+        <tt>"john\@x.com"</tt>), text with a space before the \c "@" (<tt>"j \@x.com"</tt>), and an address that is
+        part of a longer word (<tt>"abc\@def\@ghi.com"</tt> gave <tt>"abc\@def"</tt>; the local part of
+        <tt>"http://user\@host.com/path"</tt> is now <tt>"//user"</tt>)
     */
     static *string getEmailAddress(string str) {
+        # an encoded word is text, never part of an address (issue #6066)
+        if (str.find("=?") >= 0) {
+            str = Message::removeEncodedWords(str);
+        }
+        string t = Message::trimSpace(str);
+        # an address in quotes, brackets or braces
+        *string inner = Message::unwrap(t);
+        if (exists inner && Message::isAddrSpec(inner)) {
+            return inner;
+        }
         # the address of a name-addr (RFC 5322 section 3.4) is in angle brackets after the display name, which can
         # contain text that looks like another address
-        *list<*string> m = regex_extract(str, "<([^<>]*)>\\s*\\z");
-        if (m) {
-            string addr = trim(m[0] ?? "");
-            if (Message::isAddrSpec(addr)) {
-                return addr;
-            }
-        }
-        string addr = trim(str);
-        if (Message::isAddrSpec(addr)) {
+        *string addr = Message::getAngleAddress(t);
+        if (exists addr) {
             return addr;
         }
-        # the first address in the string that is not part of another word, such as an encoded word
+        if (Message::isAddrSpec(t)) {
+            return t;
+        }
+        # the first address in the string that is not part of another word
         return regex_extract(str, AddrScanRegex)[0];
     }
+
+    #! @cond nodoc
+    # returns the string with every RFC 2047 encoded word replaced with a space
+    private static string removeEncodedWords(string str) {
+        return regex_subst(str, "=\\?[^?\\s]+\\?[QqBb]\\?[^?\\s]*\\?=", " ", RE_Global);
+    }
+
+    # returns the string without white space, including Unicode white space, at its start and end; linear in the
+    # length of the string
+    private static string trimSpace(string str) {
+        str = regex_subst(str, "\\A[" + SpaceChars + "]+", "");
+        if (!regex(str, "[" + SpaceChars + "]\\z")) {
+            return str;
+        }
+        list<string> chars = str.splitChars();
+        int end = chars.size();
+        while (end && Message::isSpace(chars[end - 1])) {
+            --end;
+        }
+        return str.substr(0, end);
+    }
+
+    # returns the text in quotes, square brackets or braces if the string is in them
+    private static *string unwrap(string str) {
+        if (str.size() < 2) {
+            return;
+        }
+        string first = str.substr(0, 1);
+        string last = str.substr(-1);
+        if ((first == "\"" && last == "\"") || (first == "'" && last == "'") || (first == "[" && last == "]")
+            || (first == "{" && last == "}")) {
+            return Message::trimSpace(str.substr(1, -1));
+        }
+    }
+
+    # returns the address in angle brackets at the end of a trimmed string, if there is one; the last "<" is found
+    # without a regular expression, so the time is linear in the length of the string
+    private static *string getAngleAddress(string str) {
+        if (str.substr(-1) != ">") {
+            return;
+        }
+        int i = str.rfind("<");
+        if (i < 0) {
+            return;
+        }
+        string addr = Message::trimSpace(str.substr(i + 1, -1));
+        if (addr.find(">") < 0 && Message::isAddrSpec(addr)) {
+            return addr;
+        }
+    }
+    #! @endcond
 
     #! returns @ref True "True" if the string contains an email address, @ref False "False" if not
     static bool checkEmailAddress(string str) {
@@ -1402,23 +1475,52 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     }
 
     private {
-        # an atext character of RFC 5322 section 3.2.3, a non-ASCII character (RFC 6532 section 3.2), or a dot,
-        # which can be anywhere in the local part, as in the addresses that the module accepted before
-        const LocalChars = "A-Za-z0-9!#$%&'*+/=?^_`{|}~.\\-\\x{80}-\\x{10ffff}";
-        # the local part of an address: a dot-atom or a quoted string, with no control character
-        const LocalPartRegex = "(?:\"(?:[^\"\\\\\\x00-\\x1f\\x7f]|\\\\[^\\x00-\\x1f\\x7f])*\"|[" + LocalChars + "]+)";
-        # the domain of an address: a host name, which can have non-ASCII characters (an internationalized domain name),
-        # or a domain literal
-        const DomainRegex = "(?:[A-Za-z0-9_.\\-\\x{80}-\\x{10ffff}]+|\\[[^\\[\\]\\\\\\x00-\\x20\\x7f]+\\])";
+        # white space, including Unicode white space (ex: a no-break space, a line or paragraph separator, NEL)
+        const SpaceChars = "\\s\\p{Z}\\x{85}";
+        # a non-ASCII character that can be in an address (RFC 6532 section 3.2): a letter, a mark, a digit, a
+        # punctuation character or a symbol, not white space or a control or format character
+        const NonAsciiRegex = "(?:(?=[^\\x00-\\x7f])[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S}])";
+        # the local part of an address: a quoted string, or atext characters (RFC 5322 section 3.2.3) and dots, which
+        # can be anywhere in the local part, as in the addresses that the module accepted before; the quantifiers
+        # are possessive, so the time to match is linear in the length of the string
+        const LocalPartRegex = "(?:\"(?:[\\x20\\x21\\x23-\\x5b\\x5d-\\x7e]|\\\\[\\x20-\\x7e]|" + NonAsciiRegex
+            + ")*+\"|(?:[A-Za-z0-9!#$%&'*+/=?^_`{|}~.\\-]|" + NonAsciiRegex + ")++)";
+        # the domain of an address: a host name, which can have non-ASCII characters (an internationalized domain
+        # name), or a domain literal
+        const DomainRegex = "(?:(?:[A-Za-z0-9_.\\-]|" + NonAsciiRegex + ")++|\\[[\\x21-\\x5a\\x5e-\\x7e]++\\])";
         # an address (RFC 5322 section 3.4.1 addr-spec)
         const AddrSpecRegex = LocalPartRegex + "@" + DomainRegex;
+        # the characters besides white space that can be before an address in a string, and that separate the
+        # words of an address header for its encoding
+        const AddrStartChars = ",;:<>()\\[\\]\"";
+        # the characters besides white space that can be after an address in a string
+        const AddrEndRegex = "(?=\\z|[" + SpaceChars + ",;:<>()\\[\\]\"'/?#&{}])";
         # an address in a string that is not part of another word
-        const AddrScanRegex = "(?:\\A|[\\s,;:<>()])(" + AddrSpecRegex + ")(?=\\z|[\\s,;:<>()])";
+        const AddrScanRegex = "(?:\\A|[" + SpaceChars + AddrStartChars + "])(" + AddrSpecRegex + ")" + AddrEndRegex;
+        # an address at the start of a word
+        const AddrWordRegex = "\\A(" + AddrSpecRegex + ")" + AddrEndRegex;
+        # the characters that separate the words of an address header
+        const AddrSpecials = {",": True, ";": True, ":": True, "<": True, ">": True, "(": True, ")": True,
+            "[": True, "]": True, "\"": True};
+        # ASCII white space
+        const AsciiSpace = {" ": True, "\t": True, "\r": True, "\n": True, "\f": True, "\v": True};
+        # an encoded word
+        const EncodedWordRegex = "\\A=\\?[^?\\s]+\\?[QqBb]\\?[^?\\s]*\\?=\\z";
+        # the longest line of an address header that is folded (RFC 5322 section 2.1.1: 78 characters)
+        const MaxHeaderLineLen = 76;
     }
 
     # returns True if the string is an email address (an RFC 5322 addr-spec)
     private static bool isAddrSpec(string str) {
         return regex(str, "\\A" + AddrSpecRegex + "\\z");
+    }
+
+    # returns True if the character is white space; an ASCII character is looked up without a regular expression
+    private static bool isSpace(string ch) {
+        if (ch.isDataAscii()) {
+            return AsciiSpace{ch} ?? False;
+        }
+        return regex(ch, "\\A[" + SpaceChars + "]\\z");
     }
 
     # splits a list of mailboxes at the commas that are not in a quoted string, a comment, angle brackets or a
@@ -1475,33 +1577,59 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     }
 
     # returns a mailbox (an address alone, or a display name and an address in angle brackets, RFC 5322 section
-    # 3.4) as a hash with "addr" and "name", or NOTHING if the string is not a mailbox; the encoded words of the name
-    # are decoded if decode is True (for the raw value of a parsed header)
+    # 3.4) as a hash with "addr", "name" and "angle" (True if the address is in angle brackets), or NOTHING if the
+    # string is not a mailbox; the encoded words of the name are decoded if decode is True (for the raw value of a
+    # parsed header).  The address is found without a regular expression on the whole string, so the time is
+    # linear in its length.
     private static *hash<auto> parseMailbox(string mailbox, bool decode) {
-        trim mailbox;
+        mailbox = Message::trimSpace(mailbox);
         if (Message::isAddrSpec(mailbox)) {
             return {"addr": mailbox};
         }
-        *list<*string> m = mailbox =~ x/^(.*?)\s*<\s*([^<>]*?)\s*>$/s;
-        if (!m || !Message::isAddrSpec(m[1] ?? "")) {
+        *string addr = Message::getAngleAddress(mailbox);
+        if (!exists addr) {
             return;
         }
-        *string name = Message::getPhraseText(m[0] ?? "");
+        *string name = Message::getPhraseText(mailbox.substr(0, mailbox.rfind("<")));
         if (!exists name) {
             return;
         }
         if (decode && name.val()) {
             name = mime_decode_header(name);
         }
-        return {"addr": m[1], "name": name};
+        return {"addr": addr, "name": name, "angle": True};
     }
 
-    # returns an address header (From, To, CC, BCC) with only the display names of its mailboxes encoded (issue
-    # #6066): a display name that is not printable ASCII is encoded as an RFC 2047 "B" encoded word, and the
+    # returns the mailboxes of an address header value, or NOTHING if it is not a list of mailboxes
+    private static *list<hash<auto>> parseMailboxList(string value, bool decode) {
+        *list<string> parts = Message::splitMailboxList(value);
+        if (parts && parts.size() > 1) {
+            list<hash<auto>> rv = ();
+            foreach string part in (parts) {
+                *hash<auto> mb = Message::parseMailbox(part, decode);
+                if (!mb) {
+                    remove rv;
+                    break;
+                }
+                rv += mb;
+            }
+            if (rv) {
+                return rv;
+            }
+        }
+        # a single mailbox, whose display name can have a comma outside quotes (ex: "Doe, John <j@x.com>")
+        *hash<auto> mb = Message::parseMailbox(value, decode);
+        if (mb) {
+            return (mb,);
+        }
+    }
+
+    # returns an address header (From, To, CC, BCC) with only the display names and the other text of its mailboxes
+    # encoded (issue #6066): text that is not printable ASCII is encoded as RFC 2047 "B" encoded words, and the
     # addresses are never encoded, since an encoded word is not an address (RFC 2047 section 5); a printable ASCII
     # value is written as it is.  The raw value of a parsed header is used if given: it is written as it was parsed
     # if it is printable ASCII (with its encoded words), and its encoded words cannot hide the commas between
-    # mailboxes.  A value that is not a list of mailboxes is encoded as a whole, as other header values are.
+    # mailboxes.
     private static string doAddressHeader(string hdr, string val, *string raw, string eol, bool encode) {
         if (!encode) {
             return Message::doHeaderValue(hdr, val, eol, encode);
@@ -1510,43 +1638,246 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         if (src.isDataPrintableAscii()) {
             return Message::doHeaderValue(hdr, src, eol, encode);
         }
-        bool decode = exists raw;
-        *list<hash<auto>> mailboxes;
-        *list<string> parts = Message::splitMailboxList(src);
-        if (parts && parts.size() > 1) {
-            mailboxes = ();
-            foreach string part in (parts) {
-                *hash<auto> mb = Message::parseMailbox(part, decode);
-                if (!mb) {
-                    remove mailboxes;
-                    break;
-                }
-                mailboxes += mb;
-            }
-        }
-        # a single mailbox, whose display name can have a comma outside quotes (ex: "Doe, John <j@x.com>")
-        if (!mailboxes) {
-            *hash<auto> mb = Message::parseMailbox(src, decode);
-            if (!mb) {
-                return Message::doHeaderValue(hdr, val, eol, encode);
-            }
-            mailboxes = (mb,);
-        }
         check_line_text(hdr, "message header name", "HEADER-ERROR");
-        list<string> l = map Message::formatHeaderMailbox($1.name, $1.addr, eol), mailboxes;
-        return sprintf("%s: %s%s", hdr, l.join(", "), eol);
+        int start = hdr.size() + 2;
+        *list<hash<auto>> mailboxes = Message::parseMailboxList(src, exists raw);
+        string value = mailboxes
+            ? Message::foldMailboxes((map Message::formatHeaderMailbox($1.name, $1.addr, $1.angle, eol),
+                mailboxes), eol, start)
+            : Message::encodeAddressText(src, exists raw, eol, start);
+        # the header gives the address that the value gives, so that a message that is parsed again (for example to
+        # forward it) is sent to the same address; otherwise the value is written as the display name of that
+        # address
+        *string addr = Message::getEmailAddress(src);
+        if (Message::getEmailAddress(value) !== addr) {
+            value = mime_encode_header_word_b(val, eol);
+            if (exists addr) {
+                value += sprintf(" <%s>", addr);
+            }
+        }
+        return sprintf("%s: %s%s", hdr, value, eol);
     }
 
-    # returns a mailbox for a header: the address alone if it has no display name, otherwise the display name, as a
-    # quoted string if it has specials, or as a "B" encoded word if it is not printable ASCII, and the address
-    private static string formatHeaderMailbox(*string name, string addr, string eol) {
+    # returns a mailbox for a header: the address alone (in angle brackets if it was in them) if it has no display
+    # name, otherwise the display name, as a quoted string if it has specials, or as a "B" encoded word if it is not
+    # printable ASCII, and the address
+    private static string formatHeaderMailbox(*string name, string addr, *bool angle, string eol) {
         if (!name.val()) {
-            return addr;
+            return angle ? sprintf("<%s>", addr) : addr;
         }
         if (name.isDataPrintableAscii()) {
             return Message::formatMailbox(name, addr);
         }
         return sprintf("%s <%s>", mime_encode_header_word_b(name, eol), addr);
+    }
+
+    # returns the length of the first line of a string, and the length of its last line
+    private static list<int> getLineLengths(string str, string eol) {
+        int first = str.find(eol);
+        int last = str.rfind(eol);
+        return (first < 0 ? str.size() : first, last < 0 ? str.size() : str.size() - last - eol.size());
+    }
+
+    # returns the mailboxes separated by commas, with a folded line before a mailbox that would make the line
+    # longer than MaxHeaderLineLen characters (RFC 5322 section 2.2.3)
+    private static string foldMailboxes(list<string> mailboxes, string eol, int start) {
+        string rv = "";
+        int len = start;
+        foreach string mb in (mailboxes) {
+            (int first, int last) = Message::getLineLengths(mb, eol);
+            if ($#) {
+                if ((len + 2 + first) > MaxHeaderLineLen) {
+                    rv += "," + eol + " ";
+                    len = 1;
+                } else {
+                    rv += ", ";
+                    len += 2;
+                }
+            }
+            rv += mb;
+            len = mb.find(eol) < 0 ? len + first : last;
+        }
+        return rv;
+    }
+
+    # returns the text of an address header that is not a list of mailboxes (ex: a group, a mailbox with a
+    # comment, or a display name without angle brackets) with only the text that is not printable ASCII encoded
+    # as RFC 2047 "B" encoded words: the addresses (an address in angle brackets, or at the start of a word), the
+    # specials (,;:<>()[]") and the printable ASCII text are written as they are, white space is written as a space
+    # or a folded line break, and a quoted string or a word that is not printable ASCII is encoded; encoded words
+    # separated by white space are one encoded word, since the white space between encoded words is dropped when
+    # they are decoded (RFC 2047 section 6.2).  The time is linear in the length of the value.
+    private static string encodeAddressText(string src, bool decode, string eol, int start) {
+        list<string> c = src.splitChars();
+        int n = c.size();
+        # the words of the value: hashes with "t" ("ws": white space, "lit": written as it is, "enc": text to
+        # encode) and "s" (the text)
+        list<hash<auto>> words = ();
+        # no quoted string or angle brackets after an unterminated one, so that every character is read once or
+        # twice
+        bool no_quote;
+        bool no_angle;
+        string word = "";
+        int i = 0;
+        while (i < n) {
+            string ch = c[i];
+            if (Message::isSpace(ch)) {
+                Message::addAddressWord(\words, \word, decode);
+                if (!words || words.last().t != "ws") {
+                    words += {"t": "ws", "s": " "};
+                }
+                ++i;
+                continue;
+            }
+            if (ch == "\"" && !no_quote) {
+                string quoted = "\"";
+                string text = "";
+                bool escaped;
+                int j = i + 1;
+                for (; j < n; ++j) {
+                    quoted += c[j];
+                    if (escaped) {
+                        text += c[j];
+                        escaped = False;
+                    } else if (c[j] == "\\") {
+                        escaped = True;
+                    } else if (c[j] == "\"") {
+                        break;
+                    } else {
+                        text += c[j];
+                    }
+                }
+                if (j < n) {
+                    i = j + 1;
+                    # a quoted local part: the quoted string is the start of the word after it
+                    if (i < n && c[i] == "@") {
+                        word += quoted;
+                        continue;
+                    }
+                    Message::addAddressWord(\words, \word, decode);
+                    words += quoted.isDataPrintableAscii() ? {"t": "lit", "s": quoted} : {"t": "enc", "s": text};
+                    continue;
+                }
+                no_quote = True;
+            } else if (ch == "<" && !no_angle) {
+                string inner = "";
+                int j = i + 1;
+                for (; j < n && c[j] != ">" && c[j] != "<"; ++j) {
+                    inner += c[j];
+                }
+                if (j < n && c[j] == ">") {
+                    Message::addAddressWord(\words, \word, decode);
+                    string addr = Message::trimSpace(inner);
+                    if (Message::isAddrSpec(addr)) {
+                        words += {"t": "lit", "s": "<" + addr + ">"};
+                    } else {
+                        words += {"t": "lit", "s": "<"};
+                        Message::addAddressText(\words, inner, decode);
+                        words += {"t": "lit", "s": ">"};
+                    }
+                    i = j + 1;
+                    continue;
+                }
+                if (j == n) {
+                    no_angle = True;
+                }
+            } else if (ch == "[" && word.substr(-1) == "@") {
+                # a domain literal is part of the address
+                int j = i;
+                string literal = "";
+                for (; j < n && c[j] != "]" && !Message::isSpace(c[j]); ++j) {
+                    literal += c[j];
+                }
+                if (j < n && c[j] == "]") {
+                    word += literal + "]";
+                    i = j + 1;
+                    continue;
+                }
+            }
+            if (AddrSpecials{ch}) {
+                Message::addAddressWord(\words, \word, decode);
+                words += {"t": "lit", "s": ch};
+            } else {
+                word += ch;
+            }
+            ++i;
+        }
+        Message::addAddressWord(\words, \word, decode);
+
+        # encoded words separated by white space are one encoded word
+        list<hash<auto>> merged = ();
+        foreach hash<auto> w in (words) {
+            int k = merged.size();
+            if (w.t == "enc" && k >= 2 && merged[k - 1].t == "ws" && merged[k - 2].t == "enc") {
+                merged[k - 2].s += " " + w.s;
+                pop merged;
+                continue;
+            }
+            merged += w;
+        }
+
+        string rv = "";
+        int len = start;
+        bool space;
+        *hash<auto> prev;
+        foreach hash<auto> w in (merged) {
+            if (w.t == "ws") {
+                space = True;
+                continue;
+            }
+            string s = w.t == "enc" ? mime_encode_header_word_b(w.s, eol) : w.s;
+            # an encoded word is separated from the words beside it by white space or a special
+            if (prev && !space && (w.t == "enc" || prev.t == "enc")
+                && !AddrSpecials{prev.s.substr(-1)} && !AddrSpecials{s.substr(0, 1)}) {
+                space = True;
+            }
+            (int first, int last) = Message::getLineLengths(s, eol);
+            if (space && rv.val()) {
+                if ((len + 1 + first) > MaxHeaderLineLen) {
+                    rv += eol + " ";
+                    len = 1;
+                } else {
+                    rv += " ";
+                    ++len;
+                }
+            }
+            rv += s;
+            len = s.find(eol) < 0 ? len + first : last;
+            space = False;
+            prev = w;
+        }
+        return rv;
+    }
+
+    # adds a word of an address header to the words to write: an address at its start is written as it is, and the
+    # rest is text
+    private static addAddressWord(reference<list<hash<auto>>> words, reference<string> word, bool decode) {
+        if (!word.val()) {
+            return;
+        }
+        *string addr = regex_extract(word, AddrWordRegex)[0];
+        if (exists addr) {
+            words += {"t": "lit", "s": addr};
+            Message::addAddressText(\words, word.substr(addr.size()), decode);
+        } else {
+            Message::addAddressText(\words, word, decode);
+        }
+        word = "";
+    }
+
+    # adds text of an address header to the words to write: printable ASCII text is written as it is, other text
+    # is encoded; an encoded word of a parsed header is decoded to be encoded again with the text beside it
+    private static addAddressText(reference<list<hash<auto>>> words, string text, bool decode) {
+        if (!text.val()) {
+            return;
+        }
+        if (decode && regex(text, EncodedWordRegex)) {
+            words += {"t": "enc", "s": mime_decode_header(text)};
+        } else if (text.isDataPrintableAscii()) {
+            words += {"t": "lit", "s": text};
+        } else {
+            words += {"t": "enc", "s": text};
+        }
     }
     #! @endcond
 
@@ -1994,17 +2325,25 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         The \c From header (and the \c Return-Receipt-To and \c Disposition-Notification-To headers) has the sender
         in display format (see @ref getSender()).  For a message created to be sent, a display name that is not
         printable ASCII is encoded as an <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a> \c "B" encoded
-        word when \a encode is @ref True "True", and the email address is never encoded; the \c From header of a
-        parsed message is written as it was parsed, encoded like other header values.
+        word when \a encode is @ref True "True", and the email address is never encoded.
 
-        @param eol the End-Of-Line marker for the string
-        @param encode encode non-ASCII values with quoted printable encoding (http://tools.ietf.org/html/rfc2047)
+        The \c To, \c CC and \c BCC headers, and the \c From header of a parsed message or of a message created
+        with no display name, are written with their addresses as they are when \a encode is @ref True "True":
+        only their other text that is not printable ASCII (display names, comments, group names) is encoded as
+        \c "B" encoded words, and a list of mailboxes is folded between mailboxes so that its lines are at most 76
+        characters long.  A header of a parsed message is written as it was parsed if it is printable ASCII.  The
+        address that a header gives (see @ref getEmailAddress()) is the address that its value gives, so that a
+        message that is parsed again is sent to the same addresses.
+
+        @param eol the End-Of-Line marker for the string, also used to fold long headers
+        @param encode encode non-ASCII values with RFC 2047 encoded words (http://tools.ietf.org/html/rfc2047)
 
         @return a string with all the message headers separated by the EOL marker
 
         @since MailMessage 1.5.1 the message is not changed: a \c Content-Type header was removed or taken as the
         type of the body; the \c From header has the display name of the sender, and only the display name is
-        encoded
+        encoded; only the text of the address headers is encoded, never their addresses, and encoded words are
+        folded with \a eol
     */
     string getHeaderString(string eol = "\r\n", bool encode = True) {
         string hdr = doSenderHeader("From", eol, encode);
