@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - background threads that hold the object of the starting code for calls through self
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%exec-class BackgroundDeletedSelfCallTest
+
+#! a background expression calls a method of a deleted object through self (qore#5973)
+/** The AST interpreter runs the expression up to the call, which raises OBJECT-ALREADY-DELETED in the new thread; only a
+    background expression that is the call itself checks the object when its thread starts.  The IR interpreter and
+    native code checked the object when the thread started whenever the expression called a method of the object, so
+    the thread ran none of the expression.
+*/
+class BackgroundDeletedSelfCallTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/background-deleted-self-call/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("background deleted self call", "1.0", \ARGV) {
+        addTestCase("AST runs the expressions up to the calls", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        assertEq("side first\npre started\nside op\nop started\nside alive\nside alive-arg\nB::m(1)\nalive started\n"
+            "side static\nB::sm(2)\nstatic started\nside qual\nqualified started\nside copy\ncopy started\n"
+            "side sroot\nstatic root started\n", getAst());
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, runProbe(("QORE_IR_THRESHOLD=1", qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode,
+                probe), mode), mode);
+        }
+        assertEq(expected, runProbe(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1",
+            qore_bin, "-b", "--enable-debug", "--exec-mode=tiered", probe), "tiered"), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-background-deleted-self-call-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, runProbe((exe, "-b", "--enable-debug"), "qcc " + level), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = runProbe((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe), "ast");
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command and returns its output; one that runs qore with an execution mode runs through ExecModeHarness
+    private hash<ExecModeHarness::ModeRunResult> runResult(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r;
+    }
+
+    #! runs a command and returns its standard output
+    private string run(list<string> args) {
+        return runResult(args).stdout;
+    }
+
+    #! runs the probe and checks the errors that the threads raise: the calls of methods on the deleted object (three
+    #! of B::m(), one of them in the argument of a static method, one of A::am() and one of copy()), and the
+    #! background call of the method whose thread checks the object when it starts, with the call chained; no other
+    #! exception is raised
+    private string runProbe(list<string> args, string label) {
+        hash<ExecModeHarness::ModeRunResult> r = runResult(args);
+        list<string> lines = r.stderr.split("\n");
+        assertEq(7, (select lines, $1 =~ /^unhandled QORE System exception/).size(), label + ": " + r.stderr);
+        assertEq(4, (select lines, $1 =~ /^OBJECT-ALREADY-DELETED: cannot call B::m\(/).size(), label + ": " + r.stderr);
+        assertEq(1, (select lines, $1 =~ /^OBJECT-ALREADY-DELETED: cannot call B::copy\(\)/).size(),
+            label + ": " + r.stderr);
+        assertEq(1, (select lines, $1 =~ /^OBJECT-ALREADY-DELETED: cannot call (B::)?A::am\(\)/).size(),
+            label + ": " + r.stderr);
+        assertEq(1, (select lines,
+            $1 =~ /^OBJECT-ALREADY-DELETED: cannot call method 'background operator\(\)'/).size(),
+            label + ": " + r.stderr);
+        return r.stdout;
+    }
+}
