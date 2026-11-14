@@ -7074,9 +7074,19 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
     }
     std::unordered_set<QoreIRBasicBlock*> removed;
     removed.reserve(func.blocks.size() - reachable.size());
+    // the values that the unreachable blocks define, which no code that runs can define any more: those of the blocks
+    // that are removed and of the instructions that a block kept for its Return loses (a Return defines no value, and
+    // the value that a kept Return returns is defined by reachable code, so it is not one of them)
+    std::unordered_set<uint32_t> removed_values;
     for (const auto& block : func.blocks) {
         if (reachable.count(block.get())) {
             continue;
+        }
+        for (const auto& inst : block->instructions) {
+            (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block analysis");
+            if (inst->result.isValid()) {
+                removed_values.insert(inst->result.id);
+            }
         }
         // a Return with a value in an unreachable block (the exit of a return statement after a handler that throws
         // or exits the thread) is kept, alone in its block: the IR interpreter and native code take the slot of every
@@ -7103,13 +7113,17 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
         }
         removed.insert(block.get());
     }
-    if (removed.empty()) {
+    // the releases of the values that the blocks kept for their Returns lost are removed also when no block is
+    if (removed.empty() && removed_values.empty()) {
         return 0;
     }
+    auto is_removed_value = [&](QoreIRValue v) {
+        return v.isValid() && removed_values.count(v.id);
+    };
 
     // The removal decision is committed.  Finish all pointer and phi rewrites
     // even if cancellation arrives so no retained IR can reference an erased
-    // block.
+    // block or a value that it defined.
     for (const auto& block : func.blocks) {
         if (!reachable.count(block.get())) {
             continue;
@@ -7117,6 +7131,35 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
         (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
         if (removed.count(block->enclosing_loop_exit)) {
             block->enclosing_loop_exit = nullptr;
+        }
+        // the releases of values that a removed block defined: a functional operator releases the values that its
+        // loop derived from an element (the values of its map stages, a fold's accumulator and the incoming values of
+        // its Phi) after the loop, before the next element (QoreIRIteratorNextInstruction::release_values) and in its
+        // exception cleanup, from their slots, which hold none if the code that defines them did not run (an element
+        // that a select stage skipped, or a stage that a constant predicate makes unreachable: issue #6014); the
+        // release of a value that no code can define any more releases nothing, so it is removed with its definition
+        if (!removed_values.empty()) {
+            auto& instructions = block->instructions;
+            for (auto it = instructions.begin(); it != instructions.end();) {
+                (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
+                QoreIRInstruction& inst = **it;
+                if (inst.opcode == QoreIROpcode::ReleaseOwnedTemp && !inst.operands.empty()) {
+                    // the value that a ReleaseStageInput keeps (its second operand) is defined just before it, in the
+                    // same block, so it cannot be removed while the release is kept; the instruction is not made a
+                    // ReleaseOwnedTemp with one operand, whose exception that a destructor raises goes elsewhere
+                    assert(inst.operands.size() < 2 || !is_removed_value(inst.operands[1]));
+                    if (is_removed_value(inst.operands[0])
+                            || (inst.operands.size() == 2 && is_removed_value(inst.operands[1]))) {
+                        it = instructions.erase(it);
+                        continue;
+                    }
+                } else if (inst.opcode == QoreIROpcode::IteratorNext
+                        || inst.opcode == QoreIROpcode::IteratorNextSelectors) {
+                    auto& values = static_cast<QoreIRIteratorNextInstruction&>(inst).release_values;
+                    values.erase(std::remove_if(values.begin(), values.end(), is_removed_value), values.end());
+                }
+                ++it;
+            }
         }
         for (const auto& inst : block->instructions) {
             (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
