@@ -113,10 +113,15 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
     return key;
 }
 
-//! Gives a key column of a join the columnar schema of its dates (qore#6107)
-/** Its values come from the left key column and, in a right or outer join, also from the right one: then the time
-    unit is "us" if the units of the two differ, and the time zone "UTC" if their zones differ, as in concat(), so
-    that the dates of both keep their values on export.  The two hold dates of one kind (checked before).
+//! Gives a key column of a join the columnar schema of its values (qore#6107, qore#6116)
+/** Its values come from the left key column and, in a right or outer join, also from the right one (then the two
+    key columns have one type: key columns of two types make a key column that holds any value, with no schema).
+    The schema is the left key column's if the values come from it only, and otherwise the schema that holds the
+    values of both, as dataFrameMergeColumnSchema() merges them (decimals of different precisions and scales,
+    temporal columns of different time units or zones, with the native type dropped if it does not describe both),
+    or none if there is none.  A date schema and a timestamp schema, which it does not merge, give the schema of the
+    side that has one, with the unit "us" if their units differ, the zone "UTC" if their zones differ, and no native
+    type.  Date key columns hold dates of one kind (checked before).
 */
 static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const ColumnData& right, bool right_values) {
     // a key column of another type keeps the schema of the left key column if its values come from it only, or the
@@ -139,10 +144,12 @@ static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const Col
         }
         return;
     }
-    if (!right_values || right.type != ColumnType::DATE) {
+    if (!right_values) {
         dataFrameCopyDateSchema(dest, left);
         return;
     }
+    // the caller makes a key column of two types one that holds any value
+    assert(right.type == ColumnType::DATE);
     // date key columns of both sides: the merged schema, as for other key columns and melt() (qore#6116)
     {
         bool has_schema = left.has_columnar_schema;
@@ -162,10 +169,12 @@ static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const Col
     // schemas of different kinds (a date and a timestamp schema): the one of the side that has one, with the unit
     // "us" if their units differ and the zone "UTC" if their zones differ, and no native type then
     const ColumnData& src = left.has_columnar_schema ? left : right;
-    if (src.type != ColumnType::DATE || !src.has_columnar_schema) {
+    if (!src.has_columnar_schema) {
         return;
     }
     dataFrameCopyDateSchema(dest, src);
+    // the native type of one kind describes no column of the other kind
+    dest.columnar_schema.native_type.clear();
     auto unit = [] (const ColumnData& cd) -> std::string {
         return cd.has_columnar_schema && !cd.columnar_schema.time_unit.empty()
             ? cd.columnar_schema.time_unit : std::string("us");
@@ -175,15 +184,9 @@ static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const Col
     };
     if (unit(left) != unit(right)) {
         dest.columnar_schema.time_unit = "us";
-        dest.columnar_schema.native_type.clear();
     }
     if (zone(left) != zone(right)) {
         dest.columnar_schema.timezone = "UTC";
-        dest.columnar_schema.native_type.clear();
-    }
-    if (left.has_columnar_schema != right.has_columnar_schema
-            || left.columnar_schema.native_type != right.columnar_schema.native_type) {
-        dest.columnar_schema.native_type.clear();
     }
 }
 

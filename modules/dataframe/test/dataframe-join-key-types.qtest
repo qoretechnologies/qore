@@ -139,6 +139,30 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
                     how + ": timestamps");
             }
         }
+        # in a right or outer join: a timestamp key column with a native type and a plain date key column, in both
+        # orders: microseconds and no native type; two equal timestamp schemas keep their native type; durations of
+        # two units: microseconds and no native type
+        DataFrame::DataFrame plain({"t": (2024-01-01T10:00:00Z, 2024-01-03T10:00:00Z), "c": (1, 2)});
+        hash<auto> dur_schema = {"kind": "duration", "nullable": True};
+        DataFrame::DataFrame ds = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"t": (1s, 2s)}, {"t": {"schema": dur_schema + {"time_unit": "s", "native_type": "duration[s]"}}}));
+        DataFrame::DataFrame dms = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"t": (1s, 3s), "b": (1, 2)},
+            {"t": {"schema": dur_schema + {"time_unit": "ms", "native_type": "duration[ms]"}}}));
+        foreach string how in (("right", "outer")) {
+            foreach list<DataFrame::DataFrame> pair in (((tl, plain), (plain, tl))) {
+                hash<auto> s = schema(pair[0].join(pair[1], ("t",), how), "t");
+                assertEq(("us", NOTHING), (s.time_unit, s.native_type), how + ": a timestamp and a plain date");
+            }
+            hash<auto> s = schema(tl.join(tl, ("t",), how), "t");
+            assertEq(("ms", "timestamp[ms, tz=UTC]"), (s.time_unit, s.native_type), how + ": one timestamp schema");
+            DataFrame::DataFrame dj = ds.join(dms, ("t",), how);
+            s = schema(dj, "t");
+            assertEq(("us", NOTHING), (s.time_unit, s.native_type), how + ": durations of two units");
+            list<auto> dv = DataFrame::DataFrame::fromArrowIpc(dj.toArrowIpc()).getColumn("t");
+            assertTrue((select dv, is_date_relative($1) && $1 == 3s).size() == 1,
+                sprintf("%s: durations exported: %y", how, dv));
+        }
         # a decimal and a float key column in an outer join: a key column that holds any value with no schema, which
         # cannot be exported
         DataFrame::DataFrame dk = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
