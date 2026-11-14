@@ -3971,7 +3971,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_closure_aot(QoreAOTContext* ctx, in
         ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     QoreValue expr = fromBits(ctx->exprs[idx]);
-    auto* cn = dynamic_cast<const QoreClosureParseNode*>(expr.getInternalNode());
+    auto* cn = qore_get_closure_parse_node(expr.getInternalNode());
     if (!cn) {
         xsink->raiseException("AOT-ERROR", "invalid expression for closure creation AOT call");
         return toBits(QoreValue());
