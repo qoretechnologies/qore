@@ -194,6 +194,10 @@ int64 DateTime::getEpochMicrosecondsUTC() const {
    return priv->getEpochMicrosecondsUTC();
 }
 
+bool DateTime::getEpochMicrosecondsUTCChecked(int64& micros) const {
+   return priv->getEpochMicrosecondsUTCChecked(micros);
+}
+
 void DateTime::setDateLiteral(int64 date) {
    priv->setDateLiteral(date);
 }

@@ -53,6 +53,103 @@ static inline std::string dataFrameStdString(const QoreString* str) {
     return std::string(str->c_str(), str->size());
 }
 
+//! Stores a value as the UTF-8 bytes of a string cell: a string in another encoding converted (qore#6092)
+/** @param v the value; a value that is not a string is stored as its string form
+    @param out the bytes of the cell; the cells of a string column are always in UTF-8
+    @param xsink for a DATAFRAME-ENCODING-ERROR exception if the string cannot be converted to UTF-8
+
+    @return 0 for success, -1 if an exception was raised
+
+    A conversion error raises the exception from a function of its own, so that the inline part that stores a
+    UTF-8 string adds nothing to the code that stores a cell.
+*/
+DLLLOCAL int dataFrameConvertUtf8String(QoreValue v, std::string& out, ExceptionSink* xsink);
+
+static inline int dataFrameUtf8String(QoreValue v, std::string& out, ExceptionSink* xsink) {
+    // the type of a value in a node is read from the node, with no call to QoreValue::getType(); a short string,
+    // held in the value itself, is always in UTF-8
+    if (v.isPointer()) {
+        const AbstractQoreNode* node = v.getPtr();
+        if (node->getType() == NT_STRING) {
+            const QoreStringNode* str = static_cast<const QoreStringNode*>(node);
+            if (str->getEncoding() == QCS_UTF8) {
+                out.assign(str->c_str(), str->size());
+                return 0;
+            }
+        }
+    } else if (v.isShortString()) {
+        QoreStringDataHelper str(v);
+        out.assign(str.c_str(), str.size());
+        return 0;
+    }
+    return dataFrameConvertUtf8String(v, out, xsink);
+}
+
+DLLLOCAL int dataFrameConvertUtf8Bytes(const char* data, size_t len, const QoreEncoding* enc, std::string& out,
+        ExceptionSink* xsink);
+
+//! Converts the bytes of a string in the given encoding to the UTF-8 bytes of a string cell (qore#6092)
+/** @return 0 for success, -1 if a DATAFRAME-ENCODING-ERROR exception was raised
+*/
+static inline int dataFrameUtf8Bytes(const char* data, size_t len, const QoreEncoding* enc, std::string& out,
+        ExceptionSink* xsink) {
+    if (enc == QCS_UTF8) {
+        out.assign(data, len);
+        return 0;
+    }
+    return dataFrameConvertUtf8Bytes(data, len, enc, out, xsink);
+}
+
+DLLLOCAL int dataFrameConvertFromUtf8(const std::string& utf8, const QoreEncoding* enc, std::string& out,
+        ExceptionSink* xsink);
+
+//! Converts the UTF-8 bytes of a string cell to the default encoding, the encoding of column names and of CSV files
+/** @return 0 for success, -1 if a DATAFRAME-ENCODING-ERROR exception was raised for a character that the default
+    encoding cannot represent
+*/
+static inline int dataFrameDefaultString(const std::string& utf8, std::string& out, ExceptionSink* xsink) {
+    if (QCS_DEFAULT == QCS_UTF8) {
+        out = utf8;
+        return 0;
+    }
+    return dataFrameConvertFromUtf8(utf8, QCS_DEFAULT, out, xsink);
+}
+
+//! Returns the UTF-8 form of a value for a group or join key, so that equal strings in different encodings make
+//! the same key; a string that cannot be converted keeps its bytes
+DLLLOCAL std::string dataFrameUtf8Key(QoreValue v);
+
+//! Raises DATAFRAME-DATE-RANGE-ERROR for a date or time value outside the range of a date cell (qore#6092)
+/** @param desc a description of the value
+*/
+DLLLOCAL void dataFrameRaiseDateRangeError(const char* desc, ExceptionSink* xsink);
+
+//! Raises DATAFRAME-DATE-RANGE-ERROR for a date outside the range of a date cell, with a description of the date
+/** @return -1
+*/
+DLLLOCAL int dataFrameDateOutOfRange(const DateTimeNode* dt, ExceptionSink* xsink);
+
+//! Stores a date as the microseconds since the epoch of a date cell, an int64 (qore#6092)
+/** @return 0 for success, -1 if a DATAFRAME-DATE-RANGE-ERROR exception was raised for a date outside the range of
+    an int64 of microseconds since the epoch, which the cell cannot hold
+*/
+static inline int dataFrameDateMicros(const DateTimeNode* dt, int64_t& out, ExceptionSink* xsink) {
+    // the core computes the microseconds of an absolute date or a time value with overflow-checked arithmetic, in
+    // one call, as DateTime::getEpochMicrosecondsUTC() does without the check
+    int64 micros;
+    if (dt->getEpochMicrosecondsUTCChecked(micros)) {
+        out = micros;
+        return 0;
+    }
+    return dataFrameDateOutOfRange(dt, xsink);
+}
+
+//! Compares two values as the core <=> operator does (qore#6097)
+/** @param cmp the result: -1, 0 or 1
+    @return 0 for success, -1 if the operator raises an exception (NAN-COMPARE-ERROR for a NaN value)
+*/
+DLLLOCAL int qoreDataFrameCompareValues(QoreValue lhs, QoreValue rhs, int& cmp, ExceptionSink* xsink);
+
 //! Safely extracts a Qore string value, including short-string values and NUL characters.
 static inline bool getDataFrameString(QoreValue v, std::string& out) {
     if (v.getType() != NT_STRING) {
@@ -266,8 +363,6 @@ DLLLOCAL bool scanColumnValues(const std::vector<Column>& columns, QorePrivateDa
 */
 DLLLOCAL std::string dataFrameValueKey(const ColumnData& cd, int64_t row);
 
-DLLLOCAL ColumnType inferColumnType(const QoreListNode* values);
-
 //! Build a ColumnData from a list of Qore values with the given type
 DLLLOCAL std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
     ColumnType type, ExceptionSink* xsink);
@@ -279,6 +374,13 @@ DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* val
 //! Build a ColumnData from a typed Qore buffer
 DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataFromBuffer(const QoreBufferNode* values,
     ExceptionSink* xsink);
+
+//! Builds the column of rows selected from a column with dense storage, as the column was built from its buffer
+/** A date column (a timestamp, date or duration column) keeps its dense buffer<int64> of microseconds, which is
+    built as a date column, not as an int column (qore#6097)
+*/
+DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataFromDenseRows(const ColumnData& src,
+        const QoreBufferNode* values, ExceptionSink* xsink);
 
 //! Build a date/time ColumnData from a dense int64 microsecond buffer
 DLLLOCAL std::shared_ptr<ColumnData> buildColumnDataFromTemporalBuffer(const QoreBufferNode* values,

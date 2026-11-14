@@ -196,6 +196,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   processes that set their own --exec-mode
         # - foreach-enum-element-release (#6091): its probes run in child processes that set their own --exec-mode and
         #   in qcc executables
+        # - dataframe-default-encoding (#6092): its checks run in a child process whose default character encoding is
+        #   ISO-8859-1
+        # - dataframe-default-encoding-names (#6100): its checks run in child processes whose default character
+        #   encodings differ
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -223,7 +227,9 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-6.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
-                                 "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest"]),
+                                 "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
+                                 "modules/dataframe/test/dataframe-default-encoding.qtest",
+                                 "modules/dataframe/test/dataframe-default-encoding-names.qtest"]),
                          sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):
