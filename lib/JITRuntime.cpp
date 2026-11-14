@@ -5418,22 +5418,33 @@ struct QoreBuiltinTypePathEntry {
     const QoreTypeInfo* type_info;
     //! the text of the path: a path address that a module unload frees can be used again for another path
     std::string text;
+
 };
-static constexpr size_t QORE_BUILTIN_TYPE_PATH_TABLE_SIZE = 256;
 //! an entry is allocated once and never freed or replaced, so that a reader needs no lock
-static std::atomic<const QoreBuiltinTypePathEntry*> qore_builtin_type_path_table[QORE_BUILTIN_TYPE_PATH_TABLE_SIZE];
+static std::atomic<const QoreBuiltinTypePathEntry*> qore_builtin_type_path_table[QORE_AOT_BUILTIN_TYPE_PATH_TABLE_SIZE];
 
 static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext* ctx,
         const char* type_path, const char* op, ExceptionSink* xsink) {
     static constinit QoreEnvFlag cache_enabled_env("QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE");
     const bool cache_enabled = !cache_enabled_env.get();
     // the type of a builtin-only path does not depend on the receiver, the instantiation or the generation
-    const size_t builtin_slot = (reinterpret_cast<uintptr_t>(type_path) >> 4) % QORE_BUILTIN_TYPE_PATH_TABLE_SIZE;
+    const size_t builtin_slot = (reinterpret_cast<uintptr_t>(type_path) >> 4) % QORE_AOT_BUILTIN_TYPE_PATH_TABLE_SIZE;
     if (cache_enabled && type_path) {
         const QoreBuiltinTypePathEntry* entry =
             qore_builtin_type_path_table[builtin_slot].load(std::memory_order_acquire);
-        if (entry && entry->address == type_path && !strcmp(entry->text.c_str(), type_path)) {
-            return entry->type_info;
+        if (entry && entry->address == type_path) {
+            if (ctx && ctx->hasValidatedBuiltinTypePath(builtin_slot)) {
+                return entry->type_info;
+            }
+            // An image can reuse an old path address.  Determine the new length before comparing the stored
+            // length's bytes: a shorter replacement string may end at the last byte of an accessible page.
+            if (entry->text.size() == strlen(type_path)
+                    && !memcmp(entry->text.data(), type_path, entry->text.size())) {
+                if (ctx) {
+                    ctx->validateBuiltinTypePath(builtin_slot);
+                }
+                return entry->type_info;
+            }
         }
     }
     // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached
@@ -5507,6 +5518,8 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext*
             if (!qore_builtin_type_path_table[builtin_slot].compare_exchange_strong(expected, entry,
                     std::memory_order_release, std::memory_order_relaxed)) {
                 delete entry;
+            } else {
+                ctx->validateBuiltinTypePath(builtin_slot);
             }
         }
     }

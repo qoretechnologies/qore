@@ -347,6 +347,9 @@ struct QoreAOTCallTarget {
     }
 };
 
+//! Global builtin path entries are immutable and never replaced; contexts remember validated slots.
+static constexpr size_t QORE_AOT_BUILTIN_TYPE_PATH_TABLE_SIZE = 256;
+
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.
 /** At compile time, each process-specific pointer (LocalVar*, Var*, QoreValue expr)
     is assigned a numeric slot index. At runtime, the fresh AST is re-lowered in the
@@ -456,6 +459,20 @@ struct QoreAOTContext {
 
     //! Metadata-only statements registered for source-stripped ProgramControl lookups.
     std::vector<AbstractStatement*> owned_debug_statements;
+
+    //! A generated path remains immutable for this context's lifetime.  A bit avoids repeated text checks of a
+    //! global builtin path entry after this context validated it.  The global entry must still be acquire-loaded
+    //! and its path address checked first; entries are never replaced, so a bit cannot authorize a different entry.
+    //! Atomic words allow multiple threads to validate paths in the same context without losing other bits.
+    std::array<std::atomic<uint64_t>, QORE_AOT_BUILTIN_TYPE_PATH_TABLE_SIZE / 64> builtin_type_path_validated{};
+
+    bool hasValidatedBuiltinTypePath(size_t slot) const {
+        return builtin_type_path_validated[slot / 64].load(std::memory_order_relaxed) & (uint64_t{1} << (slot % 64));
+    }
+
+    void validateBuiltinTypePath(size_t slot) {
+        builtin_type_path_validated[slot / 64].fetch_or(uint64_t{1} << (slot % 64), std::memory_order_relaxed);
+    }
 
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
