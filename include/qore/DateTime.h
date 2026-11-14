@@ -343,6 +343,19 @@ public:
    */
    DLLEXPORT bool getEpochMicrosecondsUTCChecked(int64& micros) const;
 
+   //! gets the microseconds of getEpochMicrosecondsUTCChecked() and whether the date is absolute or relative
+   /** For a caller that stores the microseconds of many dates and must tell absolute dates from relative dates
+       (durations), with one call per date and no second output: the kinds of several dates can be combined with a
+       bitwise or.
+
+       @param micros the number of microseconds; set only if the function does not return 0
+       @return 0 if the number of microseconds does not fit in an int64 (getEpochMicrosecondsUTC() would wrap), 1 if
+       it fits and the date is absolute, 2 if it fits and the date is relative
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT int getEpochMicrosecondsUTCCheckedKind(int64& micros) const;
+
    //! gets the number of milliseconds since January 1, 1970Z for the current date
    /**
       @return the number of milliseconds since January 1, 1970Z
