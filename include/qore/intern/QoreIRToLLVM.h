@@ -519,8 +519,6 @@ private:
     llvm::AllocaInst* local_reload_epoch = nullptr;
     llvm::MapVector<const void*, llvm::AllocaInst*> local_valid_epochs;
     bool local_reload_boundary_cleanup_pending = false;
-    // Propagate cancellation from native handler cache emission to lowerFunction().
-    bool native_handler_cache_cancelled = false;
 
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
@@ -546,6 +544,9 @@ private:
     // Per-scope saved on_block_exit counts (scope_id -> saved count value)
     // Used by ScopeEnter/ScopeExit for nested on_exit handler execution
     std::unordered_map<uint32_t, llvm::Value*> scope_obe_counts;
+    //! the number of catch scopes of the frame open at each ScopeEnter (catch_scope_count, or the depth of the catch
+    //! stack without it): the landing pad of a try statement leaves the catch scopes opened in its try block (#5969)
+    std::unordered_map<uint32_t, llvm::Value*> scope_catch_counts;
 
     // Entry-block load values for native pre-instantiated locals (tiered
     // compilation). qore_rt_load_local creates +1 ref at entry; these must be
@@ -1649,10 +1650,42 @@ private:
     // deferred handlers execute through AST/IR and read parent locals.
     void syncLocalsToRuntimeForHandlers(llvm::Module& module);
 
-    // Install an exact parent slot cache for deferred handler IR executed by a
-    // native/JIT/AOT parent.  This avoids name-based TLS lookup collisions.
-    llvm::Value* beginNativeHandlerSlotCache(llvm::Module& module);
-    void endNativeHandlerSlotCache(llvm::Module& module, llvm::Value* guard);
+    //! Publishes the locals to the runtime local stack before handlers run out of line (see the definition)
+    void publishLocalsForHandlers(llvm::Module& module);
+
+    //! Records the call that runs handlers out of line, around which finalizeHandlerSites() releases and reloads the
+    //! reload storage of the locals that the handlers can assign
+    /** @param reload true if the locals whose storage is released are reloaded right after the call; false if the
+        caller reloads every local itself
+    */
+    void recordHandlerSite(llvm::CallInst* call, bool reload);
+
+    //! Emits the release before and the reload after each call recorded by recordHandlerSite(), once the function is
+    //! lowered and its reload storage is known
+    void finalizeHandlerSites(llvm::Module& module, llvm::Function* llvm_func);
+
+    //! Releases the reload trackers and deferred slots of the locals that handlers can assign, last declared first,
+    //! at the builder's insertion point, and returns the locals released, last declared first
+    std::vector<const void*> releaseLocalReloadStorage(llvm::Module& module);
+
+    //! a call that runs handlers out of line (see recordHandlerSite())
+    struct HandlerSite {
+        llvm::CallInst* call;
+        bool reload;
+    };
+    std::vector<HandlerSite> handler_sites;
+
+    //! true if the reload storage of the local is released for handlers run out of line (see handler_locals)
+    bool releasesReloadStorageForHandlers(const void* key) const;
+
+    //! the locals that the function's handlers reference (QoreIRFunction::collectHandlerLocals()), whose reload
+    //! storage is released for handlers run out of line; when handler_locals_known is false, every local's
+    std::unordered_set<const void*> handler_locals;
+    bool handler_locals_known = false;
+
+    //! Returns the keys of a map of locals in reverse declaration order (their IR slot ids, highest first)
+    template <typename Map>
+    std::vector<const void*> getLocalsInReverseDeclarationOrder(const Map& map) const;
 
     // Emit qore_rt_decref calls for pre-instantiated local entry loads
     //! @param exception_exit true for an exit by an exception, which releases the body locals on the runtime stack

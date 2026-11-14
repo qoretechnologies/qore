@@ -347,6 +347,11 @@ static bool qoreDataFrameSoftEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* 
         QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
         return *xsink ? false : ls->equalSoft(*rs, xsink);
     }
+    // a char is compared with another char by its code point, and with any other value but a string as its code
+    // point, as an int is, as by the core == operator (QoreLogicalEqualsOperatorNode::softEqual(), qore#6036)
+    if (lt == NT_CHAR && rt == NT_CHAR) {
+        return l.getChar() == r.getChar();
+    }
     if (lt == NT_NUMBER) {
         switch (rt) {
             case NT_NUMBER:
@@ -355,6 +360,7 @@ static bool qoreDataFrameSoftEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* 
                 return l.get<const QoreNumberNode>()->equals(r.getAsFloat());
             case NT_INT:
             case NT_BOOLEAN:
+            case NT_CHAR:
                 return l.get<const QoreNumberNode>()->equals(r.getAsBigInt());
             default: {
                 ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
@@ -368,6 +374,7 @@ static bool qoreDataFrameSoftEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* 
                 return r.get<const QoreNumberNode>()->equals(l.getAsFloat());
             case NT_INT:
             case NT_BOOLEAN:
+            case NT_CHAR:
                 return r.get<const QoreNumberNode>()->equals(l.getAsBigInt());
             default: {
                 ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
@@ -378,7 +385,7 @@ static bool qoreDataFrameSoftEqual(QoreValue lhs, QoreValue rhs, ExceptionSink* 
     if (lt == NT_FLOAT || rt == NT_FLOAT) {
         return l.getAsFloat() == r.getAsFloat();
     }
-    if (lt == NT_INT || rt == NT_INT) {
+    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
         return l.getAsBigInt() == r.getAsBigInt();
     }
     if (lt == NT_BOOLEAN || rt == NT_BOOLEAN) {
@@ -439,6 +446,10 @@ static bool qoreDataFrameLessThan(QoreValue lhs, QoreValue rhs, ExceptionSink* x
         QoreStringValueHelper ls(l);
         QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
         return *xsink ? false : ls->compare(*rs) < 0;
+    }
+    // a char is compared with any other value but a string as its code point, as an int is (qore#6040)
+    if (lt == NT_CHAR || rt == NT_CHAR) {
+        return l.getAsBigInt() < r.getAsBigInt();
     }
     if (lt == NT_DATE || rt == NT_DATE) {
         DateTimeValueHelper ld(l);

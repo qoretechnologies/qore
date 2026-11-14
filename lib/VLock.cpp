@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/AutoVLock.h>
+#include <qore/intern/QoreLibIntern.h>
 #ifdef DEBUG
 #include "qore/intern/ql_debug.h"
 #endif
@@ -50,6 +51,18 @@ typedef std::vector<qore_obj_notification_s> qore_notify_list_t;
 
 struct qore_avl_private {
     qore_notify_list_t *notify_list;
+    // A detached parent can disappear during a native callback. Only handoffs pin notification receivers.
+    bool pinned = false;
+
+    DLLLOCAL void pin() {
+        if (pinned || !notify_list) {
+            return;
+        }
+        for (const auto& notification : *notify_list) {
+            notification.obj->refSelf();
+        }
+        pinned = true;
+    }
 
     DLLLOCAL qore_avl_private() : notify_list(0) {
     }
@@ -70,8 +83,43 @@ struct qore_avl_private {
         }
 
         notify_list->push_back(qore_obj_notification_s(obj, mem));
+        if (pinned) {
+            obj->refSelf();
+        }
     }
 };
+
+// AutoVLock owns notifications separately from its lock. Keep those for the original operation's scope while
+// the old parent lvalue is finalized; running them now would expose the object before the operation changed it.
+class LValueLockHandoffHelper {
+public:
+    DLLLOCAL explicit LValueLockHandoffHelper(AutoVLock& lock) : lock(lock), notifications(lock.priv) {
+        if (notifications) {
+            notifications->pin();
+        }
+        lock.priv = nullptr;
+    }
+
+    DLLLOCAL ~LValueLockHandoffHelper() {
+        assert(!lock.priv);
+        lock.priv = notifications;
+    }
+
+private:
+    AutoVLock& lock;
+    qore_avl_private* notifications;
+};
+
+void LValueHelper::finishForCallback() {
+    ExceptionSink* xsink = vl.xsink;
+    LValueLockHandoffHelper notifications(vl);
+    disableMemberWriteBack();
+    // Use the complete finalization sequence, including future state added to this helper. Reconstructing the
+    // same non-overlapping object also replaces its AutoVLock subobject; the saved reference denotes that new member.
+    // The empty constructor allocates nothing. No extra field or branch is needed on ordinary lvalue paths.
+    this->~LValueHelper();
+    new (this) LValueHelper(xsink);
+}
 
 AutoVLock::AutoVLock(ExceptionSink* n_xsink) : o(0), xsink(n_xsink), priv(0) {
     //printd(5, "AutoVLock::AutoVLock() this=%p\n", this);
@@ -87,6 +135,12 @@ AutoVLock::~AutoVLock() {
             // run member notifications regardless of exception status
             //printd(5, "posting notification to object %p, member %s\n", i->obj, i->member.c_str());
             i->obj->execMemberNotification(i->member.c_str(), &xsink2);
+        }
+        // Keep a detached parent alive through its notification, even if the native callback erased it.
+        if (priv->pinned) {
+            for (const auto& notification : *priv->notify_list) {
+                notification.obj->deref(&xsink2);
+            }
         }
         xsink->assimilate(xsink2);
     }

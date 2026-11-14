@@ -39,6 +39,8 @@
 #include "qore/intern/WeakHashReferenceNode.h"
 #include "qore/intern/WeakListReferenceNode.h"
 
+#include <typeinfo>
+
 struct QoreParseContext;
 
 #ifndef NDEBUG
@@ -203,5 +205,28 @@ public:
     DLLLOCAL ParseNoEvalNode(const ParseNoEvalNode& old) : ParseNode(old) {
     }
 };
+
+//! Returns the node as a T if its class is exactly T, otherwise nullptr
+/** The same result as dynamic_cast<const T*>() for a class T that has no subclasses, compared by the address of
+    the type's type_info object: a dynamic_cast searches the class hierarchy with string comparisons of the type
+    names, which is too slow for the interpreter's per-instruction paths.
+
+    T must be a library-internal (DLLLOCAL) class without subclasses: objects of such a class are only created in
+    this library, so their type_info object is the one that typeid(T) returns here.
+*/
+template <typename T>
+DLLLOCAL inline const T* qore_exact_node_cast(const AbstractQoreNode* n) {
+    const T* rv = (n && &typeid(*n) == &typeid(T)) ? static_cast<const T*>(n) : nullptr;
+    assert(rv == dynamic_cast<const T*>(n));
+    return rv;
+}
+
+//! Returns the node as a T if its class is exactly T, otherwise nullptr; see the const overload
+template <typename T>
+DLLLOCAL inline T* qore_exact_node_cast(AbstractQoreNode* n) {
+    T* rv = (n && &typeid(*n) == &typeid(T)) ? static_cast<T*>(n) : nullptr;
+    assert(rv == dynamic_cast<T*>(n));
+    return rv;
+}
 
 #endif
