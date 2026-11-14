@@ -1062,6 +1062,24 @@ public:
         return true;
     }
 
+    //! removes all pushes for the id, as removeAll(), and returns the index that its entry had among the temp entries
+    //! (those that IRCallFrame::TempCleanupMark::cleanup_size counts), or SIZE_MAX if it had none there
+    size_t removeAllIndexed(uint32_t id) {
+        if (id >= counts.size() || !counts[id]) {
+            return SIZE_MAX;
+        }
+        counts[id] = 0;
+        if (isSlotOwned(id)) {
+            eraseEntry(id);
+            return SIZE_MAX;
+        }
+        auto it = std::find(entries.begin(), entries.end(), id);
+        assert(it != entries.end());
+        size_t index = static_cast<size_t>(it - entries.begin());
+        entries.erase(it);
+        return index;
+    }
+
     //! removes all pushes for the id
     bool removeAll(uint32_t id) {
         if (id >= counts.size() || !counts[id]) {
@@ -1804,6 +1822,25 @@ static QORE_IR_COLD_NOINLINE uint32_t qore_ir_exception_branch_temp_scope(const 
         }
     }
     return scope_id;
+}
+
+//! Removes the temp entry of a value that ReleaseOwnedTemp releases
+/** The marks of the temp scopes entered after the entry was pushed count it (cleanup_size): they are moved down with
+    the entries after it, so that the release of each of those scopes still releases its own temps (#5992: the value
+    of a return that a handler's return replaces is a temp of the replaced return's statement).
+*/
+static QORE_INTERN_NOINLINE void qore_ir_remove_released_temp(IRCleanupSlots& cleanup,
+        std::vector<IRCallFrame::TempCleanupMark>& marks, uint32_t id) {
+    size_t index = cleanup.removeAllIndexed(id);
+    if (index == SIZE_MAX) {
+        return;
+    }
+    for (size_t i = marks.size(); i; --i) {
+        if (marks[i - 1].cleanup_size <= index) {
+            break;
+        }
+        --marks[i - 1].cleanup_size;
+    }
 }
 
 struct IRCallFramePool {
@@ -15309,7 +15346,7 @@ load_local_done:
                     // a value that is not a node has no reference to release: its entry stays for the slot's next
                     // value, as when the slot is overwritten (the release of a fused pipeline's stage value runs for
                     // each element, see QoreIRLowering::lowerLazyPipelineFused())
-                    removeAllCleanupEntries(cleanup, id);
+                    qore_ir_remove_released_temp(cleanup, temp_cleanup_marks, id);
                     QoreValue v = values[id];
                     values[id] = QoreValue();
                     // the value of a return that a handler's return replaced, released on the way of an exception
