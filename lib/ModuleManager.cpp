@@ -3975,8 +3975,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, parseOptions);
+        // the restrictions that the mask added, named in the error of a directive that conflicts with them
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & parseOptions);
     } else {
         pholder = mpgm = new QoreProgram(parseOptions);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & parseOptions);
         mpgm->setScriptPath(modulePath.c_str());
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
@@ -4664,9 +4667,13 @@ int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModu
     // the mask can complete %modern (it can add parts of it, such as PO_STRONG_ENCAPSULATION), which cannot be in
     // effect with a compatibility option of the module that %modern does not allow (issue #5682); the mask is refused
     // before anything is changed
+    // the options that are checked are the ones that are applied: they are read once (the parse options of a Program
+    // are not locked against a concurrent change by C++ code, so they are not read again between the check and the
+    // change)
+    QoreParseOptions masked;
     if (mpgm && !mask.empty()) {
         QoreParseOptions current = mpgm->getParseOptions();
-        QoreParseOptions masked = mask.apply(current);
+        masked = mask.apply(current);
         if (qore_program_private_base::isModern(masked)
                 && (masked & qore_program_private_base::modernIncompatibleOptions())) {
             QoreStringNode* desc = new QoreStringNodeMaker("module '%s': the parse option mask cannot be applied: ",
@@ -4679,7 +4686,7 @@ int QoreModuleManager::addModuleParseOptionMask(const char* name, const QoreModu
     }
     mi->addParseOptionMask(mask);
     if (mpgm && !mask.empty()) {
-        qore_program_private::forceReplaceParseOptions(*mpgm, mask.apply(mpgm->getParseOptions()));
+        qore_program_private::forceReplaceParseOptions(*mpgm, masked);
         qore_program_private::setAOTInheritedParseOptions(*mpgm,
             mask.apply(qore_program_private::getAOTInheritedParseOptions(*mpgm)));
     }
@@ -4931,8 +4938,11 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
+        // the restrictions that the mask added, named in the error of a directive that conflicts with them
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & po);
     } else {
         pholder = mpgm = new QoreProgram(po);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & po);
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
@@ -5065,8 +5075,11 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
+        // the restrictions that the mask added, named in the error of a directive that conflicts with them
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & po);
     } else {
         pholder = mpgm = new QoreProgram(po);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & po);
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see

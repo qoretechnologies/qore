@@ -74,6 +74,8 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         addTestCase("scripts in every mode", \scriptModes());
         addTestCase("scripts as AOT executables", \scriptAot());
         addTestCase("stale AOT artifacts", \staleArtifacts());
+        addTestCase("an object with %modern and a compatibility option cannot be linked", \craftedObjectLink());
+        addTestCase("all positive parse options", \positiveOptions());
         set_return_value(main());
     }
 
@@ -260,13 +262,101 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         f.write(sprintf("%%new-style\n%%require-types\nstring mod = \"%s/LegacyCompatMod.qm\";\nload_module(mod);\n"
             "try {\n    load_module_masked(mod, new ParseOptions(), new ParseOptions((\"strong-encapsulation\", "
             "\"no-summarize\")));\n    printf(\"MASK-APPLIED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
-            "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path));
+            "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n"
+            # the refused mask is not recorded: the module keeps no mask
+            "printf(\"MASK-ADD-EMPTY: %%y\\n\", get_module_parse_option_mask(\"LegacyCompatMod\").add.empty());\n"
+            "printf(\"RANGE: %%y\\n\", call_function(\"legacy_range\"));\n", tmp.path));
         f.close();
         string out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s/mask.q", env, qore_bin,
             tmp.path));
         assertRegex("MODULE-PARSE-OPTION-MASK-ERROR: module 'LegacyCompatMod': the parse option mask cannot be "
             "applied: %modern \\(which the options set complete\\) cannot be set while %broken-range is in effect",
             out);
+        # the module is left as it was: no mask, and its code keeps the compatibility option
+        assertRegex("MASK-ADD-EMPTY: True", out);
+        # %broken-range: the end of the range is included
+        assertRegex("RANGE: \\[1, 2\\]", out);
+
+        # the module is loaded for the first time with the mask, by load_module_masked() and with the mask of the
+        # process: its own directive cannot be used, and the error names the restrictions that the mask adds
+        foreach hash<auto> tcase in (
+                {"name": "first", "code": "load_module_masked(mod, new ParseOptions(), new ParseOptions("
+                    "(\"strong-encapsulation\", \"no-summarize\")));"},
+                {"name": "global", "code": "set_module_parse_option_mask(new ParseOptions(), new ParseOptions("
+                    "(\"strong-encapsulation\", \"no-summarize\")));\nload_module(mod);"},
+            ) {
+            string script = sprintf("%s/mask-%s.q", tmp.path, tcase.name);
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\nstring mod = \"%s/LegacyCompatMod.qm\";\ntry {\n    %s\n"
+                "    printf(\"LOADED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+                "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path, tcase.code));
+            f.close();
+            out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            assertRegex("PARSE-OPTION-ERROR: %modern \\(which the options set complete\\) cannot be used while "
+                "%broken-range is in effect.*; %modern is complete only with .*which the module parse option mask "
+                "adds", out, tcase.name);
+            assertEq(-1, out.find("LOADED"), tcase.name);
+        }
+    }
+
+    #! an executable cannot be linked from an object whose parse options have %modern with a compatibility option that
+    #! it does not allow (an object compiled before issue #5682; here: one whose recorded parse options are patched)
+    craftedObjectLink() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+            return;
+        }
+        TmpDir tmp("modern-option-consistency-link-");
+        string src = tmp.path + "/main.qr";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("int sub main() {\n    printf(\"ran\\n\");\n    return 0;\n}\n");
+        f.close();
+        string obj = tmp.path + "/main.qo";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -c -L %s -o %s %s", env, qcc_bin, tmp.path, obj, src));
+        assertTrue(is_file(obj), "compiled the object: " + out);
+        if (!is_file(obj)) {
+            return;
+        }
+        # the AOT metadata header: magic (4 bytes), version (2), flags (2), parse options 0-63 (8, little-endian)
+        binary data = File::readBinaryFile(obj);
+        string hex = make_hex_string(data);
+        int pos = -1;
+        int start = 0;
+        while (True) {
+            int i = hex.find("514f5244", start);
+            if (i < 0) {
+                break;
+            }
+            if (!(i % 2)) {
+                pos = i / 2;
+                break;
+            }
+            start = i + 1;
+        }
+        assertGt(-1, pos, "found the AOT metadata header");
+        if (pos < 0) {
+            return;
+        }
+        BinaryInputStream input(data.substr(pos + 8, 8));
+        StreamReader r(input);
+        int lo = r.readi8LSB();
+        assertEq(0, lo & PO_BROKEN_RANGE, "the object has no compatibility option");
+        BinaryOutputStream bout();
+        StreamWriter w(bout);
+        w.writei8LSB(lo | PO_BROKEN_RANGE);
+        {
+            File pf();
+            pf.open2(obj, O_RDWR);
+            on_exit pf.close();
+            pf.setPos(pos + 8);
+            pf.write(bout.getData());
+        }
+        string exe = tmp.path + "/main";
+        out = ExecModeHarness::run_any(sprintf("%s %s -o %s %s", env, qcc_bin, exe, obj));
+        assertRegex("link failed for output .*%modern and %broken-range cannot be set together.*rebuild the objects "
+            "with this version of Qore", out);
+        assertFalse(is_file(exe), "no executable was linked");
     }
 
     #! an option given on the command line: a file in %modern mode, by its extension or -M, is refused; a .q file is
@@ -409,4 +499,14 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         }
     }
 
+
+    #! ParseOptions::positiveOptions() gives all positive options, also the extended ones that PO_POSITIVE_OPTIONS cannot
+    #! hold
+    positiveOptions() {
+        ParseOptions positive = ParseOptions::positiveOptions();
+        assertTrue(positive.hasAll(PO_POSITIVE_OPTIONS), "the integer positive options");
+        assertTrue(positive.hasAll("allow-opaque-references"), "an extended positive option");
+        assertFalse(positive.hasAny(PO_NO_NETWORK), "not a restriction");
+        assertFalse(positive.hasAny("strong-encapsulation"), "not an extended restriction");
+    }
 }

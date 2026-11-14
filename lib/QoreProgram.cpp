@@ -4179,9 +4179,20 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
     QoreStringNode* desc = new QoreStringNode;
     if (set) {
         describeModernSetConflict(pwo.parse_options, po, conflict, "used", *desc);
-        desc->concat(isModern(pwo.parse_options)
-            ? "; remove the directive, or parse the code without %modern (as a .q file, or after %old-style)"
-            : "; remove the option, or parse the code without %modern");
+        // %modern is complete only with the restrictions that a module parse option mask added to the Program of the
+        // module: the error names them, as the user did not write %modern (issue #5682)
+        QoreParseOptions all = pwo.parse_options | po;
+        if (module_mask_added && isModern(all) && !isModern(all & ~module_mask_added)) {
+            desc->concat("; %modern is complete only with ");
+            describeParseOptions(module_mask_added & all, *desc);
+            desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
+                "load_module_masked())");
+            desc->concat("; remove the option, or load the module with a mask that does not add them");
+        } else {
+            desc->concat(isModern(pwo.parse_options)
+                ? "; remove the directive, or parse the code without %modern (as a .q file, or after %old-style)"
+                : "; remove the option, or parse the code without %modern");
+        }
     } else {
         // %no-negative-offsets is the only directive that disables an option that %modern implies
         desc->concat("%no-negative-offsets cannot be used while %modern is in effect, which implies ");
