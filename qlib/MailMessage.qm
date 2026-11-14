@@ -566,6 +566,10 @@ public class Message {
 
         string sender;
 
+        # the display name of the sender of a message created to be sent, if it has one; the From header is then
+        # written with it (a parsed message has none, and its From header is written as it was parsed)
+        *string sender_name;
+
         # SMTP mode: do not serialize a single "." alone on a line
         bool smtp_mode = True;
 
@@ -622,7 +626,12 @@ public class Message {
         self.sender = se;   # used for sending
         # used for displaying: the display name with the address, if there is a name
         *string name = Message::getDisplayName(sender, se);
-        from = name.val() ? Message::formatMailbox(name, se) : se;
+        if (name.val()) {
+            sender_name = name;
+            from = Message::formatMailbox(name, se);
+        } else {
+            from = se;
+        }
         self.subject = subject;
         self.smtp_mode = smtp_mode;
     }
@@ -1227,20 +1236,71 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     #! @cond nodoc
     # returns the display name of a mailbox in the name-addr form ("Name <addr>", RFC 5322 section 3.4) if the
-    # address in angle brackets is the given address: without the quotes and quoting backslashes of a quoted string,
-    # and an empty string if there is no name; NOTHING if the mailbox is not in this form
+    # address in angle brackets is the given address, and the text before it is a phrase (see getPhraseText()); an
+    # empty string if there is no name; NOTHING if the mailbox is not in this form
     private static *string getDisplayName(string mailbox, string addr) {
         *list<*string> m = mailbox =~ x/^\s*(.*?)\s*<([^<>]*)>\s*$/s;
         if (!m || m[1] != addr) {
             return;
         }
-        string name = m[0] ?? "";
-        if (name =~ /^".*"$/s) {
-            name = name.substr(1, -1);
-            name =~ s/\\(.)/$1/gs;
-            trim name;
+        return Message::getPhraseText(m[0] ?? "");
+    }
+
+    # returns the text of a display name: its words, which are atoms or quoted strings (without the quotes and the
+    # backslashes that quote characters in them), separated by a space; NOTHING if it has an unterminated quoted
+    # string, a '<' or '>' outside quotes, or a ',' and a '@' outside quotes: the text before the last address of a
+    # list of mailboxes, where each mailbox before it has an address in angle brackets or an address alone.  A ','
+    # alone is accepted, as in "Me, Myself, and I <me@email.com>", and the name is then quoted in the header.
+    private static *string getPhraseText(string phrase) {
+        list<string> words = ();
+        string word = "";
+        bool in_word;
+        bool quoted;
+        bool escaped;
+        bool comma;
+        bool at;
+        foreach string c in (phrase.splitChars()) {
+            if (quoted) {
+                if (escaped) {
+                    word += c;
+                    escaped = False;
+                } else if (c == "\\") {
+                    escaped = True;
+                } else if (c == "\"") {
+                    quoted = False;
+                } else {
+                    word += c;
+                }
+                continue;
+            }
+            if (c == "\"") {
+                quoted = True;
+                in_word = True;
+            } else if (c == " " || c == "\t" || c == "\r" || c == "\n") {
+                if (in_word) {
+                    words += word;
+                    word = "";
+                    in_word = False;
+                }
+            } else if (c == "<" || c == ">") {
+                return;
+            } else {
+                if (c == ",") {
+                    comma = True;
+                } else if (c == "@") {
+                    at = True;
+                }
+                word += c;
+                in_word = True;
+            }
         }
-        return name;
+        if (quoted || (comma && at)) {
+            return;
+        }
+        if (in_word) {
+            words += word;
+        }
+        return words.join(" ");
     }
 
     # returns a mailbox in display format: "Name <addr>", with the name as a quoted string if it has specials
@@ -1254,16 +1314,13 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # returns a header with the sender in display format: the display name is encoded as an RFC 2047 "B" encoded word
     # if it is not printable ASCII and encode is True, and the address is never encoded
     private string doSenderHeader(string hdr, string eol, bool encode) {
-        *string name = sender.val() ? Message::getDisplayName(from, sender) : NOTHING;
-        if (!exists name) {
-            # no display name with the sender's address: written as it is
+        # the sender of a parsed message, or of a message created with no display name, is written as it is
+        if (!sender_name.val()) {
             return Message::doHeaderValue(hdr, from, eol, encode);
         }
-        if (name.empty()) {
-            return Message::doHeaderValue(hdr, sender, eol, encode);
-        }
+        string name = sender_name;
         if (!encode || name.isDataPrintableAscii()) {
-            return Message::doHeaderValue(hdr, Message::formatMailbox(name, sender), eol, encode);
+            return Message::doHeaderValue(hdr, from, eol, encode);
         }
         # an encoded word cannot be in a quoted string, and the "B" encoding has no specials (RFC 2047 section 5),
         # so the name is encoded as it is; a line break in the name is encoded and cannot end the header line
@@ -1316,9 +1373,9 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         email address (ex: \c "Qorus Cloud <notifications@mail.qorus.cloud>"), with the name as a quoted string if it
         has characters that a display name cannot have outside quotes (RFC 5322 \c specials, ex:
         <tt>"Doe, John" \<john@example.com\></tt>), or the email address alone if the sender has no display name; for
-        a parsed message, the decoded \c From header.  The value is not encoded; non-ASCII display names are
-        encoded in the \c From header written by @ref getHeaderString().  Use @ref getFrom() for the email address
-        alone.
+        a parsed message, the decoded \c From header.  The value is not encoded, so it must not be written as it is
+        into a header: it can have non-ASCII characters and line breaks; @ref getHeaderString() encodes it.  Use
+        @ref getFrom() for the email address alone.
 
         @since MailMessage 1.5.1 a message created to be sent returns the display name with the address; it returned
         the email address alone
@@ -1560,7 +1617,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     #! returns the current read delivery receipt setting
     /** if this is @ref True "True", then the following header will be sent:
-        - \c Return-Receipt-To: <sender's email address>
+        - \c Return-Receipt-To: the sender in display format (see @ref getSender())
     */
     bool receiptRead() {
         return deliveryReceipt;
@@ -1568,7 +1625,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     #! sets the read delivery receipt setting
     /** if this is @ref True "True", then the following header will be sent:
-        - \c Return-Receipt-To: <sender's email address>
+        - \c Return-Receipt-To: the sender in display format (see @ref getSender())
     */
     receiptRead(bool arg) {
         deliveryReceipt = arg;
@@ -1576,7 +1633,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     #! returns the delivery receipt setting
     /** if this is @ref True "True", then the following header will be sent:
-        - \c Disposition-Notification-To: <sender's email address>
+        - \c Disposition-Notification-To: the sender in display format (see @ref getSender())
     */
     bool receiptDelivery() {
         return readReceipt;
@@ -1584,7 +1641,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
 
     #! sets the delivery receipt setting
     /** if this is @ref True "True", then the following header will be sent:
-        - \c Disposition-Notification-To: <sender's email address>
+        - \c Disposition-Notification-To: the sender in display format (see @ref getSender())
     */
     receiptDelivery(bool arg) {
         readReceipt = arg;
@@ -1688,9 +1745,10 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         MIME headers of a message with alternative parts or attachments are not included.
 
         The \c From header (and the \c Return-Receipt-To and \c Disposition-Notification-To headers) has the sender
-        in display format (see @ref getSender()); a display name that is not printable ASCII is encoded as an
-        <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a> \c "B" encoded word when \a encode is
-        @ref True "True", and the email address is never encoded.
+        in display format (see @ref getSender()).  For a message created to be sent, a display name that is not
+        printable ASCII is encoded as an <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a> \c "B" encoded
+        word when \a encode is @ref True "True", and the email address is never encoded; the \c From header of a
+        parsed message is written as it was parsed, encoded like other header values.
 
         @param eol the End-Of-Line marker for the string
         @param encode encode non-ASCII values with quoted printable encoding (http://tools.ietf.org/html/rfc2047)

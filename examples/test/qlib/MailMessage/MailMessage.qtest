@@ -33,6 +33,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Test character encoding of serialized messages", \testEncoding(), NOTHING);
         addTestCase("Test names of unnamed attachments", \testUnnamedAttachmentNames(), NOTHING);
         addTestCase("Test the sender's display name", \testSenderDisplayName(), NOTHING);
+        addTestCase("Test the From header of parsed messages", \testParsedFromHeader(), NOTHING);
 
         set_return_value(main());
     }
@@ -1372,7 +1373,8 @@ lorem ipsum\r
         assertEq("From: \"John Q. Public\" <john@example.com>\r\n", getFromHeader("John Q. Public <john@example.com>"));
         assertEq("From: \"Say \\\"Hi\\\" \\\\ bye\" <a@example.com>\r\n",
             getFromHeader("\"Say \\\"Hi\\\" \\\\ bye\" <a@example.com>"));
-        assertEq("From: \"Say \\\"Hi\\\"\" <a@example.com>\r\n", getFromHeader("Say \"Hi\" <a@example.com>"));
+        # a quoted word in a name is a word of the name
+        assertEq("From: Say Hi <a@example.com>\r\n", getFromHeader("Say \"Hi\" <a@example.com>"));
         assertEq("\"Doe, John\" <john@example.com>", (new Message("Doe, John <john@example.com>", Subject)).getSender());
         # a quoted name without specials is written without quotes
         assertEq("From: John Doe <john@example.com>\r\n", getFromHeader("\"John Doe\" <john@example.com>"));
@@ -1386,8 +1388,15 @@ lorem ipsum\r
         assertEq("foo@bar.cz", msg.getSender());
         assertEq("foo@bar.cz", msg.getFrom());
 
-        # a line break in the name cannot end the header line
+        # a line break in the name cannot end the header line: outside quotes it is white space between words, in a
+        # quoted string it is encoded, or raises HEADER-ERROR if the header is not encoded
         sender = "A\r\nBcc: victim@example.com <a@example.com>";
+        msg = new Message(sender, Subject);
+        assertEq("a@example.com", msg.getFrom());
+        assertEq("\"A Bcc: victim@example.com\" <a@example.com>", msg.getSender());
+        assertEq("From: \"A Bcc: victim@example.com\" <a@example.com>\r\n", getFromHeader(sender));
+        assertEq("From: \"A Bcc: victim@example.com\" <a@example.com>\r\n", getFromHeader(sender, False));
+        sender = "\"A\r\nBcc: victim@example.com\" <a@example.com>";
         msg = new Message(sender, Subject);
         assertEq("a@example.com", msg.getFrom());
         assertEq("From: " + mime_encode_header_word_b("A\r\nBcc: victim@example.com") + " <a@example.com>\r\n",
@@ -1396,8 +1405,47 @@ lorem ipsum\r
         msg.setBody("body");
         assertThrows("HEADER-ERROR", \msg.getHeaderString(), ("\r\n", False));
 
+        # a display name of quoted strings and words is one name
+        assertEq("\"John Q. Public\" <j@x.com>", (new Message("\"John Q.\" Public <j@x.com>", Subject)).getSender());
+        assertEq("a b <j@x.com>", (new Message("\"a\" \"b\" <j@x.com>", Subject)).getSender());
+        # text before the address that is not a display name (a list of mailboxes) is not taken as the name
+        msg = new Message("John <j@x.com>, Other <o@x.com>", Subject);
+        assertEq("o@x.com", msg.getFrom());
+        assertEq("o@x.com", msg.getSender());
+        assertEq("o@x.com", (new Message("j@x.com (no name), Other <o@x.com>", Subject)).getSender());
+        assertEq("o@x.com", (new Message("j@x.com, Other <o@x.com>", Subject)).getSender());
+        assertEq("o@x.com", (new Message("\"unterminated <o@x.com>", Subject)).getSender());
+        # a name with a comma and no address before the address is a name, as in the module's example
+        assertEq("\"Me, Myself, and I\" <me@email.com>", (new Message("Me, Myself, and I <me@email.com>", Subject)).getSender());
+    }
+
+    # issue #6019: the From header of a parsed message is written as it was parsed
+    testParsedFromHeader() {
+        foreach string from in ("John <j@x.com>, Other <o@x.com>", "j@x.com (no name), Other <o@x.com>",
+                "\"John Q.\" Public <j@x.com>", "\"a\" \"b\" <j@x.com>", "\"Doe, John\" <j@x.com>",
+                "Qorus Cloud <notifications@mail.qorus.cloud>", "<j@x.com>", "j@x.com") {
+            Message parsed(sprintf("From: %s\r\nTo: to@example.com\r\nSubject: s\r\n\r\nbody\r\n", from));
+            assertEq(from, parsed.getSender(), from);
+            assertEq("From: " + from + "\r\n", getFromLine(parsed.getHeaderString()), from);
+            Message reparsed(parsed.serializeRaw());
+            assertEq(from, reparsed.getSender(), from);
+            assertEq(parsed.getFrom(), reparsed.getFrom(), from);
+        }
+        # a list of mailboxes with non-ASCII names
+        {
+            string from = sprintf("%s <j@x.com>, %s <m@x.com>", mime_encode_header_word_b("Jörg"),
+                mime_encode_header_word_b("Müller, Jörg"));
+            Message parsed(sprintf("From: %s\r\nTo: to@example.com\r\nSubject: s\r\n\r\nbody\r\n", from));
+            string decoded = "Jörg <j@x.com>, Müller, Jörg <m@x.com>";
+            assertEq(decoded, parsed.getSender());
+            assertEq(Message::doHeaderValue("From", decoded), getFromLine(parsed.getHeaderString()));
+            Message reparsed(parsed.serializeRaw());
+            assertEq(decoded, reparsed.getSender());
+            assertEq("m@x.com", reparsed.getFrom());
+        }
+
         # the receipt headers have the display name too
-        msg = new Message("Qorus Cloud <notifications@mail.qorus.cloud>", Subject);
+        Message msg("Qorus Cloud <notifications@mail.qorus.cloud>", Subject);
         msg.addTO(To);
         msg.setBody("body");
         msg.receiptRead(True);
@@ -1414,7 +1462,9 @@ lorem ipsum\r
             Message parsed(msg.serializeRaw());
             assertEq("j@example.com", parsed.getFrom(), name);
             assertEq(msg.getSender(), parsed.getSender(), name);
-            assertEq(getFromLine(msg.getHeaderString()), getFromLine(parsed.getHeaderString()), name);
+            # the From header of the parsed message is written as it was parsed
+            assertEq(Message::doHeaderValue("From", parsed.getSender()), getFromLine(parsed.getHeaderString()), name);
+            assertEq(msg.getSender(), (new Message(parsed.serializeRaw())).getSender(), name);
         }
     }
 }
