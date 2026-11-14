@@ -29,7 +29,8 @@
     with no value, and with a try statement of the function catching the exception, it replaces the value of the try
     block's return (the review cases k1-k7), a release that raises an exception at the end of a try statement
     goes past its catch block, and a handler of a handler whose exception leaves the handler forwards its value (the
-    cases rv1-rv5 of the second review).  HandlerReturnUnwind.q gives the output of the AST interpreter in every
+    cases rv1-rv5 of the second review); the same handler reached from sites at different try depths of the function
+    gives what is specific to each site at run time (sh0-sh2).  HandlerReturnUnwind.q gives the output of the AST interpreter in every
     execution mode and compiled with qcc.
 */
 class HandlerReturnUnwindTest inherits QUnit::Test {
@@ -93,6 +94,12 @@ rv4[0]: [\"te\", \"out\", \"in\", \"~rv4-body\", \"~rv4-l\", \"~rv4-out\"]
 rv4[1]: [\"te\", \"out\", \"in\", \"~rv4-body\", \"~rv4-l\", \"~rv4-out\"]
 rv5[0]: [\"e\", \"~rv5-h\", \"c\", \"~rv5-b\", \"ex:RV5b\"]
 rv5[1]: [\"e\", \"~rv5-h\", \"c\", \"~rv5-b\", \"ex:RV5b\"]
+sh0[0]: [\"x\", \"~sh-body0\", \"~sh-l\", \"rv:sh-h0\", \"~sh-h0\"]
+sh0[1]: [\"x\", \"~sh-body0\", \"~sh-l\", \"rv:sh-h0\", \"~sh-h0\"]
+sh1[0]: [\"x\", \"~sh-h1\", \"c\", \"~sh-l\", \"rv:sh-after1\", \"~sh-after1\"]
+sh1[1]: [\"x\", \"~sh-h1\", \"c\", \"~sh-l\", \"rv:sh-after1\", \"~sh-after1\"]
+sh2[0]: [\"x\", \"~sh-h2\", \"~sh-l\"]
+sh2[1]: [\"x\", \"~sh-h2\", \"~sh-l\"]
 ";
 
 

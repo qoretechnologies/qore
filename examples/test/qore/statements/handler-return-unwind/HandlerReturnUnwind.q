@@ -257,6 +257,28 @@ auto sub rv5() {
     throw "RV5b";
 }
 
+
+# the same handler reached from sites at different try depths of the function: a normal return (the handler lowered
+# inline), an exception that a try statement of the function catches (the value replaces the value of its try
+# block's return) and a thread_exit that leaves the function (the value replaces the function's return); the handler
+# function is the same for every site, which gives what is specific to the site at run time
+auto sub sh(int mode) {
+    T l("sh-l");
+    try {
+        on_exit { lg += "x"; return new T("sh-h" + mode); }
+        if (mode == 1) {
+            throw "SH";
+        }
+        if (mode == 2) {
+            thread_exit;
+        }
+        return new T("sh-body" + mode);
+    } catch (hash<ExceptionInfo> ex) {
+        lg += "c";
+    }
+    return new T("sh-after" + mode);
+}
+
 # runs the function twice in a thread of its own, which a thread_exit ends
 sub show(string label, code c) {
     for (int i = 0; i < 2; ++i) {
@@ -304,3 +326,6 @@ show("rv2", \rv2());
 show("rv3", \rv3());
 show("rv4", \rv4());
 show("rv5", \rv5());
+show("sh0", auto sub () { return sh(0); });
+show("sh1", auto sub () { return sh(1); });
+show("sh2", auto sub () { return sh(2); });
