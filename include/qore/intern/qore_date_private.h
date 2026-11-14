@@ -828,7 +828,13 @@ public:
             ++e;
             u -= 1000000;
         }
-        return !__builtin_mul_overflow(e, (int64)1000000, &rv) && !__builtin_add_overflow(rv, u, &rv);
+        // rv is set only if the value fits, as documented
+        int64 t;
+        if (__builtin_mul_overflow(e, (int64)1000000, &t) || __builtin_add_overflow(t, u, &t)) {
+            return false;
+        }
+        rv = t;
+        return true;
     }
 
     DLLLOCAL int64 getEpochMillisecondsUTC() const {
