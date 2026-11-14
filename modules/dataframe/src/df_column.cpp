@@ -668,6 +668,34 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
     return col;
 }
 
+//! Builds a column of values of two scalar types, found at the given value: a string column, which stores a scalar
+//! value as its string form, unless a later value is not a scalar, which makes a column that holds any value
+//! (qore#6097)
+static std::shared_ptr<ColumnData> buildMixedColumnData(const QoreListNode* values, int64_t start,
+        ExceptionSink* xsink) {
+    for (size_t i = static_cast<size_t>(start); i < values->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
+            return nullptr;
+        }
+        QoreValue v = values->retrieveEntry(i);
+        if (v.isNullOrNothing()) {
+            continue;
+        }
+        switch (v.getType()) {
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+            case NT_STRING:
+            case NT_BOOLEAN:
+            case NT_DATE:
+                break;
+            default:
+                return buildColumnData(values, ColumnType::AUTO, xsink);
+        }
+    }
+    return buildColumnData(values, ColumnType::STRING, xsink);
+}
+
 std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
         ExceptionSink* xsink) {
     int64_t n = values ? (int64_t)values->size() : 0;
@@ -772,7 +800,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                     col->float_data(i) = v.getAsFloat();
                     continue;
                 } else if (col->type != ColumnType::INT64) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
                 col->int_data[i] = v.getAsBigInt();
                 break;
@@ -788,7 +816,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                         return nullptr;
                     }
                 } else if (col->type != ColumnType::FLOAT64) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
                 col->float_data(i) = v.getAsFloat();
                 break;
@@ -799,7 +827,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                         return nullptr;
                     }
                 } else if (col->type != ColumnType::STRING) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
                 if (!deferred.raised && dataFrameUtf8String(v, col->str_data[i], &deferred.xsink)) {
                     deferred.raised = true;
@@ -813,7 +841,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                         return nullptr;
                     }
                 } else if (col->type != ColumnType::BOOL) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
                 col->bool_data[i] = v.getAsBool() ? 1 : 0;
                 break;
@@ -824,7 +852,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                         return nullptr;
                     }
                 } else if (col->type != ColumnType::DATE) {
-                    return buildColumnData(values, ColumnType::STRING, xsink);
+                    return buildMixedColumnData(values, i, xsink);
                 }
                 if (!deferred.raised
                         && dataFrameDateMicros(v.get<const DateTimeNode>(), col->date_data[i], &deferred.xsink)) {

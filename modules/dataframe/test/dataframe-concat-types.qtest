@@ -21,6 +21,8 @@ class DataFrameConcatTypesTest inherits QUnit::Test {
         addTestCase("float32", \float32Test());
         addTestCase("decimal128", \decimalTest());
         addTestCase("timestamp", \timestampTest());
+        addTestCase("duration", \durationTest());
+        addTestCase("sliced nullable source", \slicedTest());
         set_return_value(main());
     }
 
@@ -59,6 +61,41 @@ class DataFrameConcatTypesTest inherits QUnit::Test {
         assertEq("date", both.dtypes()[0], "a date column");
         assertEq("timestamp", getSchema(both, "v").kind, "a timestamp column");
         assertEq(dates + dates, both.getColumn("v"), "the values");
+    }
+
+    durationTest() {
+        list<auto> durations = (5s, NOTHING, 1D);
+        DataFrame::DataFrame du = durationFrame(durations);
+        DataFrame::DataFrame both = DataFrame::DataFrame::concat((du, du));
+        assertEq("duration", getSchema(both, "v").kind, "a duration column");
+        assertTrue(both.getColumn("v")[3] == 5s, "a relative date");
+        # a timestamp column and a duration column, whose buffers of microseconds mean other values, are not
+        # concatenated as dense storage: the timestamp is not read as a duration, nor the duration as a timestamp
+        DataFrame::DataFrame ts = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "v": (2024-01-01T10:00:00Z,),
+        }, {
+            "v": {"schema": {"kind": "timestamp", "time_unit": "us", "timezone": "UTC", "nullable": True}},
+        }));
+        assertTrue(DataFrame::DataFrame::concat((ts, du)).getColumn("v")[0] == 2024-01-01T10:00:00Z,
+            "a timestamp before durations");
+        assertTrue(DataFrame::DataFrame::concat((du, ts)).getColumn("v")[3] == 2024-01-01T10:00:00Z,
+            "a timestamp after durations");
+    }
+
+    #! the validity bits of a view of a nullable source at an offset that is not a multiple of 8
+    slicedTest() {
+        list<auto> cells = map $1 % 3 ? ($1 + 0.25n) : NOTHING, xrange(20);
+        DataFrame::DataFrame df = decimalFrame(cells, 10, 2);
+        DataFrame::DataFrame both = DataFrame::DataFrame::concat((df.slice(5, 13), df.slice(3, 9)));
+        assertEq(cells[5..12] + cells[3..8], both.getColumn("v"), "the values and nulls");
+    }
+
+    private DataFrame::DataFrame durationFrame(list<auto> values) {
+        return DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "v": values,
+        }, {
+            "v": {"native_type": "interval", "nullable": True},
+        }));
     }
 
     private DataFrame::DataFrame decimalFrame(list<auto> values, int precision, int scale) {

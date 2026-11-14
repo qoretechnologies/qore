@@ -2604,10 +2604,17 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                     continue;
                 }
                 const ColumnData& src = *snapshots[d].columns[it->second].data;
+                // the columns must also have the same logical type: a timestamp and a duration column both have
+                // a buffer<int64> of microseconds, which mean other values
                 same = src.hasDenseBuffer() && src.type == first.type
                     && src.dense_buffer_type == first.dense_buffer_type
                     && src.dense_buffer->getDecimalPrecision() == first.dense_buffer->getDecimalPrecision()
-                    && src.dense_buffer->getDecimalScale() == first.dense_buffer->getDecimalScale();
+                    && src.dense_buffer->getDecimalScale() == first.dense_buffer->getDecimalScale()
+                    && src.has_columnar_schema == first.has_columnar_schema
+                    && (!first.has_columnar_schema
+                        || (src.columnar_schema.kind == first.columnar_schema.kind
+                            && src.columnar_schema.time_unit == first.columnar_schema.time_unit
+                            && src.columnar_schema.timezone == first.columnar_schema.timezone));
             }
             dense[c] = same;
         }

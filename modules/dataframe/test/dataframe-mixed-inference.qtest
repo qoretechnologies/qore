@@ -30,6 +30,12 @@ class DataFrameMixedInferenceTest inherits QUnit::Test {
             (("a", {"k": 1}), "auto"),
             (("a", <61>), "auto"),
             (("a", NOTHING, (1,)), "auto"),
+            # two scalar types before a value that is not a scalar
+            (("a", 1, (1, 2)), "auto"),
+            ((1, "a", (1, 2)), "auto"),
+            (("a", 1, c'c'), "auto"),
+            ((True, 1, {"x": 1}), "auto"),
+            (("a", 1, <0102>), "auto"),
             # a string with scalar values makes a string column
             (("a", 1), "string"),
             ((1, "a"), "string"),
