@@ -2030,6 +2030,12 @@ public:
         return cached_aot_fn != nullptr;
     }
 
+    //! Returns the standard native entry of the AOT-compiled function, or nullptr; it identifies the function's
+    //! native fast entry in the registry of a module's fast entries (qore_aot_find_cross_module_fast_entry())
+    DLLLOCAL AotFunctionPtr getCachedAOTFunction() const {
+        return cached_aot_fn;
+    }
+
     //! Returns the location of the body of the AOT-compiled function, or nullptr if unknown
     /** Where AOT code that a summary of the body takes the place of a call of the function runs
         (qore_rt_push_native_inline_call_frame_aot()).

@@ -11136,13 +11136,45 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         const char* fallback_consume_throwing_name,
         bool require_exact_object_class,
         const std::vector<uint8_t>* date_kind_guards) {
+    // a function of another module is called through the fast entry that its module registered (qore#6035)
+    const bool cross_module = callee_info.cross_module;
+    assert(cross_module ? !fast_fn && !object_base && !callee_info.context_independent_fast_entry : fast_fn != nullptr);
     auto ctx_helper = module.getOrInsertFunction(
         "qore_rt_try_get_aot_call_target_context",
         llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
     llvm::Value* callee_ctx = callee_info.context_independent_fast_entry
         ? aot_ctx_arg : nullptr;
+    // the cross-module fast entry, which is resolved with the callee's context
+    llvm::Value* cross_module_fn = nullptr;
     static constinit QoreEnvFlag hoist_context_env("QORE_DISABLE_AOT_CALLEE_CONTEXT_HOIST");
     const bool hoist_context = !hoist_context_env.get();
+    if (cross_module) {
+        auto cross_helper = module.getOrInsertFunction("qore_rt_try_get_cross_module_fast_entry",
+            llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, ptr_type, ptr_type}, false));
+        auto emit_resolve = [&](llvm::IRBuilder<>& b) {
+            llvm::BasicBlock& alloca_bb = llvm_func->getEntryBlock();
+            llvm::IRBuilder<> ab(&alloca_bb, alloca_bb.begin());
+            llvm::Value* fn_slot = ab.CreateAlloca(ptr_type, nullptr, "aot_cross_module_fn_slot");
+            llvm::Value* symbol = qore_ir_create_global_string_ptr(builder, callee_info.fast_name,
+                "aot_cross_module_symbol");
+            callee_ctx = b.CreateCall(cross_helper,
+                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), symbol, fn_slot}, "aot_cross_module_ctx");
+            cross_module_fn = b.CreateLoad(ptr_type, fn_slot, "aot_cross_module_fn");
+        };
+        auto context_it = aot_cross_module_targets.find(slot);
+        if (context_it != aot_cross_module_targets.end()) {
+            callee_ctx = context_it->second.first;
+            cross_module_fn = context_it->second.second;
+        } else if (hoist_context && current_ir_func && !current_ir_func->blocks.empty()
+                && block_map.count(current_ir_func->blocks.front().get())) {
+            llvm::BasicBlock* entry_bb = block_map[current_ir_func->blocks.front().get()];
+            llvm::IRBuilder<> entry_builder(entry_bb, entry_bb->getFirstInsertionPt());
+            emit_resolve(entry_builder);
+            aot_cross_module_targets.emplace(slot, std::make_pair(callee_ctx, cross_module_fn));
+        } else {
+            emit_resolve(*builder);
+        }
+    }
     if (!callee_ctx && hoist_context) {
         auto context_it = aot_call_target_contexts.find(slot);
         if (context_it != aot_call_target_contexts.end()) {
@@ -11278,15 +11310,20 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     call_args.push_back(callee_ctx);
     call_args.push_back(xsink_arg);
     bool summary_nothrow = false;
+    // another module's function: its Program is entered before the call's frame is pushed, as the runtime path
+    // enters it before it pushes the frame, and left after the frame is popped (qore#6035)
+    llvm::BasicBlock* cross_module_skip_bb = cross_module
+        ? emitEnterCrossModuleCall(module, llvm_func, slot) : nullptr;
     // the frame of the call, also when the callee's body summary takes the place of the call
     AotInlineCallFrame frame = emitPushAotInlineCallFrame(slot, callee_info, inst, module, llvm_func);
     // a plain function runs without the object and class context of a caller that has one
     const AbstractQoreFunctionVariant* context_callee = !object_base ? getBatchCalleeVariant(callee_info) : nullptr;
     llvm::CallInst* function_context = context_callee && nativeCallNeedsFunctionContext(context_callee)
         ? emitPushNativeFunctionContext(module, llvm_func) : nullptr;
-    llvm::Value* fast_result = emitAOTImportedSummary(callee_info, call_args,
-        callee_ctx, module, fast_fn, &summary_nothrow);
-    const bool inline_body = fast_result;
+    llvm::Value* fast_result = cross_module
+        ? emitCrossModuleFastEntryCall(callee_info, cross_module_fn, call_args)
+        : emitAOTImportedSummary(callee_info, call_args, callee_ctx, module, fast_fn, &summary_nothrow);
+    const bool inline_body = !cross_module && fast_result;
     if (!fast_result) {
         fast_result = builder->CreateCall(fast_fn, call_args);
     }
@@ -11299,6 +11336,9 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         }
     }
     endAotInlineCallFrame(frame, !inline_body || !summary_nothrow, module);
+    if (cross_module) {
+        fast_result = emitLeaveCrossModuleCall(module, llvm_func, callee_info, fast_result, cross_module_skip_bb);
+    }
     if (has_arg_cleanups) {
         emitArgCleanupClear(
             module, arg_cleanups, nargs, summary_nothrow);
@@ -11382,6 +11422,72 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     result->addIncoming(fast_result, fast_bb);
     result->addIncoming(fallback_result, fallback_bb);
     (void)inst;
+    return result;
+}
+
+llvm::BasicBlock* QoreIRToLLVM::emitEnterCrossModuleCall(llvm::Module& module, llvm::Function* llvm_func,
+        int32_t slot) {
+    if (!cross_module_call_state_storage) {
+        // one buffer serves every such call of the function: a call's arguments are evaluated before its Program is
+        // entered, and nothing is called between its entry and its exit but the function
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
+        cross_module_call_state_storage = ab.CreateAlloca(llvm::Type::getInt8Ty(ctx),
+            llvm::ConstantInt::get(i64_type, QORE_RT_CROSS_MODULE_CALL_STATE_SIZE), "cross_module_call_state");
+        cross_module_call_state_storage->setAlignment(llvm::Align(QORE_RT_CROSS_MODULE_CALL_STATE_ALIGN));
+    }
+    auto enter = module.getOrInsertFunction("qore_rt_enter_cross_module_call",
+        llvm::FunctionType::get(i32_type, {ptr_type, i32_type, ptr_type, ptr_type}, false));
+    llvm::Value* rc = builder->CreateCall(enter,
+        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), cross_module_call_state_storage, xsink_arg},
+        "cross_module_enter");
+    llvm::Value* entered = builder->CreateICmpEQ(rc, llvm::ConstantInt::get(i32_type, 0));
+    llvm::BasicBlock* call_bb = llvm::BasicBlock::Create(ctx, "cross_module_call", llvm_func);
+    llvm::BasicBlock* skip_bb = llvm::BasicBlock::Create(ctx, "cross_module_enter_failed", llvm_func);
+    builder->CreateCondBr(entered, call_bb, skip_bb);
+    builder->SetInsertPoint(call_bb);
+    return skip_bb;
+}
+
+llvm::Value* QoreIRToLLVM::emitCrossModuleFastEntryCall(const BatchCalleeInfo& callee_info, llvm::Value* fast_fn,
+        const std::vector<llvm::Value*>& call_args) {
+    assert(callee_info.cross_module && fast_fn);
+    llvm::Type* return_type = callee_info.return_kind == BatchCalleeReturnKind::NativeFloat
+        ? double_type
+        : callee_info.return_kind == BatchCalleeReturnKind::NativeBool
+            ? llvm::Type::getInt1Ty(ctx)
+            : i64_type;
+    std::vector<llvm::Type*> param_types;
+    param_types.reserve(call_args.size());
+    for (llvm::Value* arg : call_args) {
+        param_types.push_back(arg->getType());
+    }
+    llvm::FunctionType* fast_type = llvm::FunctionType::get(return_type, param_types, false);
+    return builder->CreateCall(fast_type, fast_fn, call_args, "cross_module_result");
+}
+
+llvm::Value* QoreIRToLLVM::emitLeaveCrossModuleCall(llvm::Module& module, llvm::Function* llvm_func,
+        const BatchCalleeInfo& callee_info, llvm::Value* call_result, llvm::BasicBlock* skip_bb) {
+    assert(cross_module_call_state_storage && skip_bb);
+    llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "cross_module_call_done", llvm_func);
+    builder->CreateBr(done_bb);
+    llvm::BasicBlock* call_bb = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(skip_bb);
+    // the zero value of the return kind, as a fast entry returns it with an exception raised
+    llvm::Value* skip_result = callee_info.return_kind == BatchCalleeReturnKind::Boxed
+        ? static_cast<llvm::Value*>(llvm::ConstantInt::get(i64_type, VAL_NOTHING))
+        : llvm::Constant::getNullValue(call_result->getType());
+    builder->CreateBr(done_bb);
+
+    builder->SetInsertPoint(done_bb);
+    llvm::PHINode* result = builder->CreatePHI(call_result->getType(), 2, "cross_module_call_result");
+    result->addIncoming(call_result, call_bb);
+    result->addIncoming(skip_result, skip_bb);
+    // the state is destroyed in either case
+    auto leave = module.getOrInsertFunction("qore_rt_leave_cross_module_call",
+        llvm::FunctionType::get(void_type, {ptr_type}, false));
+    builder->CreateCall(leave, {cross_module_call_state_storage});
     return result;
 }
 
@@ -11937,7 +12043,9 @@ QoreIRToLLVM::AotInlineCallFrame QoreIRToLLVM::emitPushAotInlineCallFrame(int32_
     assert(aot_mode);
     // the frame's pop restores the caller's location
     AotInlineCallFrame frame;
-    const AbstractQoreFunctionVariant* variant = target_slot < 0 || mayRunWithCallerContext()
+    // another module's function has no body location here: its call target names its frame (qore#6035)
+    const AbstractQoreFunctionVariant* variant = !callee.cross_module
+            && (target_slot < 0 || mayRunWithCallerContext())
         ? getBatchCalleeVariant(callee) : nullptr;
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!uvb) {
@@ -13503,6 +13611,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     assigned_hash_guard_elisions = 0;
     local_allocas.clear();
     aot_call_target_contexts.clear();
+    aot_cross_module_targets.clear();
+    cross_module_call_state_storage = nullptr;
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
     stable_scalar_loads.clear();
@@ -23004,9 +23114,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 && qore_ir_fast_entry_args_allow_optional_scalar_guard(
                                     aot_direct_variant, direct_inst->expr,
                                     arg_start, nargs)))) {
-                    aot_approach_b_fn = module.getFunction(it->second.fast_name);
-                    if (aot_approach_b_fn) {
-                        aot_approach_b_callee = &it->second;
+                    if (it->second.cross_module) {
+                        // another module's function: called through the fast entry that its module registered, and
+                        // with no summary of its body, so never fused with the call's consumer (qore#6035)
+                        if (!fused_string_consumer && !fused_collection_consumer && !fused_aggregate_projection
+                                && !explicit_inst && !generic_specialization_matches) {
+                            aot_approach_b_callee = &it->second;
+                        }
+                    } else {
+                        aot_approach_b_fn = module.getFunction(it->second.fast_name);
+                        if (aot_approach_b_fn) {
+                            aot_approach_b_callee = &it->second;
+                        }
                     }
                 }
                 if (!aot_approach_b_callee) {
