@@ -9883,13 +9883,15 @@ next_instruction:
                 QoreValue list_val = getIRValue(values, inst->operands[0]);
                 QoreValue push_val = getIRValue(values, inst->operands[1]);
                 QoreValue result;
-                // an in-place push borrows the list from the local, which keeps its reference
-                bool borrowed_result = false;
                 if (inst->list_push_in_place && list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
                     qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
-                    result = list_val;
-                    borrowed_result = true;
+                    // an in-place push borrows the list from the local, which keeps its reference: when the value is
+                    // rejected, the result stays empty, so the discard below does not release the local's list (the
+                    // frame's locals release it); no flag is used, as execute() is at its stack budget
+                    if (!xsink || !*xsink) {
+                        result = list_val;
+                    }
                 } else {
                     const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
                         inst->element_type ? inst->element_type : autoTypeInfo);
@@ -9897,11 +9899,7 @@ next_instruction:
                         toBits(list_val), toBits(push_val), elem_type, xsink));
                 }
                 if (xsink && *xsink) {
-                    // a rejected value leaves the list in the local, which releases it when the frame's locals are
-                    // released; releasing the borrowed list here too released it twice
-                    if (!borrowed_result) {
-                        result.discard(xsink);
-                    }
+                    result.discard(xsink);
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
