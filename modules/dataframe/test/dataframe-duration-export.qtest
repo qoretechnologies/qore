@@ -19,6 +19,7 @@ class DataFrameDurationExportTest inherits QUnit::Test {
     constructor() : Test("DataFrameDurationExportTest", "1.0", \ARGV) {
         addTestCase("Arrow IPC round trip", \roundTripTest());
         addTestCase("timestamps in nanoseconds", \nanoTimestampTest());
+        addTestCase("nested dates and durations", \nestedTest());
         set_return_value(main());
     }
 
@@ -32,6 +33,43 @@ class DataFrameDurationExportTest inherits QUnit::Test {
             DataFrame::DataFrame df = timestampFrame((d,));
             assertThrows("DATAFRAME-IO-ERROR", \df.toArrowIpc(), (), sprintf("%y", d));
         }
+        # the first and last microseconds that fit in an int64 of nanoseconds, and the ones just outside them
+        foreach date d in ((1677-09-21T00:12:43.145225Z, 1677-09-21T00:12:43.999999Z, 2262-04-11T23:47:16.854775Z)) {
+            date exported = DataFrame::DataFrame::fromArrowIpc(timestampFrame((d,)).toArrowIpc()).getColumn("v")[0];
+            assertTrue(exported == d, sprintf("%y: %y", d, exported));
+        }
+        foreach date d in ((1677-09-21T00:12:43.145224Z, 2262-04-11T23:47:16.854776Z)) {
+            DataFrame::DataFrame df = timestampFrame((d,));
+            assertThrows("DATAFRAME-IO-ERROR", \df.toArrowIpc(), (), sprintf("%y", d));
+        }
+    }
+
+    #! dates and durations in lists, which are not range-checked when they are stored, raise an error when they do
+    #! not fit in the unit of their column, instead of wrapping
+    nestedTest() {
+        date far = 1970-01-01Z + years(300000);
+        foreach list<string> spec in (("timestamp", "us"), ("timestamp", "ms"), ("duration", "us"), ("duration", "ms"),
+                ("duration", "ns")) {
+            auto value = spec[0] == "timestamp" ? far : years(300000);
+            DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+                "v": ((value,),),
+            }, {
+                "v": {"schema": {"kind": "list", "nullable": False, "children": (
+                    {"name": "item", "kind": spec[0], "time_unit": spec[1], "nullable": True},
+                )}},
+            }));
+            assertThrows("DATAFRAME-IO-ERROR", \df.toArrowIpc(), (), sprintf("list of %s in %s", spec[0], spec[1]));
+        }
+        # in the range, a list of durations in ms keeps its values
+        DataFrame::DataFrame ok = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "v": ((1500ms, -7s),),
+        }, {
+            "v": {"schema": {"kind": "list", "nullable": False, "children": (
+                {"name": "item", "kind": "duration", "time_unit": "ms", "nullable": True},
+            )}},
+        }));
+        list<auto> cells = DataFrame::DataFrame::fromArrowIpc(ok.toArrowIpc()).getColumn("v")[0];
+        assertTrue(cells[0] == 1500ms && cells[1] == -7s, sprintf("durations in a list: %y", cells));
     }
 
     private DataFrame::DataFrame timestampFrame(list<auto> values) {
