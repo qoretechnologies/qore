@@ -721,7 +721,9 @@ bool resolvePluginOperation(uint32_t global_id, QorePluginHelperAbi expected_abi
     std::lock_guard<std::mutex> lock(plugin_registry_mutex);
     auto gi = global_plugin_operations.find(global_id);
     if (gi == global_plugin_operations.end()) {
-        if (xsink) {
+        // id 0 is that of an operation that AOT code could not resolve, which raised the exception already
+        // (qore_rt_plugin_operation_id_aot())
+        if (xsink && (global_id || !*xsink)) {
             xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH",
                 "cannot dispatch plugin operation: global_operation_id=%u is not registered "
                 "(field=\"global_operation_id\", expected=\"registered operation id\", actual=\"missing\", "
@@ -2831,21 +2833,36 @@ static uint64_t qore_plugin_unresolved_binary_helper(uint64_t, uint64_t, Excepti
     return nothingBits();
 }
 
+//! Returns the process-global id of the plugin operation that AOT code names by its module-local reference
+/** @return the id, or 0 with an exception raised if the module is not loaded, has no operation with the local id or
+    the operation's signature is not the one that the code was compiled for
+*/
+static uint32_t qore_plugin_resolve_aot_operation_id(const char* module_name, uint32_t local_operation_id,
+        uint32_t canonical_signature_version, uint64_t signature_hash, ExceptionSink* xsink) {
+    if (local_operation_id > UINT16_MAX || canonical_signature_version > UINT8_MAX) {
+        xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH", "cannot dispatch plugin operation: module=\"%s\", "
+            "local_id=%u, canonical_signature_version=%u is not a valid operation reference",
+            escapeDiagnosticName(module_name).c_str(), local_operation_id, canonical_signature_version);
+        return 0;
+    }
+    uint32_t global_operation_id = 0;
+    if (qore_plugin_get_process_operation_id_checked(module_name, static_cast<uint16_t>(local_operation_id),
+            static_cast<uint8_t>(canonical_signature_version), signature_hash, &global_operation_id, xsink)) {
+        return 0;
+    }
+    return global_operation_id;
+}
+
 extern "C" void* qore_rt_plugin_operation_helper_aot(const char* module_name, uint32_t local_operation_id,
         uint32_t canonical_signature_version, uint64_t signature_hash, uint32_t helper_abi, std::atomic<void*>* cache,
         ExceptionSink* xsink) {
     QorePluginHelperAbi abi = static_cast<QorePluginHelperAbi>(helper_abi);
     assert(abi == QorePluginHelperAbi::UnaryValue || abi == QorePluginHelperAbi::BinaryValue
         || abi == QorePluginHelperAbi::SubscriptValue);
-    uint32_t global_operation_id = 0;
+    uint32_t global_operation_id = qore_plugin_resolve_aot_operation_id(module_name, local_operation_id,
+        canonical_signature_version, signature_hash, xsink);
     ResolvedPluginOperation op;
-    if (local_operation_id > UINT16_MAX || canonical_signature_version > UINT8_MAX) {
-        xsink->raiseException("PLUGIN-HELPER-ABI-MISMATCH", "cannot dispatch plugin operation: module=\"%s\", "
-            "local_id=%u, canonical_signature_version=%u is not a valid operation reference",
-            escapeDiagnosticName(module_name).c_str(), local_operation_id, canonical_signature_version);
-    } else if (!qore_plugin_get_process_operation_id_checked(module_name, static_cast<uint16_t>(local_operation_id),
-            static_cast<uint8_t>(canonical_signature_version), signature_hash, &global_operation_id, xsink)
-            && !resolvePluginOperation(global_operation_id, abi, op, xsink)) {
+    if (global_operation_id && !resolvePluginOperation(global_operation_id, abi, op, xsink)) {
         void* helper = reinterpret_cast<void*>(op.runtime_helper);
         cache->store(helper, std::memory_order_release);
         return helper;
@@ -2853,6 +2870,17 @@ extern "C" void* qore_rt_plugin_operation_helper_aot(const char* module_name, ui
     return abi == QorePluginHelperAbi::UnaryValue
         ? reinterpret_cast<void*>(&qore_plugin_unresolved_unary_helper)
         : reinterpret_cast<void*>(&qore_plugin_unresolved_binary_helper);
+}
+
+extern "C" uint32_t qore_rt_plugin_operation_id_aot(const char* module_name, uint32_t local_operation_id,
+        uint32_t canonical_signature_version, uint64_t signature_hash, std::atomic<uint32_t>* cache,
+        ExceptionSink* xsink) {
+    uint32_t global_operation_id = qore_plugin_resolve_aot_operation_id(module_name, local_operation_id,
+        canonical_signature_version, signature_hash, xsink);
+    if (global_operation_id) {
+        cache->store(global_operation_id, std::memory_order_release);
+    }
+    return global_operation_id;
 }
 
 extern "C" uint64_t qore_rt_plugin_construct(uint32_t global_operation_id, uint64_t args_list_bits,

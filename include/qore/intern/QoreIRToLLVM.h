@@ -2182,6 +2182,18 @@ private:
     */
     llvm::Value* emitAOTPluginHelperCall(const QoreIRPluginInstruction* inst, const QorePluginLLVMCodegenInfo& info,
             const std::vector<llvm::Value*>& operands, llvm::Module& module, llvm::Function* llvm_func);
+    //! Emits the process-global id of a plugin operation that AOT code dispatches generically (qore#6136)
+    /** Process-global ids are assigned when plugin modules are loaded, so AOT code names the operation by its
+        module-local reference; the call site resolves the id on its first call and caches it
+        (qore_rt_plugin_operation_id_aot()).  An operation that cannot be resolved raises an exception and gives id
+        0, which the dispatch helpers refuse without raising another one.
+    */
+    llvm::Value* emitAOTPluginOperationId(const QoreIRPluginInstruction* inst, const QorePluginLLVMCodegenInfo& info,
+            llvm::Module& module, llvm::Function* llvm_func);
+    //! Returns the arguments that name a plugin operation by its module-local reference in AOT code: the module name,
+    //! the plugin-local id, the canonical signature version and the signature hash that the code was compiled for
+    std::vector<llvm::Value*> getAOTPluginOperationRefArgs(const QoreIRPluginInstruction* inst,
+            const QorePluginLLVMCodegenInfo& info);
     //! Emits the pop of the frame pushed by emitPushNativeCallFrame() or emitPushNativeCallFrameAOT()
     void emitPopNativeCallFrame(llvm::Module& module);
     //! Returns true if a direct native call of \a callee from the function being lowered must switch to the
