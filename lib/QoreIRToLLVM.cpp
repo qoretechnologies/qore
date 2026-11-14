@@ -7418,8 +7418,10 @@ void QoreIRToLLVM::emitArgCleanupClear(llvm::Module& module,
         builder->CreateCall(decref, {cleanup_value, xsink_arg});
         return;
     }
+    // the arguments given to the call are released in its frame, unless an exception is pending: then the caller
+    // releases them after the value of the call (see qore_rt_clear_given_arg_cleanups())
     auto clear_helper = module.getOrInsertFunction(
-        "qore_rt_clear_arg_cleanups",
+        "qore_rt_clear_given_arg_cleanups",
         llvm::FunctionType::get(
             void_type, {ptr_type, i32_type, ptr_type}, false));
     builder->CreateCall(clear_helper, {arg_cleanups,

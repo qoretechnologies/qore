@@ -5663,6 +5663,14 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
             acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
         }
     }
+    if constexpr (GIVEN) {
+        // with an exception pending, the value of the return is released before the parameters, which hold the last
+        // references of the arguments that the caller gave to the call, as the AST interpreter releases it (#6039)
+        if (xsink && *xsink) {
+            ir_return_value.discard(xsink);
+            ir_return_value = QoreValue();
+        }
+    }
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -5775,6 +5783,14 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
         nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
+    if constexpr (GIVEN) {
+        // with an exception pending, the value of the return is released before the parameters, which hold the last
+        // references of the arguments that the caller gave to the call, as the AST interpreter releases it (#6039)
+        if (xsink && *xsink) {
+            ir_return_value.discard(xsink);
+            ir_return_value = QoreValue();
+        }
+    }
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -6074,6 +6090,14 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
             acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
         }
     }
+    if constexpr (GIVEN) {
+        // with an exception pending, the value of the return is released before the parameters, which hold the last
+        // references of the arguments that the caller gave to the call, as the AST interpreter releases it (#6039)
+        if (xsink && *xsink) {
+            ir_return_value.discard(xsink);
+            ir_return_value = QoreValue();
+        }
+    }
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -6346,6 +6370,14 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
         nullptr, uvb->getDebugEntryStatementBlock(), uvb->pgm, false, direct_params);
+    if constexpr (GIVEN) {
+        // with an exception pending, the value of the return is released before the parameters, which hold the last
+        // references of the arguments that the caller gave to the call, as the AST interpreter releases it (#6039)
+        if (xsink && *xsink) {
+            ir_return_value.discard(xsink);
+            ir_return_value = QoreValue();
+        }
+    }
     if (param_scope) {
         param_scope->cleanup();
     }

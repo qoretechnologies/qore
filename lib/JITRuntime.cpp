@@ -1132,6 +1132,16 @@ extern "C" DLLEXPORT void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups,
     clearConsumedArgCleanups(arg_cleanups, count, xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_clear_given_arg_cleanups(uint64_t** arg_cleanups, int32_t count,
+        ExceptionSink* xsink) {
+    // with an exception pending, the value of the call is released before the arguments (#6039): the caller releases
+    // them as it releases its temporaries, after the value
+    if (xsink && *xsink) {
+        return;
+    }
+    clearConsumedArgCleanups(arg_cleanups, count, xsink);
+}
+
 // --- Cleanup stack for JIT/AOT compiled functions ---
 // Replaces per-alloca cleanup tracking with a single runtime-managed array.
 // This reduces the error_return block from O(N) instructions to O(1), eliminating

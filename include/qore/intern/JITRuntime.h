@@ -501,6 +501,12 @@ void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSink* xsink);
 //! Clear caller-owned argument cleanup slots after callee ownership has been established.
 void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups, int32_t count, ExceptionSink* xsink);
 
+//! Releases the references that native code gave to a call, in the frame of the call (issue #5882)
+/** With an exception pending, the slots are left to the caller, which releases them after the value of the call, as
+    the AST interpreter releases the value of a return that an exception follows before the arguments (#6039)
+*/
+void qore_rt_clear_given_arg_cleanups(uint64_t** arg_cleanups, int32_t count, ExceptionSink* xsink);
+
 //! Refresh a compiled local cache from the Qore runtime stack if its valid
 //! epoch is stale.  Used by LLVM lowering to keep cache invalidation compact.
 void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tracker,
