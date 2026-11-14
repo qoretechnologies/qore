@@ -16233,6 +16233,8 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
     std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
     std::unordered_map<uint32_t, QoreIRValue> replacements;
     std::unordered_map<uint32_t, const QoreIRInstruction*> calls;
+    //! the operand that each call returns
+    std::unordered_map<const QoreIRInstruction*, size_t> call_params;
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -16280,6 +16282,7 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
             }
             replacements.emplace(call->result.id, replacement);
             calls.emplace(call->result.id, call);
+            call_params.emplace(call, static_cast<size_t>(param));
         }
     }
     if (replacements.empty()) {
@@ -16384,6 +16387,35 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
         }
         eliminated.insert(call->second);
     }
+    // The call released the arguments that it does not return when it returned, as the AST interpreter releases the
+    // argument list of a call: a temporary argument used by the call only is released where the call was
+    // (ReleaseOwnedTemp), and not when its statement ends (qore#6080).  The uses are counted on the values as the
+    // rewrite replaces them; an argument with another use is left to the end of its statement.
+    auto normalize = [&replacements](QoreIRValue v) {
+        auto r = replacements.find(v.id);
+        return r == replacements.end() ? v : r->second;
+    };
+    std::unordered_map<uint32_t, size_t> uses;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            auto call_param = eliminated.count(inst.get()) ? call_params.find(inst.get()) : call_params.end();
+            if (call_param != call_params.end()) {
+                int arg_start = qore_ir_call_arg_start(inst.get());
+                for (size_t i = arg_start < 0 ? inst->operands.size() : static_cast<size_t>(arg_start);
+                        i < inst->operands.size(); ++i) {
+                    if (i != call_param->second && inst->operands[i].isValid()) {
+                        ++uses[normalize(inst->operands[i]).id];
+                    }
+                }
+                continue;
+            }
+            (void)qore_ir_visit_value_operands(*inst, [&](QoreIRValue v) {
+                if (v.isValid()) {
+                    ++uses[normalize(v).id];
+                }
+            }, &check_count, "IR boxed return-parameter argument uses");
+        }
+    }
     for (const auto& block : func.blocks) {
         auto& instructions = block->instructions;
         for (auto inst = instructions.begin(); inst != instructions.end();) {
@@ -16393,6 +16425,32 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
                     "IR boxed return-parameter call folding");
             }
             if (eliminated.count(inst->get())) {
+                // the arguments that the call released, last first (see above)
+                std::vector<std::unique_ptr<QoreIRInstruction>> releases;
+                const QoreIRInstruction* call = inst->get();
+                int arg_start = qore_ir_call_arg_start(call);
+                size_t param = call_params.find(call)->second;
+                for (size_t i = call->operands.size(); arg_start >= 0 && i > static_cast<size_t>(arg_start); --i) {
+                    if (i - 1 == param || !call->operands[i - 1].isValid()) {
+                        continue;
+                    }
+                    QoreIRValue arg = normalize(call->operands[i - 1]);
+                    if (uses[arg.id] != 1) {
+                        continue;
+                    }
+                    auto release = std::make_unique<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
+                    release->operands.push_back(arg);
+                    release->loc = call->loc;
+                    release->cached_start_line = call->cached_start_line;
+                    release->temp_scope_id = call->temp_scope_id;
+                    releases.push_back(std::move(release));
+                }
+                if (!releases.empty()) {
+                    size_t pos = inst - instructions.begin();
+                    instructions.insert(inst, std::make_move_iterator(releases.begin()),
+                        std::make_move_iterator(releases.end()));
+                    inst = instructions.begin() + pos + releases.size();
+                }
                 if ((*inst)->opcode == QoreIROpcode::Invoke) {
                     const auto* invoke =
                         static_cast<const QoreIRInvokeInstruction*>(
