@@ -2127,6 +2127,42 @@ static QoreValue read_expr_call_ref(AOTExprReadCtx& ctx) {
     return QoreValue(fcr);
 }
 
+bool qore_aot_write_callref_arg_names(QoreAOTBinaryWriter& writer, const name_vec_t& names) {
+    if (names.size() > 255) {
+        return false;
+    }
+    writer.writeU8(static_cast<uint8_t>(names.size()));
+    for (const std::string& name : names) {
+        writer.writeStringRef(name.c_str(), name.size());
+    }
+    return true;
+}
+
+const name_vec_t* qore_aot_read_callref_arg_names(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, std::string& error) {
+    if (ptr >= end) {
+        error = "truncated named call reference call: no argument name count";
+        return nullptr;
+    }
+    uint8_t num = QoreAOTBinaryReader::readU8(ptr);
+    name_vec_t names;
+    names.reserve(num);
+    for (uint8_t i = 0; i < num; ++i) {
+        if (end - ptr < 4) {
+            error = "truncated named call reference call: argument name " + std::to_string(i);
+            return nullptr;
+        }
+        const char* name = reader.readStringRef(ptr);
+        if (!name) {
+            error = "invalid named call reference call: argument name " + std::to_string(i) + " is not in the "
+                "string pool";
+            return nullptr;
+        }
+        names.emplace_back(name);
+    }
+    return qore_intern_call_arg_names(std::move(names));
+}
+
 static bool write_expr_callref_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     auto* crc = dynamic_cast<const CallReferenceCallNode*>(node);
@@ -2141,7 +2177,9 @@ static bool write_expr_callref_call(AOTExprWriteCtx& ctx) {
         return false;
     }
 
-    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CALLREF_CALL));
+    // a named call is written with the names of its arguments after them (AOTExprKind::CALLREF_CALL_NAMED)
+    const name_vec_t* arg_names = crc->getRuntimeArgNames();
+    ctx.writer.writeU8(static_cast<uint8_t>(arg_names ? AOTExprKind::CALLREF_CALL_NAMED : AOTExprKind::CALLREF_CALL));
     if (!classifyAndWriteExpr(ctx.writer, crc->getExp(), ctx.parent_locals,
             ctx.parent_globals, ctx.const_reverse_map)) {
         return false;
@@ -2154,10 +2192,10 @@ static bool write_expr_callref_call(AOTExprWriteCtx& ctx) {
             return false;
         }
     }
-    return true;
+    return !arg_names || qore_aot_write_callref_arg_names(ctx.writer, *arg_names);
 }
 
-static QoreValue read_expr_callref_call(AOTExprReadCtx& ctx) {
+static QoreValue read_expr_callref_call_intern(AOTExprReadCtx& ctx, bool named) {
     std::string callee_err;
     QoreValue callee = readOneExpr(ctx.reader, ctx.ptr, ctx.end, callee_err,
         ctx.pgm, ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
@@ -2188,9 +2226,27 @@ static QoreValue read_expr_callref_call(AOTExprReadCtx& ctx) {
             args->add(arg, &loc_builtin);
         }
     }
+    const name_vec_t* arg_names = nullptr;
+    if (named) {
+        arg_names = qore_aot_read_callref_arg_names(ctx.reader, ctx.ptr, ctx.end, ctx.error);
+        if (!arg_names) {
+            delete args;
+            callee.discard(nullptr);
+            return QoreValue();
+        }
+    }
     auto* call = new CallReferenceCallNode(&loc_builtin, callee, args);
     call->resolveParseArgs();
+    call->setRuntimeArgNames(arg_names);
     return QoreValue(call);
+}
+
+static QoreValue read_expr_callref_call(AOTExprReadCtx& ctx) {
+    return read_expr_callref_call_intern(ctx, false);
+}
+
+static QoreValue read_expr_callref_call_named(AOTExprReadCtx& ctx) {
+    return read_expr_callref_call_intern(ctx, true);
 }
 
 // ============================================================================

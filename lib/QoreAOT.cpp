@@ -34650,7 +34650,19 @@ class ExprTreeSerializer {
 
         // CallReferenceCallNode: callref(args)
         if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
-            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CALLREF_CALL));
+            // a named call has the names of its arguments before its children (EN_CALLREF_CALL_NAMED)
+            if (const name_vec_t* arg_names = crc->getRuntimeArgNames()) {
+                if (arg_names->size() > 0xffff) {
+                    return false;
+                }
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CALLREF_CALL_NAMED));
+                writeU16(static_cast<uint16_t>(arg_names->size()));
+                for (const std::string& name : *arg_names) {
+                    writeStr(name.c_str());
+                }
+            } else {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CALLREF_CALL));
+            }
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t child_count = 1;
@@ -36411,7 +36423,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
-        id.kind = AOTExprKind::CALLREF_CALL;
+        // a named call has the names of its arguments (AOTExprKind::CALLREF_CALL_NAMED)
+        id.arg_names = crc->getRuntimeArgNames();
+        id.kind = id.arg_names ? AOTExprKind::CALLREF_CALL_NAMED : AOTExprKind::CALLREF_CALL;
         id.child_expr = crc->getExp();
         id.call_args = crc->getArgs();
         id.parse_args = crc->getParseArgs();

@@ -1996,6 +1996,8 @@ static std::pair<bool, QoreValue> runDecomposedBackground(
             buildArgListFromIROperands(operands, 1, nargs_ops, values);
         CallReferenceCallNode* call_node =
             new CallReferenceCallNode(crcn->loc, callee, arg_list);
+        // a named call keeps the names of its arguments
+        call_node->setRuntimeArgNames(crcn->getRuntimeArgNames());
         QoreValue result = do_op_background(QoreValue(call_node), xsink);
         QoreValue(call_node).discard(xsink);
         return {true, result};
@@ -6722,6 +6724,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         FunctionCallNode clone(*call, arg_list);
                         res = evalTmpCallAndRef(&clone, xsink);
                     }
+                    used_operands = true;
+                } else if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(inv->expr.getInternalNode());
+                        crc && crc->getRuntimeArgNames()) {
+                    // a named call through a call reference or closure: the callable is the first operand
+                    res = crc->evalRuntimeNamedWithArgs(arg_list, xsink);
                     used_operands = true;
                 }
             } else if (op == QoreIROpcode::CallMethod) {
@@ -18147,6 +18154,11 @@ load_local_done:
                                 FunctionCallNode clone(*call, arg_list);
                                 res = evalTmpCallAndRef(&clone, xsink);
                             }
+                            used_operands = true;
+                        } else if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(
+                                call_expr.getInternalNode()); crc && crc->getRuntimeArgNames()) {
+                            // a named call through a call reference or closure: the callable is the first operand
+                            res = crc->evalRuntimeNamedWithArgs(arg_list, xsink);
                             used_operands = true;
                         }
                     } else if (effective_opcode == QoreIROpcode::CallMethod) {

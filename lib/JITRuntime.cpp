@@ -11419,6 +11419,11 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
             result = result.refSelf();
         }
         used_operands = true;
+    } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(expr.getInternalNode());
+            call && call->getRuntimeArgNames()) {
+        // a named call through a call reference or closure: the callable is the first argument
+        result = call->evalRuntimeNamedWithArgs(arg_list.release(), xsink);
+        used_operands = true;
     } else if (auto* call = dynamic_cast<const CallReferenceCallNode*>(expr.getInternalNode())) {
         const ParseNode* parse_node = dynamic_cast<const ParseNode*>(expr.getInternalNode());
         const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
@@ -22180,6 +22185,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call(
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     CallReferenceCallNode* call_node =
         new CallReferenceCallNode(crcn->loc, callee, arg_list);
+    // a named call keeps the names of its arguments
+    call_node->setRuntimeArgNames(crcn->getRuntimeArgNames());
     QoreValue result = doBackgroundWithLocation(crcn->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
@@ -22367,6 +22374,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     CallReferenceCallNode* call_node =
         new CallReferenceCallNode(crcn->loc, callee, arg_list);
+    // a named call keeps the names of its arguments
+    call_node->setRuntimeArgNames(crcn->getRuntimeArgNames());
     QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);

@@ -620,7 +620,10 @@ static AbstractQoreNode* call_ref_call_copy(RuntimeConfig& rc, const CallReferen
         }
         args = args_holder.release();
     }
-    return qore_make_reference_call(n->getSemanticPolicy(), n->loc, exp.release(), args);
+    CallReferenceCallNode* call = qore_make_reference_call(n->getSemanticPolicy(), n->loc, exp.release(), args);
+    // a named call keeps the names of its arguments
+    call->setRuntimeArgNames(n->getRuntimeArgNames());
+    return call;
 }
 
 //! Copies a parse list of arguments with the values of the local variables of the starting code; nullptr if none

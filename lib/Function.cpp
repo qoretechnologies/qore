@@ -1277,12 +1277,12 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const qore_class_private* n_qc, const qore_class_private* cctx, QoreProgram* pgm_ctx,
         const QoreTypeInfo* n_explicit_receiver_type_info,
         const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
-        const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy)
+        const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy, const QoreClosureBase* n_closure)
     : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()), arg_names(&n_arg_names),
         tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
         receiver_type_info(n_explicit_receiver_type_info),
-        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation), closure(n_closure) {
     // Qore code must never be started on an async I/O thread answering a fast route
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
     assert(!variant);
@@ -1878,8 +1878,9 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         return -1;
     }
 
-    // check for accessible variants
-    if (qc) {
+    // check for accessible variants: only of a method; a closure created in a class has the class (qc), but its
+    // variant is not a method variant
+    if (qc && func->getClass()) {
         const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
         ClassAccess va = mv->getAccess();
         if ((va > Public && !class_ctx) || (va == Internal
@@ -10079,6 +10080,29 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     }
 
     //printd(5, "UserClosureFunction::evalClosure() this: %p (%s) variant: %p args: %p self: %p\n", this, getName(), variant, args, self);
+    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+}
+
+QoreValue UserClosureFunction::evalClosureNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, const name_vec_t& arg_names, QoreObject* self, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    // closures cannot be overloaded
+    assert(vlist.singular());
+    // the arguments are bound to the parameters of the closure's single variant by name by the helper, as for a named
+    // call of a function whose variant is resolved at run time: after the closure's Program has been entered (a
+    // Program that is being deleted is refused before the signature is read) and with the type arguments of the code
+    // that created the closure, as for a call with positional arguments (see evalClosure())
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreClosureTypeContextHelper type_context(&closure_base);
+    const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, nullptr, pgm,
+        closure_type_context ? closure_type_context->receiver_type_info : nullptr, nullptr, 0, arg_names, {},
+        &closure_base);
+    if (*xsink) {
+        return QoreValue();
+    }
+    assert(variant);
     return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
 }
 

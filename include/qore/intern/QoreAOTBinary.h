@@ -2386,6 +2386,8 @@ enum class AOTExprKind : uint8_t {
     TRANSLIT           = 126,
     //! Find expression (v34): mode byte (FindNode::Mode) + result expression + find-in expression + where expression
     FIND               = 127,
+    CALLREF_CALL_NAMED = 128, //!< named call reference call (M4 phase 3): as CALLREF_CALL, then u8 name count + a
+                              //!< string ref per argument name ("" for a positional argument)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -2423,6 +2425,8 @@ enum class AOTExprNodeKind : uint8_t {
     EN_NEW           = 24,  //!< u16 class_len + bytes; children = args
     EN_CALLREF_CALL  = 25,  //!< no metadata; children[0] = callref, [1..] = args
     EN_SCOPED_NEW    = 26,  //!< u16 class_len + bytes; children = args
+    EN_CALLREF_CALL_NAMED = 27, //!< named call reference call (M4 phase 3): u16 name count + (u16 len + bytes) per
+                                //!< argument name ("" for a positional argument); children as EN_CALLREF_CALL
 
     // Access operators (children = operands)
     EN_HASH_DEREF    = 30,  //!< children = [target, key_expr]
@@ -2631,6 +2635,7 @@ struct AOTExprSlotId {
     const QoreListNode* call_args = nullptr; //!< call args for NEW_OBJECT/SCOPED_NEW_OBJECT/STATIC_METHOD_CALL
     const QoreParseListNode* parse_args = nullptr; //!< parse args for HASHDECL_NEW
     const UserClosureFunction* closure_func = nullptr; //!< For CLOSURE_CREATE: source closure function
+    const name_vec_t* arg_names = nullptr; //!< For CALLREF_CALL_NAMED: the names of the arguments (interned)
 };
 
 //! Identity for a body local variable (needed for instantiation management)

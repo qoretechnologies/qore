@@ -14110,7 +14110,10 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                 + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
             return false;
         }
-        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CALLREF_CALL));
+        // a named call is written with the names of its arguments after them (AOTExprKind::CALLREF_CALL_NAMED)
+        const name_vec_t* arg_names = crc->getRuntimeArgNames();
+        writer.writeU8(static_cast<uint8_t>(arg_names ? AOTExprKind::CALLREF_CALL_NAMED
+            : AOTExprKind::CALLREF_CALL));
         if (!classifyAndWriteExpr(writer, crc->getExp(), parent_locals,
                 parent_globals, const_reverse_map)) {
             return false;
@@ -14122,6 +14125,11 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
                     parent_globals, const_reverse_map)) {
                 return false;
             }
+        }
+        if (arg_names && !qore_aot_write_callref_arg_names(writer, *arg_names)) {
+            qoreAOTSetExprSerializationError("CALLREF_CALL_NAMED inline payload has more than 255 argument names in "
+                + qoreAOTDescribeExpr(expr));
+            return false;
         }
         return true;
     }
