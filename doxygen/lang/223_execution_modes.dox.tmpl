@@ -209,6 +209,14 @@ QORE_JIT_MAX_IR_INSTRUCTIONS=50000 qore --exec-mode=jit script.qr
     @note Set \c QORE_JIT_TIMING to report each skipped native compilation along
     with the function's IR instruction count and the budget in effect.
 
+    A function with many \c on_exit, \c on_success or \c on_error handlers and many locals has a second budget: the
+    native code that runs the pending handlers publishes every local to the runtime and reloads it afterwards, so its
+    size is the product of the handlers and the locals, and a function with 200 try statements whose catch blocks have
+    a local and a handler, though it has far fewer IR instructions than the first budget, took tens of minutes to
+    compile.  The estimated size of that code is limited to 120000 LLVM instructions by default, which a function whose
+    catch blocks have a local and a handler reaches with about 56 of them; \c QORE_JIT_MAX_HANDLER_COST sets it, and
+    \c 0 means "no limit".  A function over it stays on the IR tier like one over the first budget.
+
     @section exec_mode_tiered Tiered Execution Mode
 
     Tiered mode is the default for @ref modern "%modern" code and can also be

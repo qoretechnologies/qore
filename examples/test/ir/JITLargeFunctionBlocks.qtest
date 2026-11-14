@@ -1,0 +1,304 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the JIT code generation of a function with many locals and exits, and its LLVM instruction count
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class JITLargeFunctionBlocksTest
+
+#! The size of the LLVM function that the JIT generates for a function with many locals and many exits (qore#5989)
+/** A function with many locals and many exits (here: a try statement after another, each one with an exit on an
+    exception, and early returns) took seconds to compile with the JIT, because the code of each exit was emitted at
+    the exit and was as long as the function has locals and cleanup slots: the number of LLVM instructions grew with
+    the product of the exits and the locals.  The exits of the function on an exception, and the returns of a function
+    with many of them, share one block that releases the locals and runs the on_block_exit handlers, the releases of
+    the temporaries of a statement that an exit holds a return value across take one call, and the lifetime markers of
+    the locals at the exits are limited.  This test generates two functions of different sizes, has the JIT compile them
+    (QORE_DUMP_LLVM_IR, without optimization, so that the code that is dumped is that of the lowering) and checks that
+    no block other than the entry block is as large as the product of the locals and a constant (the size of the
+    function was in the order of the product before), that the entry block grows with the locals, and that the whole
+    function grows less than with the product when the function grows by the same factor.
+*/
+class JITLargeFunctionBlocksTest inherits QUnit::Test {
+    public {
+        #! the number of locals and of try statements of the smaller and of the larger function
+        const Small = (50, 20);
+        const Large = (100, 40);
+
+        #! the largest block of the LLVM function other than its entry block, for each local of the function
+        /** The lowering of the exits made blocks of 57 instructions for each local at 100 locals; they are 17 with
+            the blocks shared by the exits
+        */
+        const MaxBlockPerLocal = 30;
+
+        #! the largest size of the entry block for each local of the function (68 with the lowering of the slots)
+        const MaxEntryPerLocal = 100;
+
+        #! the largest ratio of the sizes of the entry blocks of the larger and of the smaller function (2.0 when
+        #! the size is linear in the number of locals)
+        const MaxEntryRatio = 2.5;
+
+        #! the largest ratio of the number of instructions of the larger and of the smaller function: 2.25 with the
+        #! shared exits, and 3.39 before (the sizes grow by 2 in the locals and in the try statements: the product
+        #! grows by 4)
+        const MaxTotalRatio = 2.8;
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JITLargeFunctionBlocksTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("the blocks of a function with many locals and exits are bounded", \testBlocks());
+        addTestCase("the function with shared exits returns the same results as the AST", \testResults());
+        addTestCase("a function with many catch blocks that have handlers stays on the IR tier", \testHandlerBudget());
+        set_return_value(main());
+    }
+
+    #! Builds a function with \a locals locals and \a blocks try statements, some of which return early
+    private string getCode(int locals, int blocks, int calls) {
+        string code = "%modern
+
+int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
+string sub fmt(int i, string s) { return sprintf(\"%s%d\", s, i); }
+
+int sub big(int n) {
+";
+        for (int i = 0; i < locals; ++i) {
+            switch (i % 4) {
+                case 0: code += sprintf("    int i%d = n + %d;\n", i, i); break;
+                case 1: code += sprintf("    string s%d = \"v%d\";\n", i, i); break;
+                case 2: code += sprintf("    list<int> l%d = (%d, 2, 3);\n", i, i); break;
+                default: code += sprintf("    hash<string, int> h%d = {\"k\": %d};\n", i, i);
+            }
+        }
+        for (int b = 0; b < blocks; ++b) {
+            int ii = (b * 4) % locals;
+            ii -= ii % 4;
+            int si = ii + 1 < locals ? ii + 1 : 1;
+            int li = ii + 2 < locals ? ii + 2 : 2;
+            int hi = ii + 3 < locals ? ii + 3 : 3;
+            code += "    try {\n";
+            code += sprintf("        i%d = may_throw(i%d - %d);\n", ii, ii, b % 7 == 3 ? 1000 : 0);
+            code += sprintf("        s%d = fmt(i%d, s%d);\n", si, ii, si);
+            code += sprintf("        l%d += i%d;\n", li, ii);
+            code += sprintf("        h%d.k += i%d;\n", hi, ii);
+            code += "    } catch (hash<ExceptionInfo> ex) {\n";
+            code += sprintf("        s%d += ex.err;\n", si);
+            code += sprintf("        i%d = 0;\n", ii);
+            code += "    }\n";
+            if (b % 5 == 4) {
+                code += sprintf("    if (i%d > 1000000) { return i%d; }\n", ii, ii);
+            }
+        }
+        code += "    int r = 0;\n";
+        for (int i = 0; i < locals; ++i) {
+            switch (i % 4) {
+                case 0: code += sprintf("    r += i%d;\n", i); break;
+                case 1: code += sprintf("    r += s%d.size();\n", i); break;
+                case 2: code += sprintf("    r += l%d.size();\n", i); break;
+                default: code += sprintf("    r += h%d.k;\n", i);
+            }
+        }
+        code += sprintf("    return r;
+}
+
+int t = 0;
+for (int c = 0; c < %d; ++c) {
+    t += big(c);
+}
+printf(\"rv:%%d\\n\", t);
+", calls);
+        return code;
+    }
+
+    #! Runs the script; the native compilation of its function completes before the process ends
+    private string runScript(string code, string exec_mode, string env) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        return ExecModeHarness::run(sprintf("%s %s --enable-debug --exec-mode=%s %s", env, qore_bin, exec_mode,
+            tmp.path));
+    }
+
+    #! Returns the number of LLVM instructions in the entry block, in the largest other block, and in the function
+    /** @return a hash with the keys \c entry, \c max_other and \c total, or no value if the dump has no function
+        \c big
+    */
+    private *hash<auto> getSizes(string dump) {
+        list<string> lines = dump.split("\n");
+        int start = -1;
+        foreach string line in (lines) {
+            if (line =~ /^define .* @"big@/) {
+                start = $#;
+                break;
+            }
+        }
+        if (start < 0) {
+            return;
+        }
+        # the entry block is the one that the JIT names stack_check (the block before it has no label)
+        int index = 0;
+        list<int> sizes = (0,);
+        list<string> names = ("",);
+        for (int i = start + 1; i < lines.size(); ++i) {
+            string line = lines[i];
+            if (line =~ /^}/) {
+                break;
+            }
+            *list<string> m = (line =~ x/^([A-Za-z_.0-9$-]+):/);
+            if (m) {
+                sizes += 0;
+                names += m[0];
+                ++index;
+                continue;
+            }
+            # an instruction is indented; the empty lines and the comments are not
+            if (line =~ /^  [^ ;]/) {
+                ++sizes[index];
+            }
+        }
+        int total = 0;
+        int entry = 0;
+        int max_other = 0;
+        foreach int size in (sizes) {
+            total += size;
+            if (names[$#] == "stack_check") {
+                entry = size;
+            } else if (size > max_other) {
+                max_other = size;
+            }
+        }
+        return {"entry": entry, "max_other": max_other, "total": total};
+    }
+
+    private hash<auto> compile(int locals, int blocks) {
+        string out = runScript(getCode(locals, blocks, 3000), "jit",
+            "QORE_DUMP_LLVM_IR=1 QORE_JIT_OPT_LEVEL=0 QORE_JIT_MAX_IR_INSTRUCTIONS=0");
+        *hash<auto> sizes = getSizes(out);
+        if (!sizes) {
+            throw "NO-DUMP", sprintf("no LLVM function 'big' in the output (%d bytes) for %d locals: the function "
+                "was not compiled", out.size(), locals);
+        }
+        return sizes;
+    }
+
+    testBlocks() {
+        hash<auto> small = compile(Small[0], Small[1]);
+        hash<auto> large = compile(Large[0], Large[1]);
+        list<hash<auto>> cases = (
+            {"name": "small", "locals": Small[0], "sizes": small},
+            {"name": "large", "locals": Large[0], "sizes": large},
+        );
+        foreach hash<auto> i in (cases) {
+            assertTrue(i.sizes.max_other <= MaxBlockPerLocal * i.locals,
+                sprintf("%s: the largest block other than the entry block has %d instructions for %d locals (at "
+                "most %d)", i.name, i.sizes.max_other, i.locals, MaxBlockPerLocal * i.locals));
+            assertTrue(i.sizes.entry <= MaxEntryPerLocal * i.locals,
+                sprintf("%s: the entry block has %d instructions for %d locals (at most %d)", i.name, i.sizes.entry,
+                i.locals, MaxEntryPerLocal * i.locals));
+        }
+        float entry_ratio = float(large.entry) / small.entry;
+        assertTrue(entry_ratio <= MaxEntryRatio, sprintf("the entry block grows by %0.2f when the locals double (at "
+            "most %0.2f): %d -> %d", entry_ratio, MaxEntryRatio, small.entry, large.entry));
+        float total_ratio = float(large.total) / small.total;
+        assertTrue(total_ratio <= MaxTotalRatio, sprintf("the function grows by %0.2f when the locals and the exits "
+            "double (at most %0.2f): %d -> %d instructions", total_ratio, MaxTotalRatio, small.total, large.total));
+    }
+
+    #! The shared exits do not change the result of the function, with and without an exception in it
+    testResults() {
+        string code = getCode(Small[0], Small[1], 300);
+        # the script is run through its path: compare the result lines only
+        string ast = runResultLine(code, "ast");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, runResultLine(code, mode), mode);
+        }
+    }
+
+    #! A function with n try statements whose catch blocks have a local and an on_exit handler (qore#6104)
+    private string getHandlerCode(int n) {
+        string code = "%modern
+
+int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
+
+int sub big(int n) {
+    int r = 0;
+";
+        for (int i = 0; i < n; ++i) {
+            code += sprintf("    try {
+        r += may_throw(n - %d);
+    } catch (hash<ExceptionInfo> ex) {
+        int l%d = r + %d;
+        on_exit { r += l%d; }
+        r += 1;
+    }
+", i % 7 == 3 ? 1000 : 0, i, i, i);
+        }
+        code += "    return r;
+}
+
+int t = 0;
+for (int c = 0; c < 3000; ++c) {
+    t += big(c);
+}
+printf(\"rv:%d\\n\", t);
+";
+        return code;
+    }
+
+    #! Runs the script in JIT mode with the native compilation synchronous and traced, and returns the output with the trace
+    /** The trace is on stderr, which ExecModeHarness removes from the output of a run
+    */
+    private string runTrace(string code, string env) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        return backquote(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 QORE_JIT_TIMING=1 "
+            "%s --exec-mode=jit %s 2>&1", env, qore_bin, tmp.path));
+    }
+
+    #! The code that runs the handlers of a function takes the product of its handlers and locals to compile
+    /** A function with 200 of these try statements took 25 to 40 minutes to compile with the JIT though it has fewer
+        IR instructions than the budget of QORE_JIT_MAX_IR_INSTRUCTIONS; it has a budget of its own now
+        (QORE_JIT_MAX_HANDLER_COST), and a function over it stays on the IR tier, where it runs as before.
+    */
+    testHandlerBudget() {
+        string big = getHandlerCode(100);
+        string out = runTrace(big, "");
+        assertRegex("skipped native promotion of 'big[^']*' \\(handler budget exceeded", out,
+            "a function with 100 catch blocks with handlers is not compiled");
+        # without the limit, the function is compiled (slowly)
+        string small = getHandlerCode(20);
+        out = runTrace(small, "");
+        assertFalse(out =~ /handler budget exceeded/, "a function with 20 catch blocks with handlers is compiled");
+        assertRegex("compiled 'big[^']*' and promoted to JIT tier", out);
+        # the limit is set by the environment
+        out = runTrace(small, "QORE_JIT_MAX_HANDLER_COST=1000");
+        assertRegex("skipped native promotion of 'big[^']*' \\(handler budget exceeded", out);
+
+        # the result is that of the AST in every mode, whichever tier runs the function
+        string expected = runResultLine(big, "ast");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, runResultLine(big, mode), mode);
+        }
+    }
+
+    private string runResultLine(string code, string exec_mode) {
+        foreach string line in (runScript(code, exec_mode, "").split("\n")) {
+            if (line =~ /^rv:/) {
+                return trim(line);
+            }
+        }
+        throw "NO-RESULT", sprintf("no result line in the output of %s", exec_mode);
+    }
+}

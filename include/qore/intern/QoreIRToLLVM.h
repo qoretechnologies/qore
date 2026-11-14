@@ -608,6 +608,20 @@ private:
     //! the slot of each of invoke_result_allocas in invoke_cleanup_array, if it has one: a long release sequence is
     //! emitted as one call of qore_rt_cleanup_release_slots() with a table of the slots (qore#5962)
     std::unordered_map<llvm::Value*, unsigned> invoke_cleanup_slot;
+    //! the slot of each of invoke_result_allocas that is not a persistent cleanup in exit_temp_cleanup_array, if it
+    //! has one: an exit that holds the values of the returns that an exception interrupts runs the array in the
+    //! ranges between their slots (qore#5989)
+    std::unordered_map<llvm::Value*, unsigned> exit_temp_cleanup_slot;
+
+    //! Releases the first \a count entries of the cleanup slot array \a array in reverse order, except those in
+    //! \a skip, with one call of qore_rt_cleanup_run_allocas() for each run of entries between the skipped ones
+    /** The release is that of an inline load/store/decref sequence over the entries that are not skipped, last
+        registered first, and takes a number of instructions in the number of skipped entries and not in \a count
+        (qore#5989).
+        @param skip the indexes of the entries not to release, in any order
+    */
+    void emitCleanupArrayRunSkipping(llvm::Module& module, llvm::AllocaInst* array, unsigned count,
+        std::vector<unsigned> skip);
 
     // Entry-block array of pointers to invoke_result_allocas slots.  Large
     // functions use qore_rt_cleanup_run_allocas() to avoid emitting thousands
@@ -1067,6 +1081,42 @@ private:
     // When a Call/CallDirect/CallMethodDirect throws outside a try, execution
     // jumps here to return NOTHING immediately.  Created lazily on first use.
     llvm::BasicBlock* error_return_block = nullptr;
+    //! the block that the exits of the function on an exception that no handler of the function takes (a throw, a
+    //! rethrow, a thread exit) share after the release of their statement's temporaries: it runs the on_block_exit
+    //! handlers, releases the locals and returns NOTHING, as error_return_block does; it is created by the first exit
+    //! that needs it and written when the function is lowered (see emitExceptionExitTail(), qore#5989)
+    llvm::BasicBlock* exception_exit_tail = nullptr;
+    //! Returns exception_exit_tail, creating it in \a llvm_func if it does not exist yet
+    llvm::BasicBlock* getExceptionExitTail(llvm::Function* llvm_func);
+    //! Writes exception_exit_tail
+    /** Each exit on an exception wrote the release of the locals and the run of the on_block_exit handlers, with the
+        re-synchronization of every local that it takes, inline, so a function with many locals and many exits had
+        a block of thousands of LLVM instructions for each exit, and its compile time was quadratic in its size.
+    */
+    void emitExceptionExitTail(llvm::Module& module);
+    //! Returns true if an exit on an exception keeps the values of the returns that it interrupts until after the
+    //! locals (see holding_return_values)
+    bool holdsReturnValuesOnException() const;
+
+    //! true if the returns of the function share return_tail (see shouldShareReturnTail())
+    bool share_return_tail = false;
+    //! the block that the returns of the function share after the release of their statement's temporaries when
+    //! share_return_tail is set, and the value that it returns
+    llvm::BasicBlock* return_tail = nullptr;
+    llvm::PHINode* return_tail_value = nullptr;
+    //! Returns true if the returns of \a func share one block for the release of the locals and the run of the
+    //! on_block_exit handlers
+    /** Written at each return, that sequence takes a number of LLVM instructions in the number of the function's
+        locals, so a function with many locals and many returns (ex: a large switch whose cases return) had blocks of
+        thousands of them for each return and a compile time quadratic in its size (qore#5989).  A function that is
+        small in that product keeps the sequence at each return: the code of the functions that the runtime calls
+        most is not changed.
+    */
+    bool shouldShareReturnTail(const QoreIRFunction& func) const;
+    //! Branches to return_tail with \a value, which the return returns, creating the block in \a llvm_func
+    void emitSharedReturn(llvm::Function* llvm_func, llvm::Value* value);
+    //! Writes return_tail
+    void emitReturnTail(llvm::Module& module);
 
     // JIT deopt block: on guard failure, sets thread-local deopt flag and branches
     // to error_return_block.  evalTiered() checks the flag and re-executes via AST.

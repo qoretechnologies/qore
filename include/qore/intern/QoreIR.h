@@ -4102,6 +4102,35 @@ public:
         return instruction_count;
     }
 
+    //! Returns the estimated number of LLVM instructions of the code that runs the on_block_exit handlers of the function
+    /** The code that runs the pending handlers at each exit that can leave a scope with a handler publishes every local
+        of the function to the runtime and reloads it afterwards, so its size is the product of the handlers and of
+        the locals: a function with 200 try statements whose catch blocks have a local and a handler took tens of
+        minutes to compile with the JIT, though it has fewer IR instructions than the limit of
+        QoreJIT::getMaxJITIRInstructions() (qore#6104).  Used with QoreJIT::getMaxJITHandlerCost() to keep such a
+        function on the IR tier.  Memoized like getInstructionCount().
+    */
+    size_t getHandlerCostEstimate() const {
+        size_t cost = cached_handler_cost.load(std::memory_order_relaxed);
+        if (!cost) {
+            size_t handlers = 0;
+            for (const auto& block : blocks) {
+                for (const auto& inst : block->instructions) {
+                    if (inst && inst->opcode == QoreIROpcode::OnBlockExit) {
+                        ++handlers;
+                    }
+                }
+            }
+            // the code of a handler run takes about 18 instructions for each local, and a handler is run at about two
+            // places (measured: 83 runs for 40 handlers of 41 locals, 62k of the 93k instructions of the function)
+            cost = handlers * 2 * 18 * (static_cast<size_t>(total_local_count) + 1);
+            // zero marks "not computed"
+            cached_handler_cost.store(cost ? cost : 1, std::memory_order_relaxed);
+            return cost;
+        }
+        return cost == 1 ? 0 : cost;
+    }
+
     QoreIRBasicBlock* createBlock(const std::string& block_name) {
         auto block = std::make_unique<QoreIRBasicBlock>(block_name);
         QoreIRBasicBlock* ptr = block.get();
@@ -4770,6 +4799,7 @@ private:
     uint32_t next_value_id = 1;
     //! Memoized getInstructionCount() result; 0 = not yet computed
     mutable std::atomic<size_t> cached_instruction_count{0};
+    mutable std::atomic<size_t> cached_handler_cost{0};
 };
 
 //! Check if an opcode is a block terminator (transfers control flow)
