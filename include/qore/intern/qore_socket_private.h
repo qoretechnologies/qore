@@ -202,10 +202,16 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     unless both sockets reuse the port and belong to the same user, as on Linux.  A bind without \c SO_REUSEADDR is
     refused by macOS itself.
 
-    Where macOS filters the table, every check that finds no holder in the table scans the descriptors of every
-    process of the user (\c proc_listpids(), \c PROC_PIDLISTFDS and \c PROC_PIDFDSOCKETINFO): a listen then takes
-    about 1.6 ms more with about 1,360 processes on the system.  Whether the table is filtered is decided once per
-    socket type, by comparing the table with the descriptors.  Known limits:
+    Where macOS filters the table, every check that finds no holder in the table lists every process ID
+    (\c proc_listpids()) and scans the descriptors of every process it can read (\c PROC_PIDLISTFDS and
+    \c PROC_PIDFDSOCKETINFO); a process of another user costs a failing call.  The cost grows with the number of
+    processes on the system and depends on the host: a bind and listen took about 1 to 2 ms more with about 900 to
+    1,400 processes.  Whether the table is filtered is decided once per socket type, by comparing the table with the
+    descriptors, each comparison with a full scan: a comparison is repeated when a socket bound, connected or closed
+    between the two snapshots can explain a difference, and a comparison that cannot tell (it finds no socket of
+    another process, or a snapshot cannot be read) decides nothing; after QORE_SOCKET_TABLE_MAX_UNDECIDED (3) such
+    comparisons the table is taken to omit sockets, and every check scans the descriptors (see
+    qore_socket_table_lists_process_sockets()).  Known limits:
     - a socket of another user is not found where the table is filtered, as its descriptors cannot be read
       (\c EPERM); only the rules of macOS itself then apply to it
     - in a process whose table is filtered, while no other process of the user outside the process and its
