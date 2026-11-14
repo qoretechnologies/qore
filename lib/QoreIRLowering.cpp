@@ -13402,7 +13402,7 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     // the AST interpreter runs only that thread with the object as its context; a call elsewhere in the expression
     // checks it when it is made (qore#5973)
     if (state.uses_self) {
-        const SelfFunctionCallNode* root_call = dynamic_cast<const SelfFunctionCallNode*>(
+        const SelfFunctionCallNode* root_call = qore_get_self_function_call_node(
             op->getExp().getInternalNode());
         inst->helper_uses_self = root_call && (!root_call->getMethod() || !root_call->getMethod()->isStatic())
             ? QBHS_CHECKED : QBHS_HELD;
@@ -13741,7 +13741,7 @@ bool QoreIRLowering::valueMayBeNothingDespiteType(const QoreValue& elem) const {
             break;
     }
     if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
-            || dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            || qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         return true;
     }
     // +, - and * give NOTHING only for two operands without a value (one is taken as 0)
