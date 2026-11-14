@@ -509,6 +509,12 @@ void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tra
 //! Returns 1 if the value is a reference, 0 otherwise
 uint8_t qore_rt_value_is_reference(uint64_t value);
 
+//! Returns the argument of an `any` parameter with the complex type of a list or hash stripped (qore#6032)
+/** Takes the reference of \a value and returns a reference: a shared container is copied with a plain type, as
+    QoreTypeInfo::acceptInputParam() does for an `any` parameter; any other value is returned as it is
+*/
+uint64_t qore_rt_strip_any_param(uint64_t value);
+
 //! As qore_rt_load_local(), except that a reference held by the variable is returned itself
 uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);
 

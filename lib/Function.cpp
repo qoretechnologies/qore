@@ -1277,12 +1277,12 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const qore_class_private* n_qc, const qore_class_private* cctx, QoreProgram* pgm_ctx,
         const QoreTypeInfo* n_explicit_receiver_type_info,
         const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, unsigned n_call_flags,
-        const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy)
+        const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy, const QoreClosureBase* n_closure)
     : ct(CT_UNUSED), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(take_runtime_call_location()), arg_names(&n_arg_names),
         tmp(n_xsink), call_flags(n_call_flags), returnTypeInfo((const QoreTypeInfo*)-1),
         receiver_type_info(n_explicit_receiver_type_info),
-        explicit_type_param_instantiation(n_explicit_type_param_instantiation) {
+        explicit_type_param_instantiation(n_explicit_type_param_instantiation), closure(n_closure) {
     // Qore code must never be started on an async I/O thread answering a fast route
     QORE_ASSERT_NOT_IN_FAST_ROUTE();
     assert(!variant);
@@ -1878,8 +1878,9 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         return -1;
     }
 
-    // check for accessible variants
-    if (qc) {
+    // check for accessible variants: only of a method; a closure created in a class has the class (qc), but its
+    // variant is not a method variant
+    if (qc && func->getClass()) {
         const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
         ClassAccess va = mv->getAccess();
         if ((va > Public && !class_ctx) || (va == Internal
@@ -2676,12 +2677,12 @@ void UserSignature::parseInitPopLocalVars() {
     }
 }
 
-int UserSignature::resolve() {
-    if (resolved) {
-        return 0;
+// documented in Function.h
+int UserSignature::resolveTypes() {
+    if (types_resolved) {
+        return types_err;
     }
-
-    resolved = true;
+    types_resolved = true;
     // a closure names the type parameters of the code that it is in (qore#5733)
     if (closure && type_params.empty() && !enclosing_signature) {
         enclosing_signature = parse_get_signature_type_param_context();
@@ -2726,49 +2727,57 @@ int UserSignature::resolve() {
 #endif
 
     // issue #3644: to fix recursive errors in signature resolution, first resolve types, then args
-    bool has_def_args = true;
     for (unsigned i = 0; i < parseTypeList.size(); ++i) {
         if (parseTypeList[i]) {
             assert(!typeList[i]);
             typeList[i] = QoreParseTypeInfo::resolveAndDelete(parseTypeList[i], loc, err);
-        }
-        if (!has_def_args && defaultArgList[i]) {
-            has_def_args = true;
+            parseTypeList[i] = nullptr;
         }
     }
 
+    types_err = err;
+    return err;
+}
+
+int UserSignature::resolve() {
+    if (resolved) {
+        return 0;
+    }
+
+    resolved = true;
+    int err = resolveTypes();
+    UserSignatureTypeParamContextHelper type_param_context(this);
+
     // now resolve default args
-    if (has_def_args) {
-        for (unsigned i = 0; i < parseTypeList.size(); ++i) {
-            // initialize default arguments
-            if (defaultArgList[i]) {
-                QoreParseContext parse_context(selfid);
-                if (default_value_pflag) {
-                    parse_context.setFlags(default_value_pflag);
+    for (unsigned i = 0; i < parseTypeList.size(); ++i) {
+        // initialize default arguments
+        if (defaultArgList[i]) {
+            QoreParseContext parse_context(selfid);
+            if (default_value_pflag) {
+                parse_context.setFlags(default_value_pflag);
+            }
+            if (parse_init_value(defaultArgList[i], parse_context) && !err) {
+                err = -1;
+            }
+            const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
+            if (parse_context.lvids) {
+                parse_error(*loc, "illegal local variable declaration in default value expression in parameter " \
+                    "'%s'", names[i].c_str());
+                while (parse_context.lvids--) {
+                    pop_local_var();
                 }
-                if (parse_init_value(defaultArgList[i], parse_context) && !err) {
+            }
+            // check type compatibility
+            if (!QoreTypeInfo::parseAccepts(typeList[i], argTypeInfo)) {
+                QoreStringNode* desc = new QoreStringNode;
+                desc->sprintf("parameter '%s' expects ", names[i].c_str());
+                QoreTypeInfo::getThisType(typeList[i], *desc);
+                desc->concat(", but the default value is ");
+                QoreTypeInfo::getThisType(argTypeInfo, *desc);
+                desc->concat(" instead");
+                qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+                if (!err) {
                     err = -1;
-                }
-                const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
-                if (parse_context.lvids) {
-                    parse_error(*loc, "illegal local variable declaration in default value expression in parameter " \
-                        "'%s'", names[i].c_str());
-                    while (parse_context.lvids--) {
-                        pop_local_var();
-                    }
-                }
-                // check type compatibility
-                if (!QoreTypeInfo::parseAccepts(typeList[i], argTypeInfo)) {
-                    QoreStringNode* desc = new QoreStringNode;
-                    desc->sprintf("parameter '%s' expects ", names[i].c_str());
-                    QoreTypeInfo::getThisType(typeList[i], *desc);
-                    desc->concat(", but the default value is ");
-                    QoreTypeInfo::getThisType(argTypeInfo, *desc);
-                    desc->concat(" instead");
-                    qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
-                    if (!err) {
-                        err = -1;
-                    }
                 }
             }
         }
@@ -6919,7 +6928,7 @@ static void qore_mark_specialization_helpers(const QoreIRFunction& func, QoreSpe
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
                 // a background call of a function, of a closure or of a resolved self or static method is an
                 // expression instruction with the same opcode (see QoreIRLowering::lowerExprOpOrInvoke())
-                const auto* bi = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                const auto* bi = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get());
                 if (bi && bi->helper_ir) {
                     bi->helper_ir->specialization_owner = s;
                     qore_mark_specialization_helpers(*bi->helper_ir, s);
@@ -7380,12 +7389,20 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
                 = needs_type_param_substitution
                     ? qore_substitute_type_params_if_needed(signature.getParamTypeInfo(i))
                     : signature.getParamTypeInfo(i);
-            // Apply type filtering for complex hash parameters
-            if (paramTypeInfo && val.getType() == NT_HASH) {
+            // the value's type is read once for the checks below (QoreValue::getType() is not inlined)
+            qore_type_t val_type = val.getType();
+            // Apply type filtering for complex hash parameters, and strip the complex type of a list passed to an
+            // untyped parameter (`any`), as the IR engines do (instantiateFastCallParams()); a typed list parameter
+            // was filtered with the arguments (qore#6032)
+            if (paramTypeInfo && (val_type == NT_HASH
+                    || (val_type == NT_LIST && !QoreTypeInfo::hasType(paramTypeInfo)
+                        && QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)))) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, signature.getName(i), val, xsink);
                 if (*xsink) {
                     return -1;
                 }
+                // the filter can convert the value (ex: a hash for a softlist parameter)
+                val_type = val.getType();
             }
             // hash<auto!>/list<auto!> (no-narrow) parameters: strip a narrowed
             // complex type or top-level hashdecl from the incoming container
@@ -7396,7 +7413,7 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
             // function observes in an auto! parameter is engine-independent
             // (previously the AST engine raised RUNTIME-TYPE-ERROR on stores
             // into narrowed containers that the IR pipeline accepted).
-            if (val.getType() == NT_HASH || val.getType() == NT_LIST) {
+            if (val_type == NT_HASH || val_type == NT_LIST) {
                 QoreTypeInfo::applyNoNarrowCoercion(paramTypeInfo, val, xsink);
                 if (*xsink) {
                     val.discard(xsink);
@@ -8309,7 +8326,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                 } else if (inst->opcode == QoreIROpcode::Invoke) {
                     const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
                     if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                        const auto* call = qore_get_function_call_node(
                                 inv->expr.getInternalNode());
                         if (call) {
                             variant = call->getVariant();
@@ -10071,6 +10088,29 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     }
 
     //printd(5, "UserClosureFunction::evalClosure() this: %p (%s) variant: %p args: %p self: %p\n", this, getName(), variant, args, self);
+    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
+}
+
+QoreValue UserClosureFunction::evalClosureNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, const name_vec_t& arg_names, QoreObject* self, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    // closures cannot be overloaded
+    assert(vlist.singular());
+    // the arguments are bound to the parameters of the closure's single variant by name by the helper, as for a named
+    // call of a function whose variant is resolved at run time: after the closure's Program has been entered (a
+    // Program that is being deleted is refused before the signature is read) and with the type arguments of the code
+    // that created the closure, as for a call with positional arguments (see evalClosure())
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    QoreClosureTypeContextHelper type_context(&closure_base);
+    const QoreClosureTypeContext* closure_type_context = closure_base.getTypeContext();
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, "<anonymous closure>", args, nullptr, class_ctx, nullptr, pgm,
+        closure_type_context ? closure_type_context->receiver_type_info : nullptr, nullptr, 0, arg_names, {},
+        &closure_base);
+    if (*xsink) {
+        return QoreValue();
+    }
+    assert(variant);
     return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
 }
 

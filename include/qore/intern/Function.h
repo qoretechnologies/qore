@@ -545,6 +545,9 @@ public:
     LocalVar* argvid;
     LocalVar* selfid;
     bool resolved;
+    //! the types have been resolved (resolveTypes()), with the result in types_err
+    bool types_resolved = false;
+    int types_err = 0;
     //! true for the signature of a closure, which names the type parameters of the code that it is in (qore#5733)
     bool closure = false;
     //! for the signature of a closure: the signature whose type parameters the closure names, if any (qore#5733)
@@ -679,6 +682,15 @@ public:
 
     // resolves all parse types to the final types
     DLLLOCAL virtual int resolve();
+
+    //! resolves the parameter and return types (and type parameters) but not the default values
+    /** Called by resolve(); a closure of a constant expression, whose parse initialization is deferred because its
+        code and default values can refer to constants (#4903), resolves its types when it is parsed, so that it has
+        the code type of its signature in the expression (qore#6046)
+
+        @return 0 for OK, -1 if an exception was raised; the result is the same on later calls
+    */
+    DLLLOCAL int resolveTypes();
 
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
         if (resolved) {
@@ -887,13 +899,16 @@ public:
         @param cctx the class context of the variant resolved for a method call, if any
         @param explicit_receiver_type_info the receiver of a call of a static method, if any
         @param invocation_policy the semantic policy of a legacy AST call (default for any other call)
+        @param n_closure the closure of a named call of a closure, whose single variant the names are bound to after
+        the closure's Program has been entered (UserClosureFunction::evalClosureNamed()), otherwise nullptr
     */
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args,
             QoreObject* self, const qore_class_private* n_qc, const qore_class_private* cctx,
             QoreProgram* pgm_ctx, const QoreTypeInfo* explicit_receiver_type_info,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation, unsigned n_call_flags,
-            const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy = {});
+            const name_vec_t& n_arg_names, LexicalSemanticPolicy invocation_policy = {},
+            const QoreClosureBase* n_closure = nullptr);
 
     //! Creates the object for evaluating a named call with temporary arguments (see above)
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
@@ -3438,6 +3453,12 @@ public:
     }
 
     DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
+
+    //! evalClosure() with arguments in source order with the names in \a arg_names, which are bound to the
+    //! parameters of the closure's variant by name (M4 phase 3)
+    DLLLOCAL QoreValue evalClosureNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,
+            const QoreListNode* args, const name_vec_t& arg_names, QoreObject* self,
+            const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
     DLLLOCAL void setClassType(const QoreTypeInfo* cti) {
         classTypeInfo = cti;

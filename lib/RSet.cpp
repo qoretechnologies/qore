@@ -2587,7 +2587,7 @@ private:
     RScanHelper& rsh;
 };
 
-RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<const RObject*>* write_removed)
+RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const QoreRemovedValueTracker* write_removed)
         : xsink(xsink), write_removed(write_removed) {
     if (q_disable_gc) {
         return;
@@ -3037,8 +3037,7 @@ void RSetHelper::commit() {
         // again.
         if (!o->rrefs.load(std::memory_order_acquire)
                 && o->references.load(std::memory_order_acquire) <= o->rcount
-                && !(write_removed
-                    && std::find(write_removed->begin(), write_removed->end(), o) != write_removed->end())) {
+                && !(write_removed && write_removed->contains(o))) {
             o->tRef();
             recheck_objects.push_back(o);
         }

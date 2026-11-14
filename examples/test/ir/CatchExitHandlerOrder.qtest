@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class CatchExitHandlerOrderTest
+
+#! a return, break or continue out of a catch block closes it before the handlers of the enclosing blocks run (qore#6017)
+/** In the IR interpreter and in native code, the catch blocks that the statement leaves were closed after the
+    on_exit handlers of all the blocks it leaves had run, so a rethrow in the handler of a block enclosing a catch block
+    raised the exception of the inner catch block.  The handlers that such an exit runs are lowered inline with the
+    state of their own block: a try statement in one left its scope open when it caught an exception, so a handler of
+    an enclosing block ran twice, a throw or rethrow in one closed a catch block that was already closed (in native
+    code, the caller's), and an exit in one ran the cleanups of the blocks that the first exit had left again, or,
+    in a handler lowered in another, lowered the outer handler again until the lowering failed.
+*/
+class CatchExitHandlerOrderTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/CatchExitHandlerOrder/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("catch exit handler order", "1.0", \ARGV) {
+        addTestCase("AST closes each catch block before the enclosing handlers", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        list<string> lines = getAst().split("\n");
+        foreach string line in (
+                'ret_val ["rth:O"] "ret"',
+                'ret_nothing ["rth:O"]',
+                'brk ["rth0:O", "rth1:O"]',
+                'nested ["i:I", "m:M", "o:O"]',
+                'dtor ["x2", "~d2", "x1", "~d1"]',
+                'in_handler ["blk:O", "hh:H"] "r"',
+                'ret_in_handler_catch ["h", "outer:O"]',
+                'closure ["cl-rth:O"]',
+                'm010 ["i", "m:M", "o"]',
+                'm111 ["i:I", "m:M", "o:O"]',
+                's2 ["h:H", "o:O"]',
+                's3c ["x:H", "c:C"]',
+                's4c ["x:O", "c:C"]',
+                's5c ["h", "out:O", "c:C"]',
+                's6c ["hh:H", "out:O", "c:C"]',
+                's7 ["l0:O", "l1:O", "after:O"]',
+                's8c ["h1", "h2", "out:O", "c:C"]',
+                's9c ["h1", "h2", "out:O", "c:C"]',
+                's10 ["y", "h1", "z"]',
+                's11 ["y:A", "z:H"]',
+                'b1 ["h0:A", "~b0", "h1:A", "~b1", "end"]',
+                'b2 ["h11", "~r1", "h12", "~r2", "after"] [11, 12, 3]',
+                'b3 ["h", "~in", "~y", "~x"]',
+                'b4 ["h1"]',
+                'b5 ["h1", "h2", "h3", "~blk", "out:O"]',
+                'b6 ["la", "lb"]',
+            ) {
+            # each case runs twice, so that the tiered mode runs compiled code on the second call
+            assertEq(2, (select lines, $1 == line).size(), line);
+        }
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-catch-exit-handler-order-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}
