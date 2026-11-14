@@ -117,7 +117,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     if (send_op) {
         // Check send timeout
         if (send_timeout_ms > 0 && send_op_start_ms > 0) {
-            int64 elapsed = q_clock_getmillis() - send_op_start_ms;
+            int64 elapsed = monotonicMs() - send_op_start_ms;
             if (elapsed > send_timeout_ms) {
                 xsink->raiseException("SOCKET-TIMEOUT",
                     "send operation timed out after " QLLD " ms (timeout: " QLLD " ms)",
@@ -252,7 +252,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     // --- Idle timeout: close the connection if no recv activity for idle_timeout_ms ---
     // reclaims connection slots/resources held by idle clients (e.g. a client that connects and never sends)
     if (idle_timeout_ms > 0 && !goalReached() && ws_state == WsState::CONNECTED && last_recv_activity_ms > 0
-            && (q_clock_getmillis() - last_recv_activity_ms) >= idle_timeout_ms) {
+            && (monotonicMs() - last_recv_activity_ms) >= idle_timeout_ms) {
         queueSendClose(WSCC_GoingAway, "idle timeout", xsink);
         return nullptr;
     }
@@ -262,7 +262,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     // silent; last_recv_activity_ms reflects real incoming traffic only
     // so any future idle-timeout check can rely on it.
     if (heartbeat_interval_ms > 0 && ws_state == WsState::CONNECTED && last_recv_activity_ms > 0) {
-        int64 now_ms = q_clock_getmillis();
+        int64 now_ms = monotonicMs();
         int64 since_recv = now_ms - last_recv_activity_ms;
         int64 since_ping = last_ping_sent_ms ? now_ms - last_ping_sent_ms : heartbeat_interval_ms;
         if (since_recv >= heartbeat_interval_ms && since_ping >= heartbeat_interval_ms) {
@@ -270,7 +270,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             if (*xsink) {
                 return nullptr;
             }
-            last_ping_sent_ms = q_clock_getmillis();
+            last_ping_sent_ms = monotonicMs();
         }
     }
 
@@ -331,7 +331,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     if (result) {
         int64 poll_timeout = 0;
         if (send_op && send_timeout_ms > 0 && send_op_start_ms > 0) {
-            poll_timeout = send_timeout_ms - (q_clock_getmillis() - send_op_start_ms);
+            poll_timeout = send_timeout_ms - (monotonicMs() - send_op_start_ms);
             if (poll_timeout <= 0) {
                 poll_timeout = 1;
             }
@@ -344,7 +344,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             if (last_ping_sent_ms > anchor_ms) {
                 anchor_ms = last_ping_sent_ms;
             }
-            int64 hb_remaining = heartbeat_interval_ms - (q_clock_getmillis() - anchor_ms);
+            int64 hb_remaining = heartbeat_interval_ms - (monotonicMs() - anchor_ms);
             if (hb_remaining <= 0) {
                 hb_remaining = 1;
             }
@@ -354,7 +354,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         }
         // schedule a poll for the idle-timeout deadline so the idle check fires even when heartbeat is disabled
         if (idle_timeout_ms > 0 && ws_state == WsState::CONNECTED && last_recv_activity_ms > 0) {
-            int64 idle_remaining = idle_timeout_ms - (q_clock_getmillis() - last_recv_activity_ms);
+            int64 idle_remaining = idle_timeout_ms - (monotonicMs() - last_recv_activity_ms);
             if (idle_remaining <= 0) {
                 idle_remaining = 1;
             }
@@ -651,7 +651,7 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
             } else if (response) {
                 response->deref(xsink);
             }
-            last_recv_activity_ms = q_clock_getmillis();
+            last_recv_activity_ms = monotonicMs();
             return;
         }
 
@@ -686,7 +686,7 @@ void HttpWebSocketPollOperationPriv::pushRecvFrame(const char* type, AbstractQor
     h->setKeyValue("rsv3", (rsv & 1) != 0, xsink);
     recv_queue->push(xsink, h.release());
     ++frames_pushed_in_cycle;
-    last_recv_activity_ms = q_clock_getmillis();
+    last_recv_activity_ms = monotonicMs();
 }
 
 void HttpWebSocketPollOperationPriv::pushRecvCloseFrame(uint16_t code, const char* reason,
@@ -697,7 +697,7 @@ void HttpWebSocketPollOperationPriv::pushRecvCloseFrame(uint16_t code, const cha
     h->setKeyValue("reason", new QoreStringNode(reason ? reason : ""), xsink);
     recv_queue->push(xsink, h.release());
     ++frames_pushed_in_cycle;
-    last_recv_activity_ms = q_clock_getmillis();
+    last_recv_activity_ms = monotonicMs();
 }
 
 void HttpWebSocketPollOperationPriv::queueSendText(const QoreStringNode* text, ExceptionSink* xsink) {
@@ -906,7 +906,7 @@ int HttpWebSocketPollOperationPriv::startSendOp(ExceptionSink* xsink) {
     // Set our QoreObject as the inner op's self for poll info resolution
     assert(self);
     send_op->setSelf(*self);
-    send_op_start_ms = q_clock_getmillis();
+    send_op_start_ms = monotonicMs();
     return 0;
 }
 

@@ -138,7 +138,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
             }
         } else if (!recv_info) {
             // Recv complete — process the data; update heartbeat activity
-            last_recv_activity_ms = q_clock_getmillis();
+            last_recv_activity_ms = monotonicMs();
             bool got_data = false;
             if (recv_op->goalReached()) {
                 QoreValue output = recv_op->getOutput();
@@ -224,7 +224,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
     // incoming traffic only (so idle-timeout detection below can rely on
     // it even when our own PINGs are in flight).
     if (heartbeat_interval_ms > 0 && ws_state == WsState::CONNECTED && last_recv_activity_ms > 0) {
-        int64 now_ms = q_clock_getmillis();
+        int64 now_ms = monotonicMs();
         int64 since_recv = now_ms - last_recv_activity_ms;
         int64 since_ping = last_ping_sent_ms ? now_ms - last_ping_sent_ms : heartbeat_interval_ms;
         if (since_recv >= heartbeat_interval_ms && since_ping >= heartbeat_interval_ms) {
@@ -232,7 +232,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
             if (*xsink) {
                 return nullptr;
             }
-            last_ping_sent_ms = q_clock_getmillis();
+            last_ping_sent_ms = monotonicMs();
         }
     }
 
@@ -242,7 +242,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
     // no pong for our PINGs).
     if (idle_timeout_ms > 0 && ws_state == WsState::CONNECTED && !closed_on_idle
             && last_recv_activity_ms > 0) {
-        int64 elapsed = q_clock_getmillis() - last_recv_activity_ms;
+        int64 elapsed = monotonicMs() - last_recv_activity_ms;
         if (elapsed >= idle_timeout_ms) {
             closed_on_idle = true;
             close_cause = "idle-timeout";
@@ -303,7 +303,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
     if (poll_info) {
         int64 poll_timeout = 0;
         if (ws_state == WsState::CONNECTED && last_recv_activity_ms > 0) {
-            int64 now_ms = q_clock_getmillis();
+            int64 now_ms = monotonicMs();
             if (heartbeat_interval_ms > 0) {
                 // Anchor PING pacing on whichever is later — real recv activity
                 // or our last outgoing PING — so we don't busy-loop after a PING.
@@ -713,7 +713,7 @@ void WebSocketClientPollOperationPriv::handleFrame(const WsFrame& frame, Excepti
 
 void WebSocketClientPollOperationPriv::pushRecvFrame(const char* type, AbstractQoreNode* data,
         uint8_t rsv, ExceptionSink* xsink) {
-    last_recv_activity_ms = q_clock_getmillis();
+    last_recv_activity_ms = monotonicMs();
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("type", new QoreStringNode(type), xsink);
     if (data) {
@@ -729,7 +729,7 @@ void WebSocketClientPollOperationPriv::pushRecvFrame(const char* type, AbstractQ
 
 void WebSocketClientPollOperationPriv::pushRecvCloseFrame(uint16_t code, const char* reason,
         ExceptionSink* xsink) {
-    last_recv_activity_ms = q_clock_getmillis();
+    last_recv_activity_ms = monotonicMs();
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("type", new QoreStringNode("close"), xsink);
     h->setKeyValue("code", static_cast<int64>(code), xsink);

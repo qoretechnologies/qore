@@ -905,15 +905,16 @@ int QoreEventLoop::waitWithFifos(int64_t wait_us, ExceptionSink* xsink) {
 }
 #endif
 
-int64_t QoreEventLoop::addTimer(int64_t deadline_us, void* udata, int64_t preset_id) {
+int64_t QoreEventLoop::addTimer(int64_t deadline_us, void* udata, int64_t preset_id, bool monotonic) {
     int64_t id = preset_id > 0 ? preset_id : next_timer_id++;
     if (id >= next_timer_id) {
         next_timer_id = id + 1;  // keep monotonic
     }
     TimerEntry entry{deadline_us, id, udata};
-    auto [it, ok] = timer_set.insert(entry);
+    std::set<TimerEntry>& set = monotonic ? mono_timer_set : timer_set;
+    auto [it, ok] = set.insert(entry);
     if (ok) {
-        timer_id_map[id] = it;
+        timer_id_map[id] = TimerRef{it, monotonic};
     }
     return id;
 }
@@ -923,9 +924,26 @@ bool QoreEventLoop::cancelTimer(int64_t id) {
     if (it == timer_id_map.end()) {
         return false;
     }
-    timer_set.erase(it->second);
+    (it->second.monotonic ? mono_timer_set : timer_set).erase(it->second.it);
     timer_id_map.erase(it);
     return true;
+}
+
+int64_t QoreEventLoop::nextTimerWaitUs() const {
+    int64_t wait_us = -1;
+    if (!timer_set.empty()) {
+        int64_t remaining_us = timer_set.begin()->deadline_us - q_epoch_us_fast();
+        wait_us = remaining_us > 0 ? remaining_us : 0;
+    }
+    if (wait_us && !mono_timer_set.empty()) {
+        int64_t remaining_us = mono_timer_set.begin()->deadline_us - q_get_monotonic_us();
+        if (remaining_us <= 0) {
+            wait_us = 0;
+        } else if (wait_us < 0 || remaining_us < wait_us) {
+            wait_us = remaining_us;
+        }
+    }
+    return wait_us;
 }
 
 int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, ExceptionSink* xsink) {
@@ -938,11 +956,9 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     // rounded up where only whole milliseconds can be waited for: a timer due in less than a millisecond used to make
     // the wait 0, so the loop polled without blocking until the timer was due, busy-looping its thread.
     int64_t wait_us = timeout_ms < 0 ? -1 : static_cast<int64_t>(timeout_ms) * 1000;
-    if (!timer_set.empty()) {
-        int64_t remaining_us = timer_set.begin()->deadline_us - q_epoch_us_fast();
-        if (remaining_us <= 0) {
-            wait_us = 0;
-        } else if (wait_us < 0 || remaining_us < wait_us) {
+    {
+        int64_t remaining_us = nextTimerWaitUs();
+        if (remaining_us >= 0 && (wait_us < 0 || remaining_us < wait_us)) {
             wait_us = remaining_us;
         }
     }
@@ -962,7 +978,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     has_fds = !fd_map.empty();
 #endif
 
-    if (!has_fds && timer_set.empty()) {
+    if (!has_fds && timer_set.empty() && mono_timer_set.empty()) {
         events.clear();
         return 0;
     }
@@ -1336,12 +1352,19 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
 
 void QoreEventLoop::collectExpiredTimers(std::vector<QoreEventInfo>& events) {
     if (!timer_set.empty()) {
-        int64_t now_us = q_epoch_us_fast();
-        while (!timer_set.empty() && timer_set.begin()->deadline_us <= now_us) {
-            auto it = timer_set.begin();
-            events.push_back({QORE_TIMER_FD, QORE_EV_TIMER, it->udata, it->id});
-            timer_id_map.erase(it->id);
-            timer_set.erase(it);
-        }
+        collectExpiredTimers(timer_set, q_epoch_us_fast(), events);
+    }
+    if (!mono_timer_set.empty()) {
+        collectExpiredTimers(mono_timer_set, q_get_monotonic_us(), events);
+    }
+}
+
+void QoreEventLoop::collectExpiredTimers(std::set<TimerEntry>& set, int64_t now_us,
+        std::vector<QoreEventInfo>& events) {
+    while (!set.empty() && set.begin()->deadline_us <= now_us) {
+        auto it = set.begin();
+        events.push_back({QORE_TIMER_FD, QORE_EV_TIMER, it->udata, it->id});
+        timer_id_map.erase(it->id);
+        set.erase(it);
     }
 }

@@ -431,6 +431,22 @@ public class DiscordHeartbeat {
         }
     }
 
+    #! Waits for the given number of milliseconds, measured on the monotonic clock, or until the thread is told to stop
+    /** As waitUntil(), but a step of the system clock does not change the wait: a step back of an hour made the
+        heartbeat wait an hour, and the gateway closed the session.
+    */
+    waitFor(int ms) {
+        int deadline_us = clock_get_monotonic_us() + ms * 1000;
+        while (!isStopped()) {
+            # in whole milliseconds, rounded up: a wait of 0 ms would not end before a wakeup
+            int remaining = (deadline_us - clock_get_monotonic_us() + 999) / 1000;
+            if (remaining <= 0) {
+                return;
+            }
+            sleep(remaining);
+        }
+    }
+
     #! Waits for a wakeup of the thread, at most for the given number of milliseconds (more than 0)
     sleep(int remaining) {
         # a timeout of 0 would wait without a limit
@@ -1053,7 +1069,7 @@ hash<auto> h = ws.getInfo();
         }
         # the timer's callback carries its generation (closures do not keep the client alive)
         int gen = ++hello_watchdog_gen;
-        hello_watchdog_timer = controller.addTimer(now_us() + milliseconds(HelloWatchdogTimeoutMs),
+        hello_watchdog_timer = controller.addTimerDelay(milliseconds(HelloWatchdogTimeoutMs),
             wrapAsyncCallback(sub () { helloWatchdogFired(gen); }), watchdog_owner);
     }
 
@@ -1153,7 +1169,7 @@ hash<auto> h = ws.getInfo();
         }
         # the timer's callback carries its generation (closures do not keep the client alive)
         int gen = ++resume_watchdog_gen;
-        resume_watchdog_timer = controller.addTimer(now_us() + milliseconds(ResumeWatchdogTimeoutMs),
+        resume_watchdog_timer = controller.addTimerDelay(milliseconds(ResumeWatchdogTimeoutMs),
             wrapAsyncCallback(sub () { resumeWatchdogFired(gen); }), watchdog_owner);
     }
 
@@ -1538,7 +1554,7 @@ hash<auto> h = ws.getInfo();
                 sleep = (float("0." + rand()) * sleep).toInt();
                 running = True;
             }
-            h.waitUntil(now_us() + milliseconds(sleep));
+            h.waitFor(sleep);
             if (h.isStopped()) {
                 break;
             }

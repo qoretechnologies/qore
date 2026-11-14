@@ -329,7 +329,49 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         addTestCase("POST Content-Length body pre-read", \postBodyReadTest());
         addTestCase("SSE close drains queued final frame after partial send",
             \sseCloseDrainsQueuedFinalFrameTest());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("a step back of the system clock does not stop the SSE heartbeat",
+                \sseClockStepHeartbeatTest());
+        }
         set_return_value(main());
+    }
+
+    #! A step back of the system clock does not stop the SSE heartbeat
+    /** The time since the last send is measured on the monotonic clock: on the system clock, a step back of an hour
+        made it negative, so no heartbeat was sent until the system clock was back where it was.  The step is made
+        with dbg_set_realtime_offset() (debug builds).
+    */
+    sseClockStepHeartbeatTest() {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        Socket client();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port);
+        Socket accepted = server.accept(5s);
+        on_exit {
+            try { accepted.close(); } catch (hash<ExceptionInfo> ex) {}
+            try { client.close(); } catch (hash<ExceptionInfo> ex) {}
+            try { server.close(); } catch (hash<ExceptionInfo> ex) {}
+        }
+
+        # the operation takes the time of its last send when it is created, before the system clock steps back
+        HttpServerAsyncIo::HttpSseStreamPollOperation op(accepted);
+        on_exit op.abort();
+        op.setHeartbeat(50, ":hb\n\n");
+        op.continuePoll();
+        call_function("dbg_set_realtime_offset", -3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+
+        # the operation is driven until the client receives the heartbeat, at most for 20 seconds
+        int deadline = clock_get_monotonic_us() + 20000000;
+        string received = "";
+        while (received !~ /:hb/ && clock_get_monotonic_us() < deadline) {
+            op.continuePoll();
+            if (client.isDataAvailable(20ms)) {
+                received += client.recv(0, 1s);
+            }
+        }
+        assertRegex(":hb", received, "the client receives the heartbeat after its interval");
     }
 
     #! Regression: an SSE frame queued behind an in-flight (partially-sent) frame

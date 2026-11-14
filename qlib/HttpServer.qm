@@ -2348,7 +2348,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # nothing new starts while the long-lived connections are closed below; a drain timeout of zero or less
         # means no drain
         bool do_drain = drain && asyncIo && drain_timeout > 0;
-        int drain_start_us = clock_getmicros();
+        int drain_start_us = clock_get_monotonic_us();
         if (do_drain) {
             asyncIo.startDrain();
         }
@@ -2364,7 +2364,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         if (do_drain) {
             signalStreamingHandlersToStop();
             asyncIo.signalPersistentQueuesToClose();
-            int remaining_ms = drain_timeout - (clock_getmicros() - drain_start_us) / 1000;
+            int remaining_ms = drain_timeout - (clock_get_monotonic_us() - drain_start_us) / 1000;
             if (remaining_ms <= 0 || !asyncIo.waitDrain(remaining_ms)) {
                 log("stop: the requests in progress did not finish in the drain timeout (%y); closing the connections "
                     "that are left", drain_timeout);
