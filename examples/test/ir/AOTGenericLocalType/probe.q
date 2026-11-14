@@ -74,6 +74,19 @@ int sub onErrorLocal<T>(T x, auto y) {
     }
 }
 
+int sub nestedClosureLocal<T>(T x, auto y) {
+    code c = auto sub () {
+        code d = auto sub () {
+            *T z = x;
+            z = y;
+            printf("nested closure z=%y\n", z);
+            return z;
+        };
+        return d();
+    };
+    return c() ? 1 : 0;
+}
+
 class GenericLocalHolder {
     int keep<T>(T x, auto y) {
         *T z = x;
@@ -111,6 +124,8 @@ show("on_exit *int int", auto sub () { return onExitLocal<int>(1, 2); });
 show("on_success *string float", auto sub () { return onSuccessLocal<string>("a", 2.5); });
 show("on_error *string float", auto sub () { return onErrorLocal<string>("a", 2.5); });
 show("on_error *string string", auto sub () { return onErrorLocal<string>("a", "b"); });
+show("nested closure *string float", auto sub () { return nestedClosureLocal<string>("a", 2.5); });
+show("nested closure *string string", auto sub () { return nestedClosureLocal<string>("a", "b"); });
 GenericLocalHolder h();
 show("method *string float", auto sub () { return h.keep<string>("a", 2.5); });
 show("method *string string", auto sub () { return h.keep<string>("a", "b"); });

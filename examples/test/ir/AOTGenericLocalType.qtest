@@ -52,6 +52,7 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         assertRegex("(?m)^closure \\*string float => RUNTIME-TYPE-ERROR", out, out);
         assertRegex("(?m)^method \\*string float => RUNTIME-TYPE-ERROR", out, out);
         assertRegex("(?m)^method \\*string string => 1$", out, out);
+        assertRegex("(?m)^nested closure \\*string float => RUNTIME-TYPE-ERROR", out, out);
     }
 
     sourceModes() {
@@ -68,6 +69,9 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
             string exe = dir.path + "/probe";
             run((qcc_bin, level, "-o", exe, probe));
             assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+            # the IR of the closures built when they are first called (qore#5885)
+            assertEq(expected, run((exe, "-b", "--enable-debug"), "QORE_DISABLE_AOT_NATIVE_CLOSURES=1"),
+                "qcc " + level + " with lazy closure IR");
         }
     }
 
@@ -96,9 +100,9 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
     }
 
     #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
-    private string run(list<string> args) {
+    private string run(list<string> args, *string env) {
         string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
-            + (map quote($1), args).join(" ");
+            + (env ? env + " " : "") + (map quote($1), args).join(" ");
         hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
         if (r.mode) {
             ExecModeHarness::check_native(r);

@@ -4946,7 +4946,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (ref_type_path && *ref_type_path) {
                         std::string type_error;
                         QoreAOTTypeResolver type_resolver(pgm);
-                        ref_ti = type_resolver.resolve(ref_type_path, type_error);
+                        // the type of a reference to a local of a generic function can name its type parameters
+                        // (qore#5885)
+                        ref_ti = type_resolver.resolveForSignature(ref_type_path, type_error,
+                            qore_aot_get_type_param_owner());
                         if (!ref_ti) {
                             printd(0, "AOT v2: cannot resolve PARSE_REF type '%s' for expr slot %d of '%s': %s\n",
                                 ref_type_path, i, name, type_error.c_str());
@@ -8737,6 +8740,10 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
         error = "lazy closure IR is attached to a non-closure variant";
         return nullptr;
     }
+    // the IR is built when the closure is first called, out of the context build that names the type parameters of
+    // the generic function that the closure is in (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb->getUserSignature()
+        ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
 
     std::string open_error;
     const QoreAOTBinaryReader* retained_reader = lazy_ir.metadata->getReader(open_error);
@@ -8911,6 +8918,9 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_function_ir(
     const QoreAOTLazyFunctionIR::Entry& lazy_entry = lazy_ir.entries[entry_index];
     const char* name = lazy_entry.aot_func
         ? lazy_entry.aot_func->name : lazy_entry.source_name.c_str();
+    // the types of the IR can name the type parameters of the function (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb && uvb->getUserSignature()
+        ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
     std::unique_ptr<QoreIRFunction> ir = context->materializeDebugIR(name, error);
     if (!ir) {
         delete context;

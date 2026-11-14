@@ -13628,7 +13628,7 @@ load_local_done:
                         // a type that names type parameters (a local of a generic function, ex: *T) accepts any
                         // value before its type parameters are substituted, which only the full path does
                         // (LocalVarValue::resolveLValueTypeInfo()), as the AST interpreter does (qore#5885)
-                        if ((QoreTypeInfo::hasType(target_ti) && target_ti->getContainsTypeParameterCache() != 0)
+                        if (qore_type_contains_type_parameter(target_ti)
                                 || !QoreTypeInfo::parseAcceptsReturns(target_ti, val.getType())) {
                             // Type mismatch: invalidate caches and use full
                             // type-checking path (will raise RUNTIME-TYPE-ERROR)

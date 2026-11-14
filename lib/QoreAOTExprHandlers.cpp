@@ -3269,7 +3269,8 @@ static QoreValue read_expr_parse_ref(AOTExprReadCtx& ctx) {
     if (type_path && *type_path) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
-        ref_ti = type_resolver.resolve(type_path, type_error);
+        // the type of a reference to a local of a generic function can name its type parameters (qore#5885)
+        ref_ti = type_resolver.resolveForSignature(type_path, type_error, qore_aot_get_type_param_owner());
         if (!ref_ti) {
             inner.discard(nullptr);
             ctx.error = "cannot resolve parse-reference type '" + std::string(type_path) + "': " + type_error;
