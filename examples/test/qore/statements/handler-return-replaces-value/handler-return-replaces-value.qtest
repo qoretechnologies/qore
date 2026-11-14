@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of returns in handlers
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HandlerReturnReplacesValueTest
+
+#! A return in a handler replaces the value of the return that the handler runs after (#5992)
+/** As in the AST interpreter, where the handlers of a block run with the block's return value, a return statement in
+    a handler replaces the value of the return that the handler runs after, releasing the replaced value at the end of
+    the statement, also when the statement raises an exception, and a later handler's return replaces it again.  A
+    handler that returns, lowered inline at a return, ran the handlers registered before it out of line, which
+    discarded their returns, as were the handlers of a block with on_exit and on_error handlers that ends without a
+    return; the replaced value was released only when the frame ended; and a return in a handler of an inner block
+    whose handler returned too, or of a block in the body of another handler, made the lowering lower the handlers
+    again without end.  A return in a try statement in a handler replaces the value when the try statement ends, in
+    every mode (TryStatement::execImpl() kept the function's value), and the value that a handler run while an
+    exception leaves its block returns replaces the value of the return that the exception interrupted (it was
+    discarded).  HandlerReturnReplacesValue.q gives the output of the AST interpreter in every execution mode and
+    compiled with qcc.
+*/
+class HandlerReturnReplacesValueTest inherits QUnit::Test {
+    public {
+        #! the output of HandlerReturnReplacesValue.q with the AST interpreter
+        const Expected = "f: last
+f: last
+g: [\"~unused\", \"exit\", \"rv:a\", \"~a\"]
+g: [\"~unused\", \"exit\", \"rv:a\", \"~a\"]
+q2: [\"rix\", \"~rrv\", \"rox\", \"~rz\", \"rv:nothing\"]
+q2: [\"rix\", \"~rrv\", \"rox\", \"~rz\", \"rv:nothing\"]
+th: [\"h3\", \"~th-body\", \"h2\", \"~th3\", \"h1\", \"~th2\", \"rv:th1\", \"~th1\"]
+th: [\"h3\", \"~th-body\", \"h2\", \"~th3\", \"h1\", \"~th2\", \"rv:th1\", \"~th1\"]
+nv: [\"~nv-body\", \"rv:nv-last\", \"~nv-last\"]
+nv: [\"~nv-body\", \"rv:nv-last\", \"~nv-last\"]
+n1: [\"i\", \"~n1-body\", \"o\", \"~n1-inner\", \"rv:n1-outer\", \"~n1-outer\"]
+n1: [\"i\", \"~n1-body\", \"o\", \"~n1-inner\", \"rv:n1-outer\", \"~n1-outer\"]
+n2: [\"ii\", \"~n2-body\", \"i\", \"o\", \"~n2-inner\", \"rv:n2-outer\", \"~n2-outer\"]
+n2: [\"ii\", \"~n2-body\", \"i\", \"o\", \"~n2-inner\", \"rv:n2-outer\", \"~n2-outer\"]
+ft: [\"body\", \"rv:ft-last\"]
+ft: [\"body\", \"rv:ft-last\"]
+mx: [\"body\", \"~mx-x\", \"rv:mx-last\"]
+mx: [\"body\", \"~mx-x\", \"rv:mx-last\"]
+tc: [\"~tc-body\", \"tcx\", \"~tc-s\", \"catch\", \"rv:tc-after\"]
+tc: [\"~tc-body\", \"tcx\", \"~tc-s\", \"catch\", \"rv:tc-after\"]
+hh1: [\"rv:1\"]
+hh1: [\"rv:1\"]
+hh2: [\"rv:1\"]
+hh2: [\"rv:1\"]
+hh3: [\"rv:2\"]
+hh3: [\"rv:2\"]
+hh4: [\"rv:2\"]
+hh4: [\"rv:2\"]
+hh5: [\"h\", \"hb\", \"i\", \"~hh5-body\", \"o1\", \"rv:hh5-inner\", \"~hh5-inner\"]
+hh5: [\"h\", \"hb\", \"i\", \"~hh5-body\", \"o1\", \"rv:hh5-inner\", \"~hh5-inner\"]
+tc1: [\"~body\", \"x\", \"ex:RUNTIME-TYPE-ERROR\"]
+tc1: [\"~body\", \"x\", \"ex:RUNTIME-TYPE-ERROR\"]
+ev1: [\"thr\", \"~body\", \"x\", \"ex:EV\"]
+ev1: [\"thr\", \"~body\", \"x\", \"ex:EV\"]
+ev3: [\"thr\", \"~body\", \"x\", \"catch\", \"rv:after\"]
+ev3: [\"thr\", \"~body\", \"x\", \"catch\", \"rv:after\"]
+tr1: [\"h\", \"~tr1-body\", \"rv:tr1-h\", \"~tr1-h\"]
+tr1: [\"h\", \"~tr1-body\", \"rv:tr1-h\", \"~tr1-h\"]
+tr2: [\"thr\", \"c\", \"~tr2-body\", \"rv:tr2-c\", \"~tr2-c\"]
+tr2: [\"thr\", \"c\", \"~tr2-body\", \"rv:tr2-c\", \"~tr2-c\"]
+tr3: [\"~tr3-body\", \"rv:tr3-in\", \"~tr3-in\"]
+tr3: [\"~tr3-body\", \"rv:tr3-in\", \"~tr3-in\"]
+tr4: [\"h\", \"~tr4-body\", \"rv:nothing\"]
+tr4: [\"h\", \"~tr4-body\", \"rv:nothing\"]
+tr5: [\"ti\", \"~tr5-l\", \"~tr5-body\", \"o\", \"rv:tr5-h\", \"~tr5-h\"]
+tr5: [\"ti\", \"~tr5-l\", \"~tr5-body\", \"o\", \"rv:tr5-h\", \"~tr5-h\"]
+tr6: [\"~tr6-body\", \"~tr6-try\", \"rv:tr6-last\", \"~tr6-last\"]
+tr6: [\"~tr6-body\", \"~tr6-try\", \"rv:tr6-last\", \"~tr6-last\"]
+tr7: [\"body\", \"rv:tr7-h\"]
+tr7: [\"body\", \"rv:tr7-h\"]
+xr1: [\"dthrow\", \"~xr1-tt\", \"~xr1-body\", \"~xr1-z\", \"~xr1-h\", \"ex:DT\"]
+xr1: [\"dthrow\", \"~xr1-tt\", \"~xr1-body\", \"~xr1-z\", \"~xr1-h\", \"ex:DT\"]
+xr2: [\"exit\", \"err\", \"~xr2-x\", \"~xr2-err\", \"ex:E2\"]
+xr2: [\"exit\", \"err\", \"~xr2-x\", \"~xr2-err\", \"ex:E2\"]
+xr3: [\"dthrow\", \"~xr3-tt\", \"~xr3-body\", \"~xr3-h\", \"catch\", \"~xr3-z\", \"rv:xr3-after\"]
+xr3: [\"dthrow\", \"~xr3-tt\", \"~xr3-body\", \"~xr3-h\", \"catch\", \"~xr3-z\", \"rv:xr3-after\"]
+xr4: [\"~xr4-h0\", \"caught0\", \"~xr4-h1\", \"caught1\", \"rv:xr4-after\"]
+xr4: [\"~xr4-h0\", \"caught0\", \"~xr4-h1\", \"caught1\", \"rv:xr4-after\"]
+xr5: [\"thr\", \"~xr5-h\", \"c\", \"rv:xr5-b\", \"~xr5-b\"]
+xr5: [\"thr\", \"~xr5-h\", \"c\", \"rv:xr5-b\", \"~xr5-b\"]
+xr6: [\"thr\", \"~xr6-h\", \"c\", \"rv:xr6-b\", \"~xr6-b\"]
+xr6: [\"thr\", \"~xr6-h\", \"c\", \"rv:xr6-b\", \"~xr6-b\"]
+xr7: [\"thr\", \"~xr7-h\", \"c\", \"~xr7-b\", \"ex:E7\"]
+xr7: [\"thr\", \"~xr7-h\", \"c\", \"~xr7-b\", \"ex:E7\"]
+m: [\"~m-body\", \"mexit\", \"rv:m-s\", \"~m-s\"]
+m: [\"~m-body\", \"mexit\", \"rv:m-s\", \"~m-s\"]
+cl: [\"~cl-body\", \"cx\", \"rv:cl-s\", \"~cl-s\"]
+cl: [\"~cl-body\", \"cx\", \"rv:cl-s\", \"~cl-s\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("HandlerReturnReplacesValueTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/HandlerReturnReplacesValue.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a return in a handler", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a return in a handler", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-return-replaces-value-");
+        string exe = tmp.path + DirSep + "handler-return-replaces-value";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

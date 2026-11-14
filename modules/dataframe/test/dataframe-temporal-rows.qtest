@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-temporal-rows.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFrameTemporalRowsTest
+
+#! The rows selected from a date column with dense storage (as a Parquet file or a columnar result gives) are dates
+#! (qore#6097)
+class DataFrameTemporalRowsTest inherits QUnit::Test {
+    private {
+        list<auto> dates = (2024-01-01T10:00:00Z, 2024-06-01T00:00:00.5Z, NOTHING, 1969-12-31T23:59:59Z);
+        list<auto> durations = (5s + microseconds(123), NOTHING, 1D, 0s);
+    }
+
+    constructor() : Test("DataFrameTemporalRowsTest", "1.0", \ARGV) {
+        addTestCase("Parquet date column", \parquetTest());
+        addTestCase("timestamp columnar result", \timestampTest());
+        addTestCase("duration columnar result", \durationTest());
+        set_return_value(main());
+    }
+
+    parquetTest() {
+        TmpDir tmp("dataframe-temporal-rows");
+        string path = tmp.path + DirSep + "dates.parquet";
+        (new DataFrame::DataFrame({"id": range(dates.size()), "t": dates})).writeParquet(path);
+        checkSelections(DataFrame::DataFrame::readParquet(path), dates, "Parquet");
+    }
+
+    timestampTest() {
+        checkSelections(DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": range(dates.size()),
+            "t": dates,
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "us", "timezone": "UTC", "nullable": True}},
+        })), dates, "timestamp");
+    }
+
+    durationTest() {
+        checkSelections(DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": range(durations.size()),
+            "t": durations,
+        }, {
+            "t": {"native_type": "interval", "nullable": True},
+        })), durations, "duration");
+    }
+
+    #! checks that every row selection keeps the date column \c t and its values
+    private checkSelections(DataFrame::DataFrame df, list<auto> cells, string label) {
+        assertEq("date", df.dtypes()[1], label + ": a date column");
+        checkRows(df.takeRows((2, 0, 3)), (cells[2], cells[0], cells[3]), label + ": takeRows()");
+        checkRows(df.slice(1, 3), (cells[1], cells[2]), label + ": slice()");
+        checkRows(df.head(2), (cells[0], cells[1]), label + ": head()");
+        checkRows(df.tail(2), (cells[2], cells[3]), label + ": tail()");
+        checkRows(df.filter("id", "!=", 1), (cells[0], cells[2], cells[3]), label + ": filter()");
+        checkRows(df.sortBy(("id",), (False,)), (cells[3], cells[2], cells[1], cells[0]), label + ": sortBy()");
+        checkRows(df.dropna(), (select cells, exists $1), label + ": dropna()");
+    }
+
+    private checkRows(DataFrame::DataFrame df, list<auto> expected, string label) {
+        assertEq("date", df.dtypes()[1], label + ": a date column");
+        list<auto> actual = df.getColumn("t");
+        assertEq(expected.size(), actual.size(), label + ": rows");
+        foreach auto value in (expected) {
+            if (exists value) {
+                # an absolute date and a relative date are never equal
+                assertTrue(actual[$#].typeCode() == NT_DATE && actual[$#] == value, sprintf("%s: row %d: %y",
+                    label, $#, actual[$#]));
+            } else {
+                assertEq(NOTHING, actual[$#], sprintf("%s: row %d", label, $#));
+            }
+        }
+    }
+}

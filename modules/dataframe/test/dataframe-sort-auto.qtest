@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-sort-auto.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameSortAutoTest
+
+#! sortBy() orders the cells of a column that holds any value (decimal columns included) as the core <=> operator
+#! orders them, and raises its NAN-COMPARE-ERROR for a NaN value (qore#6097)
+class DataFrameSortAutoTest inherits QUnit::Test {
+    constructor() : Test("DataFrameSortAutoTest", "1.0", \ARGV) {
+        addTestCase("numbers and chars", \numberTest());
+        addTestCase("decimal column", \decimalTest());
+        addTestCase("dates and strings", \otherTest());
+        addTestCase("several keys", \keyTest());
+        addTestCase("NaN", \nanTest());
+        addTestCase("float64 NaN", \floatNanTest());
+        set_return_value(main());
+    }
+
+    numberTest() {
+        # a char first makes the column hold any value
+        checkSort(new DataFrame::DataFrame({"v": (c'z', 1.25n, -1n, 2.5n, 1, 0.5, 200, NOTHING, 1.0, True, 1n)}),
+            "numbers and chars");
+    }
+
+    decimalTest() {
+        ColumnarResult cr = ColumnarResult::fromColumnHash({"v": (1.25n, -1n, 2.5n, NOTHING, 0.5n, -1n)},
+            {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2, "nullable": True}}});
+        checkSort(DataFrame::DataFrame::fromColumnarResult(cr), "decimal");
+    }
+
+    otherTest() {
+        checkSort(new DataFrame::DataFrame({"v": (c'z', 2024-01-01Z, 2023-06-01Z, 5s, NOTHING, 1D)}), "dates");
+        # no empty string: QoreString::compare() orders it after and before any other string (qore#6090)
+        checkSort(new DataFrame::DataFrame({"v": (c'z', "b", "a", "ab", NOTHING, c'a', "B")}), "strings");
+    }
+
+    #! a column that holds any value as the second key orders the rows with the same first key
+    keyTest() {
+        DataFrame::DataFrame df({"k": (2, 1, 2, 1, 2), "v": (c'z', 3n, 1.5, -2, 0n)});
+        assertEq((-2, 3n, 0n, 1.5, c'z'), df.sortBy(("k", "v")).getColumn("v"), "two keys: values");
+        assertEq((3n, -2, c'z', 1.5, 0n), df.sortBy(("k", "v"), (True, False)).getColumn("v"),
+            "two keys, the second descending");
+    }
+
+    nanTest() {
+        assertThrows("NAN-COMPARE-ERROR", \(new DataFrame::DataFrame({"v": (c'z', 1, @nan@)})).sortBy(), (("v",),),
+            "a float NaN");
+        assertThrows("NAN-COMPARE-ERROR", \(new DataFrame::DataFrame({"v": (c'z', 1, @nan@n)})).sortBy(), (("v",),),
+            "a number NaN");
+        ColumnarResult cr = ColumnarResult::fromColumnHash({"v": (1.25n, -1n)},
+            {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2, "nullable": True}}});
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(cr);
+        assertEq((-1n, 1.25n), dec.sortBy(("v",)).getColumn("v"), "a decimal column has no NaN");
+    }
+
+    #! a NaN value of a float64 column raises NAN-COMPARE-ERROR when it is compared, as with the <=> operator
+    floatNanTest() {
+        DataFrame::DataFrame df({"v": (1.0, @nan@, 0.0, 3.0, NOTHING, 2.0)});
+        assertEq("float64", df.dtypes()[0], "a float64 column");
+        assertThrows("NAN-COMPARE-ERROR", \df.sortBy(), (("v",),), "ascending");
+        assertThrows("NAN-COMPARE-ERROR", \df.sortBy(), (("v",), (False,)), "descending");
+        # a NaN value that is not compared, as the only value with its first key, raises no error
+        DataFrame::DataFrame by_key({"k": (1, 2, 2), "v": (@nan@, 2.0, 1.0)});
+        assertEq((1.0, 2.0), by_key.sortBy(("k", "v")).getColumn("v")[1..2], "a NaN value that is not compared");
+        # a NaN value compared in a second key, whose first keys are equal
+        DataFrame::DataFrame second({"k": (1, 1, 3), "v": (@nan@, 1.0, @nan@)});
+        assertThrows("NAN-COMPARE-ERROR", \second.sortBy(), (("k", "v"),), "a NaN value in a second key");
+        assertEq((1.0, 2.0, 3.0, NOTHING), (new DataFrame::DataFrame({"v": (3.0, NOTHING, 1.0, 2.0)}))
+            .sortBy(("v",)).getColumn("v"), "no NaN value");
+    }
+
+    #! checks an ascending and a descending sort of the column \c v with the order of the <=> operator
+    private checkSort(DataFrame::DataFrame df, string label) {
+        list<auto> cells = df.getColumn("v");
+        assertEq("auto", df.dtypes()[0], label + ": the column holds any value");
+        assertEq(stableSort(cells, True), df.sortBy(("v",)).getColumn("v"), label + ": ascending");
+        assertEq(stableSort(cells, False), df.sortBy(("v",), (False,)).getColumn("v"), label + ": descending");
+    }
+
+    #! returns the values sorted by a stable insertion sort with the <=> operator, null values last
+    private list<auto> stableSort(list<auto> values, bool ascending) {
+        list<auto> sorted = ();
+        list<auto> nulls = ();
+        foreach auto value in (values) {
+            if (!exists value) {
+                nulls += value;
+                continue;
+            }
+            int pos = sorted.size();
+            while (pos > 0) {
+                auto prev = sorted[pos - 1];
+                int cmp = ascending ? (value <=> prev) : (prev <=> value);
+                if (cmp >= 0) {
+                    break;
+                }
+                --pos;
+            }
+            splice sorted, pos, 0, (value,);
+        }
+        return sorted + nulls;
+    }
+}

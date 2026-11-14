@@ -22,6 +22,8 @@ string provider_path = root + "/provider.qr";
 string consumer_path = root + "/consumer.qr";
 string combined_path = root + "/combined.qr";
 string provider_code = "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int sub nestedFalseArm(int value) {
     if (value < 0) {

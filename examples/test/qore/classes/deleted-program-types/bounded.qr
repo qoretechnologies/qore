@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The declarations kept after their Program is deleted, because derived types or surviving declarations name their
+# types (issue #5790), are bounded per destroyed declaration: each Program generation adds the same number, a Program
+# whose types are not named adds none, declarations that name each other and are destroyed together are freed, and a
+# declaration named only by a value surviving its Program is kept with the value, not retired, and so are declarations
+# that name each other and whose values survive their Program, as a group collected with the values; see deleted-program-types.qtest.
+# Needs a debug libqore (dbg_retired_type_declarations()).
+
+%modern
+
+public hashdecl BoundedHBox<T> { T v; }
+public class BoundedBox<T> { public { T v; } }
+
+const Opts = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION;
+
+const NamedSrc = "
+class Foo { public { int x = 1; } }
+enum Color { Red = 1, Green = 2 }
+hashdecl HD { int x = 1; }
+hash<auto> sub make() {
+    BoundedBox<*Foo> b();
+    hash<BoundedHBox<*Foo>> h();
+    list<*Foo> ol = (NOTHING,);
+    list<Color> cl = (Color::Red,);
+    list<hash<HD>> hl = (cast<hash<HD>>({}),);
+    return {\"b\": b, \"h\": h, \"ol\": ol, \"cl\": cl, \"hl\": hl};
+}
+";
+
+# declarations that name each other directly and are destroyed together
+const SiblingSrc = "
+class A { public { *B b; } }
+class B { public { *A a; } }
+hashdecl H1 { *hash<H2> h; }
+hashdecl H2 { *hash<H1> h; }
+int sub make() {
+    A a();
+    a.b = new B();
+    hash<H1> h1();
+    h1.h = new hash<H2>();
+    return 1;
+}
+";
+
+# a value of a declaration that names another one directly survives its Program
+const SurvivorSrc = "
+class Foo { }
+hashdecl DHD { int x = 1; *Foo f; }
+class DQ { public { *Foo f; } }
+hash<auto> sub make() {
+    return {\"h\": new hash<DHD>(), \"q\": new DQ()};
+}
+";
+
+# declarations that name each other, whose values survive their Program
+const CycleSrc = "
+class Parent { public { *Child c; } }
+class Child { public { *Parent p; } }
+hashdecl H1 { *hash<H2> h; }
+hashdecl H2 { *hash<H1> h; }
+hash<auto> sub make() {
+    return {\"p\": new Parent(), \"h\": new hash<H1>()};
+}
+";
+
+const PlainSrc = "
+class Plain { public { int x = 1; } int get() { return x; } }
+int sub make() {
+    Plain p();
+    return p.get();
+}
+";
+
+sub check(string label, bool ok, auto info) {
+    printf("%s: %s\n", label, ok ? "ok" : sprintf("FAILED %y", info));
+}
+
+int sub generation(string src) {
+    int before = dbg_retired_type_declarations();
+    {
+        auto v;
+        {
+            Program p(Opts);
+            p.parse(src, "gen");
+            v = p.callFunction("make");
+        }
+        # the values are used after their Program is deleted, then released
+        if (v.typeCode() == NT_HASH) {
+            v.ol += NOTHING;
+            v.h.v = NOTHING;
+        }
+    }
+    return dbg_retired_type_declarations() - before;
+}
+
+int first = generation(NamedSrc);
+check("named declarations retired", first > 0, first);
+bool bounded = True;
+for (int g = 1; g < 20; ++g) {
+    int n = generation(NamedSrc);
+    if (n != first) {
+        check("bounded in generation " + g, False, (n, first));
+        bounded = False;
+    }
+}
+check("bounded per generation", bounded, first);
+
+int plain;
+for (int g = 0; g < 20; ++g) {
+    plain += generation(PlainSrc);
+}
+check("unnamed declarations freed", !plain, plain);
+
+int sibling;
+for (int g = 0; g < 20; ++g) {
+    sibling += generation(SiblingSrc);
+}
+check("declarations naming each other freed together", !sibling, sibling);
+
+# the declaration named by the surviving value is kept, by a reference of the value's declaration, while the value
+# exists, and freed with it: it is never retired
+int base = dbg_retired_type_declarations();
+bool survivor_ok = True;
+for (int g = 0; g < 20; ++g) {
+    hash<auto> v;
+    {
+        Program p(Opts);
+        p.parse(SurvivorSrc, "survivor");
+        v = p.callFunction("make");
+    }
+    v.h.f = NOTHING;
+    v.q.f = NOTHING;
+    if (dbg_retired_type_declarations() != base) {
+        check("named declaration not retired while the surviving value exists in generation " + g, False,
+            dbg_retired_type_declarations() - base);
+        survivor_ok = False;
+    }
+    remove v;
+    if (dbg_retired_type_declarations() != base) {
+        check("named declaration freed with the value in generation " + g, False,
+            dbg_retired_type_declarations() - base);
+        survivor_ok = False;
+    }
+}
+check("declarations named by surviving values kept and freed", survivor_ok, NOTHING);
+
+# declarations that name each other are kept, as a group, while a value of one of them exists, and freed with it
+int groups = dbg_type_declaration_groups();
+bool cycle_ok = True;
+for (int g = 0; g < 20; ++g) {
+    hash<auto> v;
+    {
+        Program p(Opts);
+        p.parse(CycleSrc, "cycle");
+        v = p.callFunction("make");
+    }
+    v.p.c = NOTHING;
+    v.h.h = NOTHING;
+    if (dbg_type_declaration_groups() != groups + 1) {
+        check("group kept by the surviving values in generation " + g, False,
+            dbg_type_declaration_groups() - groups);
+        cycle_ok = False;
+    }
+    remove v;
+    if (dbg_type_declaration_groups() != groups || dbg_retired_type_declarations() != base) {
+        check("group collected with the values in generation " + g, False,
+            (dbg_type_declaration_groups() - groups, dbg_retired_type_declarations() - base));
+        cycle_ok = False;
+    }
+}
+check("declarations naming each other kept and freed with their values", cycle_ok, NOTHING);
