@@ -192,6 +192,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   in qcc executables
         # - empty-string-order (#6090): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
+        # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
+        #   processes that set their own --exec-mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -199,6 +201,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/deleted-program-types.qtest",
                                  "examples/test/qore/classes/method-reference-per-class.qtest",
                                  "examples/test/qore/operators/empty-string-order.qtest",
+                                 "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
