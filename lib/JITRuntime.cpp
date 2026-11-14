@@ -13989,7 +13989,7 @@ extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
     released.  Returns true if the handler's value was taken.  A handler that ends without a return gives no value;
     a return without a value cannot be told from it.
 */
-static bool qore_rt_obe_hold_return(uint64_t* hold, bool error, uint64_t rv_bits, ExceptionSink* xsink) {
+static inline bool qore_rt_obe_hold_return(uint64_t* hold, bool error, uint64_t rv_bits, ExceptionSink* xsink) {
     if (!hold || !error || fromBits(rv_bits).isNothing()) {
         return false;
     }
@@ -13999,8 +13999,8 @@ static bool qore_rt_obe_hold_return(uint64_t* hold, bool error, uint64_t rv_bits
     return true;
 }
 
-static int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered,
-        uint64_t* hold);
+static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
+        ExceptionSink* xsink, bool inline_lowered, uint64_t* hold);
 
 extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered) {
     qore_rt_exec_on_block_exit_intern(saved_count, xsink, inline_lowered, nullptr);
@@ -14013,8 +14013,9 @@ extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count,
     return qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, hold);
 }
 
-static int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered,
-        uint64_t* hold) {
+// inlined in both entry points, so that qore_rt_exec_on_block_exit_impl() has no hold check (#5992)
+static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
+        ExceptionSink* xsink, bool inline_lowered, uint64_t* hold) {
     size_t start = static_cast<size_t>(saved_count);
     if (jit_obe_handlers.size() <= start) {
         return 0;
