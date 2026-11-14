@@ -257,7 +257,10 @@ struct qore_number_private : public qore_number_private_intern {
         key += neg ? '-' : '+';
         int64 exp = (int64)mpfr_get_exp(num);
         key.append(reinterpret_cast<const char*>(&exp), sizeof(exp));
-        // the limbs from the least significant one: the zero limbs at the low end are left out
+        // the limbs from the least significant one: the zero limbs at the low end are left out; this relies on two
+        // properties of MPFR: mpfr_custom_get_significand() gives the significand of any mpfr_t (it reads its
+        // limb pointer), and the bits of the least significant limb below the precision are always zero (an MPFR
+        // invariant, checked by mpfr_check()), so two equal values have equal limbs in a partly used last limb too
         const mp_limb_t* limbs = static_cast<const mp_limb_t*>(mpfr_custom_get_significand(num));
         size_t n = (mpfr_get_prec(num) + GMP_NUMB_BITS - 1) / GMP_NUMB_BITS;
         size_t low = 0;

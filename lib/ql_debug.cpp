@@ -799,7 +799,6 @@ static void ut_number_exact_key(UnitTestCounters& c) {
         n->appendExactKey(k);
         return k;
     };
-    ExceptionSink xsink;
     // 0.1 at several precisions is several values; 0.5 at any precision is one value
     SimpleRefHolder<QoreNumberNode> tenth_128(new QoreNumberNode("0.1", 128));
     SimpleRefHolder<QoreNumberNode> tenth_5000(new QoreNumberNode("0.1", 5000));
@@ -842,7 +841,13 @@ static void ut_number_exact_key(UnitTestCounters& c) {
     SimpleRefHolder<QoreNumberNode> ninf(new QoreNumberNode("-@inf@"));
     UT_ASSERT(c, pinf->inf() && key(*pinf) != key(*ninf), "+inf and -inf have two keys");
     UT_ASSERT(c, key(*pinf) != key(*nan1) && key(*pzero) != key(*nan1), "NaN, zero and inf have keys of their own");
-    xsink.clear();
+    // two values that differ only in the low bits of a partly used last limb: 1 and 1 + 2^-69 at 70 bits
+    SimpleRefHolder<QoreNumberNode> one_70(new QoreNumberNode("1", 70));
+    SimpleRefHolder<QoreNumberNode> eps(new QoreNumberNode(
+        "0.000000000000000000001694065894508600678136645001359283924102783203125", 70));
+    SimpleRefHolder<QoreNumberNode> next(one_70->doPlus(**eps));
+    UT_ASSERT(c, !next->equals(**one_70), "1 + 2^-69 is not 1");
+    UT_ASSERT(c, key(*next) != key(*one_70), "1 and 1 + 2^-69 have two keys");
 }
 
 static void ut_string_data_helper(UnitTestCounters& c) {
