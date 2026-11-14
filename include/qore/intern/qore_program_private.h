@@ -974,6 +974,10 @@ public:
         attachAOTEntryStatementBlock())
     */
     QoreParseOptions aot_inherited_po;
+    //! the restrictions that a module parse option mask added to the parse options of the Program of a user module
+    //! when it was created (see set_module_parse_option_mask() and load_module_masked()), named in the error of a
+    //! directive that conflicts with the %modern that they complete (issue #5682)
+    QoreParseOptions module_mask_added;
 
     std::string exec_class_name, script_dir, script_path, script_name, include_path;
 
@@ -4790,6 +4794,17 @@ public:
 
     DLLLOCAL static void setAOTInheritedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
         pgm.priv->aot_inherited_po = po;
+    }
+
+    //! Records the restrictions that a module parse option mask added to the parse options of a module's Program
+    DLLLOCAL static void setModuleMaskAddedParseOptions(QoreProgram& pgm, const QoreParseOptions& po) {
+        pgm.priv->module_mask_added = po;
+    }
+
+    //! Returns the restrictions that a module parse option mask added to the parse options of a module's Program
+    //! while its code is parsed (none otherwise)
+    DLLLOCAL static QoreParseOptions getModuleMaskAddedParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->module_mask_added;
     }
 
     //! Records the functional domains that a user module declares in its module header (\c domains)
