@@ -1281,6 +1281,13 @@ public:
         held_returns.push_back(v);
     }
 
+    //! Releases the reference that holdReturn() keeps to \a v, if any (#5992)
+    DLLLOCAL void releaseHeldReturn(QoreValue v, ExceptionSink* xsink) {
+        if (!held_returns.empty()) [[unlikely]] {
+            releaseHeldReturnIntern(v, xsink);
+        }
+    }
+
     //! Releases the values that holdReturn() keeps, after the locals of the frame
     DLLLOCAL void releaseHeldReturns(ExceptionSink* xsink) {
         for (QoreValue& v : held_returns) {
@@ -1331,6 +1338,18 @@ private:
     std::vector<uint8_t> real_slots;
     //! the values of a return that an exception interrupted, released after the locals of the frame (#5920)
     std::vector<QoreValue> held_returns;
+
+    //! Releases the reference that holdReturn() keeps to \a v, if any (see releaseHeldReturn())
+    DLLLOCAL __attribute__((noinline, cold)) void releaseHeldReturnIntern(QoreValue v, ExceptionSink* xsink) {
+        for (size_t i = held_returns.size(); i; --i) {
+            if (held_returns[i - 1].hasNode() && held_returns[i - 1].getInternalNode() == v.getInternalNode()) {
+                QoreValue held = held_returns[i - 1];
+                held_returns.erase(held_returns.begin() + (i - 1));
+                held.discard(xsink);
+                return;
+            }
+        }
+    }
 };
 
 //! A set of local variables that allocates no memory once its capacity covers the locals it holds
@@ -15218,6 +15237,10 @@ load_local_done:
                     removeAllCleanupEntries(cleanup, id);
                     QoreValue v = values[id];
                     values[id] = QoreValue();
+                    // the value of a return that a handler's return replaced, released on the way of an exception
+                    // that the handler's return raised: the reference that the branch to the exception target kept
+                    // for it (see exceptionBranchTempScope()) is released with it (#5992)
+                    frame.locals_slot_cache.releaseHeldReturn(v, xsink);
                     v.discard(xsink);
                     // the release of a fused pipeline's stage input (a second operand) runs on the normal path only:
                     // an exception that a destructor raises leaves the pipeline there, as it leaves the AST

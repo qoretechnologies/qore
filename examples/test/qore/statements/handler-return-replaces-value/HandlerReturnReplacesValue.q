@@ -1,0 +1,172 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# A return in a handler replaces the value of the return that the handler runs after (#5992); see
+# handler-return-replaces-value.qtest
+
+%modern
+%enable-all-warnings
+our list<string> log = ();
+class T { public { string n; } constructor(string n) { self.n = n; } destructor() { log += "~" + n; } }
+# the return of a handler that runs after one that returns gives the value
+string sub f() {
+    on_exit { return "last"; }
+    on_success { return "success"; }
+    return "body";
+}
+# the replaced value is released when the handler's return replaces it
+T sub g() {
+    T a("a");
+    on_exit { log += "exit"; }
+    on_success { return a; }
+    return new T("unused");
+}
+# a return without a value replaces it with no value
+auto sub q2() {
+    T z("rz");
+    try {
+        if (True) {
+            on_exit { log += "rox"; }
+            if (True) {
+                on_exit { log += "rix"; return; }
+                return new T("rrv");
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += "catch";
+    }
+    log += "never";
+}
+# three handlers that return
+auto sub th() {
+    on_exit { log += "h1"; return new T("th1"); }
+    on_exit { log += "h2"; return new T("th2"); }
+    on_exit { log += "h3"; return new T("th3"); }
+    return new T("th-body");
+}
+# a return without a value in a handler, then a return of a value
+auto sub nv() {
+    on_exit { return new T("nv-last"); }
+    on_success { return; }
+    return new T("nv-body");
+}
+# handlers of nested blocks that return
+auto sub n1() {
+    on_exit { log += "o"; return new T("n1-outer"); }
+    {
+        on_exit { log += "i"; return new T("n1-inner"); }
+        return new T("n1-body");
+    }
+}
+auto sub n2() {
+    on_exit { log += "o"; return new T("n2-outer"); }
+    {
+        on_exit { log += "i"; }
+        {
+            on_success { log += "ii"; return new T("n2-inner"); }
+            return new T("n2-body");
+        }
+    }
+}
+# a block that ends without a return
+auto sub ft() {
+    on_exit { return "ft-last"; }
+    on_success { return "ft-success"; }
+    log += "body";
+}
+# a block with on_exit and on_error handlers that ends without a return
+auto sub mx() {
+    on_exit { return "mx-last"; }
+    on_error { log += "err"; }
+    on_exit { return new T("mx-x"); }
+    log += "body";
+}
+# a try statement in the function catches an exception that a handler raises after one that returns
+auto sub tc() {
+    try {
+        on_exit { log += "tcx"; throw "TC"; }
+        on_success { return new T("tc-s"); }
+        return new T("tc-body");
+    } catch (hash<ExceptionInfo> ex) {
+        log += "catch";
+    }
+    return "tc-after";
+}
+# a return in a handler of a block in the body of another handler
+auto sub hh1() { on_exit { if (True) { on_exit { return 1; } } } return 2; }
+auto sub hh2() { on_exit { if (True) { on_exit { return 1; } } } }
+auto sub hh3() { on_exit { if (True) { on_exit { if (False) return 1; } } } return 2; }
+auto sub hh4() { on_exit { while (True) { on_exit { return 2; } break; } } return 3; }
+auto sub hh5() {
+    on_exit { log += "o1"; }
+    on_exit {
+        log += "h";
+        if (True) {
+            on_exit { log += "i"; return new T("hh5-inner"); }
+            log += "hb";
+        }
+        log += "never";
+    }
+    return new T("hh5-body");
+}
+# the replaced value is released when the handler's return raises an exception
+auto sub thrower() { log += "thr"; throw "EV"; }
+T sub tc1() { on_exit { log += "x"; } on_exit { auto v = 1; return v; } return new T("body"); }
+T sub ev1() { on_exit { log += "x"; } on_exit { return thrower(); } return new T("body"); }
+auto sub ev3() {
+    try {
+        on_exit { log += "x"; }
+        on_exit { return thrower(); }
+        return new T("body");
+    } catch (hash<ExceptionInfo> ex) {
+        log += "catch";
+    }
+    return "after";
+}
+# in a method and a closure
+class C {
+    auto m() {
+        on_exit { log += "mexit"; }
+        on_success { return new T("m-s"); }
+        return new T("m-body");
+    }
+}
+code cl = auto sub () {
+    on_exit { log += "cx"; }
+    on_success { return new T("cl-s"); }
+    return new T("cl-body");
+};
+
+sub show(string label, code c) {
+    for (int i = 0; i < 2; ++i) {
+        log = ();
+        try {
+            auto v = c();
+            log += "rv:" + (v instanceof T ? v.n : (exists v ? sprintf("%s", v) : "nothing"));
+        } catch (hash<ExceptionInfo> ex) {
+            log += "ex:" + ex.err;
+        }
+        printf("%s: %y\n", label, log);
+    }
+}
+for (int i = 0; i < 2; ++i) {
+    printf("f: %s\n", f());
+}
+show("g", \g());
+show("q2", \q2());
+show("th", \th());
+show("nv", \nv());
+show("n1", \n1());
+show("n2", \n2());
+show("ft", \ft());
+show("mx", \mx());
+show("tc", \tc());
+show("hh1", \hh1());
+show("hh2", \hh2());
+show("hh3", \hh3());
+show("hh4", \hh4());
+show("hh5", \hh5());
+show("tc1", \tc1());
+show("ev1", \ev1());
+show("ev3", \ev3());
+show("m", auto sub () { C c(); return c.m(); });
+show("cl", cl);

@@ -884,6 +884,9 @@ private:
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
+        //! for a HandlerBarrier entry: the number of handlers of the protected scope that stay registered while the
+        //! handler runs (those registered before it), which a return in the handler runs after it (#5992)
+        size_t keep_handlers = 0;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
@@ -1032,6 +1035,38 @@ private:
     //! the values of the Return instructions in the try block of each enclosing try statement, innermost last (see
     //! QoreIRFunction::catch_interrupted_returns)
     std::vector<std::vector<uint32_t>> try_return_value_stack;
+    //! the number of try statements (their try and catch blocks) that enclose the code being lowered
+    /** A try statement runs its blocks with a return value of its own (TryStatement::execImpl()), so a return in a
+        try statement in a handler does not replace the value of the return that the handler runs after (#5992).
+    */
+    int try_depth = 0;
+    //! the value of the return statement whose block cleanups are being lowered, which a return in a handler that
+    //! they lower inline replaces (#5992)
+    /** As in the AST interpreter, where the handlers of a block run with the block's return value and a return
+        statement in one replaces it and releases the replaced value (ReturnStatement::execImpl()), the return of a
+        handler releases this value when it replaces it.  An invalid value is no value (a return without one), or
+        none to release.
+    */
+    QoreIRValue pending_return;
+    //! the value that pending_return took a reference of its own to before the block cleanups, if any, which holds a
+    //! reference of the frame until the frame ends; released with it (#5992)
+    QoreIRValue pending_return_base;
+    //! true while the block cleanups of a return statement are lowered (see pending_return)
+    bool pending_return_active = false;
+    //! try_depth at the return statement of pending_return
+    int pending_return_try_depth = 0;
+    //! the nesting of emitBlockCleanups() and lowerHandlersAtExit() calls (see QORE_IR_INLINE_HANDLER_BUDGET in
+    //! QoreIRLowering.cpp)
+    int exit_lowering_nesting = 0;
+    //! the nesting of the handler bodies being lowered inline by lowerHandlerAtExit()
+    int inline_handler_body_depth = 0;
+    //! the handler bodies lowered inline since the outermost exit being lowered began
+    size_t inline_handlers_lowered = 0;
+    class ExitLoweringNesting;
+    //! Returns true if a return at the current point replaces the value of pending_return (see there)
+    DLLLOCAL bool replacesPendingReturn() const;
+    //! Releases the value of the return that a return in a handler replaces (see pending_return)
+    DLLLOCAL void releaseReplacedReturn(const QoreProgramLocation* loc);
     //! the depth of the statements lowered, for the nesting of DebugStatement instructions (#5816)
     uint16_t debug_nest_depth = 0;
     //! the depth of the statements of the catch block lowered, or -1 (QORE_IR_DEBUG_NEST_IN_CATCH)
