@@ -656,7 +656,10 @@ private:
     //! are released if a handler's value replaced them (see finalizeHandlerReturnHoldSites())
     std::vector<llvm::CallInst*> handler_return_hold_sites;
     //! Emits the call that runs the handlers registered since \a saved_count out of line with handler_return_hold
-    llvm::CallInst* emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count);
+    /** @param release_returns true if the values of the function's returns are released after the call when a
+        handler's value was kept: false where a try statement of the function can catch the exception
+    */
+    llvm::CallInst* emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count, bool release_returns);
     //! Releases the values of return_value_ids after each call of handler_return_hold_sites that kept a handler's
     //! value, now that their cleanup allocas are known
     void finalizeHandlerReturnHoldSites(llvm::Module& module);

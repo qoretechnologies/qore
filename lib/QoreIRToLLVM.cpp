@@ -3323,8 +3323,40 @@ static bool qore_ir_handlers_return_value(const QoreIRFunction& func) {
     return false;
 }
 
+//! Returns true if an exception at an instruction whose exception target is \a target can reach a catch block of the
+//! function (a LandingPad or a CatchException on its exception path), conservatively (#5992)
+static bool qore_ir_exception_reaches_catch(const QoreIRBasicBlock* target) {
+    std::vector<const QoreIRBasicBlock*> work;
+    std::unordered_set<const QoreIRBasicBlock*> seen;
+    if (target) {
+        work.push_back(target);
+    }
+    while (!work.empty()) {
+        const QoreIRBasicBlock* block = work.back();
+        work.pop_back();
+        if (!block || !seen.insert(block).second) {
+            continue;
+        }
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::LandingPad || inst->opcode == QoreIROpcode::CatchException) {
+                return true;
+            }
+            if (inst->exception_target) {
+                work.push_back(inst->exception_target);
+            }
+            if (isTerminator(inst->opcode)) {
+                qore_ir_visit_successors(*inst, [&work](QoreIRBasicBlock* succ) {
+                    work.push_back(succ);
+                });
+            }
+        }
+    }
+    return false;
+}
+
 // documented in QoreIRToLLVM.h
-llvm::CallInst* QoreIRToLLVM::emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count) {
+llvm::CallInst* QoreIRToLLVM::emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count,
+        bool release_returns) {
     if (!handler_return_hold) {
         auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -3333,7 +3365,13 @@ llvm::CallInst* QoreIRToLLVM::emitOnBlockExitHoldCall(llvm::Module& module, llvm
     auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit_hold",
             llvm::FunctionType::get(builder->getInt8Ty(), {i64_type, ptr_type, ptr_type}, false));
     llvm::CallInst* call = builder->CreateCall(helper, {saved_count, xsink_arg, handler_return_hold});
-    handler_return_hold_sites.push_back(call);
+    // a handler's value replaces the function's interrupted return only where no try statement of the function
+    // catches the exception: in a try statement, it is the value of the try block's return, which the catch releases
+    // (catch_interrupted_returns), and the function's return is still pending, as the AST interpreter's try statement
+    // runs its block with a return value of its own
+    if (release_returns) {
+        handler_return_hold_sites.push_back(call);
+    }
     return call;
 }
 
@@ -4289,7 +4327,7 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, obe_saved_count);
     publishLocalsForHandlers(module);
     // every local is reloaded below
-    recordHandlerSite(emitOnBlockExitHoldCall(module, obe_saved_count), false);
+    recordHandlerSite(emitOnBlockExitHoldCall(module, obe_saved_count, true), false);
     // On-block-exit handlers execute user code and can mutate AST-visible/AOT
     // body locals through the runtime local stack.  Refresh eagerly here:
     // fused local ops can read allocas directly, so a lazy epoch alone is not
@@ -22455,7 +22493,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     publishLocalsForHandlers(module);
                     // the locals whose reload storage is released before the handlers run are reloaded right after
                     // them (see finalizeHandlerSites())
-                    recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count), true);
+                    recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count, false), true);
                     endPendingHandlerRun(done_bb);
                     // On-block-exit handlers execute through the AST path and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths: the instruction that
@@ -22493,16 +22531,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Catch exception ===
         case QoreIROpcode::CatchException: {
-            // the value that a handler run while the exception was pending returned (see handler_return_hold) is the
-            // value of the return that the exception interrupted, which the try statement releases first (qore#5941,
-            // #5992)
-            if (handler_return_hold) {
-                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-                llvm::Value* held = builder->CreateLoad(i64_type, handler_return_hold);
-                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), handler_return_hold);
-                builder->CreateCall(decref_fn, {held, xsink_arg});
-            }
             // the value of a return of the try block that the exception (or a thread_exit) interrupted is released
             // first, as TryStatement::execImpl() does (qore#5941); the block is filled once the try block is lowered
             if (current_ir_func) {
@@ -22513,6 +22541,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->SetInsertPoint(release);
                     catch_return_release_blocks.emplace_back(release, &i->second);
                 }
+            }
+            // the value that a handler run while the exception was pending returned (see handler_return_hold) is the
+            // value of the return that the exception interrupted, which the try statement releases next, after the
+            // value of the return that it replaced (qore#5941, #5992)
+            if (handler_return_hold) {
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                llvm::Value* held = builder->CreateLoad(i64_type, handler_return_hold);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), handler_return_hold);
+                builder->CreateCall(decref_fn, {held, xsink_arg});
             }
             // A thread_exit is not an exception: the catch block is not entered, and the unwind continues
             // through the instruction's exception target, the try statement's propagation block; an exception
@@ -35639,7 +35677,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     publishLocalsForHandlers(module);
                     // the locals whose reload storage is released before the handlers run are reloaded right after
                     // them (see finalizeHandlerSites())
-                    recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count), true);
+                    recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count,
+                        !qore_ir_exception_reaches_catch(inst->exception_target)), true);
                     endPendingHandlerRun(done_bb);
                     // On-block-exit handlers execute user code and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths, as at a landing pad: this

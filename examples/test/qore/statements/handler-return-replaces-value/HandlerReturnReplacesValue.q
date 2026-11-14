@@ -201,6 +201,40 @@ auto sub xr4() {
     }
     return "xr4-after";
 }
+# a handler that returns while an exception is pending in a try statement in another handler: its value is the try
+# statement's interrupted return, and the function's return is kept
+auto sub xr5() {
+    on_exit {
+        try {
+            { on_error { return new T("xr5-h"); } thrower(); }
+        } catch (hash<ExceptionInfo> ex) {
+            log += "c";
+        }
+    }
+    return new T("xr5-b");
+}
+auto sub xr6() {
+    on_success {
+        try {
+            { on_error { return new T("xr6-h"); } thrower(); }
+        } catch (hash<ExceptionInfo> ex) {
+            log += "c";
+        }
+    }
+    return new T("xr6-b");
+}
+# the same in a handler run while an exception leaves its block (out of line)
+auto sub xr7() {
+    on_exit {
+        try {
+            { on_error { return new T("xr7-h"); } thrower(); }
+        } catch (hash<ExceptionInfo> ex) {
+            log += "c";
+        }
+    }
+    T b("xr7-b");
+    throw "E7";
+}
 # in a method and a closure
 class C {
     auto m() {
@@ -258,5 +292,8 @@ show("xr1", \xr1());
 show("xr2", \xr2());
 show("xr3", \xr3());
 show("xr4", \xr4());
+show("xr5", \xr5());
+show("xr6", \xr6());
+show("xr7", \xr7());
 show("m", auto sub () { C c(); return c.m(); });
 show("cl", cl);
