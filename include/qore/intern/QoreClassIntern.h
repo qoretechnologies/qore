@@ -4084,6 +4084,9 @@ public:
                 taken = spgm.compare_exchange_strong(expected, nullptr);
             }
             if (taken) {
+                // the method lookups cached for the class are no longer known to be stable (QoreCallTargetCheckCache,
+                // issue #5824)
+                qore_bump_method_dispatch_epoch();
                 releaseSourceProgram(expected, xsink);
             }
         }
@@ -4101,6 +4104,8 @@ public:
                 }
             }
             if (p) {
+                // see above
+                qore_bump_method_dispatch_epoch();
                 releaseSourceProgram(p, xsink);
             }
         }
