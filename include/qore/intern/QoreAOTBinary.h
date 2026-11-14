@@ -473,9 +473,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      the reference of a default argument expression to one is (v34); the reader binds the capture to that variable
 //!      and reads the closure again when the Program has its top-level locals.  An earlier reader takes the text as
 //!      the name of a variable that does not exist (#5998).
-//! v37 (PLACEHOLDER: renumbered to the next free version when batched; v37 and v38 are reserved for #5952 and #5824): a return
-//!      statement of a handler compiled as a function of its own (an out-of-line on_exit, on_success or on_error
-//!      handler) is followed by a HandlerReturn instruction (QoreIROpcode::HandlerReturn, 432), with the value of the
+//! v37 (PLACEHOLDER: renumbered to the next free version when batched; v37 and v38 are reserved for #5952 and
+//!      #5824): a return statement of a handler compiled as a function of its own (an out-of-line on_exit,
+//!      on_success or on_error handler) is followed by a HandlerReturn instruction (QoreIROpcode::HandlerReturn, 432), with the value of the
 //!      return as its operand, or none for a return without a value, which hands the value to the function that the
 //!      handler runs for (#6074); native code calls qore_rt_handler_return(), and qore_rt_exec_on_block_exit_hold()
 //!      takes the slots of the interrupted return that the first hand-over releases (two more arguments).  A
