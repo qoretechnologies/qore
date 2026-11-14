@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-groupby-keys.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameGroupByKeysTest
+
+#! groupBy() puts two float keys in one group only if they are equal (with -0.0 equal to 0.0) or both NaN, in a
+#! float64 column and in a column that holds any value (qore#6107)
+class DataFrameGroupByKeysTest inherits QUnit::Test {
+    constructor() : Test("DataFrameGroupByKeysTest", "1.0", \ARGV) {
+        addTestCase("float64 keys", \floatTest());
+        addTestCase("float keys in a column of any value", \autoTest());
+        addTestCase("several key columns", \multiTest());
+        set_return_value(main());
+    }
+
+    #! floats that differ after the sixth decimal place, or in the last bit, make different groups
+    floatTest() {
+        DataFrame::DataFrame df({
+            "k": (1.0000001, 1.0000002, 0.1 + 0.2, 0.3, -0.0, 0.0, @nan@, -@nan@, 1e-300, 2e-300),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512),
+        });
+        assertEq("float64", df.dtypes()[0]);
+        DataFrame::DataFrame g = df.groupBy(("k",)).agg({"v": "sum"});
+        assertEq((1.0, 2.0, 4.0, 8.0, 48.0, 192.0, 256.0, 512.0), g.getColumn("v"), "sums");
+        list<auto> gkeys = g.getColumn("k");
+        assertEq(8, gkeys.size(), "groups");
+        assertTrue(gkeys[2] == 0.1 + 0.2 && gkeys[3] == 0.3, "0.1 + 0.2 and 0.3");
+        # nunique counts the same values
+        DataFrame::DataFrame u = (new DataFrame::DataFrame({"g": (map 1, df.getColumn("k")), "k": df.getColumn("k")}))
+            .groupBy(("g",)).agg({"k": "nunique"});
+        assertEq((8,), u.getColumn("k"), "nunique");
+    }
+
+    #! a float in a column that holds any value is keyed as in a float64 column
+    autoTest() {
+        DataFrame::DataFrame df({
+            "k": (c'z', 1.0000001, 1.0000002, 0.1 + 0.2, 0.3, -0.0, 0.0, @nan@, @nan@),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256),
+        });
+        assertEq("auto", df.dtypes()[0]);
+        DataFrame::DataFrame g = df.groupBy(("k",)).agg({"v": "sum"});
+        assertEq((1.0, 2.0, 4.0, 8.0, 16.0, 96.0, 384.0), g.getColumn("v"), "sums");
+        DataFrame::DataFrame u = (new DataFrame::DataFrame({"g": (map 1, df.getColumn("k")), "k": df.getColumn("k")}))
+            .groupBy(("g",)).agg({"k": "nunique"});
+        assertEq((7,), u.getColumn("k"), "nunique");
+    }
+
+    #! float keys with other key columns
+    multiTest() {
+        DataFrame::DataFrame df({
+            "a": ("x", "x", "x", "y"),
+            "k": (1.0000001, 1.0000002, 1.0000001, 1.0000001),
+            "v": (1, 2, 4, 8),
+        });
+        DataFrame::DataFrame g = df.groupBy(("a", "k")).agg({"v": "sum"});
+        assertEq((5.0, 2.0, 8.0), g.getColumn("v"), "sums");
+    }
+}

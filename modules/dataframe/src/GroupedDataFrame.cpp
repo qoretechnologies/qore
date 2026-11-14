@@ -111,26 +111,49 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
     std::unordered_map<std::string, size_t> group_map;  // key_str → group index
     group_map.reserve(static_cast<size_t>(std::min<int64_t>(source_n_rows, 65536)));
 
-    // returns the value of a group column as a string; null values are distinguished from strings by the key
-    // components (see appendDataFrameKeyNull())
+    // the key of the value of a group column: the exact value (the bits of a float, with -0.0 as 0.0 and the NaN
+    // values as one value), so that two values make one group only if they are equal (qore#6107); a string is
+    // compared in UTF-8, the encoding of the string cells, so that equal strings in different encodings make the
+    // same group
     auto get_key_value = [](const ColumnData& cd, int64_t row) -> std::string {
+        return dataFrameValueKey(cd, row);
+    };
+    // appends the key component of a value that is not null with no temporary string; the cells of a column other
+    // than a column that holds any value all have one type, so their components need no type tag, and a component
+    // of a fixed size needs no length (the key of one such column fits in a string with no allocation)
+    auto append_fixed = [](std::string& key, const void* value, size_t len) {
+        key += 'V';
+        key.append(static_cast<const char*>(value), len);
+    };
+    auto append_key_value = [&get_key_value, &append_fixed](std::string& key, const ColumnData& cd, int64_t row) {
         switch (cd.type) {
-            case ColumnType::FLOAT64:
-                return std::to_string(cd.float_data(row));
+            case ColumnType::FLOAT64: {
+                double value = cd.float_data(row);
+                if (value == 0.0) {
+                    // -0.0 == 0.0
+                    value = 0.0;
+                } else if (std::isnan(value)) {
+                    // the NaN values make one group
+                    value = std::numeric_limits<double>::quiet_NaN();
+                }
+                append_fixed(key, &value, sizeof(value));
+                break;
+            }
             case ColumnType::INT64:
-                return std::to_string(cd.int_data[row]);
+                append_fixed(key, &cd.int_data[row], sizeof(cd.int_data[row]));
+                break;
             case ColumnType::STRING:
-                return cd.str_data[row];
+                appendDataFrameKeyValue(key, cd.str_data[row]);
+                break;
             case ColumnType::BOOL:
-                return cd.bool_data[row] ? "true" : "false";
+                append_fixed(key, cd.bool_data[row] ? "1" : "0", 1);
+                break;
             case ColumnType::DATE:
-                return std::to_string(cd.date_data[row]);
-            // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in different
-            // encodings make the same group
-            case ColumnType::AUTO:
-                return dataFrameUtf8Key(cd.auto_data[row]);
+                append_fixed(key, &cd.date_data[row], sizeof(cd.date_data[row]));
+                break;
             default:
-                return {};
+                appendDataFrameKeyValue(key, get_key_value(cd, row));
+                break;
         }
     };
 
@@ -147,7 +170,7 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
             if (cd.isNull(r)) {
                 appendDataFrameKeyNull(key);
             } else {
-                appendDataFrameKeyValue(key, get_key_value(cd, r));
+                append_key_value(key, cd, r);
             }
         }
 

@@ -243,17 +243,9 @@ std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
 
     std::string key;
     switch (cd.type) {
-        case ColumnType::FLOAT64: {
-            double value = cd.float_data(row);
-            if (value == 0.0) {
-                value = 0.0;  // Normalize -0.0 to match numeric equality.
-            }
-            uint64_t bits;
-            std::memcpy(&bits, &value, sizeof(bits));
-            key.assign("f", 1);
-            key.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
+        case ColumnType::FLOAT64:
+            appendDataFrameFloatKey(key, 'f', cd.float_data(row));
             return key;
-        }
         case ColumnType::INT64: {
             int64_t value = cd.int_data[row];
             key.assign("i", 1);
@@ -272,12 +264,20 @@ std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
             key.append(reinterpret_cast<const char*>(&value), sizeof(value));
             return key;
         }
-        case ColumnType::AUTO:
+        case ColumnType::AUTO: {
+            // a float is keyed by its bits, as in a float64 column, as its string form can be the same for
+            // different floats (qore#6107)
+            const QoreValue& v = cd.auto_data[row];
+            if (v.getType() == NT_FLOAT) {
+                appendDataFrameFloatKey(key, 'g', v.getAsFloat());
+                return key;
+            }
             // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in different
             // encodings make the same key
             key.assign("a", 1);
-            key.append(dataFrameUtf8Key(cd.auto_data[row]));
+            key.append(dataFrameUtf8Key(v));
             return key;
+        }
         default:
             return {};
     }

@@ -845,6 +845,10 @@ DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *stri
     DataFrame counts = gdf.count();
     @endcode
 
+    Two rows are in one group if their values of each group column are equal: two floats only if they are equal
+    (with \c -0.0 equal to \c 0.0) or both NaN, which make one group; the null values of a column make a group of
+    their own.  In a column that holds any value, values of different types make different groups.
+
     @throw DATAFRAME-COLUMN-ERROR if a column name is not found
 
 */

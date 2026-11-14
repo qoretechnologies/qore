@@ -18,7 +18,10 @@
 
 #include <atomic>
 #include <cassert>
+#include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -358,8 +361,26 @@ DLLLOCAL void markScanColumnValuesStored(QoreObject& self, const std::vector<Col
 */
 DLLLOCAL bool scanColumnValues(const std::vector<Column>& columns, QorePrivateDataScanner& scanner);
 
+//! Appends the tag and the key of a float to a key: its bits, with -0.0 as 0.0 and every NaN as one NaN
+/** Two floats have the same key if they are equal (as with the == operator) or both NaN (qore#6107).
+*/
+static inline void appendDataFrameFloatKey(std::string& key, char tag, double value) {
+    if (value == 0.0) {
+        // -0.0 == 0.0
+        value = 0.0;
+    } else if (std::isnan(value)) {
+        // the NaN values make one group
+        value = std::numeric_limits<double>::quiet_NaN();
+    }
+    uint64_t bits;
+    std::memcpy(&bits, &value, sizeof(bits));
+    key += tag;
+    key.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
+}
+
 //! Returns a key of the value of a row that is equal for equal values of the column and different for others
-/** A null value has a key of its own.
+/** A null value has a key of its own.  A float (in a float64 column or a column that holds any value) is keyed by
+    its bits, so that two floats have the same key only if they are equal (with -0.0 equal to 0.0) or both NaN.
 */
 DLLLOCAL std::string dataFrameValueKey(const ColumnData& cd, int64_t row);
 
