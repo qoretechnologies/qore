@@ -1309,6 +1309,13 @@ private:
     bool fastEntryParamRejectsNothing(const BatchCalleeInfo& info,
             unsigned index) const;
     bool fastEntryArgumentKnownNotNothing(uint32_t value_id) const;
+    //! true if the argument of a fast entry is checked for NOTHING before the call: its parameter rejects NOTHING and
+    //! the value has a boxed form (a NaN-boxed value or the boxed source of a native one) that can be NOTHING
+    /** buildAotFastEntryArgs() boxes such an argument and emitAotBatchFastEntryOrFallback() checks it: the one predicate
+        keeps them in step (qore#6081: a native element of a map with a boxed source was checked but not boxed)
+    */
+    bool fastEntryArgumentNeedsNothingGuard(const BatchCalleeInfo& callee_info, unsigned index,
+            uint32_t value_id) const;
     BatchCalleeParamKind getFastEntryArgKind(const void* key) const;
     llvm::Value* getFastEntryCallArgument(const BatchCalleeInfo& info,
             unsigned index, const std::vector<llvm::Value*>& raw_args,
