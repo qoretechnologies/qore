@@ -11,6 +11,7 @@
 #include "QC_DataFrame.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <unordered_map>
 #include <unordered_set>
@@ -237,6 +238,113 @@ QoreDataFrame* QoreDataFrame::withColumn(const std::string& name,
 
 // --- pivot ---
 
+//! Gives the key and the label of an index or columns cell of pivot() that is not null (qore#6099)
+/** The key tells every two different values apart: the bits of a float (0.0 and -0.0 being the same), the
+    microseconds of a date, the type and value of a cell of a column that holds any value; the label is the string
+    form of the value in UTF-8 (a date with its microseconds and UTC offset).  A cell of a column that holds any
+    value that is not a scalar (a list, a hash, a binary value, an object) has no key and raises DATAFRAME-ERROR.  The
+    cells of a column other than a column that holds any value all have one type, so their keys have no type tag; a
+    string column needs no key, as its strings are their own keys.
+
+    @param label the label to set, or nullptr if only the key is needed
+
+    @return 0 for success, -1 if an exception was raised
+*/
+static int pivotKey(const ColumnData& cd, int64_t i, std::string& key, std::string* label, const std::string& name,
+        ExceptionSink* xsink) {
+    switch (cd.type) {
+        case ColumnType::STRING:
+            key = cd.str_data[i];
+            if (label) {
+                *label = key;
+            }
+            return 0;
+        case ColumnType::INT64:
+        case ColumnType::FLOAT64:
+        case ColumnType::BOOL:
+        case ColumnType::DATE:
+            key = dataFrameValueKey(cd, i);
+            if (!label) {
+                return 0;
+            }
+            break;
+        default:
+            break;
+    }
+    ValueHolder value(cd.getValueAt(i, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    QoreValue v = value->isEnum() ? value->getEnumMember()->getValue() : *value;
+    qore_type_t t = v.getType();
+    if (t == NT_DATE) {
+        const DateTimeNode* dt = v.get<const DateTimeNode>();
+        if (cd.type != ColumnType::DATE) {
+            int64 micros;
+            if (!dt->getEpochMicrosecondsUTCChecked(micros)) {
+                return dataFrameDateOutOfRange(dt, xsink);
+            }
+            key.assign(dt->isRelative() ? "r" : "d", 1);
+            key.append(reinterpret_cast<const char*>(&micros), sizeof(micros));
+        }
+        if (!label) {
+            return 0;
+        }
+        if (dt->isRelative()) {
+            *label = dataFrameUtf8Key(v);
+        } else {
+            QoreString str;
+            dt->format(str, "YYYY-MM-DDTHH:mm:SS.usZ");
+            label->assign(str.c_str(), str.size());
+        }
+        return 0;
+    }
+    if (cd.type == ColumnType::AUTO) {
+        switch (t) {
+            case NT_INT: {
+                int64 iv = v.getAsBigInt();
+                key.assign("i", 1);
+                key.append(reinterpret_cast<const char*>(&iv), sizeof(iv));
+                break;
+            }
+            case NT_FLOAT: {
+                double fv = v.getAsFloat();
+                if (fv == 0.0) {
+                    fv = 0.0;
+                }
+                key.assign("f", 1);
+                key.append(reinterpret_cast<const char*>(&fv), sizeof(fv));
+                break;
+            }
+            case NT_NUMBER:
+            case NT_STRING:
+            case NT_BOOLEAN:
+            case NT_CHAR:
+                key.assign(t == NT_NUMBER ? "n" : (t == NT_STRING ? "s" : (t == NT_BOOLEAN ? "b" : "c")), 1);
+                key.append(dataFrameUtf8Key(v));
+                break;
+            default:
+                xsink->raiseException("DATAFRAME-ERROR", "pivot column '%s' has a value of type '%s', which cannot "
+                    "be a key: the index and columns values must be scalars", name.c_str(), v.getTypeName());
+                return -1;
+        }
+    }
+    if (!label) {
+        return 0;
+    }
+    if (t == NT_FLOAT) {
+        // the shortest form that gives the float back, so that two different floats have two different labels
+        char buf[64];
+        auto rc = std::to_chars(buf, buf + sizeof(buf), v.getAsFloat());
+        label->assign(buf, rc.ptr);
+    } else if (t == NT_BOOLEAN) {
+        *label = v.getAsBool() ? "True" : "False";
+    } else {
+        *label = dataFrameUtf8Key(v);
+    }
+    return 0;
+}
+
 QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
         const std::string& columns_col, const std::string& values_col,
         const std::string& agg_func, ExceptionSink* xsink) const {
@@ -275,19 +383,19 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
             if (i && !(i % 100) && qore_check_cancel(xsink, "pivoting integer/string DataFrame keys")) {
                 return nullptr;
             }
-            if (!idx_cd.isNull(i)) {
-                int64_t idx_val = idx_cd.int_data[i];
-                auto inserted = index_map.emplace(idx_val, unique_indices.size());
-                if (inserted.second) {
-                    unique_indices.push_back(idx_val);
-                }
+            // a row with a null index or columns cell is left out, as in the general path below (qore#6099)
+            if (idx_cd.isNull(i) || col_cd.isNull(i)) {
+                continue;
             }
-            if (!col_cd.isNull(i)) {
-                const std::string& col_val = col_cd.str_data[i];
-                auto inserted = col_map.emplace(col_val, unique_cols.size());
-                if (inserted.second) {
-                    unique_cols.push_back(col_val);
-                }
+            int64_t idx_val = idx_cd.int_data[i];
+            auto inserted = index_map.emplace(idx_val, unique_indices.size());
+            if (inserted.second) {
+                unique_indices.push_back(idx_val);
+            }
+            const std::string& col_val = col_cd.str_data[i];
+            auto col_inserted = col_map.emplace(col_val, unique_cols.size());
+            if (col_inserted.second) {
+                unique_cols.push_back(col_val);
             }
         }
 
@@ -309,11 +417,12 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
                 continue;
             }
             size_t pos = ri_it->second * out_cols + ci_it->second;
+            // a null value is not aggregated: it counts neither for the sum nor for the mean (qore#6099)
             if (!val_cd.isNull(i)) {
                 sums[pos] += val_cd.type == ColumnType::FLOAT64 ? val_cd.float_data(i)
                     : static_cast<double>(val_cd.int_data[i]);
+                ++counts[pos];
             }
-            ++counts[pos];
         }
 
         auto* df = new QoreDataFrame();
@@ -361,6 +470,13 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
                 delete df;
                 return nullptr;
             }
+            if (df->col_index.count(col.name)) {
+                xsink->raiseException("DATAFRAME-ERROR", "pivot columns column '%s' has two values whose column "
+                    "name is '%s', or a value whose column name is the name of the index column",
+                    columns_col.c_str(), col.name.c_str());
+                delete df;
+                return nullptr;
+            }
             col.data = std::move(cd);
             df->col_index[col.name] = df->columns.size();
             df->columns.push_back(std::move(col));
@@ -384,89 +500,118 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
         }
         if (!numbers) {
             xsink->raiseException("DATAFRAME-ERROR", "pivot values column '%s' must hold numbers to be aggregated "
-                "with '%s'; it is a %s column", values_col.c_str(), agg_func.c_str(), columnTypeName(val_cd.type));
+                "with '%s'; its type is '%s'", values_col.c_str(), agg_func.c_str(), columnTypeName(val_cd.type));
             return nullptr;
         }
     }
 
-    // the key of the value of an index or columns cell, its string form in UTF-8, the encoding of the string cells of
-    // the index column; a null value has the key of an empty string; the same key is used in both passes
-    auto cell_key = [](const ColumnData& cd, int64_t i) -> std::string {
-        if (cd.isNull(i)) {
-            return std::string();
-        }
-        switch (cd.type) {
-            case ColumnType::STRING:
-                return cd.str_data[i];
-            case ColumnType::INT64:
-                return std::to_string(cd.int_data[i]);
-            default: {
-                std::string key;
-                ExceptionSink value_xsink;
-                {
-                    ValueHolder value(cd.getValueAt(i, &value_xsink), &value_xsink);
-                    key = dataFrameUtf8Key(*value);
-                }
-                value_xsink.clear();
-                return key;
-            }
-        }
-    };
-
-    // Collect unique index values and column values
+    // the rows are grouped by the exact values of the index and columns cells (a key that tells every two different
+    // values apart: the bits of a float, the microseconds of a date), and labelled with their string forms; a row
+    // with a null index or columns cell is left out, as in the int/string path above (qore#6099)
     std::vector<std::string> unique_indices;
     std::unordered_map<std::string, size_t> index_map;
     std::vector<std::string> unique_cols;
     std::unordered_map<std::string, size_t> col_map;
+    // the column names made so far, to raise an error for two values that make the same name
+    std::unordered_map<std::string, std::string> col_names;
+    col_names[index_col] = std::string();
+    // the result row and column of each row, or no_slot for a row that is left out, so that the keys are made once
+    constexpr size_t no_slot = std::numeric_limits<size_t>::max();
+    std::vector<size_t> row_ri(n_rows, no_slot);
+    std::vector<size_t> row_ci(n_rows, no_slot);
+
+    // gives the slot of the key of a cell, adding the key and the label of its value if it is new; a cell of a string
+    // column is its own key and is not copied
+    std::string key_buf;
+    std::string label;
+    auto slot = [&] (const ColumnData& cd, int64_t i, std::unordered_map<std::string, size_t>& map, size_t& rv,
+            bool& added, const std::string& name) -> int {
+        const std::string* key = &key_buf;
+        if (cd.type == ColumnType::STRING) {
+            key = &cd.str_data[i];
+        } else if (pivotKey(cd, i, key_buf, nullptr, name, xsink)) {
+            return -1;
+        }
+        auto it = map.find(*key);
+        if (it != map.end()) {
+            rv = it->second;
+            added = false;
+            return 0;
+        }
+        rv = map.size();
+        map.emplace(*key, rv);
+        added = true;
+        std::string new_key;
+        return pivotKey(cd, i, new_key, &label, name, xsink);
+    };
 
     for (int64_t i = 0; i < n_rows; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "pivoting DataFrame keys")) {
             return nullptr;
         }
-        std::string idx_val = cell_key(idx_cd, i);
-        if (!index_map.count(idx_val)) {
-            index_map[idx_val] = unique_indices.size();
-            unique_indices.push_back(idx_val);
+        if (idx_cd.isNull(i) || col_cd.isNull(i)) {
+            continue;
+        }
+        bool added;
+        if (slot(idx_cd, i, index_map, row_ri[i], added, index_col)) {
+            return nullptr;
+        }
+        if (added) {
+            unique_indices.push_back(std::move(label));
         }
 
-        std::string col_val = cell_key(col_cd, i);
-        if (!col_map.count(col_val)) {
-            col_map[col_val] = unique_cols.size();
-            unique_cols.push_back(col_val);
+        if (slot(col_cd, i, col_map, row_ci[i], added, columns_col)) {
+            return nullptr;
+        }
+        if (added) {
+            // a column name is in the default encoding, and the label in UTF-8
+            std::string name;
+            if (dataFrameDefaultString(label, name, xsink)) {
+                return nullptr;
+            }
+            auto inserted = col_names.emplace(name, label);
+            if (!inserted.second) {
+                xsink->raiseException("DATAFRAME-ERROR", "pivot columns column '%s' has two values whose column "
+                    "name is '%s', or a value whose column name is the name of the index column",
+                    columns_col.c_str(), name.c_str());
+                return nullptr;
+            }
+            unique_cols.push_back(std::move(name));
         }
     }
 
     // Build result: one row per unique index, one column per unique column value
     int64_t out_rows = (int64_t)unique_indices.size();
-    int64_t out_cols = (int64_t)unique_cols.size();
+    size_t out_cols = unique_cols.size();
 
-    // Initialize accumulation grid
-    std::vector<std::vector<double>> sums(out_rows, std::vector<double>(out_cols, 0.0));
-    std::vector<std::vector<int>> counts(out_rows, std::vector<int>(out_cols, 0));
+    // the accumulation grid, row by row
+    std::vector<double> sums(static_cast<size_t>(out_rows) * out_cols, 0.0);
+    std::vector<int64_t> counts(static_cast<size_t>(out_rows) * out_cols, 0);
 
     for (int64_t i = 0; i < n_rows; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "pivoting DataFrame values")) {
             return nullptr;
         }
-        size_t ri = index_map[cell_key(idx_cd, i)];
-        size_t ci = col_map[cell_key(col_cd, i)];
-
-        double val = 0;
-        if (!val_cd.isNull(i)) {
-            switch (val_cd.type) {
-                case ColumnType::FLOAT64:
-                    val = val_cd.float_data(i);
-                    break;
-                case ColumnType::INT64:
-                    val = (double)val_cd.int_data[i];
-                    break;
-                default:
-                    val = val_cd.auto_data[i].getAsFloat();
-                    break;
-            }
+        // a null value is not aggregated: it counts neither for the sum nor for the mean
+        if (row_ri[i] == no_slot || val_cd.isNull(i)) {
+            continue;
         }
-        sums[ri][ci] += val;
-        counts[ri][ci]++;
+        size_t pos = row_ri[i] * out_cols + row_ci[i];
+
+        double val;
+        switch (val_cd.type) {
+            case ColumnType::FLOAT64:
+                val = val_cd.float_data(i);
+                break;
+            case ColumnType::INT64:
+                val = (double)val_cd.int_data[i];
+                break;
+            default:
+                val = val_cd.auto_data[i].getAsFloat();
+                break;
+        }
+        sums[pos] += val;
+        ++counts[pos];
     }
 
     // Build output DataFrame
@@ -487,28 +632,29 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
 
     // Value columns
     for (size_t c = 0; c < unique_cols.size(); ++c) {
+        if (c && !(c % 100) && qore_check_cancel(xsink, "building pivoted DataFrame columns")) {
+            delete df;
+            return nullptr;
+        }
         auto cd = std::make_shared<ColumnData>();
         cd->type = ColumnType::FLOAT64;
         cd->n_rows = out_rows;
         cd->null_mask.resize(out_rows, 0);
         cd->float_data.resize(out_rows);
         for (int64_t r = 0; r < out_rows; ++r) {
-            if (counts[r][c] == 0) {
+            size_t pos = static_cast<size_t>(r) * out_cols + c;
+            if (counts[pos] == 0) {
                 cd->null_mask[r] = 1;
                 cd->float_data(r) = std::numeric_limits<double>::quiet_NaN();
             } else if (agg_func == "mean") {
-                cd->float_data(r) = sums[r][c] / counts[r][c];
+                cd->float_data(r) = sums[pos] / static_cast<double>(counts[pos]);
             } else {
                 // default: sum
-                cd->float_data(r) = sums[r][c];
+                cd->float_data(r) = sums[pos];
             }
         }
         Column col;
-        // a column name is in the default encoding, and a string cell in UTF-8
-        if (dataFrameDefaultString(unique_cols[c], col.name, xsink)) {
-            delete df;
-            return nullptr;
-        }
+        col.name = unique_cols[c];
         col.data = std::move(cd);
         df->col_index[col.name] = df->columns.size();
         df->columns.push_back(std::move(col));

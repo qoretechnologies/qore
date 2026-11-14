@@ -21,6 +21,9 @@ class DataFramePivotTypesTest inherits QUnit::Test {
         addTestCase("values that are not numbers", \nonNumericTest());
         addTestCase("numbers in a column that holds any value", \autoTest());
         addTestCase("index columns of any type", \indexTest());
+        addTestCase("exact keys and labels", \keyTest());
+        addTestCase("null cells", \nullTest());
+        addTestCase("keys that are not scalars and duplicate names", \errorTest());
         set_return_value(main());
     }
 
@@ -59,5 +62,56 @@ class DataFramePivotTypesTest inherits QUnit::Test {
             assertEq((1.0, 4.0), wide.getColumn("x"), label + ": x");
             assertEq((2.0, NOTHING), wide.getColumn("y"), label + ": y");
         }
+    }
+
+    #! different values make different rows and columns, which are labelled with their string forms
+    keyTest() {
+        DataFrame::DataFrame floats({"k": (0.1, 0.10000000000000002, 0.0, -0.0), "c": ("x", "x", "x", "x"),
+            "v": (1, 2, 4, 8)});
+        DataFrame::DataFrame wide = floats.pivot("k", "c", "v");
+        assertEq(("0.1", "0.10000000000000002", "0"), wide.getColumn("k"), "close floats; -0.0 is 0.0");
+        assertEq((1.0, 2.0, 12.0), wide.getColumn("x"), "close floats: values");
+        DataFrame::DataFrame dates({"k": (2024-01-01T00:00:00.5Z, 2024-01-01T00:00:00.7Z), "c": (True, False),
+            "v": (1, 2)});
+        wide = dates.pivot("k", "c", "v");
+        assertEq(2, wide.numRows(), "dates less than a second apart");
+        assertEq(("k", "True", "False"), wide.columnNames(), "bool columns values");
+        DataFrame::DataFrame ints({"k": ("a", "a"), "c": (1, 2), "v": (1.0, 2.0)});
+        assertEq(("k", "1", "2"), ints.pivot("k", "c", "v").columnNames(), "int columns values");
+    }
+
+    #! a row with a null index or columns cell is left out, and a null value is not aggregated
+    nullTest() {
+        DataFrame::DataFrame df({"k": ("a", NOTHING, "", "a", "a"), "c": ("x", "x", "x", NOTHING, "x"),
+            "v": (2, 4, 8, 16, NOTHING)});
+        foreach string agg in (("sum", "mean")) {
+            DataFrame::DataFrame wide = df.pivot("k", "c", "v", agg);
+            assertEq(("a", ""), wide.getColumn("k"), agg + ": index");
+            assertEq((2.0, 8.0), wide.getColumn("x"), agg + ": values");
+        }
+        # the general path: a float index
+        DataFrame::DataFrame floats({"k": (1.5, 1.5, NOTHING), "c": ("x", "x", "x"), "v": (2, NOTHING, 4)});
+        assertEq((2.0,), floats.pivot("k", "c", "v", "mean").getColumn("x"), "general path: mean");
+        DataFrame::DataFrame all_null = (new DataFrame::DataFrame({"k": (1, 1), "c": ("x", "x"), "v": (NOTHING, 1)}))
+            .filter("v", "is_null", NOTHING);
+        assertEq((NOTHING,), all_null.pivot("k", "c", "v").getColumn("x"), "only null values");
+        # the int64/string path: a row with a null columns cell makes no index row
+        DataFrame::DataFrame ints({"k": (1, 2, NOTHING), "c": ("x", NOTHING, "y"), "v": (1, 2, 4)});
+        DataFrame::DataFrame wide = ints.pivot("k", "c", "v");
+        assertEq((1,), wide.getColumn("k"), "int index: rows");
+        assertEq(("k", "x"), wide.columnNames(), "int index: columns");
+    }
+
+    #! an index or columns value that is not a scalar, or two values with the same column name, raise an error
+    errorTest() {
+        DataFrame::DataFrame hashes({"k": (c'z', {"a": 1}, {}), "c": ("x", "x", "x"), "v": (1, 2, 3)});
+        assertThrows("DATAFRAME-ERROR", \hashes.pivot(), ("k", "c", "v"), "hash keys");
+        DataFrame::DataFrame dup({"k": (1.5, 2.5), "c": (c'z', "z"), "v": (1, 2)});
+        assertThrows("DATAFRAME-ERROR", \dup.pivot(), ("k", "c", "v"), "a char and a string with the same name");
+        DataFrame::DataFrame index_name({"k": (1.5, 2.5), "c": ("x", "k"), "v": (1, 2)});
+        assertThrows("DATAFRAME-ERROR", \index_name.pivot(), ("k", "c", "v"), "a column named as the index");
+        # the int64/string path
+        DataFrame::DataFrame int_index({"k": (1, 2), "c": ("x", "k"), "v": (1, 2)});
+        assertThrows("DATAFRAME-ERROR", \int_index.pivot(), ("k", "c", "v"), "int index: a column named as the index");
     }
 }
