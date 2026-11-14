@@ -94,6 +94,10 @@ class DeletedProgramTypesTest inherits QUnit::Test {
             addTestCase("the declarations kept are bounded: " + mode, sub () { testBounded(mode); });
         }
         addTestCase("a reflection type of a retired declaration leaves it retired", \testReflection());
+        foreach string mode in (ExecModes) {
+            addTestCase("the declarations of module Programs are freed in order at the end: " + mode,
+                sub () { testModuleTeardown(mode); });
+        }
         set_return_value(main());
     }
 
@@ -156,6 +160,24 @@ class DeletedProgramTypesTest inherits QUnit::Test {
         foreach string line in (lines) {
             assertRegex(": ok$", line, line);
         }
+    }
+
+    #! A module that shares classes with the modules it requires ends the process cleanly (qore#5790)
+    /** The library cleanup deletes the Programs of the modules in turn.  A declaration that survived the deletion of
+        another Program, as a member of a group of declarations that name each other, and that keeps references to the
+        declarations that it names, must keep them until it is freed itself: the end of the process freed a
+        declaration of the module (the output stream class of a class that the group kept) while the group still named
+        it, and the next group sweep read it (a debug libqore asserts, valgrind reports an invalid read, and a release
+        build crashed at exit depending on the memory; the load path of the run decides if the AOT modules (qlib's
+        .qmod files, with the module Program that the library cleanup deletes) or their sources are loaded).
+    */
+    testModuleTeardown(string mode) {
+        int status;
+        string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s/deleted-program-types/module-teardown.qr 2>&1", libqore_dir,
+            libqore_dir, qore_bin, mode, get_script_dir()), \status);
+        assertEq(0, status, out);
+        assertEq("ok\n", out);
     }
 
     private writeFile(string path, string data) {

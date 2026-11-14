@@ -954,6 +954,40 @@ static bool type_owner_derived(const QoreTypeOwner* o) {
     return qore_generic_cache_registry().hasType(t1, t2);
 }
 
+#ifdef DEBUG
+namespace {
+//! the declarations that are not freed, for the assertions of the bookkeeping of the declarations that name each other
+struct QoreTypeOwnerRegistry {
+    std::mutex m;
+    std::set<const QoreTypeOwner*> live;
+};
+
+// not destroyed: declarations are freed at library cleanup and at static destruction
+QoreTypeOwnerRegistry& type_owner_registry() {
+    static QoreTypeOwnerRegistry* registry = new QoreTypeOwnerRegistry;
+    return *registry;
+}
+}
+
+QoreTypeOwner::QoreTypeOwner() {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.insert(this);
+}
+
+QoreTypeOwner::~QoreTypeOwner() {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    r.live.erase(this);
+}
+
+bool qore_type_owner_is_live(const QoreTypeOwner* owner) {
+    QoreTypeOwnerRegistry& r = type_owner_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    return r.live.count(owner) > 0;
+}
+#endif
+
 //! A group of declarations that survived the deletion of their Program together; guarded by ctl (see QoreTypeOwner)
 struct QoreTypeOwnerGroup {
     //! the members
@@ -1043,6 +1077,9 @@ static std::set<QoreTypeOwner*> type_owner_group_reach(QoreTypeOwnerGroup* g) {
             continue;
         }
         for (QoreTypeOwner* n : m->type_owner_names) {
+            // a declaration that a member of a group names must not be freed while the member exists: its references
+            // are held for the member, except those of the members of the group itself
+            assert(qore_type_owner_is_live(n));
             if (n->type_owner_group == g) {
                 work.push_back(n);
             }
@@ -1423,9 +1460,13 @@ QoreTypeOwnerBatch::~QoreTypeOwnerBatch() {
         for (QoreTypeOwner* o : survivors) {
             type_owner_count_names(o);
         }
-        // a declaration destroyed with the Program no longer keeps what it named as a survivor of another Program
+        // a declaration destroyed with the Program no longer keeps what it named as a survivor of another Program;
+        // one that is a member of a group of another Program's survivors is released below like the others, but the
+        // group can keep it (type_owner_group_hold()) with the names that it lists: it keeps its references to them,
+        // which it gives up when it is freed (qore_type_owner_destroyed()) or retired, as the names that a group
+        // sweeps are read while it exists
         for (QoreTypeOwner* o : owners) {
-            if (!survivors.count(o)) {
+            if (!survivors.count(o) && !o->type_owner_group) {
                 type_owner_uncount_names(o, release_list);
             }
         }
