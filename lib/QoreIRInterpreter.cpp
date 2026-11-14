@@ -2307,16 +2307,17 @@ static bool qore_ir_scope_records_locals(const IRScopeEntry& scope) {
 //! Keeps the values of a return of the frame that the exception interrupted: those of the slots that a Return gives
 /** The AST interpreter keeps the value of a return until the function ends, however the locals that the unwind
     releases reach it (as their value, in a container, through a reference or a closure); the unwind holds a reference
-    to each until the frame's values are released.  Taken once, at the start of the unwind, as the temps of each scope
-    that it leaves hold the values until the scope's temps are released.
+    to each with the frame's held returns (IRLocalSlotCache::holdReturn()), released after the locals of the frame.
+    Taken once, at the start of the unwind, as the temps of each scope that it leaves hold the values until the scope's
+    temps are released.  A handler that returns a value during the unwind releases them, as its value replaces the
+    interrupted one (qore_ir_handler_return_replaces(), #6074).
 */
-template <typename Values>
-static void qore_ir_hold_pending_returns(const QoreIRFunction& func, const Values& values,
-        std::vector<QoreValue>& held) {
+template <typename Values, typename Cache>
+static void qore_ir_hold_pending_returns(const QoreIRFunction& func, const Values& values, Cache& cache) {
     const std::vector<uint8_t>& return_slots = func.interpreter_return_protected_slots;
     for (size_t id = 0, e = std::min(return_slots.size(), values.size()); id < e; ++id) {
         if (return_slots[id] && values[id].hasNode()) {
-            held.push_back(values[id].refSelf());
+            cache.holdReturn(values[id].refSelf());
         }
     }
 }
@@ -7439,10 +7440,10 @@ static QORE_INTERN_NOINLINE void releaseHandlerParentCache(std::vector<QoreValue
     }
 }
 
-// The value that a handler run while an exception leaves its block returned replaces the value of the return that the
-// exception interrupted, as in the AST interpreter, where the handler runs with the block's return value: the values
-// that the frame holds for that return (see exceptionBranchTempScope()) are released, and the handler's value is held
-// in their place until the frame's locals are released (#5992)
+// The value that a handler run while an exception or a thread_exit leaves its block returned replaces the value of the
+// return that the unwind interrupted, as in the AST interpreter, where the handler runs with the block's return value:
+// the values that the frame holds for that return (see exceptionBranchTempScope() and unwindForException()) are
+// released, and the handler's value is held in their place until the frame's locals are released (#5992, #6074)
 static QORE_INTERN_NOINLINE void qore_ir_handler_return_replaces(QoreValue rv, ExceptionSink* xsink) {
     IRCallFramePool& pool = TlFramePool::get();
     assert(pool.top);
@@ -7457,7 +7458,7 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_return_replaces(QoreValue rv, E
 // Returns true if execution encountered an error.
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         std::vector<QoreValue>* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
-        QoreProgram* dbg_pgm = nullptr, bool exception_pending = false) {
+        QoreProgram* dbg_pgm = nullptr, bool unwinding = false) {
     // Every on_block_exit handler must have been compiled to IR by
     // QoreIRLowering::compileAllHandlerIRs/compileBlockHandlerIRs before
     // the enclosing IR function is executed — a handler-lowering failure
@@ -7484,8 +7485,10 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
     QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink, nullptr, nullptr, nullptr,
                                &handler.handler_ir->pre_instantiated_cache, nullptr, dbg_statements, dbg_pgm,
                                false, nullptr, parent_slot_cache, true);
-    // a handler that ends without a return gives no value; a return without a value cannot be told from it
-    if (exception_pending && !rv.isNothing() && parent_slot_cache) [[unlikely]] {
+    // a handler run while an exception or a thread_exit is pending (unwinding) keeps its value in place of the
+    // interrupted return's; a handler that ends without a return gives no value, and a return without a value cannot
+    // be told from it
+    if (unwinding && !rv.isNothing() && parent_slot_cache) [[unlikely]] {
         qore_ir_handler_return_replaces(rv, obe_xsink);
         return;
     }
@@ -7519,7 +7522,8 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
                     }
-                    executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements, dbg_pgm, error);
+                    executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements, dbg_pgm,
+                        error || (xsink && xsink->isThreadExit()));
                     // Restore td->catchException BEFORE clearing xsink to avoid
                     // a use-after-free window where td->catchException points to
                     // the freed exception chain
@@ -8310,7 +8314,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 }
                             }
                             executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
-                                        dbgHandlerStatements(), dbgHandlerProgram(), error);
+                                        dbgHandlerStatements(), dbgHandlerProgram(),
+                                        error || (xsink && xsink->isThreadExit()));
                             // Restore td->catchException BEFORE clearing xsink to avoid
                             // a use-after-free window where td->catchException points to
                             // the freed exception chain
@@ -9356,17 +9361,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 frame.locals_slot_cache.holdReturn(values[id].refSelf());
             }
         }
-        // the values of a return that the exception interrupted are held until the frame's values are released, taken
-        // before the temps of any scope or the locals of any block are released (#5867); with a debugger attached, the
-        // events of the statements that the exception leaves release the locals of the blocks without handlers in
-        // them (#5921)
-        std::vector<QoreValue> pending_returns;
+        // the values of a return that the exception interrupted are held until the locals of the frame are released,
+        // taken before the temps of any scope or the locals of any block are released (#5867); with a debugger
+        // attached, the events of the statements that the exception leaves release the locals of the blocks without
+        // handlers in them (#5921).  Held with the frame's held returns, so that a handler that returns a value
+        // during the unwind releases them when its value replaces them (#6074)
         bool hold_returns = debug_active;
         for (size_t i = 0; !hold_returns && i < scope_stack.size(); ++i) {
             hold_returns = qore_ir_scope_records_locals(scope_stack[i]);
         }
         if (hold_returns) {
-            qore_ir_hold_pending_returns(func, values, pending_returns);
+            qore_ir_hold_pending_returns(func, values, frame.locals_slot_cache);
         }
         dbgReportException();
         if (!func.interpreter_open_implicit_contexts.empty() && block && ip < block->instructions.size()) {
@@ -9394,9 +9399,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         dbgFunctionExit();
         cleanupValues(values, frame.cleanup, xsink, true, cleanup_log, &func.interpreter_exception_release_groups);
-        for (QoreValue& v : pending_returns) {
-            v.discard(xsink);
-        }
     };
 
     auto returnAfterUnhandledException = [&]() -> bool {
@@ -10821,7 +10823,8 @@ next_instruction:
                                         }
                                     }
                                     executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
-                                        dbgHandlerStatements(), dbgHandlerProgram(), error);
+                                        dbgHandlerStatements(), dbgHandlerProgram(),
+                                        error || (xsink && xsink->isThreadExit()));
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -15605,7 +15608,8 @@ load_local_done:
                                         }
                                     }
                                     executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
-                                        dbgHandlerStatements(), dbgHandlerProgram(), error);
+                                        dbgHandlerStatements(), dbgHandlerProgram(),
+                                        error || (xsink && xsink->isThreadExit()));
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain

@@ -13982,15 +13982,16 @@ extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
     return static_cast<int64_t>(jit_obe_handlers.size());
 }
 
-//! Gives the value that a handler run while an exception leaves its block returned to the parent (#5992)
-/** The value replaces the value of the return that the exception interrupted, as in the AST interpreter, where the
+//! Gives the value that a handler run while an exception or a thread_exit leaves its block returned to the parent
+//! (#5992, #6074)
+/** The value replaces the value of the return that the unwind interrupted, as in the AST interpreter, where the
     handler runs with the block's return value: it is kept in the parent's hold slot, which the parent releases after
     its locals (or when a try statement of the parent catches the exception), and the value it replaces there is
     released.  Returns true if the handler's value was taken.  A handler that ends without a return gives no value;
     a return without a value cannot be told from it.
 */
-static inline bool qore_rt_obe_hold_return(uint64_t* hold, bool error, uint64_t rv_bits, ExceptionSink* xsink) {
-    if (!hold || !error || fromBits(rv_bits).isNothing()) {
+static inline bool qore_rt_obe_hold_return(uint64_t* hold, bool unwinding, uint64_t rv_bits, ExceptionSink* xsink) {
+    if (!hold || !unwinding || fromBits(rv_bits).isNothing()) {
         return false;
     }
     uint64_t replaced = *hold;
@@ -14007,7 +14008,7 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
 }
 
 //! Runs the handlers registered since saved_count as qore_rt_exec_on_block_exit() does; the value that a handler run
-//! while an exception is pending returns is kept in \a hold (see qore_rt_obe_hold_return()); returns 1 if one was
+//! while an exception or a thread_exit is pending returns is kept in \a hold (see qore_rt_obe_hold_return()); returns 1 if one was
 extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink,
         uint64_t* hold) {
     return qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, hold);
@@ -14108,7 +14109,7 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     }
-                    if (qore_rt_obe_hold_return(hold, error, rv_bits, &obe_xsink)) {
+                    if (qore_rt_obe_hold_return(hold, error || (xsink && xsink->isThreadExit()), rv_bits, &obe_xsink)) {
                         held = 1;
                     } else {
                         fromBits(rv_bits).discard(&obe_xsink);
@@ -14128,7 +14129,7 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     }
-                    if (qore_rt_obe_hold_return(hold, error, rv_bits, &obe_xsink)) {
+                    if (qore_rt_obe_hold_return(hold, error || (xsink && xsink->isThreadExit()), rv_bits, &obe_xsink)) {
                         held = 1;
                     } else {
                         fromBits(rv_bits).discard(&obe_xsink);

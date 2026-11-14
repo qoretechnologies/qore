@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of handlers run while a thread_exit or an exception unwinds
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HandlerReturnUnwindTest
+
+#! A handler that returns a value while a thread_exit or an exception leaves its block (#6073, #6074)
+/** As in the AST interpreter, where the handlers of a block run with the block's return value, the value that a
+    handler returns while a thread_exit or an exception unwinds the block replaces the value of the return that the
+    unwind interrupted, which is released then, and is kept until the function ends, after its locals.  The compiled
+    modes kept it only while an exception was pending: a handler that ran after a thread_exit discarded its value when
+    it ended, before the interrupted value and the locals (#6074, item 1), and the value of the interrupted return of a
+    function whose blocks keep their locals for the unwind was released after the locals, also with an exception
+    pending (#6074, item 2).  A handler's value replaced by a later handler that ends in a thread_exit leaked in the IR
+    interpreter (#6073).  HandlerReturnUnwind.q gives the output of the AST interpreter in every execution mode and
+    compiled with qcc.
+*/
+class HandlerReturnUnwindTest inherits QUnit::Test {
+    public {
+        #! the output of HandlerReturnUnwind.q with the AST interpreter
+        const Expected = "te1: [\"x2\", \"~te1-body\", \"x1\", \"~te1-h\"]
+te1: [\"x2\", \"~te1-body\", \"x1\", \"~te1-h\"]
+te2: [\"s\", \"x\", \"~te2-body\", \"~te2-h\"]
+te2: [\"s\", \"x\", \"~te2-body\", \"~te2-h\"]
+te3: [\"te\", \"x\", \"~te3-body\", \"~te3-h\"]
+te3: [\"te\", \"x\", \"~te3-body\", \"~te3-h\"]
+te4: [\"te\", \"x\", \"~te4-body\", \"~te4-l\", \"~te4-h\"]
+te4: [\"te\", \"x\", \"~te4-body\", \"~te4-l\", \"~te4-h\"]
+te5: [\"s\", \"x\", \"~te5-body\", \"~te5-l\", \"~te5-h\"]
+te5: [\"s\", \"x\", \"~te5-body\", \"~te5-l\", \"~te5-h\"]
+te6: [\"x\", \"~te6-l\", \"~te6-h\"]
+te6: [\"x\", \"~te6-l\", \"~te6-h\"]
+te7: [\"te\", \"xi\", \"~te7-body\", \"~te7-h\"]
+te7: [\"te\", \"xi\", \"~te7-body\", \"~te7-h\"]
+te8: [\"te\", \"xo\", \"~te8-body\", \"~te8-h\"]
+te8: [\"te\", \"xo\", \"~te8-body\", \"~te8-h\"]
+te9: [\"x3\", \"~te9-body\", \"x2\", \"~te9-h3\", \"x1\", \"~te9-h2\"]
+te9: [\"x3\", \"~te9-body\", \"x2\", \"~te9-h3\", \"x1\", \"~te9-h2\"]
+ex1: [\"thr\", \"x\", \"~ex1-body\", \"~ex1-l\", \"~ex1-h\", \"ex:EX1\"]
+ex1: [\"thr\", \"x\", \"~ex1-body\", \"~ex1-l\", \"~ex1-h\", \"ex:EX1\"]
+ex2: [\"x\", \"~ex2-a\", \"~ex2-h\", \"ex:EX2\"]
+ex2: [\"x\", \"~ex2-a\", \"~ex2-h\", \"ex:EX2\"]
+ex3: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
+ex3: [\"te\", \"x\", \"~ex3-a\", \"~ex3-h\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("HandlerReturnUnwindTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/HandlerReturnUnwind.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a handler's return during an unwind", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a handler's return during an unwind", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-return-unwind-");
+        string exe = tmp.path + DirSep + "handler-return-unwind";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}
