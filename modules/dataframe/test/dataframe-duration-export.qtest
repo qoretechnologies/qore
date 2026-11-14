@@ -29,6 +29,17 @@ class DataFrameDurationExportTest inherits QUnit::Test {
             "us": (7s, 1500ms, NOTHING),
             "ns": (7s, 1500ms, NOTHING),
         };
+        # negative durations, which are not dense storage in a column made from a list of values
+        foreach string unit in (("ms", "us", "ns")) {
+            DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+                "v": (-1500ms, -7s),
+            }, {
+                "v": {"schema": {"kind": "duration", "time_unit": unit, "nullable": True}},
+            }));
+            list<auto> actual = DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()).getColumn("v");
+            assertTrue(actual[0] == -1500ms && actual[1] == -7s, sprintf("%s: negative durations: %y", unit,
+                actual));
+        }
         foreach string unit in (keys expected) {
             DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
                 "v": (7s, 1500ms, NOTHING),

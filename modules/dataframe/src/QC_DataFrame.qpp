@@ -1029,6 +1029,13 @@ DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=
     Horizontal concat requires all inputs to have the same row count and rejects
     duplicate column names.
 
+    A vertical concat takes the columns of the first DataFrame; a DataFrame without one of them gives null values.
+    Columns of the same type keep it, and columns with dense storage of the same element type (a \c float32 or
+    \c decimal128 column, for example) keep their element type and columnar schema; date columns of different time
+    units get the time unit \c "us" and of different time zones the time zone \c "UTC", so that an export keeps
+    their values, and a date column of absolute dates with one of durations holds any value.  Columns of different
+    types make the column that the column hash constructor makes of their values (see @ref dataframeintro).
+
     A DataFrame may be given more than once, and other threads may use the same DataFrames at the same time.
 
     @par Example:

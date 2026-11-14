@@ -73,6 +73,9 @@ class DataFrameSortAutoTest inherits QUnit::Test {
         # a NaN value that is not compared, as the only value with its first key, raises no error
         DataFrame::DataFrame by_key({"k": (1, 2, 2), "v": (@nan@, 2.0, 1.0)});
         assertEq((1.0, 2.0), by_key.sortBy(("k", "v")).getColumn("v")[1..2], "a NaN value that is not compared");
+        # a NaN value compared in a second key, whose first keys are equal
+        DataFrame::DataFrame second({"k": (1, 1, 3), "v": (@nan@, 1.0, @nan@)});
+        assertThrows("NAN-COMPARE-ERROR", \second.sortBy(), (("k", "v"),), "a NaN value in a second key");
         assertEq((1.0, 2.0, 3.0, NOTHING), (new DataFrame::DataFrame({"v": (3.0, NOTHING, 1.0, 2.0)}))
             .sortBy(("v",)).getColumn("v"), "no NaN value");
     }
