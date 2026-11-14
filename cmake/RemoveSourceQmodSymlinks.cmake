@@ -13,26 +13,7 @@ endif()
 # Several build trees can share one source tree, and each links the source qlib/ to its own qmods.  A qcc
 # format change in one tree invalidates only that tree's qmods, so only links into that tree are removed; a link
 # into another build tree belongs to that tree.
-# Sets <var> to the physical path of <path> (relative to <base>): the real path of its longest existing ancestor
-# followed by the rest of it, so that a target that no longer exists is named like one that does
-function(_qore_qmod_physical_path path base var)
-    get_filename_component(_path "${path}" ABSOLUTE BASE_DIR "${base}")
-    set(_rest "")
-    while(NOT EXISTS "${_path}")
-        get_filename_component(_parent "${_path}" DIRECTORY)
-        if("${_parent}" STREQUAL "${_path}" OR "${_parent}" STREQUAL "")
-            break()
-        endif()
-        get_filename_component(_name "${_path}" NAME)
-        set(_rest "/${_name}${_rest}")
-        set(_path "${_parent}")
-    endwhile()
-    get_filename_component(_path "${_path}" REALPATH)
-    if("${_path}" STREQUAL "/")
-        set(_path "")
-    endif()
-    set(${var} "${_path}${_rest}" PARENT_SCOPE)
-endfunction()
+include("${CMAKE_CURRENT_LIST_DIR}/QoreQmodPathUtils.cmake")
 
 # links and the tree are compared by physical path: a link may name the tree otherwise (through a symbolic link, or
 # on macOS by /private/tmp/... where CMake names it /tmp/...)

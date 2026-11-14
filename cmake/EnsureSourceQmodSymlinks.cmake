@@ -36,26 +36,7 @@ if (DEFINED QORE_QCC_FORMAT_STAMP AND NOT "${QORE_QCC_FORMAT_STAMP}" STREQUAL ""
     file(TIMESTAMP "${QORE_QCC_FORMAT_STAMP}" _qcc_format_timestamp "%s" UTC)
 endif()
 
-# Sets <var> to the physical path of <path> (relative to <base>): the real path of its longest existing ancestor
-# followed by the rest of it, so that a target that no longer exists is named like one that does
-function(_qore_qmod_physical_path path base var)
-    get_filename_component(_path "${path}" ABSOLUTE BASE_DIR "${base}")
-    set(_rest "")
-    while(NOT EXISTS "${_path}")
-        get_filename_component(_parent "${_path}" DIRECTORY)
-        if("${_parent}" STREQUAL "${_path}" OR "${_parent}" STREQUAL "")
-            break()
-        endif()
-        get_filename_component(_name "${_path}" NAME)
-        set(_rest "/${_name}${_rest}")
-        set(_path "${_parent}")
-    endwhile()
-    get_filename_component(_path "${_path}" REALPATH)
-    if("${_path}" STREQUAL "/")
-        set(_path "")
-    endif()
-    set(${var} "${_path}${_rest}" PARENT_SCOPE)
-endfunction()
+include("${CMAKE_CURRENT_LIST_DIR}/QoreQmodPathUtils.cmake")
 
 # Flat modules have the same relative path in qlib and qlib-qmod. Split
 # modules likewise use <name>/<name>.qmod in both trees.
