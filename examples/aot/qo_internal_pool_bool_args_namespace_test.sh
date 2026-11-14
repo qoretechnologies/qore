@@ -73,8 +73,7 @@ class Manager inherits AbstractManager {
     }
 
     PoolHandle getPoolImpl(string name, bool register_dependency = True, bool extern = True) {
-        PoolHandle dsp;
-        return dsp;
+        return new PoolHandle(name);
     }
 }
 }

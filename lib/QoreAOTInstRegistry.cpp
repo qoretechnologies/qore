@@ -1717,7 +1717,7 @@ static bool writeBackground(AOTInstWriteCtx& ctx) {
         if (!bi->helper_ir) {
             return false;
         }
-        ctx.writer.writeU8(bi->helper_uses_self ? 1 : 0);
+        ctx.writer.writeU8(bi->helper_uses_self);
         ctx.writer.writeU32(static_cast<uint32_t>(bi->helper_params.size()));
         for (LocalVar* lv : bi->helper_params) {
             auto i = bi->helper_ir->local_var_slots.find(lv);
@@ -1744,9 +1744,14 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     std::unique_ptr<QoreIRFunction> helper_ir;
     std::vector<LocalVar*> helper_params;
-    bool helper_uses_self = false;
+    QoreBackgroundHelperSelf helper_uses_self = QBHS_NONE;
     if (kind == QoreIRBackgroundKind::Helper) {
-        helper_uses_self = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+        uint8_t self_mode = QoreAOTBinaryReader::readU8(ctx.ptr);
+        if (self_mode > QBHS_HELD) {
+            ctx.error = "invalid background helper self mode " + std::to_string(self_mode);
+            return nullptr;
+        }
+        helper_uses_self = static_cast<QoreBackgroundHelperSelf>(self_mode);
         uint32_t num_params = QoreAOTBinaryReader::readU32(ctx.ptr);
         if (num_params != operands.size()) {
             ctx.error = "background helper parameter count differs from its operand count";
@@ -3351,8 +3356,8 @@ static std::unique_ptr<QoreIRInstruction> readPlugin(
 // available, and firing no step otherwise, which is the designed behavior of code compiled ahead of time.
 static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
     // The AST statement pointer is not serializable and the source location rides on the base-instruction record;
-    // from format version 26, the nesting of the statement (#5816): its depth (u16) and its flags (u8), 0 for the
-    // instruction of a block
+    // from format version 26, the nesting of the statement (#5816): its depth (u16) and its flags (u8); for the
+    // instruction of a block, the depth of the statement that contains it if the block has locals (#5999), 0 otherwise
     auto* dbg = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
     ctx.writer.writeU16(dbg ? dbg->nest_depth : 0);
     ctx.writer.writeU8(dbg ? dbg->nest_flags : 0);

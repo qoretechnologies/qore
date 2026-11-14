@@ -88,8 +88,10 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
                 appendDataFrameKeyValue(key, std::to_string(cd.date_data[row]));
                 break;
             case ColumnType::AUTO: {
-                QoreStringValueHelper sh(cd.auto_data[row]);
-                appendDataFrameKeyValue(key, sh->c_str(), sh->size());
+                // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in
+                // different encodings make the same key
+                std::string value = dataFrameUtf8Key(cd.auto_data[row]);
+                appendDataFrameKeyValue(key, value.data(), value.size());
                 break;
             }
             default:

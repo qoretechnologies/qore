@@ -882,6 +882,20 @@ DLLLOCAL std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo 
 */
 DLLLOCAL const char* qore_aot_find_class_ref_end(const char* ref);
 
+//! finds the method of a class that an AOT image names, whatever its access
+/** The compiler checked the access when it resolved the method: an image is loaded without the class context of the
+    code that calls it, in which QoreClass::findMethod() and QoreClass::findStaticMethod() do not find a
+    private:internal method of the class, such as one that a closure in a method of a final class calls through self,
+    which the compiler resolves itself (qore#5975); the class's own context finds it, a normal method before a static
+    one
+
+    @param qc the class
+    @param method_name the name of the method
+
+    @return the method, or nullptr if the class has none of that name
+*/
+DLLLOCAL const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const char* method_name);
+
 //! Resolves a class reference emitted by qore_aot_encode_class_ref().
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         const char* class_ref, bool pseudo = false);

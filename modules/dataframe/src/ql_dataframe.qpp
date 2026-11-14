@@ -84,6 +84,9 @@ hashdecl Qore::DataFrame::CsvOptions {
     //! Whether the first row is a header (default True)
     *bool header;
     //! String representing null/missing values (also recognizes "NA", "NULL", "None")
+    /** It is compared with the fields in the default character encoding, in which they are read; a string that the
+        default encoding cannot represent raises \c DATAFRAME-ENCODING-ERROR.
+    */
     *string null_string;
     //! Number of rows to skip before the header
     *int skip_rows;
