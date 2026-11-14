@@ -112,11 +112,12 @@ public class ParseStackBoundaryTest inherits QUnit::Test {
         assertGt(0, parsed, "the chain is parsed with a large stack");
         assertGt(0, stack_errors, "the chain runs short of a small stack");
     }
-    #! runs the fixture on a source file in a foreign thread with each stack size from 64KB to 1MB in 16KB steps
+    #! runs the fixture on a source file in a foreign thread with each stack size from 96KB to 1MB in 16KB steps
     /** Each run must parse the source and return the expected value from its run() function, or fail with the parse
         stack error; both must occur within the range of sizes.  Code that was parsed can still run short of stack
         when it runs (\c STACK-LIMIT-EXCEEDED).  A process loads a module once, so each size runs in a process of its
-        own.
+        own.  A smaller stack than 96KB leaves a foreign thread too little stack to run at all on glibc, whose threads
+        hold libqore's static TLS (about 60KB) in their stacks.
 
         @param exe the fixture
         @param libdir the directory of libqore
@@ -128,7 +129,7 @@ public class ParseStackBoundaryTest inherits QUnit::Test {
         int parsed;
         int stack_errors;
         int run_stack_errors;
-        for (int kb = 64; kb <= 1024; kb += 16) {
+        for (int kb = 96; kb <= 1024; kb += 16) {
             int status;
             string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
                 + (mdir ? " QORE_MODULE_DIR=" + quote(mdir) : "") + " " + quote(exe) + " --source " + quote(source)
