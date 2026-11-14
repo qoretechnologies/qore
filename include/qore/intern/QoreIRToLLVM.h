@@ -810,6 +810,14 @@ private:
     std::unordered_map<llvm::BasicBlock*, ExceptionEdges> exception_edges;
     //! the number of invoke_result_allocas when the mark of each temp scope was closed (see emitDiscardTemps())
     std::unordered_map<uint32_t, size_t> temp_scope_end;
+    //! The marks of the temp scopes that were open when each temp scope was closed, up to its own mark (see
+    //! getTempScopeMarks())
+    /** The blocks are lowered in layout order, which is not the order of the control flow: the continuation blocks
+        of the calls in a branch of ?: (or of another operator whose join block is created before its operands are
+        lowered) come after the join block, which holds the end of the statement (DiscardTemps), so an exception check
+        in them is lowered once the mark of its temp scope is gone (qore#5997).
+    */
+    std::unordered_map<uint32_t, std::vector<TempCleanupMark>> closed_temp_cleanup_marks;
 
     //! An exception check outside a try block whose edge to the error return is completed once the function has been
     //! lowered (see finalizeOrderedErrorReturnEdges())
@@ -1715,6 +1723,11 @@ private:
     // release the statement's temporaries in their own order on its way to the error return; nullptr if the
     // instruction has no temp scope, its statement has pending SSA cleanups or too many temporaries
     const TempCleanupMark* getOrderedErrorReturnMark(const QoreIRInstruction* inst) const;
+
+    // Returns the marks of the temp scopes open at \a inst, innermost last: temp_cleanup_marks if the mark of the
+    // instruction's temp scope is open, or those open when it was closed (closed_temp_cleanup_marks) if its block is
+    // lowered after the end of its scope; temp_cleanup_marks if neither has it
+    const std::vector<TempCleanupMark>& getTempScopeMarks(const QoreIRInstruction* inst) const;
 
     // Completes the edges of the exception checks outside a try block (ordered_error_return_sites) once every cleanup
     // alloca of the function is known: an edge that releases the iterators of the statement's functional operators
