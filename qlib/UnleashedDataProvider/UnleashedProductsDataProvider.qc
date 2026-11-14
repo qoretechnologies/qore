@@ -127,8 +127,9 @@ public class UnleashedProductsDataProvider inherits UnleashedDataProviderBase {
     }
 
     #! Returns the record type
-    private *AbstractDataProviderType getRecordTypeImpl(*hash<auto> search_options) {
-        return recordType;
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        # the fields of the record type (issue #5838: AbstractDataProvider expects them)
+        return recordType.getFields();
     }
 
     #! Performs a search/query

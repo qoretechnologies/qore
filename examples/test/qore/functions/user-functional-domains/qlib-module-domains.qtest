@@ -1,0 +1,225 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode, as a module that a Program has loaded is not checked again for the next one
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class QlibModuleDomainsTest
+
+#! Tests the functional domains that qlib modules declare (#5803)
+/** A Program restricted like a Qorus interface (\c PO_NO_PROCESS_CONTROL and \c PO_NO_THREAD_CONTROL) can load the
+    qlib modules whose own code uses those domains, as they declare them in their module headers; their public APIs
+    that perform a restricted operation declare the domain, so the restricted Program cannot call them, directly or
+    indirectly.  A module that a Program has loaded is not checked again when another Program loads it, so each check
+    loads the module first in a child process of its own.
+*/
+class QlibModuleDomainsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qlib_dir;
+
+        #! holds the child script
+        TmpDir tmp("qore-qlib-module-domains-");
+
+        #! the child script
+        string script;
+
+        #! the restrictions of a Qorus interface Program
+        const InterfaceRestrictions = PO_NO_PROCESS_CONTROL | PO_NO_THREAD_CONTROL;
+
+        #! the modules that a restricted Program can load, as their headers declare the domains their code uses
+        const LoadableModules = (
+            "QUnit", "DataProvider", "ProviderIndexUtil", "ProviderIndex", "FileLocationHandler", "HttpServerUtil",
+            "AsyncSocketIo", "QoreAsyncJobUtils", "QoreCrypto", "RestSchemaActions", "GroqDataProvider",
+            "DbDataProvider", "ConnectionProvider", "Mapper", "RestClientIo", "RestClient", "QoreLlmTypes", "SqlUtil",
+            "McpClient", "HttpClientDataProvider", "HttpClientIo", "EdifactUtil", "WebSocketClient", "OpenAiDataProvider",
+        );
+
+        #! public APIs that perform a restricted operation, with the module that provides them
+        const TaggedApis = (
+            ("module": "ProviderIndexUtil", "code": "ProviderIndexUtil::ProviderIndexUtil::setEnvironmentVariable(\"/x\");"),
+            ("module": "ProviderIndex", "code": "ProviderIndex::ProviderIndex::createDataProviderIndex();"),
+            ("module": "DataProvider", "code": "DataProvider::DataProvider::registerKnownTypes();"),
+            ("module": "AsyncSocketIo",
+             "code": "sub f(AsyncSocketIo::AsyncSocketIoController c) { c.setMaxCallbackWorkers(1); }"),
+            ("module": "DbDataProvider",
+             "code": "sub f(hash<DbDataProvider::DbVendorInfo> v) { DbDataProvider::registerDbVendorApp(v); }"),
+            ("module": "GroqDataProvider", "code": "GroqDataProvider::GroqActions::registerActions();"),
+            ("module": "RestSchemaActions",
+             "code": "sub f(RestSchemaActions::RestSchemaActionSet s) { s.registerActions(\"x\", NOTHING); }"),
+            ("module": "FileLocationHandler",
+             "code": "FileLocationHandler::FileLocationHandler::setConnectionFilter(NOTHING);"),
+            ("module": "ProviderIndexUtil", "code": "ProviderIndexUtil::ProviderIndexUtil::setBuildMode(True);"),
+            ("module": "ProviderIndex", "code": "ProviderIndex::ProviderIndex::cancelWorkers();"),
+            ("module": "DataProvider", "code": "DataProvider::DataProviderActionCatalog::cacheAllRegisteredApps();"),
+            ("module": "DataProvider", "code": "DataProvider::DataProvider::registerKnownFactoriesWithReport();"),
+            ("module": "ProviderIndexUtil", "code": "ProviderIndexUtil::ProviderIndexUtil::tryLoadModule(\"QoreMLUtils\");"),
+            ("module": "SqlUtil", "code": "SqlUtil::sqlutil_register_table_resolver(NOTHING);"),
+            ("module": "SqlUtil", "code": "SqlUtil::sqlutil_clear_table_cache();"),
+            ("module": "QoreLlmTypes", "code": "QoreLlmUtils::LlmProviderRegistry::deregisterFactory(\"openai\");"),
+            ("module": "ConnectionProvider",
+             "code": "sub f(hash<ConnectionProvider::ConnectionSchemeInfo> i) { "
+                "ConnectionProvider::ConnectionSchemeCache::registerScheme(\"x\", i); }"),
+        );
+    }
+
+    constructor() : QUnit::Test("QlibModuleDomainsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qlib_dir = realpath(get_script_dir() + "/../../../../../qlib");
+        script = tmp.path + "/restricted.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ChildScript);
+        f.close();
+
+        addTestCase("a restricted Program loads the modules that declare their domains", \testLoad());
+        addTestCase("a restricted Program cannot call the APIs that declare a domain", \testTaggedApis());
+        addTestCase("module state that a subclass must not change is internal", \testInternalState());
+        addTestCase("sandboxed code cannot open a database from a connection string", \testRawDatasource());
+        addTestCase("the APIs that declare a domain work in an unrestricted Program", \testUnrestricted());
+        addTestCase("a QUnit test runs in a restricted Program and never exits the process", \testQUnit());
+        addTestCase("a module that does not declare its domains stays refused", \testUndeclared());
+
+        set_return_value(main());
+    }
+
+    #! the child script: loads a module in a Program with the given restrictions, then parses and runs code there
+    /** args: <restrictions> <sandbox> <module> [code]; prints \c "loaded" or the error, then the output of the code;
+        with \a sandbox \c 1, the Program has a SandboxManager, as a Qorus interface Program has
+    */
+    const ChildScript = "%new-style
+%strict-args
+int po = ARGV[0].toInt();
+Program p(po | PO_NEW_STYLE);
+SandboxManager mgr();
+if (ARGV[1] == \"1\") {
+    p.setSandboxManager(mgr);
+}
+splice ARGV, 1, 1;
+try {
+    p.parse(sprintf(\"%%requires %s\\n%s\\n\", ARGV[1], ARGV[2] ?? \"\"), \"restricted\");
+    printf(\"loaded\\n\");
+    p.run();
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s: %s\\n\", ex.err, ex.desc);
+}
+printf(\"end\\n\");
+";
+
+    #! runs the child script and returns its output (stdout only: loader warnings go to stderr)
+    private string run(int po, string mod, *string code, bool sandbox = False, *reference<int> rc) {
+        *string env_dir = ENV.QORE_MODULE_DIR;
+        string mod_dir = env_dir ? qlib_dir + ":" + env_dir : qlib_dir;
+        string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b %s %d %d %s %s "
+            "2>/dev/null", libqore_dir, libqore_dir, libqore_dir, mod_dir, qore_bin, script, po, sandbox ? 1 : 0, mod,
+            code ? shellQuote(code) : "");
+        int status;
+        string out = backquote(cmd, \status);
+        rc = status;
+        return out;
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    testLoad() {
+        foreach string mod in (LoadableModules) {
+            foreach bool sandbox in ((False, True)) {
+                string out = run(InterfaceRestrictions, mod, NOTHING, sandbox);
+                assertEq("loaded\nend\n", out, sprintf("%s sandbox: %y", mod, sandbox));
+            }
+        }
+    }
+
+    testTaggedApis() {
+        foreach hash<auto> api in (TaggedApis) {
+            foreach bool sandbox in ((False, True)) {
+                string out = run(InterfaceRestrictions, api.module, api.code, sandbox);
+                assertRegex("^PARSE-EXCEPTION: .*functional domain: " + (api.dom ?? "PROCESS"), out,
+                    sprintf("%s sandbox: %y", api.code, sandbox));
+                assertEq(-1, out.find("loaded\n"), api.code);
+            }
+        }
+        # an indirect call is refused at run time
+        string out = run(InterfaceRestrictions, "ProviderIndexUtil",
+            "try { call_static_method(\"ProviderIndexUtil::ProviderIndexUtil\", \"setEnvironmentVariable\", \"/x\"); "
+            "printf(\"called\\n\"); } catch (hash<ExceptionInfo> ex) { printf(\"%s\\n\", ex.err); }");
+        assertEq("loaded\nINVALID-FUNCTION-ACCESS\nend\n", out);
+    }
+
+    #! module code builds no connection from a connection string that sandboxed code gives it (qorus#856)
+    testRawDatasource() {
+        list<list<string>> cases = (
+            ("DbDataProvider", "DbDataProvider::DbDataProviderBase::getDatasource(\"pgsql:u/p@db\")"),
+            ("SqlUtil", "SqlUtil::AbstractTable::getTable(\"pgsql:u/p@db\", \"t\")"),
+            ("SqlUtil", "SqlUtil::AbstractDatabase::getDatabase(\"pgsql:u/p@db\")"),
+        );
+        foreach list<string> c in (cases) {
+            string out = run(InterfaceRestrictions, c[0], sprintf("try { %s; printf(\"opened\\n\"); } "
+                "catch (hash<ExceptionInfo> ex) { printf(\"%%s\\n\", ex.err); }", c[1]), True);
+            assertEq("loaded\nPERMISSION-DENIED\nend\n", out, c[1]);
+        }
+    }
+
+    #! a subclass cannot set the thread that stopping a watch provider cancels
+    testInternalState() {
+        string out = run(InterfaceRestrictions, "DataProvider",
+            "class W inherits DataProvider::AbstractWatchDataProviderBase { constructor() { poll_tid = 1; } }");
+        assertRegex("^PARSE-EXCEPTION: .*poll_tid", out);
+        assertEq(-1, out.find("loaded\n"));
+    }
+
+    testUnrestricted() {
+        string out = run(0, "ProviderIndexUtil",
+            "ProviderIndexUtil::ProviderIndexUtil::setEnvironmentVariable(\"/qlib-module-domains\"); "
+            "printf(\"%s\\n\", getenv(ProviderIndexUtil::ProviderIndexEnvVar));");
+        assertEq("loaded\n/qlib-module-domains\nend\n", out);
+    }
+
+    testQUnit() {
+        string test_code = "class T inherits QUnit::Test { "
+            "constructor(list<string> args) : QUnit::Test(\"T\", \"1.0\", \\args) { addTestCase(\"c\", \\c()); } "
+            "c() { assertEq(2, 1 + 1); } } ";
+        # a test runs and returns its result instead of exiting
+        string out = run(InterfaceRestrictions, "QUnit", test_code
+            + "T t((\"-q\",)); printf(\"result: %d\\n\", t.main());");
+        assertRegex("^loaded\n", out);
+        assertRegex("result: 0\nend\n$", out);
+        # usage information and conflicting format options raise TEST-OPTION-ERROR instead of exiting the process
+        foreach list<string> args in ((("-h",), ("-v", "-q", "--format=plain"))) {
+            string argstr = (map sprintf("\"%s\"", $1), args).join(", ");
+            out = run(InterfaceRestrictions, "QUnit", test_code
+                + sprintf("try { T t((%s,)); } catch (hash<ExceptionInfo> ex) { printf(\"%%s\\n\", ex.err); }",
+                    argstr));
+            assertRegex("TEST-OPTION-ERROR\nend\n$", out, argstr);
+            # the same arguments exit the process with status 1 in an unrestricted Program
+            int rc;
+            out = run(0, "QUnit", test_code + sprintf("T t((%s,)); printf(\"not exited\\n\");", argstr), False,
+                \rc);
+            assertEq(-1, out.find("not exited"), argstr);
+            # the child script's last line is not printed: the process exited in the test's constructor
+            assertFalse(out =~ /\nend\n$/, argstr);
+            assertEq(1, rc, argstr);
+        }
+    }
+
+    testUndeclared() {
+        # the language server, the debugger modules and the REPL use process and thread control and are not meant for
+        # restricted Programs; QoreMLUtils reseeds the process-wide random number generator
+        foreach string mod in ("QLS", "DebugUtil", "QoreRepl", "QoreMLUtils", "HttpServer", "UrlDownloader") {
+            string out = run(InterfaceRestrictions, mod);
+            assertRegex("PO_NO_PROCESS_CONTROL|PO_NO_THREAD_CONTROL|AOT-MODULE-RESTRICTED", out, mod);
+            assertEq(-1, out.find("loaded\n"), mod);
+        }
+    }
+}

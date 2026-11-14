@@ -44,6 +44,8 @@ module Mapper {
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code keeps the mapping context in thread data
+    domains = "THREAD_CONTROL";
 }
 
 /** @mainpage Mapper Module

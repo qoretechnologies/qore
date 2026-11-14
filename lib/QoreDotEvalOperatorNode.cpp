@@ -35,7 +35,8 @@
 
 QoreString QoreDotEvalOperatorNode::name("dot eval expression");
 
-QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+template <bool Lexical>
+QoreValue QoreDotEvalOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder op(left, xsink);
     if (*xsink) {
         return QoreValue();
@@ -56,21 +57,29 @@ QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     // reference that the method returns - can use it
     QoreStatementTempScope::holdReceiver(left, op, xsink);
 
-    return evalWithBase(*op, xsink);
+    return evalWithBaseCommon<Lexical>(*op, xsink);
 }
 
-QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* xsink) const {
+template <bool Lexical>
+QoreValue QoreDotEvalOperatorNode::evalWithBaseCommon(QoreValue base, ExceptionSink* xsink) const {
+    LexicalSemanticPolicy policy;
+    if constexpr (Lexical) policy = getSemanticPolicy();
     switch (base.getType()) {
         case NT_WEAKREF: {
             // FIXME: inefficient
-            return m->exec(base.get<WeakReferenceNode>()->get(), xsink);
+            return m->execWithPolicy<Lexical>(policy, base.get<WeakReferenceNode>()->get(), xsink);
         }
 
         case NT_WEAKREF_HASH: {
             // FIXME: inefficient
             const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), m->getName());
             if (ref) {
-                return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
+                if constexpr (Lexical) {
+                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invokeLexical(m->getArgs(), xsink,
+                        policy);
+                } else {
+                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
+                }
             }
             break;
         }
@@ -78,13 +87,18 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
         case NT_OBJECT: {
             QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(base.getInternalNode()));
             // FIXME: inefficient
-            return m->exec(o, xsink);
+            return m->execWithPolicy<Lexical>(policy, o, xsink);
         }
 
         case NT_HASH: {
             const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), m->getName());
             if (ref) {
-                return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
+                if constexpr (Lexical) {
+                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invokeLexical(m->getArgs(), xsink,
+                        policy);
+                } else {
+                    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->invoke(m->getArgs(), xsink);
+                }
             }
             break;
         }
@@ -95,10 +109,103 @@ QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* x
 
     // FIXME: inefficient
     if (m->isPseudo()) {
-        return m->execPseudo(base, xsink);
+        return m->execPseudoWithPolicy<Lexical>(policy, base, xsink);
     }
 
-    return pseudo_classes_eval(base, m->getName(), m->getArgs(), xsink);
+    // a named call of a method of an object resolved at run time by parameter name whose receiver is not an object
+    if (m->getRuntimeArgNames()) {
+        return m->execPseudoNamed(policy, base, xsink);
+    }
+
+    if constexpr (Lexical) return pseudo_classes_eval(policy, base, m->getName(), m->getArgs(), xsink);
+    else return pseudo_classes_eval(base, m->getName(), m->getArgs(), xsink);
+}
+QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+QoreValue QoreDotEvalOperatorNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<true>(needs_deref, xsink);
+}
+
+QoreValue QoreDotEvalOperatorNode::evalWithBase(QoreValue base, ExceptionSink* xsink) const {
+    return evalWithBaseCommon<false>(base, xsink);
+}
+
+int qore_check_method_call_receiver(QoreValue base, const char* name, const QoreClass* qc,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool pseudo, ExceptionSink* xsink) {
+    // the dispatch of QoreDotEvalOperatorNode::evalWithBase(), up to the evaluation of the arguments
+    QoreObject* obj = nullptr;
+    switch (base.getType()) {
+        case NT_WEAKREF:
+            obj = base.get<WeakReferenceNode>()->get();
+            break;
+
+        case NT_WEAKREF_HASH:
+            if (check_call_ref(base.get<WeakHashReferenceNode>()->get(), name)) {
+                return 0;
+            }
+            break;
+
+        case NT_OBJECT:
+            obj = const_cast<QoreObject*>(base.get<const QoreObject>());
+            break;
+
+        case NT_HASH:
+            if (check_call_ref(base.getInternalNode(), name)) {
+                return 0;
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    if (obj) {
+        // as AbstractMethodCallNode::exec()
+        if (obj->isValid()) {
+            return 0;
+        }
+        qore_raise_deleted_method_call(xsink, obj, name, qc, method, variant);
+        return -1;
+    }
+
+    if (pseudo) {
+        // as MethodCallNode::execPseudo(): no value is dispatched to the methods of the "<nothing>" class by name; the
+        // method resolved at parse time is called otherwise
+        if (base.isNothing() && qc != QC_PSEUDONOTHING) {
+            return qore_class_private::get(*QC_PSEUDONOTHING)->runtimeFindPseudoMethod(base,
+                method ? method->getName() : name, xsink) ? 0 : -1;
+        }
+        return 0;
+    }
+
+    return pseudo_classes_check_method(base, name, xsink);
+}
+
+int QoreDotEvalOperatorNode::checkReceiver(QoreValue base, ExceptionSink* xsink) const {
+    return qore_check_method_call_receiver(base, m->getName(), m->getClass(), m->getMethod(), m->getVariant(),
+        m->isPseudo(), xsink);
+}
+
+QoreValue QoreDotEvalOperatorNode::evalRuntimeNamedWithArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    assert(m->getRuntimeArgNames());
+    ReferenceHolder<QoreListNode> args_holder(args, xsink);
+    ValueHolder base(args ? args->shift() : QoreValue(), xsink);
+    // a copy of the call with the arguments, which keeps the names of the arguments; compiled code (the only caller)
+    // has the default semantic policy
+    ReferenceHolder<MethodCallNode> call(new MethodCallNode(*m, args_holder.release()), xsink);
+    switch (base->getType()) {
+        case NT_WEAKREF:
+            return call->exec(base->get<WeakReferenceNode>()->get(), xsink);
+
+        case NT_OBJECT:
+            return call->exec(const_cast<QoreObject*>(base->get<const QoreObject>()), xsink);
+
+        default:
+            break;
+    }
+    return call->execPseudoNamed({}, *base, xsink);
 }
 
 int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -127,10 +234,11 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         // a call with named arguments through a receiver that is an object of a single class or no value (*X): bind
         // the arguments by name with the signature of the class's method; the method is not saved for the call, so
         // it is still dispatched at runtime, and a receiver with no value is handled as before
+        // a static method called through such a receiver is bound to its declared class, as Class::method() is, with
+        // positional arguments too (qore#5990)
         const QoreParseListNode* parse_args = m->getParseArgs();
-        const QoreClass* nqc = parse_args && parse_args->hasNamedArgs()
-            ? QoreTypeInfo::getUniqueReturnClassOrNothing(typeInfo)
-            : nullptr;
+        bool named_args = parse_args && parse_args->hasNamedArgs();
+        const QoreClass* nqc = QoreTypeInfo::getUniqueReturnClassOrNothing(typeInfo);
         if (nqc) {
             qore_class_private::parseInitPartial(*const_cast<QoreClass*>(nqc));
             qore_class_private* class_ctx = parse_get_class_priv();
@@ -138,15 +246,41 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 class_ctx = nullptr;
             }
             meth = qore_class_private::get(*const_cast<QoreClass*>(nqc))->parseFindAnyMethod(mname, class_ctx);
-            if (meth && strcmp(mname, "copy")) {
+            if (meth && strcmp(mname, "copy") && meth->isStatic()) {
+                m->parseSetClassAndMethod(nqc, meth);
+                parse_context.typeInfo = nullptr;
+                m->setAllowRuntimeArgNames();
+                if (m->parseArgs(parse_context, qore_method_private::get(*meth)->getFunction(), nullptr) && !err) {
+                    err = -1;
+                }
+                // the result type is not known: a receiver with no value is dispatched to a pseudo-method of the
+                // value (such as typeCode()), not to the method
+                parse_context.typeInfo = returnTypeInfo = nullptr;
+                return err;
+            }
+            if (meth && strcmp(mname, "copy") && named_args) {
                 parse_context.typeInfo = nullptr;
                 QoreFunction* func = qore_method_private::get(*meth)->getFunction();
+                // the arguments are bound by name at run time when the variants that could be selected name their
+                // parameters differently (see AbstractMethodCallNode::execNamed())
+                m->setAllowRuntimeArgNames();
+                // a named call of a normal method is resolved at run time on the class of the object, as a positional
+                // call; a static method called through an object is bound to the receiver's declared class (qore#5990)
+                if (!meth->isStatic()) {
+                    m->setVirtualNamedDispatch();
+                }
                 if (m->parseArgs(parse_context, func, nullptr) && !err) {
                     err = -1;
                 }
+                // a call resolved at run time by parameter name keeps the method of the receiver's static type, which
+                // it is resolved on when the object is of that class (otherwise on the method of the class of the
+                // object; see AbstractMethodCallNode::execNamed())
+                if (m->getRuntimeArgNames() && !m->getMethod()) {
+                    m->parseSetClassAndMethod(nqc, meth);
+                }
                 if (readonly_receiver
                     && check_readonly_receiver_method_call(loc, mname,
-                        static_cast<const MethodVariantBase*>(m->getVariant()), func)
+                        static_cast<const MethodVariantBase*>(m->getParseCheckVariant()), func)
                     && !err) {
                     err = -1;
                 }
@@ -177,7 +311,7 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 }
                 if (readonly_receiver
                     && check_readonly_receiver_method_call(loc, mname,
-                        static_cast<const MethodVariantBase*>(m->getVariant()), func)
+                        static_cast<const MethodVariantBase*>(m->getParseCheckVariant()), func)
                     && !err) {
                     err = -1;
                 }
@@ -318,11 +452,28 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
     // check parameters, if any
     QoreFunction* func = qore_method_private::get(*meth)->getFunction();
+    // the arguments of a call of a method of the object are bound by name at run time when the variants that could be
+    // selected name their parameters differently (see AbstractMethodCallNode::execNamed())
+    if (!m->isPseudo()) {
+        m->setAllowRuntimeArgNames();
+        // a named call of a normal method is resolved at run time on the class of the object, as a positional call;
+        // a static method called through an object is bound to the receiver's declared class, as Class::method() is
+        // (qore#5990)
+        if (!meth->isStatic()) {
+            m->setVirtualNamedDispatch();
+        }
+    }
     if (m->parseArgs(parse_context, func, nullptr) && !err) {
         err = -1;
     }
+    // a call resolved at run time by parameter name keeps the method of the receiver's static type, also of an
+    // abstract method, which it is resolved on when the object is of that class (otherwise on the method of the
+    // class of the object; see AbstractMethodCallNode::execNamed())
+    if (m->getRuntimeArgNames() && !m->getMethod()) {
+        m->parseSetClassAndMethod(qc, meth);
+    }
     if (readonly_receiver
-        && check_readonly_receiver_method_call(loc, mname, static_cast<const MethodVariantBase*>(m->getVariant()),
+        && check_readonly_receiver_method_call(loc, mname, static_cast<const MethodVariantBase*>(m->getParseCheckVariant()),
             func)
         && !err) {
         err = -1;
@@ -368,5 +519,6 @@ QoreOperatorNode* QoreDotEvalOperatorNode::copyBackground(ExceptionSink* xsink) 
         return nullptr;
     }
 
-    return new QoreDotEvalOperatorNode(loc, copy_value_and_resolve_lvar_refs(left, xsink), holder.release().get<MethodCallNode>());
+    return qore_make_dot_call(getSemanticPolicy(), loc, copy_value_and_resolve_lvar_refs(left, xsink),
+        holder.release().get<MethodCallNode>());
 }

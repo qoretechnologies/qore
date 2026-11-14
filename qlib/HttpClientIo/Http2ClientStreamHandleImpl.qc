@@ -436,6 +436,21 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         send_trailers = trailers;
     }
 
+    #! Waits until the data sent on the stream has been handed to the transport
+    /** @see HttpClientStreamHandle::waitSendFlushed()
+    */
+    int waitSendFlushed(timeout timeout_ms) {
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!stream_id) {
+                return 0;
+            }
+            sid = stream_id;
+        }
+        return h2conn.getSocket().waitForHttp2StreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
+    }
+
     #! Sends data on a streaming connection
     /** The request can be sent whatever has been read of the response: a server can send its complete response
         before the request is complete and keep reading the request (RFC 9113 section 8.1), and a send reports a close
@@ -456,6 +471,13 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         @throw HTTP2-STREAM-RESET if the server reset the stream with an error; every later send raises it again
         @throw HTTP2-STREAM-REFUSED if the server refused the stream without processing it (\c REFUSED_STREAM);
         every later send raises it again
+        @throw HTTP2-FLOW-CONTROL if the stream's send buffer did not drain in time: when the server has not granted
+        the flow-control credit for the data buffered, the send waits for it for the request timeout (twice the
+        connect timeout without one); the data was not sent
+
+        @note a send waits while the stream's send buffer is full, so it must not be called on the I/O thread of the
+        async I/O controller, nor in the \c continuePoll() of a poll operation that the controller runs (for example
+        a \c WebSocketSendPollOperation), which raise \c SOCKET-SYNC-ON-IO-THREAD-ERROR then
     */
     sendData(data data, bool end_stream = False) {
         int sid;
@@ -521,14 +543,19 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         try {
             if (trailers) {
                 if (data) {
-                    h2conn.sendStreamData(sid, data, False);
+                    h2conn.sendStreamData(sid, data, False, getConnectWait());
                 }
                 h2conn.sendTrailers(sid, trailers);
                 return;
             }
             # a half-close on a stream the server has already closed is a no-op in sendStreamData()
-            h2conn.sendStreamData(sid, data, end_stream);
+            h2conn.sendStreamData(sid, data, end_stream, getConnectWait());
         } catch (hash<ExceptionInfo> ex) {
+            # data that was not sent leaves the trailers to the send that is made again
+            if (trailers && ex.err == "HTTP2-FLOW-CONTROL") {
+                AutoLock al(lock);
+                send_trailers = trailers;
+            }
             if (ex.err == "HTTP2-STREAM-CLOSED") {
                 throw "HTTPCLIENT-STREAM-CLOSED", sprintf("cannot send data: stream %d was closed by the server",
                     sid);
@@ -545,6 +572,21 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
     *hash<string, string> getTrailers() {
         AutoLock al(lock);
         return response.trailers;
+    }
+
+    #! Records on the stream's frame state that the application sends its WebSocket close frame itself
+    /** See @ref HttpClientStreamHandle::markFrameStateCloseSent()
+    */
+    int markFrameStateCloseSent() {
+        int sid;
+        {
+            AutoLock al(lock);
+            if (!streaming || !exists stream_id) {
+                return 0;
+            }
+            sid = stream_id;
+        }
+        return h2conn.markFrameStateCloseSent(sid);
     }
 
     #! Installs a WebSocket frame-state decoder for this H2 CONNECT stream

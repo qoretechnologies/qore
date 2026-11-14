@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/QoreTypeSafeReferenceHelper.h"
@@ -683,7 +684,9 @@ QoreHashNode* qore_object_private::copyData(ExceptionSink* xsink, bool throw_exc
     return data->copy();
 }
 
-void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink) {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
     // saves source data to merge
     ReferenceHolder<QoreHashNode> new_data(xsink);
 
@@ -736,7 +739,7 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
             return;
         }
 
-        mergeIntern(xsink, *new_data, check_recursive, class_ctx, sdh, *new_internal_data);
+        mergeInternImpl<Lexical>(xsink, *new_data, check_recursive, class_ctx, sdh, *new_internal_data, policy);
     }
 
     if (check_recursive) {
@@ -746,11 +749,22 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
     }
 
     if (ext && !*xsink) {
-        mergeAccessorMembers(*ext, class_ctx, vl, xsink);
+        mergeAccessorMembersImpl<Lexical>(*ext, class_ctx, vl, xsink, policy);
     }
 }
 
-void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink) {
+void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink) {
+    return mergeImpl<false>(o, vl, sdh, xsink, {});
+}
+
+void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    return mergeImpl<true>(o, vl, sdh, xsink, policy);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
     bool check_recursive = false;
 
     // the values for members held in external storage are written with their setters, without the object lock
@@ -776,7 +790,7 @@ void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefH
             return;
         }
 
-        mergeIntern(xsink, h, check_recursive, class_ctx, sdh);
+        mergeInternImpl<Lexical>(xsink, h, check_recursive, class_ctx, sdh, nullptr, policy);
     }
 
     if (check_recursive) {
@@ -791,8 +805,17 @@ void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefH
         if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
             class_ctx = nullptr;
         }
-        mergeAccessorMembers(*ext, class_ctx, vl, xsink);
+        mergeAccessorMembersImpl<Lexical>(*ext, class_ctx, vl, xsink, policy);
     }
+}
+
+void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink) {
+    return mergeImpl<false>(h, vl, sdh, xsink, {});
+}
+
+void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    return mergeImpl<true>(h, vl, sdh, xsink, policy);
 }
 
 void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, ReferenceHolder<QoreHashNode>& ext) const {
@@ -820,14 +843,22 @@ void qore_object_private::takeAccessorMembersForMerge(QoreHashNode* h, Reference
     }
 }
 
-int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qore_class_private* class_ctx,
-        AutoVLock& vl, ExceptionSink* xsink) {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int qore_object_private::mergeAccessorMembersImpl(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
     // keep the object while no lvalue lock holds it
     ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), xsink);
     vl.del();
     const qore_class_private* cls = qore_class_private::get(*theclass);
+    size_t count = 0;
     ConstHashIterator hi(ext);
     while (hi.next()) {
+        if constexpr (Lexical) {
+            if (++count % 100 == 0 && qore_check_cancel(xsink, "object merge")) {
+                return -1;
+            }
+        }
         const char* key = hi.getKey();
         const QoreTypeInfo* mti = nullptr;
         const qore_class_private* member_class_ctx = nullptr;
@@ -838,7 +869,11 @@ int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qor
         assert(ami);
         ValueHolder v(hi.getReferenced(), xsink);
         // the declared type is checked as for an assignment
-        QoreTypeInfo::acceptInputMember(mti, key, *v, xsink);
+        if constexpr (Lexical) {
+            QoreTypeInfo::acceptInputMember(mti, key, *v, xsink, policy);
+        } else {
+            QoreTypeInfo::acceptInputMember(mti, key, *v, xsink);
+        }
         if (*xsink || cls->evalMemberAccessorSet(obj, key, *ami, *v, xsink)) {
             return -1;
         }
@@ -846,16 +881,35 @@ int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qor
     return 0;
 }
 
-void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
-        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data) {
+int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink) {
+    return mergeAccessorMembersImpl<false>(ext, class_ctx, vl, xsink, {});
+}
+
+int qore_object_private::mergeAccessorMembers(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    return mergeAccessorMembersImpl<true>(ext, class_ctx, vl, xsink, policy);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
+        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
+        LexicalSemanticPolicy policy) {
     //printd(5, "qore_object_private::merge() obj: %p\n", obj);
 
     QoreHashNode* id = nullptr;
     const qore_class_private* old_member_class_ctx = nullptr;
 
     if (h) {
+        size_t count = 0;
         ConstHashIterator hi(h);
         while (hi.next()) {
+            if constexpr (Lexical) {
+                if (++count % 100 == 0 && qore_check_cancel(xsink, "object merge")) {
+                    return;
+                }
+            }
             const QoreTypeInfo* ti = nullptr;
 
             // check member status
@@ -869,7 +923,11 @@ void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* 
             // silently abandoned partway through
             ValueHolder qv(hi.getReferenced(), xsink);
             ScopedTypeCheckSink ts(xsink);
-            QoreTypeInfo::acceptInputMember(ti, hi.getKey(), *qv, *ts);
+            if constexpr (Lexical) {
+                QoreTypeInfo::acceptInputMember(ti, hi.getKey(), *qv, *ts, policy);
+            } else {
+                QoreTypeInfo::acceptInputMember(ti, hi.getKey(), *qv, *ts);
+            }
             if (ts.raised()) {
                 return;
             }
@@ -906,8 +964,14 @@ void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* 
             id = getCreateInternalData(class_ctx);
         }
 
+        size_t count = 0;
         ConstHashIterator hi(new_internal_data);
         while (hi.next()) {
+            if constexpr (Lexical) {
+                if (++count % 100 == 0 && qore_check_cancel(xsink, "object merge")) {
+                    return;
+                }
+            }
             QoreValue nv = hi.getReferenced();
             QoreValue n = id->priv->swapKeyValue(hi.getKey(), nv, this);
             if (!check_recursive && (needs_scan(n) || needs_scan(nv))) {
@@ -918,6 +982,17 @@ void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* 
             sdh.deref(n);
         }
     }
+}
+
+void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
+        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data) {
+    return mergeInternImpl<false>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, {});
+}
+
+void qore_object_private::mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
+        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
+        LexicalSemanticPolicy policy) {
+    return mergeInternImpl<true>(xsink, h, check_recursive, class_ctx, sdh, new_internal_data, policy);
 }
 
 QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) const {
@@ -956,11 +1031,15 @@ QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) co
 }
 
 QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key, bool check_access,
-        bool for_delete) {
+        bool for_delete, bool* exists) {
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
-        return cls->evalMemberWriteGate(obj, key, QoreValue(),
+        QoreValue value = cls->evalMemberWriteGate(obj, key, QoreValue(),
             for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, xsink);
+        if (exists) {
+            *exists = !value.isNothing();
+        }
+        return value;
     }
     const QoreTypeInfo* mti = nullptr;
 
@@ -975,8 +1054,12 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     // a declared member held in external storage is read and cleared with its accessors, without the object lock
     if (cls->findAccessorMember(key)) {
-        return cls->evalExternalMemberWrite(obj, key, QoreValue(),
+        QoreValue value = cls->evalExternalMemberWrite(obj, key, QoreValue(),
             for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, xsink);
+        if (exists) {
+            *exists = !*xsink;
+        }
+        return value;
     }
 
     QoreAutoVarRWWriteLocker al(rml);
@@ -988,7 +1071,8 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    QoreValue rv = odata->priv->swapKeyValue(key, QoreValue(), this);
+    QoreValue rv = exists ? odata->priv->swapKeyValueIfExists(key, QoreValue(), this, *exists)
+        : odata->priv->swapKeyValue(key, QoreValue(), this);
     if (needs_scan(rv)) {
         // the removal can take a reference out of this object's recursive set
         clearRSetClosed();
@@ -1001,7 +1085,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     const qore_class_private* cls = qore_class_private::get(*theclass);
     if (cls->member_write_gate && !cls->members.find(key)) {
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
-        lvh.vl.del();
+        lvh.finishForCallback();
+        if (*lvh.vl.xsink) {
+            return QoreValue();
+        }
         QoreValue value = cls->evalMemberWriteGate(obj, key, QoreValue(),
             for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, lvh.vl.xsink);
         if (exists) {
@@ -1025,7 +1112,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     // the lvalue's locks are released first
     if (cls->findAccessorMember(key)) {
         ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
-        lvh.vl.del();
+        lvh.finishForCallback();
+        if (*lvh.vl.xsink) {
+            return QoreValue();
+        }
         QoreValue value = cls->evalExternalMemberWrite(obj, key, QoreValue(),
             for_delete ? QoreMemberWriteOp::Delete : QoreMemberWriteOp::Remove, lvh.vl.xsink);
         if (exists) {
@@ -1060,38 +1150,52 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key, bo
     return rv;
 }
 
+void qore_object_private::takeExternalMembers(QoreLValueGeneric& rv, LValueHelper& lvh,
+        const QoreListNode* l, bool for_delete) {
+    ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
+    lvh.finishForCallback();
+    if (*lvh.vl.xsink) {
+        return;
+    }
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), lvh.vl.xsink);
+    // Mixed slices can remove ordinary members too. Scan the pinned target, never the former parent path.
+    LValueHelper object_scan(*obj, lvh.vl.xsink, LValueHelper::ObjectScan{});
+    ConstListIterator li(l);
+    size_t count = 0;
+    while (li.next()) {
+        if (++count % 10 == 0 && qore_check_cancel(lvh.vl.xsink, "external member removal")) {
+            return;
+        }
+        QoreHashKeyHelper key(li.getValue(), lvh.vl.xsink);
+        if (*lvh.vl.xsink) {
+            return;
+        }
+        bool exists = false;
+        ValueHolder value(takeMember(lvh.vl.xsink, key.c_str(), true, for_delete, &exists), lvh.vl.xsink);
+        object_scan.objectRemoved(*this, needs_scan(*value));
+        // Keep even overwritten duplicate-key results until the target scan has finished.
+        object_scan.saveTemp(value->refSelf());
+        if (*lvh.vl.xsink) {
+            return;
+        }
+        if (!exists) {
+            continue;
+        }
+        result->setKeyValue(key.c_str(), value.release(), lvh.vl.xsink);
+        if (*lvh.vl.xsink) {
+            return;
+        }
+    }
+    rv.assignInitial(result.release());
+    return;
+}
+
 void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, const QoreListNode* l,
         bool for_delete) {
     lvh.disableMemberWriteBack();
     // members held in external storage are taken one at a time, as their accessors and gates run without locks
     if (theclass->hasMemberWriteGate() || qore_class_private::get(*theclass)->has_member_accessors) {
-        ReferenceHolder<QoreObject> holder(static_cast<QoreObject*>(obj->refSelf()), lvh.vl.xsink);
-        lvh.vl.del();
-        ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), lvh.vl.xsink);
-        ConstListIterator li(l);
-        size_t count = 0;
-        while (li.next()) {
-            if (++count % 10 == 0 && qore_check_cancel(lvh.vl.xsink, "external member removal")) {
-                return;
-            }
-            QoreHashKeyHelper key(li.getValue(), lvh.vl.xsink);
-            if (*lvh.vl.xsink) {
-                return;
-            }
-            bool exists = false;
-            ValueHolder value(takeMember(lvh, key.c_str(), for_delete, &exists), lvh.vl.xsink);
-            if (*lvh.vl.xsink) {
-                return;
-            }
-            if (!exists) {
-                continue;
-            }
-            result->setKeyValue(key.c_str(), value.release(), lvh.vl.xsink);
-            if (*lvh.vl.xsink) {
-                return;
-            }
-        }
-        rv.assignInitial(result.release());
+        takeExternalMembers(rv, lvh, l, for_delete);
         return;
     }
     // get the current class context for possible internal data
@@ -1168,7 +1272,9 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
     lvh.objectRemoved(*this, scan_value_removed);
 }
 
-void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) const {
     // get the current class context for possible internal data
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
@@ -1184,22 +1290,49 @@ void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& s
 
     qore_hash_private* hp = qore_hash_private::get(*hash);
     if (class_ctx) {
-        hp->merge(*qore_hash_private::get(*data), sdh, xsink);
+        if constexpr (Lexical) {
+            hp->merge(*qore_hash_private::get(*data), sdh, xsink, policy);
+        } else {
+            hp->merge(*qore_hash_private::get(*data), sdh, xsink);
+        }
         const QoreHashNode* odata = getInternalData(class_ctx);
         if (odata) {
-            hp->merge(*qore_hash_private::get(*odata), sdh, xsink);
+            if constexpr (Lexical) {
+                hp->merge(*qore_hash_private::get(*odata), sdh, xsink, policy);
+            } else {
+                hp->merge(*qore_hash_private::get(*odata), sdh, xsink);
+            }
         }
         return;
     }
 
+    size_t count = 0;
     ConstHashIterator hi(data);
     while (hi.next()) {
+        if constexpr (Lexical) {
+            if (++count % 100 == 0 && qore_check_cancel(xsink, "object merge")) {
+                return;
+            }
+        }
         if (theclass->isPrivateMember(hi.getKey())) {
             continue;
         }
 
-        hp->setKeyValue(hi.getKey(), hi.getReferenced(), sdh, xsink);
+        if constexpr (Lexical) {
+            hp->setKeyValue(hi.getKey(), hi.getReferenced(), sdh, xsink, policy);
+        } else {
+            hp->setKeyValue(hi.getKey(), hi.getReferenced(), sdh, xsink);
+        }
     }
+}
+
+void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const {
+    return mergeDataToHashImpl<false>(hash, sdh, xsink, {});
+}
+
+void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) const {
+    return mergeDataToHashImpl<true>(hash, sdh, xsink, policy);
 }
 
 QoreValue& qore_object_private::getMemberValueRefForInitialization(const char* member, const qore_class_private* class_ctx) {
@@ -2443,7 +2576,7 @@ int QoreObject::setMemberValue(const char* key, const QoreClass* cls, QoreValue 
             return -1;
         }
         // consuming semantics: caller transfers the reference in val
-        lvh.assign(val, "<set normal class member value>");
+        lvh.assignNative(val, "<set normal class member value>");
     }
     return *xsink ? -1 : 0;
 }
@@ -2891,9 +3024,13 @@ void QoreObject::execMemberNotification(const char* member, ExceptionSink* xsink
 
 bool QoreObject::getAsBoolImpl() const {
     // check if we should do perl-style boolean evaluation
-    if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL))
+    if (qore_get_native_semantic_policy().strictBoolean())
         return false;
 
+    return getAsBoolDefault();
+}
+
+bool QoreObject::getAsBoolDefault() const {
     QoreSafeVarRWReadLocker sl(priv->rml);
     return priv->status != OS_DELETED;
 }

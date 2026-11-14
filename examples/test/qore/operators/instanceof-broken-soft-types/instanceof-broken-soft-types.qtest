@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class InstanceofBrokenSoftTypesTest
+
+#! Tests that instanceof follows %broken-soft-types in every execution mode
+/** The native instanceof of IR, JIT and AOT code does not apply the lexical %broken-soft-types policy, which the AST
+    node applies (under it, SQL NULL is an instance of softint and softstring).  It never has to: the policy cannot
+    be used with %modern, and only %modern code runs in those modes or is compiled with qcc, while the code of a module
+    that is not %modern runs the AST node also when the program that calls it runs in another mode.  This test pins
+    that guarantee: a %broken-soft-types module called from %modern code gives the AST result in every mode, and the
+    policy is refused where the code would be lowered.
+*/
+class InstanceofBrokenSoftTypesTest inherits QUnit::Test {
+    public {
+        #! the output of the worker in every execution mode
+        const Expected = "direct=[True, True]\nclosure=[True, True]\nmodern=[False, False]\nstable=True\n";
+
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("InstanceofBrokenSoftTypesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("a %broken-soft-types module called from %modern code in each execution mode",
+            \testModuleExecModes());
+        addTestCase("a %broken-soft-types module called from %modern code on the IR tier", \testModuleIrTier());
+        addTestCase("%broken-soft-types is refused with %modern", \testRefusedWithModern());
+        addTestCase("code that is not %modern is not lowered or compiled", \testNotModernRefused());
+
+        set_return_value(main());
+    }
+
+    testModuleExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, get_script_dir() + DirSep + "instanceof-broken-soft-types-worker.qr"));
+            assertEq(Expected, out, mode);
+        }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testModuleIrTier() {
+        assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin,
+            get_script_dir() + DirSep + "instanceof-broken-soft-types-worker.qr")));
+    }
+
+    testRefusedWithModern() {
+        TmpDir tmp("qore-instanceof-broken-soft-types-");
+        string path = write(tmp.path + DirSep + "modern.qr", "%broken-soft-types\nprintf(\"x\\n\");\n");
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s 2>&1", libqore_dir, qore_bin, path));
+        assertRegex("PARSE-OPTION-ERROR: %broken-soft-types cannot be used while %modern is in effect", out);
+    }
+
+    testNotModernRefused() {
+        TmpDir tmp("qore-instanceof-broken-soft-types-");
+        string path = write(tmp.path + DirSep + "old.q", "%new-style\n%broken-soft-types\nauto v = NULL;\n"
+            "printf(\"%y\\n\", v instanceof softint);\n");
+        # the AST interpreter runs it with the policy
+        assertEq("True\n", backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s 2>&1", libqore_dir, qore_bin, path)),
+            "ast");
+        foreach string mode in ("ir", "jit") {
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1", libqore_dir, qore_bin,
+                mode, path));
+            assertRegex("EXEC-MODE-ERROR: Cannot execute in [A-Z]+ mode: code must use %modern", out, mode);
+        }
+        string exe = tmp.path + DirSep + "old";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, path));
+        assertRegex("AOT compilation requires %modern parse semantics", out, "qcc");
+        assertFalse(is_file(exe), "qcc made no program");
+    }
+
+    private string write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+        return path;
+    }
+}

@@ -69,7 +69,7 @@ public:
     DLLLOCAL void del(ExceptionSink* xsink) {
         //printd(5, "lvalue_ref::del() this: %p vexp: %p self: %p pgm: %p\n", this, vexp, self, pgm);
         if (vexp) {
-            vexp.discard(nullptr);
+            vexp.discard(xsink);
             vexp = QoreValue();
         }
     }

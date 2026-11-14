@@ -1,0 +1,84 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks static calls of generic class instantiations in lists and argument lists; run by
+# generic-static-call-list.qtest
+
+/** A static call of a generic class instantiation ("Holder<int>::echo(1)") is one token for the scanner up to the
+    method name; the type arguments end with the '>' that closes their '<'.  Before qore#6037, the longest match of
+    the scanner ran on over a comma to the next such call, so two of them in one list or argument list were parsed
+    as one expression, with no error.  Each check prints "name=result".
+*/
+
+namespace Ns {
+    public class Box<T> {
+        static string id<U>(U v) {
+            return sprintf("id:%y", v);
+        }
+    }
+}
+
+class Holder<T> {
+    static auto echo(auto v) {
+        return v;
+    }
+
+    static string typed<U>(U v) {
+        return sprintf("typed:%y", v);
+    }
+}
+
+class Cell<T> {
+    public {
+        auto v;
+    }
+
+    constructor(bool b, auto w) {
+        self.v = w;
+    }
+
+    constructor(auto v) {
+        self.v = v;
+    }
+}
+
+class Plain {
+    static auto echo(auto v) {
+        return v;
+    }
+}
+
+string sub args(auto a, auto b) {
+    return sprintf("%y %y", a, b);
+}
+
+hash<string, auto> sub checks() {
+    return {
+        "plain-pair": (Plain::echo(1), Plain::echo("x")),
+        "same-instantiation": (Holder<int>::echo(1), Holder<int>::echo("x")),
+        "other-instantiations": (Holder<int>::echo(1), Holder<string>::echo("x")),
+        "three": (Holder<int>::echo(1), Holder<int>::echo(2), Holder<string>::echo("z")),
+        "argument-list": args(Holder<int>::echo(1), Holder<int>::echo("x")),
+        "generic-then-plain": (Holder<int>::echo(1), Plain::echo("x")),
+        "nested-type-args": (Holder<list<int>>::echo(1), Holder<hash<string, int>>::echo(2)),
+        "callable-type-arg": (Holder<code<int(string)>>::echo(1), Holder<int>::echo(2)),
+        # numeric arguments: the characters of a string argument end the match of the scanner before the next call
+        "method-type-args": (Ns::Box<int>::id<int>(1), Ns::Box<int>::id<int>(2)),
+        "method-type-args-string": (Ns::Box<int>::id<string>("a"), Ns::Box<int>::id<int>(1)),
+        "method-type-args-then-call": (Holder<int>::typed<int>(1), Holder<int>::echo(2)),
+        "call-then-method-type-args": (Holder<int>::echo(1), Holder<int>::typed<int>(2)),
+        # a match that is not a static call is scanned again
+        "new-with-call": (new Cell<int>(Holder<string>::echo(1))).v,
+        "cast-with-call": cast<list<int>>(Holder<int>::echo((1, 2))),
+        # a comparison in the arguments: the angle brackets of the match are not balanced
+        "new-with-comparison": (new Cell<int>(1 < 2, Holder<int>::echo(1))).v,
+        "cast-with-comparison": cast<int>(1 < 2 ? Holder<int>::echo(3) : 0),
+        "root-qualified-method-type-args": (::Ns::Box<int>::id<int>(1), ::Ns::Box<int>::id<int>(2)),
+        "root-qualified": (::Holder<int>::echo(1), ::Holder<string>::echo("y")),
+        "or-nothing-type-arg": (Holder<*int>::echo(NOTHING), Holder<int>::echo(5)),
+        "nested-call": (Holder<int>::echo(Holder<string>::echo("in")), 7),
+        "operator": Holder<int>::echo(1) + Holder<int>::echo(2),
+    };
+}
+
+map printf("%s=%y\n", $1.key, $1.value), checks().pairIterator();

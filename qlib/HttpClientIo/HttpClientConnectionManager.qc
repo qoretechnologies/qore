@@ -2524,7 +2524,7 @@ printf("%d connection(s) migrated\n", migrated);
         # failed connection still in the pool is recorded here, so that a new connection, such as the retry of that
         # request, does not depend on the order of the two
         foreach HttpClientConnection conn in (pool{key}) {
-            if (conn.getProtocol() == "h3" && conn.isClosed()) {
+            if (conn.getProtocol() == "h3" && (conn.isClosed() || conn.getPollOperation().hasError())) {
                 recordH3FamilyFailureLocked(key, conn, conn.getPollOperation().getError().err, now);
             }
         }
@@ -4542,6 +4542,7 @@ printf("%d connection(s) migrated\n", migrated);
             if (!pool.hasKey(key)) {
                 return;
             }
+            date now = now_us();
             list<HttpClientConnection> live = ();
             foreach HttpClientConnection conn in (pool{key}) {
                 # Evict only definitively unavailable connections — not those
@@ -4552,6 +4553,13 @@ printf("%d connection(s) migrated\n", migrated);
                     dead = op.isClosed() || op.hasError();
                 }
                 if (dead) {
+                    # an HTTP/3 connection that failed without reaching a server records its address family before
+                    # it leaves the pool: the retry of a request that it failed can evict it before
+                    # handleConnectionResult() has processed its failure, and would then connect in the same family
+                    # again
+                    if (conn.getProtocol() == "h3") {
+                        recordH3FamilyFailureLocked(key, conn, conn.getPollOperation().getError().err, now);
+                    }
                     push to_close, conn;
                 } else {
                     push live, conn;

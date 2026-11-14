@@ -118,6 +118,15 @@ public:
         const QoreClass* cls = getClass(); return functionality | (cls ? cls->getDomain() : 0);\
     } \
     DLLLOCAL virtual AbstractFunctionSignature* getSignature() const { return const_cast<BuiltinSignature*>(&signature); } \
+    DLLLOCAL QoreCallMatch matchCallArguments(const QoreCallMatchInput& input) const override { \
+        return qore_match_default_call(this, &signature, input); \
+    } \
+    DLLLOCAL virtual CodeEvaluationHelper::PreparedCall prepareCallArguments(CodeEvaluationHelper& ceh, \
+            const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy, \
+            const qore_class_private* cctx, QoreObject* self, bool runtime_resolved) const override { \
+        return ceh.prepareCallArguments(func, variant, const_cast<BuiltinSignature*>(&signature), is_copy, cctx, \
+            self, runtime_resolved); \
+    } \
     DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.getReturnTypeInfo(); }
 
 class BuiltinFunctionVariantBase {
@@ -135,6 +144,9 @@ public:
     }
 };
 
+//! Returns a cold forwarding implementation for a core builtin, or nullptr. Used only at variant registration.
+DLLLOCAL q_func_t qore_get_lexical_builtin(q_func_t func);
+
 class BuiltinFunctionValueVariant : public AbstractQoreFunctionVariant, public BuiltinFunctionVariantBase {
 protected:
     q_func_t func;
@@ -147,6 +159,10 @@ public:
                     n_returnTypeInfo, n_typeList, n_defaultArgList, n_names), func(m) {
     }
 
+    DLLLOCAL static BuiltinFunctionValueVariant* create(q_func_t func, int64 flags, int64 functionality,
+            const QoreTypeInfo* return_type, const type_vec_t& types, const arg_vec_t& defaults,
+            const name_vec_t& names);
+
     // the following defines the pure virtual functions that are common to all builtin variants
     COMMON_BUILTIN_VARIANT_FUNCTIONS
 
@@ -157,6 +173,37 @@ public:
         });
     }
 };
+
+//! Only forwarding builtins need a distinct body: their ordinary entry remains the inherited original body.
+class LexicalForwardingFunctionVariant : public BuiltinFunctionValueVariant {
+public:
+    DLLLOCAL LexicalForwardingFunctionVariant(q_func_t func, q_func_t lexical_func, int64 flags,
+            int64 functionality, const QoreTypeInfo* return_type, const type_vec_t& types,
+            const arg_vec_t& defaults, const name_vec_t& names)
+            : BuiltinFunctionValueVariant(func, flags, functionality, return_type, types, defaults, names),
+              lexical_func(lexical_func) {
+    }
+
+    DLLLOCAL QoreValue evalLexicalFunction(ExceptionSink* xsink, CodeEvaluationHelper& ceh) const override {
+        CodeContextHelper cch(xsink, CT_BUILTIN, ceh.getName());
+        return qore_eval_builtin_call(xsink, [&]() -> QoreValue {
+            return lexical_func(ceh.getArgs(), ceh.getRuntimeConfig(), xsink);
+        });
+    }
+
+private:
+    const q_func_t lexical_func;
+};
+
+inline BuiltinFunctionValueVariant* BuiltinFunctionValueVariant::create(q_func_t func, int64 flags,
+        int64 functionality, const QoreTypeInfo* return_type, const type_vec_t& types,
+        const arg_vec_t& defaults, const name_vec_t& names) {
+    if (q_func_t lexical_func = qore_get_lexical_builtin(func)) {
+        return new LexicalForwardingFunctionVariant(func, lexical_func, flags, functionality, return_type,
+            types, defaults, names);
+    }
+    return new BuiltinFunctionValueVariant(func, flags, functionality, return_type, types, defaults, names);
+}
 
 //! External function variable
 /** @since %Qore 0.9.5

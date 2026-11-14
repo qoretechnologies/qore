@@ -306,7 +306,58 @@ public:
         }
     }
 
+    DLLLOCAL void plusEquals(const AbstractQoreNode* v, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) {
+        if (!v) {
+            return;
+        }
+        if (v->getType() == NT_OBJECT) {
+            merge(*const_cast<QoreObject*>(static_cast<const QoreObject*>(v))->priv, vl, sdh, xsink, policy);
+        } else if (v->getType() == NT_HASH) {
+            merge(static_cast<const QoreHashNode*>(v), vl, sdh, xsink, policy);
+        }
+    }
+
     DLLLOCAL void merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
+
+    DLLLOCAL void merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL void mergeImpl(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL void mergeImpl(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL int mergeAccessorMembers(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL int mergeAccessorMembersImpl(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL void mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
+        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL void mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
+        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical>
+    DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
@@ -482,7 +533,12 @@ public:
         return 0;
     }
 
-    DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true, bool for_delete = false);
+    DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true,
+        bool for_delete = false, bool* exists = nullptr);
+
+    //! Removes a mixed native/ordinary member slice after detaching its parent lvalue
+    DLLLOCAL __attribute__((noinline)) void takeExternalMembers(QoreLValueGeneric& rv, LValueHelper& lvh,
+        const QoreListNode* l, bool for_delete);
 
     DLLLOCAL QoreValue takeMember(LValueHelper& lvh, const char* mem, bool for_delete = false, bool* exists = nullptr);
 
@@ -839,6 +895,29 @@ public:
     DLLLOCAL static int getLValue(const QoreObject& obj, const char* key, LValueHelper& lvh,
             const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
         return obj.priv->getLValue(key, lvh, class_ctx, for_remove, xsink);
+    }
+
+    //! Returns true if the object has not been deleted: QoreObject::isValid(), inline for the check of a call's target
+    DLLLOCAL static bool isValidInline(const QoreObject* obj) {
+        return obj->priv->status.load(std::memory_order_relaxed) != OS_DELETED;
+    }
+
+    //! The byte offset of an object's private data pointer, for JIT code (QoreJITObjectLayout)
+    DLLLOCAL static uint32_t getPrivOffset() {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        // QoreObject has single, non-virtual inheritance: offsetof() gives the member's offset
+        return static_cast<uint32_t>(offsetof(QoreObject, priv));
+#pragma GCC diagnostic pop
+    }
+
+    //! The byte offset of the status in an object's private data, for JIT code (QoreJITObjectLayout)
+    DLLLOCAL static uint32_t getStatusOffset() {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        // qore_object_private has single, non-virtual inheritance: offsetof() gives the member's offset
+        return static_cast<uint32_t>(offsetof(qore_object_private, status));
+#pragma GCC diagnostic pop
     }
 
     DLLLOCAL static QoreStringNode* firstKey(QoreObject* obj, ExceptionSink* xsink) {

@@ -26,6 +26,7 @@
 # a poll operation refers back to the controller that owns it; see the "@=" comments
 # on those members for why the collector must not follow those edges
 %allow-opaque-references
+%allow-weak-references
 
 %requires Logger
 %requires HttpServerUtil
@@ -68,7 +69,11 @@ module HttpServerAsyncIo {
     - @ref HttpServerAsyncIo::Http3SseStream "Http3SseStream" - SSE streaming support (HTTP/3)
     - @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat" - Formats SSE event fields, refusing values that the
       event stream format cannot carry
-    - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
+    - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events, including the
+      end of a WebSocket connection or SSE stream that a request left open
+      (@ref HttpServerAsyncIo::HttpAsyncTarget::onPersistentRequestEnd() "onPersistentRequestEnd()")
+    - @ref HttpServerAsyncIo::HttpPersistentRequestEnd "HttpPersistentRequestEnd" - Reports the end of such a
+      connection to the target of its request
     - @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" - HTTP-aware I/O controller
 
     @subsection httpserverasyncio_abstract Protocol-Agnostic Abstractions
@@ -247,6 +252,14 @@ public namespace HttpServerAsyncIo {
             instead; see @ref HttpConnectionInfo.
         */
         *code<nothing(bool)> after_send;
+
+        #! Reports the end of the WebSocket connection or SSE stream that the request leaves open
+        /** Set by the server for a request whose WebSocket connection or SSE stream stays open after the request
+            returns; the async I/O controller then reports the end of that connection to the target's
+            @ref HttpAsyncTarget::onPersistentRequestEnd() "onPersistentRequestEnd()".  A target that builds its own
+            result for a request handled by the server must keep this field of the server's result.
+        */
+        *HttpPersistentRequestEnd persistent_request_end;
     }
 
     #! Connection info passed to callbacks

@@ -94,8 +94,8 @@ target_compile_definitions(forkexitb PRIVATE FORKEXIT_NS="ForkExitB" FORKEXIT_AT
 
 # --- the modules that declare a module API version -----------------------------------------------
 # (see module-api/apiprobe-module.cpp and module-api/module-api-version.qtest): one source built twice, declaring
-# the module API of the headers (apicur) and the module API 2.0 of the headers before qore#5519 (apiold); apiold has
-# the file name that a module built with the 2.0 headers has (apiold-api-2.0.qmod)
+# the module API of the headers (apicur) and its preceding minor (apiold); the latter has the file name
+# and descriptor of a module compiled with the previous headers.
 
 foreach(_apiprobe_module apicur apiold)
     add_library(${_apiprobe_module} MODULE module-api/apiprobe-module.cpp)
@@ -119,9 +119,10 @@ foreach(_apiprobe_module apicur apiold)
         target_link_options(${_apiprobe_module} PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
     endif()
 endforeach()
-set_target_properties(apiold PROPERTIES SUFFIX "-api-2.0.qmod")
+math(EXPR _apiprobe_old_minor "${MODULE_API_MINOR} - 1")
+set_target_properties(apiold PROPERTIES SUFFIX "-api-${MODULE_API_MAJOR}.${_apiprobe_old_minor}.qmod")
 target_compile_definitions(apicur PRIVATE APIPROBE_MAJOR=QORE_MODULE_API_MAJOR APIPROBE_MINOR=QORE_MODULE_API_MINOR)
-target_compile_definitions(apiold PRIVATE APIPROBE_MAJOR=2 APIPROBE_MINOR=0)
+target_compile_definitions(apiold PRIVATE APIPROBE_MAJOR=${MODULE_API_MAJOR} APIPROBE_MINOR=${_apiprobe_old_minor})
 
 # --- the module that owns Programs, which it deletes when it is deleted ---------------------------
 # (see program-owner/tdpgmowner-module.cpp and program-owner/program-owner-teardown.qtest)
@@ -145,7 +146,36 @@ if (CMAKE_HOST_APPLE)
     target_link_options(tdpgmowner PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
 endif()
 
+# --- the modules initialized with the legacy AOT module entry point -------------------------------
+# (see aot-v1-init/aotv1init-module.cpp and qore/misc/module-loader/module-load-failure-cleanup.qtest): one source
+# built twice, with an initialization that fails (aotv1fail) and one that succeeds (aotv1ok)
+
+foreach(_aotv1_module aotv1fail aotv1ok)
+    add_library(${_aotv1_module} MODULE aot-v1-init/aotv1init-module.cpp)
+    add_dependencies(${_aotv1_module} libqore)
+    target_include_directories(${_aotv1_module} PRIVATE
+        ${CMAKE_BINARY_DIR}
+        ${CMAKE_BINARY_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include)
+    target_compile_definitions(${_aotv1_module} PRIVATE
+        BUILDING_DLL=1
+        HAVE_UNIX_CONFIG_H
+        PACKAGE_VERSION="${VERSION}"
+        AOTV1_ID=${_aotv1_module}
+        AOTV1_NAME="${_aotv1_module}"
+        $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+    set_target_properties(${_aotv1_module} PROPERTIES
+        PREFIX ""
+        SUFFIX "${_cppapi_test_module_suffix}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/${_aotv1_module}")
+    if (CMAKE_HOST_APPLE)
+        target_link_options(${_aotv1_module} PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+    endif()
+endforeach()
+target_compile_definitions(aotv1fail PRIVATE AOTV1_FAIL=1)
+target_compile_definitions(aotv1ok PRIVATE AOTV1_FAIL=0)
+
 # remove the files of these modules built for another module API (see qore_remove_stale_module_api_files())
-foreach(_cppapi_test_module cppapitest cppapiuser forkexita forkexitb apicur apiold tdpgmowner)
+foreach(_cppapi_test_module cppapitest cppapiuser forkexita forkexitb apicur apiold tdpgmowner aotv1fail aotv1ok)
     qore_remove_stale_module_api_files(${_cppapi_test_module})
 endforeach()

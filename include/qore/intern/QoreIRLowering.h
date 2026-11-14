@@ -607,6 +607,33 @@ private:
     bool markReferenceArgumentAssignmentsUnknown(const QoreParseListNode* parse_args,
         const QoreListNode* args, std::string& error);
     bool callArgumentMayBeRuntimeNothing(const QoreValue& arg) const;
+    //! Returns true if evaluating an argument of a call can have an effect that the order of evaluation can show
+    //! (issue #5784); conservative: only a value and a read of a local variable have none
+    bool callArgsMayHaveSideEffects(const QoreParseListNode* parse_args, const QoreListNode* args) const;
+
+public:
+    //! Gives the "self" local of the method lowered, the object that a call through self or an unqualified call to a
+    //! method is made on; null (the default) for code without one
+    void setSelfLocal(LocalVar* n_self_local) {
+        self_local = n_self_local;
+    }
+
+private:
+    //! the "self" local of the method lowered, if any (see setSelfLocal())
+    LocalVar* self_local = nullptr;
+
+    //! Emits the check of the object of a call through self (issue #5823), before the arguments are evaluated
+    /** The direct calls of a method of a final class or of a final method on self (CallMethodDirect,
+        InvokeMethodDirect) call the method without checking the object, so they are always checked; a call that is
+        dispatched at run time checks the object itself, after its arguments, so it is checked here only when the
+        arguments can show the order (callArgsMayHaveSideEffects()).
+
+        The check has no operand: it takes the current object (see QoreIRBuilder::createCheckCallTarget()).
+
+        @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
+        @param loc the location of the call
+    */
+    void emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc);
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
@@ -699,6 +726,10 @@ private:
         CF_NONE = 0,
         CF_SKIP_LVARS = 1,       //!< skip local var cleanup (for return - pre-instantiation handles it)
         CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break and return)
+        //! close the catch blocks left (CatchScope entries) in their place among the other cleanups: a catch block
+        //! is closed after its own blocks and before the blocks that enclose it, whose on_exit handlers then see
+        //! the exception of an enclosing catch block, as in the AST interpreter (qore#6017)
+        CF_CATCH_SCOPES = 4,
     };
 
     //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
@@ -730,6 +761,10 @@ private:
         @param returned_local the local variable whose value the statement returns, if it returns one as it is
     */
     DLLLOCAL bool returnCleanupObservesError(const LocalVar* returned_local) const;
+
+    //! Returns true if a return statement here runs a handler before it returns: an on_exit or on_success handler
+    //! of a block that it leaves
+    DLLLOCAL bool returnRunsHandlers() const;
 
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:
@@ -807,6 +842,9 @@ private:
     std::vector<FunctionalSourceCapture> functional_source_captures;
     //! Releases the temporary that a functional operator's source gave once the operator has run (see the definition)
     class FunctionalSourceRelease;
+    //! returns true if the source of the functional operator being lowered is released after the operator (a
+    //! temporary or a plain read of a local, see FunctionalSourceRelease)
+    DLLLOCAL bool functionalSourceReleased() const;
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
@@ -816,6 +854,15 @@ private:
     uint32_t block_counter = 0;
     uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
     int statement_block_depth = 0;  //!< Nesting depth for debug block markers
+    //! True if the root block that this lowering lowers is the body of a handler (on_exit, on_error, on_success)
+    /** The body of a handler has the block event of the debugger, as in the AST interpreter, which makes one for the
+        block of each handler that it runs: a handler lowered inline is a nested block, which has it, while the body of
+        a handler compiled to an IR function of its own is the root block of that function, which has none (#5870)
+    */
+    bool handler_body = false;
+    //! the handler body that lowerHandlerAtExit() lowers inline next: its block gets an exception path of its own for
+    //! its locals (see lowerStatementBlock(), #6002)
+    const StatementBlock* inline_handler_block = nullptr;
     int loop_depth = 0;  //!< Nesting depth of loop bodies (for is_block_exit detection)
     QoreIRBasicBlock* guard_exception_target_override = nullptr;
 
@@ -837,7 +884,7 @@ private:
         //! non-local exit inside the handler body cannot re-enter the same
         //! handler range. Cleanup entries below that Scope still run.
         enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar,
-            ForeachElement, ForeachSource };
+            ForeachElement, ForeachSource, CatchScope };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
@@ -852,6 +899,15 @@ private:
         QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
         QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any
         size_t temp_scope_depth = 0;               //!< temp scopes open when the entry was pushed
+        //! the lowering state where the entry was pushed: the number of scope_stack entries, catch_cleanup_depth and
+        //! the number of try_catch_cleanup_depth_stack entries
+        /** The handlers of a Scope entry that a return, break or continue runs are lowered with this state: they
+            run after the exit has left the blocks, catch blocks and try statements inside the block, so code in them
+            must not count those (qore#6017)
+        */
+        size_t open_scopes = 0;
+        int open_catch_depth = 0;
+        size_t open_try_depth = 0;
         //! true for the Scope entry of a statement block with on_exit/on_success/on_error handlers
         bool block_scope = false;
         //! the exception target of the body of the block of a Scope entry with handlers (block_scope)
@@ -986,6 +1042,9 @@ private:
         stay active (see catchScopesLeftByThrow()).
     */
     std::vector<int> try_catch_cleanup_depth_stack;
+    //! the values of the Return instructions in the try block of each enclosing try statement, innermost last (see
+    //! QoreIRFunction::catch_interrupted_returns)
+    std::vector<std::vector<uint32_t>> try_return_value_stack;
     //! the depth of the statements lowered, for the nesting of DebugStatement instructions (#5816)
     uint16_t debug_nest_depth = 0;
     //! the depth of the statements of the catch block lowered, or -1 (QORE_IR_DEBUG_NEST_IN_CATCH)

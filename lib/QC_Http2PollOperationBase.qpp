@@ -156,6 +156,40 @@ void Http2PollOperationPriv::abort(ExceptionSink* xsink) {
     }
 }
 
+int Http2PollOperationPriv::startDrain(ExceptionSink* xsink) {
+    QoreSocketObject* s;
+    {
+        AutoLocker al(op_lock);
+        if (!sock || h2_state == H2ServerState::CLOSED) {
+            return 0;
+        }
+        s = sock;
+        s->ref();
+    }
+    // set before the GOAWAY is submitted, so that the read cycle that the submission's wake runs sees it
+    drain_requested.store(true, std::memory_order_release);
+    // the submission waits for the socket's I/O thread, whose continuePoll() takes op_lock, so it is made without it
+    int rv = s->startHttp2Drain(xsink);
+    s->deref(xsink);
+    return rv;
+}
+
+int Http2PollOperationPriv::sendShutdownGoaway(ExceptionSink* xsink) {
+    QoreSocketObject* s;
+    {
+        AutoLocker al(op_lock);
+        if (!sock || h2_state == H2ServerState::CLOSED) {
+            return 0;
+        }
+        s = sock;
+        s->ref();
+    }
+    // the write waits for the socket's I/O thread, whose continuePoll() takes op_lock, so it is made without the lock
+    int rv = s->sendHttp2ShutdownGoaway(xsink);
+    s->deref(xsink);
+    return rv;
+}
+
 QoreValue Http2PollOperationPriv::getOutput() const {
     AutoLocker al(op_lock);
     // Clear the pending flag — getOutput() is the dispatch callback's
@@ -351,6 +385,13 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
     }
 
     if (poll_info) {
+        // a drained connection is closed instead of waiting for more data (qore#5899)
+        if (isDrainComplete()) {
+            poll_info->deref(xsink);
+            clearStreamQueues(xsink);
+            h2_state = H2ServerState::CLOSED;
+            return nullptr;
+        }
         // Inner op needs more polling
         return poll_info;
     }
@@ -383,6 +424,12 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
             QoreStringNode* desc = new QoreStringNode;
             desc->sprintf("max consecutive empty reads (%d) exceeded", MAX_EMPTY_READS);
             error_info->setKeyValue("desc", desc, xsink);
+            h2_state = H2ServerState::CLOSED;
+            return nullptr;
+        }
+        // a drained connection is closed instead of waiting for more data (qore#5899)
+        if (isDrainComplete()) {
+            clearStreamQueues(xsink);
             h2_state = H2ServerState::CLOSED;
             return nullptr;
         }
@@ -569,7 +616,7 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendHttp2StreamDataForAsyncPoll(stream_id, *holder, false, &cxsink);
+            int rv = sock_ptr->sendHttp2StreamControlFrameForAsyncPoll(stream_id, *holder, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path.
                 cxsink.clear();
@@ -915,9 +962,13 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         // nghttp2 doesn't detect TCP closure — it only processes HTTP/2 frames.
         // When the peer drops the TCP connection, the socket becomes closed but
         // the HTTP/2 stream state in nghttp2 remains unchanged.
+        // A CONNECT tunnel (no request body, no WebSocket frame state) of a draining connection is ended as well:
+        // a tunnel has no end that a drain could wait for, and its handler ends the stream when its inbound side ends
+        // (qore#5899); a WebSocket tunnel is closed with its closing handshake by the server instead
         if (sock->isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
                 || sock->isHttp2StreamClosedForAsyncPoll(stream_id)
-                || !sock->isOpen()) {
+                || !sock->isOpen()
+                || (!info.request_body && !info.frame_state && drain_requested.load(std::memory_order_acquire))) {
             // Push the end of the stream so the handler thread knows the stream is done; the data received before
             // END_STREAM was drained above.  A request body closed without END_STREAM (RST_STREAM, a dropped
             // connection) ends with an error, so its consumer cannot take the part it received for the complete body
@@ -1209,6 +1260,46 @@ bool Http2PollOperationBase::isClosed() [flags=RET_VALUE_ONLY] {
 */
 bool Http2PollOperationBase::isStreamPeerClosed(int stream_id) [flags=RET_VALUE_ONLY] {
     return priv->isStreamPeerClosed((int32_t)stream_id);
+}
+
+//! Sends a GOAWAY frame with error code \c NO_ERROR to tell the client that the server is closing the connection
+/** Used when the server stops: the frame gives the client the ID of the last stream that the server processed, so
+    that the client knows which of its requests it can retry on another connection, and tells it to send no more
+    requests on this one (RFC 9113 section 6.8).
+
+    Does nothing if the connection is closed, if the server has not sent its connection preface yet, or if a
+    \c GOAWAY frame was sent already.  The frame is written on the I/O thread of the socket without blocking; if the
+    socket cannot take it, or if the peer has closed the connection, it is not sent and no error is raised.  Called
+    on an async I/O thread or in a \c continuePoll worker, the frame is only queued and the call does not wait for
+    it to be written.
+
+    @throw HTTP2-ERROR the frame could not be submitted
+    @throw SOCKET-CLOSED the socket was closed before the frame could be handed to its I/O thread
+    @throw ASYNC-IO-ERROR the async I/O controller could not run the operation
+
+    @since %Qore 3.0
+*/
+nothing Http2PollOperationBase::sendShutdownGoaway() {
+    priv->sendShutdownGoaway(xsink);
+}
+
+//! Starts a graceful drain of the connection: the server stops taking new requests on it and closes it when the requests it has are answered
+/** Sends a \c GOAWAY frame with error code \c NO_ERROR and the ID of the last stream that the server processed, so
+    that the client opens no new streams on the connection (RFC 9113 section 6.8); the streams open then are served
+    to their end.  When no stream is left and everything is written, the operation closes the connection, which
+    ends the operation as a closed connection does.
+
+    Does nothing if the connection is closed.  The frame is written on the I/O thread of the socket without blocking,
+    as with @ref sendShutdownGoaway().
+
+    @throw HTTP2-ERROR the frame could not be submitted
+    @throw SOCKET-CLOSED the socket was closed before the frame could be handed to its I/O thread
+    @throw ASYNC-IO-ERROR the async I/O controller could not run the operation
+
+    @since %Qore 3.0
+*/
+nothing Http2PollOperationBase::startDrain() {
+    priv->startDrain(xsink);
 }
 
 //! Registers the watch of the response on a stream so that the result of its transmission is reported

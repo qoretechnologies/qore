@@ -35,6 +35,38 @@
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreDeferredRelease.h"
 
+namespace {
+class StrictBooleanWhileStatement : public WhileStatement {
+public:
+    using WhileStatement::WhileStatement;
+private:
+    int execImpl(QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(return_value, xsink);
+    }
+    int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(rc, return_value, xsink);
+    }
+};
+}
+
+WhileStatement* WhileStatement::create(LexicalSemanticPolicy policy, int start_line, int end_line,
+        QoreValue c, StatementBlock* cd) {
+    WhileStatement* rv = policy.strictBoolean()
+        ? new StrictBooleanWhileStatement(start_line, end_line, c, cd)
+        : new WhileStatement(start_line, end_line, c, cd);
+    rv->setSemanticPolicy(policy);
+    return rv;
+}
+
+int WhileStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(return_value, xsink);
+}
+
+int WhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(rc, return_value, xsink);
+}
+
+
 WhileStatement::WhileStatement(int start_line, int end_line, QoreValue c, StatementBlock* cd)
         : AbstractStatement(start_line, end_line), cond(c), code(cd) {
 }
@@ -45,7 +77,8 @@ WhileStatement::~WhileStatement() {
     delete lvars;
 }
 
-int WhileStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int WhileStatement::execCommon(QoreValue& return_value, ExceptionSink *xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
@@ -59,7 +92,7 @@ int WhileStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
         // the condition and its temporaries are released before the body runs
         bool b;
-        if (qore_eval_condition(cond, b, xsink) || !b) {
+        if (qore_eval_condition<StrictBoolean>(cond, b, xsink) || !b) {
             break;
         }
 
@@ -81,7 +114,8 @@ int WhileStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     return rc;
 }
 
-int WhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int WhileStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
@@ -95,7 +129,7 @@ int WhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excepti
 
         // the condition and its temporaries are released before the body runs
         bool b;
-        if (qore_eval_condition(cond, b, xsink, rc) || !b) {
+        if (qore_eval_condition<StrictBoolean>(cond, b, xsink, rc) || !b) {
             break;
         }
 

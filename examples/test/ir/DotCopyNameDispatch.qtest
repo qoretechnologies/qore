@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - method-name and copy checks run in children with explicit execution modes and AOT
+# test-platform: macos - JIT and AOT dynamic method dispatch and native executable linking
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class DotCopyNameDispatchTest
+
+class DotCopyNameDispatchTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? (libqore_dir + "/qcc");
+        string probe = get_script_dir() + "/dot-copy-name/probe.qr";
+        const Expected = "names=2880 copies=64 failures=64\n";
+    }
+
+    constructor() : Test("DotCopyNameDispatch", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase("copy and similar names in " + mode, \testMode(), mode);
+        }
+        addTestCase("copy and similar names in AOT", \testAot());
+        set_return_value(main());
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    private string environment() {
+        return "LD_LIBRARY_PATH=" + shellQuote(libqore_dir) + " DYLD_LIBRARY_PATH=" + shellQuote(libqore_dir)
+            + " QORE_LIBDIR=" + shellQuote(libqore_dir) + " ";
+    }
+
+    testMode(string mode) {
+        assertEq(Expected, ExecModeHarness::run(environment() + shellQuote(qore_bin)
+            + " -b --enable-debug --exec-mode=" + mode + " " + shellQuote(probe)));
+    }
+
+    testAot() {
+        TmpDir tmp("dot-copy-name-");
+        string executable = tmp.path + "/probe";
+        hash<ExecModeHarness::ModeRunResult> compiled = ExecModeHarness::run_command(environment()
+            + shellQuote(qcc_bin) + " -O2 -o " + shellQuote(executable) + " " + shellQuote(probe));
+        assertEq(0, compiled.rc, compiled.stdout + compiled.stderr);
+        string command = environment() + shellQuote(executable) + " -b --enable-debug";
+        foreach string prefix in ("", "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 ") {
+            hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(prefix + command);
+            assertEq(0, result.rc, result.stdout + result.stderr);
+            assertEq(Expected, result.stdout);
+        }
+    }
+}

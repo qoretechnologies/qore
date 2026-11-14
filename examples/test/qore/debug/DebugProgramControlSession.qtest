@@ -203,6 +203,22 @@ class TestCommandLine inherits DebugCommandLine {
 #! how long a test waits for an event of the debugged program before it fails
 const EventTimeout = 30s;
 
+#! the lock of the stopped threads of the debug server, with a hook that its holder can run after releasing it
+class TestThreadLock inherits RWLock {
+    public {
+        #! if set, the \c code of the hash is called by the thread with the TID \c tid after it has released its write
+        #! lock, until the code returns True
+        *hash<auto> writeUnlockHook;
+    }
+
+    writeUnlock() {
+        RWLock::writeUnlock();
+        if (writeUnlockHook.tid == gettid() && writeUnlockHook.code()) {
+            remove writeUnlockHook;
+        }
+    }
+}
+
 #! a debug server that queues what it sends to its client so that a test can act on it deterministically
 class TestDebugProgramControl inherits DebugProgramControl {
     #! returns True if a thread is stopped, and no command is queued for it
@@ -233,6 +249,9 @@ class TestDebugProgramControl inherits DebugProgramControl {
         #! if set, called when terminateProgram() has marked the program, before it cancels the threads
         *code terminatingHook;
 
+        #! if set, called once when terminateProgram() has resumed the stopped threads (qore#5987)
+        *code resumedHook;
+
         #! if set, called once by the next call of isTerminating(), which a thread that attaches makes before it
         #! registers as stopped
         *code isTerminatingHook;
@@ -249,7 +268,20 @@ class TestDebugProgramControl inherits DebugProgramControl {
     }
 
     constructor() : DebugProgramControl("DebugProgramControlTest") {
+        # nothing holds the lock yet
+        rwlThread = new TestThreadLock();
         registerConnection(CX);
+    }
+
+    #! returns the lock of the stopped threads
+    TestThreadLock getThreadLock() {
+        return rwlThread;
+    }
+
+    #! returns True if the thread has ended the code of the program (see threadEnds())
+    bool hasEndedCode(int pgm_id, int tid) {
+        AutoLock al(startedLock);
+        return endedThreads{pgm_id}{tid} ?? False;
     }
 
     public bool isTerminating(int pgm_id) {
@@ -282,6 +314,14 @@ class TestDebugProgramControl inherits DebugProgramControl {
             hook();
         }
         return DebugProgramControl::checkBreakpoint(id, pgm, lv);
+    }
+
+    private resumeStoppedThreads(int pgm_id) {
+        DebugProgramControl::resumeStoppedThreads(pgm_id);
+        *code hook = remove resumedHook;
+        if (hook) {
+            hook();
+        }
     }
 
     int setProgramTerminating(ProgramControl pgm) {
@@ -531,6 +571,20 @@ public class DebugProgramControlTest inherits QUnit::Test {
         addTestCase("the debugger ends a program whose thread ends first", \terminateEndedThreadTest());
         addTestCase("the debugger ends a thread stopped at an exception that the program catches",
             \terminateCaughtExceptionTest());
+        addTestCase("the debugger ends a thread that it resumes before the thread can end the program's code",
+            \terminateResumedThreadTest());
+        addTestCase("the debugger ends a thread stopped at a caught exception that runs to its end before the cancel",
+            \terminateCaughtExceptionResumedFirstTest(), True);
+        addTestCase("the debugger ends a thread stopped at a caught exception that runs to its end before the cancel "
+            "with no cancellation point", \terminateCaughtExceptionResumedFirstTest(), False);
+        addTestCase("the debugger ends a thread at a caught exception that a client resumes while the program ends",
+            \terminateCaughtExceptionClientResumeTest(), True);
+        addTestCase("the debugger ends a thread at a caught exception that a client resumes while the program ends "
+            "with no cancellation point", \terminateCaughtExceptionClientResumeTest(), False);
+        addTestCase("the debugger ends a thread at an exception that the top-level code catches last",
+            \terminateCaughtExceptionTopLevelTest(), False);
+        addTestCase("the debugger ends a thread at an exception that the top-level code catches last, resumed first",
+            \terminateCaughtExceptionTopLevelTest(), True);
         addTestCase("the programs of a debugger have the type of their list", \allProgramsTypeTest());
         addTestCase("a stopped thread is resumed only after its program is marked as ending",
             \terminateOrderTest());
@@ -1903,6 +1957,181 @@ f();
         assertNothing(p.pgm.getGlobalVariable("after"), "the loop did not run");
     }
 
+    # a thread stopped at an exception that the top-level code catches as its last statement, with nothing after the
+    # catch, ends with the cancellation at the end of the top-level code (qore#5987)
+    terminateCaughtExceptionTopLevelTest(bool forced) {
+        DebuggedProgram p(dpc, "%modern
+our int caught;
+sub g() {
+    throw \"TEST-ERROR\";
+}
+try {
+    g();
+} catch (hash<ExceptionInfo> ex) {
+}
+");
+        on_exit p.cleanup();
+        p.breakAt(7);
+        hash<auto> e = p.runToStop();
+        assertEq(7, e.line);
+        dpc.go(p.tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq("exception", e.func);
+        *hash<auto> detach;
+        if (forced) {
+            # the resumed thread runs until it stops at its detach before terminateProgram() continues
+            dpc.resumedHook = sub () {
+                detach = dpc.getInterrupt(p.pgmId);
+            };
+        }
+        on_exit remove dpc.resumedHook;
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        if (!forced) {
+            detach = dpc.getInterrupt(p.pgmId);
+        }
+        assertEq(("detach", p.tid), (detach.func, detach.tid));
+        dpc.go(p.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err, sprintf("%y", rv));
+        assertTrue(DebugProgramControl::isTerminateException(rv.ex));
+    }
+
+    #! a program whose thread stops at line 14 and raises an exception that it catches; with \a loop, a loop (a
+    #! cancellation point) follows the try statement, without it only statements that are no cancellation points
+    private static string caughtExceptionProgram(bool loop) {
+        return "%modern
+our int caught;
+our int after;
+sub f() {
+    try {
+        throw \"TEST-ERROR\";
+    } catch (hash<ExceptionInfo> ex) {
+        caught = 1;
+    }
+" + (loop ? "    for (int i = 0; i < 3; ++i) {
+        after = i;
+    }
+" : "    after = 1;
+    after = 2;
+    after = 3;
+") + "}
+f();
+";
+    }
+
+    # a thread stopped at an exception that the program catches, which a client resumes while terminateProgram() runs,
+    # after the program is marked and before the threads are cancelled, ends with the cancellation also when it runs
+    # to its end before the threads are cancelled: its THREAD-CANCELLED is a cancellation request (qore#5987)
+    terminateCaughtExceptionClientResumeTest(bool loop) {
+        DebuggedProgram p(dpc, caughtExceptionProgram(loop));
+        on_exit p.cleanup();
+        p.breakAt(14);
+        hash<auto> e = p.runToStop();
+        assertEq(14, e.line);
+        dpc.go(p.tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq("exception", e.func);
+        # the client resumes the thread when the program is marked, and it runs until it stops at its detach
+        *hash<auto> detach;
+        dpc.terminatingHook = sub () {
+            dpc.terminatingHook = NOTHING;
+            dpc.go(p.tid);
+            detach = dpc.getInterrupt(p.pgmId);
+        };
+        on_exit dpc.terminatingHook = NOTHING;
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        assertEq(("detach", p.tid), (detach.func, detach.tid));
+        dpc.go(p.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err, sprintf("%y", rv));
+        assertTrue(DebugProgramControl::isTerminateException(rv.ex));
+        if (loop) {
+            assertNothing(p.pgm.getGlobalVariable("after"), "the loop did not run");
+        }
+    }
+
+    # a thread stopped at an exception that the program catches, which terminateProgram() resumes, ends with the
+    # cancellation also when it runs to the end of its code before the threads are cancelled (qore#5987)
+    terminateCaughtExceptionResumedFirstTest(bool loop) {
+        DebuggedProgram p(dpc, caughtExceptionProgram(loop));
+        on_exit p.cleanup();
+        p.breakAt(14);
+        hash<auto> e = p.runToStop();
+        assertEq(14, e.line);
+        dpc.go(p.tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq("exception", e.func);
+        # the resumed thread runs until it stops at its detach before terminateProgram() continues
+        *hash<auto> detach;
+        dpc.resumedHook = sub () {
+            detach = dpc.getInterrupt(p.pgmId);
+        };
+        on_exit remove dpc.resumedHook;
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        assertEq(("detach", p.tid), (detach.func, detach.tid));
+        dpc.go(p.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err, sprintf("%y", rv));
+        assertTrue(DebugProgramControl::isTerminateException(rv.ex));
+        if (loop) {
+            assertNothing(p.pgm.getGlobalVariable("after"), "the loop did not run");
+        }
+    }
+
+    # a thread that terminateProgram() resumes is cancelled before it is resumed: one that runs to the end of the code of
+    # the program after its stop before the cancellation of the threads is not ended (qore#5960)
+    terminateResumedThreadTest() {
+        DebuggedProgram p(dpc, "%modern
+our int caught;
+our int after;
+sub f() {
+    try {
+        throw \"TEST-ERROR\";
+    } catch (hash<ExceptionInfo> ex) {
+        caught = 1;
+    }
+    for (int i = 0; i < 3; ++i) {
+        after = i;
+    }
+}
+f();
+");
+        on_exit p.cleanup();
+        p.breakAt(14);
+        hash<auto> e = p.runToStop();
+        assertEq(14, e.line);
+        dpc.go(p.tid);
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq("exception", e.func);
+        # once terminateProgram() has resumed the thread, it continues when the thread has ended the code of the
+        # program: the thread ends with the cancellation only if it was cancelled before it was resumed
+        TestThreadLock lock = dpc.getThreadLock();
+        lock.writeUnlockHook = {
+            "tid": gettid(),
+            "code": bool sub () {
+                date timeout = now_us() + EventTimeout;
+                while (!dpc.hasEndedCode(p.pgmId, p.tid) && now_us() < timeout) {
+                    usleep(1ms);
+                }
+                return True;
+            },
+        };
+        on_exit remove lock.writeUnlockHook;
+        dpc.command(sprintf("program/%d/terminate", p.pgmId));
+        assertTrue(dpc.hasEndedCode(p.pgmId, p.tid), "the thread ended the code of the program");
+        e = dpc.getInterrupt(p.pgmId);
+        assertEq(("detach", p.tid), (e.func, e.tid));
+        dpc.go(p.tid);
+        hash<auto> rv = p.done.get(EventTimeout);
+        p.finished = True;
+        assertEq("THREAD-CANCELLED", rv.ex.err, sprintf("%y", rv));
+        assertTrue(DebugProgramControl::isTerminateException(rv.ex));
+        assertNothing(p.pgm.getGlobalVariable("after"), "the loop did not run");
+    }
+
     # a thread that sees that the program is ending can reach its detach before terminateProgram() cancels the threads;
     # the thread is then not cancelled, so that its stop at the detach is not ended and it can be resumed
     terminateEndedThreadTest() {
@@ -1935,7 +2164,11 @@ int x = 1;
         on_exit dpc.terminatingHook = NOTHING;
         dpc.command(sprintf("program/%d/terminate", p.pgmId));
         assertEq(("detach", p.tid), (detach.func, detach.tid));
-        # terminateProgram() resumes the thread, as it is stopped when it resumes the stopped threads
+        # the thread stays stopped at its detach although it stopped there before terminateProgram() resumed the
+        # stopped threads: the client that got the event resumes it, as any thread that ends; if terminateProgram()
+        # resumed it, the client's command would find it no longer stopped (DEBUG-HANDLER-ERROR)
+        assertTrue(dpc.isStoppedWithoutCommands(p.tid));
+        dpc.go(p.tid);
         hash<auto> rv = p.done.get(EventTimeout);
         p.finished = True;
         assertEq("THREAD-CANCELLED", rv.ex.err);

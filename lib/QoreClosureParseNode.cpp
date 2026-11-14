@@ -45,12 +45,24 @@ static LocalVar* qore_closure_vlist_self(const LVarSet* vlist) {
     return nullptr;
 }
 
+//! Returns the class of a closure function's class type, or nullptr
+static const qore_class_private* qore_closure_method_class(const UserClosureFunction* uf) {
+    const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(uf->getClassType());
+    return qc ? qore_class_private::get(*qc) : nullptr;
+}
+
 static QoreClosureBase* qore_closure_try_object_context(const QoreClosureParseNode* closure, LocalVar* self_lv,
         cvv_vec_t* cvec) {
     QoreObject* o = nullptr;
     const qore_class_private* c_ctx = nullptr;
     runtime_get_object_and_class(o, c_ctx);
     if (o) {
+        // a closure of a method runs in the class context of the method, as the method's code does, also when it is
+        // created outside of it: the default value of the method's parameter is evaluated with the method's object
+        // before the call enters the method's class, in the caller's class context (issue #5898)
+        if (const qore_class_private* method_class = closure->getMethodClass()) {
+            c_ctx = method_class;
+        }
         return new QoreObjectClosureNode(o, c_ctx, closure, cvec);
     }
 
@@ -96,6 +108,14 @@ QoreClosureParseNode::QoreClosureParseNode(const QoreProgramLocation* loc, UserC
     set_effect_as_root(false);
 }
 
+QoreClosureParseNode::QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf, bool n_lambda,
+        bool n_in_method) : ParseNode(loc, NT_CLOSURE), uf(n_uf), lambda(n_lambda), in_method(n_in_method) {
+    set_effect_as_root(false);
+    if (in_method) {
+        method_class = qore_closure_method_class(uf);
+    }
+}
+
 QoreClosureParseNode::~QoreClosureParseNode() {
     if (is_deferred) {
         QoreProgram* pgm = getProgram();
@@ -121,7 +141,7 @@ QoreClosureBase* QoreClosureParseNode::evalClosure() const {
         }
     }
 
-    return new QoreClosureNode(this, cvec, runtime_get_class());
+    return new QoreClosureNode(this, cvec, static_class);
 }
 
 QoreClosureBase* QoreClosureParseNode::evalObjectClosure() const {
@@ -130,7 +150,7 @@ QoreClosureBase* QoreClosureParseNode::evalObjectClosure() const {
         return rv;
     }
 
-    return new QoreClosureNode(this, cvec, runtime_get_class());
+    return new QoreClosureNode(this, cvec, static_class ? static_class : runtime_get_class());
 }
 
 QoreValue QoreClosureParseNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -150,9 +170,17 @@ QoreString* QoreClosureParseNode::getAsString(bool& del, int foff, ExceptionSink
 }
 
 int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    if (!parse_context.oflag) {
+        // a closure parsed in a class without an object context runs in the class context of its class, as the code
+        // of a static method does, also when it is created by a call's default value in the caller's context
+        // (issue #5907); one parsed outside a class runs in no class context, also when it is created in one, as is a
+        // closure in a namespace constant whose value is first evaluated for a class constant (issue #5961)
+        static_class = parse_get_class_priv();
+    }
     if (parse_context.oflag) {
         in_method = true;
         uf->setClassType(parse_context.oflag->getTypeInfo());
+        method_class = qore_closure_method_class(uf);
     }
     if (parse_context.pflag & PF_CONST_METHOD) {
         uf->setConstMethodContext();
@@ -165,8 +193,20 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         parse_qc = parse_get_class_priv();
         parse_ns = parse_get_ns();
         //printd(5, "QoreClosureParseNode::parseInitImpl() this: %p set deferred\n", this);
-        // Use generic closure type for deferred initialization
+        // the code and the default values of the closure can refer to constants, so their initialization is
+        // deferred (#4903), but the types of its signature are resolved now: the closure has the code type of its
+        // signature in the expression, as outside a constant expression, also behind an operator and as the value
+        // of a constant (qore#6046); the generic closure type is left for a signature whose types cannot be resolved
         parse_context.typeInfo = runTimeClosureTypeInfo;
+        if (uf->getUniqueSignature()) {
+            UserSignature* sig = static_cast<UserSignature*>(uf->getUniqueSignature());
+            // as for the deferred initialization: a constant can be initialized while generic code is parsed, whose
+            // type parameters the closure does not name (qore#5733)
+            UserSignatureTypeParamContextHelper type_param_context(nullptr);
+            if (!sig->resolveTypes()) {
+                parse_context.typeInfo = qore_get_complex_code_type_from_signature(sig);
+            }
+        }
     } else {
         // in generic code, the closure names its type parameters (see UserSignatureTypeParamContextHelper), or
         // those of its class
@@ -176,6 +216,9 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         }
         err = uf->parseInitClosure();
         uf->parseCommit();
+        if (uf->defaultsNeedObject()) {
+            defaults_need_object = true;
+        }
 
         // After parseCommit, the signature is available - create a typed callable type
         AbstractFunctionSignature* sig = uf->getUniqueSignature();
@@ -206,6 +249,9 @@ int QoreClosureParseNode::parseInitDeferred() {
         qore_ns_private* old_ns;
         thread_set_class_and_ns(parse_qc, parse_ns, old_qc, old_ns);
         rc = uf->parseInitClosure();
+        if (uf->defaultsNeedObject()) {
+            defaults_need_object = true;
+        }
         thread_set_class_and_ns(old_qc, old_ns);
     }
     uf->parseCommit();
@@ -241,6 +287,19 @@ QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QorePr
     return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink, tmp_args);
 }
 
+QoreValue QoreClosureParseNode::execNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, const name_vec_t& arg_names, QoreObject* self, const qore_class_private* class_ctx,
+        ExceptionSink* xsink) const {
+    // a deferred closure is initialized as for a call with positional arguments (see exec())
+    if (is_deferred && const_cast<QoreClosureParseNode*>(this)->parseInitDeferred()) {
+        xsink->raiseException("CLOSURE-INITIALIZATION-ERROR", "the closure used in this constant expression could "
+            "not be initialized");
+        return QoreValue();
+    }
+    assert(uf);
+    return uf->evalClosureNamed(closure_base, pgm, args, arg_names, self, class_ctx, xsink);
+}
+
 QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) const {
     // Capture only the variables the closure uses, as evalClosure() does.  The closure holds a reference to each
     // ClosureVarValue, which is shared with the frame that started the thread, so both see each other's changes.
@@ -255,5 +314,5 @@ QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) cons
         return new QoreObjectClosureNode(o, c_ctx, this, cvv);
     }
 
-    return new QoreClosureNode(this, cvv, runtime_get_class());
+    return new QoreClosureNode(this, cvv, static_class);
 }

@@ -1430,6 +1430,28 @@ foreach string key in (keys hash)
     |@ref int_type "int"|Gives the result of adding its arguments
     |@ref hash_type "hash"|Gives the result of concatenating/merging its arguments. Any common keys will be overwritten by the values in the second hash (\a expression2)
 
+    @par Lists
+    A list that \c + gives keeps the type of a typed list where it can:
+    - a value added at either end of a list gives a list of the common type of the list's element type and the type
+      of the value (ex: \c list&lt;int&gt; for <tt>l + 1</tt> and for <tt>1 + l</tt>, if \c l is a
+      \c list&lt;int&gt;; \c list&lt;*int&gt; for a \c list&lt;*int&gt;), or \c list&lt;auto&gt; if they have none;
+      an empty \c list&lt;auto&gt; takes the type of the value, and a plain list (with no element type) gives a
+      \c list&lt;auto&gt;
+    - two lists give a list of the common type of their element types, or \c list&lt;auto&gt; if they have none
+      (also for a plain list and a typed list); two plain lists give a plain list, and an empty \c list&lt;auto&gt; on
+      the left takes the type of the list on the right
+    @par
+    As these types are those of the values at runtime, the result has a type at parse time only when it does not
+    depend on them: when a value of type \c int, \c float, \c number, \c string, \c bool or \c binary is added to a
+    plain list or to a list whose element type is \c int, \c float, \c number, \c string, \c bool, \c binary,
+    \c *bool or \c *binary.  Otherwise the result has no parse-time type, and an error in its use is raised at
+    runtime, in every execution mode:
+    @code{.py}
+list<softint> l = (1, 2);
+# raises RUNTIME-TYPE-ERROR when executed: the result is a list
+int x = l + 1;
+    @endcode
+
     This operator does not throw any exceptions.
 
     <hr>
@@ -1527,6 +1549,21 @@ if (obj instanceof Qore::Mutex)
     <b>Arguments Processed by instanceof</b>
     |!Argument|!Processing
     |\a expression|If expression is an instance of the named type, which is defined as the type is able to accept the value, then the operator returns @ref True "True", otherwise returns @ref False "False".
+
+    In generic code, a type parameter of the @ref generic_class_type "generic class", function or method in the type
+    is the type argument of the instantiation that runs, as for a variable or parameter declared with it, in every
+    execution mode:
+    @code{.py}
+class Holder<T> {
+    bool isT(auto v) {
+        return v instanceof T;
+    }
+}
+
+Holder<int> h();
+h.isT(1);      # True
+h.isT("x");    # False
+    @endcode
 
     This operator does not throw any exceptions.
 
@@ -1634,6 +1671,7 @@ if (x == y)
     |@ref number_type "number"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'\\x01' == True</tt> is @ref True "True", <tt>c'a' == True</tt> is @ref False "False")
     |@ref date_type "date"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If each hash has the same keys and the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
@@ -1668,6 +1706,7 @@ if (x != y)
     |@ref number_type "number"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'a' != True</tt> is @ref True "True")
     |@ref date_type "date"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If the hashes have different keys or the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
@@ -2286,6 +2325,13 @@ if (x || y)
     raises \c RUNTIME-TYPE-ERROR as <tt>timeout t = x</tt> does).  An operation whose result is refused leaves no
     new hash key or list element behind.
 
+    @anchor native_member_callback_lvalue
+    @note When object \c += or \c -=, or member @ref remove "removal" or @ref delete "deletion", calls a native
+    member gate or accessor, the parent lvalue is released before the callback runs. The operation retains its
+    original target object: a callback can replace or remove the variable or container holding it, and that write
+    is preserved. A successful compound assignment returns the original target object. Pending parent member
+    notifications run after the operation, and exceptions from callbacks propagate to the caller.
+
     @anchor compound_assignment_parse_checks
     @note A compound assignment, \c ++ or \c -- whose result the declared type of its lvalue can never accept is
     refused at parse time with \c PARSE-TYPE-ERROR.  An lvalue declared with an or-nothing type (ex: \c *string,
@@ -2314,6 +2360,11 @@ if (x || y)
     closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
     its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
     destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
+    When the rvalue is a variable (a local variable, a parameter, a global variable, a variable captured by a closure
+    or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
+    program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
+    variable's own value and shows the changes later made through the variable; this is the same in every
+    @ref exec_mode_overview "execution mode".\n<br>
     This operator should only be used in very special circumstances by
     expert users and is only allowed when the @ref allow-weak-references "%allow-weak-references" sandbox
     permission is set.
@@ -2393,6 +2444,9 @@ if (x || y)
     @code{.py} hash += ("new-key" : 1, "other" : "two");@endcode
     @code{.py} object += hash;@endcode
 
+    @note Values replaced in a hash or object are released after the merge finishes and its lvalue locks are
+    released, including after a partial merge fails; their destructors can read or modify the target.
+
     <b>Arguments Processed by +=</b>
     |!Argument|!Processing
     |\a lvalue (@ref list_type "list")|the expression will be evaluated and concatenated to the \a lvalue. If \a expression is a list, the lists will be concatenated, to ensure adding a single element to a list, use the @ref push "push operator"
@@ -2404,6 +2458,10 @@ if (x || y)
     |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and added to the \a lvalue.
     |\a lvalue (@ref nothing)|if the \a lvalue's type has a default value (ex: @ref int_type "int", @ref string_type "string"), the \a lvalue first takes that value and is processed as above; an or-nothing lvalue (ex: \c *string) takes the default value of its plain type, unless \a expression has no value, which leaves it with no value; otherwise the \a lvalue will be assigned to the value of \a expression.
     |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer, and the \a expression will be evaluated and converted to an integer if necessary, and then the result will be added to the \a lvalue.
+
+    @note If a list rejects a temporary element because of its type, the temporary is released after the list's
+    lvalue lock is released, so its destructor can read or modify the target; a destructor exception is chained
+    after the type error.
 
     @anchor compound_assignment_union_nothing
     @note A union type (ex: <tt>union&lt;int, float&gt;</tt>, <tt>*union&lt;int, float&gt;</tt>) has no default value,
@@ -2434,6 +2492,9 @@ if (x || y)
     @code{.py} hash -= ("key1", "key2");@endcode
     @code{.py} object -= "key";@endcode
     @code{.py} object -= list_of_keys;@endcode
+
+    @note Removed values are released after the removal finishes and its lvalue locks are released, including
+    after a partial removal fails; their destructors can read or modify the target.
 
     <b>Arguments Processed by -=</b>
     |!Argument|!Processing

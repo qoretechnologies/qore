@@ -247,6 +247,110 @@ std::string qore_describe_missing_ir_parse_options(const QoreParseOptions& po) {
     return rv;
 }
 
+namespace {
+//! a functional domain as named in a \c [dom=...] attribute list and a module's \c domains key
+/** The names are those of the \c DOM_* constants and of the reflection API (getDomainStringList()); qore#5843
+*/
+struct SourceDomainName {
+    const char* name;
+    int64 dom;
+    //! the parse option that restricts the domain, or that is required for an "allow" domain
+    const char* po_name;
+    //! true for domains that require a PO_ALLOW_* option instead of being restricted by a PO_NO_* option
+    bool allow;
+};
+
+constexpr SourceDomainName source_domain_names[] = {
+    {"DEFAULT", QDOM_DEFAULT, "PO_DEFAULT", false},
+    {"PROCESS_CONTROL", QDOM_PROCESS, "PO_NO_PROCESS_CONTROL", false},
+    {"NETWORK", QDOM_NETWORK, "PO_NO_NETWORK", false},
+    {"EXTERNAL_PROCESS", QDOM_EXTERNAL_PROCESS, "PO_NO_EXTERNAL_PROCESS", false},
+    {"FILESYSTEM", QDOM_FILESYSTEM, "PO_NO_FILESYSTEM", false},
+    {"THREAD_CLASS", QDOM_THREAD_CLASS, "PO_NO_THREAD_CLASSES", false},
+    {"THREAD_CONTROL", QDOM_THREAD_CONTROL, "PO_NO_THREAD_CONTROL", false},
+    {"DATABASE", QDOM_DATABASE, "PO_NO_DATABASE", false},
+    {"GUI", QDOM_GUI, "PO_NO_GUI", false},
+    {"TERMINAL_IO", QDOM_TERMINAL_IO, "PO_NO_TERMINAL_IO", false},
+    {"EXTERNAL_INFO", QDOM_EXTERNAL_INFO, "PO_NO_EXTERNAL_INFO", false},
+    {"THREAD_INFO", QDOM_THREAD_INFO, "PO_NO_THREAD_INFO", false},
+    {"LOCALE_CONTROL", QDOM_LOCALE_CONTROL, "PO_NO_LOCALE_CONTROL", false},
+    {"MODULE", QDOM_MODULES, "PO_NO_MODULES", false},
+    {"IN_MODULE", QDOM_IN_MODULE, "PO_IN_MODULE", false},
+    {"EMBEDDED_LOGIC", QDOM_EMBEDDED_LOGIC, "PO_NO_EMBEDDED_LOGIC", false},
+    {"REFLECTION", QDOM_REFLECTION, "PO_NO_REFLECTION", false},
+    {"UNCONTROLLED_API", QDOM_UNCONTROLLED_API, "PO_NO_UNCONTROLLED_APIS", false},
+    {"INJECTION", QDOM_INJECTION, "PO_ALLOW_INJECTION", true},
+    {"DEBUGGER", QDOM_DEBUGGER, "PO_ALLOW_DEBUGGER", true},
+};
+
+//! other names accepted for a domain in Qore source: the names that qpp uses
+constexpr SourceDomainName source_domain_aliases[] = {
+    {"PROCESS", QDOM_PROCESS, "PO_NO_PROCESS_CONTROL", false},
+    {"MODULES", QDOM_MODULES, "PO_NO_MODULES", false},
+};
+
+constexpr int64 source_domain_union() {
+    int64 rv = 0;
+    for (const SourceDomainName& i : source_domain_names) {
+        rv |= i.dom;
+    }
+    return rv;
+}
+
+// every functional domain can be declared in Qore source
+static_assert(source_domain_union() == QDOM_ALL, "source_domain_names does not match QDOM_ALL");
+}
+
+int64 qore_get_source_domain(const char* name) {
+    assert(name);
+    for (const SourceDomainName& i : source_domain_names) {
+        if (!strcasecmp(i.name, name)) {
+            return i.dom;
+        }
+    }
+    for (const SourceDomainName& i : source_domain_aliases) {
+        if (!strcasecmp(i.name, name)) {
+            return i.dom;
+        }
+    }
+    return -1;
+}
+
+std::string qore_get_source_domain_names(int64 dom) {
+    std::string rv;
+    for (const SourceDomainName& i : source_domain_names) {
+        if (!i.dom || (dom & i.dom) != i.dom) {
+            continue;
+        }
+        if (!rv.empty()) {
+            rv += ',';
+        }
+        rv += i.name;
+    }
+    return rv;
+}
+
+std::string q_describe_functional_domains(int64 dom) {
+    return qore_describe_source_domains(dom);
+}
+
+std::string qore_describe_source_domains(int64 dom) {
+    std::string rv;
+    for (const SourceDomainName& i : source_domain_names) {
+        if (!i.dom || (dom & i.dom) != i.dom) {
+            continue;
+        }
+        if (!rv.empty()) {
+            rv += ", ";
+        }
+        rv += i.name;
+        rv += i.allow ? " (requires " : " (restricted by ";
+        rv += i.po_name;
+        rv += ')';
+    }
+    return rv;
+}
+
 ParseOptionMaps::ParseOptionMaps() {
     doMap(PO_NO_GLOBAL_VARS, "PO_NO_GLOBAL_VARS");
     doMap(PO_NO_SUBROUTINE_DEFS, "PO_NO_SUBROUTINE_DEFS");
@@ -442,6 +546,47 @@ qore_program_private::programid_to_program_map_t qore_program_private::programid
 QoreRWLock qore_program_private::lck_programMap;
 qore_program_id_t qore_program_private::programIdCounter = 1;
 
+void qore_program_private::clearRemainingPrograms() {
+    // the Programs are cleared one at a time, oldest first, and the registry is scanned again after each one: a
+    // Program that an older one holds (a child Program in a global variable of its parent, for example) is cleared
+    // when the older one releases it, as when its owner deletes the older one, so the objects of the child that the
+    // parent holds are destroyed while the child still has its data; a Program that a destructor creates while the
+    // Programs are cleared is cleared as well (its ID is higher than any cleared before it).  The IDs of the Programs
+    // are never reused, so each one is cleared once
+    ExceptionSink xsink;
+    qore_program_id_t last_id = 0;
+    while (true) {
+        QoreProgram* p = nullptr;
+        {
+            QoreAutoRWReadLocker al(&lck_programMap);
+            for (QoreProgram* i : qore_program_set) {
+                // a Program without references is skipped: no reference can be taken to it; it has been cleared if
+                // its last reference was released with an exception sink (see clear()), and it is freed by the code
+                // that holds it otherwise; its references cannot drop to zero meanwhile, as that needs the write lock
+                // (see derefUnregister())
+                qore_program_id_t id = i->priv->programId;
+                if (id > last_id && i->reference_count() > 0 && (!p || id < p->priv->programId)) {
+                    p = i;
+                }
+            }
+            if (!p) {
+                break;
+            }
+            // a reference of its own while it is cleared: no reference of the owner is released
+            p->ref();
+        }
+        last_id = p->priv->programId;
+        printd(5, "qore_program_private::clearRemainingPrograms() clearing pgm: %p pgmid: " QLLD "\n", p,
+            (int64)last_id);
+        p->priv->waitForTerminationAndClear(&xsink);
+        // the owner's references keep the Program; if the Program has lost them while it was cleared, it is released
+        // here as by any other last reference
+        p->deref(&xsink);
+        // each Program's exceptions are reported with it
+        xsink.handleExceptions();
+    }
+}
+
 #ifdef DEBUG
 size_t qore_program_private::dbgGetLiveProgramCount() {
     QoreAutoRWReadLocker al(&lck_programMap);
@@ -468,6 +613,8 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     }
     thread_count = own;
     thread_waiting = 0;
+    // the holds of the parent's other threads, which do not exist in the child
+    compile_holds = 0;
     // the background threads of the parent other than the forking thread do not exist in the child; a Program forked
     // while it was being constructed, after it was registered, has no hub yet
     if (thread_hub) {
@@ -1223,6 +1370,29 @@ const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProg
     }
 
     return *i;
+}
+
+int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool apply) {
+    module_own_dom |= n_dom;
+    if (!apply) {
+        return QDOM_DEFAULT;
+    }
+    module_trusted_dom |= n_dom;
+    int64 removed = n_dom & pwo.parse_options.getLo();
+    if (!removed) {
+        return QDOM_DEFAULT;
+    }
+    pwo.parse_options &= ~QoreParseOptions(removed);
+    // the module's %ifdef directives see the options it has
+    for (auto& i : pomaps.pomap) {
+        if (i.first && (removed & i.first) == i.first) {
+            dmap_t::iterator di = dmap.find(i.second);
+            if (di != dmap.end()) {
+                dmap.erase(di);
+            }
+        }
+    }
+    return removed;
 }
 
 void qore_program_private_base::setDefines() {
@@ -1981,6 +2151,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // instance's destructor may run user code that references globals or namespace data.
         exec_class_inst.discard(xsink);
         exec_class_inst = QoreValue();
+
+        // the del closures of the local modules that a compiled script embeds run while the data of the Program
+        // exists, as the del closure of a source module that a script loads does (qore#6015)
+        runAOTScriptDelClosures();
 
         // release objects captured from languages without deterministic GC (jni, python) while the
         // program is still valid (data not yet cleared, ptid == tid), so their destructors run in a
@@ -3032,14 +3206,16 @@ void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
 void qore_program_private::del(ExceptionSink* xsink) {
     printd(5, "qore_program_private::del() pgm: %p (base_object: %d)\n", pgm, base_object);
 
-    // Idempotent guard: del() may be called twice — once from ModuleManager at
-    // shutdown to break cross-program Type strong refs (issue #4816), and
-    // again from ~qore_program_private() if refcount eventually reaches 0.
-    // RootNS is set to nullptr at the end of del() so this flag detects the
-    // second call and short-circuits.
+    // Idempotent guard: del() is called only from waitForTerminationAndClear(), which can run twice: once from
+    // ModuleManager at shutdown to break cross-program Type strong refs (issue #4816), and again when the reference
+    // count reaches 0.  RootNS is set to nullptr at the end of del() so this flag detects the second call and
+    // short-circuits.
     if (!RootNS) {
         return;
     }
+    // waitForTerminationAndClear() waited for the batch JIT compiles that read the Program's code, after it had set
+    // ptid, which refuses new ones (qore#5874)
+    assert(!compile_holds);
 
     // dereference all external data, once no child Program copies it
     {
@@ -3118,6 +3294,10 @@ void qore_program_private::del(ExceptionSink* xsink) {
     }
     exp_set.clear();
 
+    // no code of this Program runs any more and its background compiles are drained: the native code that only it
+    // owns is removed from the JIT (qore#5772)
+    QoreJIT::instance().releaseCodeOwner(pgm);
+
     //printd(5, "QoreProgram::~QoreProgram() this: %p deleting root ns %p\n", this, RootNS);
 
     for (name_section_sline_statement_map_t::iterator it = statementByFileIndex.begin(); it != statementByFileIndex.end(); it++) {
@@ -3137,7 +3317,8 @@ void qore_program_private::del(ExceptionSink* xsink) {
     leaveThreadDataFamily();
 }
 
-const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, ExceptionSink* xsink) const {
+template <bool Native>
+const QoreClass* qore_program_private::runtimeFindClassImpl(const char* class_name, ExceptionSink* xsink) const {
     // acquire safe access to parse structures in the source program
     ProgramRuntimeParseAccessHelper rah(xsink, pgm);
     if (*xsink)
@@ -3145,7 +3326,19 @@ const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, 
 
     // include the ns arg to ensure that namespace-justified classes are resolved properly
     const qore_ns_private* ns;
-    return qore_root_ns_private::runtimeFindClass(*RootNS, class_name, ns);
+    if constexpr (Native) {
+        return qore_root_ns_private::runtimeFindClass(*RootNS, class_name, ns);
+    } else {
+        return qore_root_ns_private::runtimeFindClass(*RootNS, class_name, ns, LexicalSemanticPolicy{});
+    }
+}
+
+const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, ExceptionSink* xsink) const {
+    return runtimeFindClassImpl<true>(class_name, xsink);
+}
+
+const QoreClass* qore_program_private::findClassCanonical(const char* path, ExceptionSink* xsink) const {
+    return runtimeFindClassImpl<false>(path, xsink);
 }
 
 int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, ExceptionSink* xsink) {
@@ -4290,10 +4483,19 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     if (*xsink) {
         return QoreValue();
     }
-    return priv->sb.exec(xsink);
+    ValueHolder rv(priv->sb.exec(xsink), xsink);
+    // the end of the top-level code of a Program that a debugger ends is a cancellation point: a thread that the
+    // debugger ended while it raised another exception, which the code caught, has a cancellation request, which it
+    // raises here if the code ended with no statement or cancellation point after the catch (qore#5987)
+    if (!*xsink && priv->debugger_terminating.load(std::memory_order_relaxed)) {
+        qore_check_cancel(xsink, "end of the program's top-level code");
+    }
+    return *xsink ? QoreValue() : rv.release();
 }
 
-QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+template <bool LexicalInvocation>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_program_private::callFunctionImpl(const char* name,
+        const QoreListNode* args, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
     SimpleRefHolder<FunctionCallNode> fc;
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
@@ -4302,10 +4504,10 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 
     // need to grab parse lock for safe access to the user function map and imported function map
     {
-        ProgramRuntimeParseAccessHelper pah(xsink, this);
+        ProgramRuntimeParseAccessHelper pah(xsink, pgm);
         if (*xsink)
             return QoreValue();
-        fe = qore_root_ns_private::runtimeFindFunctionEntry(*priv->RootNS, name);
+        fe = qore_root_ns_private::runtimeFindFunctionEntry(*RootNS, name, policy);
     }
 
     if (!fe) {
@@ -4319,13 +4521,28 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
     // like load_module() operating on the target, and privileged builtins like set_save_object_callback()
     // invoked by a trusted caller on a sandboxed target).  Hand-rolling the parse-option handling here
     // gets one of those cases wrong; the shared path handles all of them.
-    fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), this);
+    if constexpr (LexicalInvocation) {
+        fc = qore_make_function_call<FunctionCallNode>(policy, get_runtime_location(), fe,
+            const_cast<QoreListNode*>(args), pgm);
+        ParseNode::bindSemanticPolicy(*fc, policy);
+    } else {
+        fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), pgm);
+    }
     QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
 
     // let caller delete function arguments if necessary
     fc->takeArgs();
 
     return rv;
+}
+
+QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+    return priv->callFunctionImpl<false>(name, args, xsink, {});
+}
+
+QoreValue qore_program_private::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    return callFunctionImpl<true>(name, args, xsink, policy);
 }
 
 void QoreProgram::parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
@@ -5114,7 +5331,7 @@ private:
             addArgs(call->getParseArgs(), call->getArgs());
             // a function whose variant is chosen at runtime is stepped into only if it has user code
             if (!call->getVariant()) {
-                auto* fc = dynamic_cast<const FunctionCallNode*>(call);
+                auto* fc = qore_get_function_call_node(call);
                 const QoreFunction* f = fc ? fc->getFunction() : nullptr;
                 if (f && !f->hasUser()) {
                     return;
@@ -5398,11 +5615,12 @@ func_ns_vec_t QoreProgram::findAllFunctionsRegexNs(const QoreString& pattern, in
     return qore_root_ns_private::get(*priv->RootNS)->runtimeFindAllFunctionsRegexNs(pattern, re_opts, xsink);
 }
 
-const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {
+template <bool Native>
+const TypedHashDecl* qore_program_private::findHashDeclImpl(const char* path, const QoreNamespace*& pns) const {
     pns = nullptr;
 
-    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
-        TypedHashDecl* hd = qore_root_ns_private::parseTryFindHashDecl(*priv->RootNS, path);
+    if (parsing_in_progress || parse_commit_in_progress) {
+        TypedHashDecl* hd = qore_root_ns_private::parseTryFindHashDecl(*RootNS, path);
         if (hd) {
             pns = hd->getNamespace();
             return hd;
@@ -5410,18 +5628,32 @@ const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNames
     }
 
     const qore_ns_private* pns_priv;
-    const TypedHashDecl* th = qore_root_ns_private::runtimeFindHashDecl(*priv->RootNS, path, pns_priv);
+    const TypedHashDecl* th;
+    if constexpr (Native) {
+        th = qore_root_ns_private::runtimeFindHashDecl(*RootNS, path, pns_priv);
+    } else {
+        th = qore_root_ns_private::runtimeFindHashDecl(*RootNS, path, pns_priv, LexicalSemanticPolicy{});
+    }
     if (th) {
         pns = pns_priv->ns;
     }
     return th;
 }
 
-const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*& pns) const {
+const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {
+    return priv->findHashDeclImpl<true>(path, pns);
+}
+
+const TypedHashDecl* qore_program_private::findHashDeclCanonical(const char* path, const QoreNamespace*& pns) const {
+    return findHashDeclImpl<false>(path, pns);
+}
+
+template <bool Native>
+const QoreEnumDecl* qore_program_private::findEnumImpl(const char* path, const QoreNamespace*& pns) const {
     pns = nullptr;
 
-    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
-        const QoreEnumDecl* e = qore_root_ns_private::parseTryFindEnum(*priv->RootNS, path);
+    if (parsing_in_progress || parse_commit_in_progress) {
+        const QoreEnumDecl* e = qore_root_ns_private::parseTryFindEnum(*RootNS, path);
         if (e) {
             pns = e->getNamespace();
             return e;
@@ -5429,11 +5661,24 @@ const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*
     }
 
     const qore_ns_private* pns_priv;
-    const QoreEnumDecl* e = qore_root_ns_private::runtimeFindEnum(*priv->RootNS, path, pns_priv);
+    const QoreEnumDecl* e;
+    if constexpr (Native) {
+        e = qore_root_ns_private::runtimeFindEnum(*RootNS, path, pns_priv);
+    } else {
+        e = qore_root_ns_private::runtimeFindEnum(*RootNS, path, pns_priv, LexicalSemanticPolicy{});
+    }
     if (e) {
         pns = pns_priv->ns;
     }
     return e;
+}
+
+const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*& pns) const {
+    return priv->findEnumImpl<true>(path, pns);
+}
+
+const QoreEnumDecl* qore_program_private::findEnumCanonical(const char* path, const QoreNamespace*& pns) const {
+    return findEnumImpl<false>(path, pns);
 }
 
 // issue #1796: include a non-const variant for binary modules

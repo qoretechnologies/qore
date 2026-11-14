@@ -380,6 +380,41 @@ public:
     DLLLOCAL int submitGoaway(uint32_t error_code, const char* opaque_data = nullptr,
         size_t len = 0, ExceptionSink* xsink = nullptr);
 
+    //! Submits a GOAWAY with NO_ERROR and the last stream processed, unless one was submitted already (qore#5899)
+    /** Used when the server closes the connection because it stops (RFC 9113 section 6.8): the client learns which
+        of its requests were processed and that it must not send more.  Does nothing before the connection preface
+        was submitted.  Performs no socket I/O: the frame is written by the next flush of the session's pending data.
+
+        @return 0 for success, -1 if the frame could not be submitted (an exception is raised)
+    */
+    DLLLOCAL int submitShutdownGoaway(ExceptionSink* xsink);
+
+    //! Submits a GOAWAY with submitShutdownGoaway() and writes it without blocking (qore#5899)
+    /** If the socket cannot take the frame, or if the peer has closed the connection, it is not sent and no error is
+        raised (the connection is closed anyway).  Called on the I/O thread of the socket only.
+
+        @return 0 for success, -1 if the frame could not be submitted (an exception is raised)
+    */
+    DLLLOCAL int sendShutdownGoaway(ExceptionSink* xsink);
+
+    //! Starts a graceful drain of a server session: submits the GOAWAY with submitShutdownGoaway() (qore#5899)
+    /** The streams open at that point are served to their end; the client opens no new ones (nghttp2 refuses
+        streams above the last stream ID in the GOAWAY).  The connection's poll operation closes the connection once
+        isDrainComplete() returns true.  Performs no socket I/O.
+
+        @return 0 for success, -1 if the frame could not be submitted (an exception is raised)
+    */
+    DLLLOCAL int startDrain(ExceptionSink* xsink);
+
+    //! Returns true if a drain was started and the session has no open streams and nothing left to write
+    DLLLOCAL bool isDrainComplete() const;
+
+    //! Returns true if startDrain() was called; lock-free, so that the paths that end a stream pay for the
+    //! completion check only while draining
+    DLLLOCAL bool isDraining() const {
+        return draining.load(std::memory_order_acquire);
+    }
+
     //! Submit a PING frame
     DLLLOCAL int submitPing(const uint8_t* opaque_data = nullptr, ExceptionSink* xsink = nullptr);
 
@@ -456,7 +491,22 @@ public:
         reset with an error code raises \c HTTP2-STREAM-RESET.
     */
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
-        bool end_stream, ExceptionSink* xsink);
+        bool end_stream, ExceptionSink* xsink, bool ignore_limit = false);
+
+    //! Sends a WebSocket control frame that the frame state of a WebSocket stream answers with (issue #5900)
+    /** The frame state answers a ping with a pong and a close frame with its echo on the async I/O thread, which
+        cannot wait for the stream's send buffer to drain, so these frames are never refused for a full buffer:
+        - a close frame is buffered past the stream's send limit, once per stream (a later one is sent as data);
+        - a pong is buffered when there is room; otherwise it is kept, replacing a pong kept before it (a pong
+          answers the most recent ping, RFC 6455 section 5.5.3), and buffered when the buffered data falls under
+          the limit, so that a ping flood from a peer that does not read keeps at most one pong.
+
+        The opcode is taken from the frame's first byte; any other frame is sent as data.
+
+        @return 0 if the frame was buffered or kept, 1 if it was refused (not a control frame, buffer full), -1 on
+        error (exception raised)
+    */
+    DLLLOCAL int sendStreamControlFrame(int32_t stream_id, const void* data, size_t len, ExceptionSink* xsink);
 
     //! Sets the limit of the data of a stream that is buffered for sending (for example an SSE response stream)
     /** Without a limit, a send returns 1 (buffer full) once more than the default limit (@ref MAX_STREAM_BUFFER)
@@ -474,6 +524,10 @@ public:
 
     //! The default limit of the data of a stream that is buffered for sending
     static constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+
+    //! the connection's receive window, in stream windows (SETTINGS_INITIAL_WINDOW_SIZE): the RFC 9113 default of
+    //! 65535 bytes made every 64 KiB received wait for a WINDOW_UPDATE round trip
+    static constexpr uint32_t ConnectionWindowStreams = 16;
 
     //! Submit HTTP/2 trailer headers on a stream (server-side)
     /** Sends a HEADERS frame with END_STREAM flag containing trailer fields.
@@ -634,6 +688,8 @@ public:
     */
     DLLLOCAL void markClosed() {
         session_closed_.store(true, std::memory_order_release);
+        // nothing more is sent: waiters for a stream's data to be sent are done (see streamSendFlushed())
+        notifyStreamDrain();
     }
 
     //! Returns true once @ref markClosed has been called.
@@ -801,6 +857,11 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL bool hasStreamingData(int32_t& stream_id);
+
+#ifdef DEBUG
+    //! Returns the number of streaming streams whose data is buffered, as hasStreamingData() finds them
+    DLLLOCAL size_t dbgStreamingDataCount();
+#endif
 
     //! Take an end-of-stream notification for a dispatched streaming stream
     /** Used by the client multiplex poll op to surface peer END_STREAM for streams that
@@ -1129,6 +1190,8 @@ private:
     // GOAWAY state
     bool goaway_received = false;
     bool goaway_sent = false;
+    //! true once startDrain() was called; set under m, read without it by isDraining()
+    std::atomic<bool> draining{false};
     int32_t last_stream_id = 0;
 
     // Request body data for callbacks - owns the data
@@ -1149,6 +1212,20 @@ private:
     std::unordered_map<int32_t, size_t> stream_send_limits;
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
+
+    //! The latest pong of a stream whose send buffer was full, buffered when the buffer falls under its limit;
+    //! erased with the stream (issue #5900)
+    std::unordered_map<int32_t, std::vector<uint8_t>> pending_pongs;
+
+    //! The streams whose close frame was buffered past the send limit (once per stream); erased with the stream
+    std::unordered_set<int32_t> close_frame_streams;
+
+    //! Returns true if the stream's send buffer, with \a pending bytes buffered, takes \a len more bytes
+    /** The condition with which sendStreamData() admits data: with the stream's own limit (setStreamSendLimit()),
+        the data must fit under it unless nothing is buffered; otherwise up to MAX_STREAM_BUFFER may be buffered
+        before more is taken
+    */
+    DLLLOCAL bool hasSendRoomUnlocked(int32_t stream_id, size_t pending, size_t len) const;
 
     //! Peer-initiated stream reset info, persisted beyond streams.erase()
     /** Populated by onStreamCloseCallback() (when error_code!=0) so that
@@ -1320,9 +1397,14 @@ public:
     */
     DLLLOCAL int waitForStreamDrain(int32_t stream_id, int timeout_ms);
 
+    //! Returns 0 if the stream has no data buffered to be sent (all of it was handed to the transport, or the stream
+    //! is gone), 1 otherwise; waiters are woken by notifyStreamDrain() when data is handed over or the stream closes
+    DLLLOCAL int streamSendFlushed(int32_t stream_id);
+
     //! Wake controller poll operations waiting for stream drain
-    /** Called by dataProviderReadCallback and onStreamCloseCallback.
-        Must be called while holding the session mutex m.
+    /** Called by dataProviderReadCallback, onStreamCloseCallback and sendPendingData with the session mutex m held,
+        and by markClosed() without it, which is safe: a waiter checks its condition again after it registered, and
+        the closed state is atomic.
 
         @since %Qore 3.0
     */

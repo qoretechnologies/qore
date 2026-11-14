@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - background constructor copies and thread completion
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalNativeConstructionTest
+
+class LexicalNativeConstructionTest inherits QUnit::Test {
+    private {
+        const Base = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS;
+        const Constructors = {
+            "explicit": 'auto iterator = new RangeIterator(0, 2);',
+            "implicit": 'RangeIterator iterator(0, 2);',
+            "base": 'Derived iterator();',
+            "dynamic": 'auto iterator = create_object("RangeIterator", 0, 2);',
+            "dynamic args": 'auto iterator = create_object_args("RangeIterator", (0, 2));',
+        };
+    }
+
+    constructor() : QUnit::Test("LexicalNativeConstruction", "1.0", \ARGV) {
+        foreach string name in (keys Constructors) {
+            foreach bool legacy in (False, True) {
+                addTestCase(sprintf("%s: lexical legacy %y", name, legacy), \construct(), (name, legacy));
+            }
+        }
+        foreach bool list_args in (False, True) {
+            foreach bool legacy in (False, True) {
+                addTestCase(sprintf("Program forwarding: list args %y, lexical legacy %y", list_args, legacy),
+                    \forward(), (list_args, legacy));
+            }
+        }
+        foreach bool legacy in (False, True) {
+            addTestCase(sprintf("base declaration differs from caller: legacy %y", legacy), \mixedBase(), (legacy,));
+            addTestCase(sprintf("base invocation parentheses own policy: legacy %y", legacy), \baseDirective(), (legacy,));
+            addTestCase(sprintf("background constructor copy: legacy %y", legacy), \backgroundConstructor(), (legacy,));
+        }
+        set_return_value(main());
+    }
+
+    construct(string name, bool legacy) {
+        Program p(Base);
+        if (legacy) p.setParseOptions(PO_BROKEN_RANGE);
+        p.parse('class Derived inherits RangeIterator { constructor() : RangeIterator(0, 2) {} }
+            list<int> sub sample() { ' + Constructors{name} + '
+                list<int> result = ();
+                foreach int value in (iterator) push result, value;
+                return result;
+            }', "lexical-native-constructor-" + name);
+        list<int> expected = legacy ? (0, 1, 2) : (0, 1);
+        assertEq(expected, p.callFunction("sample"));
+        if (legacy) p.disableParseOptions(PO_BROKEN_RANGE);
+        else p.setParseOptions(PO_BROKEN_RANGE);
+        assertEq(expected, p.callFunction("sample"), "policy survives Program mutation");
+    }
+
+    private mixedBase(bool legacy) {
+        Program p(Base);
+        if (legacy) p.setParseOptions(PO_BROKEN_RANGE);
+        p.parsePending('class Mid inherits RangeIterator { constructor() : RangeIterator(0, 2) {} }', "base-declaration");
+        if (legacy) p.disableParseOptions(PO_BROKEN_RANGE);
+        else p.setParseOptions(PO_BROKEN_RANGE);
+        p.parsePending('class Leaf inherits Mid { constructor() : Mid() {} }
+            list<int> sub sample() {
+                Leaf iterator();
+                list<int> result = ();
+                foreach int value in (iterator) push result, value;
+                return result;
+            }', "opposite-constructor-caller");
+        p.parseCommit();
+        list<int> expected = legacy ? (0, 1, 2) : (0, 1);
+        assertEq(expected, p.callFunction("sample"), "base invocation uses its own declaration");
+        if (legacy) p.setParseOptions(PO_BROKEN_RANGE);
+        else p.disableParseOptions(PO_BROKEN_RANGE);
+        assertEq(expected, p.callFunction("sample"), "intermediate constructor preserves base policy");
+    }
+
+    private baseDirective(bool legacy) {
+        Program p(Base);
+        string initial = legacy ? "%broken-range\n" : "%correct-range\n";
+        string changed = legacy ? "%correct-range\n" : "%broken-range\n";
+        p.parse(changed + "class Derived inherits RangeIterator { constructor() : RangeIterator\n"
+            + initial + "(0,\n" + changed + "2) {} }\n"
+            + "list<int> sub sample() { Derived iterator(); list<int> result = ();\n"
+            + "foreach int value in (iterator) push result, value; return result; }", "base-parenthesis-policy");
+        list<int> expected = legacy ? (0, 1, 2) : (0, 1);
+        assertEq(expected, p.callFunction("sample"), "arguments do not replace the invocation policy");
+        if (legacy) p.setParseOptions(PO_BROKEN_RANGE);
+        else p.disableParseOptions(PO_BROKEN_RANGE);
+        assertEq(expected, p.callFunction("sample"));
+    }
+
+    private backgroundConstructor(bool legacy) {
+        Program p(Base);
+        if (legacy) p.setParseOptions(PO_BROKEN_RANGE);
+        p.parse('list<int> sub collect(RangeIterator iterator) {
+                list<int> result = ();
+                foreach int value in (iterator) push result, value;
+                return result;
+            }
+            list<int> sub sample() {
+                Queue q();
+                int tid = background q.push(collect(new RangeIterator(0, 2)));
+                on_exit thread_join(tid);
+                return q.get(30s);
+            }', "background-native-constructor");
+        list<int> expected = legacy ? (0, 1, 2) : (0, 1);
+        assertEq(expected, p.callFunction("sample"));
+        if (legacy) p.disableParseOptions(PO_BROKEN_RANGE);
+        else p.setParseOptions(PO_BROKEN_RANGE);
+        assertEq(expected, p.callFunction("sample"), "background expression retains policy after mutation");
+    }
+
+    forward(bool list_args, bool legacy) {
+        Program caller(Base);
+        Program target(Base);
+        if (legacy) caller.setParseOptions(PO_BROKEN_RANGE);
+        string expression = list_args ? 'target.callFunctionArgs("range", (0, 2))'
+            : 'target.callFunction("range", 0, 2)';
+        caller.parse("auto sub sample(Program target) { return " + expression + "; }",
+            "lexical-program-forwarding");
+        list<int> expected = legacy ? (0, 1, 2) : (0, 1);
+        assertEq(expected, caller.callFunction("sample", target));
+        if (legacy) caller.disableParseOptions(PO_BROKEN_RANGE);
+        else caller.setParseOptions(PO_BROKEN_RANGE);
+        assertEq(expected, caller.callFunction("sample", target), "invocation owns the native policy");
+    }
+}

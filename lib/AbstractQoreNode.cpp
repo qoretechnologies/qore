@@ -514,6 +514,8 @@ static QoreListNode* crlr_list_copy(RuntimeConfig& rc, const QoreListNode* n, Ex
             return nullptr;
         }
     }
+    // the arguments of a named call bound at parse time keep their parameter positions
+    qore_list_private::get(**l)->copyCallArgEvalMap(*qore_list_private::get(*n));
     return l.release();
 }
 
@@ -538,7 +540,7 @@ static AbstractQoreNode* crlr_hash_copy(RuntimeConfig& rc, const QoreHashNode* n
 
 static AbstractQoreNode* crlr_hash_copy(RuntimeConfig& rc, const QoreParseHashNode* n, ExceptionSink* xsink) {
     assert(xsink);
-    ReferenceHolder<QoreParseHashNode> h(new QoreParseHashNode(*n, xsink), xsink);
+    ReferenceHolder<QoreParseHashNode> h(QoreParseHashNode::copyBackground(*n, xsink), xsink);
     return *xsink ? nullptr : h.release();
 }
 
@@ -559,16 +561,22 @@ static AbstractQoreNode* crlr_selfcall_copy(RuntimeConfig& rc, const SelfFunctio
     QoreListNode* na = const_cast<QoreListNode*>(n->getArgs());
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
-    return crlr_call_copy_done(new SetSelfFunctionCallNode(*n, na));
+    return crlr_call_copy_done(qore_make_function_call<SetSelfFunctionCallNode>(n->getSemanticPolicy(), *n, na));
 }
 
 static AbstractQoreNode* crlr_fcall_copy(RuntimeConfig& rc, const FunctionCallNode* n, ExceptionSink* xsink) {
     QoreListNode* na = const_cast<QoreListNode*>(n->getArgs());
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
-    return crlr_call_copy_done(new FunctionCallNode(*n, na));
+    return crlr_call_copy_done(n->copyWithArgs(na));
 }
 
 static AbstractQoreNode* crlr_mcall_copy(RuntimeConfig& rc, const MethodCallNode* m, ExceptionSink* xsink) {
@@ -594,7 +602,7 @@ static AbstractQoreNode* crlr_smcall_copy(RuntimeConfig& rc, const StaticMethodC
         }
         args = args_holder.release();
     }
-    return crlr_call_copy_done(new StaticMethodCallNode(*m, args));
+    return crlr_call_copy_done(qore_make_function_call<StaticMethodCallNode>(m->getSemanticPolicy(), *m, args));
 }
 
 static AbstractQoreNode* call_ref_call_copy(RuntimeConfig& rc, const CallReferenceCallNode* n, ExceptionSink* xsink) {
@@ -612,7 +620,10 @@ static AbstractQoreNode* call_ref_call_copy(RuntimeConfig& rc, const CallReferen
         }
         args = args_holder.release();
     }
-    return new CallReferenceCallNode(n->loc, exp.release(), args);
+    CallReferenceCallNode* call = qore_make_reference_call(n->getSemanticPolicy(), n->loc, exp.release(), args);
+    // a named call keeps the names of its arguments
+    call->setRuntimeArgNames(n->getRuntimeArgNames());
+    return call;
 }
 
 //! Copies a parse list of arguments with the values of the local variables of the starting code; nullptr if none
@@ -636,19 +647,19 @@ static QoreValue crlr_new_copy(RuntimeConfig& rc, const QoreValue& n, ExceptionS
             }
             args = args_holder.release();
         }
-        return new ScopedObjectCallNode(*soc, args);
+        return qore_make_function_call<ScopedObjectCallNode>(soc->getSemanticPolicy(), *soc, args);
     }
     if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
         ReferenceHolder<QoreParseListNode> args(crlr_parse_args_copy(rc, nhd->args, xsink), xsink);
-        return *xsink ? QoreValue() : QoreValue(new NewHashDeclNode(*nhd, args.release()));
+        return *xsink ? QoreValue() : QoreValue(qore_make_new_complex<NewHashDeclNode>(nhd->getSemanticPolicy(), *nhd, args.release()));
     }
     if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
         ReferenceHolder<QoreParseListNode> args(crlr_parse_args_copy(rc, nch->args, xsink), xsink);
-        return *xsink ? QoreValue() : QoreValue(new NewComplexHashNode(*nch, args.release()));
+        return *xsink ? QoreValue() : QoreValue(qore_make_new_complex<NewComplexHashNode>(nch->getSemanticPolicy(), *nch, args.release()));
     }
     if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
         ValueHolder args(copy_value_and_resolve_lvar_refs(rc, ncl->args, xsink), xsink);
-        return *xsink ? QoreValue() : QoreValue(new NewComplexListNode(*ncl, args.release()));
+        return *xsink ? QoreValue() : QoreValue(qore_make_new_complex<NewComplexListNode>(ncl->getSemanticPolicy(), *ncl, args.release()));
     }
     if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
         ValueHolder args(copy_value_and_resolve_lvar_refs(rc, ncb->args, xsink), xsink);
@@ -757,7 +768,7 @@ QoreValue copy_value_and_resolve_lvar_refs_not_lvalue(const QoreValue& n, Except
 
 //! Returns true if the node is a step of an lvalue's access path, whose first operand is the next step
 static bool qore_background_lvalue_path_step(const AbstractQoreNode* node) {
-    return dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)
+    return qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)
         || dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
         || dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)
         || dynamic_cast<const QoreCastOperatorNode*>(node);
@@ -845,7 +856,50 @@ QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreValue& n, Ex
     return copy_value_and_resolve_lvar_refs(n, xsink);
 }
 
-QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+static thread_local LexicalParsePolicyHelper* current_lexical_parse_policy = nullptr;
+
+LexicalParsePolicyHelper::LexicalParsePolicyHelper(LexicalSemanticPolicy policy)
+        : owned_policy(policy), policy(&owned_policy), pgm(getProgram()), previous(current_lexical_parse_policy) {
+    current_lexical_parse_policy = this;
+}
+
+LexicalParsePolicyHelper::LexicalParsePolicyHelper(const LexicalSemanticPolicy* policy)
+        : policy(policy), pgm(getProgram()), previous(current_lexical_parse_policy) {
+    current_lexical_parse_policy = this;
+}
+
+LexicalParsePolicyHelper::~LexicalParsePolicyHelper() {
+    current_lexical_parse_policy = previous;
+}
+
+bool LexicalParsePolicyHelper::capture(LexicalSemanticPolicy& policy) {
+    if (!current_lexical_parse_policy || current_lexical_parse_policy->pgm != getProgram()) {
+        return false;
+    }
+    policy = current_lexical_parse_policy->policy ? *current_lexical_parse_policy->policy : LexicalSemanticPolicy();
+    return true;
+}
+
+void ParseNode::captureSemanticPolicy() {
+    if (!semantic_policy_bound) {
+        // Parser results are explicitly bound. Synthesized replacements inherit the owning operation;
+        // native-created code without a source descriptor keeps the canonical default.
+        LexicalParsePolicyHelper::capture(semantic_policy);
+        semantic_policy_bound = true;
+    }
+}
+
+void ParseNode::bindSemanticPolicy(QoreValue value, LexicalSemanticPolicy policy) {
+    if (value.hasNode()) {
+        auto* node = dynamic_cast<ParseNode*>(value.getInternalNode());
+        if (node && !node->semantic_policy_bound) {
+            node->semantic_policy = policy;
+            node->semantic_policy_bound = true;
+        }
+    }
+}
+
+static QoreValue copy_value_and_resolve_lvar_refs_impl(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
     if (!n.hasNode()) {
         return n.refSelf();
     }
@@ -941,6 +995,21 @@ QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n
     }
 
     return n.refSelf();
+}
+
+// Preserve lexical policy when executable code is copied for a background thread.
+QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+    QoreValue copy = copy_value_and_resolve_lvar_refs_impl(rc, n, xsink);
+    // Background clones bypass parse initialization, including clones made while copying an lvalue path.
+    // Only newly created code is written here; shared original nodes remain immutable.
+    if (copy.hasNode() && n.hasNode() && copy.getInternalNode() != n.getInternalNode()) {
+        if (auto* target = dynamic_cast<ParseNode*>(copy.getInternalNode())) {
+            if (const auto* source = dynamic_cast<const ParseNode*>(n.getInternalNode())) {
+                target->copySemanticPolicy(*source);
+            }
+        }
+    }
+    return copy;
 }
 
 // Default implementation - forwards to non-RuntimeConfig version for backwards compatibility

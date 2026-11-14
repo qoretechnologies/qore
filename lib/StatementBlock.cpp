@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/ReturnStatement.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/ParserSupport.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -325,7 +326,7 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                         }
                         if (type == OBE_Error) {
                             if (qore_es_private::get(obe_xsink)->rethrown) {
-                                xsink->clear();
+                                qore_es_private::clearForRethrow(*xsink);
                             }
                         }
                     }
@@ -333,7 +334,9 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                     // that all on_(exit|error) statements are executed even if exceptions are thrown
                     if (obe_xsink) {
                         xsink->assimilate(obe_xsink);
-                        if (!error)
+                        // a thread_exit is not an exception: the block's on_error handlers do not run after it, as
+                        // when the block raises it itself (#5893)
+                        if (!error && xsink->isException())
                             error = true;
                     }
                 }
@@ -534,6 +537,7 @@ int StatementBlock::parseInitIntern(QoreParseContext& parse_context, statement_l
     int err = 0;
 
     for (statement_list_t::iterator i = start, l = statement_list.last(), e = statement_list.end(); i != e; ++i) {
+        i.node->data = ReturnStatement::bindDeclarationPolicy(*i);
         if ((*i)->parseInit(parse_context) && !err) {
             err = -1;
         }
@@ -824,12 +828,19 @@ void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
     if (!lv_list) {
         // v2 path: no parse() was called, so lvars was never created.
         // Create an LVList from the AOT context locals so doTopLevelInstantiation() works.
+        // Only the locals of the top-level block itself are the Program's: the locals of the blocks in it (the body
+        // locals of the context) are instantiated by the code of their blocks, as in the code that was parsed, and a
+        // closure-bound one that the Program instantiated was found by the instantiation of its block, which then
+        // pushed no variable of its own, so that the closures of all iterations of a loop shared it (#5869)
+        std::unordered_set<const LocalVar*> body_locals(ctx->all_body_locals.begin(), ctx->all_body_locals.end());
+        std::vector<LocalVar*> top_locals;
         for (int i = 0; i < ctx->num_locals; ++i) {
-            if (ctx->locals[i]) {
+            if (ctx->locals[i] && !body_locals.count(ctx->locals[i])) {
                 ctx->locals[i]->setTopLevel();
+                top_locals.push_back(ctx->locals[i]);
             }
         }
-        lvars = new LVList(ctx->locals, ctx->num_locals);
+        lvars = new LVList(top_locals.data(), static_cast<int>(top_locals.size()));
         return;
     }
     // Update the LVList entries from the AOT context
@@ -1212,8 +1223,10 @@ int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const 
         return_value = ir_return_value;
         return 0;
     }
-    // If IR execution raised an exception, propagate it
+    // If IR execution raised an exception, propagate it; a return that an exception raised after it (by the destructor
+    // of a local) leaves the value it returns to be released here (#6029)
     if (*xsink) {
+        ir_return_value.discard(xsink);
         return 0;
     }
     // IR execution failed without raising an exception.  This path only

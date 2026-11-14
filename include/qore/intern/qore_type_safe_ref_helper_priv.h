@@ -35,16 +35,18 @@
 
 #include "qore/intern/Variable.h"
 
-struct qore_type_safe_ref_helper_priv_t : public LValueHelper {
+struct qore_type_safe_ref_helper_priv_t {
+    // A non-overlapping member can be transparently replaced by finishForCallback(); a base subobject cannot.
+    LValueHelper lvalue;
     DLLLOCAL qore_type_safe_ref_helper_priv_t(const ReferenceNode* ref, ExceptionSink* xsink)
-            : LValueHelper(*ref, xsink) {
+            : lvalue(*ref, xsink) {
     }
 
     DLLLOCAL qore_type_safe_ref_helper_priv_t(const AbstractQoreNode* exp, ExceptionSink* xsink)
-            : LValueHelper(exp, xsink) {
+            : lvalue(exp, xsink) {
     }
 
-    DLLLOCAL qore_type_safe_ref_helper_priv_t(ExceptionSink* xsink) : LValueHelper(xsink) {
+    DLLLOCAL qore_type_safe_ref_helper_priv_t(ExceptionSink* xsink) : lvalue(xsink) {
     }
 
     DLLLOCAL ~qore_type_safe_ref_helper_priv_t() {
@@ -52,43 +54,43 @@ struct qore_type_safe_ref_helper_priv_t : public LValueHelper {
 
     DLLLOCAL AbstractQoreNode* getUnique(ExceptionSink *xsink) {
         // the caller can change the value in place without this helper knowing
-        disableRemovalScanSkip();
-        ensureUnique();
-        assert(!LValueHelper::getNodeValue() || (LValueHelper::getNodeValue()->reference_count() == 1));
-        return LValueHelper::getNodeValue();
+        lvalue.disableRemovalScanSkip();
+        lvalue.ensureUnique();
+        assert(!lvalue.getNodeValue() || (lvalue.getNodeValue()->reference_count() == 1));
+        return lvalue.getNodeValue();
     }
 
     DLLLOCAL int assign(QoreValue val) {
-        disableRemovalScanSkip();
-        return LValueHelper::assign(val, "<reference>");
+        lvalue.disableRemovalScanSkip();
+        return lvalue.assignNative(val, "<reference>");
     }
 
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove) {
-        disableRemovalScanSkip();
-        return LValueHelper::doHashLValue(t, mem, for_remove);
+        lvalue.disableRemovalScanSkip();
+        return lvalue.doHashLValue(t, mem, for_remove);
     }
 
     DLLLOCAL int doObjLValue(QoreObject* obj, const char* mem, bool for_remove) {
-        disableRemovalScanSkip();
-        return LValueHelper::doObjLValue(obj, mem, for_remove);
+        lvalue.disableRemovalScanSkip();
+        return lvalue.doObjLValue(obj, mem, for_remove);
     }
 
     DLLLOCAL const QoreValue getValue() const {
-        return LValueHelper::getValue();
+        return lvalue.getValue();
     }
 
     DLLLOCAL qore_type_t getType() const {
-        return LValueHelper::getType();
+        return lvalue.getType();
     }
 
     DLLLOCAL const char* getTypeName() const {
-        return LValueHelper::getTypeName();
+        return lvalue.getTypeName();
     }
 
     DLLLOCAL static LValueHelper& get(QoreTypeSafeReferenceHelper& ref) {
         // the caller can use the helper in any way
-        ref.priv->disableRemovalScanSkip();
-        return *ref.priv;
+        ref.priv->lvalue.disableRemovalScanSkip();
+        return ref.priv->lvalue;
     }
 };
 

@@ -38,12 +38,15 @@
 #include "qore/intern/FunctionalOperatorInterface.h"
 
 class QoreMapSelectOperatorNode : public QoreNOperatorNodeBase<3>, public FunctionalOperator {
-    friend class QoreFunctionalMapSelectListOperator;
-    friend class QoreFunctionalMapSelectSingleValueOperator;
-    friend class QoreFunctionalMapSelectIteratorOperator;
-    friend class QoreFunctionalMapSelectOperator;
+    template <bool> friend class QoreFunctionalMapSelectListOperator;
+    template <bool> friend class QoreFunctionalMapSelectSingleValueOperator;
+    template <bool> friend class QoreFunctionalMapSelectIteratorOperator;
+    template <bool> friend class QoreFunctionalMapSelectOperator;
+    template <bool> friend class QoreGenericMapSelectOperatorNode;
 
 public:
+    DLLLOCAL static QoreMapSelectOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+            QoreValue e0, QoreValue e1, QoreValue e2);
     DLLLOCAL QoreMapSelectOperatorNode(const QoreProgramLocation* loc, QoreValue e0, QoreValue e1, QoreValue e2)
             : QoreNOperatorNodeBase<3>(loc, e0, e1, e2),
             returnTypeInfo(nullptr), iterator_func(nullptr) {
@@ -68,8 +71,7 @@ public:
         ValueHolder n_e2(copy_value_and_resolve_lvar_refs_bound_implicit(e[2], xsink), xsink);
         if (*xsink)
             return nullptr;
-        QoreMapSelectOperatorNode* rv = new QoreMapSelectOperatorNode(loc, n_e0.release(), n_e1.release(),
-            n_e2.release());
+        QoreMapSelectOperatorNode* rv = createBackgroundCopy(n_e0.release(), n_e1.release(), n_e2.release());
         rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->e[1].getInternalNode());
         return rv;
     }
@@ -107,6 +109,12 @@ public:
             ExceptionSink* xsink) const;
 
 protected:
+    //! Returns the functional iterator; that of an operator whose element type has a type parameter (\a Generic)
+    //! substitutes its value type (issue #5988)
+    template <bool StrictBoolean, bool Generic = false>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* getFunctionalIteratorCommon(
+        FunctionalValueType& value_type, ExceptionSink* xsink) const;
+
     const QoreTypeInfo* returnTypeInfo;
     const QoreTypeInfo* expTypeInfo = nullptr;
     FunctionalOperator* iterator_func;
@@ -114,6 +122,15 @@ protected:
     DLLLOCAL static QoreString map_str;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! Evaluates the operator; the element type of a list result has its type parameters substituted if generic
+    template <bool generic>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalIntern(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! Returns a new operator of the class of this operator with the given operands for a background expression
+    DLLLOCAL virtual QoreMapSelectOperatorNode* createBackgroundCopy(QoreValue e0, QoreValue e1, QoreValue e2) const {
+        return create(getSemanticPolicy(), loc, e0, e1, e2);
+    }
 
     DLLLOCAL virtual ~QoreMapSelectOperatorNode() {
     }
@@ -127,6 +144,32 @@ protected:
     DLLLOCAL QoreValue mapSelectIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 };
 
+//! A map select operator whose element type has a type parameter
+/** Its result has the type argument of the call in place of the type parameter, and so has the value type of its
+    functional iterator; an operator is replaced by this class when it is parsed, so the other operators keep their
+    code path (issue #5988).  \a StrictBoolean is the lexical semantic policy of the operator, as for the other
+    operators.
+*/
+template <bool StrictBoolean>
+class QoreGenericMapSelectOperatorNode : public QoreMapSelectOperatorNode {
+public:
+    //! Takes over the operands and the parse state of the given operator
+    DLLLOCAL QoreGenericMapSelectOperatorNode(QoreMapSelectOperatorNode& old);
+
+    //! Creates an operator for a background expression
+    DLLLOCAL QoreGenericMapSelectOperatorNode(const QoreProgramLocation* loc, QoreValue e0, QoreValue e1,
+            QoreValue e2);
+
+    DLLLOCAL virtual FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
+            ExceptionSink* xsink) const;
+
+protected:
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreMapSelectOperatorNode* createBackgroundCopy(QoreValue e0, QoreValue e1, QoreValue e2) const;
+};
+
+template <bool StrictBoolean>
 class QoreFunctionalMapSelectListOperator : public FunctionalOperatorInterface, public ConstListIterator {
 protected:
     const QoreMapSelectOperatorNode* map;
@@ -151,6 +194,7 @@ public:
     }
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalMapSelectSingleValueOperator : public FunctionalOperatorInterface {
 protected:
     const QoreMapSelectOperatorNode* map;
@@ -173,6 +217,7 @@ public:
     }
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalMapSelectIteratorOperator : public FunctionalOperatorInterface {
 protected:
     const QoreMapSelectOperatorNode* map;
@@ -197,6 +242,7 @@ public:
     }
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalMapSelectOperator : public FunctionalOperatorInterface {
 protected:
     const QoreMapSelectOperatorNode* map;

@@ -26,7 +26,7 @@ public class KatanaWatchPurchaseOrderRowCreatedDataProvider
     string getEndpoint() { return "purchase_order_rows"; }
     string getEventName() { return EVENT_POR_CREATED; }
     *string getTargetStatus() { return NOTHING; }
-    *string getTimestampField() { return "created_at"; }
+    string getTimestampField() { return "created_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaPurchaseOrderRowRecordDataType();

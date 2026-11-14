@@ -345,6 +345,10 @@ public:
             : MethodVariantBase(n_access, n_final, n_flags, n_is_user, is_abstract, n_const_method) {
     }
     DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const = 0;
+    DLLLOCAL virtual QoreValue evalLexicalMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+            ExceptionSink* xsink) const {
+        return evalMethod(self, ceh, xsink);
+    }
     DLLLOCAL virtual QoreValue evalPseudoMethod(const QoreValue n, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const {
         assert(false);
         return QoreValue();
@@ -359,11 +363,18 @@ protected:
     // evaluates base class constructors and initializes members
     DLLLOCAL int constructorPrelude(const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
+    DLLLOCAL int constructorPrelude(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
 public:
     DLLLOCAL ConstructorMethodVariant(ClassAccess n_access, int64 n_flags, bool n_is_user = false) : MethodVariantBase(n_access, false, n_flags, n_is_user) {
     }
     DLLLOCAL virtual const BCAList* getBaseClassArgumentList() const = 0;
     DLLLOCAL virtual void evalConstructor(const QoreClass &thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
+    DLLLOCAL virtual void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+        CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
 };
 
 #define CONMV(f) (reinterpret_cast<ConstructorMethodVariant*>(f))
@@ -391,6 +402,12 @@ public:
 
     DLLLOCAL virtual void evalCopy(const QoreClass &thisclass, QoreObject* self, QoreObject* old,
             CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const = 0;
+
+    // User copy bodies keep their declaration's entry; builtin copies explicitly forward the caller's policy.
+    DLLLOCAL virtual void evalLexicalCopy(LexicalSemanticPolicy policy, const QoreClass& thisclass,
+            QoreObject* self, QoreObject* old, CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const {
+        evalCopy(thisclass, self, old, ceh, scl, xsink);
+    }
 };
 
 #define COPYMV(f) (reinterpret_cast<CopyMethodVariant*>(f))
@@ -495,6 +512,16 @@ public:
     DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
         BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override;
 
+    DLLLOCAL void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+            CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
+        evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
+    }
+
+    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
     //! Move BCAList from another constructor variant (for AOT fallback transplanting)
@@ -511,6 +538,17 @@ public:
 
     //! Set the BCAList for AOT deserialization (takes ownership)
     DLLLOCAL void setBCAList(BCAList* n_bcal);  // defined in QoreClass.cpp
+};
+
+//! Selected at parse time when a constructor declares a noncanonical base invocation.
+class LexicalBaseConstructorVariant : public UserConstructorVariant {
+public:
+    using UserConstructorVariant::UserConstructorVariant;
+
+    DLLLOCAL void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
+            BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
+        evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    }
 };
 
 #define UCONV(f) (reinterpret_cast<UserConstructorVariant*>(f))
@@ -566,6 +604,9 @@ public:
 
 class UserCopyVariant : public CopyMethodVariant, public UserVariantBase {
 protected:
+    template <bool Lexical>
+    DLLLOCAL void evalCopyImpl(const QoreClass& thisclass, QoreObject* self, QoreObject* old,
+        CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const;
 public:
    DLLLOCAL UserCopyVariant(ClassAccess n_access, StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params, RetTypeInfo* rv, bool synced) : CopyMethodVariant(n_access, true), UserVariantBase(b, n_sig_first_line, n_sig_last_line, params, rv, synced) {
    }
@@ -576,6 +617,26 @@ public:
    DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
    DLLLOCAL virtual void evalCopy(const QoreClass &thisclass, QoreObject* self, QoreObject* old, CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const override;
+};
+
+//! A user copy's implicit base copies belong to its declaration, not to the external copy call site.
+template <>
+class LexicalUserVariant<UserCopyVariant> : public UserCopyVariant {
+public:
+    using UserCopyVariant::UserCopyVariant;
+    QoreCallMatch matchCallArguments(const QoreCallMatchInput& input) const override {
+        return qore_match_lexical_user_call(this, &signature, input);
+    }
+    CodeEvaluationHelper::PreparedCall prepareCallArguments(CodeEvaluationHelper& ceh,
+            const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
+            const qore_class_private* cctx, QoreObject* self, bool runtime_resolved) const override {
+        return ceh.prepareLexicalCallArguments(func, variant, const_cast<UserSignature*>(&signature),
+            is_copy, cctx, self, runtime_resolved);
+    }
+    void evalCopy(const QoreClass& thisclass, QoreObject* self, QoreObject* old, CodeEvaluationHelper& ceh,
+            BCList* scl, ExceptionSink* xsink) const override {
+        evalCopyImpl<true>(thisclass, self, old, ceh, scl, xsink);
+    }
 };
 
 #define UCOPYV(f) (reinterpret_cast<UserCopyVariant*>(f))
@@ -624,10 +685,29 @@ protected:
 public:
     DLLLOCAL BuiltinNormalMethodValueVariant(q_method_t m, ClassAccess n_access, bool n_final = false, int64 n_flags = QCF_USES_EXTRA_ARGS, int64 n_functionality = QDOM_DEFAULT, const QoreTypeInfo* n_returnTypeInfo = 0, const type_vec_t &n_typeList = type_vec_t(), const arg_vec_t &n_defaultArgList = arg_vec_t(), const name_vec_t& n_names = name_vec_t(), bool n_const_method = false) : BuiltinNormalMethodVariantBase(n_access, n_final, n_flags, n_functionality, n_returnTypeInfo, n_typeList, n_defaultArgList, n_names, n_const_method), method(m) {
     }
+    DLLLOCAL static BuiltinNormalMethodValueVariant* create(q_method_t method, ClassAccess access,
+        bool final, int64 flags, int64 functionality, const QoreTypeInfo* return_type, const type_vec_t& types,
+        const arg_vec_t& defaults, const name_vec_t& names, bool const_method = false);
+
     DLLLOCAL virtual QoreValue evalImpl(QoreObject* self, AbstractPrivateData* private_data, const QoreListNode* args,
             RuntimeConfig& rc, ExceptionSink* xsink) const {
         return method(self, private_data, args, rc, xsink);
     }
+};
+
+//! Registration selects alternate bodies only for native methods that forward a call.
+class LexicalForwardingMethodVariant : public BuiltinNormalMethodValueVariant {
+public:
+    template <typename... Args>
+    DLLLOCAL LexicalForwardingMethodVariant(q_method_t lexical_method, Args&&... args)
+            : BuiltinNormalMethodValueVariant(std::forward<Args>(args)...), lexical_method(lexical_method) {
+    }
+
+    DLLLOCAL QoreValue evalLexicalMethod(QoreObject* self, CodeEvaluationHelper& ceh,
+        ExceptionSink* xsink) const override;
+
+private:
+    const q_method_t lexical_method;
 };
 
 class BuiltinExternalNormalMethodValueVariant : public BuiltinNormalMethodVariantBase {
@@ -706,6 +786,16 @@ public:
     }
 
     DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    DLLLOCAL void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+            CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
+        evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
+    }
+
+    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 };
 
 class BuiltinExternalConstructorValueVariant : public BuiltinConstructorVariantBase {
@@ -718,6 +808,16 @@ public:
     }
 
     DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    DLLLOCAL void evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
+            CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
+        evalConstructor({}, thisclass, self, ceh, bcl, bceal, xsink);
+    }
+
+    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 };
 
 class BuiltinDestructorVariantBase : public DestructorMethodVariant, public BuiltinFunctionVariantBase {
@@ -762,8 +862,13 @@ public:
     // the following defines the pure virtual functions that are common to all builtin variants
     COMMON_BUILTIN_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual void evalCopy(const QoreClass &thisclass, QoreObject* self, QoreObject* old,
-            CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const;
+    DLLLOCAL void evalCopy(const QoreClass& thisclass, QoreObject* self, QoreObject* old,
+            CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const override;
+    DLLLOCAL void evalLexicalCopy(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+            QoreObject* old, CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const override;
+    template <bool Lexical>
+    DLLLOCAL void evalCopyImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+            QoreObject* old, CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const;
     DLLLOCAL virtual void evalImpl(const QoreClass &thisclass, QoreObject* self, QoreObject* old,
             AbstractPrivateData* private_data, RuntimeConfig& rc, ExceptionSink* xsink) const = 0;
 };
@@ -816,6 +921,17 @@ public:
             const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
+    DLLLOCAL QoreValue evalMethod(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreObject* self, const QoreListNode* args,
+            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreObject* self, const QoreListNode* args,
+            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+
     //! as evalMethod(), with a temporary argument list that the caller owns, whose values the parameters take over,
     //! as the AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
     DLLLOCAL QoreValue evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
@@ -831,10 +947,52 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             const AbstractQoreFunctionVariant** resolved_variant = nullptr) const;
 
+    DLLLOCAL QoreValue evalMethodTmpArgs(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
+            const qore_class_private* cctx = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            const AbstractQoreFunctionVariant** resolved_variant = nullptr) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalMethodTmpArgsImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreObject* self, QoreListNode* args,
+            const qore_class_private* cctx = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            const AbstractQoreFunctionVariant** resolved_variant = nullptr) const;
+
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL QoreValue evalPseudoMethod(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreValue n, const QoreListNode* args,
         const qore_class_private* cctx = runtime_get_class()) const;
+
+    DLLLOCAL QoreValue evalPseudoMethod(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreValue n, const QoreListNode* args,
+        const qore_class_private* cctx = runtime_get_class()) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalPseudoMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreValue n, const QoreListNode* args,
+        const qore_class_private* cctx = runtime_get_class()) const;
+
+    //! evaluates a named call whose variant is resolved at run time by parameter name; the arguments are in source
+    //! order with the names in "arg_names" (see QoreFunction::runtimeFindVariant()) and are evaluated by the call
+    DLLLOCAL QoreValue evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
+            const QoreListNode* args, const qore_class_private* cctx,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+
+    //! evalMethodNamed() with temporary (evaluated) arguments, which the caller keeps
+    DLLLOCAL QoreValue evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
+            QoreListNode* args, const qore_class_private* cctx,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+
+    //! evaluates a named call of a pseudo-method resolved at run time by parameter name; the arguments are evaluated
+    //! by the call (tmp_args false) or temporary values that the caller keeps
+    DLLLOCAL QoreValue evalPseudoMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreValue n,
+            const QoreListNode* args, bool tmp_args, const qore_class_private* cctx,
+            const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}) const;
 };
 
 #define NMETHF(f) (reinterpret_cast<NormalMethodFunction*>(f))
@@ -857,6 +1015,19 @@ public:
             const QoreTypeInfo* receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
+    DLLLOCAL QoreValue evalMethod(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+
     //! as evalMethod(), with a temporary argument list that the caller owns, whose values the parameters take over,
     //! as the AST interpreter's call moves its evaluated arguments into the parameters (issue #5882)
     DLLLOCAL QoreValue evalMethodGivenArgs(ExceptionSink* xsink, RuntimeConfig& rc,
@@ -871,6 +1042,32 @@ public:
             const qore_class_private* cctx = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             const AbstractQoreFunctionVariant** resolved_variant = nullptr) const;
+
+    DLLLOCAL QoreValue evalMethodTmpArgs(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+            const qore_class_private* cctx = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            const AbstractQoreFunctionVariant** resolved_variant = nullptr) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalMethodTmpArgsImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, QoreListNode* args,
+            const qore_class_private* cctx = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            const AbstractQoreFunctionVariant** resolved_variant = nullptr) const;
+
+    //! evaluates a named call whose variant is resolved at run time by parameter name; the arguments are in source
+    //! order with the names in "arg_names" (see QoreFunction::runtimeFindVariant()) and are evaluated by the call
+    DLLLOCAL QoreValue evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreListNode* args,
+            const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+
+    //! evalMethodNamed() with temporary (evaluated) arguments, which the caller keeps
+    DLLLOCAL QoreValue evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreListNode* args,
+            const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
 };
 
 #define SMETHF(f) (reinterpret_cast<StaticMethodFunction*>(f))
@@ -888,6 +1085,15 @@ public:
     //! @param tmp_args true if \a args is a temporary list with one reference, whose values the call takes over
     //! (see CodeEvaluationHelper), instead of copying the list to convert an argument
     DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
+            QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
+            ExceptionSink* xsink, bool tmp_args = false) const;
+
+    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
+            QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
+            ExceptionSink* xsink, bool tmp_args = false) const;
+
+    template <bool Lexical>
+    DLLLOCAL void evalConstructorImpl(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, const QoreClass &thisclass,
             QoreObject* self, const QoreListNode* args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc,
             ExceptionSink* xsink, bool tmp_args = false) const;
 
@@ -926,6 +1132,11 @@ public:
     }
     DLLLOCAL void evalCopy(const QoreClass &thisclass, QoreObject* self, QoreObject* old, BCList* scl,
             RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL void evalCopy(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+        QoreObject* old, BCList* scl, RuntimeConfig& rc, ExceptionSink* xsink) const;
+    template <bool Lexical>
+    DLLLOCAL void evalCopyImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self,
+        QoreObject* old, BCList* scl, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual MethodFunctionBase* copy(const QoreClass* n_qc) const {
         return new CopyMethodFunction(*this, n_qc);
@@ -1020,8 +1231,16 @@ public:
 class QoreMemberInfoBase {
 protected:
     const QoreTypeInfo* typeInfo;
+    // Default initializers alias typeInfo. Only legacy code owns a separate conversion descriptor.
+    const QoreTypeInfo* initializer_type_info;
+    std::shared_ptr<const QoreTypeInfo> initializer_filter;
+    LexicalSemanticPolicy initializer_policy;
+    bool instance_initializer = false;
 
-    DLLLOCAL QoreMemberInfoBase(const QoreMemberInfoBase& old) : typeInfo(old.typeInfo), exp(old.exp.refSelf()),
+    DLLLOCAL QoreMemberInfoBase(const QoreMemberInfoBase& old) : typeInfo(old.typeInfo),
+            initializer_type_info(old.initializer_type_info), initializer_filter(old.initializer_filter),
+            initializer_policy(old.initializer_policy), instance_initializer(old.instance_initializer),
+            exp(old.exp.refSelf()),
             loc(old.loc), parseTypeInfo(old.parseTypeInfo ? new QoreParseTypeInfo(*old.parseTypeInfo) : nullptr) {
     }
 
@@ -1046,7 +1265,7 @@ public:
 
     DLLLOCAL QoreMemberInfoBase(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeinfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue())
-            : typeInfo(n_typeinfo), exp(e), loc(loc), parseTypeInfo(n_parseTypeInfo) {
+            : typeInfo(n_typeinfo), initializer_type_info(n_typeinfo), exp(e), loc(loc), parseTypeInfo(n_parseTypeInfo) {
     }
 
     DLLLOCAL ~QoreMemberInfoBase() {
@@ -1059,6 +1278,23 @@ public:
             delete parseTypeInfo;
             parseTypeInfo = nullptr;
         }
+    }
+
+    //! Source-only binding; module APIs and AOT construction keep the canonical initializer target.
+    DLLLOCAL void bindInitializationPolicy(LexicalSemanticPolicy policy, bool instance_member = false) {
+        initializer_policy = policy;
+        instance_initializer = instance_member;
+        refreshInitializationFilter();
+    }
+
+    //! Called during parsing or cold generic hashdecl specialization after resolving the declared type.
+    DLLLOCAL void refreshInitializationFilter() {
+        initializer_filter = qore_make_initializer_filter(typeInfo, initializer_policy, instance_initializer);
+        initializer_type_info = initializer_filter ? initializer_filter.get() : typeInfo;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getInitializerTypeInfo() const {
+        return initializer_type_info;
     }
 
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
@@ -1800,6 +2036,8 @@ public:
     NamedScope* ns;
     char* name;
 
+    LexicalSemanticPolicy semantic_policy;
+
     // this function takes ownership of n and arg
     DLLLOCAL BCANode(NamedScope* n, QoreParseListNode* n_args, const QoreProgramLocation* loc)
             : FunctionCallBase(n_args), loc(loc), ns(n), name(nullptr) {
@@ -1854,8 +2092,21 @@ public:
          delete *i;
    }
 
+    //! Parse-time selection only; canonical constructors retain their original entry.
+    DLLLOCAL bool needsLexicalEntry() const {
+        for (auto* call : *this) {
+            if (!call->semantic_policy.isDefault()) return true;
+        }
+        return false;
+    }
+
    // returns 0 for no errors, -1 for exception raised
-   DLLLOCAL int execBaseClassConstructorArgs(BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL int execBaseClassConstructorArgs(BCEAList* bceal, ExceptionSink* xsink) const;
+
+    DLLLOCAL int execBaseClassConstructorArgs(LexicalSemanticPolicy policy, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL int execBaseClassConstructorArgsImpl(LexicalSemanticPolicy policy, BCEAList* bceal, ExceptionSink* xsink) const;
 };
 
 typedef std::pair<QoreClass*, bool> class_virt_pair_t;
@@ -1903,6 +2154,11 @@ public:
     DLLLOCAL void execDestructors(QoreObject* o, RuntimeConfig& rc, ExceptionSink* xsink) const;
     DLLLOCAL void execSystemDestructors(QoreObject* o, RuntimeConfig& rc, ExceptionSink* xsink) const;
     DLLLOCAL void execCopyMethods(QoreObject* self, QoreObject* old, RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL void execCopyMethods(LexicalSemanticPolicy policy, QoreObject* self, QoreObject* old,
+        RuntimeConfig& rc, ExceptionSink* xsink) const;
+    template <bool Lexical>
+    DLLLOCAL void execCopyMethodsImpl(LexicalSemanticPolicy policy, QoreObject* self, QoreObject* old,
+        RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     // parseResolve classes to the new class pointer after all namespaces and classes have been copied
     DLLLOCAL void resolveCopy();
@@ -2000,6 +2256,11 @@ public:
     DLLLOCAL bool runtimeIsPrivateMember(const char* str, bool toplevel) const;
 
     DLLLOCAL void execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    DLLLOCAL void execConstructors(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL void execConstructorsImpl(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL const QoreMemberInfo* parseFindMember(const char* mem, const qore_class_private*& qc,
             ClassAccess& n_access, bool toplevel) const;
@@ -2101,6 +2362,11 @@ public:
     DLLLOCAL bool match(const QoreClass* cls);
     DLLLOCAL void execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
+    DLLLOCAL void execConstructors(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL void execConstructorsImpl(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
     DLLLOCAL bool runtimeIsPrivateMember(const char* str, bool toplevel) const;
 
     DLLLOCAL bool parseCheckHierarchy(const QoreClass* cls, ClassAccess& access, bool toplevel) const;
@@ -2186,12 +2452,12 @@ public:
    QoreListNode* args = nullptr;
    const AbstractQoreFunctionVariant* variant = nullptr;
    bool execed = false;
-   bool member_init_done = false;
+   LexicalSemanticPolicy semantic_policy;
 
    DLLLOCAL BCEANode(const QoreProgramLocation* loc, QoreListNode* args, const AbstractQoreFunctionVariant* variant) : loc(loc), args(args), variant(reinterpret_cast<const MethodVariant*>(variant)) {
    }
 
-   DLLLOCAL BCEANode(bool n_execed = true, bool mid = true) : execed(n_execed), member_init_done(mid) {
+   DLLLOCAL BCEANode(bool n_execed = true) : execed(n_execed) {
    }
 };
 
@@ -2220,21 +2486,13 @@ public:
     DLLLOCAL void deref(ExceptionSink* xsink);
     // evaluates arguments, returns -1 if an exception was thrown
     DLLLOCAL int add(qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink);
+    DLLLOCAL int add(LexicalSemanticPolicy policy, qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink);
+    template <bool Lexical>
+    DLLLOCAL int addImpl(LexicalSemanticPolicy policy, qore_classid_t classid, const QoreListNode* arg, const AbstractQoreFunctionVariant* variant, const QoreProgramLocation* loc, ExceptionSink* xsink);
     DLLLOCAL QoreListNode* findArgs(qore_classid_t classid, bool* aexeced, const AbstractQoreFunctionVariant*& variant, const QoreProgramLocation*& loc);
-    /*
-    DLLLOCAL bool initMembers(qore_classid_t classid) {
-        bceamap_t::iterator i = lower_bound(classid);
-        if (i == end() || i->first != classid) {
-            insert(i, bceamap_t::value_type(classid, new BCEANode(false, true)));
-            return false;
-        }
-        if (!i->second->member_init_done) {
-            i->second->member_init_done = true;
-            return false;
-        }
-        return true;
-    }
-    */
+    DLLLOCAL QoreListNode* findArgs(LexicalSemanticPolicy& policy, qore_classid_t classid, bool* aexeced, const AbstractQoreFunctionVariant*& variant, const QoreProgramLocation*& loc);
+    template <bool Lexical>
+    DLLLOCAL QoreListNode* findArgsImpl(LexicalSemanticPolicy& policy, qore_classid_t classid, bool* aexeced, const AbstractQoreFunctionVariant*& variant, const QoreProgramLocation*& loc);
 };
 
 struct SelfInstantiatorHelper {
@@ -2364,6 +2622,25 @@ DLLLOCAL bool qore_module_lifetime_active();
 
 class qore_class_private {
 public:
+    template <bool Lexical, typename... Args>
+    DLLLOCAL QoreValue evalMethodWithPolicy(LexicalSemanticPolicy policy, Args&&... args) const {
+        if constexpr (Lexical) {
+            return evalMethod(policy, std::forward<Args>(args)...);
+        } else {
+            return evalMethod(std::forward<Args>(args)...);
+        }
+    }
+
+    template <bool Lexical, typename... Args>
+    DLLLOCAL QoreValue evalPseudoMethodWithPolicy(LexicalSemanticPolicy policy, Args&&... args) const {
+        if constexpr (Lexical) {
+            return evalPseudoMethod(policy, std::forward<Args>(args)...);
+        } else {
+            return evalPseudoMethod(std::forward<Args>(args)...);
+        }
+    }
+
+
     const QoreProgramLocation* loc; // location of declaration
     std::string name;               // the name of the class
     std::string path;               // the full namespace path for the class
@@ -3990,6 +4267,17 @@ public:
         const QoreClass* obj_cls = nullptr, bool allow_abstract = false,
         const QoreTypeInfo* object_type_info = nullptr, bool tmp_args = false) const;
 
+    DLLLOCAL QoreObject* execConstructor(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+        const QoreClass* obj_cls = nullptr, bool allow_abstract = false,
+        const QoreTypeInfo* object_type_info = nullptr, bool tmp_args = false) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreObject* execConstructorImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
+        const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+        const QoreClass* obj_cls = nullptr, bool allow_abstract = false,
+        const QoreTypeInfo* object_type_info = nullptr, bool tmp_args = false) const;
+
     DLLLOCAL void addBuiltinMethod(const char* mname, MethodVariantBase* variant);
     DLLLOCAL void addBuiltinStaticMethod(const char* mname, MethodVariantBase* variant);
     DLLLOCAL void addBuiltinConstructor(BuiltinConstructorVariantBase* variant);
@@ -3999,8 +4287,18 @@ public:
 
     DLLLOCAL void execBaseClassConstructor(QoreObject* self, BCEAList* bceal, RuntimeConfig& rc,
             ExceptionSink* xsink) const;
+
+    DLLLOCAL void execBaseClassConstructor(LexicalSemanticPolicy policy, QoreObject* self, BCEAList* bceal, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL void execBaseClassConstructorImpl(LexicalSemanticPolicy policy, QoreObject* self, BCEAList* bceal, RuntimeConfig& rc,
+            ExceptionSink* xsink) const;
     DLLLOCAL QoreObject* execSystemConstructor(QoreObject* self, int code, va_list args) const;
     DLLLOCAL QoreObject* execCopy(QoreObject* old, ExceptionSink* xsink) const;
+    DLLLOCAL QoreObject* execCopy(LexicalSemanticPolicy policy, QoreObject* old, ExceptionSink* xsink) const;
+    template <bool Lexical>
+    DLLLOCAL QoreObject* execCopyImpl(LexicalSemanticPolicy policy, QoreObject* old, ExceptionSink* xsink) const;
 
     // returns a non-static method if it exists in the local class
     DLLLOCAL QoreMethod* parseFindLocalMethod(const char* nme) {
@@ -4080,6 +4378,17 @@ public:
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             QoreProgram* pgm_ctx = nullptr) const;
 
+    DLLLOCAL QoreValue evalMethod(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
+            const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreProgram* pgm_ctx = nullptr) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalMethodImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
+            const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            QoreProgram* pgm_ctx = nullptr) const;
+
     //! as evalMethod() by name, with a temporary argument list that the caller owns, whose values the parameters of
     //! a method found take over, as the AST interpreter's call moves its evaluated arguments into the parameters
     //! (issue #5882)
@@ -4087,6 +4396,11 @@ public:
             const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink, QoreProgram* pgm_ctx) const;
 
     DLLLOCAL QoreValue evalMethodGate(QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalMethodGate(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalMethodGateImpl(LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL static const QoreMethod* doParseMethodAccess(const QoreMethod* m, const qore_class_private* class_ctx);
 
@@ -4214,6 +4528,8 @@ public:
     DLLLOCAL void execBaseClassSystemDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL void execBaseClassCopy(QoreObject* self, QoreObject* old, RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL void execBaseClassCopy(LexicalSemanticPolicy policy, QoreObject* self, QoreObject* old,
+        RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL int parseInit();
     DLLLOCAL void parseWarnAmbiguousOverloads();
@@ -4224,6 +4540,11 @@ public:
         @return 0 for OK, -1 if a parse exception was raised
     */
     DLLLOCAL int parseCheckFinalHierarchy() const;
+
+    //! Checks that the variants that a call typed against a parent class can select return compatible types
+    /** See MethodFunctionBase::checkReturnTypeResolution() (issue #5838).
+    */
+    DLLLOCAL int parseCheckReturnTypeHierarchy() const;
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
     DLLLOCAL void parseResolveAbstract();
@@ -4236,7 +4557,21 @@ public:
     DLLLOCAL QoreValue evalPseudoMethod(const QoreValue n, const char* name, const QoreListNode* args,
             RuntimeConfig& rc, ExceptionSink* xsink) const;
 
+    DLLLOCAL QoreValue evalPseudoMethod(LexicalSemanticPolicy policy, const QoreValue n, const char* name, const QoreListNode* args,
+            RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalPseudoMethodImpl(LexicalSemanticPolicy policy, const QoreValue n, const char* name, const QoreListNode* args,
+            RuntimeConfig& rc, ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue evalPseudoMethod(const QoreMethod* m, const AbstractQoreFunctionVariant* variant,
+            const QoreValue n, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalPseudoMethod(LexicalSemanticPolicy policy, const QoreMethod* m, const AbstractQoreFunctionVariant* variant,
+            const QoreValue n, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalPseudoMethodImpl(LexicalSemanticPolicy policy, const QoreMethod* m, const AbstractQoreFunctionVariant* variant,
             const QoreValue n, const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL const QoreMethod* runtimeFindPseudoMethod(const QoreValue n, const char* nme,
@@ -4516,6 +4851,18 @@ public:
             const AbstractQoreFunctionVariant* variant, const QoreListNode* args, ExceptionSink* xsink,
             const QoreTypeInfo* object_type_info = nullptr, bool tmp_args = false) {
         return qc.priv->execConstructor(xsink, rc, variant, args, nullptr, false, object_type_info, tmp_args);
+    }
+
+    template <bool Lexical>
+    DLLLOCAL static QoreObject* execConstructorWithPolicy(LexicalSemanticPolicy policy, const QoreClass& qc,
+            RuntimeConfig& rc, const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
+            ExceptionSink* xsink, const QoreTypeInfo* object_type_info = nullptr, bool tmp_args = false) {
+        if constexpr (Lexical) {
+            return qc.priv->execConstructor(policy, xsink, rc, variant, args, nullptr, false, object_type_info,
+                tmp_args);
+        } else {
+            return execConstructor(qc, rc, variant, args, xsink, object_type_info, tmp_args);
+        }
     }
 
     DLLLOCAL static bool injected(const QoreClass& qc) {
@@ -4994,6 +5341,12 @@ public:
         return func->getUniqueReturnTypeInfo();
     }
 
+    template <bool Lexical, typename... Args>
+    DLLLOCAL void evalConstructorWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
+        if constexpr (Lexical) evalConstructor(policy, std::forward<Args>(args)...);
+        else evalConstructor(std::forward<Args>(args)...);
+    }
+
     DLLLOCAL void evalConstructor(const AbstractQoreFunctionVariant* variant, QoreObject* self,
             const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink,
             bool tmp_args = false) {
@@ -5001,8 +5354,25 @@ public:
             tmp_args);
     }
 
+    DLLLOCAL void evalConstructor(LexicalSemanticPolicy policy, const AbstractQoreFunctionVariant* variant, QoreObject* self,
+            const QoreListNode* args, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink,
+            bool tmp_args = false) {
+        CONMF(func)->evalConstructor(policy, variant, *parent_class, self, args, parent_class->priv->scl, bceal, rc, xsink,
+            tmp_args);
+    }
+
     DLLLOCAL void evalCopy(QoreObject* self, QoreObject* old, RuntimeConfig& rc, ExceptionSink* xsink) const {
         COPYMF(func)->evalCopy(*parent_class, self, old, parent_class->priv->scl, rc, xsink);
+    }
+
+    DLLLOCAL void evalCopy(LexicalSemanticPolicy policy, QoreObject* self, QoreObject* old,
+            RuntimeConfig& rc, ExceptionSink* xsink) const {
+        COPYMF(func)->evalCopy(policy, *parent_class, self, old, parent_class->priv->scl, rc, xsink);
+    }
+
+    DLLLOCAL void evalBaseClassCopy(LexicalSemanticPolicy policy, QoreObject* self, QoreObject* old,
+            RuntimeConfig& rc, ExceptionSink* xsink) const {
+        COPYMF(func)->evalCopy(policy, *parent_class, self, old, nullptr, rc, xsink);
     }
 
     DLLLOCAL void evalBaseClassCopy(QoreObject* self, QoreObject* old, RuntimeConfig& rc,
@@ -5040,6 +5410,23 @@ public:
             explicit_type_param_instantiation);
     }
 
+    DLLLOCAL QoreValue eval(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, const QoreListNode* args,
+            const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const {
+        if (!static_flag) {
+            assert(self);
+            return NMETHF(func)->evalMethod(policy, xsink, rc, 0, self, args, cctx, pgm_ctx,
+                explicit_type_param_instantiation);
+        }
+        // issue #5769: a static method called through an object (self.method() in a method) has the object's type as
+        // its receiver, as a normal method does, so the type parameters of a generic class that the object's class
+        // inherits a specialization of are substituted when the variant is resolved at run time
+        return SMETHF(func)->evalMethod(policy, xsink, rc, 0, args, cctx, pgm_ctx,
+            receiver_type_info ? receiver_type_info : (self ? qore_get_object_receiver_type_info(self) : nullptr),
+            explicit_type_param_instantiation);
+    }
+
     DLLLOCAL QoreValue evalTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, QoreListNode* args,
             const qore_class_private* cctx = nullptr, const AbstractQoreFunctionVariant* variant = nullptr,
             const QoreTypeInfo* receiver_type_info = nullptr,
@@ -5052,6 +5439,22 @@ public:
         }
         // issue #5769: see eval()
         return SMETHF(func)->evalMethodTmpArgs(xsink, rc, variant, args, cctx,
+            receiver_type_info ? receiver_type_info : (self ? qore_get_object_receiver_type_info(self) : nullptr),
+            explicit_type_param_instantiation, resolved_variant);
+    }
+
+    DLLLOCAL QoreValue evalTmpArgs(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, QoreListNode* args,
+            const qore_class_private* cctx = nullptr, const AbstractQoreFunctionVariant* variant = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            const AbstractQoreFunctionVariant** resolved_variant = nullptr) const {
+        if (!static_flag) {
+            assert(self);
+            return NMETHF(func)->evalMethodTmpArgs(policy, xsink, rc, variant, self, args, cctx,
+                explicit_type_param_instantiation, resolved_variant);
+        }
+        // issue #5769: see eval()
+        return SMETHF(func)->evalMethodTmpArgs(policy, xsink, rc, variant, args, cctx,
             receiver_type_info ? receiver_type_info : (self ? qore_get_object_receiver_type_info(self) : nullptr),
             explicit_type_param_instantiation, resolved_variant);
     }
@@ -5069,7 +5472,31 @@ public:
         return rv;
     }
 
+    DLLLOCAL QoreValue evalPseudoMethod(LexicalSemanticPolicy policy, RuntimeConfig& rc, const AbstractQoreFunctionVariant* variant,
+            const QoreValue n,
+            const QoreListNode* args, ExceptionSink* xsink) const {
+        //QORE_TRACE("qore_method_private::evalPseudoMethod()");
+
+        assert(!static_flag);
+
+        QoreValue rv = NMETHF(func)->evalPseudoMethod(policy, xsink, rc, variant, n, args);
+        printd(5, "qore_method_private::evalPseudoMethod() %s::%s() returning type: %s\n", parent_class->getName(),
+            getName(), rv.getTypeName());
+        return rv;
+    }
+
     DLLLOCAL QoreValue evalNormalVariant(QoreObject* self, RuntimeConfig& rc, const QoreExternalMethodVariant* ev,
+            const QoreListNode* args, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr) const;
+
+    DLLLOCAL QoreValue evalNormalVariant(LexicalSemanticPolicy policy, QoreObject* self, RuntimeConfig& rc, const QoreExternalMethodVariant* ev,
+            const QoreListNode* args, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalNormalVariantImpl(LexicalSemanticPolicy policy, QoreObject* self, RuntimeConfig& rc, const QoreExternalMethodVariant* ev,
             const QoreListNode* args, ExceptionSink* xsink,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             const QoreTypeInfo* receiver_type_info = nullptr) const;
@@ -5091,9 +5518,23 @@ public:
             receiver_type_info);
     }
 
+    DLLLOCAL static QoreValue evalNormalVariant(LexicalSemanticPolicy policy, const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
+            QoreObject* self,
+            const QoreExternalMethodVariant* ev, const QoreListNode* args,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr) {
+        return m.priv->evalNormalVariant(policy, self, rc, ev, args, xsink, explicit_type_param_instantiation,
+            receiver_type_info);
+    }
+
     DLLLOCAL static QoreValue evalPseudoMethod(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
             const AbstractQoreFunctionVariant* variant, const QoreValue n, const QoreListNode* args) {
         return m.priv->evalPseudoMethod(rc, variant, n, args, xsink);
+    }
+
+    DLLLOCAL static QoreValue evalPseudoMethod(LexicalSemanticPolicy policy, const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
+            const AbstractQoreFunctionVariant* variant, const QoreValue n, const QoreListNode* args) {
+        return m.priv->evalPseudoMethod(policy, rc, variant, n, args, xsink);
     }
 
     DLLLOCAL static QoreValue eval(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
@@ -5101,6 +5542,14 @@ public:
             const QoreTypeInfo* receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
         return m.priv->eval(xsink, rc, self, args, cctx, pgm_ctx, receiver_type_info,
+            explicit_type_param_instantiation);
+    }
+
+    DLLLOCAL static QoreValue eval(LexicalSemanticPolicy policy, const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
+            const QoreListNode* args, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
+        return m.priv->eval(policy, xsink, rc, self, args, cctx, pgm_ctx, receiver_type_info,
             explicit_type_param_instantiation);
     }
 
@@ -5127,6 +5576,82 @@ public:
             const AbstractQoreFunctionVariant** resolved_variant = nullptr) {
         return m.priv->evalTmpArgs(xsink, rc, self, args, cctx, variant, receiver_type_info,
             explicit_type_param_instantiation, resolved_variant);
+    }
+
+    DLLLOCAL static QoreValue evalTmpArgs(LexicalSemanticPolicy policy, const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
+            QoreObject* self,
+            QoreListNode* args, const qore_class_private* cctx = nullptr,
+            const AbstractQoreFunctionVariant* variant = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            const AbstractQoreFunctionVariant** resolved_variant = nullptr) {
+        return m.priv->evalTmpArgs(policy, xsink, rc, self, args, cctx, variant, receiver_type_info,
+            explicit_type_param_instantiation, resolved_variant);
+    }
+
+    template <bool Lexical, typename... Args>
+    DLLLOCAL static QoreValue evalWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
+        if constexpr (Lexical) {
+            return eval(policy, std::forward<Args>(args)...);
+        } else {
+            return eval(std::forward<Args>(args)...);
+        }
+    }
+
+    template <bool Lexical, typename... Args>
+    DLLLOCAL static QoreValue evalTmpArgsWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
+        if constexpr (Lexical) {
+            return evalTmpArgs(policy, std::forward<Args>(args)...);
+        } else {
+            return evalTmpArgs(std::forward<Args>(args)...);
+        }
+    }
+
+    template <bool Lexical, typename... Args>
+    DLLLOCAL static QoreValue evalNormalVariantWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
+        if constexpr (Lexical) {
+            return evalNormalVariant(policy, std::forward<Args>(args)...);
+        } else {
+            return evalNormalVariant(std::forward<Args>(args)...);
+        }
+    }
+
+    template <bool Lexical, typename... Args>
+    DLLLOCAL static QoreValue evalPseudoMethodWithPolicy(LexicalSemanticPolicy policy, Args&&... args) {
+        if constexpr (Lexical) {
+            return evalPseudoMethod(policy, std::forward<Args>(args)...);
+        } else {
+            return evalPseudoMethod(std::forward<Args>(args)...);
+        }
+    }
+
+    //! evaluates a named call of the method whose variant is resolved at run time by parameter name; the arguments
+    //! are in source order with the names in "arg_names" and are evaluated by the call (tmp_args false) or temporary
+    //! values that the caller keeps
+    /** @param self the object of a call of a normal method; for a static method, the object of a call through an
+        object, if any
+    */
+    DLLLOCAL static QoreValue evalNamed(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
+            QoreObject* self, const QoreListNode* args, bool tmp_args, const qore_class_private* cctx,
+            const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            const name_vec_t& arg_names, LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) {
+        const qore_method_private* p = m.priv;
+        if (!p->static_flag) {
+            assert(self);
+            return tmp_args
+                ? NMETHF(p->func)->evalMethodTmpArgsNamed(xsink, rc, self, const_cast<QoreListNode*>(args), cctx,
+                    explicit_type_param_instantiation, arg_names, policy, pgm_ctx)
+                : NMETHF(p->func)->evalMethodNamed(xsink, rc, self, args, cctx, explicit_type_param_instantiation,
+                    arg_names, policy, pgm_ctx);
+        }
+        // issue #5769: see eval()
+        if (!receiver_type_info && self) {
+            receiver_type_info = qore_get_object_receiver_type_info(self);
+        }
+        return tmp_args
+            ? SMETHF(p->func)->evalMethodTmpArgsNamed(xsink, rc, const_cast<QoreListNode*>(args), cctx,
+                receiver_type_info, explicit_type_param_instantiation, arg_names, policy, pgm_ctx)
+            : SMETHF(p->func)->evalMethodNamed(xsink, rc, args, cctx, receiver_type_info,
+                explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
     }
 
     DLLLOCAL static qore_method_private* get(QoreMethod& m) {

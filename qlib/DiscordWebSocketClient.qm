@@ -55,6 +55,8 @@ module DiscordWebSocketClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("discordwss", DiscordWebSocketConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage DiscordWebSocketClient Module
@@ -997,6 +999,10 @@ hash<auto> h = ws.getInfo();
 
     #! Cancels the watchdog of a connection that a failed connect published and released
     private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnect) {
+        # the destructor waits until this call returned if it waits for the action, so that the cleanup below finds
+        # the client (issue #5983)
+        WscActionCall action_call(action_wait_count, action_call_key);
+        on_exit remove action_call;
         on_error cancelStaleHelloWatchdog();
         return WebSocketClient::connectIntern(opts, \info, reconnect);
     }

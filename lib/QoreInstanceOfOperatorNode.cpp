@@ -34,6 +34,34 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreStatementTemps.h"
 
+namespace {
+class LexicalInstanceOfOperatorNode : public QoreInstanceOfOperatorNode {
+public:
+    using QoreInstanceOfOperatorNode::QoreInstanceOfOperatorNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreInstanceOfOperatorNode* QoreInstanceOfOperatorNode::create(LexicalSemanticPolicy policy,
+        const QoreProgramLocation* loc, QoreValue exp, QoreParseTypeInfo* type) {
+    auto* node = policy.brokenSoftTypes()
+        ? static_cast<QoreInstanceOfOperatorNode*>(new LexicalInstanceOfOperatorNode(loc, exp, type))
+        : new QoreInstanceOfOperatorNode(loc, exp, type);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
+QoreInstanceOfOperatorNode* QoreInstanceOfOperatorNode::create(LexicalSemanticPolicy policy,
+        const QoreProgramLocation* loc, QoreValue exp, const QoreTypeInfo* type) {
+    auto* node = policy.brokenSoftTypes()
+        ? static_cast<QoreInstanceOfOperatorNode*>(new LexicalInstanceOfOperatorNode(loc, exp, type))
+        : new QoreInstanceOfOperatorNode(loc, exp, type);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
 QoreString QoreInstanceOfOperatorNode::InstanceOf_str("instanceof operator expression");
 
 // if del is true, then the returned QoreString * should be deleted, if false, then it must not be
@@ -48,6 +76,42 @@ int QoreInstanceOfOperatorNode::getAsString(QoreString& str, int foff, Exception
 }
 
 QoreValue QoreInstanceOfOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+//! Returns the type that an instanceof expression checks at run time: its type parameters substituted with the type
+//! arguments of the code that runs, as for a variable declared with them (qore#6016)
+static const QoreTypeInfo* instanceof_runtime_type(const QoreTypeInfo* ti) {
+    if (!qore_type_contains_type_parameter(ti)) {
+        return ti;
+    }
+    return qore_substitute_type_params(ti, qore_get_current_receiver_type_info(),
+        runtime_get_type_param_instantiation());
+}
+
+//! Returns true if \a ti accepts \a val as instanceof checks it: a weak reference is checked as its target
+template <typename Accepts>
+static bool instanceof_accepts(QoreValue val, Accepts accepts) {
+    switch (val.getType()) {
+        case NT_WEAKREF:
+            return accepts(**val.get<const WeakReferenceNode>());
+        case NT_WEAKREF_HASH:
+            return accepts(**val.get<const WeakHashReferenceNode>());
+        case NT_WEAKREF_LIST:
+            return accepts(**val.get<const WeakListReferenceNode>());
+    }
+    return accepts(val);
+}
+
+bool QoreInstanceOfOperatorNode::runtimeInstanceOf(const QoreTypeInfo* ti, QoreValue val) {
+    const QoreTypeInfo* rti = instanceof_runtime_type(ti);
+    return instanceof_accepts(val, [rti](QoreValue v) {
+        return QoreTypeInfo::runtimeAcceptsValue(rti, v) != QTI_NOT_EQUAL;
+    });
+}
+
+template <bool Lexical>
+QoreValue QoreInstanceOfOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     assert(ti);
 
     QoreOperandEvalHolder v(exp, xsink);
@@ -55,18 +119,18 @@ QoreValue QoreInstanceOfOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
         return QoreValue();
     }
 
-    // treat a weak reference as the target object
-    qore_type_t t = v->getType();
-    switch (t) {
-        case NT_WEAKREF:
-            return QoreTypeInfo::runtimeAcceptsValue(ti, **v->get<const WeakReferenceNode>()) ? true : false;
-        case NT_WEAKREF_HASH:
-            return QoreTypeInfo::runtimeAcceptsValue(ti, **v->get<const WeakHashReferenceNode>()) ? true : false;
-        case NT_WEAKREF_LIST:
-            return QoreTypeInfo::runtimeAcceptsValue(ti, **v->get<const WeakListReferenceNode>()) ? true : false;
-    }
+    // the type parameters of the type are those of the code that runs (qore#6016)
+    const QoreTypeInfo* rti = instanceof_runtime_type(ti);
+    auto accepts = [&](QoreValue value) {
+        if constexpr (Lexical) {
+            return QoreTypeInfo::runtimeAcceptsValue(rti, value, getSemanticPolicy()) != QTI_NOT_EQUAL;
+        } else {
+            return QoreTypeInfo::runtimeAcceptsValue(rti, value) != QTI_NOT_EQUAL;
+        }
+    };
 
-    return QoreTypeInfo::runtimeAcceptsValue(ti, *v) ? true : false;
+    // treat a weak reference as the target object
+    return instanceof_accepts(*v, accepts) ? true : false;
 }
 
 // returns true if "super" unconditionally accepts every runtime value of "sub" (i.e. without may_not_match - the
@@ -114,9 +178,12 @@ int QoreInstanceOfOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     // "x instanceof T" only always returns False when the operand types are disjoint - i.e. no runtime value of the
     // static type (lti) can ever match the target type (ti). The following relationships keep the result
     // runtime-dependent, so no parse-time "always returns False" warning should be issued:
-    bool runtime_dependent =
+    // a type parameter of generic code is the type argument of the instantiation that runs, known only at run time
+    // (qore#6016)
+    bool type_param = qore_type_contains_type_parameter(ti);
+    bool runtime_dependent = type_param
         // lti has no type constraint (ex: "auto"/"any"), so a runtime value could be anything - including a ti
-        !QoreTypeInfo::hasType(lti)
+        || !QoreTypeInfo::hasType(lti)
         // (A) ti definitely accepts every value that lti can produce, so instanceof matches at runtime. Conversions
         // are allowed here because instanceof honors them at runtime via runtimeAcceptsValue() (ex: an int value
         // satisfies "instanceof float", so "int instanceof float" is True - but the reverse "float instanceof int"
@@ -138,8 +205,9 @@ int QoreInstanceOfOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
             edesc);
     }
 
-    // see the argument is a constant value, then eval immediately and substitute this node with the result
-    if (exp.isValue()) {
+    // see the argument is a constant value, then eval immediately and substitute this node with the result; not
+    // with a type parameter, whose type is that of the instantiation that runs
+    if (exp.isValue() && !type_param) {
         SimpleRefHolder<QoreInstanceOfOperatorNode> del(this);
         ParseExceptionSink xsink;
         ValueEvalOptimizedRefHolder v(this, *xsink);

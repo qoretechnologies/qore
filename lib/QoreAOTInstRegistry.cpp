@@ -41,6 +41,8 @@
 #include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/VarRefNode.h"
 #include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/CallReferenceCallNode.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/QoreTimeZoneManager.h"
@@ -527,6 +529,7 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::ToIntChecked, {G::Base, G::Expr}, true},
     {O::ToFloatChecked, {G::Base, G::Expr}, true},
     {O::IteratorCreateSource, {G::IteratorCreate}},
+    {O::CheckCallTarget, {G::Expr}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {
@@ -707,10 +710,19 @@ struct InstRegistryMethodRef {
     const char* sig_text = nullptr;
     std::string method_name_storage;
     std::string variant_class_storage;
+    std::string encoded_storage;
+    //! the explicit type arguments of the call, starting with QORE_AOT_CALL_TYPE_ARGS_MARKER, if any (qore#5865)
+    std::string type_args;
 
     InstRegistryMethodRef(const char* encoded) : method_name(encoded) {
         if (!encoded) {
             return;
+        }
+        if (const char* type_args_start = qore_aot_find_call_type_args(encoded)) {
+            type_args = type_args_start;
+            encoded_storage.assign(encoded, type_args_start - encoded);
+            encoded = encoded_storage.c_str();
+            method_name = encoded;
         }
         const char* first_sep = strchr(encoded, '\n');
         if (!first_sep) {
@@ -720,7 +732,10 @@ struct InstRegistryMethodRef {
         method_name = method_name_storage.c_str();
 
         const char* payload = first_sep + 1;
-        const char* second_sep = strrchr(payload, '\n');
+        // the variant's class reference ends the payload's first line, or its second one for a class of a module;
+        // the signature text that follows has the default values of the parameters, whose strings can have newlines
+        // (qore#6026)
+        const char* second_sep = qore_aot_find_class_ref_end(payload);
         if (!second_sep) {
             // Backward-compatible form: method_name + "\n" + signature.
             sig_text = payload;
@@ -734,6 +749,36 @@ struct InstRegistryMethodRef {
         sig_text = second_sep + 1;
     }
 };
+
+//! Returns the explicit type arguments of the call node of a call instruction read from serialized IR (qore#5865)
+static const QoreTypeParamInstantiation* instRegistryCallTypeArgs(const QoreValue& expr) {
+    const auto* call = expr.hasNode() ? dynamic_cast<const FunctionCallBase*>(expr.getInternalNode()) : nullptr;
+    return call ? call->getExplicitTypeParamInstantiation() : nullptr;
+}
+
+//! Sets the explicit type arguments of a dot-eval method call instruction read from serialized IR (qore#5865)
+/** @return false with the error in the context if they cannot be resolved
+*/
+template <typename T>
+static bool instRegistrySetMethodTypeArgs(AOTInstReadCtx& ctx, T& ci, const InstRegistryMethodRef& method_ref) {
+    if (method_ref.type_args.empty()) {
+        return true;
+    }
+    const UserVariantBase* uvb = ci.variant ? ci.variant->getUserVariantBase() : nullptr;
+    auto inst = std::make_unique<QoreTypeParamInstantiation>();
+    // the type arguments can name the type parameters of the code whose context is being built (qore#5733)
+    if (!qore_aot_decode_call_type_args(ctx.pgm, method_ref.type_args.c_str(),
+            uvb ? uvb->getUserSignature() : nullptr, qore_aot_get_type_param_owner(), *inst)) {
+        ctx.error = std::string("cannot resolve the explicit type arguments of the call of method '")
+            + (method_ref.method_name ? method_ref.method_name : "") + "'";
+        return false;
+    }
+    if (!inst->type_args.empty()) {
+        ci.explicit_type_param_inst = inst.get();
+        ci.aot_explicit_type_param_inst = std::move(inst);
+    }
+    return true;
+}
 
 static const QoreClass* instRegistryFindClassByPath(QoreProgram* pgm, const char* class_path, bool pseudo) {
     return qore_aot_resolve_class_ref(pgm, class_path, pseudo);
@@ -805,11 +850,13 @@ static std::string instRegistryGetVariantSignatureRef(const AbstractQoreFunction
  */
 static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValue& expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (auto* call = qore_get_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
         std::string name = instRegistryGetFunctionCallName(call);
         ctx.writer.writeStringRef(name.c_str());
         std::string sig_ref = instRegistryGetVariantSignatureRef(call->getVariant());
+        // the explicit type arguments of the call (f<T>()), read back by the FUNC_CALL expression reader (qore#5865)
+        qore_aot_append_call_type_args(sig_ref, call->getExplicitTypeParamInstantiation());
         ctx.writer.writeStringRef(sig_ref.c_str());
         ctx.writer.writeU8(0);
         return true;
@@ -820,7 +867,9 @@ static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValu
         const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
         ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         const AbstractQoreFunctionVariant* variant = call->getVariant();
-        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant);
+        // the explicit type arguments of the call (qore#5865)
+        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant, nullptr,
+            call->getExplicitTypeParamInstantiation());
         ctx.writer.writeStringRef(method_ref.c_str());
         ctx.writer.writeU8(0);
         return true;
@@ -833,7 +882,7 @@ static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValu
         ctx.writer.writeStringRef(class_path.c_str());
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo());
+            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
         ctx.writer.writeStringRef(method_ref.c_str());
         if ((ctx.writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
             ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
@@ -904,7 +953,7 @@ static bool instRegistryResolveGlobalLValueRoot(AOTInstReadCtx& ctx, LVPathStep&
 
     qore_program_private* pp = qore_program_private::get(*ctx.pgm);
     const qore_ns_private* vns = nullptr;
-    Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name.c_str(), vns);
+    Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name.c_str(), vns, LexicalSemanticPolicy{});
     if (!var) {
         ctx.error = "cannot resolve global lvalue path root '" + name + "'";
         return false;
@@ -1110,7 +1159,7 @@ static std::unique_ptr<QoreIRInstruction> readConst(
             const char* member_name = ctx.reader.readStringRef(ctx.ptr);
             if (enum_path && *enum_path && member_name && *member_name) {
                 const QoreNamespace* pns = nullptr;
-                const QoreEnumDecl* ed = ctx.pgm->findEnum(enum_path, pns);
+                const QoreEnumDecl* ed = qore_program_private::get(*ctx.pgm)->findEnumCanonical(enum_path, pns);
                 if (ed) {
                     ci->constant.enum_member = ed->findMember(member_name);
                     if (ci->constant.enum_member) {
@@ -1459,7 +1508,7 @@ static std::unique_ptr<QoreIRInstruction> readVar(
     if (vname && *vname) {
         qore_program_private* pp = qore_program_private::get(*ctx.pgm);
         const qore_ns_private* vns = nullptr;
-        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns);
+        var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns, LexicalSemanticPolicy{});
     }
     auto* vi = new QoreIRVarInstruction(static_cast<QoreIROpcode>(opcode_raw), var);
     vi->mode = mode;
@@ -1508,9 +1557,56 @@ static std::unique_ptr<QoreIRInstruction> readLValue(
 // Group 9: Expr - General expression instruction
 // ============================================================================
 
+//! Writes the call of a check of its target (QoreIROpcode::CheckCallTarget, issue #5784) without its arguments
+/** The check needs only what identifies the call: the method of a method call (whose receiver is the check's operand),
+    and the kind of a call through a call reference (whose callable is the operand); the arguments, which the call
+    evaluates after the check, can hold expressions that have no serialized form of their own.
+*/
+static bool instRegistryWriteCheckCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        if (const MethodCallNode* mc = dot->getMethodCall()) {
+            // the inline form of a method call (AOTExprKind::DOT_EVAL_TARGET): class, method (with its variant),
+            // pseudo flag, receiver (none: it is the operand) and no arguments
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_TARGET));
+            std::string class_path = instRegistryGetClassPath(mc->getClass(), mc->isPseudo());
+            ctx.writer.writeStringRef(class_path.c_str());
+            std::string method_ref = mc->getName() ? mc->getName() : "";
+            instRegistryAppendMethodVariantRef(method_ref, mc->getVariant(), mc->isPseudo());
+            ctx.writer.writeStringRef(method_ref.c_str());
+            ctx.writer.writeU8(mc->isPseudo() ? 1 : 0);
+            if (!ctx.writeExpr(ctx.writer, QoreValue())) {
+                return false;
+            }
+            ctx.writer.writeU8(0);
+            return true;
+        }
+    }
+    if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        // a call through a call reference (AOTExprKind::CALLREF_CALL): no callable (it is the operand) and no
+        // arguments; a named call has the names of its arguments (AOTExprKind::CALLREF_CALL_NAMED), which are bound
+        // when the call is made (CallReferenceCallNode::evalRuntimeNamedWithArgs())
+        const name_vec_t* arg_names = crc->getRuntimeArgNames();
+        ctx.writer.writeU8(static_cast<uint8_t>(arg_names ? AOTExprKind::CALLREF_CALL_NAMED
+            : AOTExprKind::CALLREF_CALL));
+        if (!ctx.writeExpr(ctx.writer, QoreValue())) {
+            return false;
+        }
+        ctx.writer.writeU8(0);
+        return !arg_names || qore_aot_write_callref_arg_names(ctx.writer, *arg_names);
+    }
+    return instRegistryWriteCallTargetExpr(ctx, expr);
+}
+
 static bool writeExpr(AOTInstWriteCtx& ctx) {
     auto* ei = static_cast<const QoreIRExprInstruction*>(ctx.inst);
     bool expr_written = false;
+    if (ei->opcode == QoreIROpcode::CheckCallTarget) {
+        if (!instRegistryWriteCheckCallTargetExpr(ctx, ei->expr)) {
+            return false;
+        }
+        expr_written = true;
+    }
     if ((ei->opcode == QoreIROpcode::Call
             || ei->opcode == QoreIROpcode::CallMethod
             || ei->opcode == QoreIROpcode::CallStatic)
@@ -1875,11 +1971,53 @@ static std::unique_ptr<QoreIRInstruction> readCallDirect(
     auto* ci = new QoreIRCallDirectInstruction(func, nullptr, func_pgm, expr);
     ci->has_ref_args = has_ref_args;
     ci->is_self_recursive = is_self_recursive;
+    ci->explicit_type_param_inst = instRegistryCallTypeArgs(ci->expr);
     expr.discard(nullptr);
     ci->result = QoreIRValue(result_id);
     ci->operands = operands;
     ci->exception_target = exc_target;
     return std::unique_ptr<QoreIRInstruction>(ci);
+}
+
+//! Returns a normal or static method of a class or of one of its base classes that is not committed yet, or nullptr
+static const QoreMethod* instRegistryFindPendingMethod(const qore_class_private& qcp, const char* method_name,
+        bool is_static) {
+    if (const QoreMethod* method = is_static ? qcp.parseFindLocalStaticMethod(method_name)
+            : qcp.parseFindLocalMethod(method_name)) {
+        return method;
+    }
+    if (qcp.scl) {
+        for (const BCNode* bc : *qcp.scl) {
+            if (bc && bc->sclass) {
+                if (const QoreMethod* method = instRegistryFindPendingMethod(*qore_class_private::get(*bc->sclass),
+                        method_name, is_static)) {
+                    return method;
+                }
+            }
+        }
+    }
+    return nullptr;
+}
+
+//! Returns the method of a direct method call, or nullptr if the class and its base classes have no such method
+/** A closure in a member initializer is read before the classes' methods are committed (see
+    QoreAOTBinaryDeserializer::resolveTypesAndMembers()), and a method that is not committed yet is not found by name
+    at run time: it is the method object of the class (or of a base class) that its variants are committed to (issue
+    #5901)
+*/
+static const QoreMethod* instRegistryFindDirectMethod(const QoreClass& qc, const char* method_name) {
+    if (const QoreMethod* method = qc.findMethod(method_name)) {
+        return method;
+    }
+    if (const QoreMethod* method = qc.findStaticMethod(method_name)) {
+        return method;
+    }
+    // normal methods of the hierarchy before static ones, as the calls are resolved when the code is parsed
+    const qore_class_private& qcp = *qore_class_private::get(qc);
+    if (const QoreMethod* method = instRegistryFindPendingMethod(qcp, method_name, false)) {
+        return method;
+    }
+    return instRegistryFindPendingMethod(qcp, method_name, true);
 }
 
 // ============================================================================
@@ -1922,10 +2060,7 @@ static std::unique_ptr<QoreIRInstruction> readCallMethodDirect(
     if (class_path && *class_path) {
         qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && method_name && *method_name) {
-            method = qc->findMethod(method_name);
-            if (!method) {
-                method = qc->findStaticMethod(method_name);
-            }
+            method = instRegistryFindDirectMethod(*qc, method_name);
         }
     }
     if (!qc || !method) {
@@ -1991,10 +2126,7 @@ static std::unique_ptr<QoreIRInstruction> readInvokeMethodDirect(
     if (class_path && *class_path) {
         qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && method_name && *method_name) {
-            method = qc->findMethod(method_name);
-            if (!method) {
-                method = qc->findStaticMethod(method_name);
-            }
+            method = instRegistryFindDirectMethod(*qc, method_name);
         }
     }
     if (!qc || !method) {
@@ -2055,6 +2187,7 @@ static std::unique_ptr<QoreIRInstruction> readCallStaticDirect(
     }
     auto* ci = new QoreIRCallStaticDirectInstruction(method, nullptr, expr);
     ci->has_ref_args = has_ref_args;
+    ci->explicit_type_param_inst = instRegistryCallTypeArgs(ci->expr);
     expr.discard(nullptr);
     ci->result = QoreIRValue(result_id);
     ci->operands = operands;
@@ -2115,6 +2248,8 @@ static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
     std::string encoded_mname = mname ? mname : "";
     instRegistryAppendMethodVariantRef(encoded_mname, ci->variant, ci->pseudo);
+    // the explicit type arguments of the call (obj.method<T>()), which the instruction holds (qore#5865)
+    qore_aot_append_call_type_args(encoded_mname, ci->explicit_type_param_inst);
     ctx.writer.writeStringRef(encoded_mname.c_str());
     ctx.writer.writeU8(ci->pseudo ? 1 : 0);
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
@@ -2160,10 +2295,14 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
         ci->fallback_method_name = strdup(method_ref.method_name);
     }
     expr.discard(nullptr);
+    std::unique_ptr<QoreIRInstruction> rv(ci);
+    if (!instRegistrySetMethodTypeArgs(ctx, *ci, method_ref)) {
+        return nullptr;
+    }
     ci->result = QoreIRValue(result_id);
     ci->operands = operands;
     ci->exception_target = exc_target;
-    return std::unique_ptr<QoreIRInstruction>(ci);
+    return rv;
 }
 
 // ============================================================================
@@ -2184,6 +2323,8 @@ static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
     std::string encoded_mname = mname ? mname : "";
     instRegistryAppendMethodVariantRef(encoded_mname, ci->variant, ci->pseudo);
+    // the explicit type arguments of the call (obj.method<T>()), which the instruction holds (qore#5865)
+    qore_aot_append_call_type_args(encoded_mname, ci->explicit_type_param_inst);
     ctx.writer.writeStringRef(encoded_mname.c_str());
     ctx.writer.writeU8(ci->pseudo ? 1 : 0);
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
@@ -2233,10 +2374,14 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
         ci->fallback_method_name = strdup(method_ref.method_name);
     }
     expr.discard(nullptr);
+    std::unique_ptr<QoreIRInstruction> rv(ci);
+    if (!instRegistrySetMethodTypeArgs(ctx, *ci, method_ref)) {
+        return nullptr;
+    }
     ci->result = QoreIRValue(result_id);
     ci->operands = operands;
     // NOTE: do NOT overwrite ci->exception_target — correctly set at construction
-    return std::unique_ptr<QoreIRInstruction>(ci);
+    return rv;
 }
 
 // ============================================================================
@@ -2317,6 +2462,9 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
     ii->invoke_key_name = invoke_key_name ? invoke_key_name : "";
     ii->mode = mode;
     ii->has_ref_args = has_ref_args;
+    if (ii->invoke_opcode == QoreIROpcode::CallDirect || ii->invoke_opcode == QoreIROpcode::CallStaticDirect) {
+        ii->explicit_type_param_inst = instRegistryCallTypeArgs(ii->expr);
+    }
     expr.discard(nullptr);
     ii->result = QoreIRValue(result_id);
     ii->operands = operands;
@@ -2330,6 +2478,13 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
 static bool writeScopeEnter(AOTInstWriteCtx& ctx) {
     auto* si = static_cast<const QoreIRScopeEnterInstruction*>(ctx.inst);
     ctx.writer.writeU32(si->scope_id);
+    // the locals of the block, by name and slot, as a local instruction gives its local (#5867)
+    ctx.writer.writeU32(static_cast<uint32_t>(si->locals.size()));
+    for (size_t i = 0; i < si->locals.size(); ++i) {
+        const LocalVar* lv = si->locals[i];
+        ctx.writer.writeStringRef(lv ? lv->getName() : "");
+        ctx.writer.writeU32(i < si->local_slots.size() ? si->local_slots[i] : UINT32_MAX);
+    }
     return true;
 }
 
@@ -2339,6 +2494,22 @@ static std::unique_ptr<QoreIRInstruction> readScopeEnter(
         AOTInstReadCtx& ctx) {
     uint32_t scope_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     auto inst = std::make_unique<QoreIRScopeEnterInstruction>(scope_id);
+    if (ctx.reader.getHeader().version >= QORE_AOT_SCOPE_LOCALS_VERSION) {
+        uint32_t count = QoreAOTBinaryReader::readU32(ctx.ptr);
+        for (uint32_t i = 0; i < count; ++i) {
+            const char* lname = ctx.reader.readStringRef(ctx.ptr);
+            uint32_t slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+            // a local that the function does not have is not released
+            LocalVar* lv = ctx.resolveLocalBySlot(slot_id);
+            if (!lv) {
+                lv = ctx.resolveLocal(lname);
+            }
+            if (lv) {
+                inst->locals.push_back(lv);
+                inst->local_slots.push_back(slot_id);
+            }
+        }
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;
@@ -2847,7 +3018,7 @@ static std::unique_ptr<QoreIRInstruction> readLoadConst(
         ctx.error = error;
         return nullptr;
     }
-    auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode());
+    auto* rcr = qore_get_runtime_constant_ref_node(expr.getInternalNode());
     auto* lci = new QoreIRLoadConstantInstruction(rcr, expr);
     lci->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
@@ -3182,9 +3353,20 @@ static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
     // The AST statement pointer is not serializable and the source location rides on the base-instruction record;
     // from format version 26, the nesting of the statement (#5816): its depth (u16) and its flags (u8), 0 for the
     // instruction of a block
-    auto* dbg = dynamic_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
+    auto* dbg = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(ctx.inst);
     ctx.writer.writeU16(dbg ? dbg->nest_depth : 0);
     ctx.writer.writeU8(dbg ? dbg->nest_flags : 0);
+    // from format version 31, the locals of the block of a DebugBlock, by name and slot (#5921)
+    if (ctx.inst->opcode == QoreIROpcode::DebugBlock) {
+        const QoreIRDebugBlockLocals* bl = dbg ? dbg->block_locals.get() : nullptr;
+        size_t count = bl ? bl->locals.size() : 0;
+        ctx.writer.writeU32(static_cast<uint32_t>(count));
+        for (size_t i = 0; i < count; ++i) {
+            const LocalVar* lv = bl->locals[i];
+            ctx.writer.writeStringRef(lv ? lv->getName() : "");
+            ctx.writer.writeU32(i < bl->slots.size() ? bl->slots[i] : UINT32_MAX);
+        }
+    }
     return true;
 }
 
@@ -3206,6 +3388,26 @@ static std::unique_ptr<QoreIRInstruction> readDebugStatement(
     if (ctx.reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION) {
         inst->nest_depth = QoreAOTBinaryReader::readU16(ctx.ptr);
         inst->nest_flags = QoreAOTBinaryReader::readU8(ctx.ptr);
+    }
+    // the locals of the block of a DebugBlock (see writeDebugStatement()); a local that the function does not have is
+    // not released
+    if (opcode == QoreIROpcode::DebugBlock && ctx.reader.getHeader().version >= QORE_AOT_DEBUG_BLOCK_LOCALS_VERSION) {
+        uint32_t count = QoreAOTBinaryReader::readU32(ctx.ptr);
+        for (uint32_t i = 0; i < count; ++i) {
+            const char* lname = ctx.reader.readStringRef(ctx.ptr);
+            uint32_t slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+            LocalVar* lv = ctx.resolveLocalBySlot(slot_id);
+            if (!lv) {
+                lv = ctx.resolveLocal(lname);
+            }
+            if (lv) {
+                if (!inst->block_locals) {
+                    inst->block_locals = std::make_unique<QoreIRDebugBlockLocals>();
+                }
+                inst->block_locals->locals.push_back(lv);
+                inst->block_locals->slots.push_back(slot_id);
+            }
+        }
     }
     inst->result = QoreIRValue(result_id);
     inst->operands = std::move(operands);

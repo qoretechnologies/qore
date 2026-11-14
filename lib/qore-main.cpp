@@ -80,6 +80,7 @@ std::atomic<bool> qore_initialized = {false};
 
 // shutdown flag
 std::atomic<bool> qore_shutdown = {false};
+std::atomic<bool> qore_thread_start_closed = {false};
 std::atomic<bool> qore_types_deleted = {false};
 
 // exiting flag
@@ -420,9 +421,10 @@ void qore_cleanup() {
     // raw pointers to UserVariantBase members.  Keep the LLVM engine alive, however, because user
     // module delete callbacks below can still call functions through published native entry points.
     // A compile still in LLVM is detached rather than awaited, as LLVM can take without bound; its
-    // thread no longer reads those pointers, QoreJIT::shutdown() below leaves the engine to the
-    // operating system then, and qore_fork_child_quick_exit() ends the process with _exit() if the
-    // compile still runs at the end (see QoreJIT::stopBackgroundCompiler() and QoreJIT::exitQuickly()).
+    // thread no longer reads those pointers.  QoreJIT::shutdown() below releases the engine if the
+    // compile has ended by then; otherwise qore_fork_child_quick_exit() releases it if the compile has
+    // ended at the end, or ends the process with _exit() if it still runs (see
+    // QoreJIT::stopBackgroundCompiler() and QoreJIT::exitQuickly(); qore#5842).
     QoreJIT::instance().stopBackgroundCompiler();
 
     // drop any user-module QoreObject references held by the async I/O
@@ -468,6 +470,14 @@ void qore_cleanup() {
 
     // delete all loadable modules
     QMM.cleanup();
+
+    // the Programs that their owners keep beyond this point (ex: a module's Program with static storage duration,
+    // deleted by a static destructor after this function has freed the types) have their data cleared now, while
+    // Qore code that their objects run when they are destroyed can still run: the JIT engine, the types and the
+    // thread data are released below (qore#6045)
+    // no thread can be started by that code: the threads have been waited for and are not waited for again
+    qore_thread_start_closed.store(true, std::memory_order_release);
+    qore_program_private::clearRemainingPrograms();
 
     // All module programs and their callable UserVariantBase objects are gone, so native entry
     // points can no longer be reached and the LLVM execution engine may now be released safely.

@@ -55,8 +55,21 @@ thread_local unsigned qore_constant_init_depth = 0;
 
 static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed);
 
-static void reapplyConstantType(const QoreTypeInfo* typeInfo, QoreValue& value) {
+//! Gives the value that the init function of a constant compiled ahead of time computed the type of the constant
+/** As the AST interpreter does when it initializes a constant (ConstantEntry::parseInit()), the value of a constant
+    with an explicit declared type is retyped to it.  The type of a constant without one is that of the value that the
+    AST interpreter computed at compile time, which the init function can compute with less specific container types
+    (from the parse types of the expressions); its value is retyped to it as well, unless it already has that type:
+    retyping a container to its own type gives the containers that it holds its value type, which drops the more
+    specific types that they have, as the AST interpreter keeps them (#5925).
+*/
+static void reapplyConstantType(const QoreTypeInfo* typeInfo, QoreValue& value, bool explicit_type) {
     if (!typeInfo || value.isNothing()) {
+        return;
+    }
+    // complex types are unique, so the same type is the same pointer; QoreTypeInfo::equal() does not tell a code
+    // type from one with a signature
+    if (!explicit_type && value.getFullTypeInfo() == typeInfo) {
         return;
     }
 
@@ -204,6 +217,10 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
     if (pgm)
         pwo = qore_program_private::getParseWarnOptions(pgm);
 
+    if (!builtin) {
+        LexicalParsePolicyHelper::capture(semantic_policy);
+    }
+
     const char* mod_name = get_module_context_name();
     if (mod_name) {
         from_module = mod_name;
@@ -214,7 +231,7 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
 }
 
 ConstantEntry::ConstantEntry(const ConstantEntry& old)
-        : loc(old.loc), pwo(old.pwo), name(old.name),
+        : loc(old.loc), pwo(old.pwo), semantic_policy(old.semantic_policy), name(old.name),
         typeInfo(old.typeInfo),
         in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
         explicit_type(old.explicit_type),
@@ -359,7 +376,7 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     // AOT init functions can lose container metadata while computing values.
     // Re-apply the declared constant type before storing so runtime overload
     // dispatch sees the same value type as source mode.
-    reapplyConstantType(typeInfo, result);
+    reapplyConstantType(typeInfo, result, explicit_type);
 
 #ifdef DEBUG
     // the last point where a thread copying the entry can run before the store; see dbg_hold_constant_store()
@@ -411,7 +428,7 @@ void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
         return;
     }
 
-    reapplyConstantType(typeInfo, resolved);
+    reapplyConstantType(typeInfo, resolved, explicit_type);
 
     {
         std::lock_guard<std::mutex> value_lock(runtimeValueLock());
@@ -453,7 +470,7 @@ void ConstantEntry::materializeAOTParseShellValue(ExceptionSink* xsink) {
         resolved.discard(nullptr);
         return;
     }
-    reapplyConstantType(typeInfo, resolved);
+    reapplyConstantType(typeInfo, resolved, explicit_type);
     aot_parse_shell_value.discard(xsink);
     aot_parse_shell_value = resolved;
 }
@@ -588,9 +605,9 @@ int ConstantEntry::parseInit(ClassNs ptr) {
             // running acceptAssignment() here would report a second, redundant RUNTIME-TYPE-ERROR for the
             // same mismatch
             ExceptionSink type_xsink;
-            QoreTypeInfo::retypeValue(val, typeInfo, &type_xsink);
+            QoreTypeInfo::retypeValue(val, typeInfo, &type_xsink, semantic_policy);
             if (!type_xsink) {
-                QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", val, &type_xsink);
+                QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", val, &type_xsink, semantic_policy);
             }
             if (type_xsink) {
                 qore_program_private::addParseException(getProgram(), type_xsink, loc);
@@ -655,9 +672,9 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
                 saved_val = nv;
                 saved_val_set = true;
                 if (explicit_type) {
-                    QoreTypeInfo::retypeValue(saved_val, typeInfo, &xsink);
+                    QoreTypeInfo::retypeValue(saved_val, typeInfo, &xsink, semantic_policy);
                     if (!xsink) {
-                        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", saved_val, &xsink);
+                        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", saved_val, &xsink, semantic_policy);
                     }
                 } else {
                     // a date has the type of its subtype, as a date literal does (issue #5722)

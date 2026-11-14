@@ -79,7 +79,8 @@ module.exports = grammar({
     [$.hash_literal, $.block],
     [$.hash_literal, $._statement],
     [$.list_literal, $.paren_hash_literal],
-    [$.function_declaration, $.primary_expression, $.generic_type],
+    // a function name followed by '<': the type parameters of the declaration, or an expression
+    [$.function_declaration, $.primary_expression],
     [$.argument_list, $.parameter_list],
     [$._statement, $._top_level_item],
     [$.module_spec],
@@ -87,12 +88,8 @@ module.exports = grammar({
     [$._type_keyword, $.complex_type],
     [$._type_keyword, $.simple_type],
     [$.simple_type, $.complex_type],
-    [$.simple_type, $.generic_type],
-    [$.type_parameter, $.simple_type],
     // case < identifier could be comparison value or start of <Type> cast
     [$.primary_expression, $.simple_type],
-    [$.primary_expression, $.generic_type],
-    [$.generic_type, $.generic_scoped_identifier],
     [$.generic_scoped_identifier, $.scoped_identifier],
     // conditional_declaration in if/while vs as primary_expression
     [$.if_statement, $.primary_expression],
@@ -111,7 +108,6 @@ module.exports = grammar({
     [$.debug_statement, $.primary_expression, $._declared_name],
     // a type name as an expression, the name of an untyped declaration or the start of a type
     [$._type_keyword, $._declared_name],
-    [$._declared_name, $.generic_type],
     [$._declared_name, $.complex_type],
   ],
 
@@ -453,6 +449,7 @@ module.exports = grammar({
       optional(field('type_parameters', $.type_parameter_list)),
       $.parameter_list,
       optional($.method_qualifier),
+      optional($.callable_attributes),
       optional(seq('returns', field('returns', $.type))),
       choice(
         $.block,
@@ -464,6 +461,7 @@ module.exports = grammar({
       optional($.modifiers),
       'constructor',
       $.parameter_list,
+      optional($.callable_attributes),
       optional($.base_class_constructor_calls),
       choice(
         $.block,
@@ -522,6 +520,7 @@ module.exports = grammar({
         field('name', choice($.identifier, $.scoped_identifier)),
         optional(field('type_parameters', $.type_parameter_list)),
         $.parameter_list,
+        optional($.callable_attributes),
         optional(seq('returns', field('returns', $.type))),
         $.block,
       ),
@@ -532,6 +531,7 @@ module.exports = grammar({
         optional(field('type_parameters', $.type_parameter_list)),
         $.parameter_list,
         optional($.method_qualifier),
+        optional($.callable_attributes),
         optional(seq('returns', field('returns', $.type))),
         $.block,
       ),
@@ -542,12 +542,29 @@ module.exports = grammar({
         optional(field('type_parameters', $.type_parameter_list)),
         $.parameter_list,
         optional($.method_qualifier),
+        optional($.callable_attributes),
         optional(seq('returns', field('returns', $.type))),
         ';',
       ),
     ),
 
     method_qualifier: $ => 'const',
+
+    // the attribute list of a function or method after its parameter list (lib/parser.ypp: callable_attrs):
+    // [key=value,...;key=value,...] with an optional trailing ';'; the only key is "dom" (functional domains)
+    callable_attributes: $ => seq(
+      '[',
+      $.callable_attribute,
+      repeat(seq(';', $.callable_attribute)),
+      optional(';'),
+      ']',
+    ),
+
+    callable_attribute: $ => seq(
+      field('name', $.identifier),
+      '=',
+      commaSep1(field('value', $.identifier)),
+    ),
 
     // lib/parser.ypp reads the parameters as a list expression, which may end with a comma
     parameter_list: $ => seq(
@@ -1082,6 +1099,10 @@ module.exports = grammar({
         // design/astparser-keyword-identifiers.md.
         alias($._keyword_identifier, $.identifier),
         $.generic_scoped_identifier,
+        // the explicit type arguments of a generic function call, id<code<*hash<auto>(int)>>(c): lib/scanner.lpp
+        // reads word<args> (no whitespace before the '<') as one name, so this takes precedence over the comparison
+        // chain (id<code)>(c), which cannot contain a type such as *hash<auto> or a nested code<> type (qore#6024)
+        prec.dynamic(1, $.generic_type),
         $.scoped_identifier,
         $.member_expression,
         $.index_expression,     // factories{name}(), DataSerializationSupport{ct}(body)
@@ -1694,13 +1715,16 @@ module.exports = grammar({
       ),
     ),
 
+    // the '<' follows the name without whitespace, as lib/scanner.lpp reads {WORD}{TYPE_ARGS}: `a < b > (c)` is a
+    // comparison chain, and the immediate '<' is the only '<' that can start the type arguments, so the lexer has no
+    // choice between it and the comparison operator in a state that allows both (qore#6024)
     generic_type: $ => seq(
       field('base', choice($.identifier, $.scoped_identifier)),
       choice(
-        seq('<', commaSep1($.type), '>'),
+        seq(token.immediate('<'), commaSep1($.type), '>'),
         // lib/scanner.lpp: TYPE_ARGS may be empty, which uses the defaults of all type parameters
-        seq('<', '>'),
-        '<>',
+        seq(token.immediate('<'), '>'),
+        token.immediate('<>'),
       ),
     ),
 

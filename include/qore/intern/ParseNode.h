@@ -34,9 +34,12 @@
 #define _QORE_PARSENODE_H
 
 #include "qore/intern/QoreParseAnalysis.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/WeakHashReferenceNode.h"
 #include "qore/intern/WeakListReferenceNode.h"
+
+#include <typeinfo>
 
 struct QoreParseContext;
 
@@ -63,7 +66,8 @@ public:
         effect_as_root = effect;
     }
     DLLLOCAL ParseNode(const ParseNode& old) : SimpleQoreNode(old.type, false, old.needs_eval_flag), loc(old.loc),
-            effect(old.effect), ref_rv(old.ref_rv), parse_init(false) {
+            effect(old.effect), ref_rv(old.ref_rv), parse_init(false),
+            semantic_policy_bound(old.semantic_policy_bound), semantic_policy(old.semantic_policy) {
         effect_as_root = effect;
     }
     // parse types should never be copied
@@ -102,12 +106,27 @@ public:
         return parse_analysis;
     }
 
+    //! The operation's immutable compatibility semantics; zero never requests a Program lookup.
+    DLLLOCAL LexicalSemanticPolicy getSemanticPolicy() const {
+        return semantic_policy;
+    }
+
+    //! Binds a newly reduced source expression; pass-through grammar rules preserve an existing binding.
+    DLLLOCAL static void bindSemanticPolicy(QoreValue value, LexicalSemanticPolicy policy);
+
+    //! Copies policy to an unpublished execution clone, which does not undergo parse initialization again.
+    DLLLOCAL void copySemanticPolicy(const ParseNode& source) {
+        semantic_policy = source.semantic_policy;
+        semantic_policy_bound = source.semantic_policy_bound;
+    }
+
     //! Returns the type of the node's value as parse initialization gave it (nullptr if it is not known)
     DLLLOCAL const QoreTypeInfo* getParseTypeInfo() const {
         return getTypeInfo();
     }
 
     DLLLOCAL void setParseAnalysis(const QoreParseAnalysis& analysis) {
+        captureSemanticPolicy();
         parse_analysis = analysis;
         parse_init = true;
     }
@@ -121,9 +140,16 @@ public:
             return 0;
         }
         parse_init = true;
+        captureSemanticPolicy();
+        const LexicalSemanticPolicy policy = semantic_policy;
+        LexicalParsePolicyHelper semantic_scope(policy);
         int rc = parseInitImpl(val, parse_context);
         if (val.hasNode() && val.getInternalNode() == this) {
             parse_analysis = parse_context.analysis;
+        } else {
+            // parseInitImpl may replace and destroy this node. Only unbound replacements inherit this
+            // operation's policy; an existing operand returned by simplification keeps its own binding.
+            bindSemanticPolicy(val, policy);
         }
         return rc;
     }
@@ -144,7 +170,12 @@ protected:
 
     //! if the node has undergone "parse initialization"
     bool parse_init : 1;
+    bool semantic_policy_bound : 1 = false;
+    //! Written only during parse initialization or before publishing a background clone.
+    LexicalSemanticPolicy semantic_policy;
     QoreParseAnalysis parse_analysis;
+
+    DLLLOCAL void captureSemanticPolicy();
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) = 0;
 
@@ -174,5 +205,28 @@ public:
     DLLLOCAL ParseNoEvalNode(const ParseNoEvalNode& old) : ParseNode(old) {
     }
 };
+
+//! Returns the node as a T if its class is exactly T, otherwise nullptr
+/** The same result as dynamic_cast<const T*>() for a class T that has no subclasses, compared by the address of
+    the type's type_info object: a dynamic_cast searches the class hierarchy with string comparisons of the type
+    names, which is too slow for the interpreter's per-instruction paths.
+
+    T must be a library-internal (DLLLOCAL) class without subclasses: objects of such a class are only created in
+    this library, so their type_info object is the one that typeid(T) returns here.
+*/
+template <typename T>
+DLLLOCAL inline const T* qore_exact_node_cast(const AbstractQoreNode* n) {
+    const T* rv = (n && &typeid(*n) == &typeid(T)) ? static_cast<const T*>(n) : nullptr;
+    assert(rv == dynamic_cast<const T*>(n));
+    return rv;
+}
+
+//! Returns the node as a T if its class is exactly T, otherwise nullptr; see the const overload
+template <typename T>
+DLLLOCAL inline T* qore_exact_node_cast(AbstractQoreNode* n) {
+    T* rv = (n && &typeid(*n) == &typeid(T)) ? static_cast<T*>(n) : nullptr;
+    assert(rv == dynamic_cast<T*>(n));
+    return rv;
+}
 
 #endif

@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - native callback and policy checks run in children with explicit modes and AOT
+# test-platform: macos - native module compilation and loading, thread entry callbacks and concurrent policy isolation
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class LexicalCompatibilityNativeTest
+
+class LexicalCompatibilityNativeTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? ENV.QCC ?? ENV.QORE_QCC
+            ?? (libqore_dir + DirSep + "qcc");
+    }
+
+    constructor() : QUnit::Test("LexicalCompatibilityNative", "1.0", \ARGV) {
+        addTestCase("external subclass, nested calls, exceptions and concurrent policies", \probe(), ("boundaries",));
+        addTestCase("native entry and exit handlers restore policy on success and failure", \probe(), ("entry-handlers",));
+        addTestCase("native methods, constructors and forwarding retain invocation policy", \probe(), ("methods",));
+        addTestCase("reflection invocations retain caller policy and argument filters", \probe(), ("reflection",));
+        addTestCase("native container APIs retain the active invocation policy", \probe(), ("shared-values",));
+        addTestCase("native copy and reflection copy retain source policy", \probe(), ("copy",));
+        addTestCase("named calls resolved at run time by parameter name retain invocation policy", \probe(),
+            ("named",));
+        set_return_value(main());
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    private checkCommand(string command, string label, bool check_output = False) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command);
+        assertEq(0, result.rc, label + ": " + result.stdout + result.stderr);
+        if (result.mode) ExecModeHarness::check_native(result);
+        if (check_output) assertTrue(result.stdout.endsWith("PASS\n"), label + ": " + result.stdout);
+    }
+
+    probe(string name) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+            return;
+        }
+        if (!trim(backquote("command -v cmake 2>/dev/null || true"))) {
+            testSkip("cmake is unavailable");
+            return;
+        }
+        TmpDir tmp("lexical-native-");
+        string src = get_script_dir() + "/lexical-native";
+        string build = tmp.path + "/build";
+        string config = ENV.Qore_DIR ?? (libqore_dir + "/cmake");
+        string configure = "cmake -S " + shellQuote(src) + " -B " + shellQuote(build);
+        if (is_file(config + "/QoreConfig.cmake")) configure += " -DQore_DIR=" + shellQuote(config);
+        checkCommand(configure, "configure external native subclass");
+        checkCommand("cmake --build " + shellQuote(build) + " --target compatprobe -j2", "compile native subclass");
+        string module_path = build + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string env = "QORE_LIBDIR=" + shellQuote(libqore_dir) + " QORE_MODULE_DIR=" + shellQuote(module_path)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_IR_THRESHOLD=1 ";
+        string source = src + "/" + name + ".qr";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkCommand(env + shellQuote(qore_bin) + " -b --enable-debug --exec-mode=" + mode
+                + " " + shellQuote(source), name + " " + mode, True);
+        }
+        string executable = tmp.path + "/probe";
+        checkCommand(env + shellQuote(qcc_bin) + " -O2 -o " + shellQuote(executable) + " " + shellQuote(source),
+            name + " qcc");
+        checkCommand(env + shellQuote(executable) + " -b --enable-debug", name + " AOT", True);
+    }
+}

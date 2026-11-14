@@ -131,7 +131,12 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
         longer a normal keep-alive connection under manager ownership;
         \c handleConnectionResult()'s \c continueReading() fallback would
         throw \c HTTPCLIENT-STATE-ERROR and close the socket the
-        WebSocket layer is still using.
+        WebSocket layer is still using.  \c isProtocolSwitched() stays
+        @ref True when the operation is aborted or closed after the switch:
+        the completion is delivered on a worker at any time, and for a
+        closed operation \c handleConnectionResult() would close the
+        connection, canceling the WebSocket operation on its socket
+        (issue #5985).
 
         See also \c Http2ClientPollOperation::onComplete() which has the
         same override (without the protocol-switch check, since H2 doesn't

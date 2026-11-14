@@ -39,6 +39,8 @@ class RuntimeConfig;
 
 class AssertStatement : public AbstractStatement {
 public:
+    DLLLOCAL static AssertStatement* create(LexicalSemanticPolicy policy, int start_line, int end_line,
+            QoreValue exp);
     //! no lexical sub-scope of its own
     DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
         return false;
@@ -57,6 +59,12 @@ public:
 
     //! Returns the message expression (or NOTHING) for IR lowering
     DLLLOCAL QoreValue getMessage() const { return message; }
+
+protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(QoreValue& return_value, ExceptionSink* xsink);
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
 private:
     QoreValue condition{};  //!< The condition to assert

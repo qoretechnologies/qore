@@ -28,6 +28,33 @@ class E {
     }
 }
 
+class It inherits AbstractIterator {
+    public {
+        list<E> l;
+        int i = -1;
+    }
+
+    constructor(list<E> l) {
+        self.l = l;
+    }
+
+    bool next() {
+        return ++i < l.size();
+    }
+
+    auto getValue() {
+        return l[i];
+    }
+
+    bool valid() {
+        return i >= 0 && i < l.size();
+    }
+}
+
+hashdecl HE {
+    auto a;
+}
+
 #! records a point of the statement
 string sub mark(string m) {
     printf("  mark %s\n", m);
@@ -56,6 +83,109 @@ hash<auto> sub mkh(string n) {
 
 E sub mke(string n) {
     return new E(n);
+}
+
+# the cases of qore#5801 are functions, not closures, so that each execution mode compiles them
+auto sub case_map_iterator() {
+    *It it = new It((new E("mapit"),));
+    string s = f1(map $1, it) + ((it = NOTHING) ?? "") + mark("mapit");
+}
+
+auto sub case_map_single() {
+    *E e = new E("maps");
+    string s = f1(map $1, e) + ((e = NOTHING) ?? "") + mark("maps");
+}
+
+auto sub case_map_exception() {
+    *list<E> l = (new E("mapex"),);
+    try {
+        string s = f1(map raise(), l) + ((l = NOTHING) ?? "") + mark("mapex");
+    } catch (hash<ExceptionInfo> ex) {
+        mark("caught mapex");
+    }
+    l = NOTHING;
+    mark("mapex end");
+}
+
+auto sub case_map_loop() {
+    *list<E> l = (new E("mapl1"), new E("mapl2"));
+    foreach E e in (l) {
+        *list<E> x = (e,);
+        try {
+            string s = f1(map $1, x) + ((x = NOTHING) ?? "") + mark("mapl " + e.n);
+        } catch (hash<ExceptionInfo> ex) {
+            mark("caught mapl");
+        }
+    }
+    l = NOTHING;
+    mark("mapl end");
+}
+
+auto sub case_cast_list() {
+    *list<auto> l = (new E("castl"),);
+    string s = f1(cast<list<E>>(l)) + ((l = NOTHING) ?? "") + mark("castl");
+}
+
+auto sub case_cast_hashdecl() {
+    *hash<auto> h = {"a": new E("casth")};
+    string s = f1(cast<hash<HE>>(h)) + ((h = NOTHING) ?? "") + mark("casth");
+}
+
+auto sub case_hash_minus_key() {
+    *hash<auto> h = {"a": new E("hmk"), "b": 1};
+    string s = f1(h - "b") + ((h = NOTHING) ?? "") + mark("hmk");
+}
+
+auto sub case_map() {
+    *list<auto> l = (new E("map"),);
+    string s = f1(map $1, l) + ((l = NOTHING) ?? "") + mark("map");
+}
+
+auto sub case_map_typed() {
+    *list<E> l = (new E("mapt"),);
+    string s = f1(map $1, l) + ((l = NOTHING) ?? "") + mark("mapt");
+}
+
+auto sub case_select() {
+    *list<auto> l = (new E("sel"),);
+    string s = f1(select l, True) + ((l = NOTHING) ?? "") + mark("sel");
+}
+
+auto sub case_select_typed() {
+    *list<E> l = (new E("selt"),);
+    string s = f1(select l, True) + ((l = NOTHING) ?? "") + mark("selt");
+}
+
+auto sub case_foldl() {
+    *list<auto> l = ((new E("fold1"),), (new E("fold2"),));
+    string s = f1(foldl $1 + $2, l) + ((l = NOTHING) ?? "") + mark("fold");
+}
+
+auto sub case_foldl_single_element() {
+    *list<auto> l = (new E("fold0"),);
+    string s = f1(foldl $1 + $2, l) + ((l = NOTHING) ?? "") + mark("fold0");
+}
+
+# a fold over a pipeline (a fused fold) given to a call: the Phi that takes the fold's value from the loop (qore#5801)
+# owns the accumulator, which the fold takes over from the pipeline's elements (qore#5883)
+auto sub case_foldl_pipeline() {
+    *list<E> l = (new E("fp1"), new E("fp2"));
+    string s = f1(foldl $2, (map $1, l)) + ((l = NOTHING) ?? "") + mark("fp");
+}
+
+auto sub case_foldl_pipeline_iterator() {
+    *It it = new It((new E("fpi1"), new E("fpi2")));
+    string s = f1(foldl $2, (map $1, it)) + ((it = NOTHING) ?? "") + mark("fpi");
+}
+
+auto sub case_foldl_pipeline_concat() {
+    *list<E> l = (new E("fpc1"), new E("fpc2"));
+    string s = f1(foldl $1 + $2, (map ($1,), l)) + ((l = NOTHING) ?? "") + mark("fpc");
+}
+
+auto sub case_foldl_pipeline_single_element() {
+    *list<E> l = (new E("fps"),);
+    string s = f1(foldl $1 + $2, (map ($1,), l)) + ((l = NOTHING) ?? "") + mark("fps");
 }
 
 #! runs a case
@@ -160,6 +290,25 @@ sub main() {
         bool c = True;
         string s = f1((o,)) + (c ? (o = NOTHING) : "") + mark("br");
     });
+    # the value of a cast, of hash - key and of map, select and foldl, passed to a call, is released when the call
+    # returns, and the operator's source read from a local does not keep its value: the write destroys it (qore#5801)
+    t("cast list", \case_cast_list());
+    t("cast hashdecl", \case_cast_hashdecl());
+    t("hash minus key", \case_hash_minus_key());
+    t("map", \case_map());
+    t("map typed", \case_map_typed());
+    t("select", \case_select());
+    t("select typed", \case_select_typed());
+    t("foldl", \case_foldl());
+    t("foldl single element", \case_foldl_single_element());
+    t("foldl pipeline", \case_foldl_pipeline());
+    t("foldl pipeline iterator", \case_foldl_pipeline_iterator());
+    t("foldl pipeline concat", \case_foldl_pipeline_concat());
+    t("foldl pipeline single element", \case_foldl_pipeline_single_element());
+    t("map iterator", \case_map_iterator());
+    t("map single value", \case_map_single());
+    t("map exception", \case_map_exception());
+    t("map loop", \case_map_loop());
     # an exception after the release
     t("exception", auto sub () {
         auto o = new E("ex");
