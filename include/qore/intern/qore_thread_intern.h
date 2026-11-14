@@ -43,6 +43,7 @@ class RuntimeConfig;
 #include <set>
 #include <map>
 #include <memory>
+#include <new>
 
 #include "qore/intern/QoreSandboxLimits.h"
 #include "qore/QoreSandboxManager.h"
@@ -1399,6 +1400,29 @@ private:
 */
 DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
 
+//! The number of sandbox managers whose interrupt is requested (QoreSandboxManager::requestInterrupt())
+/** A cancellation point resolves the sandbox manager that governs the thread only while it is not 0, so that a check
+    with no request pending costs no lookup (see qore_check_cancel() and "Cost of a check" in
+    design/cooperative-cancellation.md).
+
+    It is never less than the number of managers whose QSB_INTR_REQUESTED bit is set, so it is 0 only while no
+    interrupt is requested: requestInterrupt() increments it before it sets the bit (and decrements it again if the bit
+    was already set), and clearInterrupt() and the destructor of a manager decrement it only after they have cleared a
+    set bit.  A clear that runs between a request's increment and its setting of the bit finds no bit and leaves the
+    count alone.  If the request set the bit first, such a clear would decrement the count before the request
+    incremented it, and a check in between would read 0 while the interrupt of another manager is pending.  It can be
+    one higher than the number of set bits for a moment, which only makes a check look up the manager.  All changes are
+    seq_cst, as the bit, and made before requestInterrupt() wakes the waiting threads: a waiter that registers its
+    wait and then reads 0 is woken by the wakeup that follows.
+*/
+DLLLOCAL extern std::atomic<int> qore_sandbox_interrupt_count;
+
+#ifdef DEBUG
+//! Test hook of the current thread called by QoreSandboxManager::requestInterrupt() between its increment of
+//! qore_sandbox_interrupt_count and its setting of the interrupt bit; see dbg_sandbox_interrupt_request_window()
+DLLLOCAL extern thread_local void (*qore_sandbox_interrupt_request_hook)(QoreSandboxManager* sm);
+#endif
+
 //! Gives the Program of a module (a registered user module, or an AOT module) module lifetime
 /** The Program stays allocated (with a dependency reference) until qore_release_module_program_pins(), which
     qore_cleanup() calls once no other thread can run Qore code, so code that calls into the module from another
@@ -2683,6 +2707,16 @@ DLLLOCAL bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid)
 */
 DLLLOCAL bool qore_thread_add_exit_cleanup(void (*fn)(void*), void* data);
 
+#ifdef DEBUG
+//! Debug-only: makes QoreThreadLocalObject::getNoThrow() fail to allocate an object in the calling thread
+/** For the tests of the callers' handling of an allocation failure; see qore_thread_test_alloc_fails()
+*/
+DLLLOCAL void qore_thread_test_set_alloc_fails(bool fails);
+
+//! Debug-only: returns true if QoreThreadLocalObject::getNoThrow() fails to allocate an object in the calling thread
+DLLLOCAL bool qore_thread_test_alloc_fails();
+#endif
+
 DLLLOCAL bool qore_thread_program_teardown_enter();
 //! records in the thread's data that it has deleted a Program's data; only after qore_thread_program_teardown_enter()
 //! returned true
@@ -2862,10 +2896,17 @@ public:
 
     //! Sets the stack size of threads created with these attributes
     /** The stack of each thread is this size for its code: the static TLS that the C library places on the stack
-        (see q_thread_stack_tls_size()) is added to it
+        (see q_thread_stack_tls_size()) is added to it; a total below the platform's minimum (PTHREAD_STACK_MIN,
+        ex: 128 KB on Linux aarch64) is raised to the minimum, so the thread gets at least the requested size
     */
     DLLLOCAL int setstacksize(size_t ssize) {
-        int rc = pthread_attr_setstacksize(&attr, ssize + q_thread_stack_tls_size());
+        size_t total = ssize + q_thread_stack_tls_size();
+#ifdef PTHREAD_STACK_MIN
+        if (total < static_cast<size_t>(PTHREAD_STACK_MIN)) {
+            total = static_cast<size_t>(PTHREAD_STACK_MIN);
+        }
+#endif
+        int rc = pthread_attr_setstacksize(&attr, total);
         if (!rc) {
             requested_stack_size = ssize;
         }
@@ -3283,7 +3324,8 @@ DLLLOCAL void checkpoint_stack_pos(const char*);
     The object here is behind a thread_local pointer, which has no destructor and is valid for the life of the thread,
     created when the thread first uses it and released when the Qore thread ends (or, for the main thread, when
     qore_cleanup() deletes the thread's data; see qore_thread_add_exit_cleanup()).  A thread without thread data (a
-    thread that runs no Qore code, or one that runs after qore_cleanup()) gets an object that is never released.
+    thread that runs no Qore code, or one that runs after qore_cleanup()) gets an object from get() that is never
+    released; getNoThrow() gives it an object of its own instead, which the caller deletes.
 
     @tparam T the class of the object, default constructible
     @tparam Tag a type that identifies the use (an empty struct): each use has its own pointer
@@ -3298,6 +3340,37 @@ public:
             p = create();
         }
         return *p;
+    }
+
+    //! returns the calling thread's object, creating it if the thread has none, or nullptr if it cannot be allocated
+    /** No exception is thrown for an allocation failure (but the constructor of T can throw).
+
+        A thread without thread data does not keep the object, as nothing would release it: \a owned is then set, and
+        the caller deletes the object when it is done with it.
+
+        @param owned set to true if the caller owns the object returned and must delete it, false otherwise
+    */
+    DLLLOCAL static T* getNoThrow(bool& owned) {
+        owned = false;
+        T* p = ptr;
+        if (__builtin_expect(p != nullptr, 1)) {
+            return p;
+        }
+#ifdef DEBUG
+        if (qore_thread_test_alloc_fails()) {
+            return nullptr;
+        }
+#endif
+        p = new (std::nothrow) T;
+        if (!p) {
+            return nullptr;
+        }
+        if (!qore_thread_add_exit_cleanup(release, nullptr)) {
+            owned = true;
+            return p;
+        }
+        ptr = p;
+        return p;
     }
 
 private:

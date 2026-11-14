@@ -1697,16 +1697,17 @@ int QoreModuleDefContext::initClosure(const QoreProgramLocation* loc, QoreValue&
     public:
         DLLLOCAL HeaderClosureInitHelper(QoreProgram* pgm) : pgm(pgm) {
             if (pgm) {
-                qore_program_private::setModuleHeaderClosureInit(*pgm, true);
+                prev = qore_program_private::setModuleHeaderClosureInit(*pgm, true);
             }
         }
         DLLLOCAL ~HeaderClosureInitHelper() {
             if (pgm) {
-                qore_program_private::setModuleHeaderClosureInit(*pgm, false);
+                qore_program_private::setModuleHeaderClosureInit(*pgm, prev);
             }
         }
     private:
         QoreProgram* pgm;
+        bool prev = false;
     } closure_init_helper(::getProgram());
     // initialize closure
     QoreParseContext parse_context;
@@ -5750,6 +5751,9 @@ void QoreModuleManager::delUser() {
         for (QoreUserModule* um : user_modules) {
             um->runDelCallback(xsink);
         }
+        // AOT user modules are binary modules, deleted after all user modules in cleanup(), but their del closures
+        // run here too, while all module data exists (qore#6015)
+        qore_aot_run_all_module_del_closures();
     }
 
     // calls into module code take the thread count of the module's Program again from now on, and the threads in

@@ -268,6 +268,51 @@ struct QoreAOTMethodDispatchCache {
 };
 
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
+//! the binding of the arguments of a named function call, serialized before the reference to the call's target
+/** written between two 0x01 bytes, which no reference starts with (so the text of the
+    reference, such as the default values of a signature, is never taken for a binding):
+    "argmap:<result size>:<parameter position of each argument, comma-separated>" for a call bound at parse time,
+    "argnames:<count>" followed by one line per argument with its name ("" for a positional argument) for a call
+    resolved at run time by parameter name; names are identifiers and contain no newline
+*/
+struct QoreAOTNamedCallArgs {
+    std::vector<size_t> source_to_param;
+    size_t result_size = 0;
+    name_vec_t names;
+    bool has_map = false;
+    bool has_names = false;
+};
+
+class FunctionCallBase;
+class QoreAOTBinaryWriter;
+class QoreAOTBinaryReader;
+
+//! writes the names of the arguments of a named call reference call (AOTExprKind::CALLREF_CALL_NAMED): u8 count, then
+//! a string ref per name; returns false if there are more than 255
+DLLLOCAL bool qore_aot_write_callref_arg_names(QoreAOTBinaryWriter& writer, const name_vec_t& names);
+
+//! reads the names written by qore_aot_write_callref_arg_names(); returns the interned names, or nullptr with \a error
+//! set if the data is truncated
+DLLLOCAL const name_vec_t* qore_aot_read_callref_arg_names(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        const uint8_t* end, std::string& error);
+
+//! returns the serialized binding of the arguments of a named call ("" for any other call)
+/** @param with_map true to include the parameter positions of a call bound at parse time (an expression tree, whose
+    arguments are written in source order); the arguments of a compiled call are passed at their positions
+*/
+DLLLOCAL std::string qore_aot_named_call_arg_prefix(const FunctionCallBase* call, bool with_map = true);
+
+//! sets the binding of the arguments of a named call read with qore_aot_parse_named_call_arg_prefix() on the call
+/** a function call resolved at run time by parameter name is replaced with a RuntimeNamedFunctionCallNode
+
+    @return -1 if the value is not a call or the binding does not match its arguments, with the reason in \a error
+*/
+DLLLOCAL int qore_aot_apply_named_call_args(QoreValue& call, QoreAOTNamedCallArgs& named, std::string& error);
+
+//! removes the serialized binding of the arguments of a named function call from the start of the reference; returns
+//! -1 if invalid
+DLLLOCAL int qore_aot_parse_named_call_arg_prefix(std::string& ref, QoreAOTNamedCallArgs& named);
+
 struct QoreAOTCallTarget {
     const QoreFunction* func = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
@@ -293,6 +338,8 @@ struct QoreAOTCallTarget {
     bool self_ns_single = false;           //!< unqualified self call; false for explicit base/namespace call
     bool self_is_copy = false;             //!< implicit self copy() call
     bool self_is_abstract = false;         //!< abstract self call requiring virtual dispatch
+    //! a named function call resolved at run time by parameter name: evaluated through its call node
+    bool runtime_arg_names = false;
 
     ~QoreAOTCallTarget() {
         delete object_member_descriptor.load(std::memory_order_relaxed);
@@ -828,6 +875,13 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink);
  */
 DLLLOCAL std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo = false);
 
+//! Returns the newline that ends the class reference at the start of @a ref, or nullptr if there is none
+/** A class reference of qore_aot_encode_class_ref() has no newline but the one after the module of a module class
+    ("@qore-module:<module>\n<path>"), while the text that follows it in a method variant reference (the signature
+    text, with the default values of the parameters) can have newlines (qore#6026)
+*/
+DLLLOCAL const char* qore_aot_find_class_ref_end(const char* ref);
+
 //! Resolves a class reference emitted by qore_aot_encode_class_ref().
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         const char* class_ref, bool pseudo = false);
@@ -851,6 +905,15 @@ DLLLOCAL const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, con
     user-module teardown.
  */
 DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink);
+
+//! Runs the del closures of all registered AOT user modules, in the order in which source modules run theirs
+/** Called at shutdown before any module data is cleared, with the del callbacks of the source user modules, while
+    the Programs and the data of all modules still exist (see QoreModuleManager::delUser(), issue #5164): a closure
+    can use the static variables and the code of its own module and of the modules that it requires.  A module whose
+    closure has run is not run again when the module is deleted (qore_aot_module_delete()).  A module that requires
+    another module has its closure run first.
+ */
+DLLLOCAL void qore_aot_run_all_module_del_closures();
 
 //! Breaks the cycles held up by opaque references that the Programs of all registered AOT user modules own
 /** Called at shutdown while the Programs of all modules still exist, so that the destructors of the objects

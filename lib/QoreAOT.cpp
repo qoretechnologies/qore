@@ -187,6 +187,7 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreStreamingOperatorNode.h"
+#include "qore/intern/FindNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
@@ -915,6 +916,14 @@ std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo) {
     return rv;
 }
 
+const char* qore_aot_find_class_ref_end(const char* ref) {
+    const char* nl = strchr(ref, '\n');
+    if (nl && !strncmp(ref, AOT_CLASS_REF_MODULE_PREFIX, strlen(AOT_CLASS_REF_MODULE_PREFIX))) {
+        nl = strchr(nl + 1, '\n');
+    }
+    return nl;
+}
+
 //! Returns true for an instruction of the step events of a debugger, which native AOT code ignores
 /** The IR of a Program that can be debugged has them (QoreIRFunction::emit_debug_statements), as it is also
     serialized as the debug IR of the function; the analyses of the native code skip them (#5558)
@@ -1111,7 +1120,7 @@ static bool hasAOTSelfRecursiveCall(const QoreIRFunction* ir_func) {
             if (inst->opcode == QoreIROpcode::Invoke) {
                 auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
                 if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                    auto* call = dynamic_cast<const FunctionCallNode*>(
+                    auto* call = qore_get_function_call_node(
                             inv->expr.getInternalNode());
                     if (call && call->getFunction()
                             && std::string(call->getFunction()->getName())
@@ -1855,10 +1864,10 @@ static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
     for (const auto& block : f.blocks) {
         for (const auto& inst : block->instructions) {
             flags |= opcodeToFeatureFlag(inst->opcode);
-            if (dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get())) {
+            if (qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get())) {
                 flags |= QORE_AOT_FEAT_BACKGROUND_IR;
             }
-            if (auto* ei = dynamic_cast<const QoreIRExprInstruction*>(inst.get())) {
+            if (auto* ei = qore_ir_inst_cast<const QoreIRExprInstruction*>(inst.get())) {
                 if (!ei->list_selector_kinds.empty()) {
                     flags |= QORE_AOT_FEAT_LIST_SELECTOR_RANGE;
                 }
@@ -2883,7 +2892,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
     if (q_env_is_set("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu\n",
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu constant-loads=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -2906,7 +2915,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
             optimization_stats.pure_calls_folded,
             optimization_stats.pure_calls_commoned,
             optimization_stats.redundant_phis_eliminated,
-            optimization_stats.return_checks_elided);
+            optimization_stats.return_checks_elided,
+            optimization_stats.constant_containers_loaded);
     }
 
     return 0;
@@ -3655,72 +3665,72 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
 //! exception_target used by all other opcodes.
 template <typename F>
 static void aotOutlineForEachBlockTarget(QoreIRInstruction* inst, F&& cb) {
-    if (auto* br = dynamic_cast<QoreIRBranchInstruction*>(inst)) {
+    if (auto* br = qore_ir_inst_cast<QoreIRBranchInstruction*>(inst)) {
         cb(br->target);
         return;
     }
-    if (auto* brif = dynamic_cast<QoreIRBranchIfInstruction*>(inst)) {
+    if (auto* brif = qore_ir_inst_cast<QoreIRBranchIfInstruction*>(inst)) {
         cb(brif->true_target);
         cb(brif->false_target);
         return;
     }
-    if (auto* fused = dynamic_cast<QoreIRBranchIfLtLocalIntInstruction*>(inst)) {
+    if (auto* fused = qore_ir_inst_cast<QoreIRBranchIfLtLocalIntInstruction*>(inst)) {
         cb(fused->true_target);
         cb(fused->false_target);
         return;
     }
-    if (auto* iter_next = dynamic_cast<QoreIRIteratorNextInstruction*>(inst)) {
+    if (auto* iter_next = qore_ir_inst_cast<QoreIRIteratorNextInstruction*>(inst)) {
         cb(iter_next->done_target);
         cb(iter_next->continue_target);
         return;
     }
-    if (auto* guard = dynamic_cast<QoreIRGuardInstruction*>(inst)) {
+    if (auto* guard = qore_ir_inst_cast<QoreIRGuardInstruction*>(inst)) {
         cb(guard->deopt_target);
         // guards also carry the base-class exception_target
         cb(guard->QoreIRInstruction::exception_target);
         return;
     }
-    if (auto* invoke = dynamic_cast<QoreIRInvokeInstruction*>(inst)) {
+    if (auto* invoke = qore_ir_inst_cast<QoreIRInvokeInstruction*>(inst)) {
         cb(invoke->normal_target);
         cb(invoke->exception_target);
         return;
     }
-    if (auto* sw_int = dynamic_cast<QoreIRSwitchIntInstruction*>(inst)) {
+    if (auto* sw_int = qore_ir_inst_cast<QoreIRSwitchIntInstruction*>(inst)) {
         cb(sw_int->default_target);
         for (auto& c : sw_int->cases) {
             cb(c.target);
         }
         return;
     }
-    if (auto* sw_str = dynamic_cast<QoreIRSwitchStringInstruction*>(inst)) {
+    if (auto* sw_str = qore_ir_inst_cast<QoreIRSwitchStringInstruction*>(inst)) {
         cb(sw_str->default_target);
         for (auto& c : sw_str->cases) {
             cb(c.target);
         }
         return;
     }
-    if (auto* phi = dynamic_cast<QoreIRPhiInstruction*>(inst)) {
+    if (auto* phi = qore_ir_inst_cast<QoreIRPhiInstruction*>(inst)) {
         for (auto& incoming : phi->incoming) {
             cb(incoming.block);
         }
         return;
     }
-    if (auto* thr = dynamic_cast<QoreIRThrowInstruction*>(inst)) {
+    if (auto* thr = qore_ir_inst_cast<QoreIRThrowInstruction*>(inst)) {
         // QoreIRThrowInstruction shadows the base-class exception_target
         cb(thr->exception_target);
         return;
     }
-    if (auto* inv_md = dynamic_cast<QoreIRInvokeMethodDirectInstruction*>(inst)) {
+    if (auto* inv_md = qore_ir_inst_cast<QoreIRInvokeMethodDirectInstruction*>(inst)) {
         cb(inv_md->normal_target);
         cb(inv_md->exception_target);
         return;
     }
-    if (auto* inv_de = dynamic_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
+    if (auto* inv_de = qore_ir_inst_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
         cb(inv_de->normal_target);
         cb(inv_de->exception_target);
         return;
     }
-    if (auto* cah = dynamic_cast<QoreIRCallAOTHelperInstruction*>(inst)) {
+    if (auto* cah = qore_ir_inst_cast<QoreIRCallAOTHelperInstruction*>(inst)) {
         // transient outline return-token target (synthesized call blocks)
         cb(cah->return_target);
         return;
@@ -3871,15 +3881,15 @@ public:
                 if (inst->exception_target) {
                     has_exception_paths = true;
                 }
-                if (auto* thr = dynamic_cast<const QoreIRThrowInstruction*>(inst)) {
+                if (auto* thr = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst)) {
                     has_exception_paths |= thr->exception_target != nullptr;
-                } else if (auto* inv = dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
+                } else if (auto* inv = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
                     has_exception_paths |= inv->exception_target != nullptr;
                 } else if (auto* inv_md =
-                        dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
+                        qore_ir_inst_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
                     has_exception_paths |= inv_md->exception_target != nullptr;
                 } else if (auto* inv_de =
-                        dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
+                        qore_ir_inst_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
                     has_exception_paths |= inv_de->exception_target != nullptr;
                 }
                 switch (inst->opcode) {
@@ -4169,15 +4179,15 @@ private:
                 // return, skipping the in-function handler path — reject.
                 {
                     QoreIRBasicBlock* ex_target = inst->exception_target;
-                    if (auto* thr = dynamic_cast<const QoreIRThrowInstruction*>(inst)) {
+                    if (auto* thr = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst)) {
                         ex_target = thr->exception_target;
-                    } else if (auto* inv = dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
+                    } else if (auto* inv = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
                         ex_target = inv->exception_target;
                     } else if (auto* inv_md =
-                            dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
+                            qore_ir_inst_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
                         ex_target = inv_md->exception_target;
                     } else if (auto* inv_de =
-                            dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
+                            qore_ir_inst_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
                         ex_target = inv_de->exception_target;
                     }
                     if (ex_target) {
@@ -5141,7 +5151,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledInitFunc>& compiled_init_funcs,
         const AOTConstantReverseMap* const_reverse_map,
-        std::string& error, const char* module_path = nullptr) {
+        std::string& error, const char* module_path = nullptr, bool is_del = false) {
     const QoreFunction* source_qf = nullptr;
     UserVariantBase* uvb = getModuleInitUserVariant(init_c, mod_name, module_path, source_qf, error);
     if (!uvb) {
@@ -5151,7 +5161,9 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
         return false;
     }
 
-    std::string init_name = std::string("__module_init::") + mod_name;
+    // the module's \c del closure is compiled the same way; it is loaded with the module and run by
+    // qore_aot_module_delete() (#6015)
+    std::string init_name = std::string(is_del ? "__module_del::" : "__module_init::") + mod_name;
 
     QoreIRFunction* ir_func = nullptr;
     std::string lower_error;
@@ -5213,7 +5225,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
     cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
     cif.feature_flags = scanIRFeatureFlags(*ir_func);
-    cif.target_type = AOTCompiledInitFunc::MODULE_INIT;
+    cif.target_type = is_del ? AOTCompiledInitFunc::MODULE_DEL : AOTCompiledInitFunc::MODULE_INIT;
     cif.ns_path = mod_name;
     cif.item_name = module_path ? module_path : "";
 
@@ -5343,7 +5355,7 @@ static std::string qoreAOTTopLevelCallName(const AbstractStatement* s) {
     }
     QoreValue exp = es->getExpression();
     const FunctionCallNode* fc = exp.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(exp.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(exp.getInternalNode()) : nullptr;
     if (!fc || !fc->getFunctionEntry() || (fc->getArgs() && !fc->getArgs()->empty())
             || (fc->getParseArgs() && !fc->getParseArgs()->empty())) {
         return std::string();
@@ -5431,7 +5443,7 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
             // path and make the alias init function unable to serialize its
             // dependency after its own path is filtered out.
             QoreValue init_expr = ce->getInitExpr();
-            if (!dynamic_cast<const RuntimeConstantRefNode*>(init_expr.getInternalNode())) {
+            if (!qore_get_runtime_constant_ref_node(init_expr.getInternalNode())) {
                 QoreValue v = ce->getAOTOwnershipValue();
                 if (v.hasNode()) {
                     qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq(), true);
@@ -5473,7 +5485,7 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
                     }
                 }
                 QoreValue init_expr = ce->getInitExpr();
-                if (!dynamic_cast<const RuntimeConstantRefNode*>(init_expr.getInternalNode())) {
+                if (!qore_get_runtime_constant_ref_node(init_expr.getInternalNode())) {
                     QoreValue v = ce->getAOTOwnershipValue();
                     if (v.hasNode()) {
                         qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq(), true);
@@ -5776,7 +5788,7 @@ static const ConstantEntry* getAOTLoadConstantEntry(const RuntimeConstantRefNode
         return node->getConstantEntry();
     }
     auto* expr_node = expr.getInternalNode();
-    auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr_node);
+    auto* rcr = qore_get_runtime_constant_ref_node(expr_node);
     return rcr ? rcr->getConstantEntry() : nullptr;
 }
 
@@ -5833,7 +5845,7 @@ static const type_vec_t* qore_aot_get_call_parsed_arg_types(const QoreValue& exp
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_function_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
@@ -5886,7 +5898,7 @@ static const QoreTypeParamInstantiation* qore_aot_get_call_type_instantiation(
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
     if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
@@ -5975,7 +5987,7 @@ static bool qore_aot_get_direct_call_target(
     expr = &invoke->expr;
     const AbstractQoreNode* node = invoke->expr.getInternalNode();
     if (invoke->invoke_opcode == QoreIROpcode::CallDirect) {
-        const auto* call = dynamic_cast<const FunctionCallNode*>(node);
+        const auto* call = qore_get_function_call_node(node);
         variant = call ? call->getVariant() : nullptr;
     } else {
         const auto* call = dynamic_cast<const StaticMethodCallNode*>(node);
@@ -6295,7 +6307,7 @@ static bool qore_aot_is_deferred_source_function_call(const QoreValue& expr) {
     if (!expr.hasNode()) {
         return false;
     }
-    const auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
+    const auto* call = qore_get_function_call_node(expr.getInternalNode());
     return call && call->getAOTDeferredSourceFunction();
 }
 
@@ -7063,7 +7075,7 @@ static bool qore_aot_get_bounded_summary_call(
             static_cast<const QoreIRCallDirectInstruction&>(inst);
         result.variant = call.variant;
         if (!result.variant && call.expr.hasNode()) {
-            const auto* call_node = dynamic_cast<const FunctionCallNode*>(
+            const auto* call_node = qore_get_function_call_node(
                 call.expr.getInternalNode());
             result.variant = call_node ? call_node->getVariant() : nullptr;
         }
@@ -7576,7 +7588,7 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                     has_ref_args = direct->has_ref_args;
                     if (!variant && direct->expr.hasNode()) {
                         const auto* call_node =
-                            dynamic_cast<const FunctionCallNode*>(
+                            qore_get_function_call_node(
                                 direct->expr.getInternalNode());
                         variant = call_node ? call_node->getVariant() : nullptr;
                     }
@@ -7800,7 +7812,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
                 return false;
             }
             if (expr->expr.hasNode()) {
-                const auto* square = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                const auto* square = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                     expr->expr.getInternalNode());
                 if (!square) {
                     return false;
@@ -18729,7 +18741,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             call->variant;
                         if (!callee && call->expr.hasNode()) {
                             const auto* expr =
-                                dynamic_cast<const FunctionCallNode*>(
+                                qore_get_function_call_node(
                                     call->expr.getInternalNode());
                             callee = expr ? expr->getVariant() : nullptr;
                         }
@@ -23961,6 +23973,73 @@ bool QoreAOT::compile(QoreProgram* pgm,
             return false;
         }
     }
+    // the del closures of the local modules run when the compiled script's Program is cleared (qore#6015); a module
+    // without an init closure can have one.  The closure of a module can use the modules that it requires, so the
+    // closures are compiled, and run, in the order that puts a module before the modules it requires
+    {
+        std::vector<std::string> del_modules;
+        for (auto& root : local_module_roots) {
+            QoreAbstractModule* mod = QMM.findModule(root.first.c_str());
+            QoreUserModule* user_mod = mod && mod->isUser() ? dynamic_cast<QoreUserModule*>(mod) : nullptr;
+            if (!user_mod) {
+                continue;
+            }
+            QoreValue del_c = user_mod->refDelClosure();
+            if (del_c) {
+                del_modules.push_back(root.first);
+            }
+            del_c.discard(nullptr);
+        }
+        // the modules that each module requires, directly or through other modules
+        std::map<std::string, std::set<std::string>> requires_map;
+        for (const std::string& name : del_modules) {
+            std::set<std::string> all;
+            std::vector<std::string> todo{name};
+            while (!todo.empty()) {
+                std::string cur = std::move(todo.back());
+                todo.pop_back();
+                std::set<std::string> deps;
+                QMM.getModuleDependencies(cur.c_str(), deps);
+                for (const std::string& d : deps) {
+                    if (all.insert(d).second) {
+                        todo.push_back(d);
+                    }
+                }
+            }
+            requires_map[name] = std::move(all);
+        }
+        std::vector<std::string> ordered;
+        while (!del_modules.empty()) {
+            size_t pick = 0;
+            for (size_t i = 0; i < del_modules.size(); ++i) {
+                bool required = false;
+                for (size_t j = 0; j < del_modules.size() && !required; ++j) {
+                    required = i != j && requires_map[del_modules[j]].count(del_modules[i]);
+                }
+                if (!required) {
+                    pick = i;
+                    break;
+                }
+            }
+            ordered.push_back(del_modules[pick]);
+            del_modules.erase(del_modules.begin() + pick);
+        }
+        for (const std::string& name : ordered) {
+            QoreAbstractModule* mod = QMM.findModule(name.c_str());
+            QoreUserModule* user_mod = dynamic_cast<QoreUserModule*>(mod);
+            assert(user_mod);
+            QoreValue del_c = user_mod->refDelClosure();
+            std::string del_error;
+            bool del_ok = compileModuleInitClosureAsInitFunc(del_c, name.c_str(), user_mod->getProgram(),
+                ctx, *module, di_builder, di_cu, compiled_init_funcs, &const_reverse_map,
+                del_error, user_mod->getFileName(), true);
+            del_c.discard(nullptr);
+            if (!del_ok) {
+                error = del_error;
+                return false;
+            }
+        }
+    }
 
     // Step 2: Try to compile top-level code with AOT mode
     {
@@ -24064,6 +24143,18 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     // handlers cannot be lowered, the image has no debug IR for the top-level code, which then runs
                     // as native code while a debugger is attached, as before
                     if (ir_func->emit_debug_statements) {
+                        // the runtime binds each local slot of the debug IR to the variable of the native code's
+                        // slot with the same ID (the AOT context's locals, in the order of buildAOTSlotMap()), so the
+                        // debug IR takes the native code's slots: assigned in the order of its own instructions, they
+                        // differed when a closure-bound local is instantiated before the locals that the native code
+                        // gives slots first (its InstantiateLocal takes no native slot), and the debug IR then read
+                        // and wrote other variables, as a foreach variable that got the catch variable (qore#6043)
+                        for (const auto& [lv, slot_id] : slots.local_slots) {
+                            if (lv && slot_id >= 0) {
+                                ir_func->local_var_slots[static_cast<const LocalVar*>(lv)]
+                                    = static_cast<uint32_t>(slot_id);
+                            }
+                        }
                         ir_func->computeSlotIdsAndEmbed();
                         std::string handler_error;
                         if (lowering.compileAllHandlerIRs(handler_error) < 0) {
@@ -26485,6 +26576,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // Capture the module init closure value here so it survives past mod_ctx
     // scope end (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     QoreParseOptions parsed_po;
     {
         // the module is parsed only to be compiled and is never registered: closing its context
@@ -26507,6 +26601,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             init_c_holder = mod_ctx.init_c.refSelf();
         }
 
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
     }
 
@@ -26604,6 +26701,17 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
             &const_reverse_map, init_error)) {
             error = init_error;
+            return false;
+        }
+    }
+
+    // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+    if (del_c_holder) {
+        std::string del_error;
+        if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+            *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+            &const_reverse_map, del_error, nullptr, true)) {
+            error = del_error;
             return false;
         }
     }
@@ -26908,6 +27016,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     // Capture the module init closure value so it survives past mod_ctx scope end
     // (which discards it). ValueHolder releases on scope exit.
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -27011,6 +27122,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             init_c_holder = mod_ctx.init_c.refSelf();
         }
 
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
 
         // Handle warnings
@@ -27100,6 +27214,17 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
                 &const_reverse_map, init_error)) {
                 error = init_error;
+                return false;
+            }
+        }
+
+        // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+        if (del_c_holder) {
+            std::string del_error;
+            if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map, del_error, nullptr, true)) {
+                error = del_error;
                 return false;
             }
         }
@@ -30767,6 +30892,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -30906,6 +31034,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             if (is_primary) {
                 init_c_holder = mod_ctx.init_c.refSelf();
             }
+        }
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
         }
         mod_ctx.close();
 
@@ -31337,6 +31468,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -31423,6 +31557,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         if (mod_ctx.hasInit()) {
             init_c_holder = mod_ctx.init_c.refSelf();
         }
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
 
         if (qoreAotHandleWarnings(wsink, error, "module object aggregation parsing")) {
@@ -31487,6 +31624,17 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
                 &const_reverse_map, init_error)) {
                 error = init_error;
+                return false;
+            }
+        }
+
+        // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+        if (del_c_holder) {
+            std::string del_error;
+            if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map, del_error, nullptr, true)) {
+                error = del_error;
                 return false;
             }
         }
@@ -31891,6 +32039,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     ValueHolder init_c_holder(nullptr);
+    // the module's del closure is released with its context; the Program keeps a registry of its statements, which a
+    // closure released before the Program ends leaves dangling, so it is held for as long as the Program (qore#6015)
+    ValueHolder del_c_holder(nullptr);
     {
         // the module is parsed only to be compiled and is never registered: closing its context
         // releases the dependencies that its parse registered, whether or not it failed (#5953)
@@ -31977,6 +32128,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         if (mod_ctx.hasInit()) {
             init_c_holder = mod_ctx.init_c.refSelf();
         }
+        if (mod_ctx.del_c) {
+            del_c_holder = mod_ctx.del_c.refSelf();
+        }
         mod_ctx.close();
 
         if (qoreAotHandleWarnings(wsink, error, "module archive aggregation parsing")) {
@@ -32030,6 +32184,17 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
                 &const_reverse_map, init_error)) {
                 error = init_error;
+                return false;
+            }
+        }
+
+        // the module's del closure is compiled as a MODULE_DEL init function, which the module runs when it is unloaded
+        if (del_c_holder) {
+            std::string del_error;
+            if (!compileModuleInitClosureAsInitFunc(*del_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map, del_error, nullptr, true)) {
+                error = del_error;
                 return false;
             }
         }
@@ -32269,7 +32434,7 @@ static bool qoreAOTDecomposedBackgroundUsesExprSlot(const QoreValue& expr) {
         return false;
     }
     const AbstractQoreNode* inner = bg_op->getExp().getInternalNode();
-    return dynamic_cast<const FunctionCallNode*>(inner) || dynamic_cast<const StaticMethodCallNode*>(inner)
+    return qore_get_function_call_node(inner) || dynamic_cast<const StaticMethodCallNode*>(inner)
         || dynamic_cast<const QoreDotEvalOperatorNode*>(inner) || dynamic_cast<const CallReferenceCallNode*>(inner);
 }
 
@@ -32373,7 +32538,7 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
 }
 
 static bool shouldSkipExprInstructionExprSlot(const QoreIRExprInstruction* ei) {
-    if (dynamic_cast<const QoreIRBackgroundInstruction*>(ei)) {
+    if (qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(ei)) {
         return true;
     }
     if (ei->opcode == QoreIROpcode::BackgroundInt && !ei->operands.empty()) {
@@ -32458,7 +32623,7 @@ static void registerLValueBaseVars(const QoreValue& lvalue, AOTSlotMap& slots) {
     }
 
     // Handle square brackets (e.g., $list[i] or $hash{"key"})
-    if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         registerLValueBaseVars(sb->getLeft(), slots);
         registerLValueBaseVars(sb->getRight(), slots);
         return;
@@ -32555,7 +32720,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
             // parameters and everything its code refers to take slots of this function, so that a metadata-only
             // compile assigns the same slots without lowering it
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
-                auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                auto* bg_inst = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get());
                 if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper && bg_inst->helper_ir) {
                     for (LocalVar* lv : bg_inst->helper_params) {
                         slots.getLocalSlot(reinterpret_cast<const void*>(lv));
@@ -33619,7 +33784,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                         // Pre-resolve call target to avoid per-call dynamic_cast
                         QoreValue expr_val;
                         std::memcpy(&expr_val, &bits, sizeof(expr_val));
-                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                        const auto* call = qore_get_function_call_node(
                             expr_val.getInternalNode());
                         if (call && call->getFunction() && call->getVariant()) {
                             ctx->call_targets[slot].func = call->getFunction();
@@ -34289,7 +34454,7 @@ class ExprTreeSerializer {
         }
 
         // RuntimeConstantRefNode
-        if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+        if (auto* rcr = qore_get_runtime_constant_ref_node(node)) {
             std::string path;
             if (!getAOTRuntimeConstantPath(rcr, const_reverse_map, path)) {
                 return false;
@@ -34324,7 +34489,7 @@ class ExprTreeSerializer {
         // ---- Call nodes ----
 
         // FunctionCallNode: function call with args
-        if (auto* fc = dynamic_cast<const FunctionCallNode*>(node)) {
+        if (auto* fc = qore_get_function_call_node(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FUNC_CALL));
             // Emit namespace-qualified name (see write_expr_func_call
             // in QoreAOTExprHandlers.cpp for rationale — without
@@ -34334,12 +34499,13 @@ class ExprTreeSerializer {
             // `OMQ::substitute_env_vars` (the wrapper itself),
             // infinite-recursing).
             const FunctionEntry* fe = fc->getFunctionEntry();
-            if (fe && fe->getNamespace()) {
-                std::string qualified = qore_aot_get_function_identity_name(fe);
-                writeStr(qualified.c_str());
-            } else {
-                writeStr(fc->getName());
-            }
+            std::string qualified = fe && fe->getNamespace() ? qore_aot_get_function_identity_name(fe)
+                : std::string(fc->getName());
+            // the arguments are written in source order (the order of their evaluation): a named call keeps the
+            // positions of their parameters (bound at parse time) or their names (resolved at run time) before
+            // the name
+            qualified.insert(0, qore_aot_named_call_arg_prefix(fc));
+            writeStr(qualified.c_str());
             // Count and serialize args
             size_t count_pos = buf.size();
             writeU16(0); // placeholder for num_children
@@ -34365,6 +34531,9 @@ class ExprTreeSerializer {
             const AbstractQoreFunctionVariant* variant = sfc->getVariant();
             std::string method_ref = qore_aot_encode_static_method_ref(sfc->getName(), variant,
                 variant ? nullptr : &sfc->getParsedArgTypeInfo());
+            // the arguments are written in source order: a named call keeps the positions of their parameters or
+            // their names before the method reference (read by read_node_EN_SELF_CALL())
+            method_ref.insert(0, qore_aot_named_call_arg_prefix(sfc));
             writeStr(method_ref.c_str());
             // Args
             size_t count_pos = buf.size();
@@ -34388,7 +34557,9 @@ class ExprTreeSerializer {
             } else {
                 writeStr("");
             }
-            writeStr(smc->getName());
+            // the arguments are written in source order: a named call keeps the positions of their parameters or
+            // their names before the name of the method (read by read_node_EN_STATIC_CALL())
+            writeStr(qore_aot_named_call_arg_prefix(smc) + smc->getName());
             // Args
             size_t count_pos = buf.size();
             writeU16(0);
@@ -34405,7 +34576,9 @@ class ExprTreeSerializer {
         if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_DOT_EVAL));
             MethodCallNode* mc = de->getMethodCall();
-            writeStr(mc ? mc->getName() : "");
+            // the arguments are written in source order: a named call keeps the positions of their parameters or
+            // their names before the name of the method (read by read_node_EN_DOT_EVAL())
+            writeStr(mc ? qore_aot_named_call_arg_prefix(mc) + mc->getName() : std::string());
             // Serialize class path for method resolution at deserialization time
             const QoreClass* dot_qc = mc ? mc->getClass() : nullptr;
             writeStr(qore_aot_encode_class_ref(dot_qc, mc && mc->isPseudo()));
@@ -34477,7 +34650,19 @@ class ExprTreeSerializer {
 
         // CallReferenceCallNode: callref(args)
         if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
-            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CALLREF_CALL));
+            // a named call has the names of its arguments before its children (EN_CALLREF_CALL_NAMED)
+            if (const name_vec_t* arg_names = crc->getRuntimeArgNames()) {
+                if (arg_names->size() > 0xffff) {
+                    return false;
+                }
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CALLREF_CALL_NAMED));
+                writeU16(static_cast<uint16_t>(arg_names->size()));
+                for (const std::string& name : *arg_names) {
+                    writeStr(name.c_str());
+                }
+            } else {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CALLREF_CALL));
+            }
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t child_count = 1;
@@ -34504,7 +34689,7 @@ class ExprTreeSerializer {
         }
 
         // QoreSquareBracketsOperatorNode: list[idx]
-        if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             return serializeBinary(AOTExprNodeKind::EN_SQUARE_BRKT, sb->getLeft(), sb->getRight());
         }
 
@@ -35028,6 +35213,12 @@ class ExprTreeSerializer {
         if (auto* op = dynamic_cast<const QoreIterateOperatorNode*>(node)) {
             return serializeUnary(AOTExprNodeKind::EN_ITERATE, op->getExp());
         }
+        if (auto* op = dynamic_cast<const FindNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FIND));
+            writeU8(static_cast<uint8_t>(op->getMode()));
+            writeU16(3);
+            return serializeValue(op->exp) && serializeValue(op->find_exp) && serializeValue(op->where);
+        }
         if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STREAMING));
             writeU8(static_cast<uint8_t>(op->getKind()));
@@ -35275,7 +35466,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     // FunctionCallNode: regular function call
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (auto* call = qore_get_function_call_node(node)) {
         id.kind = AOTExprKind::FUNC_CALL;
         if (const char* deferred_source_function = call->getAOTDeferredSourceFunction()) {
             id.ref1 = deferred_source_function;
@@ -35301,6 +35492,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.reloc_qore_path = getVariantKey(aotRelocStripLeadingColons(id.ref1.c_str()).c_str(), v);
         }
         qore_aot_append_call_type_args(id.ref2, call->getExplicitTypeParamInstantiation());
+        // a named call resolved at run time by parameter name: the names of its arguments in source order, first; the
+        // compiled arguments of any other call are passed at the positions of their parameters
+        id.ref2.insert(0, qore_aot_named_call_arg_prefix(call, false));
         return id;
     }
 
@@ -35322,6 +35516,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // with the explicit type arguments of the call (qore#5818)
         id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
             call_variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        // a named call resolved at run time by parameter name: the names of its arguments in source order, first (read
+        // by resolveExprSlot())
+        id.ref2.insert(0, qore_aot_named_call_arg_prefix(call, false));
         if (method && call->getVariant()) {
             id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), call->getVariant());
         }
@@ -35352,6 +35549,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
             call_variant ? nullptr : &call->getParsedArgTypeInfo(),
             call->getExplicitTypeParamInstantiation());
+        // a named call resolved at run time by parameter name: the names of its arguments in source order, first (read
+        // by resolveExprSlot())
+        id.ref2.insert(0, qore_aot_named_call_arg_prefix(call, false));
         id.ref3 = qore_get_aot_serializable_type_path(call->getReceiverTypeInfo());
         if (const AbstractQoreFunctionVariant* v = call_variant) {
             if (method) {
@@ -35745,7 +35945,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.child_expr = v;
         return id;
     }
-    if (dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         id.kind = AOTExprKind::SQUARE_BRACKET;
         id.child_expr = v;
         return id;
@@ -35993,6 +36193,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.child_expr = v;
         return id;
     }
+    if (dynamic_cast<const FindNode*>(node)) {
+        id.kind = AOTExprKind::FIND;
+        id.child_expr = v;
+        return id;
+    }
     if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
         id.kind = AOTExprKind::STREAMING;
         id.flags = static_cast<uint32_t>(op->getKind());
@@ -36218,7 +36423,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
-        id.kind = AOTExprKind::CALLREF_CALL;
+        // a named call has the names of its arguments (AOTExprKind::CALLREF_CALL_NAMED)
+        id.arg_names = crc->getRuntimeArgNames();
+        id.kind = id.arg_names ? AOTExprKind::CALLREF_CALL_NAMED : AOTExprKind::CALLREF_CALL;
         id.child_expr = crc->getExp();
         id.call_args = crc->getArgs();
         id.parse_args = crc->getParseArgs();
@@ -36279,7 +36486,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 
     // Runtime constant references should be serialized as resolvable constant
     // identities, not as EXPR_TREE blobs rooted at EN_CONST_REF.
-    if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+    if (auto* rcr = qore_get_runtime_constant_ref_node(node)) {
         std::string path;
         if (!getAOTRuntimeConstantPath(rcr, const_reverse_map, path)) {
             ConstantEntry* ce = rcr->getConstantEntry();
@@ -36519,7 +36726,7 @@ static void collectAOTStaticVarRefs(const QoreIRFunction& func, std::vector<AOTS
                     }
                     case QoreIROpcode::BackgroundInt: {
                         // the helper of a background expression is compiled with the function
-                        const auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                        const auto* bg_inst = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get());
                         if (bg_inst && bg_inst->helper_ir) {
                             walk(*bg_inst->helper_ir);
                         }

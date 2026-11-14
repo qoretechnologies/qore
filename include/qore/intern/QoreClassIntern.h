@@ -967,6 +967,26 @@ public:
     DLLLOCAL QoreValue evalPseudoMethodImpl(LexicalSemanticPolicy policy, ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreValue n, const QoreListNode* args,
         const qore_class_private* cctx = runtime_get_class()) const;
+
+    //! evaluates a named call whose variant is resolved at run time by parameter name; the arguments are in source
+    //! order with the names in "arg_names" (see QoreFunction::runtimeFindVariant()) and are evaluated by the call
+    DLLLOCAL QoreValue evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
+            const QoreListNode* args, const qore_class_private* cctx,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+
+    //! evalMethodNamed() with temporary (evaluated) arguments, which the caller keeps
+    DLLLOCAL QoreValue evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
+            QoreListNode* args, const qore_class_private* cctx,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+
+    //! evaluates a named call of a pseudo-method resolved at run time by parameter name; the arguments are evaluated
+    //! by the call (tmp_args false) or temporary values that the caller keeps
+    DLLLOCAL QoreValue evalPseudoMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreValue n,
+            const QoreListNode* args, bool tmp_args, const qore_class_private* cctx,
+            const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}) const;
 };
 
 #define NMETHF(f) (reinterpret_cast<NormalMethodFunction*>(f))
@@ -1023,6 +1043,19 @@ public:
             const qore_class_private* cctx = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
             const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
             const AbstractQoreFunctionVariant** resolved_variant = nullptr) const;
+
+    //! evaluates a named call whose variant is resolved at run time by parameter name; the arguments are in source
+    //! order with the names in "arg_names" (see QoreFunction::runtimeFindVariant()) and are evaluated by the call
+    DLLLOCAL QoreValue evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreListNode* args,
+            const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
+
+    //! evalMethodNamed() with temporary (evaluated) arguments, which the caller keeps
+    DLLLOCAL QoreValue evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreListNode* args,
+            const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) const;
 };
 
 #define SMETHF(f) (reinterpret_cast<StaticMethodFunction*>(f))
@@ -5556,6 +5589,36 @@ public:
         } else {
             return evalPseudoMethod(std::forward<Args>(args)...);
         }
+    }
+
+    //! evaluates a named call of the method whose variant is resolved at run time by parameter name; the arguments
+    //! are in source order with the names in "arg_names" and are evaluated by the call (tmp_args false) or temporary
+    //! values that the caller keeps
+    /** @param self the object of a call of a normal method; for a static method, the object of a call through an
+        object, if any
+    */
+    DLLLOCAL static QoreValue evalNamed(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
+            QoreObject* self, const QoreListNode* args, bool tmp_args, const qore_class_private* cctx,
+            const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+            const name_vec_t& arg_names, LexicalSemanticPolicy policy = {}, QoreProgram* pgm_ctx = nullptr) {
+        const qore_method_private* p = m.priv;
+        if (!p->static_flag) {
+            assert(self);
+            return tmp_args
+                ? NMETHF(p->func)->evalMethodTmpArgsNamed(xsink, rc, self, const_cast<QoreListNode*>(args), cctx,
+                    explicit_type_param_instantiation, arg_names, policy, pgm_ctx)
+                : NMETHF(p->func)->evalMethodNamed(xsink, rc, self, args, cctx, explicit_type_param_instantiation,
+                    arg_names, policy, pgm_ctx);
+        }
+        // issue #5769: see eval()
+        if (!receiver_type_info && self) {
+            receiver_type_info = qore_get_object_receiver_type_info(self);
+        }
+        return tmp_args
+            ? SMETHF(p->func)->evalMethodTmpArgsNamed(xsink, rc, const_cast<QoreListNode*>(args), cctx,
+                receiver_type_info, explicit_type_param_instantiation, arg_names, policy, pgm_ctx)
+            : SMETHF(p->func)->evalMethodNamed(xsink, rc, args, cctx, receiver_type_info,
+                explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
     }
 
     DLLLOCAL static qore_method_private* get(QoreMethod& m) {

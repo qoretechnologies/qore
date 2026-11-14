@@ -141,6 +141,12 @@ static QoreValue member_accessor_probe_get(QoreObject* self, AbstractPrivateData
     if (*xsink) {
         return QoreValue();
     }
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(new QoreStringNode("get"), xsink);
+    ValueHolder reentered(self->evalMethod("reenter", *args, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     return probe->get(member);
 }
 
@@ -154,6 +160,12 @@ static void member_accessor_probe_set(QoreObject* self, AbstractPrivateData* dat
     }
     // the setter runs without Qore locks: reading a normal member of the object here would deadlock otherwise
     ValueHolder declared(self->evalMember("declared", xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(new QoreStringNode("set"), xsink);
+    ValueHolder reentered(self->evalMethod("reenter", *args, xsink), xsink);
     if (*xsink) {
         return;
     }
@@ -300,6 +312,14 @@ MemberAccessorProbe::destructor() {
     probe->deref(xsink);
 }
 
+//! overridden by test subclasses to reenter Qore from a native accessor
+/** @param operation either \c "get" or \c "set"
+    @return zero
+    @throw none */
+int MemberAccessorProbe::reenter(string operation) [flags=CONSTANT] {
+    return 0;
+}
+
 //! returns accessor call counts in get, set order
 /** @return the number of getter and setter calls for the object
     @throw none */
@@ -325,6 +345,55 @@ auto MemberAccessorProbe::raw(string key) [flags=CONSTANT] {
     @throw none */
 nothing MemberAccessorProbe::setRaw(string key, auto value) {
     probe->setRaw(key->c_str(), value, xsink);
+}
+
+//! tests the representation received at a native call boundary, before an assignment can convert it
+/** @param value the evaluated value
+    @return true when the value still holds an opaque reference
+    @throw none */
+static bool MemberAccessorProbe::isOpaqueValue(auto value) [flags=CONSTANT] {
+    return value.isOpaque();
+}
+
+//! exercises removal, binding validity and reset/reuse through the public native reference API
+/** @param target the hash or object containing the member
+    @param reuse_target an integer lvalue used after resetting the helper
+    @param member the member name
+    @return the removal result, validity flags and values before and after reuse
+    @throw an exception from resolving or writing either reference, or from the native member callback */
+static hash<auto> MemberAccessorProbe::referenceRemove(reference target, reference<int> reuse_target,
+        string member) {
+    // The removed value outlives the reference helper's locks and pending notifications.
+    ValueHolder removed(xsink);
+    QoreTypeSafeReferenceHelper helper(target, xsink);
+    if (!helper) {
+        return QoreValue();
+    }
+    removed = helper.removeHashObjKey(member->c_str());
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool valid = helper;
+    bool locked = helper.isLocked();
+    if (helper.reset(reuse_target, xsink)) {
+        return QoreValue();
+    }
+    int64 before = helper.getValue().getAsBigInt();
+    if (helper.assign(QoreValue(before + 1))) {
+        return QoreValue();
+    }
+    int64 after = helper.getValue().getAsBigInt();
+    helper.close();
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("removed", removed.release(), xsink);
+    result->setKeyValue("valid", valid, xsink);
+    result->setKeyValue("locked", locked, xsink);
+    result->setKeyValue("before", before, xsink);
+    result->setKeyValue("after", after, xsink);
+    return result.release();
 }
 
 //! creates an object from C++ without running the Qore constructor

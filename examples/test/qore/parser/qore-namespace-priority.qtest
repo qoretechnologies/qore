@@ -31,9 +31,17 @@ public class QoreNamespacePriorityTest inherits QUnit::Test {
     private qoreFunctionPriority() {
         Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
         string code = "int sub abs(int i) { return 1234; } int sub call() { return abs(-20); }";
+        # the strict language-traps warning says that the declared function is never reached by an unqualified call
+        # (qore#6034); without the strict warnings the declaration is silent
         *hash h = p.parse(code, "qore-priority-fn", WARN_STRICT);
-        assertFalse(exists h);
+        assertTrue(exists h);
+        assertEq("LANGUAGE-TRAP", h.err);
+        assertRegex("function 'abs' declared in namespace '::' is not reachable by an unqualified call", h.desc);
         assertEq(20, p.callFunction("call"));
+
+        Program q(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertFalse(exists q.parse(code, "qore-priority-fn-silent", WARN_ALL));
+        assertEq(20, q.callFunction("call"));
     }
 
     private qoreClassPriority() {

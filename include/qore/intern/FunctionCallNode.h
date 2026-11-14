@@ -37,6 +37,12 @@
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/FunctionList.h"
 
+//! returns the interned list of the names of the arguments of a named call resolved at run time by parameter name
+/** each distinct list is kept once for the life of the library (it is part of the code that uses it, as the names
+    of the parameters are); thread-safe
+*/
+DLLLOCAL const name_vec_t* qore_intern_call_arg_names(name_vec_t&& names);
+
 class FunctionCallBase {
 protected:
     QoreParseListNode* parse_args = nullptr;
@@ -48,7 +54,30 @@ protected:
     type_vec_t explicit_type_args;
     type_vec_t parsed_arg_type_info;
     QoreTypeParamInstantiation explicit_runtime_type_param_instantiation;
+    //! the names of the arguments in source order ("" for a positional argument) of a named call whose variant is
+    //! resolved at run time by parameter name; the arguments are then kept in source order (see
+    //! QoreFunction::runtimeFindVariant())
+    /** interned (qore_intern_call_arg_names()): the list lives as long as the library, so a copy of the call (made for
+        each call by the IR interpreter, or for a background thread) takes the pointer without owning it
+    */
+    const name_vec_t* runtime_arg_names = nullptr;
     bool has_explicit_type_args = false;
+    //! true if the call can bind named arguments at run time (set by the call node before parseArgsVariant())
+    bool allow_runtime_arg_names = false;
+    //! true for a call of a method resolved on the class of the object (a call through an object or an unqualified
+    //! call of a normal method in the class): a named call is resolved at run time on the class of the object, as the
+    //! positional call that it spells out (qore#5990)
+    bool virtual_named_dispatch = false;
+    //! the variant of the receiver's static type that the names of a named call select at parse time, whose checks
+    //! are made at parse time, when a child class can have another variant that the call selects (the call is
+    //! resolved at run time on the class of the object; see parseCommitVirtualNamedCall())
+    const AbstractQoreFunctionVariant* named_bound_variant = nullptr;
+    //! the names of the arguments of such a call until the call is made resolved at run time
+    name_vec_t virtual_named_names;
+
+    //! makes a named call of a method for which a child class can have another variant resolved at run time by
+    //! parameter name after the checks of its variant (qore#5990); returns 1 if it did
+    DLLLOCAL int parseCommitVirtualNamedCall();
 
 public:
     DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args),
@@ -64,6 +93,7 @@ public:
         explicit_type_args(old.explicit_type_args),
         parsed_arg_type_info(old.parsed_arg_type_info),
         explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
+        runtime_arg_names(old.runtime_arg_names),
         has_explicit_type_args(old.has_explicit_type_args) {
         explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
         for (const QoreParseTypeInfo* pti : old.explicit_parse_type_args) {
@@ -77,6 +107,7 @@ public:
             explicit_type_args(old.explicit_type_args),
             parsed_arg_type_info(old.parsed_arg_type_info),
             explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
+            runtime_arg_names(old.runtime_arg_names),
             has_explicit_type_args(old.has_explicit_type_args) {
         explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
         for (const QoreParseTypeInfo* pti : old.explicit_parse_type_args) {
@@ -104,6 +135,39 @@ public:
         args = nullptr;
         return rv;
     }
+
+    //! the names of the arguments in source order of a named call resolved at run time by parameter name, if any
+    DLLLOCAL const name_vec_t* getRuntimeArgNames() const { return runtime_arg_names; }
+
+    //! allows the call to bind named arguments at run time; set before parseArgsVariant()
+    DLLLOCAL void setAllowRuntimeArgNames() {
+        allow_runtime_arg_names = true;
+    }
+
+    //! returns the variant of the call for the checks that a call node makes after parseArgsVariant(): the variant
+    //! of the call, or the variant that the names of a named call resolved at run time select (qore#5990)
+    DLLLOCAL const AbstractQoreFunctionVariant* getParseCheckVariant() const {
+        return variant ? variant : named_bound_variant;
+    }
+
+    //! marks a call of a method dispatched on the class of the object; set before parseArgsVariant()
+    DLLLOCAL void setVirtualNamedDispatch() {
+        virtual_named_dispatch = true;
+    }
+
+    //! sets the names of the arguments in source order of a named call resolved at run time (AOT deserialization)
+    /** a call resolved at run time by parameter name has no variant: a variant that the reader resolved from the types
+        of the arguments is cleared (qore#5990)
+    */
+    DLLLOCAL void setRuntimeArgNames(name_vec_t&& names) {
+        runtime_arg_names = qore_intern_call_arg_names(std::move(names));
+        variant = nullptr;
+        type_param_instantiation.clear();
+    }
+
+    //! sets the positions of the parameters of the arguments of a named call bound at parse time (AOT
+    //! deserialization); the arguments must be set
+    DLLLOCAL void setCallArgEvalMap(std::vector<size_t>&& source_to_param, size_t result_size);
 
     // ns can be nullptr if the function is a method
     DLLLOCAL int parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context, QoreFunction* func,
@@ -213,9 +277,11 @@ protected:
         if (!reusable_tmp_args || !args) {
             return args;
         }
-        holder = args->copy();
-        return *holder;
+        return copyEvalTmpArgs(holder);
     }
+
+    //! returns a copy of the temporary arguments of a reusable copy of a call (see getEvalTmpArgs())
+    DLLLOCAL QoreListNode* copyEvalTmpArgs(ReferenceHolder<QoreListNode>& holder) const;
 
     DLLLOCAL void doFlags(int64 flags) {
         if (flags & QCF_RET_VALUE_ONLY) {
@@ -374,9 +440,39 @@ public:
         return const_cast<QoreProgram*>(pgm);
     }
 
+    //! returns a copy of the call with the given temporary arguments, of the class of this call and with its semantic
+    //! policy (see qore_make_function_call())
+    DLLLOCAL virtual FunctionCallNode* copyWithArgs(QoreListNode* n_args) const;
+
+    //! returns the call as a named call whose variant is resolved at run time by parameter name
+    /** @param call a call whose runtime argument names are set; it is consumed (dereferenced)
+
+        @return a RuntimeNamedFunctionCallNode with the arguments, names and state of the call
+    */
+    DLLLOCAL static FunctionCallNode* makeRuntimeNamed(FunctionCallNode* call);
+
     DLLLOCAL int parseInitCall(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL int parseInitFinalizedCall(QoreValue& val, QoreParseContext& parse_context);
+
+    //! Parse-initializes this call as the replacement of another node and records its analysis on it
+    /** A node that replaces itself with this call (a namespace-qualified call parsed as a static method call, a
+        deferred AOT call) initializes it here instead of through ParseNode::parseInit(), which records the analysis
+        - the known return type, for example - only on the node it was called on.  Without it, code generation sees
+        no type for the call's value (qore#5977).
+    */
+    DLLLOCAL int parseInitReplacementCall(QoreValue& val, QoreParseContext& parse_context) {
+        int rc = parseInitFinalizedCall(val, parse_context);
+        // parseInitFinalizedCall() can replace this call in val and release it (a named call whose variant is
+        // resolved at run time becomes a RuntimeNamedFunctionCallNode: makeRuntimeNamed()), so this call must not be
+        // used after it: the analysis is recorded on the node that val holds, which is this call or its replacement
+        ParseNode* call = dynamic_cast<ParseNode*>(val.getInternalNode());
+        assert(call);
+        if (call) {
+            call->setParseAnalysis(parse_context.analysis);
+        }
+        return rc;
+    }
 
     DLLLOCAL virtual const char* getName() const {
         return fe ? fe->getName() : c_str;
@@ -456,8 +552,21 @@ protected:
     template <bool LexicalInvocation>
     DLLLOCAL QoreValue evalImplInternal(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
+    template <bool LexicalInvocation>
+    DLLLOCAL QoreValue evalReusableTmpArgs(QoreFunction* func, QoreProgram* call_pgm, unsigned call_flags,
+        RuntimeConfig& rc, ExceptionSink* xsink) const;
+
     DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+    //! evaluates a named call whose variant is resolved at run time by parameter name
+    DLLLOCAL QoreValue evalNamed(QoreFunction* func, QoreProgram* call_pgm, RuntimeConfig& rc, unsigned call_flags,
+            ExceptionSink* xsink) const;
+
+    //! the Program to execute this call in (see evalImpl())
+    DLLLOCAL QoreProgram* getCallProgram(RuntimeConfig& rc) const {
+        QoreProgram* call_pgm = pgm ? pgm : ::getProgram();
+        return call_pgm ? call_pgm : rc.getProgram();
+    }
 
     DLLLOCAL FunctionCallNode(const QoreProgramLocation* loc, char* name, QoreParseListNode* a, qore_type_t n_type)
             : AbstractFunctionCallNode(loc, n_type, a), c_str(name), finalized(false) {
@@ -470,6 +579,32 @@ protected:
             ? variant->parseGetReturnTypeInfo()
             : (fe ? fe->getFunction()->parseGetUniqueReturnTypeInfo() : nullptr);
     }
+};
+
+//! a named function call whose variant is resolved at run time by parameter name
+/** a class of its own, so that the evaluation of other function calls has no cost of it; the names of the arguments
+    are in FunctionCallBase (getRuntimeArgNames()), which IR lowering, the JIT and AOT read
+*/
+class RuntimeNamedFunctionCallNode : public FunctionCallNode {
+public:
+    //! a copy of the call with the given arguments
+    /** @param tmp true if the arguments are temporary (evaluated values), false for the arguments of the call as
+        parsed
+    */
+    DLLLOCAL RuntimeNamedFunctionCallNode(const FunctionCallNode& old, QoreListNode* n_args, bool tmp = true)
+            : FunctionCallNode(old, n_args) {
+        assert(getRuntimeArgNames());
+        tmp_args = tmp;
+    }
+
+    DLLLOCAL virtual FunctionCallNode* copyWithArgs(QoreListNode* n_args) const {
+        return new RuntimeNamedFunctionCallNode(*this, n_args);
+    }
+
+protected:
+    using FunctionCallNode::evalImpl;
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 class ProgramFunctionCallNode : public FunctionCallNode {
@@ -515,6 +650,25 @@ Base* qore_make_function_call(LexicalSemanticPolicy policy, Args&&... args) {
 */
 DLLLOCAL void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
         const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant);
+
+//! Returns the node as a FunctionCallNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const FunctionCallNode*>(), from the node type: a FunctionCallNode has
+    NT_FUNCTION_CALL and ProgramFunctionCallNode NT_PROGRAM_FUNC_CALL; its other subclasses keep the type of their
+    base class (the lexical variants made by qore_make_function_call()) or of the call they copy
+    (RuntimeNamedFunctionCallNode), and no other class has either type.  A dynamic_cast searches the class hierarchy
+    with string comparisons of the type names, which is too slow for the interpreter's per-call paths.
+*/
+DLLLOCAL inline const FunctionCallNode* qore_get_function_call_node(const AbstractQoreNode* n) {
+    if (!n) {
+        return nullptr;
+    }
+    qore_type_t t = n->getType();
+    const FunctionCallNode* rv = (t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL)
+        ? static_cast<const FunctionCallNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const FunctionCallNode*>(n));
+    return rv;
+}
 
 class AbstractMethodCallNode : public AbstractFunctionCallNode {
 protected:
@@ -562,6 +716,20 @@ public:
     /** @return -1 if the exception was raised, 0 if the object is valid
     */
     DLLLOCAL int checkObject(QoreObject* o, const char* cstr, ExceptionSink* xsink) const;
+    //! evaluates a named call of a method of an object resolved at run time by parameter name (qore#5990)
+    /** the call is resolved as the call with positional arguments that it spells out: on the method of the class of
+        the object (or \a m), whose classes are searched from the first, and the first class with a variant that
+        accepts the names and the arguments is used
+
+        @param policy the semantic policy of a legacy AST call (default for any other call)
+        @param o the object
+        @param m the method called (a call that names the class of the method, as Base::m() does, or the method of
+        the class of the object), or nullptr to look it up by name in the class of the object
+        @param cstr the name of the method
+        @param ctx the class context of the call
+    */
+    DLLLOCAL QoreValue execNamed(LexicalSemanticPolicy policy, QoreObject* o, const QoreMethod* m, const char* cstr,
+            const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL const QoreClass* getClass() const {
         return qc;
@@ -622,6 +790,10 @@ public:
 
     template <bool Lexical>
     DLLLOCAL QoreValue execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const;
+    //! evaluates a named call resolved at run time by parameter name on a value that is not an object: the call of
+    //! a method of an object whose receiver has no value or another value at run time (see
+    //! QoreDotEvalOperatorNode::evalWithBase())
+    DLLLOCAL QoreValue execPseudoNamed(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual const char* getName() const {
         return c_str ? c_str : "copy";
@@ -875,6 +1047,11 @@ protected:
     DLLLOCAL QoreValue evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
         return evalImpl(getSemanticPolicy(), rc, needs_deref, xsink);
     }
+    //! evaluates a named call resolved at run time by parameter name
+    DLLLOCAL QoreValue evalNamed(LexicalSemanticPolicy policy, RuntimeConfig& rc, ExceptionSink* xsink) const;
+
+    //! reports an unresolved target without keeping diagnostic string storage in ordinary call frames
+    DLLLOCAL QoreValue evalUnresolved(ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, NamedScope* n_scope, QoreParseListNode* args)
