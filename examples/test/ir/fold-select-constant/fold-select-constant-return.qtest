@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+# test-platform: macos - JIT and AOT code generation of the release of a return value on an exception
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class FoldSelectConstantReturnTest
+
+#! issues #6014 and #6028: a pipeline with a constant select predicate gives the value of a return that a handler interrupts
+/** The IR optimizer's unreachable-block pruning removes the blocks after a select stage whose predicate is a constant
+    False, with the releases of the values that they defined (#6014), and keeps the Return of a return statement whose
+    handler throws behind a constant condition, alone in its otherwise unreachable block, so that its value is
+    released after the function's locals (#6028).  Here the value of such a return is a fold or a list over a pipeline
+    with a constant False select stage (whose blocks are removed) or a constant True one (whose values are live and
+    are the return value): without #6014, the functions with False fail IR verification; without #6028, the values of
+    the functions with True are released before the local.
+
+    The script next to the test runs in every execution mode (its functions compiled before they run, with
+    QORE_JIT_SYNC_COMPILE), on the IR tier and as AOT executables, and its output must be that of the AST interpreter.
+*/
+class FoldSelectConstantReturnTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "fold-select-constant-return-cases";
+
+        #! the output of each case with the AST interpreter, which the script gives three times
+        const ExpectedLines = (
+            "fold map false: [\"~m1\", \"~m2\", \"x\", \"~z\", \"caught:E\"] live=0",
+            "fold map true: [\"x\", \"~z\", \"~m1\", \"~m2\", \"caught:E\"] live=0",
+            "fold select map false: [\"s\", \"~z\", \"caught:E\"] live=0",
+            "fold select map true: [\"s\", \"~z\", \"~m1\", \"~m2\", \"caught:E\"] live=0",
+            "list iterator false: [\"x\", \"~z\", \"caught:E\"] live=0",
+            "list iterator true: [\"x\", \"~z\", \"~m1\", \"~m2\", \"caught:E\"] live=0",
+            "list try false: [\"~m1\", \"~m2\", \"x\", \"catch:E\", \"~z\", \"returned:after\"] live=0",
+            "list try true: [\"x\", \"~m1\", \"~m2\", \"catch:E\", \"~z\", \"returned:after\"] live=0",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("constant select in an interrupted return", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the functions are compiled to native code before they run, not in the background
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_JIT_SYNC_COMPILE=1", libqore_dir,
+            libqore_dir, libqore_dir);
+        expected = foldl $1 + $2, (map sprintf("%s\n%s\n%s\n", $1, $1, $1), ExpectedLines);
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode, \modeTest(), (mode,));
+        }
+        addTestCase(ExecModeHarness::IRTierName, \irTierTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in an execution mode
+    private modeTest(string mode) {
+        assertEq(expected, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+            scriptPath())), mode);
+    }
+
+    #! runs the script on the IR tier
+    private irTierTest() {
+        assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("fold-select-constant-return-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+}

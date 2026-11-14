@@ -94,6 +94,8 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         addTestCase("createRecordsBulk returning", \testCreateBulkReturning());
         addTestCase("columnar bulk shapes", \testColumnarBulkShapes());
         addTestCase("transactional mutation limits", \testTransactionalMutationLimits());
+        addTestCase("a failed upsert raises the same error whatever the shape of its records",
+            \testUpsertBulkErrorShapeIndependent());
 
         set_return_value(main());
     }
@@ -177,6 +179,47 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         assertEq("alice", rows[0].name);
         assertEq("bob", rows[1].name);
         assertEq("carol", rows[2].name);
+    }
+
+    #! A failed upsert raises the error the provider raised, for a list of records as for a hash of lists
+    /** The list overload wrapped every failure as @c CREATE-RECORD-ERROR, an @c on_error block copied from
+        createRecordsBulk(), so a Qorus Qog's exec-upsert (a list of records) raised another code than the same upsert
+        as a hash of lists, and neither is in the documented contract.
+    */
+    private testUpsertBulkErrorShapeIndependent() {
+        Datasource ds = getDatasource();
+
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        Table t(ds, TestTableName);
+        AbstractTable at = t.getTable();
+        on_exit at.rollback();
+        at.del({});
+        at.commit();
+
+        DbTableDataProvider provider(at);
+        # a null in a required column
+        code upsert_list = sub () {
+            provider.upsertRecordsBulk(({"id": 1, "name": NULL, "value": 1},));
+        };
+        code upsert_hash = sub () {
+            provider.upsertRecordsBulk({"id": (1,), "name": (NULL,), "value": (1,)});
+        };
+        hash<auto> errs = {};
+        foreach hash<auto> c in ({"list": upsert_list, "hash": upsert_hash}.pairIterator()) {
+            try {
+                c.value();
+                fail(c.key + ": the upsert of a null in a required column fails");
+            } catch (hash<ExceptionInfo> ex) {
+                errs{c.key} = ex.err;
+                at.rollback();
+            }
+        }
+        assertNeq("CREATE-RECORD-ERROR", errs.list, "an upsert's failure is not a create's");
+        assertEq(errs.hash, errs.list, "the same code for a list of records as for a hash of lists");
+        assertEq(0, at.selectRows().size(), "nothing was written");
     }
 
     #! Test that upsertRecordsBulk works with an explicit string strategy
