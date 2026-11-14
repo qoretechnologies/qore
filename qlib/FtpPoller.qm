@@ -33,7 +33,7 @@
 
 module FtpPoller {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "2.2";
     desc = "user module providing FTP polling functionality";
     author = "Alzhan Turlybekov <alzhan.turlybekov@qoretechnologies.com>";
@@ -155,8 +155,11 @@ poller.waitStop();
 
     The @ref FtpPoller::FtpPoller "FtpPoller" class includes support for running in sandboxed Program objects with the
     following parse options set:
-    - \c PO_NO_THREAD_CONTROL: in this case the \c "start_thread" option is required in
-      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
+    - \c PO_NO_THREAD_CONTROL: the module declares the \c THREAD_CONTROL @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, it starts its polling thread for such a caller
+      (the thread runs under the caller's sandbox), and the \c "start_thread" option is not required in
+      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
     - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
       in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
       @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()";
@@ -165,6 +168,12 @@ poller.waitStop();
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
     @section ftppollerv2_2 Version 2.2
+    - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
+    - without the \c "start_thread" option, the \c start_thread capability of the thread that creates the poller is
+      used, as a host sets it for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - FTP errors during polling are now logged with the new \c "log_error" callback (falling back to \c "log_info" if
       not set) instead of being reported only as informational messages
     - added the \c "error_delay" option so that the delay before retrying a poll after an FTP error can be configured
@@ -406,9 +415,11 @@ public class FtpPoller {
         - \c sleep: (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
           set then @ref Qore::sleep() will be used)
-        - \c start_thread: (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
-          @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
-          thread ID (if not set then @ref background will be used)
+        - \c start_thread: a @ref closure "closure" or @ref call_reference "call reference" for
+          starting threads; must return the integer thread ID; if not set, the \c start_thread capability that a host
+          sets for the code that creates the object is used (@ref Qore::Thread::ThreadCapabilityScope
+          "ThreadCapabilityScope"), and otherwise @ref background; required with @ref Qore::PO_NO_THREAD_CONTROL only
+          when the module is loaded by its path, where its \c THREAD_CONTROL domain declaration does not apply
         - \c tempfile_template: (used when \c local_dir and \c atomic_transfer are set) the temporary filename prefix
           to use when transferring files to the local directory specified by \c local_dir; use \c "%s" as the
           placeholder for the target filename
@@ -426,6 +437,11 @@ public class FtpPoller {
     constructor(Qore::FtpClient n_ftp, hash<auto> nconf) {
         # create hash of keys with only valid options in argument hash
         hash<auto> conf += Defaults + nconf{AllKeys};
+        # without the option, the capability of the code that the host runs, if any (qorus#867); before the required
+        # keys are checked, as a Program that may not control threads requires it
+        if (!exists conf.start_thread) {
+            conf.start_thread = get_thread_capability("start_thread");
+        }
 
         foreach string k in (RequiredKeys) {
             if (!exists conf{k}) {
@@ -510,9 +526,11 @@ public class FtpPoller {
         - \c protocol: either \c "ftp" (the detault) or \c "ftps" for secure FTP
         - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value)
         - \c reopts: regular expression match options (ex RE_Caseless for case-insensitive matches)
-        - \c start_thread: (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
-          @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
-          thread ID (if not set then @ref background will be used)
+        - \c start_thread: a @ref closure "closure" or @ref call_reference "call reference" for
+          starting threads; must return the integer thread ID; if not set, the \c start_thread capability that a host
+          sets for the code that creates the object is used (@ref Qore::Thread::ThreadCapabilityScope
+          "ThreadCapabilityScope"), and otherwise @ref background; required with @ref Qore::PO_NO_THREAD_CONTROL only
+          when the module is loaded by its path, where its \c THREAD_CONTROL domain declaration does not apply
         - \c sleep: (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
           set then @ref Qore::sleep() will be used)
@@ -529,6 +547,11 @@ public class FtpPoller {
     constructor(hash<auto> nconf) {
         # create hash of keys with only valid options in argument hash
         hash<auto> conf += Defaults + nconf{AllKeys};
+        # without the option, the capability of the code that the host runs, if any (qorus#867); before the required
+        # keys are checked, as a Program that may not control threads requires it
+        if (!exists conf.start_thread) {
+            conf.start_thread = get_thread_capability("start_thread");
+        }
 
         foreach string k in (RequiredKeysWithHost) {
             if (!exists conf{k}) {
@@ -861,6 +884,11 @@ public class FtpPoller {
 
         runflag = True;
         sc.add();
+        # a thread that is not started leaves the poller stopped, so that stop() does not wait for it
+        on_error {
+            runflag = False;
+            sc.done();
+        }
 
 %ifdef PO_NO_THREAD_CONTROL
         return tid = call_function(start_thread, \run());

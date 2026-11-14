@@ -27,7 +27,7 @@
 
 module FilePoller {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "2.1";
     desc = "Filesystem polling solution";
     author = "Petr Vanek <petr@yarpen.cz>";
@@ -103,8 +103,11 @@ module FilePoller {
 
     The @ref FilePoller::FilePoller "FilePoller" class includes support for running in sandboxed Program objects with
     the following parse options set:
-    - \c PO_NO_THREAD_CONTROL: in this case the \c "start_thread" option is required in
-      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()"
+    - \c PO_NO_THREAD_CONTROL: the module declares the \c THREAD_CONTROL @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, it starts its polling thread for such a caller
+      (the thread runs under the caller's sandbox), and the \c "start_thread" option is not required in
+      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
     - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
       in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
       @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()";
@@ -113,6 +116,12 @@ module FilePoller {
     @section file_poller_relnotes FilePoller Release Notes
 
     @subsection file_poller_2_1 FilePoller v2.1
+    - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
+    - without the \c "start_thread" option, the \c start_thread capability of the thread that creates the poller is
+      used, as a host sets it for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - a FilePoller object that is destroyed in its own polling thread, for example because an event or log callback
       held its last reference, stops polling; its destructor raised \c THREAD-ERROR
     - @ref FilePoller::FilePoller::stop() "stop()" and @ref FilePoller::FilePoller::stopNoWait() "stopNoWait()" wake
@@ -345,9 +354,11 @@ public class FilePoller {
             - @ref SortNone "SortNone": no sort
             - @ref SortName "SortName": sort by file name (the default)
             - @ref SortDate "SortDate": sort by the file's last modified date
-        - \c "start_thread": (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
-          @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
-          thread ID (if not set then @ref background will be used)
+        - \c "start_thread": a @ref closure "closure" or @ref call_reference "call reference" for
+          starting threads; must return the integer thread ID; if not set, the \c start_thread capability that a host
+          sets for the code that creates the object is used (@ref Qore::Thread::ThreadCapabilityScope
+          "ThreadCapabilityScope"), and otherwise @ref background; required with @ref Qore::PO_NO_THREAD_CONTROL only
+          when the module is loaded by its path, where its \c THREAD_CONTROL domain declaration does not apply
 
         @throw FILEPOLLER-CONSTRUCTOR-ERROR invalid option
     */
@@ -355,8 +366,12 @@ public class FilePoller {
         path = n_path;
         mask = n_mask;
 
+        # without the option, the capability of the code that the host runs, if any (qorus#867); it satisfies the
+        # requirement of a Program that may not control threads
+        *code cap = exists n_opts.start_thread ? NOTHING : get_thread_capability("start_thread");
+
         foreach string k in (RequiredKeys) {
-            if (!exists n_opts{k})
+            if (!exists n_opts{k} && (k != "start_thread" || !cap))
                 throw "FILEPOLLER-CONSTRUCTOR-ERROR", sprintf("required key %y missing from constructor hash "
                     "argument)", k);
         }
@@ -414,6 +429,9 @@ public class FilePoller {
                     throw "FILEPOLLER-CONSTRUCTOR-ERROR", sprintf("unknown option %y; known options: %y", h.key,
                         Options);
             }
+        }
+        if (cap) {
+            start_thread = cap;
         }
     }
 
@@ -513,6 +531,11 @@ public class FilePoller {
 
         runflag = True;
         sc.add();
+        # a thread that is not started leaves the poller stopped, so that stop() does not wait for it
+        on_error {
+            runflag = False;
+            sc.done();
+        }
 
 %ifdef PO_NO_THREAD_CONTROL
         return tid = call_function(start_thread, \run());

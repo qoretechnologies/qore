@@ -85,11 +85,13 @@ public class ParallelToolDispatcher {
             - \c tool_timeout_ms (int): per-tool timeout; default 30000
             - \c max_total_time_ms (int): total time budget; default 120000
             - \c start_thread (*code<int(code<nothing()>)>): optional callable
-              that starts a new thread and returns the thread ID; <b>required
-              when the enclosing program has @ref Qore::PO_NO_THREAD_CONTROL
-              set and \c max_concurrent > 1</b>.  In a non-sandboxed program
-              this option is optional and defaults to the @ref background
-              operator.
+              that starts a new thread and returns the thread ID; without it,
+              the \c start_thread capability of the code that creates the
+              dispatcher is used, if a host set one (@ref
+              Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"), and
+              otherwise the @ref background operator; required with
+              @ref Qore::PO_NO_THREAD_CONTROL and \c max_concurrent > 1 only
+              when the module is loaded by its path
 
         @throw PARALLEL-DISPATCH-ARG-ERROR if a required option is missing or
             invalid in the current parse context
@@ -104,7 +106,8 @@ public class ParallelToolDispatcher {
         max_concurrent = options.max_concurrent ?? 5;
         tool_timeout_ms = options.tool_timeout_ms ?? 30000;
         max_total_time_ms = options.max_total_time_ms ?? 120000;
-        start_thread = options.start_thread;
+        # without the option, the capability of the code that the host runs, if any (qorus#867)
+        start_thread = exists options.start_thread ? options.start_thread : get_thread_capability("start_thread");
 
 %ifdef PO_NO_THREAD_CONTROL
         if (max_concurrent > 1 && !start_thread) {

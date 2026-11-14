@@ -56,7 +56,7 @@ module DiscordWebSocketClient {
         ConnectionSchemeCache::registerScheme("discordwss", DiscordWebSocketConnection::ConnectionScheme);
     };
     # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
-    domains = "PROCESS_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage DiscordWebSocketClient Module
@@ -82,6 +82,9 @@ module DiscordWebSocketClient {
     @section discordwebsocketclientrelnotes Release Notes
 
     @subsection discordwebsocketclientv1_2 DiscordWebSocketClient v1.2
+    - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - fixed a heartbeat that could stall when its next beat was due in less than a millisecond; a cancelled heartbeat
       thread reports its end, so a disconnect or the destructor does not wait for it forever
     - an automatic reconnect stops the heartbeat and switches to the resume gateway URL only if no connection was

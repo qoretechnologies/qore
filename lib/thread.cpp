@@ -78,6 +78,7 @@
 #include "qore/intern/QC_Semaphore.h"
 #include "qore/intern/QC_AutoSemaphore.h"
 #include "qore/intern/QC_AutoLock.h"
+#include "qore/intern/QC_ThreadCapabilityScope.h"
 #include "qore/intern/QC_AutoGate.h"
 #include "qore/intern/QC_AutoReadLock.h"
 #include "qore/intern/QC_AutoWriteLock.h"
@@ -724,6 +725,25 @@ public:
     // QoreInheritedSandboxHelper and design/thread-sandbox-inheritance.md)
     const QoreSandboxContext* inherited_sandbox_context = nullptr;
     const QoreSandboxProvenanceHelper* sandbox_provenance = nullptr;
+
+    //! a capability set of the thread, set by a ThreadCapabilityScope (qorus#867)
+    struct CapabilityScope {
+        //! the set (a reference), which is never changed once it is on the stack
+        QoreHashNode* caps;
+        //! the identity of the scope that set it
+        uint64_t gen;
+    };
+    //! the thread's capability sets, innermost last (see design/thread-capability-scope.md); a new thread has none
+    std::vector<CapabilityScope> capability_scopes;
+
+    //! releases the thread's capability sets
+    DLLLOCAL void releaseCapabilityScopes(size_t level, ExceptionSink* xsink) {
+        while (capability_scopes.size() > level) {
+            QoreHashNode* caps = capability_scopes.back().caps;
+            capability_scopes.pop_back();
+            caps->deref(xsink);
+        }
+    }
     //! the innermost QoreCallerSandboxHelper that a sandboxed caller created on this thread, if any
     const QoreCallerSandboxHelper* sandboxed_caller = nullptr;
     // the budgets of the sandbox calls with a time limit that the thread is running (see
@@ -1121,6 +1141,8 @@ public:
 
     DLLLOCAL void del(ExceptionSink* xsink) {
         finalizing = true;
+        // the code of the open capability scopes belongs to the thread's Programs
+        releaseCapabilityScopes(0, xsink);
         releaseThreadLocalVars(xsink);
 
         tpd->del(xsink);
@@ -6266,6 +6288,49 @@ bool runtime_get_module_caller_app(qore_program_id_t& app_pgm_id) {
     return true;
 }
 
+//! the identities of the capability scopes, unique in the process
+static std::atomic<uint64_t> capability_scope_gen{0};
+
+int thread_push_capability_scope(const QoreHashNode* caps, bool replace, size_t& level, uint64_t& gen,
+        ExceptionSink* xsink) {
+    ThreadData* td = thread_data.get();
+    // a set of any code: the hash given can be typed, and the values of the sets it is merged with have other types
+    ReferenceHolder<QoreHashNode> set(new QoreHashNode(autoTypeInfo), xsink);
+    if (!replace && !td->capability_scopes.empty()) {
+        set->merge(td->capability_scopes.back().caps, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+    set->merge(caps, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    gen = ++capability_scope_gen;
+    // the holder keeps the set if the push raises
+    td->capability_scopes.push_back(ThreadData::CapabilityScope{*set, gen});
+    set.release();
+    level = td->capability_scopes.size();
+    return 0;
+}
+
+void thread_pop_capability_scope(size_t level, uint64_t gen, ExceptionSink* xsink) {
+    ThreadData* td = thread_data.get();
+    // a scope of another thread, or one that an outer scope has already left, changes nothing
+    if (!level || level > td->capability_scopes.size() || td->capability_scopes[level - 1].gen != gen) {
+        return;
+    }
+    td->releaseCapabilityScopes(level - 1, xsink);
+}
+
+QoreHashNode* thread_get_capabilities() {
+    ThreadData* td = thread_data.get();
+    // an empty set (an independent scope) is no set
+    return td->capability_scopes.empty() || td->capability_scopes.back().caps->empty()
+        ? nullptr
+        : td->capability_scopes.back().caps->hashRefSelf();
+}
+
 // returns the description and the parse option name of the first domain in \a denied, thread control first
 static void get_denied_domain_desc(const QoreParseOptions& denied, const char*& desc, const char*& po_name,
         const char*& caller_desc) {
@@ -7917,6 +7982,7 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initCounterClass(*Thread));
 
     Thread->addSystemClass(initAutoLockClass(*Thread));
+    Thread->addSystemClass(initThreadCapabilityScopeClass(*Thread));
     Thread->addSystemClass(initAutoGateClass(*Thread));
     Thread->addSystemClass(initAutoReadLockClass(*Thread));
     Thread->addSystemClass(initAutoWriteLockClass(*Thread));

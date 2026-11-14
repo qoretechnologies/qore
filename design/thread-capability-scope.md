@@ -1,0 +1,210 @@
+# Thread Capability Scope
+
+Copyright (C) 2026 Qore Technologies, s.r.o.
+
+## Status
+
+Implemented (qorus#867, the Qore part; follows qorus#766 and qore#5943); see Decisions at the end.
+
+- the scope: `ThreadCapabilityScope` (`lib/QC_ThreadCapabilityScope.qpp`), the thread's stack of sets in
+  `ThreadData::capability_scopes` (`lib/thread.cpp`: `thread_push_capability_scope()`,
+  `thread_pop_capability_scope()`, released at the thread's end before its Program data);
+- the lookup: `get_thread_capability()` and `get_thread_capabilities()` (`lib/ql_thread.qpp`),
+  `thread_capabilities_visible()`;
+- the tests: `examples/test/qore/threads/thread-capability-scope.qtest` (with the module fixture
+  `ThreadCapabilityFixture.qm`), and a capability case in each module's test.
+
+## Problem
+
+Library modules that start threads or wrap callbacks for their callers take that code as an option: `start_thread`
+(`code<int(code<nothing()>)>`) and `call_wrapper` (`code<auto(code<auto()>)>`) of `WebSocketClient`,
+`DiscordWebSocketClient`, `FilePoller`, `FtpPoller`, `ServerSentEventClient`, `ParallelToolDispatcher` and
+`ExtractionPipeline` (QoreStructuredExtraction). A host
+that runs code for an interface, such as Qorus for a service, wants the threads those modules start to be counted,
+shown and waited for as the interface's threads, and to run in the interface's context. Today every caller has to
+pass the host's implementations explicitly; a caller that does not gets untracked threads without context.
+
+The host should be able to make its implementations available to the module code that runs for an interface,
+without the interface's code passing them, and without letting the interface's code, which can be sandboxed,
+replace or read them.
+
+## Design
+
+### The scope
+
+A thread has a capability set: a map from a capability name to the code that implements it.  It is empty when a
+thread starts.  A host sets it for the code it runs with a scope object:
+
+```
+ThreadCapabilityScope scope({
+    "start_thread": \startServiceThread(),
+    "call_wrapper": \callInServiceContext(),
+});
+svc.start();
+# the scope is left when the object is destroyed: at the end of the block, or when an exception leaves it
+```
+
+- `ThreadCapabilityScope::constructor(hash<auto> capabilities, *bool replace)` (each value must be code) makes the thread's set the
+  outer set with `capabilities` added or replaced by name (with `replace`: `capabilities` only); destroying the object
+  restores the outer set.  The class is in the `THREAD_CONTROL` domain: code whose Program, or whose caller's
+  restrictions (module code running for a restricted caller), forbid thread control cannot set a scope.
+- A scope cannot be set by code that a sandbox governs, and each capability's code must pass the guard's check
+  (below): a host cannot pass on, by mistake, a closure of the restricted code it runs.  Its signature is not checked
+  by the scope; the module that looks it up checks it as it checks an option.
+- Scopes nest.  A scope belongs to the thread that created it; it is left by its destruction in that thread, which
+  also leaves any scope created inside it that is still open (an object kept beyond its block).  Destroying it in
+  another thread, or after an outer scope has already left it, does not change any thread's set.
+- A thread's open scopes are released when the thread ends.
+
+### The lookup and the guard
+
+`*code get_thread_capability(string name)` returns the **guard** of a capability of the current thread's set, or
+`NOTHING` if the set has none of that name or the caller may not see it.  The capability's code itself is never
+returned: no Qore code can reach it once the scope has taken it.
+
+The guard is a call reference (`ThreadCapabilityGuardReferenceNode`).  A call of it passes its arguments to the
+capability's code (with `invoke()`) once they have been checked:
+
+- the arguments are evaluated by the guard when the call passes them unevaluated (a direct call `guard(...)` in the
+  AST interpreter), so that the values are checked, not the expressions that produce them;
+- an argument that is code (`thread_capability_check_code()`) must be of a Program that may control threads and that
+  no sandbox governs, and not a call reference without a Program of its own (builtin code, or another guard), which
+  would run with no restrictions at all; this is the module-owned code rule of `qore_check_module_owned_code()`
+  (c320f09f0b) for timers and tasks.  A call reference to a builtin function that code creates at run time carries the
+  Program that created it and is judged by that Program's options, as in `qore_check_module_owned_code()`;
+- every other argument must be a plain value (`NOTHING`, `NULL`, a number, a boolean, a string, a date or a binary):
+  a reference, a container or an object could carry code that the capability would run unchecked, so they are
+  refused.
+
+The lookup is visible to:
+
+- **user module code** (a Program with `PO_IN_MODULE`, which only the system can set);
+- **other code** that may control threads itself and that no sandbox governs (the host, unsandboxed applications);
+
+and returns `NOTHING` to code a sandbox governs and to code whose restrictions forbid thread control.  This is defence
+in depth only, not the boundary.
+
+`*hash<string, code> get_thread_capabilities()` returns the guards of the whole set by the same rule.  Neither function
+changes anything, so they are `RET_VALUE_ONLY`.
+
+### The boundary
+
+**A capability runs only code that could control threads itself, whoever holds its guard.**  Code that obtains the
+guard, by whatever path, cannot use the host's implementation to run its own code:
+
+- a restricted or sandboxed Program that loads a user module of its own (S1 of the review), which returns or passes
+  on what it looks up: the module's Program inherits the restrictions of the Program that loads it, so its code is
+  refused too, and the restricted Program's own code is refused anyway;
+- a restricted subclass of a module class that reads the member where the module keeps the capability (S2), and calls
+  it with its own code: refused;
+- the restricted code passed by reference, in a container, or in an object: refused, as is a direct call of the guard
+  in the AST interpreter (whose arguments the guard evaluates before it checks them).
+
+Module code keeps passing its own closures (`\run()`, a closure that calls the user's callback inside), which are of
+the module's Program and so may control threads.  A consequence of the rule: a module that a restricted Program loads
+first is parsed with that Program's restrictions, so its code may not control threads, and the capability does not run
+it either; such a module gets `THREAD-CAPABILITY-ERROR` when it starts its thread.  A host that wants its capabilities
+used by a module loads the module itself before the restricted code does.
+
+A scope cannot be set by code that a sandbox governs (S3): its set stays in effect for the code that runs on the thread
+after the call that set it, the host's code included.  The capability code given to a scope must pass the same check.
+
+### Independent objects
+
+A module that creates a shared or independent object (a module-wide cache, poller or connection) from inside the code
+that a host runs for one of its interfaces creates it in an independent scope, so that the object takes none of the
+capabilities of that code and its threads belong to no interface:
+
+```
+{
+    ThreadCapabilityScope independent = ThreadCapabilityScope::independent();
+    shared_poller = new SharedPoller();
+}
+```
+
+`ThreadCapabilityScope::independent()` is the named form of an empty replacing scope (`ThreadCapabilityScope({},
+True)`); a thread with an empty set has no capabilities (`get_thread_capability()` returns `NOTHING`).  Both need
+thread control and cannot be used by code that a sandbox governs, like any scope, so sandboxed code cannot hide the
+threads of its objects from the host this way.
+
+### Attribution
+
+A host attributes the threads that a capability starts by the guard: its provider is code that the host creates for
+one interface, so a guard always starts threads for the interface whose scope the module took it from.  Modules take
+the guard when their object is created inside the interface's code, so the threads that the object starts later,
+outside any scope (reconnects, timers, other threads), are attributed to that interface too.  Threads that modules
+start without a capability (at module initialization, for objects created outside any scope or in an independent
+scope) belong to no interface.
+
+### Domain declarations
+
+Thread-starting library modules declare the `THREAD_CONTROL` domain in their module header (`domains = ...`: the
+WebSocketClient, DiscordWebSocketClient, FilePoller, FtpPoller, ServerSentEventClient, QoreAgentStrategies and
+QoreStructuredExtraction modules).  A module of the process-wide module path that declares a domain keeps it however it
+is loaded (see the `domains` key of the module declaration), so its code may start threads for a caller restricted with
+`PO_NO_THREAD_CONTROL`, and the guard runs its code.  The module is responsible for the safety of what its threads do
+for such callers.
+
+The effective restrictions of a module's thread that runs for a caller:
+
+- **parse-option domains**: the caller's restrictions minus exactly the domains that the module declares, for the
+  module's own code; a module without a declaration cannot widen anything (a caller that may not control threads
+  cannot even load a module that uses `background`);
+- **sandbox policy** (the caller's `SandboxManager`: filesystem and network allow-lists, private ranges, thread
+  limits, interrupts): always the caller's, inherited by the thread, and **never widened** by a declaration, so a
+  tenant never reaches what its sandbox denies (private addresses, other tenants' resources);
+- the caller's own code that the module calls back keeps the restrictions of its own Program.
+
+`PO_NO_THREAD_CONTROL` without a sandbox is therefore no thread boundary for these modules, as for any module that
+starts threads for its callers (see the Qore sandboxing documentation): such a caller can cause module threads that
+run its callbacks, and only a sandbox's thread limit bounds how many run at once.
+
+`examples/test/qore/threads/restricted-first-modules.qtest` checks each module loaded first by a restricted,
+sandboxed Program (its threads start, and the sandbox's thread limit governs them), and the domain rule (a declared
+`NETWORK` domain is granted to the module's thread, an undeclared `FILESYSTEM` domain is not, a module without the
+declaration cannot be loaded, and a sandbox that denies the network denies it in the module's thread).
+
+### Modules
+
+When an option is not given (or is `NOTHING`), a module looks the capability up when it is constructed; an option given
+always wins:
+
+```
+*code<int(code<nothing()>)> start_thread = opts.hasKey("start_thread")
+    ? opts.start_thread
+    : get_thread_capability("start_thread");
+```
+
+The modules: `WebSocketClient`, `DiscordWebSocketClient`, `FilePoller`, `FtpPoller`, `ServerSentEventClient`,
+`ParallelToolDispatcher`, `ExtractionPipeline`.  The capability is taken at construction, so an object created in the
+scope keeps it after
+the scope is left, as an option given to the constructor is kept.
+
+### Names
+
+`start_thread` and `call_wrapper`, with the signatures of the module options above.  The names are documented
+with the lookup function; a host may set other names, which no module looks up.
+
+### ABI
+
+A new class and two builtin functions, and a member of the thread's internal data: no module-API or public-ABI
+change.
+
+## Tests
+
+- set, nested, replace, leave on exception, out-of-order destruction, destruction in another thread, thread end with
+  open scopes; a new thread starts with an empty set;
+- the lookup from module code, host code, sandboxed code and code without thread control; a scope set by code
+  without thread control, and with a capability of code without thread control, is refused;
+- each module takes the capability when no option is given, keeps an explicit option, and keeps the capability after
+  the scope;
+- every execution mode; valgrind.
+
+## Decisions
+
+- The boundary is the guard (option C, David 2026-11-14): visibility of the lookup is defence in depth only.
+- A scope object, as qorus#766 asks; a new thread starts with an empty set.
+- Attribution by the guard, and the independent form (`ThreadCapabilityScope::independent()` and the empty replacing
+  scope) for objects that belong to no interface (qorus#867, decision 1).
+- Domain declarations widen only the parse-option domains of the module's own code, never the caller's sandbox
+  (decision 4); the thread-starting library modules declare `THREAD_CONTROL`.

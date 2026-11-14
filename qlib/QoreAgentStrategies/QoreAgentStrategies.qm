@@ -36,6 +36,8 @@ module QoreAgentStrategies {
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
+    # the parallel tool dispatcher starts threads for its callers (qorus#867)
+    domains = "THREAD_CONTROL";
 }
 
 /** @mainpage QoreAgentStrategies Module
@@ -86,20 +88,18 @@ printf("Response: %s\n", result.response);
 
     @section qoreagentstrategiessandbox QoreAgentStrategies Module in Sandboxed Programs
 
-    The @ref QoreAgentStrategies::ParallelToolDispatcher "ParallelToolDispatcher" class
-    spawns background threads to dispatch tool calls concurrently.  Under a
-    sandboxed @ref Qore::Program "Program" with @ref Qore::PO_NO_THREAD_CONTROL set,
-    the @ref background operator is unavailable, so the caller must supply a
-    \c start_thread callable when constructing the dispatcher:
+    The @ref QoreAgentStrategies::ParallelToolDispatcher "ParallelToolDispatcher" class starts threads to dispatch tool calls concurrently.  The module declares the
+    \c THREAD_CONTROL @ref function_domains "functional domain" in its module header, so when it is loaded from the
+    module path, it starts its threads also for a @ref Qore::Program "Program" with
+    @ref Qore::PO_NO_THREAD_CONTROL set; the threads run under the caller's sandbox, whose thread limit bounds them.
 
-    - \c start_thread: required when \c max_concurrent > 1 in a program with
-      @ref Qore::PO_NO_THREAD_CONTROL set; a
-      @ref closure "closure" or @ref call_reference "call reference" that accepts a
-      zero-arg code reference and returns the integer thread ID of the new thread
+    - \c start_thread: an optional @ref closure "closure" or @ref call_reference "call reference" that accepts a
+      zero-arg code reference and returns the integer thread ID of the new thread; without it, the \c start_thread
+      capability that a host sets for the code it runs (@ref Qore::Thread::ThreadCapabilityScope
+      "ThreadCapabilityScope") is used, and otherwise the @ref background operator; it is required with
+      @ref Qore::PO_NO_THREAD_CONTROL only when the module is loaded by its path, where the declaration does not apply
 
-    When running in a non-sandboxed program, \c start_thread is optional; if not
-    supplied, the @ref background operator is used directly.  When
-    \c max_concurrent is 1, no threads are spawned and the option is ignored.
+    When \c max_concurrent is 1, no threads are started and the option is ignored.
 
     @par Example: Sandboxed parallel tool dispatch
     @code{.py}

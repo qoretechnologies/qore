@@ -215,7 +215,8 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             }
         }
         yield = opts.yield;
-        start_thread = opts.start_thread;
+        # without the option, the capability of the code that the host runs, if any (qorus#867)
+        start_thread = exists opts.start_thread ? opts.start_thread : get_thread_capability("start_thread");
 
         if (exists opts.last_event_id) {
             last_event_id = opts.last_event_id.toString();
