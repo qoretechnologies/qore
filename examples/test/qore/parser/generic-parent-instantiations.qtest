@@ -106,6 +106,16 @@ class GenericParentInstantiationsTest inherits QUnit::Test {
         # through a namespace path, and as one of several parent classes
         assertRegex(msg, parseError("namespace N { class A {} }\n"
             "class RawSub inherits N::A, Box { constructor() : Box(1) {} }\n"));
+        # the generic class declared after the class that inherits it
+        string raw_sub = "class RawSub inherits Box {}\n";
+        Program fp(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            fp.parse(raw_sub + Box, "<generic-parents>");
+            assertTrue(False, "a forward-declared generic parent without type arguments is refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("^MISSING-TYPE-ARGUMENTS: cannot inherit generic class 'Box' without type arguments",
+                ex.err + ": " + ex.desc);
+        }
         # a generic class that passes its parameter on needs the argument too
         assertRegex("^MISSING-TYPE-ARGUMENTS: cannot inherit generic class 'Box' without type arguments",
             parseError("class G<U> inherits Box { constructor(U v) : Box(v) {} }\n"));
