@@ -4776,6 +4776,13 @@ public:
         one only; not serialized: IR read back closes the innermost one (#5968)
     */
     std::unordered_map<const QoreIRInstruction*, uint32_t> catch_exit_depths;
+    //! true if the function has a catch block without an exit block whose statements can raise an exception (or
+    //! run a thread_exit) that leaves the frame without closing it
+    /** Set by the lowering and read by the LLVM lowering, whose exception exits of the frame then close the catch
+        blocks still open before the frame's handlers and locals; not serialized: IR read back closes them at the
+        frame's end (#5968)
+    */
+    bool catch_exit_unwind = false;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
     mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;
     mutable bool interpreter_needs_slot_cache_tls = false;
