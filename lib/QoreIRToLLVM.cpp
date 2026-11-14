@@ -4691,6 +4691,10 @@ void QoreIRToLLVM::emitReturnTail(llvm::Module& module) {
 }
 
 bool QoreIRToLLVM::holdsReturnValuesOnException() const {
+    // the value of a handler's return that replaced an interrupted return is held as one (#5992)
+    if (handler_return_hold) {
+        return true;
+    }
     for (uint32_t id : return_value_ids) {
         auto i = invoke_alloca_map.find(id);
         if (i != invoke_alloca_map.end() && i->second) {
