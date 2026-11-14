@@ -63,7 +63,7 @@ static void splitMicros(int64_t micros, int64_t& seconds, int& microseconds) {
 }
 
 static bool isDurationColumn(const ColumnData& col) {
-    return col.has_columnar_schema && col.columnar_schema.kind == QoreColumnarTypeKind::Duration;
+    return col.isDuration();
 }
 
 static DateTimeNode* makeDateFromMicros(int64_t micros, bool duration) {
