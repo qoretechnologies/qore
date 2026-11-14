@@ -5253,6 +5253,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
 }
 
 int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
+    // nothing adds to saved_top_level_handlers, so this compiles nothing: the handlers are compiled by
+    // compileBlockHandlerIRs(), which shares their functions (HandlerIRCache, #6087); a lowering here would have to
+    // pass handler_ir_cache to the lowerings of the handlers as it does
     // Phase B2: Handler IR compilation with parent slot inheritance
     // QoreIRVerifier has been updated to handle pre-seeded parent slots
     // Handler functions can now be compiled with parent scope access.
