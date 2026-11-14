@@ -61,6 +61,7 @@ class JITLargeFunctionBlocksTest inherits QUnit::Test {
         addTestCase("the blocks of a function with many locals and exits are bounded", \testBlocks());
         addTestCase("the function with shared exits returns the same results as the AST", \testResults());
         addTestCase("a function with many catch blocks that have handlers stays on the IR tier", \testHandlerBudget());
+        addTestCase("the shared exits release the value of a handler's return", \testHandlerReturnOnException());
         set_return_value(main());
     }
 
@@ -291,6 +292,89 @@ printf(\"rv:%d\\n\", t);
         foreach string mode in (("ir", "jit", "tiered")) {
             assertEq(expected, runResultLine(big, mode), mode);
         }
+    }
+
+    #! Functions whose exits on an exception (no handler of the function takes them) have handlers that return values
+    /** The exits share one block (exception_exit_tail) that runs the handlers and releases the locals, and releases
+        the value that a handler's return replaced it with (the hold slot of qore#5992) after the locals; the output has
+        the result of each function and the order of the destructors of the values, which must be the AST's.
+    */
+    private string getHandlerReturnCode() {
+        return "%modern
+our list<string> log = ();
+class T {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { log += \"~\" + n; }
+}
+auto sub t1() {
+    on_exit { log += \"x1\"; return new T(\"h1\"); }
+    T a(\"a1\");
+    throw \"E1\", \"d1\";
+}
+auto sub t2() {
+    on_exit { log += \"x2\"; return new T(\"h2\"); }
+    on_error { log += \"e2\"; return new T(\"he2\"); }
+    T a(\"a2\");
+    T b(\"b2\");
+    throw \"E2\", \"d2\";
+}
+auto sub t3(bool fail) {
+    on_exit { log += \"x3\"; return new T(\"h3\"); }
+    T a(\"a3\");
+    if (fail) {
+        throw \"E3\", \"d3\";
+    }
+    return new T(\"r3\");
+}
+auto sub t4() {
+    T a(\"a4\");
+    {
+        on_exit { log += \"x4\"; return new T(\"h4\"); }
+        T b(\"b4\");
+        rethrow_it();
+    }
+}
+sub rethrow_it() {
+    throw \"E4\", \"d4\";
+}
+string sub run(string name, code c) {
+    string r;
+    try {
+        auto v = c();
+        r = sprintf(\"%s: %s\", name, v ? v.n : \"nothing\");
+    } catch (hash<ExceptionInfo> ex) {
+        r = sprintf(\"%s: caught %s\", name, ex.err);
+    }
+    r += \" \" + log.join(\",\");
+    log = ();
+    return r;
+}
+string out = run(\"t1\", \\t1()) + \"\\n\" + run(\"t2\", \\t2()) + \"\\n\" + run(\"t3 fail\", auto sub () { return t3(True); }) + \"\\n\"
+    + run(\"t3 ok\", auto sub () { return t3(False); }) + \"\\n\" + run(\"t4\", \\t4()) + \"\\n\";
+print(out);
+printf(\"rv:done\\n\");
+";
+    }
+
+    testHandlerReturnOnException() {
+        string code = getHandlerReturnCode();
+        string ast = runOutput(code, "ast");
+        assertRegex("t1: ", ast, "the script ran: " + ast);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, runOutput(code, mode), mode);
+        }
+    }
+
+    #! Returns the output of the script without the lines of warnings
+    private string runOutput(string code, string exec_mode) {
+        string out;
+        foreach string line in (runScript(code, exec_mode, "").split("\n")) {
+            if (line =~ /^(t[0-9]|rv:)/) {
+                out += line + "\n";
+            }
+        }
+        return out;
     }
 
     private string runResultLine(string code, string exec_mode) {
