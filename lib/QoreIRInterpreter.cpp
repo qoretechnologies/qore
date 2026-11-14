@@ -10715,7 +10715,9 @@ next_instruction:
             ++ip;
             goto next_instruction;
         }
-        if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
+        // the line is compared first: most instructions are on the line of the one before them, and this order is the
+        // one with the fewest instructions dispatched (an instruction without a location has -1)
+        if (inst->cached_start_line != last_ephemeral_line && inst->cached_start_line >= 0) {
             // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is attached,
             // the current statement is set by the DebugStatement instruction of each statement and kept, so that the
             // call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
