@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - checks run in child processes with explicit execution modes
+# test-platform: macos - JIT and AOT handler execution and local ownership
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class HandlerReturnLocalOwnershipTest
+
+#! A return in a handler releases cached copies before the remaining handlers replace their locals (#6008)
+class HandlerReturnLocalOwnershipTest inherits QUnit::Test {
+    public {
+        const Expected = "member: [\"~a\", \"assigned\", \"~b\"] -> a
+list: [\"~a\", \"assigned\", \"~b\"] -> a
+hash: [\"~a\", \"assigned\", \"~b\"] -> a
+on-exit-return: [\"~a\", \"assigned\", \"~b\"] -> a
+remove: [\"~a\", \"removed\"] -> a
+throwing-dtor: [\"~a\", \"caught:DTOR\", \"after-catch\", \"~b\"] -> a
+closure: [\"~a\", \"assigned\", \"~b\"] -> a
+reference: [\"~a\", \"assigned\", \"~b\"] -> a
+returned-object: [\"assigned\", \"~b\", \"result:a\", \"~a\"] -> done
+constant: [\"~a\", \"assigned\", \"~b\"] -> constant
+successive-handlers: [\"~a\", \"first\", \"b\", \"~b\", \"second\", \"~c\"] -> a
+shadowed-local: [\"~a\", \"shadow\", \"~shadow\", \"assigned\", \"~b\"] -> a
+nested-block-constant: [\"~inner\", \"outer-exit\", \"~outer\"] -> constant
+handler-local: [\"~inner\", \"outer-exit\", \"~outer\"] -> inner
+member: [\"~a\", \"assigned\", \"~b\"] -> a
+list: [\"~a\", \"assigned\", \"~b\"] -> a
+hash: [\"~a\", \"assigned\", \"~b\"] -> a
+on-exit-return: [\"~a\", \"assigned\", \"~b\"] -> a
+remove: [\"~a\", \"removed\"] -> a
+throwing-dtor: [\"~a\", \"caught:DTOR\", \"after-catch\", \"~b\"] -> a
+closure: [\"~a\", \"assigned\", \"~b\"] -> a
+reference: [\"~a\", \"assigned\", \"~b\"] -> a
+returned-object: [\"assigned\", \"~b\", \"result:a\", \"~a\"] -> done
+constant: [\"~a\", \"assigned\", \"~b\"] -> constant
+successive-handlers: [\"~a\", \"first\", \"b\", \"~b\", \"second\", \"~c\"] -> a
+shadowed-local: [\"~a\", \"shadow\", \"~shadow\", \"assigned\", \"~b\"] -> a
+nested-block-constant: [\"~inner\", \"outer-exit\", \"~outer\"] -> constant
+handler-local: [\"~inner\", \"outer-exit\", \"~outer\"] -> inner
+";
+    }
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string prefix;
+        string worker;
+    }
+    constructor() : QUnit::Test("HandlerReturnLocalOwnershipTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libdir + "/qcc";
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        worker = get_script_dir() + "/HandlerReturnLocalOwnership.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": handler local ownership", \modeTest(), (mode,));
+        }
+        addTestCase("tiered IR: handler local ownership", \irTierTest());
+        foreach int opt in (0, 3) {
+            addTestCase(sprintf("qcc -O%d: handler local ownership", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string checked(string command, bool ir_tier = False) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False,
+            ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
+        assertEq(0, result.rc, sprintf("child exited normally: %s\n%s", command, result.out));
+        if (ir_tier) { ExecModeHarness::check_ir_tier(result); }
+        else if (result.mode) { ExecModeHarness::check_native(result); }
+        return result.out;
+    }
+    modeTest(string mode) {
+        assertEq(Expected, checked(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+            + mode + " " + quote(worker)), mode);
+    }
+    irTierTest() {
+        assertEq(Expected, checked(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=tiered "
+            + quote(worker), True), "tiered IR");
+    }
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-return-local-ownership-");
+        string exe = tmp.path + DirSep + "handler-return";
+        checked(prefix + quote(qcc_bin) + sprintf(" -O%d -o ", opt) + quote(exe) + " " + quote(worker));
+        assertTrue(is_file(exe), "qcc produced the executable");
+        assertEq(Expected, checked(prefix + quote(exe) + " -b --enable-debug"), "qcc");
+    }
+}

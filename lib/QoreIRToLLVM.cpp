@@ -4012,12 +4012,13 @@ std::vector<const void*> QoreIRToLLVM::getLocalsInReverseDeclarationOrder(const 
 }
 
 std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module) {
-    if (local_reload_trackers.empty() && local_reload_deferred.empty()) {
+    if (local_reload_trackers.empty() && local_reload_deferred.empty()
+            && preinstantiated_entry_cleanup_by_local.empty()) {
         return {};
     }
-    // A local's reload tracker holds a reference to the value of its native cache, and its deferred slot one to the
-    // value that the cache held before (see ensureLocalCacheFresh()); either can be the last reference to its value,
-    // so the locals are released in reverse declaration order, a local's deferred value, the older one, first.  The
+    // A local's entry cleanup can own its initial value, its reload tracker the value of its native cache, and its
+    // deferred slot the value that the cache held before (see ensureLocalCacheFresh()). Any can be the last owner,
+    // so locals are released in reverse declaration order, each local's entry value then deferred value first. The
     // allocas are left NOTHING, which the next reload and the exit cleanup of the function release as nothing.
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -4027,6 +4028,15 @@ std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& m
         builder->CreateCall(helper, {val, xsink_arg});
     };
     llvm::MapVector<const void*, bool> keys;
+    size_t count = 0;
+    for (const auto& entry : preinstantiated_entry_cleanup_by_local) {
+        if (!(++count % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM handler entry cleanup collection");
+        }
+        if (releasesReloadStorageForHandlers(entry.first)) {
+            keys.insert({entry.first, true});
+        }
+    }
     for (const auto& entry : local_reload_deferred) {
         if (releasesReloadStorageForHandlers(entry.first)) {
             keys.insert({entry.first, true});
@@ -4038,10 +4048,16 @@ std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& m
         }
     }
     std::vector<const void*> released = getLocalsInReverseDeclarationOrder(keys);
-    size_t count = 0;
+    count = 0;
     for (const void* key : released) {
         if (!(++count % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM handler local reload storage release");
+        }
+        // A handler's inherited local (and a parameter) can also own its entry-time load. It is independent of
+        // the reload tracker and must be released before a nested handler replaces the runtime local (#6005).
+        auto entry_it = preinstantiated_entry_cleanup_by_local.find(key);
+        if (entry_it != preinstantiated_entry_cleanup_by_local.end()) {
+            release(entry_it->second);
         }
         auto deferred_it = local_reload_deferred.find(key);
         if (deferred_it != local_reload_deferred.end()) {
@@ -4082,8 +4098,8 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
     // frame has, and a handler that assigns or removes a local releases the value it replaces right away (qore#5942).
     // The storage released is the storage that the function has once it is lowered: code lowered after a site can
     // run before it, and a site creates no storage of its own, which every later flush of the function's statements
-    // would rotate.  A local without a reload tracker is left to the invalidation of the caches after the handlers,
-    // as before.  The locals released are reloaded eagerly after the handlers: code can read a local's native cache
+    // would rotate. A local without a reload tracker or entry owner is left to cache invalidation, as before.
+    // The locals released are reloaded eagerly after the handlers: code can read a local's native cache
     // without the stale check (fused local operations), and the reference that backed the cache was released.
     // the sites are taken from the member, which is left empty on any exit
     std::vector<HandlerSite> sites;
@@ -4108,18 +4124,20 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
             builder->SetInsertPoint(site.call->getParent());
         }
         for (const void* key : released) {
-            // only a local whose cache was backed by its tracker is reloaded, into its cache and its tracker, which
-            // the release left NOTHING, so that nothing is rotated through its deferred slot; reloadLocalFromRuntime()
-            // would create the storage that a local lacks, after the exit cleanup of the function that releases it
-            // was emitted.  A local without a tracker is left to the invalidation of the caches after the handlers.
+            // Reload into the existing tracker, or the entry owner if it alone backed the cache. Both were cleared,
+            // so no old value rotates through the deferred slot. reloadLocalFromRuntime() would create missing
+            // storage after the exit cleanup that would need to release it was emitted; no new storage is created.
             auto tracker_it = local_reload_trackers.find(key);
+            auto entry_it = preinstantiated_entry_cleanup_by_local.find(key);
+            llvm::Value* owner = tracker_it != local_reload_trackers.end() ? tracker_it->second
+                : entry_it != preinstantiated_entry_cleanup_by_local.end() ? entry_it->second : nullptr;
             auto alloca_it = local_allocas.find(key);
-            if (tracker_it == local_reload_trackers.end() || alloca_it == local_allocas.end()) {
+            if (!owner || alloca_it == local_allocas.end()) {
                 continue;
             }
             llvm::Value* reloaded = emitLocalCacheLoad(key, *builder, module);
             builder->CreateStore(reloaded, alloca_it->second.storage());
-            builder->CreateStore(reloaded, tracker_it->second);
+            builder->CreateStore(reloaded, owner);
             markLocalCacheFresh(key, llvm_func);
         }
     }

@@ -7347,6 +7347,33 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
     }
 }
 
+// Drop duplicate runtime-local owners before each handler, including values written back by its predecessor.
+// Handler execution is entered from the innermost active interpreter frame. Resolve its metadata only here,
+// using the existing pool as the debugger's cold helpers do, so ordinary dispatch needs no extra arguments,
+// captures or state. Frames have stable addresses even when a destructor re-enters the interpreter.
+static QORE_INTERN_NOINLINE void releaseHandlerParentCache(std::vector<QoreValue>& parent_cache,
+        ExceptionSink* xsink) {
+    IRCallFramePool& pool = TlFramePool::get();
+    assert(pool.top);
+    IRCallFrame& frame = *pool.frames[pool.top - 1];
+    auto& cache = frame.locals_slot_cache;
+    assert(&cache.vector() == &parent_cache);
+    const auto& ir_only = frame.locals_ir_only;
+    for (size_t i = 0; i < cache.size(); ++i) {
+        if (i && !(i % 100)) {
+            // Finish releasing the caches even if cancellation is pending; the handler observes it at its
+            // statement boundary, as it does while the enclosing frame is unwinding.
+            (void)qore_check_cancel(nullptr, "IR handler local cache release");
+        }
+        // IR-only locals cannot be reached by handlers and remain owned by their slots.
+        if (i < ir_only.size() && ir_only[i]) {
+            continue;
+        }
+        cache.release(i, xsink);
+        cache.set(i, QoreValue());
+    }
+}
+
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
@@ -7368,6 +7395,9 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
                 "handler lowering must have failed silently");
         }
         return;
+    }
+    if (parent_slot_cache) {
+        releaseHandlerParentCache(*parent_slot_cache, obe_xsink);
     }
     QoreValue rv;
     // the handler runs with the debug context of its frame, so that a debugger gets the events of its statements, as
