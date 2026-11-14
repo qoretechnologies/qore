@@ -1219,7 +1219,9 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
         *slot = 0;
         if (tagged & 1) {
             qore_rt_object_slot_release(bits, xsink);
-        } else {
+        } else if (qore_rt_bits_may_own_reference(bits)) {
+            // most slots hold no value that owns a reference at the exit of the frame: NOTHING, as the end of the
+            // statement or a return path released and cleared them already, or a scalar
             fromBits(bits).discard(xsink);
         }
     }
