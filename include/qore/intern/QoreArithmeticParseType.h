@@ -51,6 +51,17 @@ enum class QoreArithParseResult {
     Untyped,
 };
 
+//! Returns the type of the container that an operator gives at runtime for operand values of the given value types,
+//! or nullptr if it is not known more precisely than the base type of the container
+/** @param lt the value type of the left operand
+    @param lti the member of the type of the left operand that gives values of type \a lt (ex: \c hash<X>), or
+    nullptr if it is not known more precisely than the value type
+    @param rt the value type of the right operand
+    @param rti the member of the type of the right operand that gives values of type \a rt, or nullptr
+*/
+typedef const QoreTypeInfo* (*qore_arith_container_rule_t)(qore_type_t lt, const QoreTypeInfo* lti, qore_type_t rt,
+        const QoreTypeInfo* rti);
+
 //! Returns the parse result type of a binary arithmetic operator from the runtime result of every combination of the
 //! values that the operand types allow (qore#5663)
 /** An operand type that is not known allows a value of any type.  The result type is the union of the results (or
@@ -61,9 +72,13 @@ enum class QoreArithParseResult {
     @param rti the type of the right operand
     @param result the result type, unless QoreArithParseResult::Untyped is returned
     @param single true on return if each operand has one value type (NOTHING counts as a value type)
+    @param container_rule if not nullptr, gives the type of a container result of a combination of members of the
+    operand types more precisely than the base type of the container (ex: \c hash<X> for an operand of type
+    <tt>*hash<X></tt>), so that a container type is kept when an operand can also have other values
 */
 DLLLOCAL QoreArithParseResult qore_arith_parse_result_type(QoreArithParseOp op, const QoreTypeInfo* lti,
-        const QoreTypeInfo* rti, const QoreTypeInfo*& result, bool& single);
+        const QoreTypeInfo* rti, const QoreTypeInfo*& result, bool& single,
+        qore_arith_container_rule_t container_rule = nullptr);
 
 //! Returns true if the container type that an operator's own rules give (\a rule_ti) has the base type of the result
 //! that qore_arith_parse_result_type() computes (\a arith_ti): a list, a hash or an object
