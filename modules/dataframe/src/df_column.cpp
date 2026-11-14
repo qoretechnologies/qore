@@ -316,55 +316,17 @@ static void appendDateKey(std::string& key, const DateTimeNode* dt) {
     key.append(reinterpret_cast<const char*>(&us), sizeof(us));
 }
 
-//! the precision at which arbitrary-precision numbers are keyed: one for all numbers, which holds the value of a
-//! number of a lower precision exactly
-static constexpr unsigned DATAFRAME_NUMBER_KEY_PREC = 4096;
-
 //! appends the key of an arbitrary-precision number: its exact value, whatever its precision, so that two numbers
-//! make one key if and only if they are equal (qore#6107)
-/** The number is widened to one precision for all numbers, which holds its value exactly, and keyed by the
-    shortest decimal form that gives that value back at that precision; the form at a number's own precision would
-    give one form to two different values at two precisions.  A number of a higher precision (rare) is keyed by its
-    precision and its own form.  NaN, the infinities and zero (-0 == 0) have keys of their own.
+//! make one key if and only if they are equal; NaN numbers make one key, and -0 and 0 one key (qore#6107)
+/** The key of QoreNumberNode::appendExactKey() does not delimit itself, so it is appended with its length.
 */
 static void appendNumberKey(std::string& key, const QoreNumberNode* n) {
     key += 'n';
-    if (n->nan()) {
-        appendKeyBytes(key, "NaN", 3);
-        return;
-    }
-    if (n->inf()) {
-        if (n->sign() > 0) {
-            appendKeyBytes(key, "+Inf", 4);
-        } else {
-            appendKeyBytes(key, "-Inf", 4);
-        }
-        return;
-    }
-    if (n->zero()) {
-        appendKeyBytes(key, "0", 1);
-        return;
-    }
-    QoreString str;
-    ExceptionSink xsink;
-    int rc;
-    if (n->getPrec() <= DATAFRAME_NUMBER_KEY_PREC) {
-        SimpleRefHolder<QoreNumberNode> zero(new QoreNumberNode("0", DATAFRAME_NUMBER_KEY_PREC));
-        SimpleRefHolder<QoreNumberNode> wide(n->doPlus(**zero));
-        rc = wide->toStringRoundTrip(str, true, &xsink);
-    } else {
-        key += 'P';
-        unsigned prec = n->getPrec();
-        key.append(reinterpret_cast<const char*>(&prec), sizeof(prec));
-        rc = n->toStringRoundTrip(str, true, &xsink);
-    }
-    if (rc) {
-        // a conversion error: the raw (unrounded) form
-        xsink.clear();
-        str.clear();
-        n->toString(str, QORE_NF_RAW);
-    }
-    appendKeyBytes(key, str.c_str(), str.size());
+    size_t len_pos = key.size();
+    key.append(sizeof(uint64_t), '\0');
+    n->appendExactKey(key);
+    uint64_t len = key.size() - len_pos - sizeof(uint64_t);
+    memcpy(&key[len_pos], &len, sizeof(len));
 }
 
 //! appends the key of a value that is not a list or a hash, whose type is given (see appendAutoValueKey())

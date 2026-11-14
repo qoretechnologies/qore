@@ -28,6 +28,7 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         addTestCase("dates and numbers", \dateNumberTest());
         addTestCase("weak references", \weakTest());
         addTestCase("values in containers", \nestedTest());
+        addTestCase("numbers of any precision", \numberTest());
         set_return_value(main());
     }
 
@@ -195,6 +196,31 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         }
         DataFrame::DataFrame d({"k": (c'z', deep, deep), "v": (1, 2, 4)});
         assertEq((1.0, 6.0), d.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "deeply nested hashes");
+    }
+
+    #! numbers are keyed by their exact values at any precision, up to the maximum, in groupBy(), nunique(),
+    #! valueCounts() and pivot() (qore#6107)
+    numberTest() {
+        # 0.1 at the default precision, widened to the maximum (an equal value), and at a higher precision (another
+        # value); 1e-1000 has more than 4096 bits, and is equal to itself widened
+        # a zero of the maximum precision: a number string has about 5 bits per character
+        number zmax = number("0." + strmul("0", 1700));
+        number a = 0.1n;
+        number a2 = a + zmax;
+        number hi = number("0.1000000000000000000000000000000000000000000000000000000000000000000000000000");
+        number t = number("1e-1000");
+        number t2 = t + zmax;
+        DataFrame::DataFrame df({
+            "k": (c'z', a, a2, hi, t, t2, -0n, 0n, @nan@n, @nan@n),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512),
+        });
+        assertEq((1.0, 6.0, 8.0, 48.0, 192.0, 768.0), df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"),
+            "groupBy()");
+        assertEq(6, df.nunique("k"), "nunique()");
+        assertEq(6, df.valueCounts("k").numRows(), "valueCounts()");
+        # pivot(): equal numbers of two precisions make one index row
+        DataFrame::DataFrame p({"k": (c'z', 1.5n, 1.5n + zmax), "c": ("x", "x", "x"), "v": (1, 2, 4)});
+        assertEq(2, p.pivot("k", "c", "v").numRows(), "pivot()");
     }
 
     #! count() gives the key values of a float64 column and of a column of durations
