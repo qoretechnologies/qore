@@ -4274,12 +4274,6 @@ void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& q
     qc = td->current_class;
 }
 
-void runtime_get_class_and_program(const qore_class_private*& qc, QoreProgram*& pgm) {
-    ThreadData* td = thread_data.get();
-    qc = td->current_class;
-    pgm = td->current_pgm;
-}
-
 void runtime_get_program_and_class(QoreProgram*& pgm, const qore_class_private*& qc) {
     ThreadData* td = thread_data.get();
     assert(td);

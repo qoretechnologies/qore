@@ -7357,10 +7357,6 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
     }
 }
 
-// Drop duplicate runtime-local owners before each handler, including values written back by its predecessor.
-// Handler execution is entered from the innermost active interpreter frame. Resolve its metadata only here,
-// using the existing pool as the debugger's cold helpers do, so ordinary dispatch needs no extra arguments,
-// captures or state. Frames have stable addresses even when a destructor re-enters the interpreter.
 //! the value of the current object of a frame of QoreIRInterpreter::execute() that has not been read yet (no object
 //! has this address)
 static QoreObject* const QORE_IR_FRAME_SELF_UNKNOWN = reinterpret_cast<QoreObject*>(uintptr_t(1));
@@ -7387,6 +7383,10 @@ static QORE_INTERN_NOINLINE bool qore_ir_call_target_check_slow(const QoreIRExpr
         : qore_check_call_target(ei->expr, target, xsink));
 }
 
+// Drop duplicate runtime-local owners before each handler, including values written back by its predecessor.
+// Handler execution is entered from the innermost active interpreter frame. Resolve its metadata only here,
+// using the existing pool as the debugger's cold helpers do, so ordinary dispatch needs no extra arguments,
+// captures or state. Frames have stable addresses even when a destructor re-enters the interpreter.
 static QORE_INTERN_NOINLINE void releaseHandlerParentCache(std::vector<QoreValue>& parent_cache,
         ExceptionSink* xsink) {
     IRCallFramePool& pool = TlFramePool::get();

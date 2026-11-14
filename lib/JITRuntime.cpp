@@ -1785,7 +1785,7 @@ bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, const Qor
     // the class context and the Program with one lookup of the thread's data
     const qore_class_private* ctx;
     QoreProgram* pgm;
-    runtime_get_class_and_program(ctx, pgm);
+    runtime_get_program_and_class(pgm, ctx);
     const QoreClass* cls = obj->getClass();
     return qore_class_private::get(*cls)->runtimeMethodLookupIsStable(pgm) && cache->hit(cls, ctx);
 }
