@@ -7278,13 +7278,11 @@ bool QoreIRToLLVM::buildAotFastEntryArgs(const QoreIRInstruction* inst,
         }
         raw_args.push_back(raw);
         raw_arg_ids.push_back(value_id);
+        // an argument that emitAotBatchFastEntryOrFallback() checks for NOTHING is boxed for the check
         bool needs_boxed = !lazy_boxing
             || getFastEntryParamKind(callee_info, static_cast<unsigned>(i))
                 == BatchCalleeParamKind::Boxed
-            || (fastEntryParamRejectsNothing(callee_info,
-                    static_cast<unsigned>(i))
-                && nanboxed_values.count(value_id)
-                && !fastEntryArgumentKnownNotNothing(value_id));
+            || fastEntryArgumentNeedsNothingGuard(callee_info, static_cast<unsigned>(i), value_id);
         boxed_args.push_back(needs_boxed ? boxValue(raw, value_id) : nullptr);
     }
 
@@ -8220,14 +8218,19 @@ bool QoreIRToLLVM::fastEntryNativeArgsNeedNothingGuard(const BatchCalleeInfo& in
                     "AOT fast-entry native argument guard analysis")) {
             return true;
         }
-        if (fastEntryParamRejectsNothing(info, i)
-                && (nanboxed_values.count(raw_arg_ids[i])
-                    || native_boxed_sources.count(raw_arg_ids[i]))
-                && !fastEntryArgumentKnownNotNothing(raw_arg_ids[i])) {
+        if (fastEntryArgumentNeedsNothingGuard(info, i, raw_arg_ids[i])) {
             return true;
         }
     }
     return false;
+}
+
+// documented in QoreIRToLLVM.h
+bool QoreIRToLLVM::fastEntryArgumentNeedsNothingGuard(const BatchCalleeInfo& callee_info, unsigned index,
+        uint32_t value_id) const {
+    return fastEntryParamRejectsNothing(callee_info, index)
+        && (nanboxed_values.count(value_id) || native_boxed_sources.count(value_id))
+        && !fastEntryArgumentKnownNotNothing(value_id);
 }
 
 bool QoreIRToLLVM::fastEntryArgumentKnownNotNothing(uint32_t value_id) const {
@@ -11044,13 +11047,9 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             error = "cancelled during AOT batch native fast-entry guard lowering";
             return nullptr;
         }
-        if (fastEntryParamRejectsNothing(callee_info, i)) {
-            if (i < raw_arg_ids.size()
-                    && ((!nanboxed_values.count(raw_arg_ids[i])
-                            && !native_boxed_sources.count(raw_arg_ids[i]))
-                        || fastEntryArgumentKnownNotNothing(raw_arg_ids[i]))) {
-                continue;
-            }
+        // the arguments that buildAotFastEntryArgs() boxed for the check (qore#6081)
+        if (i < raw_arg_ids.size() && fastEntryArgumentNeedsNothingGuard(callee_info, i, raw_arg_ids[i])) {
+            assert(boxed_args[i]);
             llvm::Value* not_nothing = builder->CreateICmpNE(
                     boxed_args[i], llvm::ConstantInt::get(i64_type, VAL_NOTHING));
             can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, not_nothing);
@@ -22838,13 +22837,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     bool needs_boxed = !selective_summary_boxing
                         || getFastEntryParamKind(*selective_summary_callee,
                             static_cast<unsigned>(i)) == BatchCalleeParamKind::Boxed
-                        || (fastEntryParamRejectsNothing(*selective_summary_callee,
-                                static_cast<unsigned>(i))
-                            && (nanboxed_values.count(raw_arg_ids[i])
-                                || native_boxed_sources.count(
-                                    raw_arg_ids[i]))
-                            && !fastEntryArgumentKnownNotNothing(
-                                raw_arg_ids[i]));
+                        || fastEntryArgumentNeedsNothingGuard(*selective_summary_callee,
+                            static_cast<unsigned>(i), raw_arg_ids[i]);
                     boxed_args.push_back(needs_boxed
                         ? boxValue(raw_args[i], raw_arg_ids[i]) : nullptr);
                 }
