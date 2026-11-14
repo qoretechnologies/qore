@@ -192,8 +192,8 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     a wildcard address of the port.  Linux refuses a bind with \c SO_REUSEADDR of a specific address to a given port
     if a socket on a wildcard address that covers it holds the port and listens or does not reuse the address; macOS
     allows it.  On macOS, therefore, such a bind fails with \c EADDRINUSE, as found in the system's socket table or,
-    where macOS filters the table (macOS 27 lists only the caller's own sockets there), in the accessible process
-    descriptors:
+    where macOS filters the table (for some processes, such as a program that another program started, macOS 27
+    lists only the sockets that the process created), in the accessible process descriptors:
     - of a stream socket, if a socket that is not connected holds a wildcard address that covers the address on the
       port, whether it listens or not, because a connection request to a stream socket that is bound but not
       listening is dropped on macOS, while Linux gives it to the socket that listens
@@ -246,6 +246,13 @@ DLLLOCAL size_t qore_socket_descriptor_scan_count();
     yet
 */
 DLLLOCAL int qore_socket_table_check_mode(int socktype);
+//! For the unit tests: sets the decision of the port checks of macOS for a socket type and returns the previous one
+/** @param socktype \c SOCK_STREAM or \c SOCK_DGRAM
+    @param state the state to set, as returned by an earlier call; 0 for a decision that has not been made yet
+
+    @return the previous state, which a test gives back to this function when it ends
+*/
+DLLLOCAL int qore_socket_table_check_exchange(int socktype, int state);
 #endif
 DLLLOCAL int sock_get_error();
 DLLLOCAL void sock_set_raw_error(int rc);

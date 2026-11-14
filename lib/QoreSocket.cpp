@@ -14080,15 +14080,63 @@ static constexpr int QORE_SOCKET_TABLE_OMITS = -1000;
 //! the number of comparisons that cannot tell after which a table is taken to omit sockets
 static constexpr int QORE_SOCKET_TABLE_MAX_UNDECIDED = 3;
 
+//! the maximum number of parent processes that qore_socket_is_descendant() follows
+static constexpr unsigned QORE_SOCKET_MAX_PROCESS_DEPTH = 256;
+
+//! Returns true if the process is this process or one of its descendants, or if that cannot be told
+/** @param pid the process
+    @param self this process
+    @param known the processes already checked, with the result; the processes checked are added
+*/
+static bool qore_socket_is_descendant(pid_t pid, pid_t self, std::unordered_map<pid_t, bool>& known) {
+    std::vector<pid_t> chain;
+    bool rv = true;
+    for (unsigned depth = 0; ; ++depth) {
+        if (pid == self) {
+            rv = true;
+            break;
+        }
+        auto i = known.find(pid);
+        if (i != known.end()) {
+            rv = i->second;
+            break;
+        }
+        if (pid <= 1) {
+            rv = false;
+            break;
+        }
+        if (depth == QORE_SOCKET_MAX_PROCESS_DEPTH) {
+            // cannot be told
+            rv = true;
+            break;
+        }
+        chain.push_back(pid);
+        struct proc_bsdinfo info;
+        if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != static_cast<int>(sizeof(info))) {
+            // the process has ended or cannot be read: it cannot be told
+            rv = true;
+            break;
+        }
+        pid = static_cast<pid_t>(info.pbi_ppid);
+    }
+    for (pid_t p : chain) {
+        known[p] = rv;
+    }
+    return rv;
+}
+
 //! Returns 1 if the system's socket table lists every socket of the type that the process descriptors show
 /** The table that \c netstat reads is filtered by macOS for some processes; whether it is, is a property of the
     process, not of a port.  The first check of a socket type therefore compares the sockets of the accessible process
     descriptors that are bound and not connected with the table: if the table lists all of them, including at least
-    one socket of another process, the table alone is the answer of every check, and the descriptors, whose scan costs
-    a system call for every process and for every socket descriptor, are not scanned again.  A socket that is bound,
-    connected or closed between the two snapshots can be missing from the table, so the comparison is repeated before
-    the table is taken to omit sockets; every check then scans the descriptors.  A comparison that finds no socket of
-    another process, or for which a snapshot cannot be read, cannot tell: nothing is decided, and after
+    one socket of a process that is not this process or one of its descendants (for a process whose table it filters,
+    such as a program that another program started, macOS 27 lists only the sockets that the process created, which
+    its children can hold too, by fork(), and the descriptors show them in the children as well), the table alone is
+    the answer of every check, and the descriptors, whose scan costs a system call for every process and for every
+    socket descriptor, are not scanned again.  A socket that is bound, connected or closed between the two snapshots
+    can be missing from the table, so the comparison is repeated before the table is taken to omit sockets; every
+    check then scans the descriptors.  A comparison that finds no such socket of another process, or for which a
+    snapshot cannot be read, cannot tell: nothing is decided, and after
     QORE_SOCKET_TABLE_MAX_UNDECIDED such comparisons the table is taken to omit sockets.
 
     @return 1 if the table lists the sockets of the descriptors, 0 if it omits some or the outcome is not known, -1 if
@@ -14108,6 +14156,12 @@ static int qore_socket_table_lists_process_sockets(int socktype, ExceptionSink* 
         return 0;
     }
     const pid_t self = getpid();
+    // whether each process found is this process or one of its descendants, which can hold sockets that this process
+    // created, by fork()
+    std::unordered_map<pid_t, bool> descendants;
+    auto is_descendant = [&](pid_t pid) {
+        return qore_socket_is_descendant(pid, self, descendants);
+    };
     // set when every comparison found a socket of the descriptors missing from the table
     bool omits = true;
     for (unsigned attempt = 0; attempt < 3; ++attempt) {
@@ -14133,8 +14187,9 @@ static int qore_socket_table_lists_process_sockets(int socktype, ExceptionSink* 
             break;
         }
         bool missing = false;
-        // a socket of another process in both: without one, a table that only lists the sockets of this process
-        // could not be told from a complete one
+        // a socket of a process that is not this process or one of its descendants in both: without one, a table
+        // that only lists the sockets that this process created could not be told from a complete one; a descendant
+        // can hold the sockets of this process that it inherited
         bool other_process = false;
         size_t count = 0;
         for (const QoreSocketTableEntry& e : process_sockets) {
@@ -14149,7 +14204,7 @@ static int qore_socket_table_lists_process_sockets(int socktype, ExceptionSink* 
             if (missing) {
                 break;
             }
-            if (e.pid != self) {
+            if (!other_process && !is_descendant(e.pid)) {
                 other_process = true;
             }
         }
@@ -14183,6 +14238,11 @@ size_t qore_socket_descriptor_scan_count() {
 int qore_socket_table_check_mode(int socktype) {
     int state = qore_socket_table_lists_sockets[socktype == SOCK_STREAM ? 0 : 1].load(std::memory_order_acquire);
     return state == 1 ? 1 : (state == QORE_SOCKET_TABLE_OMITS ? -1 : 0);
+}
+
+// documented in qore_socket_private.h
+int qore_socket_table_check_exchange(int socktype, int state) {
+    return qore_socket_table_lists_sockets[socktype == SOCK_STREAM ? 0 : 1].exchange(state, std::memory_order_acq_rel);
 }
 
 //! Checks process socket descriptors when the system table omits sockets owned by other processes.
