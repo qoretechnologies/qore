@@ -27,6 +27,9 @@ struct RecordColumnInference {
     bool has_string = false;
     bool has_bool = false;
     bool has_date = false;
+    //! an absolute date and a relative date (qore#6107)
+    bool has_absolute_date = false;
+    bool has_relative_date = false;
     bool has_auto = false;
 };
 
@@ -51,6 +54,11 @@ static void mergeRecordColumnType(RecordColumnInference& inf, QoreValue value) {
             break;
         case NT_DATE:
             inf.has_date = true;
+            if (value.get<const DateTimeNode>()->isRelative()) {
+                inf.has_relative_date = true;
+            } else {
+                inf.has_absolute_date = true;
+            }
             break;
         default:
             inf.has_auto = true;
@@ -76,7 +84,9 @@ static ColumnType finishRecordColumnType(const RecordColumnInference& inf) {
         return ColumnType::BOOL;
     }
     if (inf.has_date && !inf.has_int && !inf.has_float && !inf.has_bool) {
-        return ColumnType::DATE;
+        // absolute and relative dates make a column that holds any value, as a concatenation of the two does
+        // (qore#6107)
+        return inf.has_absolute_date && inf.has_relative_date ? ColumnType::AUTO : ColumnType::DATE;
     }
     if (inf.has_int || inf.has_float || inf.has_bool || inf.has_date) {
         return ColumnType::STRING;
@@ -205,9 +215,14 @@ static void initializeRecordColumnData(ColumnData& data, ColumnType type, int64_
 }
 
 //! stores a value of a record in a cell
-/** @return 0 for success, -1 if an exception was raised
+/** @param date_kind for a date column, the kind of its dates (a DataFrameDateKind value), set by the first date
+    if -1; never 0, the value of a date that cannot be stored, so that such a date is never taken for one of that
+    kind (qore#6107)
+
+    @return 0 for success, -1 if an exception was raised, 1 if a date is not of the kind of the others
 */
-static int storeRecordValue(ColumnData& data, int64_t i, QoreValue value, ExceptionSink* xsink) {
+__attribute__((always_inline)) static inline int storeRecordValue(ColumnData& data, int64_t i, QoreValue value,
+        int& date_kind, ExceptionSink* xsink) {
     if (value.isNullOrNothing()) {
         data.null_mask[i] = 1;
         if (data.type == ColumnType::FLOAT64) {
@@ -230,7 +245,23 @@ static int storeRecordValue(ColumnData& data, int64_t i, QoreValue value, Except
             break;
         case ColumnType::DATE:
             if (value.getType() == NT_DATE) {
-                return dataFrameDateMicros(value.get<const DateTimeNode>(), data.date_data[i], xsink);
+                const DateTimeNode* dt = value.get<const DateTimeNode>();
+                int64 micros;
+                // a date of the kind of the others is stored with one comparison
+                int kind = dt->getEpochMicrosecondsUTCCheckedKind(micros);
+                if (kind == date_kind) {
+                    data.date_data[i] = micros;
+                    return 0;
+                }
+                if (!kind) {
+                    return dataFrameDateOutOfRange(dt, xsink);
+                }
+                if (date_kind >= 0) {
+                    return 1;
+                }
+                date_kind = kind;
+                data.date_data[i] = micros;
+                return 0;
             }
             data.null_mask[i] = 1;
             break;
@@ -807,6 +838,7 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
 
         bool fast_failed = false;
         ExceptionSink fast_xsink;
+        std::vector<int> date_kinds(num_cols, -1);
         for (int64_t i = 0; i < n; ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame from records")) {
                 delete df;
@@ -827,7 +859,9 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
                 }
                 // a value that cannot be stored in the column's cell is stored by the path that infers the type of
                 // every column first, as a later value can make the column one that stores it, or raise its error
-                if (storeRecordValue(*df->columns[c].data, i, value, &fast_xsink)) {
+                // a date that is not of the kind of the others (a duration with absolute dates) makes a column that
+                // holds any value, which the path that infers the type of every column first makes (qore#6107)
+                if (storeRecordValue(*df->columns[c].data, i, value, date_kinds[c], &fast_xsink)) {
                     fast_xsink.clear();
                     fast_failed = true;
                     break;
@@ -839,6 +873,12 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         }
 
         if (!fast_failed) {
+            // a column of durations has their schema (qore#6107)
+            for (size_t c = 0; c < num_cols; ++c) {
+                if (date_kinds[c] == DFDK_RELATIVE) {
+                    dataFrameSetDurationSchema(*df->columns[c].data);
+                }
+            }
             return df;
         }
         delete df;
@@ -870,6 +910,9 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
     for (size_t c = 0; c < num_cols; ++c) {
         auto data = std::make_shared<ColumnData>();
         initializeRecordColumnData(*data, finishRecordColumnType(inferred[c]), n);
+        if (data->type == ColumnType::DATE && inferred[c].has_relative_date) {
+            dataFrameSetDurationSchema(*data);
+        }
 
         Column col;
         col.name = col_names[c];
@@ -885,7 +928,9 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         }
         const QoreHashNode* row = rows[i];
         for (size_t c = 0; c < num_cols; ++c) {
-            if (storeRecordValue(*df->columns[c].data, i, row->getKeyValue(col_keys[c]), xsink)) {
+            // the dates of a date column are all of one kind here
+            int date_kind = -1;
+            if (storeRecordValue(*df->columns[c].data, i, row->getKeyValue(col_keys[c]), date_kind, xsink)) {
                 delete df;
                 return nullptr;
             }
@@ -2938,12 +2983,19 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
                         new_data->bool_data[i] = value.getAsBool() ? 1 : 0;
                         break;
                     case ColumnType::DATE:
-                        // as when a column is built: a value that is not a date leaves the value null
+                        // as when a column is built: a value that is not a date, or a date that is not of the kind
+                        // of the column (a duration in a column of absolute dates or the reverse), leaves the value
+                        // null (qore#6107)
                         if (value.getType() == NT_DATE) {
-                            if (dataFrameDateMicros(value.get<const DateTimeNode>(), new_data->date_data[i],
-                                    xsink)) {
+                            int kind = dataFrameDateMicrosKind(value.get<const DateTimeNode>(), new_data->date_data[i],
+                                xsink);
+                            if (!kind) {
                                 delete df;
                                 return nullptr;
+                            }
+                            if ((kind == DFDK_RELATIVE) != new_data->isDuration()) {
+                                new_data->null_mask[i] = 1;
+                                new_data->date_data[i] = 0;
                             }
                         } else {
                             new_data->null_mask[i] = 1;

@@ -1771,7 +1771,7 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     us = (val % 1000000000) / 1000;
                     break;
             }
-            return DateTimeNode::makeRelative(0, 0, 0, 0, 0, secs, us);
+            return dataFrameMakeDuration(secs, us);
         }
         case arrow::Type::DECIMAL128: {
             auto dec_array = std::static_pointer_cast<arrow::Decimal128Array>(array);

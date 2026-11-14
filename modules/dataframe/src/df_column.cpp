@@ -71,7 +71,7 @@ static DateTimeNode* makeDateFromMicros(int64_t micros, bool duration) {
     int microseconds = 0;
     splitMicros(micros, seconds, microseconds);
     if (duration) {
-        return DateTimeNode::makeRelative(0, 0, 0, 0, 0, seconds, microseconds);
+        return dataFrameMakeDuration(seconds, microseconds);
     }
     return DateTimeNode::makeAbsolute(currentTZ(), seconds, microseconds);
 }
@@ -234,6 +234,15 @@ void ColumnData::appendAutoValue(QoreValue value) {
     // the values do not change once needsScan() has been computed
     assert(scan_state.load(std::memory_order_relaxed) < 0);
     auto_data.push_back(value.refSelf());
+}
+
+void dataFrameSetDurationSchema(ColumnData& col) {
+    col.columnar_schema = QoreColumnarTypeDescriptor();
+    col.columnar_schema.kind = QoreColumnarTypeKind::Duration;
+    col.columnar_schema.column_type = QoreColumnarColumnType::Date;
+    col.columnar_schema.time_unit = "us";
+    col.columnar_schema.nullable = true;
+    col.has_columnar_schema = true;
 }
 
 std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
@@ -704,6 +713,12 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
         }
     } deferred;
 
+    // the kind of the dates of a date column (a DataFrameDateKind value, -1 before the first date, never 0, the
+    // value of a date that cannot be stored, so that such a date is never taken for one of that kind): a column of
+    // absolute and relative dates (durations) holds any value, as a concatenation of the two does, and a column of
+    // relative dates is a column of durations (qore#6107)
+    int date_kind = -1;
+
     for (int64_t i = 0; i < n; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
             return nullptr;
@@ -782,9 +797,31 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                 } else if (col->type != ColumnType::DATE) {
                     return buildMixedColumnData(values, i, xsink);
                 }
-                if (!deferred.raised
-                        && dataFrameDateMicros(v.get<const DateTimeNode>(), col->date_data[i], &deferred.xsink)) {
-                    deferred.raised = true;
+                {
+                    const DateTimeNode* dt = v.get<const DateTimeNode>();
+                    int64 micros;
+                    // a date of the kind of the others is stored with one comparison
+                    int kind = deferred.raised ? 0 : dt->getEpochMicrosecondsUTCCheckedKind(micros);
+                    if (kind == date_kind) {
+                        col->date_data[i] = micros;
+                        break;
+                    }
+                    if (!kind) {
+                        // a date that cannot be stored in a date cell; its kind is needed to tell whether the column
+                        // holds any value, which stores any date
+                        if (!deferred.raised) {
+                            dataFrameDateOutOfRange(dt, &deferred.xsink);
+                            deferred.raised = true;
+                        }
+                        kind = dt->isRelative() ? DFDK_RELATIVE : DFDK_ABSOLUTE;
+                    } else {
+                        col->date_data[i] = micros;
+                    }
+                    if (date_kind < 0) {
+                        date_kind = kind;
+                    } else if (kind != date_kind) {
+                        return buildColumnData(values, ColumnType::AUTO, xsink);
+                    }
                 }
                 break;
 
@@ -796,6 +833,10 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
     if (deferred.raised) {
         xsink->assimilate(deferred.xsink);
         return nullptr;
+    }
+
+    if (date_kind == DFDK_RELATIVE) {
+        dataFrameSetDurationSchema(*col);
     }
 
     if (col->type == ColumnType::AUTO) {

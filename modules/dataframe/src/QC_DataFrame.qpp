@@ -1065,8 +1065,9 @@ static DataFrame DataFrame::concat(list<DataFrame> dataframes, *int axis) [flags
 }
 
 //! Returns a new DataFrame with null values replaced by the given value
-/** @param value the replacement value (converted to each column's type); in a date column, only a date value
-    replaces a null value, and other values leave it null
+/** @param value the replacement value (converted to each column's type); in a date column, only a date of the kind
+    of the column (an absolute date in a column of absolute dates, a relative date in a column of durations) replaces
+    a null value, and other values leave it null
     @return new DataFrame object with nulls filled
 
     @par Example:

@@ -147,6 +147,29 @@ static inline int dataFrameDateMicros(const DateTimeNode* dt, int64_t& out, Exce
     return dataFrameDateOutOfRange(dt, xsink);
 }
 
+//! The kind of a date stored in a date cell, as DateTime::getEpochMicrosecondsUTCCheckedKind() returns it
+//! (qore#6107)
+enum DataFrameDateKind : int {
+    DFDK_ABSOLUTE = 1,
+    DFDK_RELATIVE = 2,
+};
+
+//! Gives the microseconds of a date for a date cell, as dataFrameDateMicros() does, and its kind, with one call into
+//! the date (qore#6107)
+/** @return the kind of the date (DFDK_ABSOLUTE or DFDK_RELATIVE), or 0 if a DATAFRAME-DATE-RANGE-ERROR exception
+    was raised
+*/
+static inline int dataFrameDateMicrosKind(const DateTimeNode* dt, int64_t& out, ExceptionSink* xsink) {
+    int64 micros;
+    int kind = dt->getEpochMicrosecondsUTCCheckedKind(micros);
+    if (kind) {
+        out = micros;
+        return kind;
+    }
+    dataFrameDateOutOfRange(dt, xsink);
+    return 0;
+}
+
 //! Compares two values as the core <=> operator does (qore#6097)
 /** @param cmp the result: -1, 0 or 1
     @return 0 for success, -1 if the operator raises an exception (NAN-COMPARE-ERROR for a NaN value)
@@ -377,6 +400,20 @@ static inline void appendDataFrameFloatKey(std::string& key, char tag, double va
     key += tag;
     key.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
 }
+
+//! Makes a duration of the given seconds and microseconds; the seconds of a relative date are an int, so a duration
+//! of more seconds than an int holds (about 68 years) is made of days and seconds (qore#6107)
+static inline DateTimeNode* dataFrameMakeDuration(int64_t seconds, int microseconds) {
+    if (seconds >= std::numeric_limits<int>::min() && seconds <= std::numeric_limits<int>::max()) {
+        return DateTimeNode::makeRelative(0, 0, 0, 0, 0, static_cast<int>(seconds), microseconds);
+    }
+    return DateTimeNode::makeRelative(0, 0, static_cast<int>(seconds / 86400), 0, 0,
+        static_cast<int>(seconds % 86400), microseconds);
+}
+
+//! Makes a date column a column of durations: gives it the columnar schema of durations in microseconds, so that
+//! its cells are returned as relative dates (qore#6107)
+DLLLOCAL void dataFrameSetDurationSchema(ColumnData& col);
 
 //! Returns a key of the value of a row that is equal for equal values of the column and different for others
 /** A null value has a key of its own.  A float (in a float64 column or a column that holds any value) is keyed by
