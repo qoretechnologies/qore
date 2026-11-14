@@ -315,6 +315,49 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
             assertEq(-1, out.find("module parse option mask"), "inherited: the mask is not named: " + out);
             assertEq(-1, out.find("LOADED"), "inherited");
         }
+
+        # %no-negative-offsets in a module whose %modern the mask completes: the error names the mask
+        f.open2(tmp.path + "/LegacyNegOffsetsMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\n%require-types\n%strict-args\n%no-negative-offsets\nmodule LegacyNegOffsetsMod {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"Qore Technologies\";\n"
+            "    url = \"https://qore.org\";\n}\npublic int sub neg_first(list<int> l) { return l[0]; }\n");
+        f.close();
+        {
+            string script = tmp.path + "/mask-neg-offsets.q";
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\ntry {\n    load_module_masked(\"%s/LegacyNegOffsetsMod.qm\", "
+                "new ParseOptions(), new ParseOptions((\"strong-encapsulation\", \"no-summarize\")));\n"
+                "    printf(\"LOADED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+                "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path));
+            f.close();
+            out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            assertRegex("PARSE-OPTION-ERROR: %no-negative-offsets cannot be used while %modern is in effect.*; "
+                "%modern is complete only with .*which the module parse option mask adds", out, "no-negative-offsets");
+        }
+
+        # the record of the restrictions that the mask added is only kept while the module's code is parsed (debug
+        # builds have the hook that reads it)
+        f.open2(tmp.path + "/CompatibleLegacyMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\n%require-types\n%strict-args\nmodule CompatibleLegacyMod {\n    version = \"1.0\";\n"
+            "    desc = \"test\";\n    author = \"Qore Technologies\";\n    url = \"https://qore.org\";\n}\n"
+            "public int sub compat_one() { return 1; }\n");
+        f.close();
+        {
+            string script = tmp.path + "/mask-record.q";
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\nif (!exists_function(\"dbg_get_module_mask_added\")) {\n"
+                "    printf(\"NO-HOOK\\n\");\n    exit(0);\n}\nload_module_masked(\"%s/CompatibleLegacyMod.qm\", "
+                "new ParseOptions(), new ParseOptions((\"strong-encapsulation\", \"no-summarize\")));\n"
+                "printf(\"RECORD: %%y\\n\", call_function(\"dbg_get_module_mask_added\", \"CompatibleLegacyMod\"));\n",
+                tmp.path));
+            f.close();
+            out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            if (out =~ /NO-HOOK/) {
+                testSkip("the debug hook dbg_get_module_mask_added() is not available (release build)");
+            } else {
+                assertEq("RECORD: []\n", out, "the record is cleared after the module's parse");
+            }
+        }
     }
 
     #! an executable cannot be linked from an object whose parse options have %modern with a compatibility option that

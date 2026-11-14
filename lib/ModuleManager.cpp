@@ -3901,6 +3901,28 @@ static QoreParseOptions get_masked_module_parse_options(QoreProgram* p, const Qo
     return mask.apply(inherited);
 }
 
+//! Clears the record of the restrictions that a module parse option mask added to a module's Program when the parse of
+//! the module's code ends, successfully or not
+/** The record is only used to name the mask in the errors of the module's own directives (see
+    qore_program_private_base::parseCheckModernConflict()); code parsed into the Program later is not the module's
+    code under the mask
+*/
+class QoreModuleMaskAddedClearHelper {
+public:
+    DLLLOCAL QoreModuleMaskAddedClearHelper(QoreProgram* pgm) : pgm(pgm) {
+    }
+
+    DLLLOCAL ~QoreModuleMaskAddedClearHelper() {
+        qore_program_private::setModuleMaskAddedParseOptions(*pgm, QoreParseOptions());
+    }
+
+    QoreModuleMaskAddedClearHelper(const QoreModuleMaskAddedClearHelper&) = delete;
+    QoreModuleMaskAddedClearHelper& operator=(const QoreModuleMaskAddedClearHelper&) = delete;
+
+private:
+    QoreProgram* pgm;
+};
+
 QoreParseOptions qore_get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
         const QoreModuleParseOptionMask& mask) {
     return get_masked_module_parse_options(p, exclude, mask);
@@ -4048,6 +4070,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
 
     {
         ModuleLoadMapHelper mlmh(feature, xsink);
+        // the module's own code is parsed under the mask in this block
+        QoreModuleMaskAddedClearHelper mask_added_clear(userModule->getProgram());
 
         // issue #3212: warning sink
         userModule->getProgram()->parsePending(moduleCode.c_str(), path, &xsink, &xsink, warning_mask);
@@ -5025,6 +5049,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
 
     {
         ModuleLoadMapHelper mlmh(feature, xsink);
+        // the module's own code is parsed under the mask in this block
+        QoreModuleMaskAddedClearHelper mask_added_clear(mi->getProgram());
 
         // issue #3212: warning mask
         mi->getProgram()->parseFile(td, &xsink, &wsink, warning_mask);
@@ -5132,6 +5158,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     {
         // run initialization unlocked
         ModuleLoadMapHelper mlmh(feature, xsink);
+        // the module's own code is parsed under the mask in this block
+        QoreModuleMaskAddedClearHelper mask_added_clear(mi->getProgram());
 
         mi->getProgram()->parse(src, path, &xsink, &wsink, warning_mask);
     }

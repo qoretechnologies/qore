@@ -4197,8 +4197,17 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
         // %no-negative-offsets is the only directive that disables an option that %modern implies
         desc->concat("%no-negative-offsets cannot be used while %modern is in effect, which implies ");
         describeParseOptions(conflict, *desc);
-        desc->concat(" and guarantees a consistent set of parse options; remove the directive, or parse the code "
-            "without %modern (as a .q file, or after %old-style)");
+        desc->concat(" and guarantees a consistent set of parse options");
+        // %modern is complete only with the restrictions that a module parse option mask added (see above)
+        if (module_mask_added && isModern(pwo.parse_options) && !isModern(pwo.parse_options & ~module_mask_added)) {
+            desc->concat("; %modern is complete only with ");
+            describeParseOptions(module_mask_added, *desc);
+            desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
+                "load_module_masked()); remove the directive, or load the module with a mask that does not add them");
+        } else {
+            desc->concat("; remove the directive, or parse the code without %modern (as a .q file, or after "
+                "%old-style)");
+        }
     }
     qore_program_private::makeParseException(pgm, *loc, "PARSE-OPTION-ERROR", desc);
     return -1;

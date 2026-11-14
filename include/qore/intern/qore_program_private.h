@@ -4801,6 +4801,12 @@ public:
         pgm.priv->module_mask_added = po;
     }
 
+    //! Returns the restrictions that a module parse option mask added to the parse options of a module's Program
+    //! while its code is parsed (none otherwise)
+    DLLLOCAL static QoreParseOptions getModuleMaskAddedParseOptions(const QoreProgram& pgm) {
+        return pgm.priv->module_mask_added;
+    }
+
     //! Records the functional domains that a user module declares in its module header (\c domains)
     /** If \a apply is true (the module is library code: see QoreModuleManager::isTrustedModulePath()), the Program no
         longer has the restrictions of these domains, which it inherited from the Program loading it, nor their parse

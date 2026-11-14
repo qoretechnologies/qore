@@ -74,6 +74,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QC_QoreParseOptions.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_Http3ServerPollOperation.h"
@@ -19404,6 +19405,22 @@ static QoreValue f_dbg_get_live_bigfloat_count(const QoreListNode* params, Runti
     return q_get_live_bigfloat_count();
 }
 
+//! returns the names of the restrictions that a module parse option mask added to the Program of a loaded module and
+//! that are recorded for the errors of the module's own directives; the record is cleared when the module's code has
+//! been parsed (qore#5682)
+static QoreValue f_dbg_get_module_mask_added(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    QoreAbstractModule* mi = QMM.findModule(name->c_str());
+    if (!mi) {
+        return xsink->raiseException("DBG-MODULE-ERROR", "module '%s' is not loaded", name->c_str());
+    }
+    QoreProgram* mpgm = mi->getModuleProgram();
+    if (!mpgm) {
+        return new QoreListNode(stringTypeInfo);
+    }
+    return QoreParseOptionsData(qore_program_private::getModuleMaskAddedParseOptions(*mpgm)).toStringList(xsink);
+}
+
 //! returns the number of Program objects that exist (created and not yet destroyed; qore#5822)
 static QoreValue f_dbg_get_live_program_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return static_cast<int64>(qore_program_private::dbgGetLiveProgramCount());
@@ -22692,6 +22709,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_live_program_count", f_dbg_get_live_program_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_module_mask_added", f_dbg_get_module_mask_added, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        listTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "module");
     qns.addBuiltinVariant("dbg_hold_batch_collection", f_dbg_hold_batch_collection, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
     qns.addBuiltinVariant("dbg_wait_batch_collection_held", f_dbg_wait_batch_collection_held, QCF_NO_FLAGS,
