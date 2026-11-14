@@ -3300,7 +3300,8 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
 }
 
 //! Returns true if a handler of \a func, run out of line, can hand a value over, also no value with a return without
-//! a value (QoreIROpcode::HandlerReturn; see handler_return_hold, #5992, #6074)
+//! a value, or a handler of one of its handlers, which forwards it (QoreIROpcode::HandlerReturn; see
+//! handler_return_hold, #5992, #6074)
 static bool qore_ir_handlers_return_value(const QoreIRFunction& func) {
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
@@ -3317,6 +3318,10 @@ static bool qore_ir_handlers_return_value(const QoreIRFunction& func) {
                         return true;
                     }
                 }
+            }
+            // a handler of a block of the handler forwards the values that it hands over to this function
+            if (qore_ir_handlers_return_value(*obe->handler_ir)) {
+                return true;
             }
         }
     }
@@ -3371,6 +3376,14 @@ static const std::vector<uint32_t>* qore_ir_landing_pad_catch_returns(const Qore
 // documented in QoreIRToLLVM.h
 llvm::CallInst* QoreIRToLLVM::emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count,
         bool release_returns, const std::vector<uint32_t>* try_returns) {
+    if (handler_function && release_returns) {
+        // the handlers of a block of a handler body hand their values to the function that the handler runs for,
+        // through the context of the handler's run, where the exception or thread_exit leaves the handler: where a
+        // try statement of the handler catches it, they replace the value of its try block's return (#6074)
+        auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit_forward",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        return builder->CreateCall(helper, {saved_count, xsink_arg});
+    }
     if (!handler_return_hold) {
         auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -12061,9 +12074,11 @@ llvm::CallInst* QoreIRToLLVM::emitNativeCallAOT(llvm::FunctionCallee fn, llvm::A
 }
 
 llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, const std::string& name,
-        llvm::Module& module, std::string& error) {
+        llvm::Module& module, std::string& error, bool handler) {
     QoreIRToLLVM nested_lowering(ctx);
     nested_lowering.setSymbolName(name);
+    // the body of a handler: the handlers of its own blocks forward the values that they hand over (#6074)
+    nested_lowering.handler_function = handler;
     if (aot_mode) {
         // the nested function shares the AOT context of the function being lowered: its slot tables
         nested_lowering.setAOTMode(aot_slots);
@@ -34775,7 +34790,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     std::string handler_name = llvm_func->getName().str() + "_obe_"
                         + std::to_string(obe_handler_count++);
-                    handler_fn = lowerNestedFunction(*sinst->handler_ir, handler_name, module, error);
+                    handler_fn = lowerNestedFunction(*sinst->handler_ir, handler_name, module, error, true);
                     if (!handler_fn) {
                         error = "on-block-exit handler " + error;
                         return false;

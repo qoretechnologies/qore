@@ -1746,6 +1746,21 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 l.pending_return_try_depth = l.try_depth;
             }
         } pending_return_restore(*this);
+        // the hand-over of a return in a try statement of a handler body (see emitHandlerReturn()) is the state of
+        // this return only: the cleanups of the return can lower an inline handler with a return of its own, whose
+        // lowering would otherwise replace it (#6074); restored on every way out
+        struct HandoverTryRestore {
+            QoreIRLowering& l;
+            bool active;
+            QoreIRValue value;
+            HandoverTryRestore(QoreIRLowering& l) : l(l), active(l.handover_try_active), value(l.handover_try_value) {
+                l.handover_try_active = false;
+            }
+            ~HandoverTryRestore() {
+                l.handover_try_active = active;
+                l.handover_try_value = value;
+            }
+        } handover_try_restore(*this);
         QoreValue expr = ret_stmt->getExpression();
         if (!expr || expr.isNothing()) {
             // a return without a value in a handler replaces the value of the return that the handler runs after with
@@ -1765,9 +1780,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Also handles RefForeach cleanup: record the current element, then write the
             // referenced list back with its unvisited elements unchanged, as break does.
             // the catch blocks that the return leaves are closed in their places among the cleanups (qore#6017)
-            bool cleanups_ok = emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES);
-            handover_try_active = false;
-            if (!cleanups_ok) {
+            if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES)) {
                 return false;
             }
             // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a
@@ -1919,9 +1932,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // the value that the outermost try statement of the handler hands over when it ends (see emitHandlerReturn())
             handover_try_value = lowered;
         }
-        bool cleanups_ok = emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES);
-        handover_try_active = false;
-        if (!cleanups_ok) {
+        if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES)) {
             return false;
         }
         // the Return is emitted even when a handler that the cleanups lowered inline ended the block (a throw or a
@@ -3921,6 +3932,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(try_block);
         QoreIRBasicBlock* prev_guard_override = guard_exception_target_override;
+        // the exception target outside the try statement (see BlockCleanupEntry::try_outer_target)
+        QoreIRBasicBlock* try_outer_target = getCurrentExceptionTarget();
         guard_exception_target_override = catch_block;
         exception_stack.push_back(catch_block);
         size_t try_scope_depth = scope_stack.size();
@@ -3948,6 +3961,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             scope_entry.handler_start = block_handlers.size();
             // the end of the try statement for an exit from its try block (#5992)
             scope_entry.try_end_depth = try_depth;
+            scope_entry.try_outer_target = try_outer_target;
             pushBlockCleanup(scope_entry);
         }
         builder.createScopeEnter(try_scope_id);
@@ -4020,6 +4034,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             catch_scope_entry.loc = stmt->loc;
             // the end of the try statement for an exit from its catch block (#5992)
             catch_scope_entry.try_end_depth = try_depth;
+            catch_scope_entry.try_outer_target = try_outer_target;
             pushBlockCleanup(catch_scope_entry);
         }
         LocalVar* catch_var = try_stmt->getCatchVar();
@@ -4993,6 +5008,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 if (try_replaced_return_base.isValid() && try_replaced_return_base.id != try_replaced_return.id) {
                     builder.createReleaseOwnedTemp(try_replaced_return_base, entry.loc);
                 }
+                // an exception that the release raises (a destructor) is raised once the try statement has ended, as
+                // by the AST interpreter's try statement, which replaces the value after it has left its try and catch
+                // blocks: it goes past the statement's catch block, which would release the value of the try
+                // block's return, the value that the return goes on with (#6074)
+                builder.createCheckException(entry.loc)->exception_target = entry.try_outer_target;
             }
             try_replaced_depth = 0;
         }
@@ -5001,8 +5021,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         // gives it to the enclosing block when it ends, only once the try statement has ended without an exception
         // (see above, #6074)
         if (handover_try_active && entry.try_end_depth == 1 && !blockHasTerminator(builder.getBlock())) {
+            // an exception from the try block's end goes to the try statement's catch block; one raised by the
+            // release of the replaced value when the statement has ended does not (the AST interpreter's try
+            // statement gives the value to the enclosing block after it has left its try and catch blocks)
             builder.createCheckException(entry.loc)->exception_target = getCurrentExceptionTarget();
-            builder.createHandlerReturn(handover_try_value, entry.loc)->exception_target = getCurrentExceptionTarget();
+            builder.createHandlerReturn(handover_try_value, entry.loc)->exception_target = entry.try_outer_target;
             handover_try_active = false;
         }
     }

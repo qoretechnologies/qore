@@ -7,6 +7,9 @@
 %enable-all-warnings
 our list<string> lg = ();
 class T { public { string n; } constructor(string n) { self.n = n; } destructor() { lg += "~" + n; } }
+# a value whose destructor throws
+class TT { public { string n; } constructor(string n) { self.n = n; } destructor() { lg += "~" + n; throw "DTOR-" + n; } }
+our bool never = False;
 
 # a later handler ends in a thread_exit after a handler's return replaced the value (#6073)
 auto sub te1() {
@@ -206,6 +209,54 @@ auto sub tr2() {
     return new T("tr2-body");
 }
 
+
+# the cases of the second review of #6074
+# a return in a try statement of a handler lowered inline replaces a value whose destructor throws: the exception is
+# raised after the try statement, not caught by its catch block
+auto sub rv1() {
+    on_exit { try { return new T("rv1-h"); } catch (hash<ExceptionInfo> ex) { lg += "c:" + ex.err; } }
+    return new TT("rv1-body");
+}
+# the same in a handler run out of line: the hand-over at the end of the try statement raises past its catch block
+auto sub rv2() {
+    T l("rv2-l");
+    on_exit { lg += "y"; }
+    on_exit { lg += "x"; try { return new T("rv2-h"); } catch (hash<ExceptionInfo> ex) { lg += "c:" + ex.err; }
+        lg += "after"; }
+    on_exit { lg += "thr"; throw "RV2"; }
+    return new TT("rv2-body");
+}
+# a handler of a handler run out of line: its return replaces the function's interrupted return
+auto sub rv3() {
+    T l("rv3-l");
+    on_exit { on_exit { lg += "2"; return new T("rv3-2"); } lg += "1"; thread_exit; }
+    on_exit { lg += "te"; thread_exit; }
+    return new T("rv3-body");
+}
+# a return in a try statement of a handler whose cleanups lower a handler with a return that is not reached
+auto sub rv4() {
+    T l("rv4-l");
+    on_exit {
+        try {
+            on_exit { lg += "in"; if (never) return new T("rv4-in"); }
+            lg += "out";
+            return new T("rv4-out");
+        } catch (hash<ExceptionInfo> ex) { lg += "c"; }
+    }
+    on_exit { lg += "te"; thread_exit; }
+    return new T("rv4-body");
+}
+# a handler of a handler whose exception a try statement of the handler catches: the return goes to the try statement
+auto sub rv5() {
+    on_exit {
+        try {
+            { on_error { lg += "e"; return new T("rv5-h"); } throw "RV5"; }
+        } catch (hash<ExceptionInfo> ex) { lg += "c"; }
+    }
+    T b("rv5-b");
+    throw "RV5b";
+}
+
 # runs the function twice in a thread of its own, which a thread_exit ends
 sub show(string label, code c) {
     for (int i = 0; i < 2; ++i) {
@@ -248,3 +299,8 @@ show("rn2", \rn2());
 show("rn3", \rn3());
 show("tr1", \tr1());
 show("tr2", \tr2());
+show("rv1", \rv1());
+show("rv2", \rv2());
+show("rv3", \rv3());
+show("rv4", \rv4());
+show("rv5", \rv5());

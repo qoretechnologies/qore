@@ -652,6 +652,9 @@ private:
         handlers.
     */
     llvm::Value* handler_return_hold = nullptr;
+    //! true if the function is the body of a handler compiled as a function of its own: the handlers of its blocks
+    //! run out of line with qore_rt_exec_on_block_exit_forward() (#6074)
+    bool handler_function = false;
     //! A call that runs handlers out of line with handler_return_hold, and the returns whose values the first
     //! hand-over of a handler replaces (see finalizeHandlerReturnHoldSites())
     struct HandlerReturnHoldSite {
@@ -2187,7 +2190,7 @@ private:
         @return the native function, or nullptr if an error was raised
     */
     llvm::Function* lowerNestedFunction(const QoreIRFunction& func, const std::string& name, llvm::Module& module,
-            std::string& error);
+            std::string& error, bool handler = false);
 
     // Phase 5b: Try to emit a specialized list index access instead of qore_rt_invoke_expr.
     // Returns true if specialized code was emitted, false to fall through to generic path.

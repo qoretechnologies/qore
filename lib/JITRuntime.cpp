@@ -14042,10 +14042,17 @@ struct QoreNativeHandlerHold {
 };
 
 static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
-        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold);
+        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward = false);
 
 extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered) {
     qore_rt_exec_on_block_exit_intern(saved_count, xsink, inline_lowered, nullptr);
+}
+
+//! Runs the handlers of a block of a handler body as qore_rt_exec_on_block_exit() does; the values that they hand
+//! over go to the function that the handler runs for, as the AST interpreter runs them with the same reference to its
+//! return value (QoreHandlerRunContext::forwardFrom(), #6074)
+extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_forward(int64_t saved_count, ExceptionSink* xsink) {
+    qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, nullptr, true);
 }
 
 //! Runs the handlers registered since saved_count as qore_rt_exec_on_block_exit() does; the values that a handler run
@@ -14061,7 +14068,7 @@ extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count,
 
 // inlined in both entry points, so that qore_rt_exec_on_block_exit_impl() has no hold check (#5992)
 static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
-        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold) {
+        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward) {
     size_t start = static_cast<size_t>(saved_count);
     if (jit_obe_handlers.size() <= start) {
         return 0;
@@ -14147,10 +14154,17 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                 // the values of the handler's return statements are handed over as they execute (#6074): the value
                 // that the handler function returns is not used
                 QoreHandlerRunContext run_ctx;
-                run_ctx.unwinding = error || (xsink && xsink->isThreadExit());
-                if (hold) {
-                    run_ctx.hand_over = QoreNativeHandlerHold::handOver;
-                    run_ctx.data = hold;
+                QoreHandlerRunContext* outer = forward ? qore_handler_run_context() : nullptr;
+                if (outer) {
+                    // the handlers of a block of a handler body: the values go to the function that the handler
+                    // runs for
+                    run_ctx.forwardFrom(*outer);
+                } else {
+                    run_ctx.unwinding = error || (xsink && xsink->isThreadExit());
+                    if (hold) {
+                        run_ctx.hand_over = QoreNativeHandlerHold::handOver;
+                        run_ctx.data = hold;
+                    }
                 }
                 QoreHandlerRunGuard run_guard(run_ctx);
                 if (jit_obe_handlers[i].aot_fn) {

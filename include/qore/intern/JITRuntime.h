@@ -842,6 +842,10 @@ void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
 int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold,
     uint64_t* const* replace, int64_t n_replace);
 
+//! Runs the handlers of a block of a handler body as qore_rt_exec_on_block_exit() does; the values that they hand over
+//! go to the function that the handler runs for (#6074)
+void qore_rt_exec_on_block_exit_forward(int64_t saved_count, ExceptionSink* xsink);
+
 //! Hands the value of a return statement of a handler run out of line to the function that it runs for
 //! (QoreIROpcode::HandlerReturn, #6074)
 /** \a value_bits is borrowed; ignored unless the handler runs while an exception or a thread_exit is pending; see

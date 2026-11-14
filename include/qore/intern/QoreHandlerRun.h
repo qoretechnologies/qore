@@ -64,6 +64,19 @@ struct QoreHandlerRunContext {
     void* data = nullptr;
     //! the context of the run that this one is nested in, if any
     QoreHandlerRunContext* prev = nullptr;
+    //! the index of the IR frame of the handler in the thread's IR frame pool, if the handler runs in the IR
+    //! interpreter: a run of the handlers of a block of the handler itself, in that frame, forwards the values that
+    //! its handlers hand over to this run's function (see forwardFrom())
+    size_t ir_frame_index = static_cast<size_t>(-1);
+
+    //! Makes this run of the handlers of a block of a handler body forward the values that its handlers hand over to
+    //! the function that the handler runs for, as the AST interpreter runs the handlers of a handler with the same
+    //! reference to the return value of its function (#6074)
+    DLLLOCAL void forwardFrom(const QoreHandlerRunContext& outer) {
+        unwinding = outer.unwinding;
+        hand_over = outer.hand_over;
+        data = outer.data;
+    }
 };
 
 //! Returns the context of the innermost handler run of the current thread, if any (see QoreHandlerRunContext)

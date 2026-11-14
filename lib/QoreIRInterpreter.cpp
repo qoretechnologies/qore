@@ -7538,11 +7538,23 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
     // the handler's function returns is not used
     IRHandlerHandOver hand_over{parent_frame, try_returns};
     QoreHandlerRunContext run_ctx;
-    run_ctx.unwinding = unwinding;
-    if (parent_frame) {
-        run_ctx.hand_over = qore_ir_handler_hand_over;
-        run_ctx.data = &hand_over;
+    IRCallFramePool& pool = TlFramePool::get();
+    QoreHandlerRunContext* outer = qore_handler_run_context();
+    if (outer && parent_frame && !try_returns && outer->ir_frame_index < pool.frames.size()
+            && pool.frames[outer->ir_frame_index].get() == parent_frame) {
+        // the handlers of a block of a handler body, where the exception or thread_exit leaves the handler: the values
+        // go to the function that the handler runs for; where a try statement of the handler catches it, they replace
+        // the value of its try block's return (#6074)
+        run_ctx.forwardFrom(*outer);
+    } else {
+        run_ctx.unwinding = unwinding;
+        if (parent_frame) {
+            run_ctx.hand_over = qore_ir_handler_hand_over;
+            run_ctx.data = &hand_over;
+        }
     }
+    // the frame that execute() pushes for the handler
+    run_ctx.ir_frame_index = pool.top;
     QoreHandlerRunGuard run_guard(run_ctx);
     QoreValue rv;
     // the handler runs with the debug context of its frame, so that a debugger gets the events of its statements, as
