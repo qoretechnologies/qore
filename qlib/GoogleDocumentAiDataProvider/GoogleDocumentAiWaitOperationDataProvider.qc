@@ -21,6 +21,13 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
     }
 
     private {
+        #! The clock that the wait deadline is measured with (test seam); see setClock()
+        *code<date()> clock;
+        #! The sleeper between status requests (test seam); see setSleeper()
+        *code<nothing(timeout)> sleeper;
+    }
+
+    private {
         #! The ID of the builder of the types; see initializeTypes()
         static int types_id = DataProviderActionCatalog::registerLazyValue(
             \GoogleDocumentAiWaitOperationDataProvider::buildTypes());
@@ -37,6 +44,22 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
     #! Creates the helper from connection options
     /** @param options options declared by ConstructorOptions */
     constructor(*hash<auto> options) : GoogleDocumentAiDataProviderCommon(options) {}
+
+    #! Sets a deterministic clock for tests before the provider is shared
+    /** The wait deadline is measured with this clock; by default it is @ref Qore::now_us() "now_us()"
+
+        @param c callback returning the current time
+    */
+    setClock(code<date()> c) {
+        clock = c;
+    }
+
+    #! Sets a deterministic sleeper for tests before the provider is shared
+    /** @param s callback receiving the bounded wait between status requests
+    */
+    setSleeper(code<nothing(timeout)> s) {
+        sleeper = s;
+    }
 
     #! Returns the request type, which is built on first use
     /** It is built from the vendored API description, so loading the module does not parse it
@@ -95,7 +118,8 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
         if (overall <= 0 || (exists req.poll_interval && req.poll_interval <= 0)) {
             throw "GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", "overall timeout and poll interval must be positive";
         }
-        date start = now_us();
+        code<date()> now = clock ?? \Qore::now_us();
+        date start = now();
         string base = GoogleDocumentAiResources::prefix(project_id, region) + "/operations/";
         string id;
         try { id = GoogleDocumentAiResources::id(req.operation_id, base, rest, int(overall)); }
@@ -112,12 +136,12 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
         GoogleDocumentAiRestClientIo client = rest;
         *hash<auto> last_status;
         QoreAsyncJobUtils::AsyncJobPoller poller(hash<auto> sub (string job) {
-            int remaining = max(1, int(overall) - get_duration_milliseconds(now_us() - start));
+            int remaining = max(1, int(overall) - get_duration_milliseconds(now() - start));
             auto body;
             try {
                 body = client.restDoRequestWithTimeout("GET", path, NOTHING, NOTHING, remaining).body;
                 if (body.typeCode() == NT_HASH && body.name.typeCode() == NT_STRING) {
-                    remaining = max(1, int(overall) - get_duration_milliseconds(now_us() - start));
+                    remaining = max(1, int(overall) - get_duration_milliseconds(now() - start));
                     if (GoogleDocumentAiResources::id(body.name, base, client, remaining) != id) {
                         throw "GOOGLE-DOCUMENTAI-OPERATION-ERROR", "operation status has a different identity",
                             {"job_id": job};
@@ -142,9 +166,13 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
             return body;
         }, bool sub (hash<auto> status) { return status.done ?? False; }, "Document AI operation",
             "GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT");
+        poller.setClock(now);
+        if (sleeper) {
+            poller.setSleeper(sleeper);
+        }
         # Final service errors are data, alongside successful outcomes and per-document batch statuses.
         # This preserves the complete job record for workflow branching and failure analysis.
-        int remaining = int(overall) - get_duration_milliseconds(now_us() - start);
+        int remaining = int(overall) - get_duration_milliseconds(now() - start);
         if (remaining <= 0) {
             throw "GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", "resource resolution exceeded the wait deadline",
                 {"job_id": resource, "last_status": NOTHING};

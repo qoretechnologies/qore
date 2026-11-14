@@ -408,8 +408,11 @@ private:
     bool close_for_error = false;
     //! How long a close started by the client waits for the server's close frame (milliseconds, 0 = no bound)
     int64 close_timeout_ms = DefaultCloseTimeoutMs;
-    //! When a close started by the client stops waiting for the server's close frame (monotonic ms, 0 = never)
-    int64 close_deadline_ms = 0;
+    //! When a close started by the client stops waiting for the server's close frame (monotonic us, 0 = never)
+    /** In microseconds: a deadline in whole milliseconds, from a truncated clock reading, ended the wait up to a
+        millisecond before the close timeout
+    */
+    int64 close_deadline_us = 0;
     bool has_extensions = false;            //!< true if extensions are active (skip RSV validation)
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
@@ -488,7 +491,7 @@ private:
 
     //! Sets the close deadline of a close started by the client
     DLLLOCAL void startCloseWait() {
-        close_deadline_ms = close_timeout_ms ? q_clock_getmicros_monotonic() / 1000 + close_timeout_ms : 0;
+        close_deadline_us = close_timeout_ms ? q_clock_getmicros_monotonic() + close_timeout_ms * 1000 : 0;
     }
 
     //! Ends the operation closed without a close frame from the server, and reports it as a "closed" message

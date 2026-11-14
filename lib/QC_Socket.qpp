@@ -8029,6 +8029,8 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
     not set; an empty send with \a end_stream set on such a stream is a no-op
     @throw HTTP2-FLOW-CONTROL raised when the stream's send buffer is full; the
     caller should drain via @ref waitForHttp2StreamDrain() and retry
+    @throw WEBSOCKET-CLOSING-ERROR \a data is a WebSocket data frame and a close frame was sent on the stream before
+    (see @ref sendHttp2StreamWebSocketClose())
 
     @note This method is safe to call from any thread, including the async I/O
     controller's I/O thread and a controller-owned \c continuePoll() worker: the
@@ -8044,6 +8046,30 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
 nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) [flags=NAMED_ARGS] {
     s->sendHttp2StreamDataAsync((int32_t)stream_id, data, (bool)end_stream, xsink);
     return QoreValue();
+}
+
+//! Sends the close frame of a WebSocket connection on a server-side HTTP/2 stream, unless one was sent on it before
+/** A WebSocket connection has one close frame (RFC 6455 section 5.5.1): the frame is recorded as the close frame of
+    the stream, also for the stream's WebSocket frame state, which then sends none of its own, and data sent on the
+    stream after it is refused with \c WEBSOCKET-CLOSING-ERROR; if a close frame was sent on the stream before, by
+    the frame state for an error in the client's frames or by this method, the frame is not sent.  The frame is
+    buffered past the stream's send buffer limit, as a close frame is never dropped.
+
+    @param stream_id the HTTP/2 stream ID
+    @param frame the encoded close frame
+    @param end_stream set to @ref True "True" to end the stream after the frame (the stream is ended also if the
+    frame is not sent)
+
+    @return 0 if the frame was sent, 1 if a close frame was sent on the stream before and this one was not sent
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active
+    @throw HTTP2-STREAM-RESET the peer reset the stream
+
+    @since %Qore 3.0
+*/
+int Socket::sendHttp2StreamWebSocketClose(int stream_id, binary frame, softbool end_stream = False)
+        [flags=NAMED_ARGS] {
+    return s->sendHttp2StreamWebSocketClose((int32_t)stream_id, frame, (bool)end_stream, xsink);
 }
 
 //! Sends HTTP/2 trailer headers on a server-side stream
@@ -9270,6 +9296,40 @@ nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int s
     s->submitQuicResponseStreaming(session_id, stream_id, status_code, headers, xsink);
 }
 
+//! Sends the close frame of a WebSocket connection on a server-side HTTP/3 stream, unless one was sent on it before
+/** A WebSocket connection has one close frame (RFC 6455 section 5.5.1): the frame is recorded as the close frame of
+    the stream, also for the stream's WebSocket frame state, which then sends none of its own, and data sent on the
+    stream after it is refused with \c WEBSOCKET-CLOSING-ERROR; if a close frame was sent on the stream before, by
+    the frame state for an error in the client's frames or by this method, the frame is not sent.  The frame is
+    staged past the stream's send limit, as a close frame is never dropped.
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+    @param frame the encoded close frame
+    @param end_stream set to @ref True "True" to end the stream after the frame (the stream is ended also if the
+    frame is not sent)
+
+    @return 0 if the frame was staged, 1 if a close frame was staged on the stream before and this one was not sent
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-HTTP3-ERROR if no streaming response for the given stream
+
+    @since %Qore 3.0
+*/
+int Socket::submitQuicStreamWebSocketClose(int session_id, int stream_id, binary frame, softbool end_stream = False)
+        [flags=NAMED_ARGS] {
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return s->submitQuicStreamWebSocketClose(session_id, stream_id, frame->getPtr(), frame->size(),
+        (bool)end_stream, xsink);
+}
+
 //! Sends body data on a streaming HTTP/3 response
 /** @par Example:
     @code{.py}
@@ -9293,6 +9353,8 @@ nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int s
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
     @throw QUIC-HTTP3-ERROR if no streaming response for the given stream
+    @throw WEBSOCKET-CLOSING-ERROR \a body is a WebSocket data frame and a close frame was staged on the stream before
+    (see @ref submitQuicStreamWebSocketClose())
 
     @since %Qore 3.0
 */

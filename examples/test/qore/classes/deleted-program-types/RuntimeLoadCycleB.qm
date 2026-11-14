@@ -1,0 +1,20 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%requires qore >= 2.0
+
+module RuntimeLoadCycleB {
+    version = "1.0";
+    desc = "a module that loads another module that loads it, and a native module, at run time (qore#5790)";
+    author = "Qore Technologies";
+    url = "https://qoretechnologies.com";
+}
+
+%modern
+
+#! loads RuntimeLoadCycleA and the native module \c yaml from the module's own Program
+public int sub runtime_load_cycle_b() {
+    load_module("RuntimeLoadCycleA");
+    load_module("yaml");
+    return 1;
+}

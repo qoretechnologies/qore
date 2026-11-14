@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+#
+# A push to a fresh local list that the IR pushes in place (the list is borrowed from the local, without a reference
+# of its own) raises a type error for the pushed value as in the AST interpreter in every execution mode and in AOT
+# code, and the list is released once, by the local: the IR interpreter released the borrowed list on the error too,
+# and the release of the frame's locals then crashed (qore#6075; IRInPlaceListPushTypeError.qr)
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class InPlaceListPushTypeErrorTest
+
+class InPlaceListPushTypeErrorTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string source = get_script_dir() + "/IRInPlaceListPushTypeError.qr";
+        string expected = "";
+    }
+
+    constructor() : Test("in-place list push type error", "1.0", \ARGV) {
+        for (int i = 0; i < 16; ++i) {
+            expected += "RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR:[1, 2, 3]:RUNTIME-TYPE-ERROR:"
+                "RUNTIME-TYPE-ERROR:1:a\n";
+        }
+        addTestCase("execution modes", \executionModes());
+        addTestCase("in-place push", \inPlacePush());
+        addTestCase("AOT", \aot());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    executionModes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            foreach string control in (("", "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ")) {
+                assertEq(expected, run((qore, "--exec-mode=" + mode, source), control), control + mode);
+            }
+        }
+        # tiered execution kept on the IR tier: nothing is compiled to native code, nothing runs on the AST
+        string ir_cmd = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + quote(qore) + " --exec-mode=tiered " + quote(source);
+        assertEq(expected, ExecModeHarness::run_ir_tier(ir_cmd), "IR tier");
+    }
+
+    # the pushes that raise the error are pushed in place, or the test does not check that path
+    inPlacePush() {
+        string stats = run((qore, "--exec-mode=ir", source), "QORE_IR_OPT_STATS=1 ");
+        foreach string name in (("literalPush", "intPush", "loopPush")) {
+            assertRegex("IR-OPT: [^\n]*" + name + "[^\n]*:[^\n]*inplace-push=[1-9]", stats, name);
+        }
+    }
+
+    aot() {
+        TmpDir dir("qore-in-place-list-push-type-error-");
+        foreach string level in (("-O0", "-O3")) {
+            string executable = dir.path + "/fixture";
+            run((qcc, level, "--strip-source", "-o", executable, source));
+            assertEq(expected, run((executable,)), level);
+        }
+    }
+}

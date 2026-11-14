@@ -114,6 +114,8 @@ string safety_disabled = root + "/safety-disabled";
 File safety_file();
 safety_file.open2(safety_source, O_WRONLY | O_CREAT | O_TRUNC);
 safety_file.write("%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 final class Formatter {
     string format(int value) {
         return string(value);

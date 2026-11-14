@@ -196,7 +196,9 @@ A declaration must not turn the module's public API into a bypass, so for each m
   `*Async()` methods and `DataProviderPipeline` run the caller's code (overrides, callbacks) on them; the same holds
   for overridable methods that other declared modules run on their threads (`HttpServerUtil`'s
   `StreamResponseProducer::run()`, the `eventLoop()` methods of the OpenAI and Anthropic stream providers,
-  ConnectDataProvider's `streamLoop()`/`datagramLoop()`, `McpClient::handleServerRequest()`), and a
+  ConnectDataProvider's `streamLoop()`/`datagramLoop()`, `McpClient::handleServerRequest()`, and the callback that
+  `NatsUtil::NatsClient::subscribe()` runs for each message on a thread of its own: `callbackLoop()`, started with
+  `background` in module code), and a
   `SandboxManager` does not stop it, as `background` in module code is checked against the module's options;
 - C5, kept as designed and documented (David, 2026-11-12): a module that module code loads at run time (`load_module()`, the on-demand factory and type
   loading of DataProvider) is loaded with the restrictions that the loading module's Program has, which a
