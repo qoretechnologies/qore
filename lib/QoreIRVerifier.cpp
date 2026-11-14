@@ -36,6 +36,7 @@
 #include <vector>
 
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreClassIntern.h>
 #include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>
@@ -1585,7 +1586,19 @@ static bool isCallOrInvoke(QoreIROpcode op) {
 
 static void collectLocalsFromIRFunction(const QoreIRFunction& func,
         std::unordered_set<const void*>& ast_locals,
+        bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers);
+
+//! Collects the locals of \a func and of its handlers, each handler function once (they can be shared, #6087)
+static void collectLocalsFromIRFunction(const QoreIRFunction& func,
+        std::unordered_set<const void*>& ast_locals,
         bool& unknown_node_found) {
+    std::unordered_set<const QoreIRFunction*> visited_handlers;
+    collectLocalsFromIRFunction(func, ast_locals, unknown_node_found, visited_handlers);
+}
+
+static void collectLocalsFromIRFunction(const QoreIRFunction& func,
+        std::unordered_set<const void*>& ast_locals,
+        bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers) {
     auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
         collectLocalsFromExpr(ctx_inst->exp, ast_locals, unknown_node_found);
         collectLocalsFromExpr(ctx_inst->where_exp, ast_locals, unknown_node_found);
@@ -1663,9 +1676,9 @@ static void collectLocalsFromIRFunction(const QoreIRFunction& func,
                     collectLocalsFromStatementBlock(obe_inst->stmt->getCode(),
                             ast_locals, unknown_node_found);
                 }
-                if (obe_inst->handler_ir) {
+                if (obe_inst->handler_ir && visited_handlers.insert(obe_inst->handler_ir.get()).second) {
                     collectLocalsFromIRFunction(*obe_inst->handler_ir,
-                            ast_locals, unknown_node_found);
+                            ast_locals, unknown_node_found, visited_handlers);
                 }
             }
         }
@@ -2150,6 +2163,7 @@ bool QoreIRFunction::localMayHoldReference(const LocalVar* lv, bool creates_refe
 
 bool QoreIRFunction::collectHandlerLocals(std::unordered_set<const void*>& locals) const {
     bool unknown_node_found = false;
+    std::unordered_set<const QoreIRFunction*> visited_handlers;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
             if (!inst || inst->opcode != QoreIROpcode::OnBlockExit) {
@@ -2159,8 +2173,8 @@ bool QoreIRFunction::collectHandlerLocals(std::unordered_set<const void*>& local
             if (obe_inst->stmt) {
                 collectLocalsFromStatementBlock(obe_inst->stmt->getCode(), locals, unknown_node_found);
             }
-            if (obe_inst->handler_ir) {
-                collectLocalsFromIRFunction(*obe_inst->handler_ir, locals, unknown_node_found);
+            if (obe_inst->handler_ir && visited_handlers.insert(obe_inst->handler_ir.get()).second) {
+                collectLocalsFromIRFunction(*obe_inst->handler_ir, locals, unknown_node_found, visited_handlers);
             }
         }
     }
@@ -2184,6 +2198,8 @@ void QoreIRFunction::computeIROnlyLocals() {
     stored_locals.clear();
     ast_referenced_locals.clear();
     non_structured_ast_referenced_locals.clear();
+    // the handler functions walked, each once (they can be shared, #6087)
+    std::unordered_set<const QoreIRFunction*> visited_handlers;
     has_opaque_ast_local_access = false;
     has_explicit_self_local_access = false;
 
@@ -2389,12 +2405,36 @@ void QoreIRFunction::computeIROnlyLocals() {
                     collectLocalsFromStatementBlock(obe_inst->stmt->getCode(),
                             ast_referenced_locals, unknown_node_found);
                 }
-                if (obe_inst->handler_ir) {
+                if (obe_inst->handler_ir && visited_handlers.insert(obe_inst->handler_ir.get()).second) {
                     collectLocalsFromIRFunction(*obe_inst->handler_ir,
-                            ast_referenced_locals, unknown_node_found);
+                            ast_referenced_locals, unknown_node_found, visited_handlers);
                 }
             }
         }
+    }
+
+    // A constructor's written argument values belong to its parameter/argv cleanup, after the evaluator records
+    // successful body completion (#6086). If they lived only in the IR slot cache, execute() would release them
+    // before returning and an argument's destructor error would be mistaken for a failed constructor body.
+    // Read-only arguments and types that cannot hold destructible objects keep their existing classification.
+    if (const auto* ctor = dynamic_cast<const UserConstructorVariant*>(source_variant)) {
+        const UserSignature* sig = ctor->UserVariantBase::getUserSignature();
+        auto keep_written_argument = [&](const LocalVar* local) {
+            if (local && stored_locals.count(local) && QoreTypeInfo::needsScan(local->getTypeInfo())) {
+                ast_referenced_locals.insert(local);
+            }
+        };
+        size_t argument_count = 0;
+        for (LocalVar* local : sig->lv) {
+            if (++argument_count % 100 == 0
+                    && qore_check_cancel(nullptr, "IR constructor argument ownership analysis")) {
+                // Take the existing conservative AST-visible path below if compilation is cancelled.
+                unknown_node_found = true;
+                break;
+            }
+            keep_written_argument(local);
+        }
+        keep_written_argument(sig->argvid);
     }
 
     non_structured_ast_referenced_locals = ast_referenced_locals;
@@ -2564,7 +2604,12 @@ void QoreIRFunction::computeIROnlyLocals() {
 }
 
 QoreIRFunction::ContextUsage QoreIRFunction::getContextUsage(
-        const LocalVar* argvid, const LocalVar* selfid) const {
+        const LocalVar* argvid, const LocalVar* selfid,
+        std::unordered_set<const QoreIRFunction*>* visited_handlers) const {
+    std::unordered_set<const QoreIRFunction*> own_visited_handlers;
+    if (!visited_handlers) {
+        visited_handlers = &own_visited_handlers;
+    }
     ContextUsage usage;
     if (has_opaque_ast_local_access) {
         usage.argv = argvid != nullptr;
@@ -2675,9 +2720,9 @@ QoreIRFunction::ContextUsage QoreIRFunction::getContextUsage(
             if (inst->opcode == QoreIROpcode::OnBlockExit) {
                 const auto* block_exit =
                     static_cast<const QoreIROnBlockExitInstruction*>(inst);
-                if (block_exit->handler_ir) {
+                if (block_exit->handler_ir && visited_handlers->insert(block_exit->handler_ir.get()).second) {
                     ContextUsage handler =
-                        block_exit->handler_ir->getContextUsage(argvid, selfid);
+                        block_exit->handler_ir->getContextUsage(argvid, selfid, visited_handlers);
                     usage.argv |= handler.argv;
                     usage.self |= handler.self;
                 }
