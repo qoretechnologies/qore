@@ -808,7 +808,10 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
     Two rows match if their key values are equal and of the same type, as groupBy() groups the values of a column
     that holds any value: an int and a float, or an int and a string, never match (cast a key column to match
     values of different types), while an int key column matches the ints of a column that holds any value.  A key
-    column of a right or outer join whose left and right key columns differ in type holds any value.
+    column of a right or outer join whose left and right key columns differ in type holds any value; one whose key
+    columns have the same type gets a schema that holds the keys of both (decimals of different precisions and
+    scales, timestamps of different units or time zones), or no schema if there is none (decimals whose common
+    schema would have more than 38 digits), and then cannot be exported to Arrow or Parquet.
 
     @return new DataFrame object with joined rows
 
@@ -1890,13 +1893,21 @@ DataFrame DataFrame::pivot(string index_col, string columns_col, string values_c
     @param value_name name for the value column (default "value")
     @return new DataFrame in long format
 
-    The identifier columns keep their types and columnar schemas.  The value column is a \c float64 column if every
-    value column is an \c int64 or \c float64 column; a column of the type and the columnar schema of the value
-    columns if they all have one type and schema (strings, bools, dates, durations, decimals, for example); and
-    otherwise the column that the column hash constructor makes of the values (see @ref dataframeintro), which stores
-    scalar values of different types as their string forms (an int and a string value column make a string column)
-    and holds any value if a value is not a scalar.  Without rows, the value column of value columns of different
-    types is a string column.
+    The identifier columns keep their types and columnar schemas.  The value column is:
+    - a \c float64 column if every value column is an \c int64 or \c float64 column (with the schema of \c float32
+      value columns, for example, if they all have it);
+    - otherwise, if the value columns all have one type, a column of that type with a schema that holds the values
+      of all of them: decimals get the largest number of integer digits and the largest scale, temporal columns the
+      time unit \c "us" if their units differ and the time zone \c "UTC" if their zones differ, and the schema is
+      nullable if a column is;
+    - a column that holds the values of columns that hold any value as they are, with no schema, if their schemas
+      cannot be merged (decimals whose common schema would have more than 38 digits, for example); such a column
+      cannot be exported to Arrow or Parquet (toArrowIpc() and writeParquet() raise \c DATAFRAME-IO-ERROR), as with
+      concat();
+    - otherwise the column that the column hash constructor makes of the values (see @ref dataframeintro), which
+      stores scalar values of different types as their string forms (an int and a string value column make a string
+      column, and an int and a decimal value column a \c float64 column) and holds any value if a value is not a
+      scalar; without rows, the value column of value columns of different types is a string column.
 
     @par Example:
     @code{.py}

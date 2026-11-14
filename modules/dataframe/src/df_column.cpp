@@ -303,6 +303,10 @@ bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& sc
     if (other.nullable) {
         schema.nullable = true;
     }
+    // a native type that is not the same for all columns describes none of them
+    if (schema.native_type != other.native_type) {
+        schema.native_type.clear();
+    }
     return true;
 }
 

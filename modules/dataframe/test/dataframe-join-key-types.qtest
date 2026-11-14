@@ -149,6 +149,18 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
                     how + ": two scales");
                 list<auto> v3 = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc()).getColumn("v");
                 assertTrue((select v3, $1 == 4.125n).size() == 1, sprintf("%s: 4.125 kept: %y", how, v3));
+                # a common schema of more than 38 digits: no schema, the exact keys, and no export
+                DataFrame::DataFrame d38_10 = DataFrame::DataFrame::fromColumnarResult(
+                    ColumnarResult::fromColumnHash({"v": (1.25n,)},
+                        {"v": {"schema": {"kind": "decimal128", "precision": 38, "scale": 10}}}));
+                DataFrame::DataFrame d38_0 = DataFrame::DataFrame::fromColumnarResult(
+                    ColumnarResult::fromColumnHash({"v": (12345678901234567890123456789012345678n,)},
+                        {"v": {"schema": {"kind": "decimal128", "precision": 38, "scale": 0}}}));
+                j = d38_10.join(d38_0, ("v",), how);
+                assertEq("auto", schema(j, "v").kind, how + ": more than 38 digits");
+                assertTrue((select j.getColumn("v"), $1 == 12345678901234567890123456789012345678n).size() == 1,
+                    how + ": the exact key");
+                assertThrows("DATAFRAME-IO-ERROR", \j.toArrowIpc(), (), how + ": no export");
             }
         }
     }

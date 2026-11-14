@@ -94,10 +94,30 @@ class DataFrameMeltTypesTest inherits QUnit::Test {
         assertEq(("decimal128", 23, 2), schema(m, "value"){"kind", "precision", "scale"}.values(), "decimal schema");
         list<auto> v = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
         assertTrue(v[0] == 12345678901234567.89n && v[1] == 2.5n, sprintf("decimal values: %y", v));
-        # decimals whose common schema would have more than 38 digits: a column that holds the exact numbers
-        m = dec.melt(("id",), ("p", "r"));
-        assertEq("auto", m.dtypes()[2], "more than 38 digits");
-        assertEq((12345678901234567.89n, 1234567890123456789012.5n), m.getColumn("value"), "exact numbers");
+        # decimals whose common schema would have more than 38 digits (30 integer digits and a scale of 29): a
+        # column that holds the exact numbers, with no schema
+        DataFrame::DataFrame wide = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "s": (1.23456789012345678901234567890n,), "l": (123456789012345678901234567890.5n,),
+        }, {
+            "s": {"schema": {"kind": "decimal128", "precision": 30, "scale": 29}},
+            "l": {"schema": {"kind": "decimal128", "precision": 31, "scale": 1}},
+        }));
+        m = wide.melt(("id",));
+        assertEq("auto", schema(m, "value").kind, "more than 38 digits: no schema");
+        list<auto> wv = m.getColumn("value");
+        # the numbers of the source columns, unchanged
+        assertTrue(wv[0] == wide.getColumn("s")[0] && wv[1] == wide.getColumn("l")[0]
+            && wv[1] == 123456789012345678901234567890.5n, sprintf("exact numbers: %y", wv));
+        assertThrows("DATAFRAME-IO-ERROR", \m.toArrowIpc(), (), "a column of numbers with no schema");
+        # a column that holds any value with and without a decimal schema: the values as they are, with no schema
+        DataFrame::DataFrame anydec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "d": (2.5n,), "a": (c'z',),
+        }, {
+            "d": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}},
+            "a": {"schema": {"kind": "auto"}},
+        }));
+        m = anydec.melt(("id",));
+        assertEq((2.5n, c'z'), m.getColumn("value"), "any values with and without a schema");
         # float32 value columns keep their schema
         string dir = get_script_dir() + DirSep + "data" + DirSep;
         DataFrame::DataFrame f32 = DataFrame::DataFrame::readParquet(dir + "dense_float32.parquet");
@@ -116,6 +136,42 @@ class DataFrameMeltTypesTest inherits QUnit::Test {
         assertEq("us", schema(m, "value").time_unit, "timestamp unit");
         list<auto> tv = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
         assertTrue(tv[0] == 2024-01-01T10:00:00.5Z && tv[1] == 2024-01-02T10:00:00Z, sprintf("timestamps: %y", tv));
+        # timestamps of different zones: UTC; a nullable column makes the schema nullable
+        DataFrame::DataFrame tz = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1, 2), "a": (2024-01-01T10:00:00Z, 2024-01-01T11:00:00Z), "b": (2024-01-02T10:00:00Z, NOTHING),
+        }, {
+            "a": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "Europe/Prague", "nullable": False}},
+            "b": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True}},
+        }));
+        m = tz.melt(("id",));
+        hash<auto> tzs = (map $1, m.toColumnarResult().schemaV2(), $1.name == "value")[0];
+        assertEq(("UTC", "ms", True), (tzs.timezone, tzs.time_unit, tzs.nullable), "zone and nullable");
+        tv = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+        assertTrue(tv[0] == 2024-01-01T10:00:00Z && tv[1] == 2024-01-02T10:00:00Z && !exists tv[3],
+            sprintf("timestamps of two zones: %y", tv));
+        # a plain date column and a timestamp column, in either order: microseconds
+        DataFrame::DataFrame mixed = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "t": (2024-01-01T10:00:00Z,),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "s", "timezone": "UTC", "nullable": True}},
+        })).withColumn("p", (2024-01-01T10:00:00.25Z,));
+        foreach list<string> order in ((("t", "p"), ("p", "t"))) {
+            m = mixed.melt(("id",), order);
+            assertEq("us", schema(m, "value").time_unit, sprintf("%y: unit", order));
+            tv = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+            assertTrue((select tv, $1 == 2024-01-01T10:00:00.25Z).size() == 1, sprintf("%y: values %y", order, tv));
+        }
+        # durations of different units: microseconds
+        DataFrame::DataFrame dur = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "s": (2s,), "ms": (1500ms,),
+        }, {
+            "s": {"schema": {"kind": "duration", "time_unit": "s", "nullable": True}},
+            "ms": {"schema": {"kind": "duration", "time_unit": "ms", "nullable": True}},
+        }));
+        m = dur.melt(("id",));
+        assertEq("us", schema(m, "value").time_unit, "duration unit");
+        tv = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+        assertTrue(tv[0] == 2s && tv[1] == 1500ms, sprintf("durations: %y", tv));
     }
 
     #! returns the columnar schema of a column: its kind, element type, precision, scale, time unit and zone
