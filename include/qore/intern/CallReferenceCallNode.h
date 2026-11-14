@@ -42,6 +42,10 @@ private:
     QoreValue exp{};    // must evaluate to an AbstractCallReference
     QoreParseListNode* parse_args = nullptr;
     QoreListNode* args = nullptr;
+    //! the names of the arguments in source order of a named call ("" for a positional argument), which are bound
+    //! by parameter name when the call is made (M4 phase 3); interned (qore_intern_call_arg_names()), so copies of
+    //! the call share it
+    const name_vec_t* runtime_arg_names = nullptr;
 
     //! optionally evaluates the argument
     /** return value requires a deref(xsink) if needs_deref is true
@@ -95,6 +99,20 @@ public:
 
     //! returns the arguments (for background operator processing)
     DLLLOCAL const QoreListNode* getArgs() const { return args; }
+
+    //! returns the names of the arguments of a named call, or nullptr for a call with positional arguments
+    DLLLOCAL const name_vec_t* getRuntimeArgNames() const { return runtime_arg_names; }
+
+    //! sets the names of the arguments of a named call (a copy of a call, AOT deserialization); \a names must be
+    //! interned (see qore_intern_call_arg_names())
+    DLLLOCAL void setRuntimeArgNames(const name_vec_t* names) { runtime_arg_names = names; }
+
+    //! makes a named call with evaluated arguments (compiled code): the first element of \a args is the value of the
+    //! call's expression (the call reference or closure), the others are the arguments in source order, bound by
+    //! the names of the call (M4 phase 3)
+    /** takes ownership of \a args; the call has the default semantic policy
+    */
+    DLLLOCAL QoreValue evalRuntimeNamedWithArgs(QoreListNode* args, ExceptionSink* xsink) const;
 };
 
 class LexicalCallReferenceCallNode : public CallReferenceCallNode {
