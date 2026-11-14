@@ -1107,6 +1107,28 @@ public class WebSocketConnection {
         return !end_counter.waitForZero(ms);
     }
 
+    #! Waits until the connection has ended, or until the given time of the monotonic clock
+    /** As @ref waitForEnd(), but the deadline is a time of the monotonic clock
+        (@ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()"), which a step of the system clock does not
+        move
+
+        @param deadline_us the time of the monotonic clock in microseconds at which the wait ends
+
+        @return @ref True if the connection has ended
+
+        @note Internal API — not intended for use by subclasses.
+
+        @since WebSocketHandler 2.8
+    */
+    bool waitForEndMonotonic(int deadline_us) {
+        # in whole milliseconds, rounded up, so that the wait does not end before the deadline
+        int ms = (deadline_us - clock_get_monotonic_us() + 999) / 1000;
+        if (ms <= 0) {
+            return !end_counter.getCount();
+        }
+        return !end_counter.waitForZero(ms);
+    }
+
     #! Starts the close handshake of an HTTP/2 or HTTP/3 stream: sends the server's close frame after the frames
     #! already sent, then waits for the client's
     /** @param code the close code
@@ -1724,10 +1746,10 @@ class WebSocketStreamProcessor {
         */
         Mutex close_lock();
 
-        #! Timestamp of last inbound frame activity for heartbeat in milliseconds
+        #! Timestamp of last inbound frame activity for heartbeat in milliseconds, on the monotonic clock
         int last_recv_ms;
 
-        #! Timestamp of last heartbeat PING sent in milliseconds
+        #! Timestamp of last heartbeat PING sent in milliseconds, on the monotonic clock
         int last_ping_ms = 0;
 
         #! Consecutive heartbeat PINGs sent without any inbound frame in response
@@ -1781,7 +1803,7 @@ class WebSocketStreamProcessor {
         self.wsc = wsc;
         self.handler = handler;
         self.done = done;
-        self.last_recv_ms = clock_getmillis();
+        self.last_recv_ms = clock_get_monotonic_us() / 1000;
     }
 
     #! Sets the code that ends the stream once it has closed, in place of a thread waiting for @ref done
@@ -1916,8 +1938,8 @@ class WebSocketStreamProcessor {
             return;
         }
         AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
-        close_timer_id = controller.addTimer(now_us()
-            + milliseconds(close_timeout_ms), sub () { self.handleCloseTimer(); });
+        close_timer_id = controller.addTimerDelay(milliseconds(close_timeout_ms),
+            sub () { self.handleCloseTimer(); });
     }
 
     #! Ends the stream when the client has not answered the server's close frame within the close timeout
@@ -2222,7 +2244,7 @@ class WebSocketStreamProcessor {
                 return;
             }
             int interval_ms = heartbeat_s * 1000;
-            int now = clock_getmillis();
+            int now = clock_get_monotonic_us() / 1000;
             if ((now - last_recv_ms) >= interval_ms
                     && (!last_ping_ms || (now - last_ping_ms) >= interval_ms)) {
                 last_ping_ms = now;
@@ -2260,7 +2282,7 @@ class WebSocketStreamProcessor {
 
     private noteRecvActivity() {
         AutoLock al(heartbeat_mutex);
-        last_recv_ms = clock_getmillis();
+        last_recv_ms = clock_get_monotonic_us() / 1000;
         # any inbound frame answers an outstanding PING and proves the peer is alive
         missed_heartbeats = 0;
         rescheduleHeartbeatTimerLocked();
@@ -2277,7 +2299,7 @@ class WebSocketStreamProcessor {
             return;
         }
 
-        int now = clock_getmillis();
+        int now = clock_get_monotonic_us() / 1000;
         # schedule the timer for the sooner of the heartbeat and idle deadlines (either may be disabled)
         *int delay_ms;
         if (heartbeat_s > 0) {
@@ -2298,7 +2320,7 @@ class WebSocketStreamProcessor {
         int generation = heartbeat_generation;
         AsyncSocketIo::AsyncSocketIoController controller =
             AsyncSocketIo::getGlobalAsyncIoController();
-        heartbeat_timer_id = controller.addTimer(now_us() + milliseconds(delay_ms),
+        heartbeat_timer_id = controller.addTimerDelay(milliseconds(delay_ms),
             sub () { self.handleHeartbeatTimer(generation); });
     }
 
@@ -2328,7 +2350,7 @@ class WebSocketStreamProcessor {
             }
             remove heartbeat_timer_id;
 
-            int now = clock_getmillis();
+            int now = clock_get_monotonic_us() / 1000;
             # idle timeout takes precedence: close the stream when no inbound frame has arrived within the interval
             if (idle_timeout_s > 0 && (now - last_recv_ms) >= (idle_timeout_s * 1000)) {
                 close_idle = True;
@@ -2468,6 +2490,16 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! connection hash
         hash<string, WebSocketConnection> ch;
+
+        #! the deadline that startClosingConnections() returned last, with close_deadline_us; see
+        #! waitForConnectionsClosed()
+        *date close_deadline;
+
+        #! close_deadline as a time of the monotonic clock in microseconds, taken with it
+        int close_deadline_us;
+
+        #! the lock of close_deadline and close_deadline_us
+        Mutex close_deadline_lock();
 
         #! maximum per-connection outbound frame queue before the connection is dropped (0 = unlimited)
         int max_queue_size = 0;
@@ -3674,6 +3706,13 @@ handler.setCloseTimeout(2s);
             return;
         }
         date deadline = now_us() + close_timeout;
+        # the wait is measured on the monotonic clock: a step of the system clock does not change it (see
+        # waitForConnectionsClosed())
+        {
+            AutoLock al(close_deadline_lock);
+            close_deadline = deadline;
+            close_deadline_us = clock_get_monotonic_us() + close_timeout.durationMicroseconds();
+        }
         foreach WebSocketConnection wsc in (conns) {
             try {
                 wsc.stop();
@@ -3692,8 +3731,21 @@ handler.setCloseTimeout(2s);
         @since WebSocketHandler 2.8
     */
     waitForConnectionsClosed(date deadline, *softstring lid) {
+        # the deadline is waited for on the monotonic clock, as a step of the system clock in the meantime would
+        # shorten the wait or lengthen it by the size of the step: it is taken relative to the deadline that
+        # startClosingConnections() returned last and its time of the monotonic clock, which also converts the
+        # deadline of another handler, as HttpServer waits for the connections of all its handlers with the deadline
+        # that one of them returned; without one, the deadline is a time of the system clock
+        *int deadline_us;
+        {
+            AutoLock al(close_deadline_lock);
+            if (close_deadline) {
+                deadline_us = close_deadline_us + (deadline - close_deadline).durationMicroseconds();
+                remove close_deadline;
+            }
+        }
         foreach WebSocketConnection wsc in (getConnectionsOf(lid)) {
-            if (!wsc.waitForEnd(deadline)) {
+            if (!(exists deadline_us ? wsc.waitForEndMonotonic(deadline_us) : wsc.waitForEnd(deadline))) {
                 # the deadline has passed: the connections still open are stopped at once by stop()
                 break;
             }

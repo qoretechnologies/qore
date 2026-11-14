@@ -272,7 +272,7 @@ const char* QoreClosureParseNode::getTypeName() const {
 }
 
 QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
-        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args) const {
     if (is_deferred) {
         // A closure inside a constant expression has its parse-init deferred (deferCodeInitialization() in
         // parseInitImpl()) so that recursive constant values are available when it is initialized (#4903).  The
@@ -292,7 +292,7 @@ QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QorePr
         }
     }
     assert(uf);
-    return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink);
+    return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink, tmp_args);
 }
 
 QoreValue QoreClosureParseNode::execNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,

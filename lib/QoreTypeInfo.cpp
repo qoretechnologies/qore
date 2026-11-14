@@ -699,6 +699,9 @@ void init_qore_types() {
 
     do_maps(autoListTypeInfo, autoListOrNothingTypeInfo);
     do_maps(autoHashTypeInfo, autoHashOrNothingTypeInfo);
+    // Keep the canonical no-narrow marker when adding/removing NOTHING, including substitution of *T.
+    do_maps(autoNoNarrowListTypeInfo, autoNoNarrowListOrNothingTypeInfo);
+    do_maps(autoNoNarrowHashTypeInfo, autoNoNarrowHashOrNothingTypeInfo);
     do_maps(softAutoListTypeInfo, softAutoListOrNothingTypeInfo);
 }
 
@@ -2627,8 +2630,8 @@ private:
 
     DLLLOCAL void addHashDecl(const TypedHashDecl* hd) {
         if (std::find(hashdecls.begin(), hashdecls.end(), hd) == hashdecls.end()) {
-            hd->ref();
             hashdecls.push_back(hd);
+            hd->ref();
         }
     }
 
@@ -2639,15 +2642,15 @@ private:
         QoreClass* c = const_cast<QoreClass*>(qc);
         if (std::find(classes.begin(), classes.end(), c) == classes.end()) {
             // as an object holds its class (see QoreObject)
-            qore_class_private::refClass(*c);
             classes.push_back(c);
+            qore_class_private::refClass(*c);
         }
     }
 
     DLLLOCAL void addEnum(const QoreEnumDecl* ed) {
         if (std::find(enums.begin(), enums.end(), ed) == enums.end()) {
-            qore_enum_decl_private::get(*ed)->ref();
             enums.push_back(ed);
+            qore_enum_decl_private::get(*ed)->ref();
         }
     }
 };
