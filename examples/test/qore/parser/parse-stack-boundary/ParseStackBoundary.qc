@@ -149,14 +149,17 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
                 + " " + kb + " 2>&1", \status);
             string label = sprintf("%s %dK", basename(source), kb);
             assertEq(0, status, label + ": " + output);
-            if (output == "stack error\n") {
+            # the result is the last line: a debug build of the library can write diagnostics before it, such as a
+            # constant initializer of an AOT module that could not run
+            *string result = (output =~ x/([^\n]*)\n$/)[0];
+            if (result == "stack error") {
                 ++stack_errors;
-            } else if (output == "run stack error\n") {
+            } else if (result == "run stack error") {
                 ++run_stack_errors;
             } else {
                 # a load that leaves out a module, or code that is parsed with only part of its classes, is never
                 # the result of a parse in a small stack
-                assertEq(sprintf("parsed %d\n", expected), output, label);
+                assertEq(sprintf("parsed %d", expected), result, label + ": " + output);
                 ++parsed;
             }
         }
