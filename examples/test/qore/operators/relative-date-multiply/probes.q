@@ -98,6 +98,8 @@ list<string> sub probes() {
     l += "PT0.57S: " + same("PT0.57S", seconds(1) * 0.57);
     l += "PT0.0000015S: " + same("PT0.0000015S", seconds(1) * 0.0000015);
     l += "P0.0000001Y: " + same("P0.0000001Y", year * 0.0000001);
+    # the fraction is exact with all its digits (a 20-digit prefix gives 861us)
+    l += "P0.00000000002733384069001Y: " + same("P0.00000000002733384069001Y", year * 0.00000000002733384069001);
     # a fraction of a microsecond is truncated, as date(float) truncates it
     l += "PT0.9999999996S: " + same("PT0.9999999996S", seconds(1) * 0.9999999996);
     # the product of a component other than 1 is the decimal of the product

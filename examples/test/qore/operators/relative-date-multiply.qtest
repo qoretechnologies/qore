@@ -55,6 +55,8 @@ class RelativeDateMultiplyTest inherits QUnit::Test {
             "PT0.0000015S: <time: 1 microsecond> == <time: 1 microsecond> (equal: True, same components: True)",
             "P0.0000001Y: <time: 3 seconds 153600 microseconds> == <time: 3 seconds 153600 microseconds> (equal: "
                 "True, same components: True)",
+            "P0.00000000002733384069001Y: <time: 862 microseconds> == <time: 862 microseconds> (equal: True, same "
+                "components: True)",
             "PT0.9999999996S: <time: 999999 microseconds> == <time: 999999 microseconds> (equal: True, same "
                 "components: True)",
             "months(3) * 0.1: <time: 9 days>",

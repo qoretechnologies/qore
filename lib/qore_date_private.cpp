@@ -1419,19 +1419,16 @@ int qore_relative_time::addSecondsTo(double secs) {
     @param frac the decimal fraction
     @param parts the days, hours, minutes, seconds and microseconds of the fraction, with its sign
 
-    The fraction is computed exactly from its decimal digits, in 128 bits, and truncated to microseconds, as
-    date(float) truncates a fraction of a microsecond; digits after the 20th are ignored, as they cannot change a
-    microsecond of a year.
+    The fraction is computed exactly from all its decimal digits and truncated to microseconds, as date(float)
+    truncates a fraction of a microsecond: the digits are taken from the last to the first with
+    I = (digit * unit_us + I) / 10, which gives floor(unit_us * 0.d1...dn), as floor((n + f) / 10) = floor(n / 10)
+    for an integer n and 0 <= f < 1; I stays below unit_us * 10 / 9, so no step can overflow.
 */
 static void qore_duration_fraction(int64 unit_us, const QoreDecimalFraction& frac, int64* parts) {
-    __int128 num = 0;
-    __int128 den = 1;
-    size_t len = frac.len < 20 ? frac.len : 20;
-    for (size_t i = 0; i < len; ++i) {
-        num = num * 10 + (frac.digits[i] - '0');
-        den *= 10;
+    int64 us = 0;
+    for (size_t i = frac.len; i > 0; --i) {
+        us = ((frac.digits[i - 1] - '0') * unit_us + us) / 10;
     }
-    int64 us = static_cast<int64>(num * unit_us / den);
     if (frac.negative) {
         us = -us;
     }
