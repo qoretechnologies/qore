@@ -960,8 +960,6 @@ struct QoreTypeOwnerGroup {
     std::vector<QoreTypeOwner*> members;
     //! the number of live members
     size_t live = 0;
-    //! the number of members holding a reference to themselves for the group
-    size_t held = 0;
     //! the number of holds since the last sweep (type_owner_group_hold())
     size_t holds_since_sweep = 0;
 };
@@ -1070,7 +1068,6 @@ static void type_owner_group_sweep(QoreTypeOwnerGroup* g, const std::set<QoreTyp
         m->type_owner_group = nullptr;
         if (m->type_owner_group_hold) {
             m->type_owner_group_hold = false;
-            --g->held;
             release_list.push_back(m);
         }
     }
@@ -1087,7 +1084,6 @@ static void type_owner_group_hold(QoreTypeOwnerGroup* g, QoreTypeOwner* owner,
         std::vector<QoreTypeOwner*>& release_list) {
     owner->refTypeOwner();
     owner->type_owner_group_hold = true;
-    ++g->held;
     if (++g->holds_since_sweep < std::max<size_t>(1, g->members.size() / 2)) {
         return;
     }
@@ -1108,7 +1104,6 @@ static void type_owner_collect_group(QoreTypeOwnerGroup* g, std::vector<QoreType
             ++g->live;
             if (m->type_owner_group_hold) {
                 m->type_owner_group_hold = false;
-                --g->held;
                 release_list.push_back(m);
             }
         }
@@ -1291,9 +1286,6 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
             g->members.erase(i);
             if (owner->type_owner_group_live) {
                 --g->live;
-            }
-            if (owner->type_owner_group_hold) {
-                --g->held;
             }
             owner->type_owner_group = nullptr;
             if (!g->live) {
