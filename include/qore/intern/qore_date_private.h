@@ -1133,47 +1133,6 @@ public:
         normalize();
     }
 
-    DLLLOCAL void addFractionalYear(double d) {
-        d *= 365.0;
-        int dy = (int)d;
-        day += dy;
-        addFractionalDay(d - dy);
-    }
-
-    // this does not make sense because a month does not have a fixed number of days, but we use an approximation of 30 days in a month
-    DLLLOCAL void addFractionalMonth(double d) {
-        d *= 30.0;
-        int dy = (int)d;
-        day += dy;
-        addFractionalDay(d - dy);
-    }
-
-    DLLLOCAL void addFractionalDay(double d) {
-        d *= 24.0;
-        int h = (int)d;
-        hour += h;
-        addFractionalHour(d - h);
-    }
-
-    DLLLOCAL void addFractionalHour(double d) {
-        d *= 60.0;
-        int m = (int)d;
-        minute += m;
-        addFractionalMinute(d - m);
-    }
-
-    DLLLOCAL void addFractionalMinute(double d) {
-        d *= 60.0;
-        int s = (int)d;
-        second += s;
-        addFractionalSecond(d - s);
-    }
-
-    DLLLOCAL void addFractionalSecond(double d) {
-        d *= 1000000.0;
-        us += d;
-    }
-
     //! sets the value to a number of seconds and microseconds
     /** @return QDO_NONE, or QDO_HOURS if the hours do not fit, in which case the value is saturated
     */
@@ -1270,9 +1229,10 @@ public:
     DLLLOCAL int multiply(int64 factor);
 
     //! multiplies each component by a floating-point factor and normalizes the result (qore#6109)
-    /** The fraction of each product is carried to the smaller units with the rules of the ISO 8601 duration parser
-        (addFractionalYear() etc: a year is 365 days, a month 30 days and a day 24 hours) and rounded to the nearest
-        microsecond
+    /** The fraction of each product is carried to the smaller units as the ISO 8601 duration parser carries the
+        fraction of the product written in decimal (qore_duration_fraction(): a year is 365 days, a month 30 days and
+        a day 24 hours; a fraction of a microsecond is truncated), so that months(1) * 2.3 gives what
+        date("P2.3M") gives
 
         @return QDO_NONE, or the qore_date_overflow code of the first component of the result that does not fit
         (QDO_NOT_FINITE if the factor is NaN or infinite, in which case the value is not changed), in which case the

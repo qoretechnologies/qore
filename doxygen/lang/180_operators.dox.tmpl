@@ -1351,9 +1351,9 @@ foreach string key in (keys hash)
 
     <b>Arguments Processed by * (in order of precedence)</b>
     |!Argument|!Processing
+    |@ref date_type "date"|Gives a @ref relative_dates "relative date": the date multiplied by the other argument (see below)
     |@ref number_type "number"|Gives the result of multiplying its arguments; @ref integer "ints" and @ref float "floats" are converted to @ref number "numbers" if at least one of the arguments is a @ref number "number"
     |@ref float_type "float"|Gives the result of multiplying its arguments; @ref integer "ints" are converted to @ref float "floats" if at least one of the arguments is a @ref float "float"
-    |@ref date_type "date"|Gives a @ref relative_dates "relative date": the date multiplied by the other argument (see below)
     |@ref int_type "int"|Gives the result of multiplying its arguments
     |any other type|Converts argument to a @ref number "number" and performs the multiplication
 
@@ -1369,11 +1369,12 @@ foreach string key in (keys hash)
     - <tt>(hours(1) + minutes(30)) * 3</tt> gives <tt>4 hours 30 minutes</tt>
 
     With a @ref float_type "float" or a @ref number_type "number" factor (a number is converted to a float), the
-    fraction of each component's product is carried to the smaller units with the rules of
-    @ref Qore::date(string) "date(string)" for an ISO 8601 duration with a decimal fraction: a year is 365 days, a
-    month 30 days and a day 24 hours; the fractions are rounded to the nearest microsecond.  So <tt>months(1) * 1.5</tt>
-    gives <tt>1 month 15 days</tt>, as \c date("P1.5M") does, and <tt>years(1) * 1.5</tt> gives
-    <tt>1 year 182 days 12 hours</tt>, as \c date("P1.5Y") does.
+    fraction of each component's product is carried to the smaller units as @ref Qore::date(string) "date(string)"
+    carries the fraction of an ISO 8601 duration component written as the product in decimal (the shortest decimal
+    that gives the float): a year is 365 days, a month 30 days and a day 24 hours, and a fraction of a microsecond is
+    truncated.  So <tt>months(1) * 1.5</tt> gives <tt>1 month 15 days</tt>, as \c date("P1.5M") does,
+    <tt>months(1) * 2.3</tt> gives <tt>2 months 9 days</tt>, as \c date("P2.3M") does, and <tt>years(1) * 1.5</tt>
+    gives <tt>1 year 182 days 12 hours</tt>, as \c date("P1.5Y") does.
 
     Any other factor is converted to an @ref int_type "int".  An @ref absolute_dates "absolute date" is first
     converted to the time from now until the date (zero for a date in the past), as get_duration_microseconds() does.
@@ -2640,14 +2641,19 @@ if (x || y)
     \a lvalue <tt>*=</tt> \a expression
 
     @par Return Type
-    @ref int_type "int", @ref float_type "float", or @ref number_type "number"
+    @ref int_type "int", @ref float_type "float", @ref number_type "number" or @ref date_type "date"
 
     @par Example
     @code{.py} a *= 10;@endcode
+    @code{.py} period *= 2;@endcode
 
     <b>Arguments Processed by *=</b>
     |!Argument|!Processing
-    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float" float, and @ref integer "int", other types are converted to @ref integer "int". The \a expression will be evaluated and multiplied by the \a lvalue, and the result will be saved to the \a lvalue.
+    |@ref date_type "date"|If the \a lvalue or the \a expression is a @ref date_type "date", the \a lvalue is assigned <tt>lvalue * expression</tt>, a @ref relative_dates "relative date" (see @ref relative_date_multiplication), which the \a lvalue's type must accept
+    |All other types|The type precedence from highest to lowest is @ref number "number", @ref float "float" float, and @ref integer "int", other types are converted to @ref integer "int". The \a expression will be evaluated and multiplied by the \a lvalue, and the result will be saved to the \a lvalue.
+
+    @throw INVALID-DATE a component of a @ref relative_dates "relative date" product does not fit a signed 32-bit
+    integer, or a date is multiplied by a float that is not a finite number
 
     <hr>
     @subsection divide_equals_operator Divide Equals Operator (/=)

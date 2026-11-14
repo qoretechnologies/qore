@@ -40,7 +40,7 @@ class RelativeDateMultiplyTest inherits QUnit::Test {
             "days(1) * 1.5: <time: 1 day 12 hours>",
             "P1Y2M * 0.5: <time: 1 month 182 days 12 hours>",
             "hours(1) * 0.25: <time: 15 minutes>",
-            "microseconds(3) * 0.5: <time: 2 microseconds>",
+            "microseconds(3) * 0.5: <time: 1 microsecond>",
             "days(-1) * 1.5: <time: -1 days -12 hours>",
             "2024-01-31 + months(1) * 2.0: 2024-03-31 00:00:00.000000 +00:00",
             "months(1) * 1.5n: <time: 1 month 15 days>",
@@ -51,7 +51,20 @@ class RelativeDateMultiplyTest inherits QUnit::Test {
             "PT1.5H: <time: 1 hour 30 minutes> == <time: 1 hour 30 minutes> (equal: True, same components: True)",
             "PT1.5M: <time: 1 minute 30 seconds> == <time: 1 minute 30 seconds> (equal: True, same components: True)",
             "P2.3M: <time: 2 months 9 days> == <time: 2 months 9 days> (equal: True, same components: True)",
-            "PT0.57S: <time: 570 milliseconds>",
+            "PT0.57S: <time: 570 milliseconds> == <time: 570 milliseconds> (equal: True, same components: True)",
+            "PT0.0000015S: <time: 1 microsecond> == <time: 1 microsecond> (equal: True, same components: True)",
+            "P0.0000001Y: <time: 3 seconds 153600 microseconds> == <time: 3 seconds 153600 microseconds> (equal: "
+                "True, same components: True)",
+            "months(3) * 0.1: <time: 9 days>",
+            "differential: ok (180 cases)",
+            "*= int: <time: 2 months>",
+            "*= float: <time: 1 month 15 days>",
+            "*= number: <time: 1 day 12 hours>",
+            "*= date operand: <time: 3 hours>",
+            "*= hash member: <time: 3 months>",
+            "*= list element: <time: 3 months>",
+            "*= overflow: INVALID-DATE",
+            "*= softint lvalue: 7200",
         );
     }
 

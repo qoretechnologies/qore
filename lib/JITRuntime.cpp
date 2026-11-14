@@ -15580,6 +15580,14 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
             break;
         default: {
             qore_type_t vtype = lvh.getType();
+            // *= with a date lvalue or operand assigns the relative date that the * operator gives, as in the AST
+            // interpreter (qore#6109)
+            if (compound_op == LVCompoundOp::MulAssign && (vtype == NT_DATE || rhs.getType() == NT_DATE)) {
+                if (!qore_date_multiply_equals(lvh, rhs, xsink)) {
+                    res = lvh.getReferencedValue();
+                }
+                break;
+            }
             // only *= and /= follow a number or float lvalue or operand; the other operators are integer
             // operations, as in the AST interpreter
             bool arithmetic = compound_op == LVCompoundOp::MulAssign || compound_op == LVCompoundOp::DivAssign;

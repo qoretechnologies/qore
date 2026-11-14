@@ -34,6 +34,7 @@
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <cerrno>
+#include <charconv>
 #include <cstring>
 #include <limits>
 #include <sys/time.h>
@@ -1388,6 +1389,73 @@ int qore_relative_time::addSecondsTo(double secs) {
     return addSecondsTo(whole, n_us);
 }
 
+// the length of a year and of a month for the fraction of a duration component: a year is 365 days and a month 30
+// days, as in the ISO 8601 duration parser
+#define QORE_DURATION_YEAR_US (365 * MICROSECS_PER_AVG_DAY)
+#define QORE_DURATION_MONTH_US (30 * MICROSECS_PER_AVG_DAY)
+
+//! splits the fraction of a duration component into days, hours, minutes, seconds and microseconds (qore#6109)
+/** The ISO 8601 duration parser (setIso8601()) and the multiplication of a relative date by a float (multiply())
+    use this function, so that they give the same components for the same fraction.
+
+    @param unit_us the length of the component in microseconds (a year is 365 days, a month 30 days, a day 24 hours)
+    @param frac the fraction, less than 1 in absolute value
+    @param parts the days, hours, minutes, seconds and microseconds of the fraction, with its sign
+
+    The fraction is converted to nanoseconds and rounded, which removes the error of the binary approximation of a
+    decimal fraction (ex: 0.57 seconds are 569999.99999999994 microseconds in a double), and truncated to
+    microseconds, as date(float) truncates a fraction of a microsecond.
+*/
+static void qore_duration_fraction(int64 unit_us, double frac, int64* parts) {
+    int64 us = std::llround(frac * static_cast<double>(unit_us) * 1000.0) / 1000;
+    parts[0] = us / MICROSECS_PER_AVG_DAY;
+    us %= MICROSECS_PER_AVG_DAY;
+    parts[1] = us / MICROSECS_PER_HOUR;
+    us %= MICROSECS_PER_HOUR;
+    parts[2] = us / MICROSECS_PER_MINUTE;
+    us %= MICROSECS_PER_MINUTE;
+    parts[3] = us / MICROSECS_PER_SEC;
+    parts[4] = us % MICROSECS_PER_SEC;
+}
+
+//! returns the decimal fraction of a value as the ISO 8601 duration parser reads the fraction of a number
+/** The value is written with the shortest decimal representation that reads back as the same double, and its
+    digits after the decimal point are read with atof(), as get_duration_number() reads them (ex: 2.3 gives 0.3, and
+    not 2.3 - 2, which is 0.29999999999999982); the result has the sign of the value.
+*/
+static double qore_decimal_fraction(double v) {
+    char buf[400];
+    // "0." followed by the digits of the fraction
+    buf[0] = '0';
+    buf[1] = '.';
+    std::to_chars_result rc = std::to_chars(buf + 2, buf + sizeof(buf) - 1, v, std::chars_format::fixed);
+    if (rc.ec != std::errc()) {
+        // not reached for a value whose whole part fits an int64; the fraction of the binary value
+        return v - std::trunc(v);
+    }
+    *rc.ptr = '\0';
+    const char* dot = strchr(buf + 2, '.');
+    if (!dot) {
+        return 0.0;
+    }
+    size_t len = strlen(dot + 1);
+    memmove(buf + 2, dot + 1, len + 1);
+    double frac = atof(buf);
+    return v < 0 ? -frac : frac;
+}
+
+//! adds the fraction of a duration component to a relative date; returns -1 if a component does not fit
+static int add_duration_fraction(qore_relative_time& r, int64 unit_us, double frac) {
+    int64 parts[5];
+    qore_duration_fraction(unit_us, frac, parts);
+    if (add_duration_value(r.day, parts[0]) || add_duration_value(r.hour, parts[1])
+            || add_duration_value(r.minute, parts[2]) || add_duration_value(r.second, parts[3])
+            || add_duration_value(r.us, parts[4])) {
+        return -1;
+    }
+    return 0;
+}
+
 // the index of each component of a relative date in the arrays of multiply()
 enum { QRM_YEAR, QRM_MONTH, QRM_DAY, QRM_HOUR, QRM_MINUTE, QRM_SECOND, QRM_US, QRM_COUNT };
 
@@ -1416,15 +1484,12 @@ int qore_relative_time::multiply(double factor) {
     if (__builtin_expect(!std::isfinite(factor), 0)) {
         return QDO_NOT_FINITE;
     }
-    // the length of each component in microseconds for its fraction, with the rules of the ISO 8601 duration parser
-    // (addFractionalYear() etc): a year is 365 days, a month 30 days and a day 24 hours
-    static constexpr double unit_us[QRM_COUNT] = {365.0 * MICROSECS_PER_AVG_DAY, 30.0 * MICROSECS_PER_AVG_DAY,
-        MICROSECS_PER_AVG_DAY, MICROSECS_PER_HOUR, MICROSECS_PER_MINUTE, MICROSECS_PER_SEC, 1.0};
+    // the length of each component for its fraction, as in the ISO 8601 duration parser; a fraction of a
+    // microsecond is dropped, as the parser drops it
+    static constexpr int64 unit_us[QRM_COUNT] = {QORE_DURATION_YEAR_US, QORE_DURATION_MONTH_US,
+        MICROSECS_PER_AVG_DAY, MICROSECS_PER_HOUR, MICROSECS_PER_MINUTE, MICROSECS_PER_SEC, 0};
     const int comp[QRM_COUNT] = {year, month, day, hour, minute, second, us};
     int64 acc[QRM_COUNT] = {0, 0, 0, 0, 0, 0, 0};
-    // the fractions of the products in microseconds (in all less than a year, a month, a day, an hour, a minute, a
-    // second and a microsecond)
-    double frac_us = 0.0;
     for (int i = 0; i < QRM_COUNT; ++i) {
         if (!comp[i]) {
             continue;
@@ -1437,21 +1502,17 @@ int qore_relative_time::multiply(double factor) {
             continue;
         }
         int64 whole = static_cast<int64>(p);
-        acc[i] = whole;
-        frac_us += (p - static_cast<double>(whole)) * unit_us[i];
+        qore_rel_acc_add(acc[i], whole);
+        // the fraction is carried to the smaller units as the ISO 8601 duration parser carries the fraction of the
+        // product written in decimal (ex: months(1) * 1.5 and date("P1.5M") are both 1 month 15 days)
+        if (unit_us[i] && static_cast<double>(whole) != p) {
+            int64 parts[5];
+            qore_duration_fraction(unit_us[i], qore_decimal_fraction(p), parts);
+            for (int j = 0; j < 5; ++j) {
+                qore_rel_acc_add(acc[QRM_DAY + j], parts[j]);
+            }
+        }
     }
-    // the fractions are rounded to the nearest microsecond, so that the binary approximation of a decimal factor does
-    // not lose a microsecond (ex: months(1) * 2.3 gives 2 months 9 days); they are carried to days, hours, minutes,
-    // seconds and microseconds, as the ISO 8601 duration parser carries the fraction of a component
-    int64 f = std::llround(frac_us);
-    qore_rel_acc_add(acc[QRM_DAY], f / MICROSECS_PER_AVG_DAY);
-    f %= MICROSECS_PER_AVG_DAY;
-    qore_rel_acc_add(acc[QRM_HOUR], f / MICROSECS_PER_HOUR);
-    f %= MICROSECS_PER_HOUR;
-    qore_rel_acc_add(acc[QRM_MINUTE], f / MICROSECS_PER_MINUTE);
-    f %= MICROSECS_PER_MINUTE;
-    qore_rel_acc_add(acc[QRM_SECOND], f / MICROSECS_PER_SEC);
-    qore_rel_acc_add(acc[QRM_US], f % MICROSECS_PER_SEC);
     return setWide(acc[QRM_YEAR], acc[QRM_MONTH], acc[QRM_DAY], acc[QRM_HOUR], acc[QRM_MINUTE], acc[QRM_SECOND],
         acc[QRM_US]);
 }
@@ -2031,53 +2092,49 @@ int qore_relative_time::setIso8601(const char* str, ExceptionSink* xsink) {
             case QDC_YEAR:
                 rc = add_duration_value(year, val);
                 if (!rc && d) {
-                    addFractionalYear(d);
+                    rc = add_duration_fraction(*this, QORE_DURATION_YEAR_US, d);
                 }
                 break;
 
             case QDC_MONTH:
                 rc = add_duration_value(month, val);
                 if (!rc && d) {
-                    addFractionalMonth(d);
+                    rc = add_duration_fraction(*this, QORE_DURATION_MONTH_US, d);
                 }
                 break;
 
-            case QDC_WEEK: {
-                // a fraction of a week is a number of days and a fraction of a day
-                double fd = d * 7.0;
-                int wd = static_cast<int>(fd);
-                rc = add_duration_value(day, static_cast<int64>(val) * 7 + wd);
-                if (!rc && fd != wd) {
-                    addFractionalDay(fd - wd);
+            case QDC_WEEK:
+                rc = add_duration_value(day, static_cast<int64>(val) * 7);
+                if (!rc && d) {
+                    rc = add_duration_fraction(*this, 7 * MICROSECS_PER_AVG_DAY, d);
                 }
                 break;
-            }
 
             case QDC_DAY:
                 rc = add_duration_value(day, val);
                 if (!rc && d) {
-                    addFractionalDay(d);
+                    rc = add_duration_fraction(*this, MICROSECS_PER_AVG_DAY, d);
                 }
                 break;
 
             case QDC_HOUR:
                 rc = add_duration_value(hour, val);
                 if (!rc && d) {
-                    addFractionalHour(d);
+                    rc = add_duration_fraction(*this, MICROSECS_PER_HOUR, d);
                 }
                 break;
 
             case QDC_MINUTE:
                 rc = add_duration_value(minute, val);
                 if (!rc && d) {
-                    addFractionalMinute(d);
+                    rc = add_duration_fraction(*this, MICROSECS_PER_MINUTE, d);
                 }
                 break;
 
             case QDC_SECOND:
                 rc = add_duration_value(second, val);
                 if (!rc && d) {
-                    addFractionalSecond(d);
+                    rc = add_duration_fraction(*this, MICROSECS_PER_SEC, d);
                 }
                 break;
 
