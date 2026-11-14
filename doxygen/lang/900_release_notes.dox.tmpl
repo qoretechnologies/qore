@@ -681,6 +681,11 @@
     a %Qore-language handler; valgrind no longer kills or hangs the process at the wake-up (see
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
+    @par Date Arithmetic Out of Range Raises INVALID-DATE
+    @ref date_time_arithmetic "Date arithmetic", date(int), date(softfloat) and the conversion of a number to a
+    relative date raise \c INVALID-DATE for a result that a date cannot hold, and a relative date literal out of range
+    (ex: \c 2147483648h) is a parse error; the result wrapped to another, often negative, duration (issue #6103).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Warning for a User Symbol that Unqualified Resolution Cannot Reach
     The strict @ref warning-language-traps "language-traps" warning is raised at the declaration of a user function,

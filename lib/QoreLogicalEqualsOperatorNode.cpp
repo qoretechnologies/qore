@@ -381,8 +381,9 @@ bool QoreLogicalEqualsOperatorNode::softEqualImpl(const QoreValue& left, const Q
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeValueHelper ld(l);
-        DateTimeValueHelper rd(r);
+        // a number converted to a relative date out of range raises INVALID-DATE (qore#6103)
+        DateTimeValueHelper ld(l, xsink);
+        DateTimeValueHelper rd(r, xsink);
         return ld->isEqual(*rd);
     }
 

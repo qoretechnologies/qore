@@ -100,8 +100,12 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
         int64 secs = lh->getAsBigInt() / 1000;
         int64 ms = lh->getAsBigInt() - (secs * 1000);
         // the leftover is in milliseconds; makeRelativeFromSeconds() takes microseconds
-        SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms * 1000)));
-        return l->subtractBy(rh->get<DateTimeNode>());
+        SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms * 1000),
+            xsink));
+        if (!l) {
+            return QoreValue();
+        }
+        return l->subtractBy(*rh->get<DateTimeNode>(), xsink);
     }
 
     if (check_date_timeout_variant && lt == NT_DATE && rt == NT_INT) {
@@ -109,14 +113,36 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
         int64 ms = rh->getAsBigInt() - (secs * 1000);
         DateTime r;
         // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-        r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-        return lh->get<DateTimeNode>()->subtractBy(r);
+        if (r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+            return QoreValue();
+        }
+        return lh->get<DateTimeNode>()->subtractBy(r, xsink);
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeNodeValueHelper l(*lh);
-        DateTimeValueHelper r(*rh);
-        return l->subtractBy(*r);
+        // a result out of range raises INVALID-DATE, as does an operand converted to a date out of range (qore#6103)
+        if (lt == NT_DATE) {
+            if (rt == NT_DATE) {
+                return lh->get<const DateTimeNode>()->subtractBy(*rh->get<const DateTimeNode>(), xsink);
+            }
+            DateTimeValueHelper r(*rh, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            return lh->get<const DateTimeNode>()->subtractBy(**r, xsink);
+        }
+        if (lt != NT_INT && lt != NT_FLOAT) {
+            // other types are converted as before (ex: a hash gives the zero date in the local time zone)
+            DateTimeNodeValueHelper l(*lh);
+            return l->subtractBy(*rh->get<const DateTimeNode>(), xsink);
+        }
+        // a number of seconds
+        DateTimeValueHelper l(*lh, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        SimpleRefHolder<DateTimeNode> ln(new DateTimeNode(**l));
+        return ln->subtractBy(*rh->get<const DateTimeNode>(), xsink);
     }
 
     if (lt == NT_NUMBER || rt == NT_NUMBER) {

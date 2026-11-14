@@ -767,6 +767,145 @@ static void ut_stateful_string_api(UnitTestCounters& c) {
     xsink.clear();
 }
 
+//! the overloads of the date/time API that raise INVALID-DATE for a result out of range (qore#6103)
+static void ut_date_checked_arithmetic(UnitTestCounters& c) {
+    constexpr int imax = std::numeric_limits<int>::max();
+    constexpr int imin = std::numeric_limits<int>::min();
+    // the INVALID-DATE exception of a sink, cleared
+    auto invalid_date = [](ExceptionSink& xsink) -> bool {
+        bool rc = false;
+        if (xsink.isException()) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            rc = !strcmp(err->c_str(), "INVALID-DATE");
+        }
+        xsink.clear();
+        return rc;
+    };
+    // the hours of a relative date
+    auto hours = [](const DateTime* dt) -> int {
+        qore_tm info;
+        dt->getInfo(info);
+        return info.hour;
+    };
+
+    std::unique_ptr<DateTime> maxh(DateTime::makeRelative(0, 0, 0, imax));
+    std::unique_ptr<DateTime> minh(DateTime::makeRelative(0, 0, 0, imin));
+    std::unique_ptr<DateTime> one_hour(DateTime::makeRelative(0, 0, 0, 1));
+
+    // DateTime::add()
+    {
+        ExceptionSink xsink;
+        std::unique_ptr<DateTime> sum(maxh->add(*one_hour, &xsink));
+        UT_ASSERT(c, !sum, "DateTime::add(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::add(): INVALID-DATE out of range");
+        sum.reset(maxh->add(*one_hour, nullptr));
+        UT_ASSERT(c, sum && hours(sum.get()) == imax, "DateTime::add(): saturated with no sink");
+        std::unique_ptr<DateTime> m(DateTime::makeRelative(0, 0, 0, imax - 1));
+        sum.reset(m->add(*one_hour, &xsink));
+        UT_ASSERT(c, sum && !xsink && hours(sum.get()) == imax, "DateTime::add(): in range");
+    }
+    // DateTime::subtractBy()
+    {
+        ExceptionSink xsink;
+        std::unique_ptr<DateTime> diff(minh->subtractBy(*one_hour, &xsink));
+        UT_ASSERT(c, !diff, "DateTime::subtractBy(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::subtractBy(): INVALID-DATE out of range");
+        diff.reset(maxh->subtractBy(*one_hour, &xsink));
+        UT_ASSERT(c, diff && !xsink && hours(diff.get()) == imax - 1, "DateTime::subtractBy(): in range");
+        // the difference of two absolute dates in hours
+        std::unique_ptr<DateTime> far(DateTime::makeAbsolute(nullptr, 9999999, 1, 1));
+        std::unique_ptr<DateTime> first(DateTime::makeAbsolute(nullptr, 1, 1, 1));
+        diff.reset(far->subtractBy(*first, &xsink));
+        UT_ASSERT(c, !diff, "DateTime::subtractBy(): no absolute difference out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::subtractBy(): INVALID-DATE for an absolute difference");
+    }
+    // DateTime::unaryMinus() and unaryMinusInPlace()
+    {
+        ExceptionSink xsink;
+        std::unique_ptr<DateTime> neg(minh->unaryMinus(&xsink));
+        UT_ASSERT(c, !neg, "DateTime::unaryMinus(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::unaryMinus(): INVALID-DATE out of range");
+        neg.reset(maxh->unaryMinus(&xsink));
+        UT_ASSERT(c, neg && !xsink && hours(neg.get()) == -imax, "DateTime::unaryMinus(): in range");
+        DateTime d(*minh);
+        UT_ASSERT_EQ(c, -1, d.unaryMinusInPlace(&xsink), "DateTime::unaryMinusInPlace(): -1 out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::unaryMinusInPlace(): INVALID-DATE out of range");
+        UT_ASSERT_EQ(c, imax, hours(&d), "DateTime::unaryMinusInPlace(): saturated");
+        DateTime e(*maxh);
+        UT_ASSERT_EQ(c, 0, e.unaryMinusInPlace(&xsink), "DateTime::unaryMinusInPlace(): 0 in range");
+        UT_ASSERT_EQ(c, -imax, hours(&e), "DateTime::unaryMinusInPlace(): negated");
+    }
+    // DateTime::addSecondsTo()
+    {
+        ExceptionSink xsink;
+        DateTime d(*maxh);
+        UT_ASSERT_EQ(c, -1, d.addSecondsTo(3600, 0, &xsink), "DateTime::addSecondsTo(): -1 out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::addSecondsTo(): INVALID-DATE out of range");
+        DateTime e(*one_hour);
+        UT_ASSERT_EQ(c, 0, e.addSecondsTo(3600, 0, &xsink), "DateTime::addSecondsTo(): 0 in range");
+        UT_ASSERT_EQ(c, 2, hours(&e), "DateTime::addSecondsTo(): added");
+    }
+    // DateTime::setRelativeDateSeconds() and makeRelativeFromSeconds()
+    {
+        ExceptionSink xsink;
+        DateTime d(true);
+        UT_ASSERT_EQ(c, -1, d.setRelativeDateSeconds(9223372036855ll, 0, &xsink),
+            "DateTime::setRelativeDateSeconds(): -1 out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::setRelativeDateSeconds(): INVALID-DATE out of range");
+        UT_ASSERT_EQ(c, imax, hours(&d), "DateTime::setRelativeDateSeconds(): saturated");
+        UT_ASSERT_EQ(c, 0, d.setRelativeDateSeconds(7730941132799ll, 0, &xsink),
+            "DateTime::setRelativeDateSeconds(): 0 in range");
+        UT_ASSERT_EQ(c, imax, hours(&d), "DateTime::setRelativeDateSeconds(): the largest hours");
+        std::unique_ptr<DateTime> r(DateTime::makeRelativeFromSeconds(-7730941136400ll, 0, &xsink));
+        UT_ASSERT(c, !r, "DateTime::makeRelativeFromSeconds(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTime::makeRelativeFromSeconds(): INVALID-DATE out of range");
+        r.reset(DateTime::makeRelativeFromSeconds(-7730941132800ll, 0, &xsink));
+        UT_ASSERT(c, r && !xsink && hours(r.get()) == imin, "DateTime::makeRelativeFromSeconds(): in range");
+    }
+    // DateTimeNode
+    {
+        ExceptionSink xsink;
+        SimpleRefHolder<DateTimeNode> maxn(DateTimeNode::makeRelative(0, 0, 0, imax));
+        SimpleRefHolder<DateTimeNode> minn(DateTimeNode::makeRelative(0, 0, 0, imin));
+        SimpleRefHolder<DateTimeNode> r(maxn->add(*one_hour, &xsink));
+        UT_ASSERT(c, !*r, "DateTimeNode::add(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTimeNode::add(): INVALID-DATE out of range");
+        r = minn->subtractBy(*one_hour, &xsink);
+        UT_ASSERT(c, !*r, "DateTimeNode::subtractBy(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTimeNode::subtractBy(): INVALID-DATE out of range");
+        r = minn->unaryMinus(&xsink);
+        UT_ASSERT(c, !*r, "DateTimeNode::unaryMinus(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTimeNode::unaryMinus(): INVALID-DATE out of range");
+        r = DateTimeNode::makeRelativeFromSeconds(9223372036855ll, 0, &xsink);
+        UT_ASSERT(c, !*r, "DateTimeNode::makeRelativeFromSeconds(): no result out of range");
+        UT_ASSERT(c, invalid_date(xsink), "DateTimeNode::makeRelativeFromSeconds(): INVALID-DATE out of range");
+        r = maxn->subtractBy(*one_hour, &xsink);
+        UT_ASSERT(c, *r && !xsink && hours(*r) == imax - 1, "DateTimeNode::subtractBy(): in range");
+        r = maxn->add(*minh, &xsink);
+        UT_ASSERT(c, *r && !xsink && hours(*r) == -1, "DateTimeNode::add(): in range");
+        r = maxn->unaryMinus(&xsink);
+        UT_ASSERT(c, *r && !xsink && hours(*r) == -imax, "DateTimeNode::unaryMinus(): in range");
+        r = DateTimeNode::makeRelativeFromSeconds(3600, 0, &xsink);
+        UT_ASSERT(c, *r && !xsink && hours(*r) == 1, "DateTimeNode::makeRelativeFromSeconds(): in range");
+    }
+    // DateTimeValueHelper with an exception sink
+    {
+        ExceptionSink xsink;
+        {
+            DateTimeValueHelper h(QoreValue(static_cast<int64>(9223372036855ll)), &xsink);
+            UT_ASSERT(c, invalid_date(xsink), "DateTimeValueHelper: INVALID-DATE for an int out of range");
+        }
+        {
+            DateTimeValueHelper h(QoreValue(std::numeric_limits<double>::quiet_NaN()), &xsink);
+            UT_ASSERT(c, invalid_date(xsink), "DateTimeValueHelper: INVALID-DATE for NaN");
+        }
+        {
+            DateTimeValueHelper h(QoreValue(static_cast<int64>(7200)), &xsink);
+            UT_ASSERT(c, !xsink && hours(*h) == 2, "DateTimeValueHelper: an int in range");
+        }
+    }
+}
+
 static void ut_string_data_helper(UnitTestCounters& c) {
     // inline short string ("1.0" is 3 bytes, so it is always stored inline)
     QoreValue short_value = QoreValue::makeStringValue("1.0");
@@ -17893,6 +18032,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
+    ut_date_checked_arithmetic(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
@@ -18289,6 +18429,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
+    ut_date_checked_arithmetic(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);

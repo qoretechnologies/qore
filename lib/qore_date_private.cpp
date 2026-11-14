@@ -926,12 +926,13 @@ void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone
     set(zone, year, month, day, hour, minute, second, us);
 }
 
-int64 qore_absolute_time::getRelativeMicroseconds() const {
-    // find the difference between the current time and our time
+__int128 qore_absolute_time::getRelativeMicroseconds128() const {
+    // find the difference between the current time and our time; in 128 bits, as the microseconds until a date far
+    // in the future do not fit an int64 (qore#6103)
     int now_us;
     int64 now_seconds = q_epoch_us(now_us);
     // NOTE: we *must* cast "us" to int or we will get invalid results on macOS with clang++ 16 for example
-    int64 ds = ((epoch - now_seconds) * 1000000ll) + ((int)us - now_us);
+    __int128 ds = (static_cast<__int128>(epoch) - now_seconds) * 1000000 + ((int)us - now_us);
     return ds < 0 ? 0 : ds;
 }
 
@@ -966,8 +967,95 @@ void qore_absolute_time::getAsString(QoreString &str, bool yaml) const {
     }
 }
 
-qore_absolute_time &qore_absolute_time::operator+=(const qore_relative_time &dt) {
-    int usecs;
+// the largest absolute value of a year that a carry of int days cannot take out of the range of an int: int days
+// change the year by less than 5880000 (qore#6103)
+static constexpr int64 QORE_DATE_SAFE_YEAR = std::numeric_limits<int>::max() - 6000000;
+
+// the days from 1970-01-01 to the given date of the proleptic Gregorian calendar (H. Hinnant's days_from_civil())
+static constexpr int64 qore_days_from_civil(int64 y, int64 m, int64 d) {
+    y -= m <= 2;
+    const int64 era = (y >= 0 ? y : y - 399) / 400;
+    const int64 yoe = y - era * 400;
+    const int64 doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+    const int64 doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+// the range of the epoch offset of an absolute date: from the start of year QORE_DATE_MIN_YEAR to the end of year
+// QORE_DATE_MAX_YEAR, one year inside the range of an int on each side, so that the year of a date in the range fits
+// an int in every time zone (qore#6103)
+static constexpr int64 QORE_DATE_MAX_EPOCH = qore_days_from_civil(QORE_DATE_MAX_YEAR, 12, 31) * SECS_PER_DAY
+    + SECS_PER_DAY - 1;
+static constexpr int64 QORE_DATE_MIN_EPOCH = qore_days_from_civil(QORE_DATE_MIN_YEAR, 1, 1) * SECS_PER_DAY;
+static_assert(qore_days_from_civil(1970, 1, 1) == 0 && qore_days_from_civil(2000, 3, 1) == 11017
+    && qore_days_from_civil(1, 1, 1) == -719162, "qore_days_from_civil()");
+
+// normalize_day() for a year and days of any size; a slow path of qore_absolute_time::addRelative()
+static void normalize_day_wide(int64& year, int& month, int64& day) {
+    // whole 400-year cycles of 146097 days first, so that the loops below take at most 400 years; whether a year is
+    // a leap year depends only on the year modulo 400
+    int64 cycles = day / 146097;
+    year += cycles * 400;
+    day -= cycles * 146097;
+    // the year modulo 400 in a positive int, for getLastDayOfMonth()
+    auto ly = [](int64 y) { return static_cast<int>((y % 400) + 2000); };
+    if (day > 0) {
+        int i;
+        while (day > (i = qore_date_info::getLastDayOfMonth(month, ly(year)))) {
+            day -= i;
+            ++month;
+            if (month == 13) {
+                month = 1;
+                ++year;
+            }
+        }
+        return;
+    }
+    while (day < 1) {
+        --month;
+        if (!month) {
+            month = 12;
+            --year;
+        }
+        day += qore_date_info::getLastDayOfMonth(month, ly(year));
+    }
+}
+
+int qore_absolute_time::saturate(bool positive) {
+    epoch = positive ? QORE_DATE_MAX_EPOCH : QORE_DATE_MIN_EPOCH;
+    us = 0;
+    return QDO_ABSOLUTE;
+}
+
+int qore_absolute_time::addSecondsTo(int64 secs, int n_us) {
+    // in 128 bits, so that no sum can overflow
+    __int128 total_us = static_cast<__int128>(us) + n_us;
+    __int128 n_epoch = static_cast<__int128>(epoch) + secs + total_us / 1000000;
+    int n_usecs = static_cast<int>(total_us % 1000000);
+    if (n_usecs < 0) {
+        n_usecs += 1000000;
+        --n_epoch;
+    }
+    if (__builtin_expect(n_epoch > QORE_DATE_MAX_EPOCH || n_epoch < QORE_DATE_MIN_EPOCH, 0)) {
+        return saturate(n_epoch > 0);
+    }
+    set(zone, static_cast<int64>(n_epoch), n_usecs);
+    return QDO_NONE;
+}
+
+template <bool neg>
+int qore_absolute_time::addRelative(const qore_relative_time& dt) {
+    // the components are read with their sign for subtraction in 64 bits, so that negating the smallest int cannot
+    // overflow (qore#6103)
+    const int64 dyear = neg ? -static_cast<int64>(dt.year) : dt.year;
+    const int64 dmonth = neg ? -static_cast<int64>(dt.month) : dt.month;
+    const int64 dday = neg ? -static_cast<int64>(dt.day) : dt.day;
+    const int64 dhour = neg ? -static_cast<int64>(dt.hour) : dt.hour;
+    const int64 dminute = neg ? -static_cast<int64>(dt.minute) : dt.minute;
+    const int64 dsecond = neg ? -static_cast<int64>(dt.second) : dt.second;
+    const int64 dus = neg ? -static_cast<int64>(dt.us) : dt.us;
+
+    int64 usecs;
 
     // break down date and do day, month, and year math
     if (dt.year || dt.month || dt.day) {
@@ -980,15 +1068,49 @@ qore_absolute_time &qore_absolute_time::operator+=(const qore_relative_time &dt)
 #endif
         //printd(5, "absolute_time::operator+= this=%p %lld.%06d (%d) %04d-%02d-%02d %02d:%02d:%02d.%06d (+%dY %dM %dD %dh %dm %ds %dus)\n", this, epoch, us, zone ? zone->getUTCOffset(epoch) : 0, tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.us, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.us);
 
-        // add years, months, and days
-        tm.year += dt.year;
-        tm.month += dt.month;
-        // normalize to the end of the month
-        normalize_dm(tm.year, tm.month, tm.day);
+        // add years, months, and days; the year and the month are added and the month is normalized in 64 bits, so
+        // that the sums cannot overflow
+        int64 year = static_cast<int64>(tm.year) + dyear;
+        int64 month = static_cast<int64>(tm.month) + dmonth;
+        if (month > 12 || month < 1) {
+            --month;
+            normalize_units2<int64, int64>(year, month, 12);
+            ++month;
+        }
+        // tm.day is at most 31, so the sum cannot overflow
+        int64 day = static_cast<int64>(tm.day) + dday;
+        if (__builtin_expect(static_cast<uint64_t>(year + QORE_DATE_SAFE_YEAR)
+                > static_cast<uint64_t>(2 * QORE_DATE_SAFE_YEAR)
+                || static_cast<uint64_t>(day - std::numeric_limits<int>::min())
+                    > static_cast<uint64_t>(std::numeric_limits<unsigned>::max()), 0)) {
+            // slow path: a year near the limits of an int or a day sum that does not fit an int
+            if (year > std::numeric_limits<int>::max() || year < std::numeric_limits<int>::min()) {
+                return saturate(year > 0);
+            }
+            tm.year = static_cast<int>(year);
+            tm.month = static_cast<int>(month);
+            // normalize to the end of the month
+            normalize_dm(tm.year, tm.month, tm.day);
+            year = tm.year;
+            day = static_cast<int64>(tm.day) + dday;
+            // normalize to the correct day, month, and year
+            normalize_day_wide(year, tm.month, day);
+            if (year > std::numeric_limits<int>::max() || year < std::numeric_limits<int>::min()) {
+                return saturate(year > 0);
+            }
+            tm.year = static_cast<int>(year);
+            tm.day = static_cast<int>(day);
+        } else {
+            tm.year = static_cast<int>(year);
+            tm.month = static_cast<int>(month);
+            // normalize to the end of the month
+            normalize_dm(tm.year, tm.month, tm.day);
 
-        tm.day += dt.day;
-        // normalize to the correct day, month, and year
-        normalize_day(tm.year, tm.month, tm.day);
+            // the day can only have been reduced to the end of the month, so the sum still fits
+            tm.day += static_cast<int>(dday);
+            // normalize to the correct day, month, and year
+            normalize_day(tm.year, tm.month, tm.day);
+        }
 
         // get epoch offset for same time on the target day
         epoch = qore_date_info::getEpochSeconds(tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second);
@@ -1001,74 +1123,292 @@ qore_absolute_time &qore_absolute_time::operator+=(const qore_relative_time &dt)
         usecs = us;
     }
 
-    // get resulting microseconds
-    usecs += dt.us;
+    // get resulting microseconds (in 64 bits: the microseconds of a relative date can be any int)
+    usecs += dus;
 
-    // add time component
-    epoch += static_cast<int64>(SECS_PER_HOUR) * dt.hour
-        + static_cast<int64>(SECS_PER_MINUTE) * dt.minute + dt.second;
+    // add time component; the offset fits in 64 bits, as the components are ints, but the epoch can be any int64
+    if (__builtin_expect(__builtin_add_overflow(epoch, SECS_PER_HOUR * dhour + SECS_PER_MINUTE * dminute + dsecond,
+            &epoch), 0)) {
+        return saturate(dhour > 0);
+    }
 
     // normalize epoch and microseconds
-    normalize_units2<int64, int>(epoch, usecs, 1000000);
-    us = usecs;
+    if (usecs <= -1000000 || usecs >= 1000000) {
+        int64 units = usecs / 1000000;
+        if (__builtin_expect(__builtin_add_overflow(epoch, units, &epoch), 0)) {
+            return saturate(units > 0);
+        }
+        usecs -= units * 1000000;
+    }
+    // the result must be a date whose year is in range
+    if (__builtin_expect(epoch > QORE_DATE_MAX_EPOCH || epoch < QORE_DATE_MIN_EPOCH, 0)) {
+        return saturate(epoch > 0);
+    }
+    if (usecs < 0) {
+        usecs += 1000000;
+        if (__builtin_expect(--epoch < QORE_DATE_MIN_EPOCH, 0)) {
+            return saturate(false);
+        }
+    }
+    us = static_cast<unsigned>(usecs);
 
     //printd(5, "absolute_time::operator+= new epoch=%lld.%06d (diff=%lld)\n", epoch, tm.us, epoch - oe);
-    return *this;
+    return QDO_NONE;
 }
 
-qore_absolute_time &qore_absolute_time::operator-=(const qore_relative_time &dt) {
-    qore_relative_time t(dt);
-    t.unaryMinus();
-    return *this += t;
+template int qore_absolute_time::addRelative<false>(const qore_relative_time& dt);
+template int qore_absolute_time::addRelative<true>(const qore_relative_time& dt);
+
+// sets a component of a relative date from a 64-bit value: saturates it if it does not fit and records the first
+// component that does not fit in code
+static void qore_rel_set_component(int& field, int64 v, int which, int& code) {
+    if (__builtin_expect(v > std::numeric_limits<int>::max(), 0)) {
+        field = std::numeric_limits<int>::max();
+    } else if (__builtin_expect(v < std::numeric_limits<int>::min(), 0)) {
+        field = std::numeric_limits<int>::min();
+    } else {
+        field = static_cast<int>(v);
+        return;
+    }
+    if (code == QDO_NONE) {
+        code = which;
+    }
 }
 
-qore_relative_time &qore_relative_time::operator+=(const qore_relative_time &dt) {
-    year += dt.year;
-    month += dt.month;
-    day += dt.day;
-    hour += dt.hour;
-    minute += dt.minute;
-    second += dt.second;
-    us += dt.us;
-
-    normalize();
-
-    return *this;
+// as normalize_units() for 64-bit values; a carry that does not fit saturates the bigger unit
+static void qore_rel_normalize_wide(int64& bigger, int64& smaller, int64 ratio) {
+    if (smaller <= -ratio || smaller >= ratio) {
+        int64 units = smaller / ratio;
+        smaller -= units * ratio;
+        if (__builtin_add_overflow(bigger, units, &bigger)) {
+            bigger = units > 0 ? std::numeric_limits<int64>::max() : std::numeric_limits<int64>::min();
+        }
+    }
+    if (bigger > 0) {
+        if (smaller < 0) {
+            smaller += ratio;
+            --bigger;
+        }
+    } else if (bigger < 0 && smaller > 0) {
+        smaller -= ratio;
+        ++bigger;
+    }
 }
 
-qore_relative_time &qore_relative_time::operator-=(const qore_relative_time &dt) {
-    year -= dt.year;
-    month -= dt.month;
-    day -= dt.day;
-    hour -= dt.hour;
-    minute -= dt.minute;
-    second -= dt.second;
-    us -= dt.us;
+int qore_relative_time::setWide(int64 n_year, int64 n_month, int64 n_day, int64 n_hour, int64 n_minute,
+        int64 n_second, int64 n_us) {
+    // the steps of normalize() in 64 bits
+    qore_rel_normalize_wide(n_second, n_us, 1000000);
+    qore_rel_normalize_wide(n_minute, n_second, 60);
+    qore_rel_normalize_wide(n_hour, n_minute, 60);
 
-    normalize();
+    // align the signs of the hours and the smaller units, as normalize() does; the smaller units are now less than
+    // one hour
+    int64 time_us = n_minute * MICROSECS_PER_MINUTE + n_second * MICROSECS_PER_SEC + n_us;
+    if (n_hour < 0 && time_us > 0) {
+        ++n_hour;
+        time_us -= MICROSECS_PER_HOUR;
+    } else if (n_hour > 0 && time_us < 0) {
+        --n_hour;
+        time_us += MICROSECS_PER_HOUR;
+    }
+    n_minute = time_us / MICROSECS_PER_MINUTE;
+    time_us %= MICROSECS_PER_MINUTE;
+    n_second = time_us / MICROSECS_PER_SEC;
+    n_us = time_us % MICROSECS_PER_SEC;
 
-    return *this;
+    qore_rel_normalize_wide(n_year, n_month, 12);
+
+    int code = QDO_NONE;
+    qore_rel_set_component(year, n_year, QDO_YEARS, code);
+    qore_rel_set_component(month, n_month, QDO_MONTHS, code);
+    qore_rel_set_component(day, n_day, QDO_DAYS, code);
+    qore_rel_set_component(hour, n_hour, QDO_HOURS, code);
+    // the smaller units are normalized, so they fit
+    minute = static_cast<int>(n_minute);
+    second = static_cast<int>(n_second);
+    us = static_cast<int>(n_us);
+    return code;
 }
 
-qore_relative_time &qore_relative_time::operator-=(const qore_absolute_time &dt) {
-    second -= dt.epoch;
-    us -= dt.us;
+int qore_relative_time::add(const qore_relative_time& dt) {
+    // every component is checked: the minutes, seconds and microseconds of a value that is not normalized (such as
+    // the literal PT140S) can have any int value (qore#6103)
+    int y, mo, d, h, mi, s, u;
+    if (__builtin_expect(__builtin_add_overflow(year, dt.year, &y) | __builtin_add_overflow(month, dt.month, &mo)
+            | __builtin_add_overflow(day, dt.day, &d) | __builtin_add_overflow(hour, dt.hour, &h)
+            | __builtin_add_overflow(minute, dt.minute, &mi) | __builtin_add_overflow(second, dt.second, &s)
+            | __builtin_add_overflow(us, dt.us, &u), 0)) {
+        return setWide(static_cast<int64>(year) + dt.year, static_cast<int64>(month) + dt.month,
+            static_cast<int64>(day) + dt.day, static_cast<int64>(hour) + dt.hour,
+            static_cast<int64>(minute) + dt.minute, static_cast<int64>(second) + dt.second,
+            static_cast<int64>(us) + dt.us);
+    }
+    year = y;
+    month = mo;
+    day = d;
+    hour = h;
+    minute = mi;
+    second = s;
+    us = u;
 
-    normalize();
-
-    return *this;
+    return normalizeChecked();
 }
 
-void qore_relative_time::set(const QoreValue v) {
+int qore_relative_time::subtract(const qore_relative_time& dt) {
+    int y, mo, d, h, mi, s, u;
+    if (__builtin_expect(__builtin_sub_overflow(year, dt.year, &y) | __builtin_sub_overflow(month, dt.month, &mo)
+            | __builtin_sub_overflow(day, dt.day, &d) | __builtin_sub_overflow(hour, dt.hour, &h)
+            | __builtin_sub_overflow(minute, dt.minute, &mi) | __builtin_sub_overflow(second, dt.second, &s)
+            | __builtin_sub_overflow(us, dt.us, &u), 0)) {
+        return setWide(static_cast<int64>(year) - dt.year, static_cast<int64>(month) - dt.month,
+            static_cast<int64>(day) - dt.day, static_cast<int64>(hour) - dt.hour,
+            static_cast<int64>(minute) - dt.minute, static_cast<int64>(second) - dt.second,
+            static_cast<int64>(us) - dt.us);
+    }
+    year = y;
+    month = mo;
+    day = d;
+    hour = h;
+    minute = mi;
+    second = s;
+    us = u;
+
+    return normalizeChecked();
+}
+
+int qore_relative_time::subtract(const qore_absolute_time& dt) {
+    // an absolute date can hold any epoch offset (ex: localtime(int)), so the difference is checked
+    int64 s;
+    if (__builtin_expect(__builtin_sub_overflow(static_cast<int64>(second), dt.epoch, &s), 0)) {
+        s = dt.epoch > 0 ? std::numeric_limits<int64>::min() : std::numeric_limits<int64>::max();
+    }
+    return setWide(year, month, day, hour, minute, s, static_cast<int64>(us) - static_cast<int64>(dt.us));
+}
+
+int qore_relative_time::unaryMinusSaturated() {
+    int code = QDO_NONE;
+    qore_rel_set_component(year, -static_cast<int64>(year), QDO_YEARS, code);
+    qore_rel_set_component(month, -static_cast<int64>(month), QDO_MONTHS, code);
+    qore_rel_set_component(day, -static_cast<int64>(day), QDO_DAYS, code);
+    qore_rel_set_component(hour, -static_cast<int64>(hour), QDO_HOURS, code);
+    qore_rel_set_component(minute, -static_cast<int64>(minute), QDO_MINUTES, code);
+    qore_rel_set_component(second, -static_cast<int64>(second), QDO_SECONDS, code);
+    qore_rel_set_component(us, -static_cast<int64>(us), QDO_MICROSECONDS, code);
+    return code;
+}
+
+int qore_relative_time::addSecondsTo(double secs) {
+    int64 whole;
+    int n_us;
+    int code = qore_split_float_seconds(secs, whole, n_us);
+    if (__builtin_expect(code != QDO_NONE, 0)) {
+        if (code == QDO_HOURS) {
+            hour = secs > 0 ? std::numeric_limits<int>::max() : std::numeric_limits<int>::min();
+        }
+        return code;
+    }
+    return addSecondsTo(whole, n_us);
+}
+
+int qore_date_private::raiseOverflow(int code, const char* op, ExceptionSink* xsink) {
+    assert(code != QDO_NONE);
+    if (!xsink) {
+        return -1;
+    }
+    static const char* units[] = {nullptr, "years", "months", "days", "hours", "minutes", "seconds",
+        "microseconds"};
+    if (code == QDO_ABSOLUTE) {
+        xsink->raiseException("INVALID-DATE", "%s overflow: the result is outside the range of an absolute date "
+            "(years %d to %d)", op, QORE_DATE_MIN_YEAR, QORE_DATE_MAX_YEAR);
+    } else if (code == QDO_DURATION) {
+        xsink->raiseException("INVALID-DATE", "%s: the duration does not fit a signed 64-bit integer in the unit "
+            "requested", op);
+    } else if (code == QDO_NOT_FINITE) {
+        xsink->raiseException("INVALID-DATE", "%s: a floating-point value that is not a finite number (NaN or "
+            "infinity) cannot give a date", op);
+    } else {
+        assert(code >= QDO_YEARS && code <= QDO_MICROSECONDS);
+        xsink->raiseException("INVALID-DATE", "%s overflow: the result has more %s than a relative date can hold "
+            "(%d to %d)", op, units[code], std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
+    }
+    return -1;
+}
+
+int qore_date_private::setRelativeDateSeconds(double secs, ExceptionSink* xsink) {
+    relative = true;
+    d.rel.zero();
+    int64 whole;
+    int us;
+    int code = qore_split_float_seconds(secs, whole, us);
+    if (__builtin_expect(code != QDO_NONE, 0)) {
+        if (code == QDO_HOURS) {
+            d.rel.hour = secs > 0 ? std::numeric_limits<int>::max() : std::numeric_limits<int>::min();
+        }
+        return raiseOverflow(code, "conversion to a relative date", xsink);
+    }
+    return setRelativeDateSeconds(whole, us, xsink);
+}
+
+QoreValue qore_date_private::multiply(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink) {
+    const bool left_date = l.getType() == NT_DATE;
+    const DateTimeNode* dt = left_date ? l.get<const DateTimeNode>() : r.get<const DateTimeNode>();
+    const QoreValue& factor = left_date ? r : l;
+
+    // the duration in microseconds (a month is 31 days and a year 365 days; an absolute date gives the time from now
+    // until it) multiplied by the factor; the product must fit an int64, and its hours an int (qore#6103)
+    __int128 us = dt->isRelative()
+        ? qore_relative_time::getPrivate(dt)->d.rel.getRelativeMicroseconds128()
+        : static_cast<__int128>(dt->getRelativeMicroseconds());
+    __int128 product = 0;
+    int code = QDO_NONE;
+    if (l.getType() == NT_FLOAT || r.getType() == NT_FLOAT) {
+        double f = factor.getAsFloat();
+        double p = static_cast<double>(us) * f;
+        if (!std::isfinite(f)) {
+            code = QDO_NOT_FINITE;
+        } else if (!(p < 9223372036854775808.0 && p >= -9223372036854775808.0)) {
+            code = QDO_HOURS;
+        } else {
+            product = static_cast<int64>(p);
+        }
+    } else if (__builtin_mul_overflow(us, static_cast<__int128>(factor.getAsBigInt()), &product)
+            || product > std::numeric_limits<int64>::max() || product < std::numeric_limits<int64>::min()) {
+        code = QDO_HOURS;
+    }
+    SimpleRefHolder<DateTimeNode> rv(new DateTimeNode(true));
+    if (code == QDO_NONE) {
+        code = qore_relative_time::getPrivate(*rv)->d.rel.setSeconds(static_cast<int64>(product / 1000000),
+            static_cast<int>(product % 1000000));
+    }
+    if (__builtin_expect(code != QDO_NONE, 0)) {
+        raiseOverflow(code, "relative date multiplication", xsink);
+        return QoreValue();
+    }
+    return rv.release();
+}
+
+DateTimeNode* qore_make_relative_date_from_float(double secs, ExceptionSink* xsink) {
+    int64 whole;
+    int us;
+    int code = qore_split_float_seconds(secs, whole, us);
+    if (__builtin_expect(code != QDO_NONE, 0)) {
+        qore_date_private::raiseOverflow(code, "conversion to a relative date", xsink);
+        return nullptr;
+    }
+    return DateTimeNode::makeRelativeFromSeconds(whole, us, xsink);
+}
+
+int qore_relative_time::set(const QoreValue v) {
     qore_type_t t = v.getType();
     if (t == NT_BOOLEAN) {
         set(0, 0, 0, 0, 0, (int)v.getAsBool(), 0);
     } else if (t == NT_INT) {
         zero();
-        addSecondsTo(v.getAsBigInt());
+        return addSecondsTo(v.getAsBigInt());
     } else if (t == NT_FLOAT) {
         zero();
-        addSecondsTo(v.getAsFloat());
+        return addSecondsTo(v.getAsFloat());
     } else if (t == NT_STRING) {
         // a short string is not a node; the helper provides the string
         QoreStringValueHelper str(v);
@@ -1083,20 +1423,20 @@ void qore_relative_time::set(const QoreValue v) {
                     set(d->priv->d.rel);
                 else {
                     zero();
-                    addSecondsTo(d->priv->d.abs.epoch, d->priv->d.abs.us);
+                    return addSecondsTo(d->priv->d.abs.epoch, d->priv->d.abs.us);
                 }
                 break;
             }
             default:
                 double f = n ? n->getAsFloat() : 0.0;
                 zero();
-                addSecondsTo(f);
-                break;
+                return addSecondsTo(f);
         }
     } else {
         // no value or a value held without a node, such as NULL, gives a zero relative date/time
         zero();
     }
+    return QDO_NONE;
 }
 
 void qore_relative_time::set(const char* str, ExceptionSink* xsink) {

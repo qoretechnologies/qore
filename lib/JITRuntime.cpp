@@ -6964,8 +6964,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_date(int64_t date_microseconds, int64
     DateTimeNode* dt;
     if (is_relative) {
         dt = new DateTimeNode(true);
+        // the microseconds of a relative date constant, which the compiler took from a relative date that fits
+        // (getRelativeMicroseconds()), so its hours fit; there is no exception sink here, and a value out of range
+        // would be saturated (qore#6103)
         dt->setRelativeDateSeconds(date_microseconds / 1000000,
-            static_cast<int>(date_microseconds % 1000000));
+            static_cast<int>(date_microseconds % 1000000), nullptr);
     } else {
         // date_microseconds is a UTC epoch from getEpochMicrosecondsUTC(); use makeAbsolute()
         // which stores the epoch directly without local-to-UTC conversion (unlike DateTimeNode(s, ms)

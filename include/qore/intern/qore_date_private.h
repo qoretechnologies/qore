@@ -123,6 +123,73 @@ DLLLOCAL void normalize_units3(T1& bigger, unsigned& smaller, unsigned ratio) {
     }
 }
 
+//! As normalize_units(), but the carry into the bigger unit is checked
+/** @return true if the carry does not fit the bigger unit, in which case neither value is changed, so that they still
+    give the same duration; false if the values were normalized
+
+    The sign normalization that follows the carry moves the bigger unit toward zero and so cannot overflow.
+*/
+template <typename T1, typename T2>
+DLLLOCAL bool normalize_units_checked(T1& bigger, T2& smaller, int ratio) {
+    if (smaller <= -ratio || smaller >= ratio) {
+        T2 units = smaller / ratio;
+        T1 sum;
+        if (__builtin_add_overflow(bigger, units, &sum)) {
+            return true;
+        }
+        bigger = sum;
+        smaller -= units * ratio;
+    }
+
+    // perform further sign normalization; ensure signs are the same
+    if (bigger > 0) {
+        if (smaller < 0) {
+            smaller += ratio;
+            --bigger;
+        }
+    } else if (bigger < 0 && smaller > 0) {
+        smaller -= ratio;
+        ++bigger;
+    }
+    return false;
+}
+
+//! The component of a date/time value that the result of an operation does not fit (qore#6103)
+/** The checked operations on dates return one of these values; QDO_NONE means that the result fits.
+*/
+enum qore_date_overflow : int {
+    QDO_NONE = 0,
+    QDO_YEARS,
+    QDO_MONTHS,
+    QDO_DAYS,
+    QDO_HOURS,
+    QDO_MINUTES,
+    QDO_SECONDS,
+    QDO_MICROSECONDS,
+    //! the result is outside the range of an absolute date
+    QDO_ABSOLUTE,
+    //! a floating-point value is not a finite number (NaN or infinity)
+    QDO_NOT_FINITE,
+    //! a duration in the unit requested does not fit a signed 64-bit integer
+    QDO_DURATION,
+};
+
+//! the range of the years of an absolute date: one year inside the range of an int on each side, so that the year
+//! fits an int in every time zone (qore#6103)
+#define QORE_DATE_MIN_YEAR (std::numeric_limits<int>::min() + 1)
+#define QORE_DATE_MAX_YEAR (std::numeric_limits<int>::max() - 1)
+
+//! returns a 128-bit value saturated to the range of int64
+DLLLOCAL static inline int64 qore_date_saturate_int64(__int128 v) {
+    if (v > std::numeric_limits<int64>::max()) {
+        return std::numeric_limits<int64>::max();
+    }
+    if (v < std::numeric_limits<int64>::min()) {
+        return std::numeric_limits<int64>::min();
+    }
+    return static_cast<int64>(v);
+}
+
 struct qore_date_info {
     // static constants
     DLLLOCAL static const int month_lengths[];
@@ -738,18 +805,24 @@ public:
         return us;
     }
 
+    //! returns the microseconds from now until the date, or 0 for a date in the past, in 128 bits (qore#6103)
+    DLLLOCAL __int128 getRelativeMicroseconds128() const;
+
+    // the durations are computed in 128 bits and saturated to the range of int64 (qore#6103)
     DLLLOCAL int64 getRelativeSeconds() const {
-        return getRelativeMicroseconds() / 1000000;
+        return qore_date_saturate_int64(getRelativeMicroseconds128() / 1000000);
     }
 
     DLLLOCAL int64 getRelativeMilliseconds() const {
-        return getRelativeMicroseconds() / 1000;
+        return qore_date_saturate_int64(getRelativeMicroseconds128() / 1000);
     }
 
-    DLLLOCAL int64 getRelativeMicroseconds() const;
+    DLLLOCAL int64 getRelativeMicroseconds() const {
+        return qore_date_saturate_int64(getRelativeMicroseconds128());
+    }
 
     DLLLOCAL double getRelativeSecondsDouble() const {
-        return ((double)getRelativeMicroseconds()) / 1000000.0;
+        return static_cast<double>(getRelativeMicroseconds128()) / 1000000.0;
     }
 
     DLLLOCAL void localtime(struct tm& tms) const {
@@ -815,8 +888,21 @@ public:
         return epoch * 1000 + (us / 1000);
     }
 
-    DLLLOCAL qore_absolute_time& operator+=(const qore_relative_time& dt);
-    DLLLOCAL qore_absolute_time& operator-=(const qore_relative_time& dt);
+    //! adds a relative date/time value
+    /** @return QDO_NONE, or the qore_date_overflow code of the part of the result that is out of range, in which
+        case the value is saturated
+    */
+    DLLLOCAL int add(const qore_relative_time& dt) {
+        return addRelative<false>(dt);
+    }
+
+    //! subtracts a relative date/time value
+    /** @return QDO_NONE, or the qore_date_overflow code of the part of the result that is out of range, in which
+        case the value is saturated
+    */
+    DLLLOCAL int subtract(const qore_relative_time& dt) {
+        return addRelative<true>(dt);
+    }
 
     //! concatenates the string representation of this value to the given string
     /** @param str the string to concatenate the value to
@@ -835,25 +921,44 @@ public:
         return zone;
     }
 
-    DLLLOCAL void addSecondsTo(int64 secs, int n_us = 0) {
-        set(zone, epoch + secs, us + n_us);
-    }
+    //! adds the given seconds and microseconds
+    /** @return QDO_NONE, or QDO_ABSOLUTE if the year of the result is out of range (QORE_DATE_MIN_YEAR to
+        QORE_DATE_MAX_YEAR), in which case the value is saturated
+    */
+    DLLLOCAL int addSecondsTo(int64 secs, int n_us = 0);
+
+protected:
+    //! sets the value to the last (positive) or first (negative) date that it can hold; returns QDO_ABSOLUTE
+    DLLLOCAL int saturate(bool positive);
+
+    //! adds (or subtracts, if \a neg is true) a relative date/time value; see add()
+    template <bool neg>
+    DLLLOCAL int addRelative(const qore_relative_time& dt);
 };
 
 class qore_relative_time : public qore_simple_tm {
 friend class qore_absolute_time;
 protected:
-    DLLLOCAL void normalize(bool for_comparison = false) {
+    //! normalizes the value
+    /** @return true if a carry does not fit its component, in which case the components still give the same
+        duration but are not all normalized (see normalizeChecked()); false if the value was normalized
+    */
+    DLLLOCAL bool normalize(bool for_comparison = false) {
         //printd(5, "DT:cD() sec: %lld ms: %d\n", sec, ms);
 
+        // the carries are checked: they are only taken when a smaller unit is out of its range, so the check costs
+        // nothing for a value that needs no carry (qore#6103)
         // normalize seconds from microseconds
-        normalize_units<int, int>(second, us, 1000000);
+        bool ov = normalize_units_checked<int, int>(second, us, 1000000);
 
         // normalize minutes from seconds
-        normalize_units<int, int>(minute, second, 60);
+        ov |= normalize_units_checked<int, int>(minute, second, 60);
 
         // normalize hours from minutes
-        normalize_units<int, int>(hour, minute, 60);
+        ov |= normalize_units_checked<int, int>(hour, minute, 60);
+        if (__builtin_expect(ov, 0)) {
+            return true;
+        }
 
         // Align elapsed-time signs across zero-valued intervening units. Pairwise
         // normalization alone leaves e.g. -24h + 1us unchanged because both
@@ -876,13 +981,25 @@ protected:
         // only normalize hours to days and days to months if we are comparing
         // we use an average year length of 365 days and an maximum month length of 31 days
         if (for_comparison) {
-            normalize_units<int, int>(day, hour, 24);
-            normalize_units<int, int>(year, day, 365);
-            normalize_units<int, int>(month, day, 31);
+            ov |= normalize_units_checked<int, int>(day, hour, 24);
+            ov |= normalize_units_checked<int, int>(year, day, 365);
+            ov |= normalize_units_checked<int, int>(month, day, 31);
         }
 
         // normalize years from months
-        normalize_units<int, int>(year, month, 12);
+        ov |= normalize_units_checked<int, int>(year, month, 12);
+        return ov;
+    }
+
+    //! normalizes the value
+    /** @return QDO_NONE, or the qore_date_overflow code of the component of the normalized value that is out of
+        range, in which case the value is saturated
+    */
+    DLLLOCAL int normalizeChecked() {
+        if (__builtin_expect(normalize(), 0)) {
+            return setWide(year, month, day, hour, minute, second, us);
+        }
+        return QDO_NONE;
     }
 
     //! Sets the duration from an ISO 8601 duration string: \c "P" followed by components (\c nY, \c nM, \c nW,
@@ -907,17 +1024,32 @@ protected:
     DLLLOCAL int setIso8601Alternative(const char* str, const char* p, ExceptionSink* xsink);
 
 public:
-    DLLLOCAL void set(int n_year, int n_month, int n_day, int n_hour, int n_minute, int n_second, int n_us) {
+    //! sets and normalizes the value
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component of the normalized value that does
+        not fit, in which case the value is saturated
+    */
+    DLLLOCAL int set(int n_year, int n_month, int n_day, int n_hour, int n_minute, int n_second, int n_us) {
         qore_simple_tm::set(n_year, n_month, n_day, n_hour, n_minute, n_second, n_us);
-        normalize();
+        return normalizeChecked();
     }
+
+    //! sets the value from components of any size, which it normalizes as normalize() does (qore#6103)
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component of the normalized value that does
+        not fit, in which case every such component is saturated
+    */
+    DLLLOCAL int setWide(int64 n_year, int64 n_month, int64 n_day, int64 n_hour, int64 n_minute, int64 n_second,
+            int64 n_us);
 
     DLLLOCAL void setUnnormalized(int n_year, int n_month, int n_day, int n_hour, int n_minute, int n_second,
             int n_us) {
         qore_simple_tm::set(n_year, n_month, n_day, n_hour, n_minute, n_second, n_us);
     }
 
-    DLLLOCAL void set(const QoreValue v);
+    //! sets the value from a value of any type: a number is a number of seconds
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component that does not fit, in which case the
+        value is saturated (or zero if the value is a float that is not a finite number)
+    */
+    DLLLOCAL int set(const QoreValue v);
 
     DLLLOCAL void set(const char* str, ExceptionSink* xsink = nullptr);
 
@@ -931,25 +1063,19 @@ public:
         us = p.us;
     }
 
-    // takes the different between seconds.micros - dt and sets this to the relative date/time difference
-    DLLLOCAL void setDifference(int64 seconds, int micros, const qore_absolute_time& dt) {
-        int64 sec = seconds - dt.epoch;
-        us = micros - dt.us;
+    //! takes the difference between seconds.micros - dt and sets this to the relative date/time difference
+    /** Days are not normalized, as with DST not all days are 24 hours: the difference is in hours, minutes,
+        seconds and microseconds
 
-        year = month = day = hour = minute = 0;
-
-        // normalize seconds from microseconds
-        normalize_units<int64, int>(sec, us, 1000000);
-
-        // do not normalize days, as with DST not all days are 24 hours
-
-        // normalize hours from seconds
-        normalize_units<int, int64>(hour, sec, 3600);
-
-        // normalize minutes from seconds
-        normalize_units<int, int64>(minute, sec, 60);
-
-        second = (int)sec;
+        @return QDO_NONE, or QDO_HOURS if the hours do not fit, in which case the value is saturated
+    */
+    DLLLOCAL int setDifference(int64 seconds, int micros, const qore_absolute_time& dt) {
+        // an absolute date can hold any epoch offset (ex: localtime(int)), so the difference is checked
+        int64 s;
+        if (__builtin_expect(__builtin_sub_overflow(seconds, dt.epoch, &s), 0)) {
+            s = seconds > dt.epoch ? std::numeric_limits<int64>::max() : std::numeric_limits<int64>::min();
+        }
+        return setWide(0, 0, 0, 0, 0, s, static_cast<int64>(micros) - static_cast<int64>(dt.us));
     }
 
     DLLLOCAL void setLiteral(int64 date, int usecs = 0) {
@@ -1009,18 +1135,29 @@ public:
         us += d;
     }
 
-    DLLLOCAL void setSeconds(int64 s, int usecs = 0) {
+    //! sets the value to a number of seconds and microseconds
+    /** @return QDO_NONE, or QDO_HOURS if the hours do not fit, in which case the value is saturated
+    */
+    DLLLOCAL int setSeconds(int64 s, int usecs = 0) {
         // Normalize before narrowing hours: an opposite-sign fraction can bring an hour-boundary value in range.
-        normalize_units<int64, int>(s, usecs, 1000000);
+        if (__builtin_expect(normalize_units_checked<int64, int>(s, usecs, 1000000), 0)) {
+            return setWide(0, 0, 0, 0, 0, s, usecs);
+        }
         year = 0;
         month = 0;
         day = 0;
         // Keep elapsed hours: carrying them into calendar days changes arithmetic across timezone transitions.
         // Take remainders before narrowing components, so the split never multiplies 32-bit hours by 3600.
-        hour = static_cast<int>(s / 3600);
+        int64 h = s / 3600;
         minute = static_cast<int>((s % 3600) / 60);
         second = static_cast<int>(s % 60);
         us = usecs;
+        if (__builtin_expect(h != static_cast<int>(h), 0)) {
+            hour = h > 0 ? std::numeric_limits<int>::max() : std::numeric_limits<int>::min();
+            return QDO_HOURS;
+        }
+        hour = static_cast<int>(h);
+        return QDO_NONE;
     }
 
     DLLLOCAL void setTime(int h, int m, int s, int usecs) {
@@ -1102,7 +1239,16 @@ public:
         return 0;
     }
 
-    DLLLOCAL void unaryMinus() {
+    //! negates the value
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component whose negative does not fit (it is
+        the smallest int), in which case every such component is saturated
+    */
+    DLLLOCAL int unaryMinus() {
+        constexpr int min = std::numeric_limits<int>::min();
+        if (__builtin_expect((year == min) | (month == min) | (day == min) | (hour == min) | (minute == min)
+                | (second == min) | (us == min), 0)) {
+            return unaryMinusSaturated();
+        }
         year = -year;
         month = -month;
         day = -day;
@@ -1110,32 +1256,57 @@ public:
         minute = -minute;
         second = -second;
         us = -us;
+        return QDO_NONE;
     }
 
+    //! returns the duration in microseconds (a day is 24 hours, a month 31 days and a year 365 days) in 128 bits,
+    //! which cannot overflow (qore#6103)
+    DLLLOCAL __int128 getRelativeMicroseconds128() const {
+        // the hours and smaller units of int components fit an int64 (2^31 hours are less than 2^63 microseconds)
+        int64 time_us = static_cast<int64>(us) + static_cast<int64>(second) * MICROSECS_PER_SEC
+            + static_cast<int64>(minute) * MICROSECS_PER_MINUTE + static_cast<int64>(hour) * MICROSECS_PER_HOUR;
+        if (!(day | month | year)) {
+            return time_us;
+        }
+        return static_cast<__int128>(time_us) + static_cast<__int128>(day) * MICROSECS_PER_AVG_DAY
+            + static_cast<__int128>(month) * MICROSECS_PER_MAX_MONTH
+            + static_cast<__int128>(year) * MICROSECS_PER_AVG_YEAR;
+    }
+
+    // the durations are computed in 128 bits and saturated to the range of int64 (qore#6103)
     DLLLOCAL int64 getRelativeSeconds() const {
-        return getRelativeMicroseconds() / 1000000;
+        return qore_date_saturate_int64(getRelativeMicroseconds128() / 1000000);
     }
 
     DLLLOCAL int64 getRelativeMilliseconds() const {
-        return getRelativeMicroseconds() / 1000;
+        return qore_date_saturate_int64(getRelativeMicroseconds128() / 1000);
     }
 
     DLLLOCAL int64 getRelativeMicroseconds() const {
-        return (int64)us + (int64)second * MICROSECS_PER_SEC
-            + (int64)minute*  MICROSECS_PER_MINUTE
-            + (int64)hour * MICROSECS_PER_HOUR
-            + (int64)day * MICROSECS_PER_AVG_DAY
-            + (month ? (int64)month * MICROSECS_PER_MAX_MONTH : 0ll)
-            + (year ? (int64)year * MICROSECS_PER_AVG_YEAR : 0ll);
+        return qore_date_saturate_int64(getRelativeMicroseconds128());
     }
 
     DLLLOCAL double getRelativeSecondsDouble() const {
-        return ((double)getRelativeMicroseconds()) / 1000000.0;
+        return static_cast<double>(getRelativeMicroseconds128()) / 1000000.0;
     }
 
-    DLLLOCAL qore_relative_time& operator+=(const qore_relative_time& dt);
-    DLLLOCAL qore_relative_time& operator-=(const qore_relative_time& dt);
-    DLLLOCAL qore_relative_time& operator-=(const qore_absolute_time& dt);
+    //! adds a relative date/time value
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component of the result that does not fit, in
+        which case the value is saturated
+    */
+    DLLLOCAL int add(const qore_relative_time& dt);
+
+    //! subtracts a relative date/time value
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component of the result that does not fit, in
+        which case the value is saturated
+    */
+    DLLLOCAL int subtract(const qore_relative_time& dt);
+
+    //! subtracts the epoch offset of an absolute date/time value
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component of the result that does not fit, in
+        which case the value is saturated
+    */
+    DLLLOCAL int subtract(const qore_absolute_time& dt);
 
     DLLLOCAL void getAsString(QoreString& str) const {
         int f = 0;
@@ -1198,16 +1369,41 @@ public:
         return qore_simple_tm::hasValue();
     }
 
-    DLLLOCAL void addSecondsTo(double secs) {
-        addSecondsTo((int64)secs, (int)((secs - (float)((int)secs)) * 1000000));
+    //! adds the given seconds and fractions of a second without normalizing the value
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component that does not fit
+        (QDO_NOT_FINITE if the value is NaN or infinite, in which case the value is not changed), in which case the
+        value is saturated
+    */
+    DLLLOCAL int addSecondsTo(double secs);
+
+    //! adds the given seconds and microseconds without normalizing the value
+    /** @return QDO_NONE, or the qore_date_overflow code of the first component that does not fit, in which case the
+        value is normalized and saturated
+    */
+    DLLLOCAL int addSecondsTo(int64 secs, int n_us = 0) {
+        int64 h = static_cast<int64>(hour) + secs / 3600;
+        int64 m = static_cast<int64>(minute) + (secs % 3600) / 60;
+        int64 s = static_cast<int64>(second) + secs % 60;
+        int64 u = static_cast<int64>(us) + n_us;
+        if (__builtin_expect((h != static_cast<int>(h)) | (m != static_cast<int>(m)) | (s != static_cast<int>(s))
+                | (u != static_cast<int>(u)), 0)) {
+            return setWide(year, month, day, h, m, s, u);
+        }
+        hour = static_cast<int>(h);
+        minute = static_cast<int>(m);
+        second = static_cast<int>(s);
+        us = static_cast<int>(u);
+        return QDO_NONE;
     }
 
-    DLLLOCAL void addSecondsTo(int64 secs, int n_us = 0) {
-        hour += static_cast<int>(secs / 3600);
-        minute += static_cast<int>((secs % 3600) / 60);
-        second += static_cast<int>(secs % 60);
-        us += n_us;
+    //! returns the private implementation of a date/time value (this class is a friend of DateTime)
+    DLLLOCAL static qore_date_private* getPrivate(const DateTime* dt) {
+        return dt->priv;
     }
+
+protected:
+    //! negates the value when a component is the smallest int; see unaryMinus()
+    DLLLOCAL int unaryMinusSaturated();
 };
 
 static inline void zero_tm(struct tm& tms) {
@@ -1383,54 +1579,137 @@ public:
         return relative ? 0 : d.abs.getDayNumber();
     }
 
-    // it's not legal to call with this=relative and dt=absolute
-    DLLLOCAL void add(const qore_date_private& dt) {
+    //! sets a date/time value to the relative date/time value that a value gives (a number is a number of seconds)
+    /** @param dt the value to set
+        @param v the value to convert
+        @param xsink for an \c INVALID-DATE exception if the value gives a relative date out of range or is a float
+        that is not a finite number
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL static int setRelative(DateTime& dt, const QoreValue v, ExceptionSink* xsink) {
+        qore_date_private* p = qore_relative_time::getPrivate(&dt);
+        p->relative = true;
+        int code = p->d.rel.set(v);
+        if (__builtin_expect(code != QDO_NONE, 0)) {
+            return raiseOverflow(code, "conversion to a relative date", xsink);
+        }
+        return 0;
+    }
+
+    //! multiplies a date by a number: the * operator with a date operand (qore#6109)
+    /** @param l the left operand
+        @param r the right operand; one of the operands is a date
+
+        @return the product, a relative date, or no value if an exception was raised
+
+        The duration of the date in microseconds (a month is 31 days and a year 365 days; an absolute date gives the
+        time from now until it) is multiplied by the other operand, a float factor if it is a float, otherwise
+        converted to an int, and the result is a relative date of that many seconds.
+    */
+    DLLLOCAL static QoreValue multiply(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
+
+    //! raises the INVALID-DATE exception for the overflow of a date operation (qore#6103)
+    /** @param code the qore_date_overflow code that the operation returned; must not be QDO_NONE
+        @param op the operation, for the message (ex: \c "relative date arithmetic")
+        @param xsink for the exception; if nullptr, nothing is raised
+
+        @return -1
+    */
+    DLLLOCAL static int raiseOverflow(int code, const char* op, ExceptionSink* xsink);
+
+    //! adds a date/time value
+    /** It's not legal to call with this=relative and dt=absolute.
+
+        @param dt the value to add
+        @param xsink for an \c INVALID-DATE exception if the result is out of range; if nullptr, the result is
+        saturated without an exception
+
+        @return 0 if the result is in range, -1 if not (the value is then saturated)
+    */
+    DLLLOCAL int add(const qore_date_private& dt, ExceptionSink* xsink) {
+        int code;
         if (!relative) {
             if (dt.relative) {
-                d.abs += dt.d.rel;
+                code = d.abs.add(dt.d.rel);
             } else {
                 setDate(getEpochSecondsUTC() + dt.d.abs.getEpochSecondsUTC(), d.abs.getMicrosecond()
                     + dt.d.abs.getMicrosecond());
+                return 0;
             }
-            return;
+        } else {
+            assert(dt.relative);
+            code = d.rel.add(dt.d.rel);
         }
-
-        assert(dt.relative);
-        d.rel += dt.d.rel;
+        if (__builtin_expect(code != QDO_NONE, 0)) {
+            return raiseOverflow(code, relative ? "relative date arithmetic" : "date arithmetic", xsink);
+        }
+        return 0;
     }
 
-    DLLLOCAL void unaryMinus() {
-        if (relative)
-            d.rel.unaryMinus();
-        else
+    //! negates the value
+    /** @param xsink for an \c INVALID-DATE exception if the result is out of range; if nullptr, the result is
+        saturated without an exception
+
+        @return 0 if the result is in range, -1 if not (the value is then saturated)
+    */
+    DLLLOCAL int unaryMinus(ExceptionSink* xsink) {
+        if (relative) {
+            int code = d.rel.unaryMinus();
+            if (__builtin_expect(code != QDO_NONE, 0)) {
+                return raiseOverflow(code, "relative date negation", xsink);
+            }
+        } else {
             d.abs.unaryMinus();
+        }
+        return 0;
     }
 
-    // it's not legal to call with this=relative and dt=absolute
-    DLLLOCAL void subtractBy(const qore_date_private& dt) {
+    //! subtracts a date/time value
+    /** It's not legal to call with this=relative and dt=absolute.
+
+        @param dt the value to subtract
+        @param xsink for an \c INVALID-DATE exception if the result is out of range; if nullptr, the result is
+        saturated without an exception
+
+        @return 0 if the result is in range, -1 if not (the value is then saturated)
+    */
+    DLLLOCAL int subtractBy(const qore_date_private& dt, ExceptionSink* xsink) {
+        int code;
         if (!relative) {
-            if (dt.relative)
-                d.abs -= dt.d.rel;
-            else {
+            if (dt.relative) {
+                code = d.abs.subtract(dt.d.rel);
+            } else {
                 int64 secs = d.abs.getEpochSecondsUTC();
                 int us = d.abs.getMicrosecond();
                 relative = true;
-                d.rel.setDifference(secs, us, dt.d.abs);
+                code = d.rel.setDifference(secs, us, dt.d.abs);
             }
-            return;
+        } else if (dt.relative) {
+            code = d.rel.subtract(dt.d.rel);
+        } else {
+            code = d.rel.subtract(dt.d.abs);
         }
-
-        if (dt.relative)
-            d.rel -= dt.d.rel;
-        else
-            d.rel -= dt.d.abs;
+        if (__builtin_expect(code != QDO_NONE, 0)) {
+            return raiseOverflow(code, relative ? "relative date arithmetic" : "date arithmetic", xsink);
+        }
+        return 0;
     }
 
-    DLLLOCAL void addSecondsTo(int64 secs, int us) {
-        if (!relative)
-            d.abs.addSecondsTo(secs, us);
-        else
-            d.rel.addSecondsTo(secs, us);
+    //! adds seconds and microseconds to the value
+    /** @param secs the seconds to add
+        @param us the microseconds to add
+        @param xsink for an \c INVALID-DATE exception if the result is out of range; if nullptr, the result is
+        saturated without an exception
+
+        @return 0 if the result is in range, -1 if not (the value is then saturated)
+    */
+    DLLLOCAL int addSecondsTo(int64 secs, int us, ExceptionSink* xsink) {
+        int code = relative ? d.rel.addSecondsTo(secs, us) : d.abs.addSecondsTo(secs, us);
+        if (__builtin_expect(code != QDO_NONE, 0)) {
+            return raiseOverflow(code, relative ? "relative date arithmetic" : "date arithmetic", xsink);
+        }
+        return 0;
     }
 
     DLLLOCAL void setTime(int h, int m, int s, int us) {
@@ -1476,10 +1755,31 @@ public:
         d.rel.setLiteral(date, us);
     }
 
-    DLLLOCAL void setRelativeDateSeconds(int64 s, int us = 0) {
+    //! sets the value to a relative date/time value of the given seconds and microseconds
+    /** @param s the seconds
+        @param us the microseconds
+        @param xsink for an \c INVALID-DATE exception if the hours do not fit; if nullptr, the result is saturated
+        without an exception
+
+        @return 0 if the result is in range, -1 if not (the value is then saturated)
+    */
+    DLLLOCAL int setRelativeDateSeconds(int64 s, int us, ExceptionSink* xsink) {
         relative = true;
-        d.rel.setSeconds(s, us);
+        int code = d.rel.setSeconds(s, us);
+        if (__builtin_expect(code != QDO_NONE, 0)) {
+            return raiseOverflow(code, "conversion to a relative date", xsink);
+        }
+        return 0;
     }
+
+    //! sets the value to a relative date/time value of the given seconds and fractions of a second
+    /** @param secs the seconds
+        @param xsink for an \c INVALID-DATE exception if the hours do not fit or the value is not a finite number;
+        if nullptr, the result is saturated without an exception
+
+        @return 0 if the result is in range, -1 if not (the value is then saturated, or zero for NaN)
+    */
+    DLLLOCAL int setRelativeDateSeconds(double secs, ExceptionSink* xsink);
 
     DLLLOCAL void setRelativeDateUnnormalized(int year, int month, int day, int hour, int minute, int second, int us) {
         relative = true;
@@ -1500,6 +1800,25 @@ public:
 
     DLLLOCAL double getRelativeSecondsDouble() const {
         return relative ? d.rel.getRelativeSecondsDouble() : d.abs.getRelativeSecondsDouble();
+    }
+
+    //! returns the duration of the value in the given unit: see getRelativeMicroseconds() (qore#6103)
+    /** @param rv the duration, truncated to the unit
+        @param unit_us the unit in microseconds (1, 1000 or 1000000)
+        @param func the function, for the message
+        @param xsink for an \c INVALID-DATE exception if the duration does not fit a signed 64-bit integer
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int getDuration(int64& rv, int64 unit_us, const char* func, ExceptionSink* xsink) const {
+        __int128 total = (relative ? d.rel.getRelativeMicroseconds128() : d.abs.getRelativeMicroseconds128())
+            / unit_us;
+        if (__builtin_expect(total > std::numeric_limits<int64>::max()
+                || total < std::numeric_limits<int64>::min(), 0)) {
+            return raiseOverflow(QDO_DURATION, func, xsink);
+        }
+        rv = static_cast<int64>(total);
+        return 0;
     }
 
     DLLLOCAL int getDayOfWeek() const {
@@ -1624,5 +1943,35 @@ public:
         return relative ? 0 : d.abs.getZone();
     }
 };
+
+//! splits a floating-point number of seconds into whole seconds and microseconds for a relative date (qore#6103)
+/** @param secs the seconds
+    @param whole the whole seconds
+    @param us the microseconds of the fraction, truncated
+
+    @return QDO_NONE, QDO_NOT_FINITE if the value is NaN or infinite, or QDO_HOURS if its whole seconds do not fit an
+    int64 (and so give more hours than a relative date can hold); the outputs are then not set
+*/
+DLLLOCAL static inline int qore_split_float_seconds(double secs, int64& whole, int& us) {
+    if (__builtin_expect(!std::isfinite(secs), 0)) {
+        return QDO_NOT_FINITE;
+    }
+    // the value must fit an int64 before it is converted (2^63 is exact in a double)
+    if (__builtin_expect(secs >= 9223372036854775808.0 || secs < -9223372036854775808.0, 0)) {
+        return QDO_HOURS;
+    }
+    whole = static_cast<int64>(secs);
+    us = static_cast<int>((secs - static_cast<double>(whole)) * 1000000);
+    return QDO_NONE;
+}
+
+//! makes a relative date from a floating-point number of seconds (qore#6103)
+/** @param secs the seconds; the fraction is truncated to microseconds
+    @param xsink for an \c INVALID-DATE exception if the value is not a finite number or the hours of the value do
+    not fit a signed 32-bit integer
+
+    @return a new relative date, or nullptr if an exception was raised
+*/
+DLLLOCAL DateTimeNode* qore_make_relative_date_from_float(double secs, ExceptionSink* xsink);
 
 #endif
