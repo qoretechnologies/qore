@@ -305,6 +305,11 @@
     for such a character, as @ref Qore::convert_encoding() "convert_encoding()" does, instead of transliterating it;
     the \c ICONV_TRANSLIT build option is removed (qoretechnologies/qore#5479).
 
+    @par An Upsert of a List of Records Raises the Error Its Provider Raised
+    @ref DataProvider::AbstractDataProvider::upsertRecordsBulk() "AbstractDataProvider::upsertRecordsBulk()" with a
+    list of records raises the error the provider raised, as for every other shape of records, instead of
+    \c CREATE-RECORD-ERROR.
+
     @par The Opacity of an RGB Color Is a Number From 0 to 1
     The \c a member of @ref DataProvider::RgbColorDataType "RgbColorDataType" is an opacity from \c 0 to \c 1 (default
     \c 1), returned as a \c float; a value outside of this range, such as \c 255, raises \c TYPE-VALUE-ERROR.

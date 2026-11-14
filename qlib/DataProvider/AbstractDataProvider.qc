@@ -2942,11 +2942,9 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @throw INVALID-OPERATION the data provider does not support upsert operations
     */
     *list<string> upsertRecordsBulk(list<auto> recs, *hash<auto> upsert_options) {
-        on_error {
-            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
-            }
-        }
+        # a failed upsert raises the error the provider raised, as for every other record shape: it is not a create
+        # error (an on_error block copied from createRecordsBulk() wrapped it as CREATE-RECORD-ERROR, so the same
+        # upsert raised another code by the shape of its records)
         # an empty list is no records, not a single record with no value
         hash<auto> h = {};
         foreach auto rec in (recs) {
