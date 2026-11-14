@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - its checks run in child processes that set their own execution modes, or AOT
+# test-platform: macos - qcc AOT code generation and linking of executables
 
 # Copyright 2026 Qore Technologies, s.r.o.
 
@@ -25,6 +26,7 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
         string probe = get_script_dir() + "/AOTGenericLocalType/probe.q";
+        string debug_probe = get_script_dir() + "/AOTGenericLocalType/probe-debug.q";
         *string ast_out;
     }
 
@@ -32,6 +34,7 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         addTestCase("AST results", \astReference());
         addTestCase("compiled modes match AST", \sourceModes());
         addTestCase("qcc executables match AST", \compiled());
+        addTestCase("qcc executables with a debugger attached match AST", \debugged());
         set_return_value(main());
     }
 
@@ -53,6 +56,11 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         assertRegex("(?m)^method \\*string float => RUNTIME-TYPE-ERROR", out, out);
         assertRegex("(?m)^method \\*string string => 1$", out, out);
         assertRegex("(?m)^nested closure \\*string float => RUNTIME-TYPE-ERROR", out, out);
+        assertRegex("(?m)^closure forwarded \\*string float => RUNTIME-TYPE-ERROR: <lvalue> expects type "
+            "'\\*string'", out, out);
+        assertRegex("(?m)^closure forwarded \\*string string => 1$", out, out);
+        assertRegex("(?m)^closure forwarded \\*int string => RUNTIME-TYPE-ERROR: <lvalue> expects type '\\*int'",
+            out, out);
     }
 
     sourceModes() {
@@ -72,6 +80,21 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
             # the IR of the closures built when they are first called (qore#5885)
             assertEq(expected, run((exe, "-b", "--enable-debug"), "QORE_DISABLE_AOT_NATIVE_CLOSURES=1"),
                 "qcc " + level + " with lazy closure IR");
+        }
+    }
+
+    #! with a debugger attached, a qcc executable runs the functions with the IR that it builds from the AOT image
+    debugged() {
+        string expected = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", debug_probe));
+        assertRegex("(?m)^debug forwarded \\*string float => RUNTIME-TYPE-ERROR: <lvalue> expects type '\\*string'",
+            expected, expected);
+        assertRegex("(?m)^debug forwarded \\*string string => 1$", expected, expected);
+        assertRegex("(?m)^debug on_exit \\*string int => RUNTIME-TYPE-ERROR", expected, expected);
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-generic-local-type-debug-");
+            string exe = dir.path + "/probe-debug";
+            run((qcc_bin, level, "-o", exe, debug_probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level + " with a debugger");
         }
     }
 

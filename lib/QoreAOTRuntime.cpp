@@ -7213,13 +7213,11 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             }
             LocalVar* lv = resolveLocal(lname);
             if (!lv && lname && *lname) {
-                // Create a new local variable for handler/closure locals; its type can name the type parameters
-                // of the generic function whose code it is in (qore#5885)
+                // Create a new local variable for handler/closure locals
                 std::string type_error;
                 QoreAOTTypeResolver type_resolver(pgm);
                 const QoreTypeInfo* ti = (ltype && *ltype)
-                    ? type_resolver.resolveForSignature(ltype, type_error, qore_aot_get_type_param_owner())
-                    : nullptr;
+                    ? type_resolver.resolve(ltype, type_error) : nullptr;
                 qore_program_private* pp = qore_program_private::get(
                     *(local_owner_pgm ? local_owner_pgm : pgm));
                 lv = pp->createLocalVar(lname, ti);

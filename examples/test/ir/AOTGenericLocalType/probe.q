@@ -74,6 +74,20 @@ int sub onErrorLocal<T>(T x, auto y) {
     }
 }
 
+int sub forwardedLocal<T>(auto y) {
+    *T z;
+    z = y;
+    return 1;
+}
+
+#! a closure that calls a generic function with its own type parameter as the type argument
+int sub closureForward<T>(auto y) {
+    code c = auto sub () {
+        return forwardedLocal<T>(y);
+    };
+    return c();
+}
+
 int sub nestedClosureLocal<T>(T x, auto y) {
     code c = auto sub () {
         code d = auto sub () {
@@ -125,6 +139,9 @@ show("on_success *string float", auto sub () { return onSuccessLocal<string>("a"
 show("on_error *string float", auto sub () { return onErrorLocal<string>("a", 2.5); });
 show("on_error *string string", auto sub () { return onErrorLocal<string>("a", "b"); });
 show("nested closure *string float", auto sub () { return nestedClosureLocal<string>("a", 2.5); });
+show("closure forwarded *string float", auto sub () { return closureForward<string>(2.5); });
+show("closure forwarded *string string", auto sub () { return closureForward<string>("s"); });
+show("closure forwarded *int string", auto sub () { return closureForward<int>("s"); });
 show("nested closure *string string", auto sub () { return nestedClosureLocal<string>("a", "b"); });
 GenericLocalHolder h();
 show("method *string float", auto sub () { return h.keep<string>("a", 2.5); });
