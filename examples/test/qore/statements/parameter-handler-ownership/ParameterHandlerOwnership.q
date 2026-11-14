@@ -239,6 +239,53 @@ sub handlerLocal() {
     on_error { value = make("b"); events += "assigned"; }
     throw "E";
 }
+# Other call shapes: a method, a static method, a closure, a call reference, and calls outside a try block.
+class Shape {
+    method(Item value, string handler) {
+        on_exit { events += "exit"; }
+        if (handler == "catch") {
+            try { throw "E"; }
+            catch (hash<ExceptionInfo> ex) { value = make("b"); events += "assigned"; rethrow; }
+        } else {
+            on_error { value = make("b"); events += "assigned"; }
+            throw "E";
+        }
+    }
+    static staticMethod(Item value, string handler) {
+        on_exit { events += "exit"; }
+        if (handler == "catch") {
+            try { throw "E"; }
+            catch (hash<ExceptionInfo> ex) { value = make("b"); events += "assigned"; rethrow; }
+        } else {
+            on_error { value = make("b"); events += "assigned"; }
+            throw "E";
+        }
+    }
+}
+code shapeClosure = sub (Item value, string handler) {
+    on_exit { events += "exit"; }
+    if (handler == "catch") {
+        try { throw "E"; }
+        catch (hash<ExceptionInfo> ex) { value = make("b"); events += "assigned"; rethrow; }
+    } else {
+        on_error { value = make("b"); events += "assigned"; }
+        throw "E";
+    }
+};
+code shapeCallRef = \handlerObject();
+Shape shape();
+sub noTryFunction(string handler) {
+    on_error { events += "caught:" + $1.err; }
+    handlerObject(make("a"), handler);
+}
+sub noTryMethod(string handler) {
+    on_error { events += "caught:" + $1.err; }
+    shape.method(make("a"), handler);
+}
+sub noTryClosure(string handler) {
+    on_error { events += "caught:" + $1.err; }
+    shapeClosure(make("a"), handler);
+}
 sub report(string name) {
     printf("%s: %y\n", name, events);
     events = ();
@@ -324,4 +371,27 @@ for (int iteration = 0; iteration < 2; ++iteration) {
     try { handlerLocal(); }
     catch (hash<ExceptionInfo> ex) { events += "caught:" + ex.err; }
     report("handler-local");
+    foreach string handler in (("catch", "on-error")) {
+        try { shape.method(make("a"), handler); }
+        catch (hash<ExceptionInfo> ex) { events += "caught:" + ex.err; }
+        report(handler + "-method");
+        try { Shape::staticMethod(make("a"), handler); }
+        catch (hash<ExceptionInfo> ex) { events += "caught:" + ex.err; }
+        report(handler + "-static-method");
+        try { shapeClosure(make("a"), handler); }
+        catch (hash<ExceptionInfo> ex) { events += "caught:" + ex.err; }
+        report(handler + "-closure");
+        try { shapeCallRef(make("a"), handler); }
+        catch (hash<ExceptionInfo> ex) { events += "caught:" + ex.err; }
+        report(handler + "-call-reference");
+        try { noTryFunction(handler); }
+        catch (hash<ExceptionInfo> ex) {}
+        report(handler + "-no-try-function");
+        try { noTryMethod(handler); }
+        catch (hash<ExceptionInfo> ex) {}
+        report(handler + "-no-try-method");
+        try { noTryClosure(handler); }
+        catch (hash<ExceptionInfo> ex) {}
+        report(handler + "-no-try-closure");
+    }
 }
