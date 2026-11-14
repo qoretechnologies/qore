@@ -1176,6 +1176,14 @@ public:
     */
     DLLLOCAL void removedValue(const QoreValue& v);
 
+    //! Records the objects in the value that a removal took into the given lvalue storage
+    /** Only a node held by the storage can be or contain an object; a scalar held inline is not read, as
+        QoreLValue::getValue() boxes a large integer or a special float in a new node that the caller must release
+    */
+    DLLLOCAL void removedValue(const QoreLValueGeneric& v) {
+        removedValue(QoreValue(static_cast<const AbstractQoreNode*>(v.getInternalNode())));
+    }
+
     DLLLOCAL void objectRemoved(RObject& obj, bool scan_value_removed) {
         removal_object_reported = true;
         if (scan_value_removed) {

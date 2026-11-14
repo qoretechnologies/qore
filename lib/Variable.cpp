@@ -4038,7 +4038,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 
         if (o) {
             qore_object_private::takeMembers(*o, rv, lvh, l, for_del);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
         } else {
             unsigned old_count = qore_hash_private::getScanCount(*h);
 
@@ -4229,7 +4229,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                     lvh.setDelta(-1);
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
 
@@ -4275,7 +4275,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 }
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
 
@@ -4307,7 +4307,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 }
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
     }
@@ -4389,7 +4389,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     lvh.setDelta(-1);
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
 
@@ -4435,7 +4435,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     xsink->assimilate(xsink2);
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
 
@@ -4467,7 +4467,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                 bin->splice(i, 1);
             }
             discard(rv.assignInitial(v.release()), xsink);
-            lvh.removedValue(rv.getValue());
+            lvh.removedValue(rv);
             return;
         }
     }
@@ -4527,7 +4527,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
                         break;
                 }
                 discard(rv.assignInitial(v), xsink);
-                lvh.removedValue(rv.getValue());
+                lvh.removedValue(rv);
             }
             return;
         }
@@ -4603,7 +4603,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
 
     discard(rv.assignInitial(v.release()), xsink);
 
-    lvh.removedValue(rv.getValue());
+    lvh.removedValue(rv);
 }
 
 bool LocalVarValue::TypeSubstitutionCache::matches(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,
