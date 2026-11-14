@@ -98,6 +98,8 @@ list<string> sub probes() {
     l += "PT0.57S: " + same("PT0.57S", seconds(1) * 0.57);
     l += "PT0.0000015S: " + same("PT0.0000015S", seconds(1) * 0.0000015);
     l += "P0.0000001Y: " + same("P0.0000001Y", year * 0.0000001);
+    # a fraction of a microsecond is truncated, as date(float) truncates it
+    l += "PT0.9999999996S: " + same("PT0.9999999996S", seconds(1) * 0.9999999996);
     # the product of a component other than 1 is the decimal of the product
     l += "months(3) * 0.1: " + try_value(date sub () { return months(3) * 0.1; });
     # differential: unit(1) * f and date("P<f><unit>") for many decimal factors
