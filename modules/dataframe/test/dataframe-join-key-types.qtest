@@ -116,6 +116,42 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
 
     #! the columns of a join keep their schemas, and decimal key columns of different schemas get a common one
     schemaTest() {
+        # timestamp key columns of two units and zones: microseconds, UTC and no native type in a right or outer
+        # join, the left schema with its native type in an inner or left join
+        DataFrame::DataFrame tl = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "t": (2024-01-01T10:00:00Z, 2024-01-01T11:00:00Z),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True,
+                "native_type": "timestamp[ms, tz=UTC]"}},
+        }));
+        DataFrame::DataFrame tr = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "t": (2024-01-01T10:00:00Z, 2024-01-01T12:00:00Z), "b": (1, 2),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "s", "timezone": "Europe/Prague", "nullable": True,
+                "native_type": "timestamp[s, tz=Europe/Prague]"}},
+        }));
+        foreach string how in (("inner", "left", "right", "outer")) {
+            hash<auto> s = schema(tl.join(tr, ("t",), how), "t");
+            if (how == "right" || how == "outer") {
+                assertEq(("us", "UTC", NOTHING), (s.time_unit, s.timezone, s.native_type), how + ": timestamps");
+            } else {
+                assertEq(("ms", "UTC", "timestamp[ms, tz=UTC]"), (s.time_unit, s.timezone, s.native_type),
+                    how + ": timestamps");
+            }
+        }
+        # a decimal and a float key column in an outer join: a key column that holds any value with no schema, which
+        # cannot be exported
+        DataFrame::DataFrame dk = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"k": (1.25n,)}, {"k": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}}));
+        DataFrame::DataFrame fk({"k": (2.5,), "b": (1,)});
+        DataFrame::DataFrame jk = dk.join(fk, ("k",), "outer");
+        assertEq("auto", schema(jk, "k").kind, "a decimal and a float key column");
+        assertThrows("DATAFRAME-IO-ERROR", \jk.toArrowIpc(), (), "a key column of two types cannot be exported");
+        # a string key column with no schema exports
+        DataFrame::DataFrame sl({"k": ("a", "b")});
+        DataFrame::DataFrame sr({"k": ("b", "c"), "b": (1, 2)});
+        assertEq(3, DataFrame::DataFrame::fromArrowIpc(sl.join(sr, ("k",), "outer").toArrowIpc()).numRows(),
+            "a string key column exports");
         string dir = get_script_dir() + DirSep + "data" + DirSep;
         DataFrame::DataFrame f32 = DataFrame::DataFrame::readParquet(dir + "dense_float32.parquet");
         f32.addColumn("k", (1, 2, 3, 4, 5, 6));
@@ -169,7 +205,7 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
     private hash<auto> schema(DataFrame::DataFrame df, string name) {
         foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
             if (column.name == name) {
-                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone"};
+                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone", "native_type"};
             }
         }
         return {};

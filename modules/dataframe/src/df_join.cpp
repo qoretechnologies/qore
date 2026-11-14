@@ -143,6 +143,24 @@ static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const Col
         dataFrameCopyDateSchema(dest, left);
         return;
     }
+    // date key columns of both sides: the merged schema, as for other key columns and melt() (qore#6116)
+    {
+        bool has_schema = left.has_columnar_schema;
+        QoreColumnarTypeDescriptor schema;
+        if (has_schema) {
+            schema = left.columnar_schema;
+            schema.name.clear();
+        }
+        if (dataFrameMergeColumnSchema(has_schema, schema, left, right)) {
+            if (has_schema) {
+                dest.columnar_schema = schema;
+                dest.has_columnar_schema = true;
+            }
+            return;
+        }
+    }
+    // schemas of different kinds (a date and a timestamp schema): the one of the side that has one, with the unit
+    // "us" if their units differ and the zone "UTC" if their zones differ, and no native type then
     const ColumnData& src = left.has_columnar_schema ? left : right;
     if (src.type != ColumnType::DATE || !src.has_columnar_schema) {
         return;
@@ -157,9 +175,15 @@ static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const Col
     };
     if (unit(left) != unit(right)) {
         dest.columnar_schema.time_unit = "us";
+        dest.columnar_schema.native_type.clear();
     }
     if (zone(left) != zone(right)) {
         dest.columnar_schema.timezone = "UTC";
+        dest.columnar_schema.native_type.clear();
+    }
+    if (left.has_columnar_schema != right.has_columnar_schema
+            || left.columnar_schema.native_type != right.columnar_schema.native_type) {
+        dest.columnar_schema.native_type.clear();
     }
 }
 

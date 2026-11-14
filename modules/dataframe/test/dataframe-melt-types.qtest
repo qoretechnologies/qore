@@ -116,8 +116,36 @@ class DataFrameMeltTypesTest inherits QUnit::Test {
             "d": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}},
             "a": {"schema": {"kind": "auto"}},
         }));
-        m = anydec.melt(("id",));
-        assertEq((2.5n, c'z'), m.getColumn("value"), "any values with and without a schema");
+        foreach list<string> order in ((("d", "a"), ("a", "d"))) {
+            m = anydec.melt(("id",), order);
+            assertEq("auto", schema(m, "value").kind, sprintf("%y: no decimal schema", order));
+            assertEq((map anydec.getColumn($1)[0], order), m.getColumn("value"),
+                sprintf("%y: any values with and without a schema", order));
+        }
+        # a native type that is not the same for all value columns is dropped, one that is kept
+        hash<auto> str_schema = {"kind": "string", "nullable": True};
+        foreach list<string> natives in ((("varchar(10)", "text"), ("text", "text"))) {
+            DataFrame::DataFrame strs = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+                "id": (1,), "a": ("x",), "b": ("y",),
+            }, {
+                "a": {"schema": str_schema + {"native_type": natives[0]}},
+                "b": {"schema": str_schema + {"native_type": natives[1]}},
+            }));
+            m = strs.melt(("id",));
+            assertEq(natives[0] == natives[1] ? natives[0] : NOTHING, schema(m, "value").native_type,
+                sprintf("native types %y", natives));
+        }
+        # a timestamp column with a native type and a plain date column: microseconds, and no native type
+        DataFrame::DataFrame tsn = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "t": (2024-01-01T10:00:00Z,),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True,
+                "native_type": "timestamp[ms, tz=UTC]"}},
+        })).withColumn("p", (2024-01-01T10:00:00.25Z,));
+        foreach list<string> order in ((("t", "p"), ("p", "t"))) {
+            hash<auto> s = schema(tsn.melt(("id",), order), "value");
+            assertEq(("us", NOTHING), (s.time_unit, s.native_type), sprintf("%y: timestamp and plain date", order));
+        }
         # float32 value columns keep their schema
         string dir = get_script_dir() + DirSep + "data" + DirSep;
         DataFrame::DataFrame f32 = DataFrame::DataFrame::readParquet(dir + "dense_float32.parquet");
@@ -178,7 +206,7 @@ class DataFrameMeltTypesTest inherits QUnit::Test {
     private hash<auto> schema(DataFrame::DataFrame df, string name) {
         foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
             if (column.name == name) {
-                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone"};
+                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone", "native_type"};
             }
         }
         return {};

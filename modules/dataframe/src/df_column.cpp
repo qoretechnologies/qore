@@ -251,19 +251,21 @@ bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& sc
     }
     if (!src.has_columnar_schema) {
         if (has_schema) {
-            // a plain date column: absolute dates in microseconds with no time zone
+            // a plain date column: absolute dates in microseconds with no time zone and no native type, so a native
+            // type of the schema describes the cells of the schema's columns only
             if (schema.time_unit != "us") {
                 schema.time_unit = "us";
             }
             if (!schema.timezone.empty()) {
                 schema.timezone = "UTC";
             }
+            schema.native_type.clear();
         }
         return true;
     }
     const QoreColumnarTypeDescriptor& other = src.columnar_schema;
     if (!has_schema) {
-        // a temporal schema merged into a plain date column
+        // a temporal schema merged into a plain date column, which has no native type
         schema = other;
         schema.name.clear();
         has_schema = true;
@@ -273,6 +275,7 @@ bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& sc
         if (!schema.timezone.empty()) {
             schema.timezone = "UTC";
         }
+        schema.native_type.clear();
         return true;
     }
     if (schema.kind != other.kind || schema.buffer_type != other.buffer_type || schema.fixed_size != other.fixed_size

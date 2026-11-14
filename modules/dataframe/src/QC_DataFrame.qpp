@@ -808,10 +808,12 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
     Two rows match if their key values are equal and of the same type, as groupBy() groups the values of a column
     that holds any value: an int and a float, or an int and a string, never match (cast a key column to match
     values of different types), while an int key column matches the ints of a column that holds any value.  A key
-    column of a right or outer join whose left and right key columns differ in type holds any value; one whose key
-    columns have the same type gets a schema that holds the keys of both (decimals of different precisions and
-    scales, timestamps of different units or time zones), or no schema if there is none (decimals whose common
-    schema would have more than 38 digits), and then cannot be exported to Arrow or Parquet.
+    column of a right or outer join whose left and right key columns differ in type holds any value, with no schema
+    (a decimal and a float key column, for example), and cannot be exported to Arrow or Parquet (toArrowIpc() and
+    writeParquet() raise \c DATAFRAME-IO-ERROR); one whose key columns have the same type gets a schema that holds
+    the keys of both (decimals of different precisions and scales, timestamps of different units or time zones),
+    or no schema if there is none: a key column of strings, for example, needs none, but one that holds any value
+    with no schema (decimals whose common schema would have more than 38 digits) cannot be exported.
 
     @return new DataFrame object with joined rows
 
