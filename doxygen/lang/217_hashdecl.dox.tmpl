@@ -283,6 +283,9 @@ printf("x: %d\n", p.x);  # Prints: x: 1
     @note The reverse is not true: assigning a parent hashdecl value to a child hashdecl variable requires an
     explicit cast.
 
+    The sum of a parent and a child hashdecl value (<tt>p + c</tt> or <tt>c + p</tt>) is a hash of the child
+    hashdecl; see @ref plus_operator.
+
     @section hashdecl_object_comparison Comparison of Type-Safe Hashes and Objects
 
     Type-safe hashes are similar to objects in that they have members, but there are some important

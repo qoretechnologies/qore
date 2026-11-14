@@ -1452,6 +1452,32 @@ list<softint> l = (1, 2);
 int x = l + 1;
     @endcode
 
+    @par Type-Safe Hashes
+    A hash that \c + gives from two @ref hashdecl "type-safe hashes" is a hash of the same
+    @ref hashdecl "hashdecl" if both have it, and if one hashdecl @ref hashdecl_inheritance "inherits" the other, a
+    hash of the child hashdecl, which declares every key of the result (ex: \c hash&lt;Child&gt; for
+    <tt>c + p</tt> and for <tt>p + c</tt>, if \c c is a \c hash&lt;Child&gt; and \c p a \c hash&lt;Parent&gt;);
+    hashes of hashdecls of which neither inherits the other (such as two children of the same parent), and a
+    type-safe hash with a hash that has no hashdecl, give a \c hash&lt;auto&gt;.  The parse-time type of the sum of
+    two values of the same hashdecl type is that type, which holds unless the two values are hashes of two different
+    children of the hashdecl: their sum is then a \c hash&lt;auto&gt;, and its assignment to the hashdecl type raises
+    a \c RUNTIME-TYPE-ERROR:
+    @code{.py}
+hashdecl Parent { int x = 1; }
+hashdecl Child inherits Parent { int y = 2; }
+hashdecl Other inherits Parent { int z = 3; }
+
+hash<Parent> sub add(hash<Parent> l, hash<Parent> r) {
+    return l + r;
+}
+
+# a hash<Child>
+hash<Parent> h = add(<Child>{}, <Parent>{"x": 2});
+# raises RUNTIME-TYPE-ERROR when executed: the result is a hash<auto> with keys x, y and z
+h = add(<Child>{}, <Other>{});
+    @endcode
+    The @ref plus_equals_operator "+=" operator merges a hash into the hash of its lvalue, which keeps its hashdecl.
+
     This operator does not throw any exceptions.
 
     <hr>
