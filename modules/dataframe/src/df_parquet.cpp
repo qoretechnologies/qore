@@ -1955,9 +1955,19 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
 //! returns the error of a date or duration that does not fit in an int64 of the given time unit, out of line, as it
 //! is rare
 __attribute__((noinline, cold)) static arrow::Status arrowTimeOverflow(const DateTimeNode* dt, const char* unit) {
-    QoreStringValueHelper str(dt);
-    return arrow::Status::Invalid(dt->isRelative() ? "the duration " : "the date ", str->c_str(),
-        " cannot be stored in ", unit, " in an int64");
+    QoreString desc;
+    if (dt->isRelative()) {
+        // the parts of a duration, as the string form of a relative date runs them together (qore#6116); they are
+        // read with getInfo(), as DateTime::getYear() returns a short, which cannot hold the years of a long one
+        qore_tm parts;
+        dt->getInfo(parts);
+        desc.sprintf("the duration of %d years, %d months, %d days, %d hours, %d minutes, %d seconds and %d "
+            "microseconds", parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.us);
+    } else {
+        QoreStringValueHelper str(dt);
+        desc.sprintf("the date %s", str->c_str());
+    }
+    return arrow::Status::Invalid(desc.c_str(), " cannot be stored in ", unit, " in an int64");
 }
 
 static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
