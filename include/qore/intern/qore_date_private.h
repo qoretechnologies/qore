@@ -816,7 +816,7 @@ public:
     DLLLOCAL bool getEpochMicrosecondsUTCChecked(int64& rv) const {
         // the microseconds of the seconds in this range (-9223372036853 to 9223372036853) always fit, with no
         // overflow check; the range is checked with one unsigned comparison
-        if ((uint64_t)(epoch + 9223372036853ll) <= 18446744073706ull) {
+        if ((uint64_t)epoch + 9223372036853ull <= 18446744073706ull) {
             rv = epoch * 1000000 + us;
             return true;
         }

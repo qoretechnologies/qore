@@ -43,6 +43,19 @@ class DataFrameDateRangeTest inherits QUnit::Test {
         assertEq("date", df.dtypes()[0], "a date column");
         assertEq((-9223372036854775807 - 1, 9223372036854775807), map get_epoch_microseconds($1), df.getColumn("v"),
             "the limits of the range");
+        # the seconds at the edges of the range that is checked with no overflow check, and just outside it
+        foreach list<int> parts in ((-9223372036853, 0), (-9223372036853, 999999), (9223372036853, 999999),
+                (-9223372036854, 0), (-9223372036854, 1), (-9223372036854, 999999), (9223372036854, 0),
+                (-9223372036855, 999999)) {
+            date d = gmtime(parts[0], parts[1]);
+            assertEq((get_epoch_microseconds(d),), map get_epoch_microseconds($1),
+                (new DataFrame::DataFrame({"v": (d,)})).getColumn("v"), sprintf("%y", parts));
+        }
+        foreach list<int> parts in ((9223372036854775807, 0), (-9223372036854775807 - 1, 0), (-9223372036856, 0)) {
+            date d = gmtime(parts[0], parts[1]);
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (d,)}); }, (),
+                sprintf("%y", parts));
+        }
     }
 
     #! every way of storing a date in a date column raises an error for a date outside the range
