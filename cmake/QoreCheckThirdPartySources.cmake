@@ -38,6 +38,12 @@ if (_manifest_name MATCHES "^[.][.]/")
 endif()
 set(_module "${CMAKE_CURRENT_LIST_DIR}/QoreThirdPartySources.cmake")
 set(_self "${CMAKE_CURRENT_LIST_FILE}")
+# the files are identified by their real paths: the collected paths keep the spelling of QORE_SOURCE_DIR, while
+# get_filename_component(ABSOLUTE) and CMAKE_CURRENT_LIST_FILE may name the same file otherwise (on macOS, CMake
+# translates /private/tmp/... to /tmp/..., for example)
+get_filename_component(_manifest_real "${_manifest}" REALPATH)
+get_filename_component(_module_real "${_module}" REALPATH)
+get_filename_component(_self_real "${_self}" REALPATH)
 
 set(_errors)
 set(_used)
@@ -82,6 +88,7 @@ function(_qore_tp_check_file file)
     set(_used "${_used}")
     set(_n_calls "${_n_calls}")
     file(READ "${file}" _text)
+    get_filename_component(_real "${file}" REALPATH)
     file(RELATIVE_PATH _rel "${QORE_SOURCE_DIR}" "${file}")
     # characters that CMake lists treat specially are replaced so that each token is one list element
     string(ASCII 1 _semi)
@@ -109,7 +116,7 @@ function(_qore_tp_check_file file)
         endif()
         if (_tok MATCHES "^\"")
             # an archive URL outside the manifest
-            if (NOT file STREQUAL _manifest AND NOT file STREQUAL _module AND NOT file STREQUAL _self
+            if (NOT _real STREQUAL _manifest_real AND NOT _real STREQUAL _module_real AND NOT _real STREQUAL _self_real
                     AND _tok MATCHES "(https?|ftp)://[^\" ]+\\.(tar\\.gz|tgz|tar\\.xz|txz|tar\\.bz2|tbz2|tar\\.zst|tar|zip|7z)\"$")
                 _qore_tp_error("${_rel}:${_line}: archive URL outside ${_manifest_name}: ${_tok}")
             endif()
@@ -164,7 +171,7 @@ function(_qore_tp_check_file file)
                 set(_depth 1)
                 set(_args "")
                 # the module itself defines the commands and downloads from the mirror; the manifest registers
-                if ((file STREQUAL _module OR file STREQUAL _self)
+                if ((_real STREQUAL _module_real OR _real STREQUAL _self_real)
                         AND NOT _call MATCHES "^(fetchcontent_declare|fetchcontent_populate|externalproject_add)$")
                     set(_call "skip")
                 endif()
