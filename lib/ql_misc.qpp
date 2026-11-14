@@ -3733,7 +3733,8 @@ hash<string, hash<auto>> get_qore_option_hash() [flags=CONSTANT] {
     - \c BuildType: The build type of the %Qore library, such as \c "release" or \c "debug" (since %Qore 3.0)
     - \c BuildTypeCFLAGS: The compiler flags of the build type used in addition to \c CFLAGS, such as
       <tt>-O3 -DNDEBUG</tt> (since %Qore 3.0)
-    - \c SingleCompilationUnit: @ref True if the %Qore library was compiled as one compilation unit (since %Qore 3.0)
+    - \c SingleCompilationUnit: @ref True if the %Qore library was compiled as one compilation unit (since %Qore 3.0); @ref False if
+      it was compiled as several translation units, including a build that split the single unit into chunks
     - \c Target: The target triple of the compiler used to build the %Qore library, such as
       \c "x86_64-linux-gnu", which names the C library (since %Qore 3.0)
     - \c InterproceduralOptimization: @ref True if the %Qore library was built with link-time optimization (since
