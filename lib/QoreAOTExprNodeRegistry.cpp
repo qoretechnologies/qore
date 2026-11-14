@@ -79,8 +79,9 @@ const QoreAOTExprNodeKindInfo AOT_EXPR_NODE_KIND_REGISTRY[256] = {
     {"EN_CALLREF_CALL", 25, true, read_node_EN_CALLREF_CALL, "Call reference"},
     {"EN_SCOPED_NEW", 26, true, read_node_EN_SCOPED_NEW, "Scoped object construction"},
 
-    // [27-29] Undefined
-    {nullptr, 27, false, nullptr, nullptr},
+    {"EN_CALLREF_CALL_NAMED", 27, true, read_node_EN_CALLREF_CALL_NAMED, "Named call reference"},
+
+    // [28-29] Undefined
     {nullptr, 28, false, nullptr, nullptr},
     {nullptr, 29, false, nullptr, nullptr},
 

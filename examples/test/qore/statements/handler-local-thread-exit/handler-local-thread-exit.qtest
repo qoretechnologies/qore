@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of a thread_exit in a handler, threads
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HandlerLocalThreadExitTest
+
+#! A local of an on_error handler that ends in a thread_exit is released at the end of its block (#6065)
+/** A thread_exit without a handler in the frame left the IR frame of an on_error handler without releasing the
+    locals that the handler declares, whose variables on the runtime stack are the function's: they were released
+    when the function ended, after the handlers that run after the handler (ir, jit and tiered).
+    HandlerLocalThreadExit.q gives the output of the AST interpreter in every execution mode and compiled with qcc.
+*/
+class HandlerLocalThreadExitTest inherits QUnit::Test {
+    public {
+        #! the output of HandlerLocalThreadExit.q with the AST interpreter
+        const Expected = "t1: [\"~z1\", \"x\"]
+t2: [\"~z2\", \"x\"]
+t3: [\"~z3\", \"~y3\", \"x\", \"~a3\"]
+t4: [\"body\", \"~z4\", \"x\"]
+t5: [\"~z5\", \"x\", \"~a5\"]
+t1: [\"~z1\", \"x\"]
+t2: [\"~z2\", \"x\"]
+t3: [\"~z3\", \"~y3\", \"x\", \"~a3\"]
+t4: [\"body\", \"~z4\", \"x\"]
+t5: [\"~z5\", \"x\", \"~a5\"]
+t1: [\"~z1\", \"x\"]
+t2: [\"~z2\", \"x\"]
+t3: [\"~z3\", \"~y3\", \"x\", \"~a3\"]
+t4: [\"body\", \"~z4\", \"x\"]
+t5: [\"~z5\", \"x\", \"~a5\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("HandlerLocalThreadExitTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/HandlerLocalThreadExit.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a local of a handler that ends in a thread_exit", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a local of a handler that ends in a thread_exit", opt), \aotTest(),
+                (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-local-thread-exit-");
+        string exe = tmp.path + DirSep + "handler-local-thread-exit";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

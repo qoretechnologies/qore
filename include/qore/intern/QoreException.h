@@ -367,6 +367,31 @@ struct qore_es_private {
     }
 };
 
+//! Returns the value that code gives, or no value if the code raised an exception
+/** Code that raises an exception gives no value to its caller: a return statement whose value the declared return
+    type rejects raises the error with the value still held, which is released here, so that a caller that takes no
+    value with an exception does not keep it; an immediate value (other than an enum value, which holds a reference
+    to its declaration) holds nothing to release
+
+    @param rv the value that the code gave
+    @param xsink the sink of the code's exception, if any
+
+    @return @p rv, or no value if @p rv holds a reference and @p xsink holds an exception, after releasing @p rv
+*/
+DLLLOCAL QoreValue qore_release_value_with_exception_intern(QoreValue rv, ExceptionSink* xsink);
+
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue qore_release_value_with_exception(QoreValue rv, ExceptionSink* xsink) {
+    // the value and the sink are tested inline (ExceptionSink::operator bool() is not), as every call of a user
+    // variant passes its value here; the value is released out of line
+    if (rv.needsRef()) {
+        const qore_es_private* es = qore_es_private::get(*xsink);
+        if (__builtin_expect(es->head || es->thread_exit, 0)) {
+            return qore_release_value_with_exception_intern(rv, xsink);
+        }
+    }
+    return rv;
+}
+
 //! Returns the number of unhandled exceptions that the default exception handler has reported in the calling thread
 /** A program's entry point takes the count before the program and the library are torn down, and makes its exit
     status non-zero if the teardown reported any (see qore_teardown_exit_status())

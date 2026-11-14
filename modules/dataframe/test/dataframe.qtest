@@ -401,6 +401,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("errorCasesTest", \errorCasesTest());
         addTestCase("selectTest", \selectTest());
         addTestCase("filterTest", \filterTest());
+        addTestCase("char comparisons in filters match the core operators", \charFilterTest());
         addTestCase("sortByTest", \sortByTest());
         addTestCase("horizontalConcatTest", \horizontalConcatTest());
         addTestCase("takeRowsTest", \takeRowsTest());
@@ -1004,6 +1005,50 @@ sub invalid_dataframe_api() {
             "filter in can match null and scalar list values");
         assertThrows("DATAFRAME-FILTER-ERROR", \df.filter(), ("age", "in", 30),
             "filter in requires a list value");
+    }
+
+    # a char cell is compared in filters as the core operators compare it: with a char or any other value but a string
+    # as its code point, and with a string as a one-character string (qore#6036, qore#6040, qore#6048)
+    charFilterTest() {
+        # the core operators, which give the expected result of each filter operator
+        hash<string, code<bool(auto, auto)>> core = {
+            "==": bool sub (auto x, auto y) { return x == y; },
+            "!=": bool sub (auto x, auto y) { return x != y; },
+            "<": bool sub (auto x, auto y) { return x < y; },
+            "<=": bool sub (auto x, auto y) { return x <= y; },
+            ">": bool sub (auto x, auto y) { return x > y; },
+            ">=": bool sub (auto x, auto y) { return x >= y; },
+        };
+        # every type of operand that a char is compared with; NOTHING and NULL are left out, as a filter matches a
+        # null cell or value only with is_null, not_null and == NOTHING
+        list<auto> operands = (c'a', c'b', c'`', "a", "b", "ab", 97, 98, 96, 97.0, 97.5, 97n, 98n, True, False,
+            1970-01-01T00:01:37Z, 1970-01-01T00:01:38Z);
+        foreach auto operand in (operands) {
+            string label = sprintf("%s %y", operand.typeCode() == NT_CHAR ? "char" : operand.type(), operand);
+            # the char cell on the left: a column of chars
+            DataFrame::DataFrame chars(({"id": 1, "v": c'a'}, {"id": 2, "v": c'z'}));
+            # the char on the right: a column whose second cell is the operand; the char in the first row makes the
+            # column hold any value, as a column of chars does, so that the operand's cell is compared as it is
+            DataFrame::DataFrame values(({"id": 2, "v": c'z'}, {"id": 1, "v": operand}));
+            assertEq(("int64", "auto"), chars.dtypes(), "a column of chars holds any value");
+            assertEq(("int64", "auto"), values.dtypes(), label + ": the column holds any value");
+            foreach string op in (keys core) {
+                assertEq(core{op}(c'a', operand), (chars.filter("v", op, operand).getColumn("id") ?? ()).contains(1),
+                    sprintf("c'a' %s %s", op, label));
+                assertEq(core{op}(operand, c'a'), (values.filter("v", op, c'a').getColumn("id") ?? ()).contains(1),
+                    sprintf("%s %s c'a'", label, op));
+            }
+            # the in and not_in operators compare each value of the list with ==
+            bool in_list = c'a' == operand;
+            assertEq(in_list, (chars.filter("v", "in", (operand,)).getColumn("id") ?? ()).contains(1),
+                sprintf("c'a' in (%s)", label));
+            assertEq(!in_list, (chars.filter("v", "not_in", (operand,)).getColumn("id") ?? ()).contains(1),
+                sprintf("c'a' not_in (%s)", label));
+            assertEq(in_list, (values.filter("v", "in", (c'a',)).getColumn("id") ?? ()).contains(1),
+                sprintf("%s in (c'a')", label));
+            assertEq(!in_list, (values.filter("v", "not_in", (c'a',)).getColumn("id") ?? ()).contains(1),
+                sprintf("%s not_in (c'a')", label));
+        }
     }
 
     sortByTest() {

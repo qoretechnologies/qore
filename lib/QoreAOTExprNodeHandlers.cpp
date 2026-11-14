@@ -797,7 +797,7 @@ static QoreValue read_node_EN_SCOPED_NEW(AOTExprNodeReadCtx& ctx) {
     return QoreValue(socn);
 }
 
-static QoreValue read_node_EN_CALLREF_CALL(AOTExprNodeReadCtx& ctx) {
+static QoreValue read_node_EN_CALLREF_CALL_intern(AOTExprNodeReadCtx& ctx, const name_vec_t* arg_names) {
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     QoreValue callref_expr;
     SimpleRefHolder<QoreParseListNode> pln;
@@ -816,7 +816,34 @@ static QoreValue read_node_EN_CALLREF_CALL(AOTExprNodeReadCtx& ctx) {
     }
     CallReferenceCallNode* crcn = new CallReferenceCallNode(&loc_builtin, callref_expr, pln.release());
     crcn->resolveParseArgs();
+    crcn->setRuntimeArgNames(arg_names);
     return QoreValue(crcn);
+}
+
+static QoreValue read_node_EN_CALLREF_CALL(AOTExprNodeReadCtx& ctx) {
+    return read_node_EN_CALLREF_CALL_intern(ctx, nullptr);
+}
+
+//! a named call reference call: the names of the arguments come before the children (M4 phase 3)
+static QoreValue read_node_EN_CALLREF_CALL_NAMED(AOTExprNodeReadCtx& ctx) {
+    uint16_t num_names = readU16(ctx.ptr, ctx.end);
+    // each name takes at least its two-byte length
+    if (static_cast<size_t>(ctx.end - ctx.ptr) < static_cast<size_t>(num_names) * 2) {
+        ctx.failed = true;
+        return QoreValue();
+    }
+    name_vec_t names;
+    names.reserve(num_names);
+    for (uint16_t i = 0; i < num_names; ++i) {
+        uint16_t len = readU16(ctx.ptr, ctx.end);
+        if (static_cast<size_t>(ctx.end - ctx.ptr) < len) {
+            ctx.failed = true;
+            return QoreValue();
+        }
+        names.emplace_back(reinterpret_cast<const char*>(ctx.ptr), len);
+        ctx.ptr += len;
+    }
+    return read_node_EN_CALLREF_CALL_intern(ctx, qore_intern_call_arg_names(std::move(names)));
 }
 
 // ============================================================================

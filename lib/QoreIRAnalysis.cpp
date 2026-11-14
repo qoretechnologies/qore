@@ -64,7 +64,7 @@ const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {
             cur = op->getLeft();
             continue;
         }
-        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             cur = op->getLeft();
             continue;
         }
@@ -1361,7 +1361,7 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
                 return call->variant;
             }
             if (call->expr.hasNode()) {
-                const auto* expr = dynamic_cast<const FunctionCallNode*>(
+                const auto* expr = qore_get_function_call_node(
                     call->expr.getInternalNode());
                 if (expr && expr->getVariant()) {
                     return expr->getVariant();
@@ -1416,7 +1416,7 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
             has_ref_args = call->has_ref_args;
             if (call->invoke_opcode == QoreIROpcode::CallDirect) {
                 if (call->expr.hasNode()) {
-                    const auto* expr = dynamic_cast<const FunctionCallNode*>(
+                    const auto* expr = qore_get_function_call_node(
                         call->expr.getInternalNode());
                     if (expr && expr->getVariant()) {
                         return expr->getVariant();
@@ -2369,7 +2369,7 @@ static bool qore_ir_visit_exception_targets(const QoreIRBasicBlock& block, const
         if (inst->exception_target) {
             visitor(inst->exception_target);
         }
-        if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+        if (const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst.get())) {
             if (throw_inst->exception_target) {
                 visitor(throw_inst->exception_target);
             }
@@ -2736,7 +2736,7 @@ QoreIRBlockReachability::QoreIRBlockReachability(const QoreIRFunction& func) {
             if (inst->exception_target) {
                 add(inst->exception_target);
             }
-            if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+            if (const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst.get())) {
                 if (throw_inst->exception_target) {
                     add(throw_inst->exception_target);
                 }
@@ -6003,7 +6003,7 @@ static size_t qore_ir_fold_pure_builtin_calls_round(QoreIRFunction& func, size_t
                 continue;
             }
             if (call->expr.hasNode()) {
-                const auto* expr = dynamic_cast<const FunctionCallNode*>(
+                const auto* expr = qore_get_function_call_node(
                     call->expr.getInternalNode());
                 if (expr && expr->getExplicitTypeParamInstantiation()) {
                     continue;
@@ -7044,13 +7044,13 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
                 return 0;
             }
             add_reachable(inst->exception_target);
-            if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+            if (const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst.get())) {
                 add_reachable(throw_inst->exception_target);
             }
-            if (const auto* guard = dynamic_cast<const QoreIRGuardInstruction*>(inst.get())) {
+            if (const auto* guard = qore_ir_inst_cast<const QoreIRGuardInstruction*>(inst.get())) {
                 add_reachable(guard->deopt_target);
             }
-            if (const auto* helper = dynamic_cast<const QoreIRCallAOTHelperInstruction*>(inst.get())) {
+            if (const auto* helper = qore_ir_inst_cast<const QoreIRCallAOTHelperInstruction*>(inst.get())) {
                 add_reachable(helper->return_target);
             }
         }
@@ -7352,7 +7352,7 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             }
             QoreIRInstruction& inst = *inst_ptr;
             const auto* throw_inst =
-                dynamic_cast<const QoreIRThrowInstruction*>(&inst);
+                qore_ir_inst_cast<const QoreIRThrowInstruction*>(&inst);
             block_has_exception_edge = block_has_exception_edge
                 || inst.exception_target
                 || (throw_inst && throw_inst->exception_target);
@@ -11498,7 +11498,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
                     return;
                 }
                 const auto* throw_inst =
-                    dynamic_cast<const QoreIRThrowInstruction*>(inst.get());
+                    qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst.get());
                 if (inst->exception_target
                         || (throw_inst && throw_inst->exception_target)) {
                     has_exception_edges = true;

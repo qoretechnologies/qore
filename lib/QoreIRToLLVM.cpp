@@ -279,7 +279,7 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
             && intrinsic != QoreIRIntrinsic::StringLength)) {
         return false;
     }
-    const auto* call = dynamic_cast<const FunctionCallNode*>(
+    const auto* call = qore_get_function_call_node(
         expr.getInternalNode());
     // only a call of the Qore builtin, never a user or module function with the same name
     if (!call || call->hasExplicitTypeArgs() || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
@@ -293,7 +293,7 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
 static const FunctionCallNode* qore_ir_get_synthetic_global_pseudo_call(const QoreValue& expr,
         bool pseudo, const char* fallback_method_name) {
     return pseudo && fallback_method_name && expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
 }
 
 static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntrinsic intrinsic,
@@ -644,7 +644,7 @@ static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_function_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
@@ -702,7 +702,7 @@ qore_ir_get_call_type_instantiation(const QoreValue& expr) {
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
     if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
@@ -980,7 +980,7 @@ static bool qore_ir_fast_entry_args_allow_optional_scalar_guard(
         return false;
     }
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     const QoreFunction* function = call ? call->getFunction() : nullptr;
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
@@ -1207,13 +1207,13 @@ static bool qore_llvm_is_aot_deferred_source_function_call(const QoreValue& expr
     if (!expr.hasNode()) {
         return false;
     }
-    const auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
+    const auto* call = qore_get_function_call_node(expr.getInternalNode());
     return call && call->getAOTDeferredSourceFunction();
 }
 
 static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     // only the Qore builtins, never a user or module function with the same name
     if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
@@ -1228,7 +1228,7 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
         const QoreValue& expr, const QoreIRFunction* ir_func,
         QoreIRValue argument, bool aot_mode) {
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     if (!call || call->hasExplicitTypeArgs()) {
         return nullptr;
     }
@@ -3119,7 +3119,11 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                         alloca_builder.CreateStore(alloca_builder.CreateCall(is_ref_fn, {arg_val}), ref_flag);
                     }
                 };
-                if (fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
+                // an `any` parameter strips the complex type of a list or hash argument, as the call path does
+                // (UserVariantBase::setupCall(), instantiateFastCallParams()), which can make a new value that the
+                // parameter owns: it is not borrowed (qore#6032)
+                const bool strip_any = var->getTypeInfo() == anyTypeInfo;
+                if (!strip_any && fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
                     alloca_builder.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
                     local_allocas[key] = LocalCacheSlot(alloca);
@@ -3152,6 +3156,11 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                     alloca_builder.CreateStore(native_val, alloca);
                     preinstantiated_entry_loads.push_back(arg_val);
                 } else {
+                    if (strip_any) {
+                        auto strip_fn = module.getOrInsertFunction("qore_rt_strip_any_param",
+                                llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        arg_val = alloca_builder.CreateCall(strip_fn, {arg_val});
+                    }
                     alloca_builder.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
                     // NaN-boxed: track alloca for load+decref at exit.  Combined with
@@ -3731,11 +3740,15 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
     // the locals that an on_block_exit handler declares are released by the handler (#6002): they are no body locals
     // of its IR function, as their variables on the runtime stack are those that the function the handler belongs to
     // instantiated, so the handler releases their values, in the order of their slots, which the function reserved
-    // in declaration order (see QoreIRLowering::compileBlockHandlerIRs()); the function removes the variables
+    // in declaration order (see QoreIRLowering::compileBlockHandlerIRs()); the function removes the variables.  A
+    // closure-bound local of the handler is popped from the closure stack, as the IR interpreter and the AST
+    // interpreter give it up at the end of its block (#6012): the pop finds the variable in the current frame by its
+    // LocalVar (the name pointer of the variable, which no other variable shares), so it pops nothing if the handler
+    // raised before the declaration, and never a variable of the function with the same name
     if (current_ir_func->parent_slot_count && !current_ir_func->handler_own_locals.empty()) {
         std::vector<std::pair<uint32_t, const LocalVar*>> own;
         for (const LocalVar* var : current_ir_func->handler_own_locals) {
-            if (!var || var->closureUse()) {
+            if (!var) {
                 continue;
             }
             auto slot_it = current_ir_func->local_var_slots.find(var);
@@ -3753,6 +3766,7 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
                 }
                 entry.aot_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
             }
+            entry.pop_closure = var->closureUse();
             push_body(var, entry);
         }
     }
@@ -4012,12 +4026,13 @@ std::vector<const void*> QoreIRToLLVM::getLocalsInReverseDeclarationOrder(const 
 }
 
 std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module) {
-    if (local_reload_trackers.empty() && local_reload_deferred.empty()) {
+    if (local_reload_trackers.empty() && local_reload_deferred.empty()
+            && preinstantiated_entry_cleanup_by_local.empty()) {
         return {};
     }
-    // A local's reload tracker holds a reference to the value of its native cache, and its deferred slot one to the
-    // value that the cache held before (see ensureLocalCacheFresh()); either can be the last reference to its value,
-    // so the locals are released in reverse declaration order, a local's deferred value, the older one, first.  The
+    // A local's entry cleanup can own its initial value, its reload tracker the value of its native cache, and its
+    // deferred slot the value that the cache held before (see ensureLocalCacheFresh()). Any can be the last owner,
+    // so locals are released in reverse declaration order, each local's entry value then deferred value first. The
     // allocas are left NOTHING, which the next reload and the exit cleanup of the function release as nothing.
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -4027,6 +4042,15 @@ std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& m
         builder->CreateCall(helper, {val, xsink_arg});
     };
     llvm::MapVector<const void*, bool> keys;
+    size_t count = 0;
+    for (const auto& entry : preinstantiated_entry_cleanup_by_local) {
+        if (!(++count % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM handler entry cleanup collection");
+        }
+        if (releasesReloadStorageForHandlers(entry.first)) {
+            keys.insert({entry.first, true});
+        }
+    }
     for (const auto& entry : local_reload_deferred) {
         if (releasesReloadStorageForHandlers(entry.first)) {
             keys.insert({entry.first, true});
@@ -4038,10 +4062,16 @@ std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& m
         }
     }
     std::vector<const void*> released = getLocalsInReverseDeclarationOrder(keys);
-    size_t count = 0;
+    count = 0;
     for (const void* key : released) {
         if (!(++count % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM handler local reload storage release");
+        }
+        // A handler's inherited local (and a parameter) can also own its entry-time load. It is independent of
+        // the reload tracker and must be released before a nested handler replaces the runtime local (#6005).
+        auto entry_it = preinstantiated_entry_cleanup_by_local.find(key);
+        if (entry_it != preinstantiated_entry_cleanup_by_local.end()) {
+            release(entry_it->second);
         }
         auto deferred_it = local_reload_deferred.find(key);
         if (deferred_it != local_reload_deferred.end()) {
@@ -4082,8 +4112,8 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
     // frame has, and a handler that assigns or removes a local releases the value it replaces right away (qore#5942).
     // The storage released is the storage that the function has once it is lowered: code lowered after a site can
     // run before it, and a site creates no storage of its own, which every later flush of the function's statements
-    // would rotate.  A local without a reload tracker is left to the invalidation of the caches after the handlers,
-    // as before.  The locals released are reloaded eagerly after the handlers: code can read a local's native cache
+    // would rotate. A local without a reload tracker or entry owner is left to cache invalidation, as before.
+    // The locals released are reloaded eagerly after the handlers: code can read a local's native cache
     // without the stale check (fused local operations), and the reference that backed the cache was released.
     // the sites are taken from the member, which is left empty on any exit
     std::vector<HandlerSite> sites;
@@ -4108,18 +4138,20 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
             builder->SetInsertPoint(site.call->getParent());
         }
         for (const void* key : released) {
-            // only a local whose cache was backed by its tracker is reloaded, into its cache and its tracker, which
-            // the release left NOTHING, so that nothing is rotated through its deferred slot; reloadLocalFromRuntime()
-            // would create the storage that a local lacks, after the exit cleanup of the function that releases it
-            // was emitted.  A local without a tracker is left to the invalidation of the caches after the handlers.
+            // Reload into the existing tracker, or the entry owner if it alone backed the cache. Both were cleared,
+            // so no old value rotates through the deferred slot. reloadLocalFromRuntime() would create missing
+            // storage after the exit cleanup that would need to release it was emitted; no new storage is created.
             auto tracker_it = local_reload_trackers.find(key);
+            auto entry_it = preinstantiated_entry_cleanup_by_local.find(key);
+            llvm::Value* owner = tracker_it != local_reload_trackers.end() ? tracker_it->second
+                : entry_it != preinstantiated_entry_cleanup_by_local.end() ? entry_it->second : nullptr;
             auto alloca_it = local_allocas.find(key);
-            if (tracker_it == local_reload_trackers.end() || alloca_it == local_allocas.end()) {
+            if (!owner || alloca_it == local_allocas.end()) {
                 continue;
             }
             llvm::Value* reloaded = emitLocalCacheLoad(key, *builder, module);
             builder->CreateStore(reloaded, alloca_it->second.storage());
-            builder->CreateStore(reloaded, tracker_it->second);
+            builder->CreateStore(reloaded, owner);
             markLocalCacheFresh(key, llvm_func);
         }
     }
@@ -6111,7 +6143,7 @@ llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDeferBlock(const QoreIRBasicBlock
                 if (inst->exception_target) {
                     targets.insert(inst->exception_target);
                 }
-                if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                if (const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst.get())) {
                     if (throw_inst->exception_target) {
                         targets.insert(throw_inst->exception_target);
                     }
@@ -11469,7 +11501,7 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
     }
 
     // background foo(args) — free function call
-    if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
+    if (auto* fcn = qore_get_function_call_node(inner)) {
         if (!fcn->getFunction()) {
             return false;
         }
@@ -12218,7 +12250,7 @@ static std::string formatQoreIRFallbackInstruction(const QoreIRInstruction* inst
     }
 
     const QoreValue* expr = nullptr;
-    if (auto* invoke = dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
+    if (auto* invoke = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
         desc += " (invoke opcode ";
         if (const char* name = qoreIROpcodeDiagnosticName(invoke->invoke_opcode)) {
             desc += name;
@@ -12228,27 +12260,27 @@ static std::string formatQoreIRFallbackInstruction(const QoreIRInstruction* inst
         }
         desc += ")";
         expr = &invoke->expr;
-    } else if (auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst)) {
+    } else if (auto* expr_inst = qore_ir_inst_cast<const QoreIRExprInstruction*>(inst)) {
         expr = &expr_inst->expr;
-    } else if (auto* static_var = dynamic_cast<const QoreIRStaticVarInstruction*>(inst)) {
+    } else if (auto* static_var = qore_ir_inst_cast<const QoreIRStaticVarInstruction*>(inst)) {
         expr = &static_var->expr;
-    } else if (auto* load_const = dynamic_cast<const QoreIRLoadConstantInstruction*>(inst)) {
+    } else if (auto* load_const = qore_ir_inst_cast<const QoreIRLoadConstantInstruction*>(inst)) {
         expr = &load_const->expr;
-    } else if (auto* create_closure = dynamic_cast<const QoreIRCreateClosureInstruction*>(inst)) {
+    } else if (auto* create_closure = qore_ir_inst_cast<const QoreIRCreateClosureInstruction*>(inst)) {
         expr = &create_closure->expr;
-    } else if (auto* create_call_ref = dynamic_cast<const QoreIRCreateCallRefInstruction*>(inst)) {
+    } else if (auto* create_call_ref = qore_ir_inst_cast<const QoreIRCreateCallRefInstruction*>(inst)) {
         expr = &create_call_ref->expr;
-    } else if (auto* create_method_ref = dynamic_cast<const QoreIRCreateMethodRefInstruction*>(inst)) {
+    } else if (auto* create_method_ref = qore_ir_inst_cast<const QoreIRCreateMethodRefInstruction*>(inst)) {
         expr = &create_method_ref->expr;
-    } else if (auto* create_parse_ref = dynamic_cast<const QoreIRCreateParseRefInstruction*>(inst)) {
+    } else if (auto* create_parse_ref = qore_ir_inst_cast<const QoreIRCreateParseRefInstruction*>(inst)) {
         expr = &create_parse_ref->expr;
-    } else if (auto* new_hd = dynamic_cast<const QoreIRNewHashDeclInstruction*>(inst)) {
+    } else if (auto* new_hd = qore_ir_inst_cast<const QoreIRNewHashDeclInstruction*>(inst)) {
         expr = &new_hd->expr;
-    } else if (auto* new_ch = dynamic_cast<const QoreIRNewComplexHashInstruction*>(inst)) {
+    } else if (auto* new_ch = qore_ir_inst_cast<const QoreIRNewComplexHashInstruction*>(inst)) {
         expr = &new_ch->expr;
-    } else if (auto* new_cl = dynamic_cast<const QoreIRNewComplexListInstruction*>(inst)) {
+    } else if (auto* new_cl = qore_ir_inst_cast<const QoreIRNewComplexListInstruction*>(inst)) {
         expr = &new_cl->expr;
-    } else if (auto* new_cb = dynamic_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
+    } else if (auto* new_cb = qore_ir_inst_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
         expr = &new_cb->expr;
     }
 
@@ -12398,7 +12430,7 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
         // the entered block, which the parse tree outlives the native code with; without it, the block is resolved
         // from the marker's file and line
         const StatementBlock* block = nullptr;
-        if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+        if (auto* dbg_inst = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(inst)) {
             block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
         }
         if (block) {
@@ -20288,7 +20320,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     inv->receiver_type_info;
                 if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
                     if (!invoke_explicit_inst) {
-                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                        const auto* call = qore_get_function_call_node(
                             inv->expr.getInternalNode());
                         invoke_explicit_inst = call
                             ? call->getExplicitTypeParamInstantiation() : nullptr;
@@ -20313,7 +20345,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const AbstractQoreFunctionVariant* variant = nullptr;
                     bool method_call = false;
                     if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                        aot_invoke_direct_call = dynamic_cast<const FunctionCallNode*>(expr_node);
+                        aot_invoke_direct_call = qore_get_function_call_node(expr_node);
                         if (aot_invoke_direct_call) {
                             variant = aot_invoke_direct_call->getVariant();
                         }
@@ -20429,7 +20461,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
                 if (inv->invoke_opcode == QoreIROpcode::CallDirect && !aot_mode) {
                     // CallDirect: extract function/variant/pgm from the FunctionCallNode
-                    const auto* call = dynamic_cast<const FunctionCallNode*>(
+                    const auto* call = qore_get_function_call_node(
                             inv->expr.getInternalNode());
                     assert(call);
                     // Use the func captured at IR-lowering time.  Re-reading
@@ -20568,7 +20600,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // pointer to the current function's FE.
                     const FunctionCallNode* aot_call = aot_invoke_direct_call
                         ? aot_invoke_direct_call
-                        : dynamic_cast<const FunctionCallNode*>(inv->expr.getInternalNode());
+                        : qore_get_function_call_node(inv->expr.getInternalNode());
                     const BatchCalleeInfo* aot_approach_b_callee = nullptr;
                     llvm::Function* aot_approach_b_fn = nullptr;
                     // the date kind checks of a fast entry call with date arguments for date<absolute>/
@@ -21286,7 +21318,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                             module, llvm_func, inst);
                 } else {
-                    const auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(
+                    const auto* rt_const = qore_get_runtime_constant_ref_node(
                             inv->expr.getInternalNode());
                     assert(rt_const);
                     llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
@@ -22644,7 +22676,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const QoreTypeParamInstantiation* explicit_inst =
                 direct_inst->explicit_type_param_inst;
             if (!explicit_inst) {
-                const auto* call = dynamic_cast<const FunctionCallNode*>(
+                const auto* call = qore_get_function_call_node(
                     direct_inst->expr.getInternalNode());
                 explicit_inst = call
                     ? call->getExplicitTypeParamInstantiation() : nullptr;
@@ -22694,7 +22726,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     || fused_aggregate_projection
                 ? nullptr : &call_date_kind_guards;
             if (aot_mode && !aot_direct_variant && direct_inst->expr.hasNode()) {
-                const auto* call = dynamic_cast<const FunctionCallNode*>(
+                const auto* call = qore_get_function_call_node(
                     direct_inst->expr.getInternalNode());
                 const QoreFunction* function = call ? call->getFunction() : nullptr;
                 const AbstractQoreFunctionVariant* candidate = function
@@ -24328,7 +24360,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // qore_rt_call_function_direct and crashing at runtime.
                 const QoreFunction* resolved_func = direct_inst->func;
                 if (!resolved_func) {
-                    if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                    if (auto* call = qore_get_function_call_node(
                             direct_inst->expr.getInternalNode())) {
                         resolved_func = call->getFunction();
                     }
@@ -34320,7 +34352,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::BackgroundInt: {
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
             llvm::Value* result = nullptr;
-            const auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
+            const auto* bg_inst = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst);
             if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper) {
                 // the expression is evaluated by its helper in the new thread
                 if (!emitBackgroundHelper(bg_inst, module, llvm_func, &result, error)) {
@@ -36138,7 +36170,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
                     int32_t string_index_char = 1;
                     if (expr_inst->expr.hasNode()) {
-                        if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                        if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
                             string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                         }
@@ -36187,7 +36219,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
                     int32_t string_index_char = 1;
                     if (expr_inst->expr.hasNode()) {
-                        if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                        if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
                             string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                         }
@@ -36918,7 +36950,7 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
         return false;
     }
 
-    auto* sq_brackets = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    auto* sq_brackets = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!sq_brackets) {
         return false;
     }

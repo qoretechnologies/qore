@@ -166,6 +166,18 @@ objects in lists and hashes it holds - in each removal path (the AST `LValueRemo
 scans, whose `commit()` skips them. `examples/test/qore/misc/dgc-removed-values.qtest` checks that such a value,
 including a cycle attached only through the removed edge, is collected by the write's release of it.
 
+Removal bookkeeping uses a bounded-inline identity tracker: two distinct objects fit in the space formerly used
+by its vector, with no allocation. Flat containers with at most two distinct objects (or only scalars) use that
+same path. A third distinct object or the first nested list/hash lazily creates an open-addressed object membership table
+and a hash set of visited container identities. The object table stays at most half full and grows geometrically,
+without allocating a separate node for each object. The parent is registered before descending into a child container, so shared
+subgraphs are traversed once, while every edge is inspected a bounded number of times. The scan's orphan check
+uses the same object membership set instead of searching a vector for every orphan. The tracker borrows identities
+from the removed values, which stay referenced and cannot be modified without copying until the scan finishes;
+it neither follows object members nor owns references. Debug visit, identity-probe and allocation counters in
+`examples/test/qore/misc/dgc-removal-scaling/dgc-removal-scaling.qtest` check the work bound and the flat-container
+allocation path without timing thresholds.
+
 ### Watched nodes
 
 Releasing an outside reference to a list, hash, closure or reference in a recursive set does not dereference any

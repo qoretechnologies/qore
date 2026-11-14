@@ -4291,7 +4291,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 has_unsupported = true;
                 continue;
             }
-            case AOTExprKind::CALLREF_CALL: {
+            case AOTExprKind::CALLREF_CALL:
+            case AOTExprKind::CALLREF_CALL_NAMED: {
                 std::string callee_err;
                 QoreValue callee = readOneExpr(reader, ptr, end, callee_err, pgm,
                     ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
@@ -4304,6 +4305,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                 QoreParseListNode* args = nullptr;
+                // an argument of this call could not be read (the flag of the function can be set by another slot)
+                bool arg_failed = false;
                 if (num_args > 0) {
                     args = new QoreParseListNode(&loc_builtin);
                     for (uint8_t j = 0; j < num_args; ++j) {
@@ -4317,17 +4320,33 @@ static QoreAOTContext* buildContextFromSlotMap(
                             callee.discard(nullptr);
                             arg.discard(nullptr);
                             has_unsupported = true;
+                            arg_failed = true;
                             args = nullptr;
                             break;
                         }
                         args->add(arg, &loc_builtin);
                     }
                 }
-                if (has_unsupported) {
+                if (arg_failed) {
                     continue;
+                }
+                // a named call has the names of its arguments after them
+                const name_vec_t* arg_names = nullptr;
+                if (kind == AOTExprKind::CALLREF_CALL_NAMED) {
+                    std::string names_err;
+                    arg_names = qore_aot_read_callref_arg_names(reader, ptr, end, names_err);
+                    if (!arg_names) {
+                        printd(0, "AOT v2: error reading callref argument names for slot %d: %s\n", i,
+                            names_err.c_str());
+                        delete args;
+                        callee.discard(nullptr);
+                        has_unsupported = true;
+                        continue;
+                    }
                 }
                 auto* call = new CallReferenceCallNode(&loc_builtin, callee, args);
                 call->resolveParseArgs();
+                call->setRuntimeArgNames(arg_names);
                 ctx->exprs[i] = toBitsNB(QoreValue(call));
                 continue;
             }
@@ -6318,9 +6337,15 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ctx->call_targets[i].runtime_arg_names = true;
                 continue;
             }
+            // a named call through a call reference or closure (CallReferenceCallNode::evalRuntimeNamedWithArgs())
+            const CallReferenceCallNode* crc = dynamic_cast<const CallReferenceCallNode*>(node);
+            if (crc && crc->getRuntimeArgNames()) {
+                ctx->call_targets[i].runtime_arg_names = true;
+                continue;
+            }
         }
         // Function call
-        const auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
+        const auto* fcn = qore_get_function_call_node(node);
         if (fcn && fcn->getFunction()) {
             ctx->call_targets[i].func = fcn->getFunction();
             ctx->call_targets[i].pgm = fcn->getProgram();
@@ -7575,7 +7600,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode());
+            auto* rcr = qore_get_runtime_constant_ref_node(expr.getInternalNode());
             auto* lci = new QoreIRLoadConstantInstruction(rcr, expr);
             lci->opcode = opcode;
             expr.discard(nullptr);
