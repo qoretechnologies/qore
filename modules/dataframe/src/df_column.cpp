@@ -434,33 +434,13 @@ void dataFrameRaiseDateRangeError(const char* desc, ExceptionSink* xsink) {
         "294247-01-10T04:00:54.775807Z)", desc);
 }
 
-int dataFrameEdgeDateMicros(const DateTimeNode* dt, int64_t& out, ExceptionSink* xsink) {
-    __int128 micros;
-    qore_tm parts;
-    bool relative = dt->isRelative();
-    if (relative) {
-        // the microseconds of a time value, computed from its parts as the core computes them (an average year of
-        // 365 days and a month of 31 days), but with no overflow; the parts are read with getInfo(), as
-        // DateTime::getYear() returns a short, which cannot hold the years of a long time value
-        dt->getInfo(parts);
-        micros = static_cast<__int128>(parts.year) * (86400ll * 365 * 1000000)
-            + static_cast<__int128>(parts.month) * (86400ll * 31 * 1000000)
-            + static_cast<__int128>(parts.day) * (86400ll * 1000000)
-            + static_cast<__int128>(parts.hour) * (3600ll * 1000000)
-            + static_cast<__int128>(parts.minute) * (60ll * 1000000)
-            + static_cast<__int128>(parts.second) * 1000000
-            + parts.us;
-    } else {
-        // the seconds times a million can overflow where the sum with the microseconds does not, at the start of
-        // the range
-        micros = static_cast<__int128>(dt->getEpochSecondsUTC()) * 1000000 + dt->getMicrosecond();
-    }
-    if (micros >= std::numeric_limits<int64_t>::min() && micros <= std::numeric_limits<int64_t>::max()) {
-        out = static_cast<int64_t>(micros);
-        return 0;
-    }
+int dataFrameDateOutOfRange(const DateTimeNode* dt, ExceptionSink* xsink) {
     QoreString desc;
-    if (relative) {
+    if (dt->isRelative()) {
+        // the parts are read with getInfo(), as DateTime::getYear() returns a short, which cannot hold the years of
+        // a long time value
+        qore_tm parts;
+        dt->getInfo(parts);
         desc.sprintf("the time value of %d years, %d months, %d days, %d hours, %d minutes, %d seconds and %d "
             "microseconds", parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.us);
     } else {
