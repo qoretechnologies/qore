@@ -31,6 +31,7 @@ class GenericParentInstantiationsTest inherits QUnit::Test {
         addTestCase("a generic parent class and the class it is instantiated through", \testGenericParent());
         addTestCase("a generic class without type arguments", \testRaw());
         addTestCase("a value-erased instance and its subclasses", \testAuto());
+        addTestCase("a generic parent class without type arguments", \testRawParent());
         set_return_value(main());
     }
 
@@ -94,6 +95,36 @@ class GenericParentInstantiationsTest inherits QUnit::Test {
         string err = parseError("Box b(1);\n");
         assertRegex("^MISSING-TYPE-ARGUMENTS: cannot instantiate generic class 'Box' without type arguments; use "
             "'Box<auto>' for an explicitly value-erased instance$", err);
+    }
+
+    testRawParent() {
+        string msg = "^MISSING-TYPE-ARGUMENTS: cannot inherit generic class 'Box' without type arguments; use "
+            "'Box<auto>' for an explicitly value-erased parent$";
+        # at parse time: the class is not created, and no construction is needed to see the error
+        assertRegex(msg, parseError("class RawSub inherits Box { constructor() : Box(1) {} }\n"));
+        assertRegex(msg, parseError("class RawSub inherits Box {}\n"));
+        # through a namespace path, and as one of several parent classes
+        assertRegex(msg, parseError("namespace N { class A {} }\n"
+            "class RawSub inherits N::A, Box { constructor() : Box(1) {} }\n"));
+        # a generic class that passes its parameter on needs the argument too
+        assertRegex("^MISSING-TYPE-ARGUMENTS: cannot inherit generic class 'Box' without type arguments",
+            parseError("class G<U> inherits Box { constructor(U v) : Box(v) {} }\n"));
+
+        # with type arguments, and as the explicit value-erased parent, the class is inherited
+        Program p = parseOk(
+            "class AutoSub inherits Box<auto> { constructor() : Box(1) {} }\n"
+            "class IntSub inherits Box<int> { constructor() : Box(1) {} }\n"
+            "string sub types() {\n"
+            "    AutoSub a(); IntSub i();\n"
+            "    return sprintf(\"%s %s\", a.mi.fullType(), i.mi.fullType());\n"
+            "}\n");
+        assertEq("hash<auto> hash<string, int>", p.callFunction("types"));
+
+        # a class declared [legacy_raw] defaults to a value-erased instance for raw use, so it can be inherited so
+        p = parseOk("class LBox<T> [legacy_raw] { public { list<T> ml = (); } }\n"
+            "class LSub inherits LBox {}\n"
+            "string sub types() { LSub s(); return s.ml.fullType(); }\n");
+        assertEq("list<auto>", p.callFunction("types"));
     }
 
     testAuto() {

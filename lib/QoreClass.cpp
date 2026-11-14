@@ -2450,6 +2450,8 @@ void BCNode::setClassPointer(QoreClass* qc) {
 
 int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
     if (!sclass) {
+        // the parent class is named without type arguments (qore#6082)
+        const bool raw_parent = !parsed_type;
         if (parsed_type) {
             QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, raise_error);
             if (qc) {
@@ -2551,6 +2553,17 @@ int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
         setClassPointer(sclass);
         if (cls == sclass) {
             parse_error(*cls->priv->loc, "class '%s' cannot inherit itself", cls->getName());
+            assert(cls->priv->scl);
+            cls->priv->scl->valid = false;
+            sclass = nullptr;
+        }
+        // a generic class is inherited with type arguments, as it is instantiated with them; the classes that
+        // default to a value-erased instance for raw use (legacy_raw) can be inherited without (qore#6082)
+        if (sclass && raw_parent && sclass->hasTypeParameters()
+            && !qore_class_private::get(*sclass)->rawConstructionDefaultsToAuto()) {
+            parseException(*loc, "MISSING-TYPE-ARGUMENTS", "cannot inherit generic class '%s' without type "
+                "arguments; use '%s<auto>' for an explicitly value-erased parent", sclass->getName(),
+                sclass->getName());
             assert(cls->priv->scl);
             cls->priv->scl->valid = false;
             sclass = nullptr;
