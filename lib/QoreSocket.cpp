@@ -14178,6 +14178,12 @@ static std::atomic<int> qore_socket_table_lists_sockets[2] = {{0}, {0}};
 static constexpr int QORE_SOCKET_TABLE_OMITS = -1000;
 //! the number of comparisons that cannot tell after which a table is taken to omit sockets
 static constexpr int QORE_SOCKET_TABLE_MAX_UNDECIDED = 3;
+//! the maximum number of comparisons of the table with the process descriptors in one check
+/** A comparison that finds a socket of the descriptors missing from the table is repeated, up to this number of
+    comparisons in all; if every one of them finds a socket missing, the table is taken to omit sockets in that check
+    (see qore_socket_table_lists_process_sockets()).
+*/
+static constexpr unsigned QORE_SOCKET_TABLE_MAX_COMPARISONS = 3;
 
 //! Returns 1 if the system's socket table lists every socket of the type that the process descriptors show
 /** The table that \c netstat reads is filtered by macOS for some processes; whether it is, is a property of the
@@ -14218,7 +14224,7 @@ static int qore_socket_table_lists_process_sockets(int socktype, ExceptionSink* 
     };
     // set when every comparison found a socket of the descriptors missing from the table
     bool omits = true;
-    for (unsigned attempt = 0; attempt < 3; ++attempt) {
+    for (unsigned attempt = 0; attempt < QORE_SOCKET_TABLE_MAX_COMPARISONS; ++attempt) {
         std::vector<QoreSocketTableEntry> process_sockets;
         int rc = qore_socket_for_each_process_socket(socktype, 0, [&](const QoreSocketTableEntry& e) {
             process_sockets.push_back(e);

@@ -207,10 +207,14 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     \c PROC_PIDFDSOCKETINFO); a process of another user costs a failing call.  The cost grows with the number of
     processes on the system and depends on the host: a bind and listen took about 1 to 2 ms more with about 900 to
     1,400 processes.  Whether the table is filtered is decided once per socket type, by comparing the table with the
-    descriptors, each comparison with a full scan: a comparison is repeated when a socket bound, connected or closed
-    between the two snapshots can explain a difference, and a comparison that cannot tell (it finds no socket of
-    another process, or a snapshot cannot be read) decides nothing; after QORE_SOCKET_TABLE_MAX_UNDECIDED (3) such
-    comparisons the table is taken to omit sockets, and every check scans the descriptors (see
+    descriptors, each comparison with a full scan.  A comparison that finds a socket of the descriptors missing from
+    the table is repeated, because a socket bound, connected or closed between the two snapshots can explain the
+    difference, up to QORE_SOCKET_TABLE_MAX_COMPARISONS (3) comparisons in all within one check; when every one of
+    them finds a socket missing, the table is taken to omit sockets in that same check.  A comparison that cannot
+    tell (it finds no socket of another process, or a snapshot cannot be read) decides nothing; the checks whose
+    comparison could not tell are counted per socket type, the count is never reset, and once
+    QORE_SOCKET_TABLE_MAX_UNDECIDED (3) of them have been counted, the next check takes the table to omit sockets.
+    Once the table is taken to omit sockets, every check scans the descriptors (see
     qore_socket_table_lists_process_sockets()).  Known limits:
     - a socket of another user is not found where the table is filtered, as its descriptors cannot be read
       (\c EPERM); only the rules of macOS itself then apply to it
