@@ -11964,6 +11964,36 @@ void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
     }
 }
 
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitPendingExceptionTest() {
+    // Inline exception check as direct memory loads instead of function call
+    // ExceptionSink::priv at offset 0 -> qore_es_private*
+    // qore_es_private::head at offset 0 within priv -> QoreException*
+    // qore_es_private::thread_exit at offset 20 within priv -> bool
+
+    // Load priv pointer from xsink at offset 0
+    auto* xsink_priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "xsink_priv_ptr");
+
+    // Load head pointer from priv at offset 0
+    auto* head_ptr = builder->CreateLoad(ptr_type, xsink_priv_ptr, "priv_head");
+
+    // Check if head != nullptr
+    auto* has_exception_head = builder->CreateICmpNE(head_ptr,
+            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
+            "has_exception_head");
+
+    // Also check thread_exit at offset 20 within priv
+    // thread_exit is a bool at offset 20 in qore_es_private
+    auto* thread_exit_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(ctx),
+            xsink_priv_ptr, {llvm::ConstantInt::get(i64_type, 20)}, "thread_exit_ptr");
+    auto* thread_exit_byte = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), thread_exit_ptr, "thread_exit_byte");
+    auto* has_exception_thread_exit = builder->CreateICmpNE(thread_exit_byte,
+            llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0), "has_thread_exit");
+
+    // Combine: exception exists if (head != nullptr) OR (thread_exit)
+    return builder->CreateOr(has_exception_head, has_exception_thread_exit, "has_exception");
+}
+
 void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, bool force_function_error) {
     // For deferred exception checking (init functions): skip per-instruction checks
@@ -11984,6 +12014,39 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         return;
     }
 
+    // an instruction that gives the value of a return statement and then raises - a call when the release of its
+    // arguments raises, the DiscardTempsKeep of the statement when the release of its temporaries does - raises in
+    // the evaluation of the return's expression: its value is released there, before the locals, as a temporary of
+    // the statement, as the AST interpreter (ReturnStatement::execImpl()) and the IR interpreter release it; the
+    // exit on the exception holds the values of the returns until after the locals (holding_return_values) only for
+    // an exception that interrupts a return whose value is complete, such as one that a handler or the destructor of
+    // a local raises (qore#5941, qore#5995)
+    if (!return_value_ids.empty() && inst->result.isValid() && return_value_ids.count(inst->result.id)) {
+        auto alloca_it = invoke_alloca_map.find(inst->result.id);
+        if (alloca_it != invoke_alloca_map.end() && alloca_it->second) {
+            llvm::Value* has_exception = emitPendingExceptionTest();
+            llvm::BasicBlock* raised = llvm::BasicBlock::Create(ctx, "return_value_raised", llvm_func);
+            llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "return_value_cont", llvm_func);
+            builder->CreateCondBr(has_exception, raised, cont);
+            builder->SetInsertPoint(raised);
+            llvm::Value* val = builder->CreateLoad(i64_type, alloca_it->second);
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca_it->second);
+            auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(decref_fn, {val, xsink_arg});
+            emitExceptionBranch(module, llvm_func, inst, force_function_error);
+            // the exception is still pending
+            builder->CreateUnreachable();
+            builder->SetInsertPoint(cont);
+            return;
+        }
+    }
+    emitExceptionBranch(module, llvm_func, inst, force_function_error);
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitExceptionBranch(llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst, bool force_function_error) {
     llvm::BasicBlock* exception_block = nullptr;
     if (!force_function_error && inst->exception_target) {
         auto except_it = block_map.find(inst->exception_target);
@@ -12013,32 +12076,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         site.iter_end = iterator_cleanup_allocas.size();
         site.loc = builder->getCurrentDebugLocation();
     }
-    // Inline exception check as direct memory loads instead of function call
-    // ExceptionSink::priv at offset 0 -> qore_es_private*
-    // qore_es_private::head at offset 0 within priv -> QoreException*
-    // qore_es_private::thread_exit at offset 20 within priv -> bool
-
-    // Load priv pointer from xsink at offset 0
-    auto* xsink_priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "xsink_priv_ptr");
-
-    // Load head pointer from priv at offset 0
-    auto* head_ptr = builder->CreateLoad(ptr_type, xsink_priv_ptr, "priv_head");
-
-    // Check if head != nullptr
-    auto* has_exception_head = builder->CreateICmpNE(head_ptr,
-            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
-            "has_exception_head");
-
-    // Also check thread_exit at offset 20 within priv
-    // thread_exit is a bool at offset 20 in qore_es_private
-    auto* thread_exit_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(ctx),
-            xsink_priv_ptr, {llvm::ConstantInt::get(i64_type, 20)}, "thread_exit_ptr");
-    auto* thread_exit_byte = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), thread_exit_ptr, "thread_exit_byte");
-    auto* has_exception_thread_exit = builder->CreateICmpNE(thread_exit_byte,
-            llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0), "has_thread_exit");
-
-    // Combine: exception exists if (head != nullptr) OR (thread_exit)
-    auto* has_exception = builder->CreateOr(has_exception_head, has_exception_thread_exit, "has_exception");
+    llvm::Value* has_exception = emitPendingExceptionTest();
     llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception", llvm_func);
     // Phase 2B — route the exception edge through a per-site preamble
     // BB that decrefs the current pending_ssa_cleanup snapshot before

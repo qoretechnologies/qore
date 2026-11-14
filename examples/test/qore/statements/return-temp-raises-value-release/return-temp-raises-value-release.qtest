@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the release of a return value on an exception
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ReturnTempRaisesValueReleaseTest
+
+#! The value of a return is released at once when the release of the return statement's temporaries raises (#5995)
+/** When the destructor of a temporary of a return statement (an argument of the call whose value it returns) raised
+    an exception, native code (jit, tiered and qcc) held the value of the return until after the locals, as the value
+    of a return that an exception interrupts; the AST interpreter releases it at once, before the locals, since the
+    exception is raised in the evaluation of the return's expression.  ReturnTempRaisesValueRelease.q gives the output
+    of the AST interpreter, which counts the live objects, in every execution mode and compiled with qcc.
+*/
+class ReturnTempRaisesValueReleaseTest inherits QUnit::Test {
+    public {
+        #! the output of ReturnTempRaisesValueRelease.q with the AST interpreter
+        const Expected = "r1: [\"dthrow\", \"~r1-tt\", \"~r1-v\", \"~r1-q\", \"~r1-z\", \"caught:DT\"] live=0
+r2: [\"dthrow\", \"~r2-tt\", \"~r2-v\", \"~r2-q\", \"~r2-z\", \"caught:DT\"] live=0
+r3: [\"dthrow\", \"~r3-tt\", \"~r3-q\", \"~r3-z\", \"caught:DT\"] live=0
+r4: [\"dthrow\", \"~r4-tt\", \"~r4-q\", \"~r4-z\", \"caught:DT\"] live=0
+r5: [\"dthrow\", \"~r5-tt\", \"~r5-v\", \"~r5-q\", \"catch:DT\", \"~r5-z\", \"got\", \"~r5-after\"] live=0
+r6: [\"dthrow\", \"~r6-tt\", \"~r6-v\", \"~r6-q\", \"~r6-b\", \"~r6-a\", \"~r6-z\", \"caught:DT\"] live=0
+r7: [\"dthrow\", \"~r7-tt\", \"~r7-v\", \"~r7-q\", \"r7-error\", \"r7-exit\", \"~r7-z\", \"caught:DT\"] live=0
+method: [\"dthrow\", \"~m-tt\", \"~m-v\", \"~m-q\", \"~m-z\", \"caught:DT\"] live=0
+r9: [\"dthrow\", \"~r9-tt\", \"~r9-v\", \"~r9-q\", \"~r9-zx\", \"caught:DT\"] live=0
+r10: [\"dthrow\", \"~r10-tt\", \"~r10-v\", \"caught:DT\"] live=0
+r11: [\"~r11-t\", \"dthrow\", \"~r11-d\", \"~r11-z\", \"~r11-v\", \"caught:DT\"] live=0
+closure: [\"dthrow\", \"~cl-tt\", \"~cl-v\", \"~cl-q\", \"~cl-z\", \"caught:DT\"] live=0
+r1: [\"dthrow\", \"~r1-tt\", \"~r1-v\", \"~r1-q\", \"~r1-z\", \"caught:DT\"] live=0
+r2: [\"dthrow\", \"~r2-tt\", \"~r2-v\", \"~r2-q\", \"~r2-z\", \"caught:DT\"] live=0
+r3: [\"dthrow\", \"~r3-tt\", \"~r3-q\", \"~r3-z\", \"caught:DT\"] live=0
+r4: [\"dthrow\", \"~r4-tt\", \"~r4-q\", \"~r4-z\", \"caught:DT\"] live=0
+r5: [\"dthrow\", \"~r5-tt\", \"~r5-v\", \"~r5-q\", \"catch:DT\", \"~r5-z\", \"got\", \"~r5-after\"] live=0
+r6: [\"dthrow\", \"~r6-tt\", \"~r6-v\", \"~r6-q\", \"~r6-b\", \"~r6-a\", \"~r6-z\", \"caught:DT\"] live=0
+r7: [\"dthrow\", \"~r7-tt\", \"~r7-v\", \"~r7-q\", \"r7-error\", \"r7-exit\", \"~r7-z\", \"caught:DT\"] live=0
+method: [\"dthrow\", \"~m-tt\", \"~m-v\", \"~m-q\", \"~m-z\", \"caught:DT\"] live=0
+r9: [\"dthrow\", \"~r9-tt\", \"~r9-v\", \"~r9-q\", \"~r9-zx\", \"caught:DT\"] live=0
+r10: [\"dthrow\", \"~r10-tt\", \"~r10-v\", \"caught:DT\"] live=0
+r11: [\"~r11-t\", \"dthrow\", \"~r11-d\", \"~r11-z\", \"~r11-v\", \"caught:DT\"] live=0
+closure: [\"dthrow\", \"~cl-tt\", \"~cl-v\", \"~cl-q\", \"~cl-z\", \"caught:DT\"] live=0
+r1: [\"dthrow\", \"~r1-tt\", \"~r1-v\", \"~r1-q\", \"~r1-z\", \"caught:DT\"] live=0
+r2: [\"dthrow\", \"~r2-tt\", \"~r2-v\", \"~r2-q\", \"~r2-z\", \"caught:DT\"] live=0
+r3: [\"dthrow\", \"~r3-tt\", \"~r3-q\", \"~r3-z\", \"caught:DT\"] live=0
+r4: [\"dthrow\", \"~r4-tt\", \"~r4-q\", \"~r4-z\", \"caught:DT\"] live=0
+r5: [\"dthrow\", \"~r5-tt\", \"~r5-v\", \"~r5-q\", \"catch:DT\", \"~r5-z\", \"got\", \"~r5-after\"] live=0
+r6: [\"dthrow\", \"~r6-tt\", \"~r6-v\", \"~r6-q\", \"~r6-b\", \"~r6-a\", \"~r6-z\", \"caught:DT\"] live=0
+r7: [\"dthrow\", \"~r7-tt\", \"~r7-v\", \"~r7-q\", \"r7-error\", \"r7-exit\", \"~r7-z\", \"caught:DT\"] live=0
+method: [\"dthrow\", \"~m-tt\", \"~m-v\", \"~m-q\", \"~m-z\", \"caught:DT\"] live=0
+r9: [\"dthrow\", \"~r9-tt\", \"~r9-v\", \"~r9-q\", \"~r9-zx\", \"caught:DT\"] live=0
+r10: [\"dthrow\", \"~r10-tt\", \"~r10-v\", \"caught:DT\"] live=0
+r11: [\"~r11-t\", \"dthrow\", \"~r11-d\", \"~r11-z\", \"~r11-v\", \"caught:DT\"] live=0
+closure: [\"dthrow\", \"~cl-tt\", \"~cl-v\", \"~cl-q\", \"~cl-z\", \"caught:DT\"] live=0
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("ReturnTempRaisesValueReleaseTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/ReturnTempRaisesValueRelease.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the value of a return when a temporary's destructor raises", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the value of a return when a temporary's destructor raises", opt),
+                \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-return-temp-raises-value-release-");
+        string exe = tmp.path + DirSep + "return-temp-raises-value-release";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

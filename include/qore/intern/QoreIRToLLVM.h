@@ -1937,6 +1937,11 @@ private:
     // unless the caller requests the function-level error path.
     void emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, bool force_function_error = false);
+    //! Emits the test of whether an exception is pending in xsink, by inline loads; returns the i1 result
+    llvm::Value* emitPendingExceptionTest();
+    //! Emits the branch of emitExceptionCheck() to the exception path of \a inst when an exception is pending
+    void emitExceptionBranch(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst, bool force_function_error);
 
     // Emit the in-place debug-step hook (issue #5352) at a DebugBlock (synthetic=true,
     // block-entry → dbgSyntheticBlockStep) or DebugStatement (synthetic=false,
