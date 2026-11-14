@@ -2626,7 +2626,6 @@ void qore_root_ns_private::parseAddHashDeclIntern(const QoreProgramLocation* loc
     qore_ns_private* sns = parseResolveNamespace(loc, name);
 
     if (sns) {
-        parseCheckHashDeclShadowedByQore(loc, hd, sns);
         //printd(5, "qore_root_ns_private::parseAddHashDeclIntern() '%s' adding %s:%p to %s:%p\n", nscope.ostr, hd->getName(), parseAddHashDeclIntern, sns->name.c_str(), sns);
         // add to pending hashdecl map if add was successful
         if (!sns->parseAddPendingHashDecl(loc, hd)) {
@@ -2689,7 +2688,6 @@ void qore_root_ns_private::parseAddConstantIntern(const QoreProgramLocation* loc
     }
 
     const char* cname = name.get(name.size() - 1);
-    parseCheckConstantShadowedByQore(loc, cname, sns->priv);
     cnemap_t::iterator i = sns->priv->parseAddConstant(loc, cname, vh.release(), cpub, typeInfo, parseTypeInfo);
     if (i == sns->priv->constant.end())
         return;
@@ -3078,7 +3076,17 @@ bool qore_root_ns_private::parseShadowWarningEnabled(const qore_ns_private* decl
         return false;
     }
     const qore_ns_private* qore_ns = getQore();
-    return qore_ns && !isUnderQoreNamespace(declaring_ns, qore_ns);
+    if (!qore_ns) {
+        return false;
+    }
+    // a namespace block that is parsed is not attached to the root: it is the Qore namespace's own if it has its name
+    // and is declared at the top level, as are the namespaces inside it
+    for (const qore_ns_private* cur = declaring_ns; cur; cur = cur->parent) {
+        if (cur == qore_ns || (cur->name == "Qore" && (!cur->parent || cur->parent == this))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void qore_root_ns_private::parseWarnShadowedByQoreSymbol(const QoreProgramLocation* loc, const char* kind,
@@ -3114,16 +3122,9 @@ void qore_root_ns_private::parseWarnShadowedByQoreSymbol(const QoreProgramLocati
     metadata.addFix("use the symbol with its namespace path, or rename it", "review-required");
 
     QoreStringNode* desc = new QoreStringNodeMaker("%s '%s' declared in namespace '%s' is not reachable by an "
-        "unqualified %s: unqualified resolution selects '%s' first; use '%s' or rename it", kind, name,
+        "unqualified %s: unqualified resolution selects '%s' first; %s '%s' or rename it", kind, name,
         declared_path.empty() ? "::" : declared_path.c_str(), is_function ? "call" : "reference", qore_name.c_str(),
-        declared_name.c_str());
-    // the message says "call it as" for a function, as the proposal of qore#6034 has it
-    if (is_function) {
-        desc->clear();
-        desc->sprintf("function '%s' declared in namespace '%s' is not reachable by an unqualified call: unqualified "
-            "resolution selects '%s' first; call it as '%s' or rename it", name,
-            declared_path.empty() ? "::" : declared_path.c_str(), qore_name.c_str(), declared_name.c_str());
-    }
+        is_function ? "call it as" : "use", declared_name.c_str());
     qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_LANGUAGE_TRAPS, "LANGUAGE-TRAP", desc,
         metadata);
 }
@@ -4017,6 +4018,12 @@ cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* 
     // track the new constant for rollback support
     if (rv != constant.end()) {
         pending_const_names.push_back(cname);
+        // qore#6034: a constant that unqualified references cannot reach, as the Qore namespace has one of its name
+        if (!imported) {
+            if (RootQoreNamespace* root = getRootNS()) {
+                root->rpriv->parseCheckConstantShadowedByQore(loc, cname, this);
+            }
+        }
     }
     return rv;
 }
@@ -4243,6 +4250,13 @@ int qore_ns_private::parseAddPendingHashDecl(const QoreProgramLocation* loc, Typ
     thd.release();
     // track the new hashdecl for rollback support
     pending_hashdecl_names.push_back(hashdecl->getName());
+
+    // qore#6034: a hashdecl that unqualified references cannot reach, as the Qore namespace has one of its name
+    if (!imported) {
+        if (RootQoreNamespace* root = getRootNS()) {
+            root->rpriv->parseCheckHashDeclShadowedByQore(loc, hashdecl, this);
+        }
+    }
 
     return 0;
 }

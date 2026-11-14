@@ -37,6 +37,9 @@ class QoreNamespaceShadowWarningTest inherits QUnit::Test {
         addTestCase("a global variable with the name of a Qore variable", \testGlobalVar());
         addTestCase("no warning for the other kinds with %broken-namespace-resolution or in a module",
             \testOtherKindsExempt());
+        addTestCase("symbols declared in namespace blocks", \testNamespaceBlocks());
+        addTestCase("a namespace block of the Qore namespace", \testQoreNamespaceBlock());
+        addTestCase("a redeclaration adds no warning of its own", \testRedeclaration());
         addTestCase("no warning with %broken-namespace-resolution", \testBrokenNamespaceResolution());
         addTestCase("no warning for a function that does not clash", \testNoClash());
         addTestCase("no warning in a user module", \testUserModule());
@@ -154,6 +157,65 @@ class QoreNamespaceShadowWarningTest inherits QUnit::Test {
         assertEq(0, parseWarnings(source, LegacyOptions | PO_BROKEN_NAMESPACE_RESOLUTION).size());
         assertEq(0, parseWarnings(source, PO_MODERN, WARN_ALL).size(), "off without the strict warnings");
         assertEq(4, parseWarnings(source).size(), "each declaration once");
+    }
+
+    testNamespaceBlocks() {
+        # a constant and a hashdecl declared in a namespace block take other paths than those at the top level
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings(
+            "namespace A {\n"
+            "    namespace B {\n"
+            "        const M_PI = 1;\n"
+            "        hashdecl StatInfo { string who; }\n"
+            "        class Mutex { }\n"
+            "        string sub reverse(string s) { return s; }\n"
+            "    }\n"
+            "}\n");
+        assertEq(4, diags.size());
+        hash<string, string> declared;
+        foreach hash<ParseDiagnosticInfo> d in (diags) {
+            assertEq("USER-SYMBOL-SHADOWED-BY-QORE", d.id);
+            declared{d.facts.kind} = d.facts.declared;
+        }
+        assertEq("A::B::M_PI", declared{"constant"});
+        assertEq("A::B::StatInfo", declared{"hashdecl"});
+        assertEq("A::B::Mutex", declared{"class"});
+        assertEq("A::B::reverse()", declared{"function"});
+    }
+
+    testQoreNamespaceBlock() {
+        # a program cannot declare a symbol into the Qore namespace that the namespace has: the redeclaration is an
+        # error, so there is no symbol of the program to warn about
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            p.parse("namespace Qore { const M_PI = 1; }", "<qore-block>", WARN_LANGUAGE_TRAPS);
+            assertTrue(False, "the redeclaration of a constant of the Qore namespace is an error");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err);
+        }
+        foreach hash<ParseDiagnosticInfo> d in (p.getParseDiagnostics()) {
+            assertTrue(d.id != "USER-SYMBOL-SHADOWED-BY-QORE");
+        }
+    }
+
+    testRedeclaration() {
+        # the duplicate error is the diagnostic of a redeclared constant or hashdecl, not a shadow warning too
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            p.parse("const M_PI = 1;\nconst M_PI = 2;\n", "<redecl>", WARN_LANGUAGE_TRAPS);
+            assertTrue(False, "the redeclaration is an error");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err);
+        }
+        # the first declaration of the program's constant is shadowed, the second is the error: one warning
+        int shadow_warnings = 0;
+        foreach hash<ParseDiagnosticInfo> d in (p.getParseDiagnostics()) {
+            if (d.id == "USER-SYMBOL-SHADOWED-BY-QORE") {
+                ++shadow_warnings;
+            }
+        }
+        assertEq(1, shadow_warnings, "the redeclaration adds no warning of its own");
     }
 
     testOff() {
