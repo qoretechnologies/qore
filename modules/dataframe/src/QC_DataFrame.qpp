@@ -894,6 +894,20 @@ DataFrame DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
 
     @return new DataFrame object with matching rows
 
+    @par Comparison Semantics
+    The operators \c "==", \c "!=", \c "<", \c "<=", \c ">" and \c ">=" give, for each cell that is not null, the
+    result of the Qore operator of the same name applied to the cell value (as DataFrame::getColumn() returns it)
+    and \a value, whatever the type of the column; the value is not converted to the column's type first.  For
+    example, a \c bool column cell \c True does not match \c "==" with \c "x" or \c 97, an \c int column cell \c 1
+    does not match \c "==" with \c "1.5", and a \c string column cell \c "10" matches \c ">" with \c 9 (but not
+    with \c "9"), as with the Qore operators.  The absolute date cells of a \c date column are dates in the current
+    time zone, so the comparison of such a cell with a value that is not a date, which converts the date, depends on
+    the time zone.  \c "in" and \c "not_in" compare the cell with each value of the list with \c "==".  A null cell
+    matches only \c "is_null", \c "==" with a null value (\c NOTHING or \c NULL), and \c "in" or \c "not_in"
+    according to whether the list holds a null value; a cell that is not null matches a null value only with
+    \c "!=".  \c "contains", \c "startswith" and \c "endswith" compare the cell as a string and match no cell of a
+    typed column that is not a \c string column.
+
     @par Example:
     @code{.py}
     DataFrame adults = df.filter("age", ">=", 18);

@@ -639,8 +639,14 @@ static bool qoreParquetStringStatsMayMatch(const std::shared_ptr<parquet::Statis
         return true;
     }
     auto typed = std::static_pointer_cast<parquet::ByteArrayStatistics>(stats);
+    std::string min = parquet::ByteArrayToString(typed->min());
+    // the core operators order an empty string after any other string (QoreString::compare()), while the statistics
+    // order it first, so a row group with an empty string can match any comparison but == with another string
+    if (min.empty() && !value.empty() && filter.op != "==") {
+        return true;
+    }
     return qoreParquetRangeMayMatch(
-        qoreParquetCompareStringBytes(parquet::ByteArrayToString(typed->min()), value),
+        qoreParquetCompareStringBytes(min, value),
         qoreParquetCompareStringBytes(parquet::ByteArrayToString(typed->max()), value),
         filter.op);
 }
@@ -827,10 +833,87 @@ static bool qoreParquetStatsMayMatchDecimal(const parquet::ColumnDescriptor* col
     }
 }
 
-static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
+//! returns true if the statistics of a column can exclude rows for a filter comparison with the given value
+/** A row group is skipped only if no cell of it can match the filter, which DataFrame::filter() evaluates on the
+    rows read as the core comparison operators compare the cell that the DataFrame gets and the value (qore#6061); so
+    the statistics are used only where they order the column's values as the core operators do for the value, which
+    is for the values with which DataFrame::filter() uses the typed comparison of the column: a value of the column's
+    own type (an absolute date for a date or timestamp column, a string for a string column in UTF-8, the default
+    encoding of its cells) and an int for a float column, and an int, which the core operators compare exactly, for a
+    decimal column
+
+    A timestamp column in nanoseconds is not pruned, as its cells are truncated to microseconds when they are read,
+    and a decimal column is pruned only with an int that it can hold, which its scale can be applied to exactly
+*/
+static bool qoreParquetStatsCanPrune(const arrow::DataType& type, QoreValue value) {
+    qore_type_t vt = value.getType();
+    switch (type.id()) {
+        case arrow::Type::BOOL:
+            return vt == NT_BOOLEAN;
+        // the statistics of a UINT32 or UINT64 column are ordered as unsigned values, but read as signed ones
+        case arrow::Type::INT8:
+        case arrow::Type::INT16:
+        case arrow::Type::INT32:
+        case arrow::Type::INT64:
+        case arrow::Type::UINT8:
+        case arrow::Type::UINT16:
+            return vt == NT_INT;
+        case arrow::Type::FLOAT:
+        case arrow::Type::DOUBLE:
+            return vt == NT_FLOAT || vt == NT_INT;
+        case arrow::Type::STRING:
+        case arrow::Type::LARGE_STRING:
+            return vt == NT_STRING && QCS_DEFAULT == QCS_UTF8;
+        case arrow::Type::DATE32:
+        case arrow::Type::TIMESTAMP: {
+            if (vt != NT_DATE) {
+                return false;
+            }
+            if (type.id() == arrow::Type::TIMESTAMP
+                    && static_cast<const arrow::TimestampType&>(type).unit() == arrow::TimeUnit::NANO) {
+                return false;
+            }
+            const DateTimeNode* dt = value.get<const DateTimeNode>();
+            if (dt->isRelative()) {
+                return false;
+            }
+            // the epoch microseconds of the date must fit in an int64
+            constexpr int64 max_seconds = std::numeric_limits<int64_t>::max() / 1000000 - 1;
+            int64 seconds = dt->getEpochSecondsUTC();
+            return seconds <= max_seconds && seconds >= -max_seconds;
+        }
+        case arrow::Type::DECIMAL128:
+        case arrow::Type::DECIMAL256: {
+            if (vt != NT_INT) {
+                return false;
+            }
+            // the int must have no more digits than the integer part of the column, or the rescaled value can
+            // overflow
+            const arrow::DecimalType& dec_type = static_cast<const arrow::DecimalType&>(type);
+            int int_digits = dec_type.precision() - dec_type.scale();
+            uint64_t magnitude = value.getAsBigInt() < 0
+                ? 0 - static_cast<uint64_t>(value.getAsBigInt())
+                : static_cast<uint64_t>(value.getAsBigInt());
+            int digits = 0;
+            while (magnitude) {
+                ++digits;
+                magnitude /= 10;
+            }
+            // a Decimal128 holds 38 digits
+            return digits <= int_digits && digits + dec_type.scale() <= 38;
+        }
+        default:
+            return false;
+    }
+}
+
+static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column, const arrow::DataType& type,
         const std::shared_ptr<parquet::Statistics>& stats,
-        int64_t row_count, const QoreParquetReadOptions::Filter& filter,
+        int64_t row_count, const QoreParquetReadOptions::Filter& orig_filter,
         ExceptionSink* xsink = nullptr) {
+    // the core operators compare an enum member as its value
+    const QoreParquetReadOptions::Filter filter{orig_filter.column, orig_filter.op,
+        orig_filter.value.isEnum() ? orig_filter.value.getEnumMember()->getValue() : orig_filter.value};
     bool cmp_is_null = filter.value.isNullOrNothing();
     bool has_null_count = stats && stats->HasNullCount();
     int64_t null_count = has_null_count ? stats->null_count() : 0;
@@ -855,7 +938,7 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
                 return true;
             }
             QoreParquetReadOptions::Filter eq_filter{filter.column, "==", values->retrieveEntry(i)};
-            if (qoreParquetStatsMayMatch(column, stats, row_count, eq_filter, xsink)) {
+            if (qoreParquetStatsMayMatch(column, type, stats, row_count, eq_filter, xsink)) {
                 return true;
             }
         }
@@ -868,6 +951,9 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
         return false;
     }
     if (!stats || !stats->HasMinMax()) {
+        return true;
+    }
+    if (!qoreParquetStatsCanPrune(type, filter.value)) {
         return true;
     }
 
@@ -911,15 +997,17 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
         case parquet::Type::INT64:
             return qoreParquetTypedStatsMayMatch<parquet::Int64Type>(stats, filter, filter.value.getAsBigInt());
         case parquet::Type::FLOAT: {
+            // a NaN cell, which the statistics leave out, matches != with any value
             double value = filter.value.getAsFloat();
-            if (std::isnan(value)) {
+            if (std::isnan(value) || filter.op == "!=") {
                 return true;
             }
-            return qoreParquetTypedStatsMayMatch<parquet::FloatType>(stats, filter, static_cast<float>(value));
+            // the cells are compared with the value as doubles, so the value is not rounded to a float
+            return qoreParquetTypedStatsMayMatch<parquet::FloatType>(stats, filter, value);
         }
         case parquet::Type::DOUBLE: {
             double value = filter.value.getAsFloat();
-            if (std::isnan(value)) {
+            if (std::isnan(value) || filter.op == "!=") {
                 return true;
             }
             return qoreParquetTypedStatsMayMatch<parquet::DoubleType>(stats, filter, value);
@@ -928,7 +1016,13 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
             if (filter.op == "contains" || filter.op == "startswith" || filter.op == "endswith") {
                 return true;
             }
-            QoreStringValueHelper str(filter.value);
+            // the core operators convert the value to the encoding of the cells, which is UTF-8 here
+            ExceptionSink conv_xsink;
+            QoreStringValueHelper str(filter.value, QCS_UTF8, &conv_xsink);
+            if (conv_xsink) {
+                conv_xsink.clear();
+                return true;
+            }
             return qoreParquetStringStatsMayMatch(stats, filter, dataFrameStdString(*str));
         }
         default:
@@ -937,16 +1031,23 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
 }
 
 static bool qoreParquetRowGroupMayMatch(const std::unique_ptr<parquet::arrow::FileReader>& reader,
-        int row_group, const QoreParquetReadOptions::Filter& filter, ExceptionSink* xsink) {
+        const arrow::Schema& schema, int row_group, const QoreParquetReadOptions::Filter& filter,
+        ExceptionSink* xsink) {
     int column_index = qoreParquetUniqueLeafIndexForTopLevelName(reader, filter.column, xsink);
     if (*xsink || column_index < 0) {
+        return true;
+    }
+
+    // the Arrow type of the column gives the type of the DataFrame column that the rows are read into
+    std::shared_ptr<arrow::Field> field = schema.GetFieldByName(filter.column);
+    if (!field) {
         return true;
     }
 
     auto metadata = reader->parquet_reader()->metadata();
     std::unique_ptr<parquet::RowGroupMetaData> rg = metadata->RowGroup(row_group);
     std::unique_ptr<parquet::ColumnChunkMetaData> chunk = rg->ColumnChunk(column_index);
-    return qoreParquetStatsMayMatch(metadata->schema()->Column(column_index), chunk->statistics(),
+    return qoreParquetStatsMayMatch(metadata->schema()->Column(column_index), *field->type(), chunk->statistics(),
         rg->num_rows(), filter, xsink);
 }
 
@@ -978,6 +1079,10 @@ static std::vector<int> qoreParquetFilteredRowGroups(
     if (!options.has_filters || !options.use_statistics) {
         return row_groups;
     }
+    std::shared_ptr<arrow::Schema> schema;
+    if (!reader->GetSchema(&schema).ok() || !schema) {
+        return row_groups;
+    }
 
     std::vector<int> selected;
     selected.reserve(row_groups.size());
@@ -990,7 +1095,7 @@ static std::vector<int> qoreParquetFilteredRowGroups(
             if (f && !(f % 100) && qore_check_cancel(xsink, "checking Parquet row-group filter statistics")) {
                 return {};
             }
-            if (!qoreParquetRowGroupMayMatch(reader, row_groups[r], options.filters[f], xsink)) {
+            if (!qoreParquetRowGroupMayMatch(reader, *schema, row_groups[r], options.filters[f], xsink)) {
                 may_match = false;
                 break;
             }
