@@ -363,8 +363,9 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             }
         }
         // wake at the close deadline of a close the server started
-        if (waitsForPeerClose() && close_deadline_ms) {
-            int64 close_remaining = close_deadline_ms - q_clock_getmicros_monotonic() / 1000;
+        if (waitsForPeerClose() && close_deadline_us) {
+            // rounded up, so the wake is not before the deadline
+            int64 close_remaining = (close_deadline_us - q_clock_getmicros_monotonic() + 999) / 1000;
             if (close_remaining <= 0) {
                 close_remaining = 1;
             }
@@ -857,11 +858,11 @@ int HttpWebSocketPollOperationPriv::checkClosing(ExceptionSink* xsink) {
     if (waitsForPeerClose()) {
         // the server's close frame has been written: the wait for the client's close frame starts; without a close
         // timeout, the server does not wait
-        int64 now_ms = q_clock_getmicros_monotonic() / 1000;
-        if (!close_deadline_ms) {
-            close_deadline_ms = now_ms + close_timeout_ms;
+        int64 now_us = q_clock_getmicros_monotonic();
+        if (!close_deadline_us) {
+            close_deadline_us = now_us + close_timeout_ms * 1000;
         }
-        if (now_ms >= close_deadline_ms) {
+        if (now_us >= close_deadline_us) {
             // no close frame was received, so the close code is 1006, which is never sent in a close frame
             // (RFC 6455 section 7.4.1)
             setClosed(1006, "close handshake timed out");

@@ -143,6 +143,29 @@ class RawWsServer {
     }
 }
 
+#! A WebSocketClient whose disconnect() is held after it took the connection, before it waits for the close handshake
+class ClaimGateWsClient inherits WebSocketClient {
+    public {
+        #! gets True each time a disconnect() is held after it took the connection
+        Queue claimed();
+        #! a held disconnect() goes on once this is zero
+        Counter release(1);
+    }
+
+    constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {
+    }
+
+    private *hash<WscAsyncIoResources> closeConnectionUnlocked(int cmd) {
+        *hash<WscAsyncIoResources> rv = WebSocketClient::closeConnectionUnlocked(cmd);
+        # held with the lock released, as while the close handshake is waited for
+        m.unlock();
+        on_exit m.lock();
+        claimed.push(True);
+        release.waitForZero(HangGuard);
+        return rv;
+    }
+}
+
 public class WebSocketClientPollOperationTest inherits QUnit::Test {
     private {
         HttpServer m_server;
@@ -158,6 +181,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         addTestCase("close handshake", \closeHandshakeTest());
         addTestCase("the server's close frame gives the close code and reason", \serverCloseFrameTest());
         addTestCase("a close the server does not answer ends at the close timeout", \unansweredCloseTest());
+        addTestCase("a close the server does not answer does not end before the close timeout",
+            \unansweredCloseNotEarlyTest());
         addTestCase("a close the server starts is reported once", \serverInitiatedCloseTest());
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             addTestCase("an aborted operation does not go on with a close the server starts", \abortedDuringPeerCloseTest());
@@ -169,6 +194,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         addTestCase("no data frame is sent after a close frame", \noDataAfterCloseTest());
         addTestCase("WebSocketClient::startPollSend() sends no data frame after a close frame",
             \clientStartPollSendAfterCloseTest());
+        addTestCase("WebSocketClient::startPollSend() after the close frame, while disconnect() takes the connection",
+            \clientStartPollSendWhileClaimedTest());
         addTestCase("WebSocketClient::disconnect() runs the close handshake", \clientDisconnectCloseHandshakeTest());
         addTestCase("WebSocketClient::disconnect() ends at the close timeout when the server does not answer",
             \clientDisconnectUnansweredCloseTest());
@@ -448,6 +475,31 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         assertEq(WSCC_NormalClosure, frames[0].close, "the client's close frame has the client's code");
     }
 
+    #! A close the client started waits for the server's close frame for the whole close timeout
+    /** The close deadline is kept in microseconds: one in whole milliseconds, taken from a truncated clock reading,
+        ended the wait up to a millisecond early.  With a close timeout of 1 ms that loss is most of the wait, so
+        each close below ended early unless it started right at a millisecond boundary.  The time is measured with
+        the monotonic clock, as the deadline is.
+    */
+    unansweredCloseNotEarlyTest() {
+        for (int i = 0; i < 20; ++i) {
+            RawWsServer server("silent");
+            HTTPClient hc = wsHandshake(server.port);
+            on_exit hc.disconnect();
+            WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 1ms, logger);
+
+            # taken before the close is requested, so before its deadline is set
+            int start = clock_get_monotonic_us();
+            poll_op.sendClose(WSCC_NormalClosure, "client reason");
+            driveAndCollect(poll_op);
+            int elapsed = clock_get_monotonic_us() - start;
+
+            assertEq("close handshake timed out", poll_op.getCloseReason(), sprintf("%d: the close timed out", i));
+            assertGe(1000, elapsed, sprintf("%d: the close does not end before its close timeout (%d us)", i,
+                elapsed));
+        }
+    }
+
     #! WebSocketClient::startPollSend() refuses a data message while the close handshake is in progress
     clientStartPollSendAfterCloseTest() {
         RawWsServer server("hold", WSCC_NormalClosure, "");
@@ -466,6 +518,36 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
             server.releaseClose();
             disconnected.waitForZero();
         }
+        assertEq(WSOP_Close, server.received.get(HangGuard), "the server receives the client's close frame");
+
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \wsc.startPollSend(), "after the close");
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \wsc.startPollSend(), <0102>);
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \wsc.startPollSend(), ("after", WSOP_Text, True));
+    }
+
+    #! WebSocketClient::startPollSend() refuses a data message sent after the close frame also while disconnect() is
+    #! between taking the connection from the client and waiting for the close handshake
+    /** startPollSend() reads the client's operation without the lock: the operation of the connection taken stopped
+        being the client's before it became the closing one, and a message sent in between got
+        \c WEBSOCKET-NOT-CONNECTED-ERROR, although the connection was open and its close frame sent.
+    */
+    clientStartPollSendWhileClaimedTest() {
+        RawWsServer server("hold", WSCC_NormalClosure, "");
+        ClaimGateWsClient wsc(sub (auto msg) {}, {"url": "ws://127.0.0.1:" + server.port, "timeout": HangGuard});
+        wsc.connect();
+
+        Counter disconnected(1);
+        background sub () {
+            on_exit disconnected.dec();
+            wsc.disconnect(WSCC_NormalClosure);
+        }();
+        on_exit {
+            wsc.release.dec();
+            server.releaseClose();
+            disconnected.waitForZero();
+        }
+        # the disconnect() has taken the connection and is held before it waits for the close handshake
+        assertEq(True, wsc.claimed.get(HangGuard), "disconnect() took the connection");
         assertEq(WSOP_Close, server.received.get(HangGuard), "the server receives the client's close frame");
 
         assertThrows("WEBSOCKET-CLOSING-ERROR", \wsc.startPollSend(), "after the close");
@@ -529,9 +611,12 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         # the server answers only once the client has given up
         on_exit server.releaseClose();
 
-        date start = now_us();
+        # the wait is measured with the monotonic clock, as the operation's close deadline is: a change of the system
+        # clock while disconnect() waits (a VM's time synchronization) must not change the elapsed time
+        int start = clock_get_monotonic_us();
         wsc.disconnect(WSCC_NormalClosure);
-        assertGe(250ms, now_us() - start, "disconnect() waits for the server's close frame for the close timeout");
+        assertGe(250ms, microseconds(clock_get_monotonic_us() - start),
+            "disconnect() waits for the server's close frame for the close timeout");
         assertEq(WSOP_Close, server.received.get(HangGuard), "the server receives the client's close frame");
         assertFalse(wsc.isOpen(), "the connection is closed");
         assertEq("closed", op.getState(), "the operation ends closed");

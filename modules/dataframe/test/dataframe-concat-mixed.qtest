@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-concat-mixed.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameConcatMixedTest
+
+#! concat() of columns of different types gives the column that the column hash constructor gives for the
+#! concatenated values, in either order (qore#6100)
+class DataFrameConcatMixedTest inherits QUnit::Test {
+    constructor() : Test("DataFrameConcatMixedTest", "1.0", \ARGV) {
+        addTestCase("mixed column types", \mixedTest());
+        addTestCase("three DataFrames and a missing column", \threeTest());
+        addTestCase("dense columns", \denseTest());
+        set_return_value(main());
+    }
+
+    #! three DataFrames, one of which has no "v" column, which gives null values
+    threeTest() {
+        DataFrame::DataFrame a({"id": (1,), "v": (1,)});
+        DataFrame::DataFrame b({"id": (2,)});
+        DataFrame::DataFrame c({"id": (3,), "v": ("x",)});
+        DataFrame::DataFrame both = DataFrame::DataFrame::concat((a, b, c));
+        DataFrame::DataFrame expected({"v": (1, NOTHING, "x")});
+        assertEq(expected.dtypes()[0], both.dtypes()[1], "type");
+        assertEq(expected.getColumn("v"), both.getColumn("v"), "values");
+    }
+
+    #! columns with dense storage (float32, decimal128) concatenated with columns of another type
+    denseTest() {
+        DataFrame::DataFrame f32({"v": new buffer<float32>((1.5, 2))});
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.25n,)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}}));
+        DataFrame::DataFrame ints({"v": (3,)});
+        DataFrame::DataFrame strs({"v": ("x",)});
+        foreach list<DataFrame::DataFrame> frames in (((f32, ints), (ints, f32), (dec, strs), (strs, dec),
+                (f32, strs))) {
+            list<auto> values = frames[0].getColumn("v") + frames[1].getColumn("v");
+            DataFrame::DataFrame expected({"v": values});
+            DataFrame::DataFrame actual = DataFrame::DataFrame::concat(frames);
+            string label = sprintf("%y", values);
+            assertEq(expected.dtypes(), actual.dtypes(), label + ": type");
+            assertEq(expected.getColumn("v"), actual.getColumn("v"), label + ": values");
+        }
+    }
+
+    mixedTest() {
+        list<list<auto>> pairs = (
+            ((1, 2), ("x",)),
+            ((1,), (1.5,)),
+            ((True,), (1.5,)),
+            # dates in the local time zone, in which date cells are returned and so made strings
+            ((1.5,), (2024-01-01,)),
+            ((1,), ((1, 2),)),
+            ((2024-01-01,), (1,)),
+            ((True,), (1,)),
+            (("a",), (c'x',)),
+            ((1, NOTHING), (2.5, NOTHING)),
+            (("a",), ("b",)),
+        );
+        foreach list<auto> pair in (pairs) {
+            foreach list<list<auto>> order in (((pair[0], pair[1]), (pair[1], pair[0]))) {
+                list<auto> values = order[0] + order[1];
+                string label = sprintf("%y + %y", order[0], order[1]);
+                DataFrame::DataFrame expected({"v": values});
+                DataFrame::DataFrame actual = DataFrame::DataFrame::concat((new DataFrame::DataFrame({"v": order[0]}),
+                    new DataFrame::DataFrame({"v": order[1]})));
+                assertEq(expected.dtypes(), actual.dtypes(), label + ": type");
+                assertEq(expected.getColumn("v"), actual.getColumn("v"), label + ": values");
+            }
+        }
+    }
+}

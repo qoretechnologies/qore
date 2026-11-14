@@ -327,8 +327,8 @@ public class WebSocketClientAsyncIoTest inherits QUnit::Test {
         assertTrue(wsc.reconnect(), "reconnect initiated");
 
         # Wait for reconnect to complete
-        date end = now_us() + 30s;
-        while (now_us() < end) {
+        int end_us = clock_get_monotonic_us() + 30000000;
+        while (clock_get_monotonic_us() < end_us) {
             if (wsc.isOpen()) {
                 break;
             }
@@ -634,9 +634,9 @@ public class WebSocketClientAsyncIoTest inherits QUnit::Test {
 
         # Within ~700ms we should see at least two pong responses to our
         # automatic heartbeat PINGs.
-        date deadline = now_us() + 2s;
+        int deadline_us = clock_get_monotonic_us() + 2000000;
         int pong_count = 0;
-        while (pong_count < 2 && now_us() < deadline) {
+        while (pong_count < 2 && clock_get_monotonic_us() < deadline_us) {
             auto evt = event_queue.get(1s);
             if (exists evt && evt.event == EVENT_WS_PONG) {
                 ++pong_count;

@@ -143,6 +143,12 @@ Child<int> child();
 int echoed = child.echo(value);
     @endcode
 
+    A generic class is inherited with type arguments (<tt>inherits Base&lt;int&gt;</tt>, or
+    <tt>inherits Base&lt;auto&gt;</tt> for a value-erased parent), as it is instantiated with them: <tt>inherits
+    Base</tt> without type arguments is a parse error (<tt>MISSING-TYPE-ARGUMENTS</tt>), unless the class is declared
+    <tt>[legacy_raw]</tt> (see below).  A class that inherits one generic class with different type arguments through
+    its parent classes is also a parse error.
+
     Type parameters can have defaults and upper bounds:
 
     @code{.py}
