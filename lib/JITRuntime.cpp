@@ -2245,7 +2245,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_strip_any_param(uint64_t value) {
     if (!QoreTypeInfo::mayRequireFilter(anyTypeInfo, val)) {
         return value;
     }
-    // copies a shared container with a plain type, as QoreTypeInfo::acceptInputParam() does for an `any` parameter
+    // copies a container with a complex type with a plain one, as QoreTypeInfo::acceptInputParam() does for an `any`
+    // parameter
     ExceptionSink xsink;
     QoreTypeInfo::acceptInputParam(anyTypeInfo, 0, nullptr, val, &xsink);
     // stripping a plain list or hash raises nothing
