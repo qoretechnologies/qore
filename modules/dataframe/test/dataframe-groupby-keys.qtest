@@ -21,6 +21,7 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         addTestCase("float64 keys", \floatTest());
         addTestCase("float keys in a column of any value", \autoTest());
         addTestCase("several key columns", \multiTest());
+        addTestCase("count()", \countTest());
         set_return_value(main());
     }
 
@@ -65,5 +66,20 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         });
         DataFrame::DataFrame g = df.groupBy(("a", "k")).agg({"v": "sum"});
         assertEq((5.0, 2.0, 8.0), g.getColumn("v"), "sums");
+    }
+
+    #! count() gives the key values of a float64 column and of a column of durations
+    countTest() {
+        DataFrame::DataFrame df({"f": (1.5, 1.5, 2.5, NOTHING), "d": (1h, 1h, 2h, NOTHING)});
+        DataFrame::DataFrame c = df.groupBy(("f",)).count();
+        assertEq((1.5, 2.5, NOTHING), c.getColumn("f"), "float keys");
+        assertEq((2, 1, 1), c.getColumn("count"), "float counts");
+        c = df.groupBy(("d",)).count();
+        list<auto> d = c.getColumn("d");
+        assertTrue(is_date_relative(d[0]) && d[0] == 1h && is_date_relative(d[1]) && d[1] == 2h && !exists d[2],
+            sprintf("duration keys of count(): %y", d));
+        d = df.groupBy(("d",)).agg({"f": "sum"}).getColumn("d");
+        assertTrue(is_date_relative(d[0]) && d[0] == 1h && is_date_relative(d[1]) && d[1] == 2h && !exists d[2],
+            sprintf("duration keys of agg(): %y", d));
     }
 }

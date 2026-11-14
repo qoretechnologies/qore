@@ -847,7 +847,8 @@ DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *stri
 
     Two rows are in one group if their values of each group column are equal: two floats only if they are equal
     (with \c -0.0 equal to \c 0.0) or both NaN, which make one group; the null values of a column make a group of
-    their own.  In a column that holds any value, values of different types make different groups.
+    their own.  In a column that holds any value, a float is grouped by its value as in a \c float64 column, and
+    any other value by its string form (so the int \c 1 and the string \c "1" make one group).
 
     @throw DATAFRAME-COLUMN-ERROR if a column name is not found
 

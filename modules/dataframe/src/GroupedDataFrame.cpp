@@ -628,72 +628,22 @@ QoreDataFrame* QoreGroupedDataFrame::aggSpecs(const std::vector<AggSpec>& specs,
             return nullptr;
         }
         const ColumnData& src_cd = *source_columns[it->second].data;
-        auto cd = std::make_shared<ColumnData>();
-        cd->type = src_cd.type;
-        cd->n_rows = n_groups;
-        cd->null_mask.resize(n_groups, 0);
-
-        switch (src_cd.type) {
-            case ColumnType::INT64:
-                cd->int_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    cd->int_data[g] = src_cd.int_data[r];
+        // the value of the first row of each group, in a column of the type and the columnar schema of the source
+        // column (a column of durations, for example; qore#6107)
+        std::shared_ptr<ColumnData> cd = makeGroupValueColumn(src_cd, n_groups, gc);
+        for (int64_t g = 0; g < n_groups; ++g) {
+            if (g && !(g % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame keys")) {
+                delete df;
+                return nullptr;
+            }
+            int64_t r = groups[g].row_indices[0];
+            if (!src_cd.isNull(r)) {
+                setGroupValue(*cd, g, src_cd, r, xsink);
+                if (*xsink) {
+                    delete df;
+                    return nullptr;
                 }
-                break;
-            case ColumnType::FLOAT64:
-                cd->float_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    cd->float_data(g) = src_cd.float_data(r);
-                }
-                break;
-            case ColumnType::STRING:
-                cd->str_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    cd->str_data[g] = src_cd.str_data[r];
-                }
-                break;
-            case ColumnType::BOOL:
-                cd->bool_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    cd->bool_data[g] = src_cd.bool_data[r];
-                }
-                break;
-            case ColumnType::DATE:
-                cd->date_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    if (g && !(g % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame keys")) {
-                        delete df;
-                        return nullptr;
-                    }
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    cd->date_data[g] = src_cd.date_data[r];
-                }
-                break;
-            case ColumnType::AUTO:
-                cd->auto_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    if (g && !(g % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame keys")) {
-                        delete df;
-                        return nullptr;
-                    }
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    if (!cd->null_mask[g]) {
-                        cd->setAutoValue(g, src_cd.auto_data[r], xsink);
-                    }
-                }
-                break;
-            default:
-                break;
+            }
         }
 
         Column col;
@@ -750,68 +700,22 @@ QoreDataFrame* QoreGroupedDataFrame::count(ExceptionSink* xsink) const {
     for (const auto& gc : group_col_names) {
         auto it = source_col_index.find(gc);
         const ColumnData& src_cd = *source_columns[it->second].data;
-        auto cd = std::make_shared<ColumnData>();
-        cd->type = src_cd.type;
-        cd->n_rows = n_groups;
-        cd->null_mask.resize(n_groups, 0);
-
-        switch (src_cd.type) {
-            case ColumnType::STRING:
-                cd->str_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    cd->str_data[g] = src_cd.str_data[r];
+        // the value of the first row of each group, in a column of the type and the columnar schema of the source
+        // column (a column of durations, for example; qore#6107)
+        std::shared_ptr<ColumnData> cd = makeGroupValueColumn(src_cd, n_groups, gc);
+        for (int64_t g = 0; g < n_groups; ++g) {
+            if (g && !(g % 100) && qore_check_cancel(xsink, "counting grouped DataFrame keys")) {
+                delete df;
+                return nullptr;
+            }
+            int64_t r = groups[g].row_indices[0];
+            if (!src_cd.isNull(r)) {
+                setGroupValue(*cd, g, src_cd, r, xsink);
+                if (*xsink) {
+                    delete df;
+                    return nullptr;
                 }
-                break;
-            case ColumnType::INT64:
-                cd->int_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    cd->int_data[g] = src_cd.int_data[r];
-                }
-                break;
-            case ColumnType::BOOL:
-                cd->bool_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    if (g && !(g % 100) && qore_check_cancel(xsink, "counting grouped DataFrame keys")) {
-                        delete df;
-                        return nullptr;
-                    }
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    cd->bool_data[g] = src_cd.bool_data[r];
-                }
-                break;
-            case ColumnType::DATE:
-                cd->date_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    if (g && !(g % 100) && qore_check_cancel(xsink, "counting grouped DataFrame keys")) {
-                        delete df;
-                        return nullptr;
-                    }
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    cd->date_data[g] = src_cd.date_data[r];
-                }
-                break;
-            case ColumnType::AUTO:
-                cd->auto_data.resize(n_groups);
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    if (g && !(g % 100) && qore_check_cancel(xsink, "counting grouped DataFrame keys")) {
-                        delete df;
-                        return nullptr;
-                    }
-                    int64_t r = groups[g].row_indices[0];
-                    cd->null_mask[g] = src_cd.null_mask[r];
-                    if (!cd->null_mask[g]) {
-                        cd->setAutoValue(g, src_cd.auto_data[r], xsink);
-                    }
-                }
-                break;
-            default:
-                break;
+            }
         }
 
         Column col;
