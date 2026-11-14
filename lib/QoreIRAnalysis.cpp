@@ -10964,6 +10964,28 @@ const qore_class_private* qore_ir_function_class_context(const QoreIRFunction& f
     return qc ? qore_class_private::get(*qc) : nullptr;
 }
 
+void qore_ir_set_static_call_context(QoreIRFunction& func, const AbstractQoreFunctionVariant* variant) {
+    func.static_call_context = false;
+    func.static_class_ctx = nullptr;
+    if (!variant || dynamic_cast<const UserClosureVariant*>(variant)) {
+        // a closure created in a method runs in the Program of its object
+        return;
+    }
+    if (dynamic_cast<const UserFunctionVariant*>(variant)) {
+        // a plain function runs without a class context in its Program
+        func.static_call_context = true;
+        return;
+    }
+    // a normal or static method and a destructor run in the class context of their class; a constructor and a copy
+    // method run in that of the class whose object they construct, which an imported copy of the class changes
+    if (dynamic_cast<const UserMethodVariant*>(variant) || dynamic_cast<const UserDestructorVariant*>(variant)) {
+        func.static_call_context = true;
+        const MethodVariantBase* mv = dynamic_cast<const MethodVariantBase*>(variant);
+        assert(mv);
+        func.static_class_ctx = mv->getClassPriv();
+    }
+}
+
 // a function without code of its own (neither source_qf nor source_variant: the IR function of a try or catch block,
 // or of a background expression, lowered as part of the function that contains the code) keeps the class context of
 // that function, as its code runs in it; top-level code, lowered on its own, has none

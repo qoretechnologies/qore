@@ -54,6 +54,7 @@ class FunctionEntry;
 
 class QoreIRFunction;
 struct QoreJITObjectLayout;
+class QoreCallTargetCheckCache;
 class QoreIRBasicBlock;
 class QoreIRInstruction;
 class QoreIRPhiInstruction;
@@ -1479,6 +1480,17 @@ private:
     //! libqore (JIT only; QoreIROpcode::CheckCallTarget, issue #5784)
     llvm::Value* emitValidObjectTest(llvm::Value* qv, const QoreJITObjectLayout& layout, llvm::Function* llvm_func,
         const QoreClass* qc = nullptr, const QoreClass* method_qc = nullptr);
+
+    //! Emits the inline test of the cache of a call site (QoreCallTargetCheckCache::hit()) for code that always runs
+    //! with the class context @a class_ctx (QoreIRFunction::static_call_context): true if @a qv is an object that has
+    //! not been deleted and the cache knows that a lookup by name finds a method for its class (JIT only, issue #5824)
+    /** An entry is made only after a full check found the lookup stable in the Program of the code; the epoch of the
+        entry changes when that can stop being so (a Program or a class is released, module lifetime ends), so the
+        stability is not tested again
+    */
+    llvm::Value* emitCallTargetCacheHitInline(const QoreCallTargetCheckCache* cache,
+        const qore_class_private* class_ctx, llvm::Value* qv, const QoreJITObjectLayout& layout,
+        llvm::Function* llvm_func);
 
     //! Emits the fast test of QoreIROpcode::CheckCallTarget: true if @a target needs no other check (a method call
     //! resolved at parse time on an object of its class that has not been deleted; issues #5784, #5824)

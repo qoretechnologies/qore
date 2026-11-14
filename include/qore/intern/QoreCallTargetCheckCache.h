@@ -93,7 +93,29 @@ public:
         seq.store(s + 2, std::memory_order_release);
     }
 
+    //! the byte offsets of the fields that JIT code reads for its inline test of an entry (QoreJITObjectLayout)
+    DLLLOCAL static uint32_t getSeqOffset() {
+        return getOffset(&QoreCallTargetCheckCache::seq);
+    }
+    DLLLOCAL static uint32_t getClassOffset() {
+        return getOffset(&QoreCallTargetCheckCache::cls);
+    }
+    DLLLOCAL static uint32_t getContextOffset() {
+        return getOffset(&QoreCallTargetCheckCache::ctx);
+    }
+    DLLLOCAL static uint32_t getEpochOffset() {
+        return getOffset(&QoreCallTargetCheckCache::epoch);
+    }
+
 private:
+    //! the offset of a field in an object of the class
+    template <typename T>
+    DLLLOCAL static uint32_t getOffset(T QoreCallTargetCheckCache::* field) {
+        static const QoreCallTargetCheckCache probe;
+        return static_cast<uint32_t>(reinterpret_cast<const char*>(&(probe.*field))
+            - reinterpret_cast<const char*>(&probe));
+    }
+
     mutable std::atomic<uint32_t> seq{0};
     mutable std::atomic<const QoreClass*> cls{nullptr};
     mutable std::atomic<const qore_class_private*> ctx{nullptr};

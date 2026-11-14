@@ -3895,6 +3895,9 @@ bool qore_program_private::derefUnregister() {
     programid_to_program_map_t::iterator i = programid_to_program_map.find(programId);
     assert(i != programid_to_program_map.end() && i->second == pgm);
     programid_to_program_map.erase(i);
+    // the method lookups cached for code of this Program are no longer known to be stable (the classes that it is the
+    // source Program of raise an error for a call once it is torn down; QoreCallTargetCheckCache, issue #5824)
+    qore_bump_method_dispatch_epoch();
     return true;
 }
 

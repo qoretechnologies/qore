@@ -1790,6 +1790,21 @@ bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, const Qor
     return qore_class_private::get(*cls)->runtimeMethodLookupIsStable(pgm) && cache->hit(cls, ctx);
 }
 
+bool qore_call_target_cache_hit_static(const QoreCallTargetCheckCache* cache, const QoreValue& target,
+        const qore_class_private* ctx, const QoreProgram* pgm) {
+    if (!cache) {
+        return false;
+    }
+    const AbstractQoreNode* n = target.isPointer() ? target.getPtr() : nullptr;
+    if (!n || n->getType() != NT_OBJECT) {
+        return false;
+    }
+    const QoreObject* obj = static_cast<const QoreObject*>(n);
+    const QoreClass* cls = obj->getClass();
+    return qore_object_private::isValidOfClass(obj, nullptr, nullptr, true)
+        && qore_class_private::get(*cls)->runtimeMethodLookupIsStable(pgm) && cache->hit(cls, ctx);
+}
+
 extern "C" DLLEXPORT bool qore_rt_call_target_cache_hit(const QoreCallTargetCheckCache* cache,
         uint64_t target_bits) {
     return qore_call_target_cache_hit(cache, fromBits(target_bits));

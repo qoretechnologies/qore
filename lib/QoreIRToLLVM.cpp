@@ -2168,6 +2168,14 @@ llvm::Value* QoreIRToLLVM::emitCallTargetFastTest(const QoreIRExprInstruction* c
         // no method resolved at parse time: the cache of the call site knows the classes for which the lookup by name
         // finds a method; the check is made otherwise
         if (check->check_cache && !check->check_after_args) {
+            // code that always runs in the same class context and Program tests the cache inline, without reading
+            // them from the thread
+            if (current_ir_func && current_ir_func->static_call_context) {
+                if (const QoreJITObjectLayout* layout = qore_jit_object_layout()) {
+                    return emitCallTargetCacheHitInline(check->check_cache, current_ir_func->static_class_ctx, target,
+                        *layout, llvm_func);
+                }
+            }
             auto fast = module.getOrInsertFunction("qore_rt_call_target_cache_hit",
                 llvm::FunctionType::get(i1_type, {ptr_type, i64_type}, false));
             llvm::Value* cache_ptr = builder->CreateIntToPtr(
@@ -2251,6 +2259,96 @@ llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObj
     result->addIncoming(builder->getFalse(), node_block);
     result->addIncoming(builder->getFalse(), other_block);
     result->addIncoming(valid, status_block);
+    return result;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitCallTargetCacheHitInline(const QoreCallTargetCheckCache* cache,
+        const qore_class_private* class_ctx, llvm::Value* qv, const QoreJITObjectLayout& layout,
+        llvm::Function* llvm_func) {
+    // JIT only: the layout and the addresses are the running libqore's
+    assert(!aot_mode);
+    llvm::LLVMContext& ctx = builder->getContext();
+    auto const_ptr = [&](const void* p) -> llvm::Value* {
+        return builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(p)), ptr_type);
+    };
+    // the value must be an object that has not been deleted, as in emitValidObjectTest()
+    llvm::Value* tag = builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 48), "cache.tag");
+    llvm::Value* addr = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK), "cache.addr");
+    llvm::Value* is_node = builder->CreateAnd(
+        builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_POINTER >> 48)),
+        builder->CreateICmpNE(addr, llvm::ConstantInt::get(i64_type, 0)), "cache.is.node");
+    llvm::Value* is_opaque_object = builder->CreateAnd(
+        builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG16_OPAQUE_OBJECT)),
+        builder->CreateICmpNE(addr, llvm::ConstantInt::get(i64_type, 0)), "cache.is.opaque");
+    llvm::BasicBlock* node_block = llvm::BasicBlock::Create(ctx, "cache.node", llvm_func);
+    llvm::BasicBlock* other_block = llvm::BasicBlock::Create(ctx, "cache.other", llvm_func);
+    llvm::BasicBlock* status_block = llvm::BasicBlock::Create(ctx, "cache.status", llvm_func);
+    llvm::BasicBlock* entry_block = llvm::BasicBlock::Create(ctx, "cache.entry", llvm_func);
+    llvm::BasicBlock* done_block = llvm::BasicBlock::Create(ctx, "cache.done", llvm_func);
+    builder->CreateCondBr(is_node, node_block, other_block);
+    builder->SetInsertPoint(node_block);
+    llvm::Value* node_ptr = builder->CreateIntToPtr(addr, ptr_type);
+    llvm::LoadInst* type_word = builder->CreateAlignedLoad(i32_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), node_ptr, layout.type_byte_offset),
+        llvm::MaybeAlign(1), "cache.type.word");
+    llvm::Value* type = builder->CreateAnd(builder->CreateLShr(type_word, layout.type_shift),
+        llvm::ConstantInt::get(i32_type, (1u << 11) - 1));
+    builder->CreateCondBr(builder->CreateICmpEQ(type, llvm::ConstantInt::get(i32_type, NT_OBJECT)), status_block,
+        done_block);
+    builder->SetInsertPoint(other_block);
+    builder->CreateCondBr(is_opaque_object, status_block, done_block);
+    builder->SetInsertPoint(status_block);
+    llvm::Value* obj_ptr = builder->CreateIntToPtr(addr, ptr_type);
+    llvm::Value* priv = builder->CreateLoad(ptr_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), obj_ptr, layout.priv_offset), "cache.priv");
+    llvm::LoadInst* status = builder->CreateAlignedLoad(i32_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), priv, layout.status_offset), llvm::MaybeAlign(4),
+        "cache.status");
+    status->setAtomic(llvm::AtomicOrdering::Monotonic);
+    llvm::Value* valid = builder->CreateICmpNE(status,
+        llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(layout.deleted_status)), "cache.valid");
+    llvm::Value* obj_class = builder->CreateLoad(ptr_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), priv, layout.class_offset), "cache.obj.class");
+    builder->CreateCondBr(valid, entry_block, done_block);
+    // the entry, read as QoreCallTargetCheckCache::hit() reads it: a sequence lock
+    builder->SetInsertPoint(entry_block);
+    llvm::Value* cache_ptr = const_ptr(cache);
+    auto field = [&](uint32_t offset) {
+        return builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), cache_ptr, offset);
+    };
+    auto atomic_load = [&](llvm::Type* type, llvm::Value* ptr, unsigned align, llvm::AtomicOrdering order,
+            const char* name) -> llvm::Value* {
+        llvm::LoadInst* load = builder->CreateAlignedLoad(type, ptr, llvm::MaybeAlign(align), name);
+        load->setAtomic(order);
+        return load;
+    };
+    llvm::Value* seq = atomic_load(i32_type, field(QoreCallTargetCheckCache::getSeqOffset()), 4,
+        llvm::AtomicOrdering::Acquire, "cache.seq");
+    llvm::Value* even = builder->CreateICmpEQ(builder->CreateAnd(seq, llvm::ConstantInt::get(i32_type, 1)),
+        llvm::ConstantInt::get(i32_type, 0));
+    llvm::Value* entry_class = atomic_load(ptr_type, field(QoreCallTargetCheckCache::getClassOffset()), 8,
+        llvm::AtomicOrdering::Monotonic, "cache.class");
+    llvm::Value* entry_ctx = atomic_load(ptr_type, field(QoreCallTargetCheckCache::getContextOffset()), 8,
+        llvm::AtomicOrdering::Monotonic, "cache.ctx");
+    llvm::Value* entry_epoch = atomic_load(i64_type, field(QoreCallTargetCheckCache::getEpochOffset()), 8,
+        llvm::AtomicOrdering::Monotonic, "cache.epoch");
+    llvm::Value* epoch = atomic_load(i64_type, const_ptr(qore_get_method_dispatch_epoch_addr()), 8,
+        llvm::AtomicOrdering::Acquire, "dispatch.epoch");
+    builder->CreateFence(llvm::AtomicOrdering::Acquire);
+    llvm::Value* seq2 = atomic_load(i32_type, field(QoreCallTargetCheckCache::getSeqOffset()), 4,
+        llvm::AtomicOrdering::Monotonic, "cache.seq2");
+    llvm::Value* hit = builder->CreateAnd(even, builder->CreateICmpEQ(entry_class, obj_class));
+    hit = builder->CreateAnd(hit, builder->CreateICmpEQ(entry_ctx, const_ptr(class_ctx)));
+    hit = builder->CreateAnd(hit, builder->CreateICmpEQ(entry_epoch, epoch));
+    hit = builder->CreateAnd(hit, builder->CreateICmpEQ(seq2, seq), "cache.hit");
+    builder->CreateBr(done_block);
+    builder->SetInsertPoint(done_block);
+    llvm::PHINode* result = builder->CreatePHI(i1_type, 4, "cache.hit.result");
+    result->addIncoming(builder->getFalse(), node_block);
+    result->addIncoming(builder->getFalse(), other_block);
+    result->addIncoming(builder->getFalse(), status_block);
+    result->addIncoming(hit, entry_block);
     return result;
 }
 

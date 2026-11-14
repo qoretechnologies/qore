@@ -70,6 +70,10 @@ void qore_bump_method_dispatch_epoch() {
     qore_method_dispatch_epoch.fetch_add(1, std::memory_order_release);
 }
 
+const std::atomic<uint64_t>* qore_get_method_dispatch_epoch_addr() {
+    return &qore_method_dispatch_epoch;
+}
+
 // starts at 1 so that 0 never identifies a class
 static std::atomic<uint64_t> qore_class_instance_serial_seq{1};
 

@@ -980,6 +980,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     // Owning program for the per-Program background-compile drain (always).
                     func->pgm = pgm;
                     func->pgm_id = pgm->getProgramId();
+                    // top-level code runs without a class context in its Program (issue #5824)
+                    func->static_call_context = true;
                     // Debug-step hook context (issue #5352): the top-level block can run as
                     // JIT-compiled native code (executeWithFallback), so record its own
                     // StatementBlock and the program's attached-debugger slot to enable the

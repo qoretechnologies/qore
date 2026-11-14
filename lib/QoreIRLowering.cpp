@@ -4813,6 +4813,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // a handler belongs to the Program of the function it is part of (see QoreJIT::workReferencesPgm())
         handler_func->pgm = parent_func->pgm;
         handler_func->pgm_id = parent_func->pgm_id;
+        // a handler runs in the frame of the function it belongs to
+        handler_func->static_call_context = parent_func->static_call_context;
+        handler_func->static_class_ctx = parent_func->static_class_ctx;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
@@ -4948,6 +4951,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // a handler belongs to the Program of the function it is part of (see QoreJIT::workReferencesPgm())
         handler_func->pgm = parent_func->pgm;
         handler_func->pgm_id = parent_func->pgm_id;
+        // a handler runs in the frame of the function it belongs to
+        handler_func->static_call_context = parent_func->static_call_context;
+        handler_func->static_class_ctx = parent_func->static_class_ctx;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
@@ -12966,6 +12972,11 @@ QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const Q
     auto helper = std::make_unique<QoreIRFunction>("background_helper_" + std::to_string(helper_index));
     helper->pgm = starting_func ? starting_func->pgm : nullptr;
     helper->pgm_id = starting_func ? starting_func->pgm_id : 0;
+    // the new thread runs with the class context and the Program of the starting code (BGThreadParams)
+    if (starting_func) {
+        helper->static_call_context = starting_func->static_call_context;
+        helper->static_class_ctx = starting_func->static_class_ctx;
+    }
 
     QoreIRBuilder helper_builder(helper.get());
     helper_builder.setBlock(helper->createBlock("entry"));
@@ -15248,6 +15259,17 @@ bool QoreIRLowering::callArgsMayHaveSideEffects(const QoreParseListNode* parse_a
         if (LocalVar* local = getLocalVarFromValue(arg)) {
             if (qore_ir_type_cannot_hold_reference(local->getTypeInfo())) {
                 continue;
+            }
+            // a local of a type that can hold a reference (auto) whose value at the read is known to be of a type that
+            // cannot hold one (see getAnalysis()); a local that a closure captures, of a reference type or ever
+            // deleted can change in ways that the analysis does not see
+            if (!local->closureUse() && !local->everDeleted()
+                    && !QoreTypeInfo::getReferenceTarget(local->getTypeInfo())) {
+                QoreParseAnalysis analysis;
+                if (getAnalysis(arg, analysis) && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                        && analysis.known_type && qore_ir_type_cannot_hold_reference(analysis.known_type)) {
+                    continue;
+                }
             }
         }
         return true;

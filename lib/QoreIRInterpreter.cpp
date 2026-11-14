@@ -7364,9 +7364,16 @@ static QoreObject* const QORE_IR_FRAME_SELF_UNKNOWN = reinterpret_cast<QoreObjec
 //! true if the check @a check of a method call's target before its arguments needs no other test than that the object
 //! @a target has not been deleted: a lookup by name for the object's class from the current class context found a
 //! method before (QoreCallTargetCheckCache; issue #5824)
-static QORE_INTERN_NOINLINE bool qore_ir_call_target_cache_hit(const QoreIRExprInstruction* check,
-        const QoreValue& target) {
-    return !check->check_after_args && qore_call_target_cache_hit(check->check_cache, target);
+static QORE_INTERN_NOINLINE bool qore_ir_call_target_cache_hit(const QoreIRFunction& func,
+        const QoreIRExprInstruction* check, const QoreValue& target) {
+    if (check->check_after_args) {
+        return false;
+    }
+    // the class context and the Program of code that always runs in the same ones are those of the function; others
+    // are read from the thread
+    return func.static_call_context
+        ? qore_call_target_cache_hit_static(check->check_cache, target, func.static_class_ctx, func.pgm)
+        : qore_call_target_cache_hit(check->check_cache, target);
 }
 
 //! the check of a call's target after the inline tests of the IR interpreter: the cache of a method looked up by name,
@@ -7374,9 +7381,9 @@ static QORE_INTERN_NOINLINE bool qore_ir_call_target_cache_hit(const QoreIRExprI
 /** Out of line and without state of the interpreter's frame, which is at its stack budget
     (tools/stack-usage-budgets.txt)
 */
-static QORE_INTERN_NOINLINE bool qore_ir_call_target_check_slow(const QoreIRExprInstruction* ei,
-        const QoreValue& target, ExceptionSink* xsink) {
-    if (qore_ir_call_target_cache_hit(ei, target)) {
+static QORE_INTERN_NOINLINE bool qore_ir_call_target_check_slow(const QoreIRFunction& func,
+        const QoreIRExprInstruction* ei, const QoreValue& target, ExceptionSink* xsink) {
+    if (qore_ir_call_target_cache_hit(func, ei, target)) {
         return true;
     }
     return !(ei->check_after_args ? qore_check_call_target_after_args(ei->expr, target, xsink)
@@ -8812,7 +8819,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     ei->check_method_class, ei->check_any_class)) {
                 return true;
             }
-            return qore_ir_call_target_check_slow(ei, frame_self
+            return qore_ir_call_target_check_slow(func, ei, frame_self
                 ? QoreValue(static_cast<AbstractQoreNode*>(frame_self)) : QoreValue(), xsink);
         }
         QoreValue target = getIRValue(values, check_inst->operands.front());
@@ -8822,7 +8829,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     ei->check_class, ei->check_method_class, ei->check_any_class)) {
             return true;
         }
-        return qore_ir_call_target_check_slow(ei, target, xsink);
+        return qore_ir_call_target_check_slow(func, ei, target, xsink);
     };
     debug_active = can_debug && tlpd->runtimeCheck();
     // the state of the debugger's events of the frame (see QoreIRDebugFrameState)
@@ -11345,7 +11352,8 @@ load_local_done:
                         break;
                     }
                     // a method call looked up by name for the object's class from this class context before
-                    if (qore_ir_call_target_cache_hit(static_cast<const QoreIRExprInstruction*>(check), out)) {
+                    if (qore_ir_call_target_cache_hit(func, static_cast<const QoreIRExprInstruction*>(check),
+                            out)) {
                         ++ip;
                         break;
                     }

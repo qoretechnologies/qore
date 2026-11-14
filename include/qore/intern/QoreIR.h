@@ -4240,6 +4240,17 @@ public:
     //! only the compiles referencing a Program being torn down. Set unconditionally at
     //! lowering (independent of the #5352 debug context above). Null for AOT.
     QoreProgram* pgm = nullptr;
+    //! true if the code of the function always runs with the class context \a static_class_ctx and with \a pgm as
+    //! the current Program of its thread (issue #5824)
+    /** Known for top-level code (no class context), plain functions (none) and normal and static methods and
+        destructors (the class of the method), and for the functions lowered as part of one of them; not for
+        constructors and copy methods (an imported class runs them in its own class context), closures (a closure
+        created in a method runs in the Program of its object) and code compiled ahead of time, which the
+        call-target cache test then reads from the thread (QoreCallTargetCheckCache)
+    */
+    bool static_call_context = false;
+    //! the class context of the code of the function, if \a static_call_context
+    const qore_class_private* static_class_ctx = nullptr;
     //! the ID of \a pgm, taken when it is set: a background compile checks that the Program with this ID is still
     //! the one at \a pgm, as a deleted Program's address can be reused (see QoreJIT::enqueueBgCompile())
     qore_program_id_t pgm_id = 0;

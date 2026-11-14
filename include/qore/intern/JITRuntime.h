@@ -408,6 +408,11 @@ bool qore_rt_call_target_cache_hit(const QoreCallTargetCheckCache* cache, uint64
 //! @a target, which has not been deleted, from the current class context (QoreCallTargetCheckCache; issue #5824)
 DLLLOCAL bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, const QoreValue& target);
 
+//! qore_call_target_cache_hit() for code that always runs with the class context @a ctx and the current Program
+//! @a pgm (QoreIRFunction::static_call_context), which are not read from the thread
+DLLLOCAL bool qore_call_target_cache_hit_static(const QoreCallTargetCheckCache* cache, const QoreValue& target,
+        const qore_class_private* ctx, const QoreProgram* pgm);
+
 //! The JIT helper of a CheckCallTarget made after the arguments (QoreIRExprInstruction::check_after_args)
 void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink);
 

@@ -33,6 +33,7 @@
 #include <qore/QoreSandboxManager.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
@@ -1674,6 +1675,9 @@ void qore_release_module_program_pins() {
         qore_module_lifetime_flag.store(false, std::memory_order_release);
         pgms.swap(pins.pgms);
     }
+    // the method lookups cached for classes of Programs with module lifetime are no longer known to be stable
+    // (QoreCallTargetCheckCache, issue #5824)
+    qore_bump_method_dispatch_epoch();
     for (QoreProgram* pgm : pgms) {
         pgm->depDeref();
     }
