@@ -3360,6 +3360,39 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
             slot_owned_values[id] |= QORE_IR_SLOT_RETURN;
         }
     }
+    // the value that the DiscardTempsKeep of a return statement keeps is the value of the return as well: the AST
+    // interpreter takes the value before it releases the statement's temporaries (ReturnStatement::execImpl()), so an
+    // exception that their release raises interrupts the return, and the value is kept until the locals are released,
+    // as native code keeps it (qore#5995); the operand of the DiscardTempsKeep is not, as a call that raises as it
+    // releases its own arguments raises before the statement takes its value
+    if (!return_value_slot_ids.empty()) {
+        std::unordered_map<uint32_t, const QoreIRInstruction*> keep_defs;
+        for (const auto& b : func.blocks) {
+            for (const auto& inst_ptr : b->instructions) {
+                if (inst_ptr && (inst_ptr->opcode == QoreIROpcode::RefSelf
+                            || inst_ptr->opcode == QoreIROpcode::DiscardTempsKeep)
+                        && inst_ptr->result.isValid() && !inst_ptr->operands.empty()) {
+                    keep_defs[inst_ptr->result.id] = inst_ptr.get();
+                }
+            }
+        }
+        for (uint32_t id : return_value_slot_ids) {
+            std::unordered_set<uint32_t> seen;
+            for (uint32_t cur = id; seen.insert(cur).second;) {
+                auto d = keep_defs.find(cur);
+                if (d == keep_defs.end()) {
+                    break;
+                }
+                if (d->second->opcode == QoreIROpcode::DiscardTempsKeep) {
+                    if (cur < slot_owned_values.size()) {
+                        slot_owned_values[cur] |= QORE_IR_SLOT_RETURN;
+                    }
+                    break;
+                }
+                cur = d->second->operands.front().id;
+            }
+        }
+    }
     func.interpreter_slot_owned_values = std::move(slot_owned_values);
     func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
     func.interpreter_return_preserve_slot_ids = std::move(return_preserve_slot_ids);
