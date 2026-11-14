@@ -2403,9 +2403,26 @@ static uint32_t getAOTMetadataSectionSize(const std::vector<uint8_t>& metadata,
     return 0;
 }
 
-//! Compresses AOT metadata as the compression policy wants; returns false with an error if the metadata is too big
-static bool finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool include_source,
-        bool report_metadata, const QoreAOTBinaryWriter& writer, std::string& error) {
+//! Returns the maximum size of compressed AOT metadata once decompressed
+/** The QORE_AOT_TEST_MAX_METADATA_SIZE environment variable can only lower it, for tests of the fallback to
+    uncompressed metadata
+*/
+static size_t getAOTMaxCompressedMetadataSize() {
+    size_t rv = QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE;
+    QoreEnvironmentValue test_max("QORE_AOT_TEST_MAX_METADATA_SIZE");
+    if (const char* str = test_max.c_str(); str && *str) {
+        char* end = nullptr;
+        unsigned long long val = strtoull(str, &end, 10);
+        if (end && !*end && val < rv) {
+            rv = static_cast<size_t>(val);
+        }
+    }
+    return rv;
+}
+
+//! Compresses AOT metadata as the compression policy wants
+static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool include_source,
+        bool report_metadata, const QoreAOTBinaryWriter& writer) {
     static constexpr uint32_t AOT_HEADER_BYTES = 60;
     static constexpr size_t AOT_HEADER_COMPRESSION_OFFSET = 34;
 
@@ -2421,28 +2438,26 @@ static bool finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
                 printf("\n");
             }
         }
-        return true;
+        return;
     }
 
     // the reader refuses compressed metadata that is bigger than this once decompressed, whichever compression is
     // used (the size of all metadata bounds that of each section, of the string pool and of the metadata after the
-    // header), so an artifact with more would fail to load (qore#6127)
-    if (metadata.size() > QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) {
+    // header), but it has no limit for uncompressed metadata, so such metadata is written uncompressed (qore#6127)
+    if (size_t max_size = getAOTMaxCompressedMetadataSize(); metadata.size() > max_size) {
         if (report_metadata) {
-            printf("\n");
+            printf(" (uncompressed: too big to compress)\n");
         }
-        error = "the AOT metadata is " + std::to_string(metadata.size()) + " bytes, but the AOT format supports at "
-            "most " + std::to_string(QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) + " bytes of compressed metadata";
+        std::string msg = "warning: the AOT metadata is " + std::to_string(metadata.size()) + " bytes, more than the "
+            + std::to_string(max_size) + " bytes that can be compressed; it is written uncompressed";
         // name the function with the most metadata when it accounts for a good part of the metadata
         if (!writer.largest_func_metadata_name.empty()
                 && writer.largest_func_metadata_size >= metadata.size() / 10) {
-            error += "; function '" + writer.largest_func_metadata_name + "' has "
-                + std::to_string(writer.largest_func_metadata_size) + " bytes of it (slot map and debug IR); split "
-                "it into smaller functions";
-        } else {
-            error += "; split the code into smaller programs or modules";
+            msg += "; function '" + writer.largest_func_metadata_name + "' has "
+                + std::to_string(writer.largest_func_metadata_size) + " bytes of it (slot map and debug IR)";
         }
-        return false;
+        fprintf(stderr, "%s\n", msg.c_str());
+        return;
     }
 
     if (policy == AOTMetadataCompressionPolicy::SectionedZstd) {
@@ -2456,7 +2471,7 @@ static bool finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
         } else if (report_metadata) {
             printf("\n");
         }
-        return true;
+        return;
     }
 
     std::vector<uint8_t> sectioned_candidate;
@@ -2493,7 +2508,7 @@ static bool finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
                     100.0 * sectioned_candidate.size() / metadata.size());
             }
             metadata = std::move(sectioned_candidate);
-            return true;
+            return;
         }
         if (report_metadata) {
             printf(" (compressed to %zu bytes, %.1f%%)\n", compressed_total,
@@ -2512,7 +2527,6 @@ static bool finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
     } else if (report_metadata) {
         printf("\n");
     }
-    return true;
 }
 
 static std::string qccCompileModeSuffix(int opt_level, bool include_source) {
@@ -24417,9 +24431,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         }
 
         bool report_metadata = qccReportMetadataSizeStart("compilation metadata", metadata.size());
-        if (!finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer, error)) {
-            return false;
-        }
+        finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
         generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs,
             compiled_init_funcs);
 
@@ -26860,9 +26872,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         }
 
         bool report_metadata = qccReportMetadataSizeStart("module metadata", metadata.size());
-        if (!finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer, error)) {
-            return false;
-        }
+        finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
 
         // Add init functions to the function table so they're available at runtime
         for (auto& cif : compiled_init_funcs) {
@@ -27372,9 +27382,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             }
 
             bool report_metadata = qccReportMetadataSizeStart("split module metadata", metadata.size());
-            if (!finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer, error)) {
-                return false;
-            }
+            finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
 
             // Add init functions to the function table so they're available at runtime
             for (auto& cif : compiled_init_funcs) {
@@ -29991,9 +29999,7 @@ bool QoreAOT::compileScriptAggregate(
         }
 
         bool report_metadata = qccReportMetadataSizeStart("script aggregate metadata", metadata.size());
-        if (!finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer, error)) {
-            return false;
-        }
+        finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
     }
 
     size_t init_func_i = 0;
@@ -31782,9 +31788,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             }
 
             bool report_metadata = qccReportMetadataSizeStart("aggregated metadata", metadata.size());
-            if (!finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer, error)) {
-                return false;
-            }
+            finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
 
             for (auto& cif : compiled_init_funcs) {
                 AOTCompiledFunc cf;
@@ -32339,9 +32343,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             }
 
             bool report_metadata = qccReportMetadataSizeStart("archive metadata", metadata.size());
-            if (!finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer, error)) {
-                return false;
-            }
+            finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
 
             for (auto& cif : compiled_init_funcs) {
                 AOTCompiledFunc cf;

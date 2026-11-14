@@ -15460,6 +15460,23 @@ static const char* aotTestFailIRSerialization() {
     return name && *name ? name : nullptr;
 }
 
+//! Returns the maximum number of basic blocks of a serialized IR function
+/** Block references are u16 indices, with 0xFFFF meaning no block; the QORE_AOT_TEST_MAX_IR_BLOCKS environment
+    variable can only lower the limit, for tests of the check
+*/
+static size_t aotMaxIRBlocks() {
+    size_t rv = std::numeric_limits<uint16_t>::max() - 1;
+    QoreEnvironmentValue test_max("QORE_AOT_TEST_MAX_IR_BLOCKS");
+    if (const char* str = test_max.c_str(); str && *str) {
+        char* end = nullptr;
+        unsigned long long val = strtoull(str, &end, 10);
+        if (end && !*end && val < rv) {
+            rv = static_cast<size_t>(val);
+        }
+    }
+    return rv;
+}
+
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
         const AOTExprWriteFunc& writeExpr) {
     if (const char* fail_name = aotTestFailIRSerialization()) {
@@ -15474,6 +15491,56 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     if (!qore_aot_validate_inst_group_registry(registry_error)) {
         qoreAOTSetExprSerializationError("AOT instruction group registry validation failed: " + registry_error);
         return false;
+    }
+
+    // The counts of the IR have fixed widths in the AOT format; a count that does not fit would wrap and make the
+    // reader decode a different function than was written, so the function is refused instead (qore#6127)
+    {
+        auto checkCount = [&func](size_t count, size_t limit, const char* what) -> bool {
+            if (count <= limit) {
+                return true;
+            }
+            qoreAOTSetExprSerializationError("AOT cannot compile function '" + func.name + "': its IR has "
+                + std::to_string(count) + " " + what + ", but the AOT format supports at most "
+                + std::to_string(limit) + "; split the function into smaller functions");
+            return false;
+        };
+        constexpr size_t u16_max = std::numeric_limits<uint16_t>::max();
+        if (!checkCount(func.blocks.size(), aotMaxIRBlocks(), "basic blocks")
+                || !checkCount(func.local_var_slots.size(), u16_max, "local variable slots")
+                || !checkCount(func.all_body_locals.size(), u16_max, "body local variables")) {
+            return false;
+        }
+        for (auto& block : func.blocks) {
+            if (!checkCount(block->instructions.size(), u16_max, "instructions in a basic block")) {
+                return false;
+            }
+            for (auto& inst_ptr : block->instructions) {
+                switch (classifyInstruction(inst_ptr.get())) {
+                    case QoreIRInstGroup::SwitchInt:
+                        if (!checkCount(static_cast<const QoreIRSwitchIntInstruction*>(inst_ptr.get())->cases.size(),
+                                u16_max, "cases in a switch statement")) {
+                            return false;
+                        }
+                        break;
+                    case QoreIRInstGroup::SwitchString:
+                        if (!checkCount(
+                                static_cast<const QoreIRSwitchStringInstruction*>(inst_ptr.get())->cases.size(),
+                                u16_max, "cases in a switch statement")) {
+                            return false;
+                        }
+                        break;
+                    case QoreIRInstGroup::LValuePath:
+                        if (!checkCount(static_cast<const QoreIRLValuePathInstruction*>(inst_ptr.get())->path.size(),
+                                std::numeric_limits<uint8_t>::max(), "steps in an lvalue path")) {
+                            return false;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
     }
 
     // 1. Function header
