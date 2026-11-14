@@ -45,6 +45,7 @@ public:
     DLLLOCAL ParseReferenceNode(const QoreProgramLocation* loc, QoreValue exp,
             const QoreTypeInfo* typeInfo = referenceTypeInfo) : ParseNode(loc, NT_PARSEREFERENCE, true, false),
             lvexp(exp), typeInfo(typeInfo) {
+        updateReferenceTarget();
     }
 
     //! concatenate the verbose string representation of the value to an existing QoreString
@@ -86,6 +87,7 @@ public:
 
     DLLLOCAL void setTypeInfo(const QoreTypeInfo* ti) {
         typeInfo = ti;
+        updateReferenceTarget();
         if (parse_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
             parse_analysis.known_type = ti;
         }
@@ -114,6 +116,21 @@ protected:
     QoreValue lvexp{};
     //! lvalue type info
     const QoreTypeInfo* typeInfo;
+    //! Cached when parsing or loading metadata, never changed by an invocation.
+    const QoreTypeInfo* reference_target_type = nullptr;
+    bool reference_target_needs_substitution = false;
+
+    DLLLOCAL void updateReferenceTarget() {
+        reference_target_type = QoreTypeInfo::getUniqueReturnComplexReference(typeInfo);
+        reference_target_needs_substitution = qore_type_contains_type_parameter(reference_target_type);
+    }
+
+    //! Resolve before evaluating the owned lvalue expression, so a failed allocation cannot leak it.
+    DLLLOCAL const QoreTypeInfo* getRuntimeReferenceTarget() const {
+        return reference_target_needs_substitution
+            ? qore_substitute_type_params(reference_target_type, qore_get_current_receiver_type_info())
+            : reference_target_type;
+    }
 
     //! frees all memory and destroys the object
     DLLLOCAL ~ParseReferenceNode() {

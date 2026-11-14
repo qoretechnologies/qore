@@ -482,6 +482,12 @@ DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
 
 #ifdef DEBUG
+//! the offset in microseconds that debug builds add to the system clock (q_epoch(), q_epoch_us(), q_epoch_ns()), to test
+//! code under a step of the system clock; set with dbg_set_realtime_offset(); the monotonic clock is not affected
+DLLLOCAL extern std::atomic<int64> qore_dbg_realtime_offset_us;
+#endif
+
+#ifdef DEBUG
 //! Returns the number of heap integers (QoreBigIntNode) that exist in the process
 /** An integer outside the inline range of a value is allocated on the heap, and code that fails to release one
     leaks it; tests compare the count before and after the code under test; see dbg_get_live_bigint_count().
