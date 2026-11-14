@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../ExecModeHarness.qm
+
+%exec-class LoggerWrapperNoLoggerTest
+
+#! Tests the level checks of a LoggerWrapper without a logger
+/** The isTraceEnabled() ... isFatalEnabled() methods of LoggerWrapper returned no value when no logger was set, which
+    raised RUNTIME-TYPE-ERROR for their bool return type; they return False, as isEnabledFor() does.  The checks are in
+    logger-wrapper-no-logger-worker.qr, which is run in each execution mode; every run must give the results below.
+*/
+class LoggerWrapperNoLoggerTest inherits QUnit::Test {
+    public {
+        #! the result of every level check without a logger
+        const NoLogger = "isTraceEnabled:False,isDebugEnabled:False,isInfoEnabled:False,isWarnEnabled:False,"
+            "isErrorEnabled:False,isFatalEnabled:False";
+
+        #! the result of every check the worker makes
+        const Expected = {
+            "no-logger": NoLogger,
+            "info-logger": "isTraceEnabled:False,isDebugEnabled:False,isInfoEnabled:True,isWarnEnabled:True,"
+                "isErrorEnabled:True,isFatalEnabled:True",
+            "logger-removed": NoLogger,
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("LoggerWrapperNoLoggerTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("each execution mode", \testExecModes());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, get_script_dir() + DirSep + "logger-wrapper-no-logger-worker.qr"));
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

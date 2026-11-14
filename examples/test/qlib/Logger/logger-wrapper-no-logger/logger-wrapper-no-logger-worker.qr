@@ -1,0 +1,28 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the checks of logger-wrapper-no-logger.qtest: prints one "name=result" line per check
+
+%requires ../../../../../qlib/Logger.qm
+
+#! returns the result of each is*Enabled() method of the wrapper, or the error that it raised
+string sub levels(LoggerWrapper w) {
+    list<string> l = ();
+    foreach string name in (("isTraceEnabled", "isDebugEnabled", "isInfoEnabled", "isWarnEnabled", "isErrorEnabled",
+            "isFatalEnabled")) {
+        try {
+            l += sprintf("%s:%y", name, call_object_method(w, name));
+        } catch (hash<ExceptionInfo> ex) {
+            l += sprintf("%s:%s", name, ex.err);
+        }
+    }
+    return l.join(",");
+}
+
+LoggerWrapper w();
+printf("no-logger=%s\n", levels(w));
+w.setLogger(new Logger("wrapper-test", LoggerLevel::getLevelInfo()));
+printf("info-logger=%s\n", levels(w));
+w.setLogger();
+printf("logger-removed=%s\n", levels(w));
