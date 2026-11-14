@@ -1770,25 +1770,29 @@ static bool qore_self_call_is_qualified(const SelfFunctionCallNode* self_call) {
 
 //! true if the cache of a method call site (QoreCallTargetCheckCache) knows that a lookup by name finds a method for
 //! the class of the object @a target_bits, which has not been deleted, from the current class context (issue #5824)
-static bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, uint64_t target_bits) {
+bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, const QoreValue& target) {
     if (!cache) {
         return false;
     }
-    QoreValue target = fromBits(target_bits);
     const AbstractQoreNode* n = target.isPointer() ? target.getPtr() : nullptr;
     if (!n || n->getType() != NT_OBJECT) {
         return false;
     }
     const QoreObject* obj = static_cast<const QoreObject*>(n);
+    if (!qore_object_private::isValidOfClass(obj, nullptr, nullptr, true)) {
+        return false;
+    }
+    // the class context and the Program with one lookup of the thread's data
+    const qore_class_private* ctx;
+    QoreProgram* pgm;
+    runtime_get_class_and_program(ctx, pgm);
     const QoreClass* cls = obj->getClass();
-    return qore_object_private::isValidOfClass(obj, nullptr, nullptr, true)
-        && qore_class_private::get(*cls)->runtimeMethodLookupIsStable()
-        && cache->hit(cls, runtime_get_class());
+    return qore_class_private::get(*cls)->runtimeMethodLookupIsStable(pgm) && cache->hit(cls, ctx);
 }
 
 extern "C" DLLEXPORT bool qore_rt_call_target_cache_hit(const QoreCallTargetCheckCache* cache,
         uint64_t target_bits) {
-    return qore_call_target_cache_hit(cache, target_bits);
+    return qore_call_target_cache_hit(cache, fromBits(target_bits));
 }
 
 extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext* ctx, int32_t slot,
@@ -1831,7 +1835,7 @@ extern "C" DLLEXPORT bool qore_rt_call_target_needs_no_check_aot(QoreAOTContext*
     if (qc && method && qore_rt_call_target_is_valid_object(target_bits, qc, method->getClass(), false)) {
         return true;
     }
-    return qore_call_target_cache_hit(cache, target_bits);
+    return qore_call_target_cache_hit(cache, fromBits(target_bits));
 }
 
 //! qore_check_call_target(); @a runtime_location is a template parameter, so that the JIT and IR paths, which use

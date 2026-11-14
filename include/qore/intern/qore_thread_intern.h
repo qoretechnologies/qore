@@ -2013,6 +2013,8 @@ DLLLOCAL const qore_class_private* runtime_get_class();
 */
 DLLLOCAL const qore_class_private* runtime_get_caller_class();
 DLLLOCAL void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& qc);
+//! returns the class context and the current Program of the thread, with one lookup of its data
+DLLLOCAL void runtime_get_class_and_program(const qore_class_private*& qc, QoreProgram*& pgm);
 //! returns the current Program and class context with one thread-local lookup
 DLLLOCAL void runtime_get_program_and_class(QoreProgram*& pgm, const qore_class_private*& qc);
 // to get or set the current generic receiver type for static generic method bodies

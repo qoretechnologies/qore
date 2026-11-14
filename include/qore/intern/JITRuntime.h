@@ -404,6 +404,10 @@ void qore_rt_check_call_target_aot(QoreAOTContext* ctx, int32_t slot, uint64_t t
 //! current class context (QoreCallTargetCheckCache; issue #5824)
 bool qore_rt_call_target_cache_hit(const QoreCallTargetCheckCache* cache, uint64_t target_bits);
 
+//! true if the cache of a method call site knows that a lookup by name finds a method for the class of the object
+//! @a target, which has not been deleted, from the current class context (QoreCallTargetCheckCache; issue #5824)
+DLLLOCAL bool qore_call_target_cache_hit(const QoreCallTargetCheckCache* cache, const QoreValue& target);
+
 //! The JIT helper of a CheckCallTarget made after the arguments (QoreIRExprInstruction::check_after_args)
 void qore_rt_check_call_target_after_args(uint64_t call_bits, uint64_t target_bits, ExceptionSink* xsink);
 
