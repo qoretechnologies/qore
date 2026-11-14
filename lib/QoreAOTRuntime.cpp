@@ -2633,12 +2633,29 @@ static const QoreMethod* findAOTVariantClassLocalMethod(const QoreClass* qc, con
     return is_static ? qcp->parseFindLocalStaticMethod(name) : qcp->parseFindLocalMethod(name);
 }
 
+// documented in QoreAOT.h
+const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const char* method_name) {
+    if (!qc || !method_name || !*method_name) {
+        return nullptr;
+    }
+    qore_class_private* qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+    if (const QoreMethod* method = findAOTInstanceMethod(qc, method_name, qcp)) {
+        return method;
+    }
+    ClassAccess access = Public;
+    return qcp->runtimeFindCommittedStaticMethodIntern(method_name, access, qcp);
+}
+
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
     }
     const QoreMethod* method = qc->findMethod(method_name);
-    return method ? method : findAOTStaticMethod(qc, method_name);
+    if (!method) {
+        method = findAOTStaticMethod(qc, method_name);
+    }
+    // a method whatever its access, which the compiler checked (qore#5975)
+    return method ? method : qore_aot_find_named_method(qc, method_name);
 }
 
 static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
