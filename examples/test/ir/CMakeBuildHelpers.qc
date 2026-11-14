@@ -243,6 +243,20 @@ qore_user_modules(\"qlib/Fixture\")
         mkdir(tmp.path + "/debug/qlib-qmod/ModD", 0755, True);
         write(tmp.path + "/debug/qlib-qmod/ModD/ModD.qmod", "fixture qmod\n");
         symlink(tmp.path + "/debug/./qlib-qmod/ModD/ModD.qmod", source_modd + "/ModD.qmod");
+        # a link that names tree "debug" through a symbolic link to it is removed too, while a link into a sibling
+        # directory whose name extends the tree's qmod directory (qlib-qmod2) is kept
+        string debug_alias = tmp.path + "/debug-alias";
+        symlink(tmp.path + "/debug", debug_alias);
+        hash<string, string> extra_links;
+        foreach hash<auto> h in ({"module": "ModE", "dir": debug_alias + "/qlib-qmod"},
+                {"module": "ModF", "dir": tmp.path + "/debug/qlib-qmod2"}) {
+            string source_module = source_qlib + "/" + h.module;
+            mkdir(source_module, 0755, True);
+            mkdir(tmp.path + "/debug/" + basename(h.dir) + "/" + h.module, 0755, True);
+            write(tmp.path + "/debug/" + basename(h.dir) + "/" + h.module + "/" + h.module + ".qmod", "fixture qmod\n");
+            extra_links{h.module} = source_module + "/" + h.module + ".qmod";
+            symlink(h.dir + "/" + h.module + "/" + h.module + ".qmod", extra_links{h.module});
+        }
 
         # the format-change cleanup of tree "debug" removes only its own links
         string out = run(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s -P %s",
@@ -253,11 +267,25 @@ qore_user_modules(\"qlib/Fixture\")
         assertFalse(is_link(source_modc + "/ModC.qmod"), "a relative link into the cleaning tree is removed: " + out);
         assertFalse(is_link(source_modd + "/ModD.qmod"),
             "an absolute link into the cleaning tree named otherwise is removed: " + out);
-        assertTrue(out.find("Removed 3 generated source qmod symlink(s)") >= 0, out);
+        assertFalse(is_link(extra_links.ModE),
+            "a link into the cleaning tree through a symbolic link to it is removed: " + out);
+        assertTrue(is_link(extra_links.ModF), "a link into a sibling qmod directory (qlib-qmod2) is kept: " + out);
+        assertTrue(out.find("Removed 4 generated source qmod symlink(s)") >= 0, out);
 
         # the stale-artifact check of tree "debug" does not remove tree "release"'s link to a fresh qmod
         string format_stamp = tmp.path + "/debug/qcc-format.stamp";
         write(format_stamp, "format=1\n");
+        foreach string mod in ("ModG", "ModH") {
+            mkdir(source_qlib + "/" + mod, 0755, True);
+            write(source_qlib + "/" + mod + "/" + mod + ".qm",
+                sprintf("%%modern\nmodule %s { version = \"1.0\"; }\n", mod));
+            string qmod = tmp.path + "/debug/qlib-qmod/" + mod + "/" + mod + ".qmod";
+            mkdir(dirname(qmod), 0755, True);
+            write(qmod, "fixture qmod\n");
+            TestFileTime::set_file_times(2026-01-01T00:00:00Z, qmod);
+        }
+        symlink(tmp.path + "/debug/./qlib-qmod/ModG/ModG.qmod", source_qlib + "/ModG/ModG.qmod");
+        symlink(debug_alias + "/qlib-qmod/ModH/ModH.qmod", source_qlib + "/ModH/ModH.qmod");
         TestFileTime::set_file_times(2026-01-01T00:00:00Z, debug_moda);
         TestFileTime::set_file_times(2026-01-01T00:01:00Z, format_stamp);
         assertTrue(mtime(debug_moda) < mtime(format_stamp),
@@ -267,6 +295,12 @@ qore_user_modules(\"qlib/Fixture\")
             shellQuote(ensure_script)));
         assertTrue(is_link(links.ModA), "a stale artifact in another tree keeps the link: " + out);
         assertEq(qmods.ModA, readlink(links.ModA), "a stale artifact in another tree leaves the link alone: " + out);
+        # a link to a stale artifact of tree "debug" is removed however it names the artifact (with ./, or through a
+        # symbolic link to the tree)
+        assertFalse(is_link(source_qlib + "/ModG/ModG.qmod"),
+            "a link to a stale artifact of the tree spelled with ./ is removed: " + out);
+        assertFalse(is_link(source_qlib + "/ModH/ModH.qmod"),
+            "a link to a stale artifact of the tree through a symbolic link to it is removed: " + out);
 
         # the cleanup requires the build tree whose links it removes
         assertNeq(0, system(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -P %s > /dev/null 2>&1",

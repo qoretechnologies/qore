@@ -13,7 +13,30 @@ endif()
 # Several build trees can share one source tree, and each links the source qlib/ to its own qmods.  A qcc
 # format change in one tree invalidates only that tree's qmods, so only links into that tree are removed; a link
 # into another build tree belongs to that tree.
-get_filename_component(_qore_build_qmod_prefix "${QORE_BUILD_QMOD_DIR}" ABSOLUTE)
+# Sets <var> to the physical path of <path> (relative to <base>): the real path of its longest existing ancestor
+# followed by the rest of it, so that a target that no longer exists is named like one that does
+function(_qore_qmod_physical_path path base var)
+    get_filename_component(_path "${path}" ABSOLUTE BASE_DIR "${base}")
+    set(_rest "")
+    while(NOT EXISTS "${_path}")
+        get_filename_component(_parent "${_path}" DIRECTORY)
+        if("${_parent}" STREQUAL "${_path}" OR "${_parent}" STREQUAL "")
+            break()
+        endif()
+        get_filename_component(_name "${_path}" NAME)
+        set(_rest "/${_name}${_rest}")
+        set(_path "${_parent}")
+    endwhile()
+    get_filename_component(_path "${_path}" REALPATH)
+    if("${_path}" STREQUAL "/")
+        set(_path "")
+    endif()
+    set(${var} "${_path}${_rest}" PARENT_SCOPE)
+endfunction()
+
+# links and the tree are compared by physical path: a link may name the tree otherwise (through a symbolic link, or
+# on macOS by /private/tmp/... where CMake names it /tmp/...)
+_qore_qmod_physical_path("${QORE_BUILD_QMOD_DIR}" "${CMAKE_CURRENT_BINARY_DIR}" _qore_build_qmod_prefix)
 set(_qore_build_qmod_prefix "${_qore_build_qmod_prefix}/")
 
 file(GLOB_RECURSE _qore_source_qmods LIST_DIRECTORIES false "${QORE_SOURCE_QLIB_DIR}/*.qmod")
@@ -23,10 +46,8 @@ foreach(_qore_source_qmod IN LISTS _qore_source_qmods)
         continue()
     endif()
     file(READ_SYMLINK "${_qore_source_qmod}" _qore_target)
-    # the target is normalized as the prefix is (get_filename_component(ABSOLUTE) also translates paths: on macOS,
-    # /private/tmp/... becomes /tmp/...), whether the link is relative or absolute
     get_filename_component(_qore_link_dir "${_qore_source_qmod}" DIRECTORY)
-    get_filename_component(_qore_target "${_qore_target}" ABSOLUTE BASE_DIR "${_qore_link_dir}")
+    _qore_qmod_physical_path("${_qore_target}" "${_qore_link_dir}" _qore_target)
     string(FIND "${_qore_target}" "${_qore_build_qmod_prefix}" _qore_prefix_pos)
     if(_qore_prefix_pos EQUAL 0)
         file(REMOVE "${_qore_source_qmod}")
