@@ -812,10 +812,11 @@ private:
     std::unordered_map<uint32_t, size_t> temp_scope_end;
     //! The marks of the temp scopes that were open when each temp scope was closed, up to its own mark (see
     //! getTempScopeMarks())
-    /** The blocks are lowered in layout order, which is not the order of the control flow: the continuation blocks
-        of the calls in a branch of ?: (or of another operator whose join block is created before its operands are
-        lowered) come after the join block, which holds the end of the statement (DiscardTemps), so an exception check
-        in them is lowered once the mark of its temp scope is gone (qore#5997).
+    /** The blocks are lowered in layout order, which is not the order of the control flow: a block that comes after
+        the block holding the end of its statement (DiscardTemps) has its exception checks lowered once the mark of
+        their temp scope is gone (qore#5997).  The join blocks of ?:, ??, ?*, && and || are placed after the blocks of
+        their operands since qore#6080, so these operators no longer produce such blocks; the saved marks remain a
+        safety net for any other construct that does.
     */
     std::unordered_map<uint32_t, std::vector<TempCleanupMark>> closed_temp_cleanup_marks;
 

@@ -19182,8 +19182,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.insert(inst->result.id);
             }
             // a Phi of temporaries is a temporary too: its own cleanup slot takes each incoming temporary's reference
-            // over at the end of the predecessor (in the fixup pass, when every block is lowered: the blocks of a
-            // nested ?: or ?? that gives an incoming value are lowered after the outer Phi), so a call consumes it as
+            // over at the end of the predecessor (in the fixup pass, when every block is lowered: an incoming value can
+            // come from a block lowered after the Phi), so a call consumes it as
             // it consumes any temporary argument (see consumable_phis).  The slot is created here, before the
             // statement's DiscardTemps is lowered, so that the statement releases it
             llvm::AllocaInst* temp_cleanup = nullptr;
