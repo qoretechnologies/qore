@@ -60,7 +60,7 @@ interrupt is requested and a check sees an interrupt exactly as it did when it a
 `requestInterrupt()` increments it before it sets the bit (and decrements it again if the bit was already set),
 `clearInterrupt()` decrements it only after it has cleared a set bit, and the destructor of a manager, which does not
 clear the bit, decrements it if it finds the bit set, when no other thread can request or clear the manager's interrupt
-any more.  For a moment the count can be higher than the number of set bits by the number of requests and clears in
+any more (the manager is reference-counted, and every caller holds a reference).  For a moment the count can be higher than the number of set bits by the number of requests and clears in
 progress (a request from its increment until it sets the bit or takes the increment back, a clear from its clearing of
 the bit until its decrement), which only makes a check look up the manager.  The order
 matters: if a request set the bit first, a clear between its setting of the bit and its increment would decrement the

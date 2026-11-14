@@ -1409,8 +1409,10 @@ DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
     interrupt is requested: requestInterrupt() increments it before it sets the bit (and decrements it again if the bit
     was already set), clearInterrupt() decrements it only after it has cleared a set bit, and the destructor of a
     manager, which does not clear the bit, decrements it if it finds the bit set, when no other thread can request or
-    clear the manager's interrupt any more.  A clear that runs between a request's increment and its setting of the
-    bit finds no bit and leaves the count alone.  If the request set the bit first, such a clear would decrement the
+    clear the manager's interrupt any more (the manager is reference-counted, and every caller holds a reference).  A
+    clear that runs between a request's increment and its setting of the bit finds no bit and leaves the count alone,
+    unless the bit was already set: then the clear removes the earlier request's count, and the request sets the bit
+    again and keeps its own increment.  If the request set the bit first, such a clear would decrement the
     count before the request incremented it, and a check in between would read 0 while the interrupt of another
     manager is pending.  For a moment it can be higher than the number of set bits by the number of requests and
     clears in progress (a request from its increment until it sets the bit or takes the increment back, a clear from
