@@ -1744,11 +1744,9 @@
     - a @ref call_reference "call reference" to an object method now refers to the method of each object's class
       when it is created, as compiled code does, and raises \c OBJECT-METHOD-REFERENCE-ERROR for a class without it,
       also one with a \c methodGate() method; the result depended on the objects evaluated before (issue #6062)
-    - the objects of a Program that outlives the library cleanup (such as a Program that a module holds in a static
-      object) are now destroyed while the library can run their destructors, which crashed at a normal process exit;
-      a thread started while the library is cleaned up now raises \c THREAD-CREATION-FAILURE; a Program in which
-      a foreign thread still runs (such as a Python daemon thread blocked in a Qore call) is left as it is, so that
-      the cleanup does not wait for the thread forever (issue #6045)
+    - a Program that outlives the library cleanup (such as one a module holds in a static object) no longer crashes
+      a normal process exit, a thread started during the cleanup raises \c THREAD-CREATION-FAILURE, and the exit no
+      longer hangs when a foreign thread (such as a Python daemon thread) is blocked in Qore code (issue #6045)
     - a @ref find "find expression" nested in the result, in-expression or where expression of another one can now be
       compiled with @ref qcc_tool "qcc"; it was refused as an unsupported expression (issue #5974)
     - @ref qcc_tool "qcc" no longer crashes compiling a user module whose header has a \c del closure, and the compiled

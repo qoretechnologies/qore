@@ -20,13 +20,15 @@
     clearing of the data of the compiled modules did not leave a Program that such a thread runs in: the process hung
     (qore#6045 made it so for every python3 process with a blocked daemon thread).  The thread is started by
     staticpgm_foreign_call() of the test module "staticpgmcode" from ForeignBlockModule (the user module of
-    program-cleanup-at-exit.qtest, compiled here).  A hang is ended by timeout(1): status 124.
+    program-cleanup-at-exit.qtest, compiled here).  A hang is ended by killAfter(): status 137.
 */
 class AOTModuleForeignThreadTest inherits QUnit::Test {
     private {
         string qore_bin;
         string qcc_bin;
         string libqore_dir;
+        #! ends a child that hangs (see killAfter())
+        string kill_after = killAfter(120);
     }
 
     constructor() : QUnit::Test("AOTModuleForeignThreadTest", "1.0", \ARGV) {
@@ -38,6 +40,25 @@ class AOTModuleForeignThreadTest inherits QUnit::Test {
         addTestCase("a compiled module with a blocked foreign thread", \testForeignThread());
 
         set_return_value(main());
+    }
+
+    #! returns a command prefix that kills the command after it when it still runs after \a secs seconds
+    /** timeout(1) is not installed on every platform (macOS has none); without it, perl forks the command and kills it
+        when the alarm fires; the status of a killed command is 137 (128 + SIGKILL), as with timeout -s KILL.  With
+        neither, the prefix is empty, and a hang is ended by the test runner
+    */
+    private static string killAfter(int secs) {
+        string cmd = trim(backquote("command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (cmd.val()) {
+            return sprintf("%s -s KILL %d ", cmd, secs);
+        }
+        cmd = trim(backquote("command -v perl 2>/dev/null || true"));
+        if (cmd.val()) {
+            return sprintf("%s -e 'my $s = shift; my $p = fork; exit 127 if !defined $p; if (!$p) { exec @ARGV; "
+                "exit 127; } $SIG{ALRM} = sub { kill 9, $p; }; alarm $s; waitpid $p, 0; "
+                "exit($? & 127 ? 128 + ($? & 127) : $? >> 8);' %d ", cmd, secs);
+        }
+        return "";
     }
 
     private string run(string cmd) {
@@ -73,8 +94,8 @@ ForeignBlockModule::start();
 ", mod_dir));
             f.close();
             foreach string mode in ("ast", "ir", "jit") {
-                string cmd = sprintf("%s timeout -s KILL 120 %s -b --exec-mode=%s -l staticpgmcode %s", env(), qore_bin,
-                    mode, probe);
+                string cmd = sprintf("%s %s%s -b --exec-mode=%s -l staticpgmcode %s", env(), kill_after, qore_bin, mode,
+                    probe);
                 assertRegex("status=0\n$", run(cmd), "the process ends with the foreign thread blocked: " + opt + " " + mode);
             }
         }

@@ -53,6 +53,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         string env_prefix = "";
         #! 1 if the test module "staticpgm" can be loaded, 0 if not, -1 if it was not checked yet
         int staticpgm_available = -1;
+        #! ends a child that hangs (see killAfter())
+        string kill_after = killAfter(120);
     }
 
     constructor() : Test("ProgramCleanupAtExitTest", "1.0") {
@@ -101,6 +103,25 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         teardown exception reaches std::terminate(), or by the JVM's crash handler) rather than as
         any status the script could have set itself
     */
+    #! returns a command prefix that kills the command after it when it still runs after \a secs seconds
+    /** timeout(1) is not installed on every platform (macOS has none); without it, perl forks the command and kills it
+        when the alarm fires; the status of a killed command is 137 (128 + SIGKILL), as with timeout -s KILL.  With
+        neither, the prefix is empty, and a hang is ended by the test runner
+    */
+    private static string killAfter(int secs) {
+        string cmd = trim(backquote("command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (cmd.val()) {
+            return sprintf("%s -s KILL %d ", cmd, secs);
+        }
+        cmd = trim(backquote("command -v perl 2>/dev/null || true"));
+        if (cmd.val()) {
+            return sprintf("%s -e 'my $s = shift; my $p = fork; exit 127 if !defined $p; if (!$p) { exec @ARGV; "
+                "exit 127; } $SIG{ALRM} = sub { kill 9, $p; }; alarm $s; waitpid $p, 0; "
+                "exit($? & 127 ? 128 + ($? & 127) : $? >> 8);' %d ", cmd, secs);
+        }
+        return "";
+    }
+
     private int runChild(string statement, int expected, string module = "jni", string options = "",
             *reference<string> output, string extra_env = "") {
         # the statement is embedded in single quotes below, so it must not contain any;
@@ -239,7 +260,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         thread blocked in Queue::get() never does: every python3 process that ended with a blocked daemon thread hung
         forever.  The module "staticpgmcode" starts such a thread when QORE_STATICPGM_FOREIGN_THREAD is set and returns
         when the thread is in the call, so the state at the end of the process is the same at every run.  A hang is
-        ended by timeout(1), which gives 124 instead of the status 0 expected
+        ended by killAfter(), which gives 137 instead of the status 0 expected
     */
     private staticProgramForeignThreadTest() {
         if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
@@ -247,7 +268,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
                 "--build <build directory> --target staticpgmcode");
             return;
         }
-        string tenv = "QORE_STATICPGM_FOREIGN_THREAD=1 timeout -s KILL 120 ";
+        string tenv = "QORE_STATICPGM_FOREIGN_THREAD=1 " + kill_after;
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             string options = "--exec-mode=" + mode;
             string output = "";
@@ -274,7 +295,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         # the module ForeignBlockModule is in the directory of this test
         string mod_dir = get_script_dir();
         string module_path = (ENV.QORE_MODULE_DIR ? ENV.QORE_MODULE_DIR + ":" : "") + mod_dir;
-        string tenv = sprintf("QORE_MODULE_DIR=%s timeout -s KILL 120 ", module_path);
+        string tenv = sprintf("QORE_MODULE_DIR=%s %s", module_path, kill_after);
         string code = "%requires ForeignBlockModule\nForeignBlockModule::start();";
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             string options = "--exec-mode=" + mode;
@@ -302,7 +323,7 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
             string output = "";
             assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgmcode", "--exec-mode=" + mode, \output,
-                "QORE_STATICPGM_FOREIGN_ENTRY=1 timeout -s KILL 120 "), "normal end: " + mode);
+                "QORE_STATICPGM_FOREIGN_ENTRY=1 " + kill_after), "normal end: " + mode);
             assertRegex("staticpgmcode: foreign thread entry refused", output, "the entry was refused: " + mode);
         }
     }
