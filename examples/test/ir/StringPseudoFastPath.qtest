@@ -17,6 +17,8 @@ if (!is_file(qcc_bin)) {
 
 string sub scriptCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 string heap = \"abcdefghijklmnopqrstuvwxyz\";
 string short = \"abc\";

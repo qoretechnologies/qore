@@ -833,6 +833,13 @@ int64_t qore_rt_get_on_block_exit_count();
 //! Removes executed handlers from the stack.
 void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
 
+//! Runs the handlers as qore_rt_exec_on_block_exit() does, keeping the value that a handler run while an exception
+//! is pending returns in \a hold, which replaces the value of the return that the exception interrupted (#5992)
+/** @return 1 if a handler's value was kept in \a hold, after which the parent releases the values of the
+    interrupted return
+*/
+int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold);
+
 //! Discard (without firing) on_block_exit handlers registered since saved_count,
 //! truncating the thread-local handler stack back to that mark.  Used by the JIT
 //! deopt path before re-executing via the AST interpreter.

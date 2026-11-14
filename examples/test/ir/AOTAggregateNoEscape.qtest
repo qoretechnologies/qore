@@ -27,6 +27,8 @@ string sub findFastNativeLine(string dump, string qore_path) {
 }
 
 string code = "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int sub readHash(hash<string, int> row) {
     return row.a + row.b + row.c + row.d;

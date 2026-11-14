@@ -13,6 +13,7 @@
 #include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -241,8 +242,16 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
             has_header = v.getAsBool();
         }
         v = options->getKeyValue("null_string");
-        if (getDataFrameString(v, s)) {
-            null_string = s;
+        if (v.getType() == NT_STRING) {
+            // the fields are compared in the default encoding, in which they are read; a string that it cannot
+            // represent raises DATAFRAME-ENCODING-ERROR (qore#6100)
+            // a short string is stored in the value, with no string node
+            QoreStringDataHelper str(v);
+            std::string utf8;
+            if (dataFrameUtf8Bytes(str.c_str(), str.size(), str.getEncoding(), utf8, xsink)
+                    || dataFrameDefaultString(utf8, null_string, xsink)) {
+                return nullptr;
+            }
         }
         v = options->getKeyValue("skip_rows");
         if (!v.isNullOrNothing()) {
@@ -409,6 +418,32 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
         }
     }
 
+    // the fields are read in the default encoding, and the string cells are in UTF-8, so the string cells are
+    // converted after they are read unless the default encoding is UTF-8, which reads them with no conversion
+    if (QCS_DEFAULT != QCS_UTF8) {
+        for (auto& col : df->columns) {
+            if (col.data->type != ColumnType::STRING) {
+                continue;
+            }
+            for (int64_t i = 0; i < col.data->n_rows; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink, "converting CSV string fields")) {
+                    delete df;
+                    return nullptr;
+                }
+                if (col.data->isNull(i)) {
+                    continue;
+                }
+                std::string& cell = col.data->str_data[i];
+                std::string utf8;
+                if (dataFrameConvertUtf8Bytes(cell.data(), cell.size(), QCS_DEFAULT, utf8, xsink)) {
+                    delete df;
+                    return nullptr;
+                }
+                cell = std::move(utf8);
+            }
+        }
+    }
+
     // Set final row count from first column
     df->n_rows = df->columns.empty() ? 0 : df->columns[0].data->n_rows;
     return df;
@@ -473,7 +508,20 @@ void QoreDataFrame::writeCSV(const std::string& path,
                     file << cd.float_data(r);
                     break;
                 case ColumnType::STRING: {
-                    const std::string& s = cd.str_data[r];
+                    // a CSV file is in the default encoding, as are the column names in its header, and a string
+                    // cell is in UTF-8
+                    const std::string* cell = &cd.str_data[r];
+                    std::string converted;
+                    if (QCS_DEFAULT != QCS_UTF8) {
+                        if (dataFrameConvertFromUtf8(*cell, QCS_DEFAULT, converted, xsink)) {
+                            // no partial file is left
+                            file.close();
+                            std::remove(path.c_str());
+                            return;
+                        }
+                        cell = &converted;
+                    }
+                    const std::string& s = *cell;
                     if (s.find(sep) != std::string::npos
                             || s.find('"') != std::string::npos
                             || s.find('\n') != std::string::npos) {

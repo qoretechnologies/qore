@@ -57,13 +57,18 @@ than the loop body of a tight loop; it is done only while the count is not 0.
 
 The count is never less than the number of managers with the `QSB_INTR_REQUESTED` bit set, so it is 0 only while no
 interrupt is requested and a check sees an interrupt exactly as it did when it always looked up the manager:
-`requestInterrupt()` increments it before it sets the bit (and decrements it again if the bit was already set), and
-`clearInterrupt()` and the destructor of a manager decrement it only after they have cleared a set bit.  The order
-matters: if a request set the bit first, a clear between its setting of the bit and its increment would decrement the
-count first, and a check in between would read 0 while the interrupt of another manager is pending, and miss it (a
-waiter would still be woken by the request's wakeup, but a check in a loop, or the only check of a short call, would
-not).  The count is changed before `requestInterrupt()` wakes the waiting threads, in the same seq_cst order as the
-bit, so a waiter that registers its wait and then reads 0 is woken by the wakeup that follows.
+`requestInterrupt()` increments it before it sets the bit (and decrements it again if the bit was already set),
+`clearInterrupt()` decrements it only after it has cleared a set bit, and the destructor of a manager, which does not
+clear the bit, decrements it if it finds the bit set, when no other thread can request or clear the manager's interrupt
+any more (the manager is reference-counted, and every caller holds a reference).  For a moment the count can be
+higher than the number of set bits by the number of requests and clears in progress (a request from its increment
+until it sets the bit or takes the increment back, a clear from its clearing of the bit until its decrement), which
+only makes a check look up the manager.  The order matters: if a request set the bit first, a clear between its
+setting of the bit and its increment would decrement the count first, and a check in between would read 0 while the
+interrupt of another manager is pending, and miss it (a waiter would still be woken by the request's wakeup, but a
+check in a loop, or the only check of a short call, would not).  `requestInterrupt()` changes the count before it
+wakes the waiting threads, in the same seq_cst order as the bit, so a waiter that registers its wait and then reads 0
+is woken by the wakeup that follows.
 
 Debug builds count the lookups (`dbg_get_cancel_sandbox_lookup_count()`): `loop-cancellation-points/fast-path.q`
 checks that a loop makes none without a requested interrupt, in every execution mode and with AOT, and that every kind

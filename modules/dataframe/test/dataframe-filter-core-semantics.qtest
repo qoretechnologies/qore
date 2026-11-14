@@ -1,0 +1,266 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-filter-core-semantics.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFrameFilterCoreSemanticsTest
+
+#! an enum filter value, which the core operators compare as its value
+enum FilterIntEnum { One = 1 }
+enum FilterStringEnum : string { A = "a" }
+enum FilterFloatEnum : float { Half = 1.5 }
+
+#! A filter on a column compares each cell with the value as the core comparison operators do, whatever the type of
+#! the column (qore#6061)
+/** The expected result of each filter is computed with the core operator itself on the cell value that the
+    DataFrame returns and the filter value, for every typed column kind and for a column that holds any value, with
+    DataFrame::filter(), with a row mask of ColumnRef::compare(), and with the filters of DataFrame::readParquet(),
+    which skips row groups with the column statistics.
+
+    A null cell or value is the exception: a null cell matches only \c is_null and \c == with a null value (and \c in
+    or \c not_in according to whether the list holds a null value), and a non-null cell matches a null value only with
+    \c !=.
+*/
+class DataFrameFilterCoreSemanticsTest inherits QUnit::Test {
+    private {
+        #! the core operators, which give the expected result of each filter operator; the operands are untyped, so
+        #! the operators compare them as they compare values of any type
+        hash<string, code> core = {
+            "==": bool sub (auto x, auto y) { return x == y; },
+            "!=": bool sub (auto x, auto y) { return x != y; },
+            "<": bool sub (auto x, auto y) { return x < y; },
+            "<=": bool sub (auto x, auto y) { return x <= y; },
+            ">": bool sub (auto x, auto y) { return x > y; },
+            ">=": bool sub (auto x, auto y) { return x >= y; },
+        };
+
+        #! the filter values: every type of value that a cell can be compared with
+        list<auto> values = (
+            0, 1, 2, -1, 35, 97, 9007199254740992, 9007199254740993,
+            0.0, 1.0, 1.5, -1.5, 97.0, 9007199254740992.0, @nan@,
+            0n, 1n, 1.5n, 97n, 9007199254740993n, @nan@n,
+            "", "0", "1", "1.5", "a", "b", "abc", "97", "True", "1970-01-01T00:01:37Z", "1970-01-01 00:01:37",
+            "é", convert_encoding("é", "ISO-8859-1"), "a\x00b",
+            True, False,
+            1970-01-01T00:01:37Z, 1970-01-01T01:01:37+01:00, 2024-06-01T12:00:00+02:00, 1969-12-31T23:59:59.5Z,
+            1970-01-01T00:00:00.000001Z, 1969-12-31T23:59:59.999999Z,
+            1D, 97s, 0s, 5s + microseconds(123),
+            c'a', c'1', c'0',
+            <61>, binary(),
+            FilterIntEnum::One, FilterStringEnum::A, FilterFloatEnum::Half,
+            NOTHING, NULL
+        );
+
+        #! lists of several values for the in and not_in operators
+        list<list<auto>> in_lists = (
+            (97, 1970-01-01T00:01:37Z),
+            (1, "1", 1.5),
+            ("", "a", True),
+            (NOTHING, 0),
+            (2024-06-01T12:00:00+02:00, 97s),
+            (1970-01-01T00:00:00Z, NULL),
+        );
+
+        #! the cells of each column kind
+        hash<string, list<auto>> column_cells = {
+            "int64": (-1, 0, 1, 2, 97, 9007199254740993),
+            "float64": (-1.5, 0.0, 1.0, 1.5, 97.0, 9007199254740992.0, @nan@),
+            "string": ("", "0", "1", "1.5", "a", "abc", "97", "True", "1970-01-01T00:01:37Z", "é", "a\x00b"),
+            "bool": (True, False),
+            "date": (1970-01-01T00:01:37Z, 1969-12-31T23:59:59.5Z, 2024-06-01T10:00:00Z, 1970-01-01T00:00:00Z),
+            "auto": (1, 1.5, "a", True, 1970-01-01T00:01:37Z, c'a', 1n, @nan@, 97s, ""),
+        };
+    }
+
+    constructor() : Test("DataFrameFilterCoreSemanticsTest", "1.0", \ARGV) {
+        foreach string dtype in (keys column_cells) {
+            addTestCase(dtype + " column", \columnTest(), (dtype,));
+        }
+        addTestCase("duration column", \durationColumnTest());
+        foreach string dtype in (keys column_cells) {
+            if (dtype != "auto") {
+                addTestCase(dtype + " Parquet column", \parquetColumnTest(), (dtype, column_cells{dtype}));
+            }
+        }
+        # a timestamp column in nanoseconds, whose cells are read truncated to microseconds; a DataFrame cannot write
+        # cells that are not whole microseconds (data/gen-filter-fixtures.cpp)
+        addTestCase("timestamp[ns] Parquet column", \parquetFileTest(), ("date",
+            get_script_dir() + DirSep + "data" + DirSep + "filter_timestamp_ns.parquet"));
+        # a decimal column whose integer part has a single digit
+        addTestCase("decimal128(38, 37) Parquet column", \parquetColumnTest(), ("auto", (1n, 2n), {
+            "kind": "decimal128", "precision": 38, "scale": 37}));
+        set_return_value(main());
+    }
+
+    #! tests a column of the given type holding its cells and a null cell
+    columnTest(string dtype) {
+        DataFrame::DataFrame df = makeFrame(column_cells{dtype});
+        checkColumn(df, dtype, "filter", DataFrame::DataFrame sub (string op, auto value) {
+            return df.filter("v", op, value);
+        });
+        checkColumn(df, dtype, "ColumnRef::compare", DataFrame::DataFrame sub (string op, auto value) {
+            return df.filter(df.column("v").compare(op, value));
+        });
+    }
+
+    #! tests a date column holding durations (relative dates), which a ColumnarResult gives
+    durationColumnTest() {
+        list<auto> cells = (97s, 0s, 5s + microseconds(123), 1D, NOTHING);
+        ColumnarResult cr = ColumnarResult::fromColumnHash({
+            "id": range(cells.size()),
+            "v": cells,
+        }, {
+            "v": {"native_type": "interval", "nullable": True},
+        });
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(cr);
+        # an absolute date is never equal to a relative date
+        assertTrue(df.getColumn("v")[0] == 97s, "the cells of a duration column are relative dates");
+        checkColumn(df, "date", "filter", DataFrame::DataFrame sub (string op, auto value) {
+            return df.filter("v", op, value);
+        });
+    }
+
+    #! tests the filters of DataFrame::readParquet() on a Parquet file with a row group for each row, which the
+    #! statistics of the column can skip
+    /** @param dtype the type of the DataFrame column that the cells are read into
+        @param cells the cells of the column
+        @param schema the columnar schema of the column, if it is not the one that the type of the cells gives
+    */
+    parquetColumnTest(string dtype, list<auto> cells, *hash<auto> schema) {
+        TmpDir tmp("dataframe-filter-core-semantics");
+        string path = tmp.path + DirSep + "frame.parquet";
+        DataFrame::DataFrame frame;
+        if (schema) {
+            frame = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+                "id": range(cells.size() + 1),
+                "v": cells + (NOTHING,),
+            }, {
+                "v": {"schema": schema + {"nullable": True}},
+            }));
+        } else {
+            frame = makeFrame(cells);
+        }
+        frame.writeParquet(path, <DataFrame::ParquetWriteOptions>{
+            "compression": "none", "row_group_size": 1, "use_dictionary": False,
+        });
+        parquetFileTest(dtype, path);
+    }
+
+    #! tests the filters of DataFrame::readParquet() on a Parquet file with the columns \c id and \c v
+    parquetFileTest(string dtype, string path) {
+        # the rows as they are read, from which the expected results are computed
+        DataFrame::DataFrame df = DataFrame::DataFrame::readParquet(path);
+        checkColumn(df, dtype, "readParquet", DataFrame::DataFrame sub (string op, auto value) {
+            return DataFrame::DataFrame::readParquet(path, <DataFrame::ParquetReadOptions>{
+                "filters": ({"column": "v", "op": op, "value": value},),
+            });
+        });
+    }
+
+    #! returns a DataFrame with the given cells and a null cell in its column \c v and their row numbers in \c id
+    private DataFrame::DataFrame makeFrame(list<auto> cells) {
+        list<hash<auto>> rows;
+        foreach auto cell in (cells) {
+            rows += {"id": $#, "v": cell};
+        }
+        rows += {"id": cells.size(), "v": NOTHING};
+        return new DataFrame::DataFrame(rows);
+    }
+
+    #! checks every filter operator with every value on the column \c v of the given DataFrame
+    /** @param df the DataFrame, whose cells give the expected results
+        @param dtype the expected type of the column
+        @param how the name of the way that the rows are filtered
+        @param filter a closure that returns the rows of the DataFrame that a filter operator and value select
+    */
+    private checkColumn(DataFrame::DataFrame df, string dtype, string how, code filter) {
+        hash<string, string> dtypes;
+        foreach string name in (df.columnNames()) {
+            dtypes{name} = df.dtypes()[$#];
+        }
+        assertEq(dtype, dtypes.v, "the column has the expected type");
+        list<auto> cells = df.getColumn("v");
+        list<auto> ids = df.getColumn("id");
+        # each filter whose result differs from the core operators' result; all are collected, so that a failure
+        # shows every mismatch at once
+        list<string> mismatches = ();
+        foreach auto value in (values) {
+            # a NUL character is shown escaped
+            string label = replace(sprintf("%s %y", value.typeCode() == NT_CHAR ? "char" : value.type(), value),
+                "\x00", "\\x00");
+            foreach string op in (keys core) {
+                list<int> expected = ();
+                foreach auto cell in (cells) {
+                    if (expectedMatch(op, cell, value)) {
+                        expected += ids[$#];
+                    }
+                }
+                checkFilter(\mismatches, filter, op, value, expected, sprintf("%s v %s %s", dtype, op, label));
+            }
+            checkInFilters(\mismatches, filter, cells, ids, (value,), dtype, label);
+        }
+        foreach list<auto> in_list in (in_lists) {
+            checkInFilters(\mismatches, filter, cells, ids, in_list, dtype, sprintf("%y", in_list));
+        }
+        assertEq((), mismatches, sprintf("%s column filters with %s give the core operators' results", dtype, how));
+    }
+
+    #! checks the in and not_in operators, which compare the cell with each value of the list with ==
+    private checkInFilters(reference<list<string>> mismatches, code filter, list<auto> cells, list<auto> ids,
+            list<auto> in_list, string dtype, string label) {
+        list<int> in_rows = ();
+        list<int> not_in_rows = ();
+        foreach auto cell in (cells) {
+            bool found = False;
+            foreach auto value in (in_list) {
+                if (expectedMatch("==", cell, value)) {
+                    found = True;
+                    break;
+                }
+            }
+            if (found) {
+                in_rows += ids[$#];
+            } else {
+                not_in_rows += ids[$#];
+            }
+        }
+        checkFilter(\mismatches, filter, "in", in_list, in_rows, sprintf("%s v in (%s)", dtype, label));
+        checkFilter(\mismatches, filter, "not_in", in_list, not_in_rows, sprintf("%s v not_in (%s)", dtype, label));
+    }
+
+    #! adds a mismatch to the list if the filter does not give the expected rows
+    private checkFilter(reference<list<string>> mismatches, code filter, string op, auto value, list<int> expected,
+            string label) {
+        list<auto> actual = filter(op, value).getColumn("id") ?? ();
+        if (actual != expected) {
+            mismatches += sprintf("%s: expected rows %y, got %y", label, expected, actual);
+        }
+    }
+
+    #! returns the expected result of a filter operator on a cell
+    private bool expectedMatch(string op, auto cell, auto value) {
+        bool cell_null = cell === NOTHING || cell === NULL;
+        bool value_null = value === NOTHING || value === NULL;
+        if (cell_null || value_null) {
+            # a null cell or value matches only == with both null and != with only one null
+            if (op == "==") {
+                return cell_null && value_null;
+            }
+            if (op == "!=") {
+                return !cell_null && value_null;
+            }
+            return False;
+        }
+        return core{op}(cell, value);
+    }
+}

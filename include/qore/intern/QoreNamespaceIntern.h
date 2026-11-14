@@ -499,6 +499,9 @@ public:
     DLLLOCAL void clearConstants(QoreListNode& l);
     DLLLOCAL void clearData(ExceptionSink* xsink);
     DLLLOCAL void deleteData(ExceptionSink* xsink);
+
+    //! Adds the user class, hashdecl and enum declarations of the namespace and its subnamespaces (issue #5790)
+    DLLLOCAL void getTypeOwners(std::vector<QoreTypeOwner*>& owners);
     //! marks the class lists of the namespace tree as owned by a Program releasing its values; see QoreClassList::setVarsReleased()
     DLLLOCAL void setVarsReleased();
     //DLLLOCAL void deleteClearData(ExceptionSink* xsink);

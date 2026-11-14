@@ -546,6 +546,25 @@ public:
     */
     DLLLOCAL int sendStreamControlFrame(int64_t stream_id, const void* data, size_t len, ExceptionSink* xsink);
 
+    //! Sends the application's WebSocket close frame on a stream, unless a close frame was sent on it before
+    /** The close frame is recorded under the session's lock, as the close frame of the stream's WebSocket frame
+        state (see sendStreamControlFrame()), so that the stream has one close frame (RFC 6455 section 5.5.1): a close
+        frame sent before, by the frame state or by the application, makes this one not sent, and data sent after
+        it is refused (issue #6077).  The frame is staged past the stream's send limit, as a close frame is never
+        dropped.
+
+        @param stream_id the stream
+        @param data the encoded close frame
+        @param len the size of the frame
+        @param end_stream also ends the stream (also if the frame is not sent)
+        @param xsink exception sink
+
+        @return 0 if the frame was staged, 2 if a close frame was sent on the stream before (only the end of the
+        stream is sent, if requested), -1 on error (exception raised)
+    */
+    DLLLOCAL int sendStreamCloseFrame(int64_t stream_id, const void* data, size_t len, bool end_stream,
+            ExceptionSink* xsink);
+
 #ifdef DEBUG
     //! Resumes the streams whose staged data dbg_quic_hold_stream_data() held back (debug builds only)
     /** Called by dbg_quic_release_stream_data() after it clears the hold: a held stream returned

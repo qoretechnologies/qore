@@ -285,6 +285,21 @@ struct QoreBackgroundHelperCode {
     QoreAOTContext* aot_ctx = nullptr;
 };
 
+//! how the thread of a background helper uses the object of the code that starts it
+/** The thread holds the object while it runs when the expression calls methods of the object.  The AST interpreter
+    runs the thread with the object as its context, and so checks that the object has not been deleted when the thread
+    starts, only when the expression is a call of a method of the object; a call elsewhere in the expression checks the
+    object when it is made, so the expression runs until then (qore#5973).
+*/
+enum QoreBackgroundHelperSelf : uint8_t {
+    //! the thread does not use the object
+    QBHS_NONE = 0,
+    //! the expression is a call of a method of the object: the thread checks the object when it starts
+    QBHS_CHECKED = 1,
+    //! the expression calls methods of the object elsewhere: each call checks the object
+    QBHS_HELD = 2,
+};
+
 //! Starts a thread evaluating a background expression with its helper (QoreIRBackgroundInstruction)
 /** The starting code has evaluated the values that the expression takes when the thread starts.  The new thread
     instantiates the helper's parameters with them, runs the helper and releases its value, as the AST interpreter's
@@ -294,13 +309,13 @@ struct QoreBackgroundHelperCode {
     @param params the helper's parameters
     @param values the value of each parameter, borrowed: the thread takes references of its own
     @param num the number of parameters and values
-    @param uses_self true if the thread runs with the object of the starting code, which it holds while it runs
+    @param self_mode how the thread uses the object of the starting code
     @param xsink for exceptions raised starting the thread
 
     @return the TID of the new thread, or NOTHING if an exception was raised
 */
 DLLLOCAL QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const QoreValue* values, size_t num, bool uses_self, ExceptionSink* xsink);
+        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink);
 
 //! Runs a background helper in the thread started by do_op_background_helper(), with its parameters instantiated
 /** Defined with the JIT runtime, which owns the native calling conventions.
@@ -1407,13 +1422,18 @@ DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
 
     It is never less than the number of managers whose QSB_INTR_REQUESTED bit is set, so it is 0 only while no
     interrupt is requested: requestInterrupt() increments it before it sets the bit (and decrements it again if the bit
-    was already set), and clearInterrupt() and the destructor of a manager decrement it only after they have cleared a
-    set bit.  A clear that runs between a request's increment and its setting of the bit finds no bit and leaves the
-    count alone.  If the request set the bit first, such a clear would decrement the count before the request
-    incremented it, and a check in between would read 0 while the interrupt of another manager is pending.  It can be
-    one higher than the number of set bits for a moment, which only makes a check look up the manager.  All changes are
-    seq_cst, as the bit, and made before requestInterrupt() wakes the waiting threads: a waiter that registers its
-    wait and then reads 0 is woken by the wakeup that follows.
+    was already set), clearInterrupt() decrements it only after it has cleared a set bit, and the destructor of a
+    manager, which does not clear the bit, decrements it if it finds the bit set, when no other thread can request or
+    clear the manager's interrupt any more (the manager is reference-counted, and every caller holds a reference).  A
+    clear that runs between a request's increment and its setting of the bit finds no bit and leaves the count alone,
+    unless the bit was already set: then the clear removes the earlier request's count, and the request sets the bit
+    again and keeps its own increment.  If the request set the bit first, such a clear would decrement the
+    count before the request incremented it, and a check in between would read 0 while the interrupt of another
+    manager is pending.  For a moment it can be higher than the number of set bits by the number of requests and
+    clears in progress (a request from its increment until it sets the bit or takes the increment back, a clear from
+    its clearing of the bit until its decrement), which only makes a check look up the manager.  All changes are
+    seq_cst, as the bit, and requestInterrupt() makes its changes before it wakes the waiting threads: a waiter that
+    registers its wait and then reads 0 is woken by the wakeup that follows.
 */
 DLLLOCAL extern std::atomic<int> qore_sandbox_interrupt_count;
 

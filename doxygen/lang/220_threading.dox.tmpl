@@ -176,6 +176,21 @@ x=null@endverbatim
     creating an object or a hash that needs one evaluated after the Program has been deleted raises a
     \c PROGRAM-ERROR exception (see @ref hashdecl_initializer_program).
 
+    @anchor program_deletion_types
+    A value can outlive the Program whose classes, @ref hashdecl "hashdecls" and enums its type names: a value of
+    type \c list<*Foo> or \c hash<string, Foo> returned by a function of the Program, an object of a generic class or
+    a hash of a generic hashdecl whose type argument is one of the Program's classes, a hash or an object of a
+    declaration of the Program with a member of type \c *Foo, or a class or hashdecl imported from the Program.  Such a
+    declaration is kept with its types after the Program is deleted: until library cleanup if a type derived from its
+    types was created (including a type such as \c list<Foo> used only in the Program's own code), otherwise as long
+    as a declaration that names it survives.  As no object or hash of the declaration exists then (unless one is
+    created through the @ref reflectionintro "reflection" API), its types accept no value other than \c NOTHING where
+    the type allows it, and objects of an equal class (a class of the same name and signature, from another Program);
+    assigning \c NOTHING to an element of a \c list<*Foo> works, and assigning an object of another class raises the
+    usual type error.  A class
+    or hashdecl imported from the Program keeps its source declaration; the methods of an imported class are code of
+    the deleted Program, so calling them or creating an object of the class raises a \c PROGRAM-ERROR exception.
+
     @section thread_synchronization Thread Management and Inter-Thread Communication
 
     @anchor synchronized

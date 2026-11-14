@@ -80,6 +80,19 @@ void qore_hash_private::setHashDecl(const TypedHashDecl* hd) {
 
 }
 
+const TypedHashDecl* qore_hash_private::getInheritingHashDecl(const TypedHashDecl* a, const TypedHashDecl* b) {
+    // a specialization of a generic hashdecl inherits the specialization of its parent with the same type arguments
+    const typed_hash_decl_private* ap = typed_hash_decl_private::get(*a);
+    const typed_hash_decl_private* bp = typed_hash_decl_private::get(*b);
+    if (ap->isDescendantOf(*bp)) {
+        return a;
+    }
+    if (bp->isDescendantOf(*ap)) {
+        return b;
+    }
+    return nullptr;
+}
+
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
     assert(key);
 
