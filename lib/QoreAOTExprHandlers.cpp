@@ -3180,7 +3180,9 @@ static QoreValue read_expr_hash_deref(AOTExprReadCtx& ctx) {
         if (type_path && *type_path) {
             QoreAOTTypeResolver type_resolver(ctx.pgm);
             std::string type_error;
-            result_type_info = type_resolver.resolve(type_path, type_error);
+            // the type can name the type parameters of the generic function that the expression is in (qore#6121)
+            result_type_info = type_resolver.resolveForSignature(type_path, type_error,
+                qore_aot_get_type_param_owner());
             if (!result_type_info || !type_error.empty()) {
                 ctx.error = "cannot resolve hash-dereference result type '";
                 ctx.error += type_path;
