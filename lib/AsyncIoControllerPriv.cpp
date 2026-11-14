@@ -343,8 +343,9 @@ bool qore_set_async_io_thread_for_test(bool value) {
     in waitForNotifierExplicitSafetyTimeoutTest on Alpine arm64).
 
     NOTE: this is distinct from `Cmd::timer_deadline_us` (AddTimer), which is a wall-clock
-    absolute deadline produced from `DateTime::getEpochMicrosecondsUTC()` - that flow uses
-    realtime semantics and is compared via `QoreEventLoop::q_epoch_us_fast()`, not this.
+    absolute deadline produced from `DateTime::getEpochMicrosecondsUTC()` for addTimer() - that flow uses
+    realtime semantics and is compared via `QoreEventLoop::q_epoch_us_fast()`, not this - or, for addTimerDelay()
+    (`Cmd::timer_monotonic`), a deadline on the monotonic clock (q_get_monotonic_us()).
 */
 static int64 get_epoch_us() {
     return q_get_monotonic_us();
@@ -721,10 +722,12 @@ void AsyncIoControllerPriv::dbgHoldTimerCallbacks(bool hold) {
 
 bool AsyncIoControllerPriv::dbgWaitHeldTimerCallbacks(size_t count, int64_t timeout_ms) {
     AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
-    int64_t deadline = q_clock_getmillis() + timeout_ms;
+    // on the monotonic clock, so that a test that steps the system clock (dbg_set_realtime_offset()) does not change
+    // the wait
+    int64_t deadline = get_epoch_us() / 1000 + timeout_ms;
     AutoLocker al(state.lock);
     while (state.held.size() < count) {
-        int64_t remaining = deadline - q_clock_getmillis();
+        int64_t remaining = deadline - get_epoch_us() / 1000;
         if (remaining <= 0) {
             return false;
         }
@@ -776,10 +779,11 @@ int64_t AsyncIoControllerPriv::dbgDispatchHeldOffIoThreadReleases(size_t count, 
     AsyncIoDebugHeldReleases& state = AsyncIoDebugHeldReleases::get();
     std::vector<std::unique_ptr<AsyncIoDeferredRelease>> held;
     {
-        int64_t deadline = q_clock_getmillis() + timeout_ms;
+        // on the monotonic clock (see dbgWaitHeldTimerCallbacks())
+        int64_t deadline = get_epoch_us() / 1000 + timeout_ms;
         AutoLocker al(state.lock);
         while (state.held.size() < count) {
-            int64_t remaining = deadline - q_clock_getmillis();
+            int64_t remaining = deadline - get_epoch_us() / 1000;
             if (remaining <= 0) {
                 return -1;
             }
@@ -5613,14 +5617,24 @@ QoreObject* AsyncIoControllerPriv::getLogger() const {
 
 int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue udata,
         ExceptionSink* xsink, const std::string& owner) {
-    if (checkForked("addTimer", xsink)) {
+    // an absolute deadline in microseconds since the epoch, compared with the system clock
+    return addTimerIntern(deadline->getEpochMicrosecondsUTC(), false, "addTimer", udata, xsink, owner);
+}
+
+int64_t AsyncIoControllerPriv::addTimerDelay(int64_t delay_us, QoreValue udata, ExceptionSink* xsink,
+        const std::string& owner) {
+    // the deadline is taken now, on the monotonic clock, so that a step of the system clock does not move it
+    return addTimerIntern(q_get_monotonic_us() + (delay_us > 0 ? delay_us : 0), true, "addTimerDelay", udata, xsink,
+        owner);
+}
+
+int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotonic, const char* method,
+        QoreValue udata, ExceptionSink* xsink, const std::string& owner) {
+    if (checkForked(method, xsink)) {
         return -1;
     }
     // Pre-allocate ID from atomic counter (no lock needed)
     int64_t id = next_ctrl_timer_id.fetch_add(1);
-
-    // Convert deadline to absolute microseconds since epoch
-    int64_t deadline_us = deadline->getEpochMicrosecondsUTC();
 
     // captured outside the lock: capturing resolves the sandbox through the thread's Program context
     AsyncIoSandboxContext sandbox_ctx = capture_async_io_sandbox_context();
@@ -5640,6 +5654,7 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         Command cmd;
         cmd.cmd = IoCommand::AddTimer;
         cmd.timer_deadline_us = deadline_us;
+        cmd.timer_monotonic = monotonic;
         cmd.timer_id = id;
         // (completion is nullptr by default — AddTimer/CancelTimer have no waiter)
 
@@ -8154,7 +8169,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                 case IoCommand::AddTimer: {
                     // Register timer in EventLoop with pre-allocated ID
-                    t.loop->addTimer(cmd.timer_deadline_us, nullptr, cmd.timer_id);
+                    t.loop->addTimer(cmd.timer_deadline_us, nullptr, cmd.timer_id, cmd.timer_monotonic);
                     break;
                 }
 

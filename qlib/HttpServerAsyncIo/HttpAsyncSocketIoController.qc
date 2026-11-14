@@ -530,13 +530,13 @@ public class HttpAsyncSocketIoController {
             drain_conns.waitForZero();
             return True;
         }
-        int deadline = clock_getmicros() + timeout_ms * 1000;
+        int deadline = clock_get_monotonic_us() + timeout_ms * 1000;
         # the requests in handlers first: a connection that has one has no entry, and so no drain token, until its
         # dispatch ends, which gives it one
         if (dispatch_count.waitForZero(timeout_ms)) {
             return False;
         }
-        int remaining_ms = (deadline - clock_getmicros()) / 1000;
+        int remaining_ms = (deadline - clock_get_monotonic_us()) / 1000;
         if (remaining_ms <= 0) {
             return !drain_conns.getCount();
         }
@@ -2990,7 +2990,6 @@ public class HttpAsyncSocketIoController {
         if (delay <= 0ms) {
             return False;
         }
-        date deadline = now_us() + delay;
         string delay_key;
         {
             AutoWriteLock al(m);
@@ -3003,7 +3002,7 @@ public class HttpAsyncSocketIoController {
                 "timer_id": 0,
             };
             on_error remove delayed_responses{delay_key};
-            int timer_id = controller.addTimer(deadline, sub () {
+            int timer_id = controller.addTimerDelay(delay, sub () {
                 bool dispatch;
                 {
                     AutoWriteLock wl(m);

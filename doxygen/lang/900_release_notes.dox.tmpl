@@ -948,6 +948,9 @@
       @ref Qore::getaddrinfo_async() "getaddrinfo_async()", HTTP response methods of @ref Qore::Socket "Socket" such
       as @ref Qore::Socket::startPollLingeringClose() "startPollLingeringClose()", and
       @ref Qore::PollPipeline::addRecvImapResponse() "PollPipeline::addRecvImapResponse()"
+    - @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()" arms a timer for an interval
+      on the monotonic clock, which a step of the system clock does not move; the WebSocket, SSE and HTTP server
+      heartbeat, idle and close timers use it and measure their intervals on the monotonic clock
     - other new functions and methods: @ref Qore::deflate_raw() "deflate_raw()" and the raw inflate functions
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>),
       @ref Qore::Thread::Queue::tryGet() "Queue::tryGet()", @ref Qore::check_line_text() "check_line_text()",
@@ -1754,6 +1757,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
+      monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
+      (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
     - a @ref background "background expression" nested in another one that calls methods of the object no longer
       crashes the AST interpreter: the calls are made on the object of the code that started the outer one (issue
       #5971)

@@ -17467,6 +17467,17 @@ static QoreValue f_dbg_poll_wait_close_before_open_state(const QoreListNode* par
 #endif
 
 #ifdef DEBUG
+//! Debug-only: dbg_set_realtime_offset(us): sets the offset in microseconds that is added to the system clock (now_us(),
+//! clock_getmillis(), clock_getmicros() and the deadlines of AsyncIoController::addTimer()), as a step of the system
+//! clock would change it, and returns the previous offset; the monotonic clock is not affected.  A test that sets it
+//! must set it back to 0, also when it fails, as the offset is process-wide
+static QoreValue f_dbg_set_realtime_offset(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 off_us = get_param_value(params, 0).getAsBigInt();
+    return qore_dbg_realtime_offset_us.exchange(off_us, std::memory_order_relaxed);
+}
+#endif
+
+#ifdef DEBUG
 //! Debug-only: runs Http1DuplexSendFailureTest: response recovery after a concurrent write of the request body
 //! (buffered or streamed) fails, before and after the final response header, on a new and on a reused connection
 static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, RuntimeConfig& rc,
@@ -22712,6 +22723,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_poll_wait_close_before_open_state", f_dbg_poll_wait_close_before_open_state,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_set_realtime_offset", f_dbg_set_realtime_offset, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "us");
     qns.addBuiltinVariant("dbg_aot_split_method_ref", f_dbg_aot_split_method_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "encoded");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
