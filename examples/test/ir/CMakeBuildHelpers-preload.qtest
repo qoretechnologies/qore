@@ -75,7 +75,7 @@ class CMakeBuildHelpersPreloadTest inherits CMakeBuildHelpersTestBase::CMakeBuil
         so nothing else in the group goes stale and the plan really does take the standalone path.
     */
     testIncrementalConstantOwnerPreload() {
-        TmpDir tmp("qore-cmake-qcc-const-preload-");
+        TmpDir tmp("qore-cmake-qcc-const-preload-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -167,7 +167,7 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
 
     #! A newly named typedef has no depfile edge yet and must be found from the source summary.
     testIncrementalTypedefPreload() {
-        TmpDir tmp("qore-cmake-qcc-typedef-");
+        TmpDir tmp("qore-cmake-qcc-typedef-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         mkdir(src_dir);
@@ -260,7 +260,7 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
         object's index, while a construction records only the class.
     */
     testIncrementalExecutedCalleePreload(string variant, string engine_body) {
-        TmpDir tmp("qore-cmake-qcc-exec-preload-");
+        TmpDir tmp("qore-cmake-qcc-exec-preload-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -412,7 +412,7 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
         the coordinator compiles both in one partial parse and preloads the three providers.
     */
     testSubsetParseInitializerCallsPreloadedBody() {
-        TmpDir tmp("qore-cmake-qcc-subset-body-");
+        TmpDir tmp("qore-cmake-qcc-subset-body-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -561,7 +561,7 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
              A::f(string a)
     */
     testIncrementalStaleProviderCompiledFirst() {
-        TmpDir tmp("qore-cmake-qcc-stale-provider-");
+        TmpDir tmp("qore-cmake-qcc-stale-provider-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
