@@ -1738,10 +1738,11 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
-    - a failed non-blocking connect (@ref Qore::Socket::startPollConnect() "Socket::startPollConnect()",
+    - a failed non-blocking connect to a TCP or UNIX socket target
+      (@ref Qore::Socket::startPollConnect() "Socket::startPollConnect()",
+      @ref Qore::Socket::startPollConnectSsl() "Socket::startPollConnectSsl()",
       @ref Qore::HTTPClient::startPollConnect() "HTTPClient::startPollConnect()") reports the connect's own error; on
-      macOS, a connect that was refused or that timed out could be reported as <tt>Broken pipe</tt> (\c EPIPE) (issue
-      #6119)
+      macOS, a refused or timed-out connect could be reported as <tt>Broken pipe</tt> (\c EPIPE) (issue #6119)
     - a @ref background "background expression" nested in another one that calls methods of the object no longer
       crashes the AST interpreter: the calls are made on the object of the code that started the outer one (issue
       #5971)

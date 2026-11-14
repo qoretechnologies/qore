@@ -434,6 +434,15 @@ static int qore_socket_set_raw_error(int rc) {
 
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
 std::atomic<int> qore_dbg_connect_error_after_so_error_read{0};
+std::atomic<int> qore_dbg_connect_first_error_after_so_error_read{0};
+std::atomic<int> qore_dbg_errno_after_connect_close{0};
+
+void qore_socket_dbg_errno_after_connect_close() {
+    int e = qore_dbg_errno_after_connect_close.load(std::memory_order_relaxed);
+    if (e) {
+        errno = e;
+    }
+}
 
 namespace {
 //! The socket state that qore_dbg_connect_error_after_so_error_read models during one check of a connect
@@ -490,9 +499,15 @@ static int qore_socket_send_connect_probe(int fd) {
     return ::send(fd, nullptr, 0, 0);
 }
 
-// returns 0 = connected, 1 = still in progress, -1 = error with the connect's error in errno (WSAGetLastError() on
-// Windows)
-int qore_socket_confirm_connect(int fd) {
+//! Confirms the connection of a nonblocking connect whose pending error (SO_ERROR) was read as 0
+/** Makes a zero-byte send; when the connect failed after its pending error was read, the error the send fails with
+    describes the state of the socket (EPIPE on Darwin), so the connect's own error, which is still pending, is taken
+    from SO_ERROR instead
+
+    @return 0 = connected, 1 = still in progress, -1 = the connect failed: errno (WSAGetLastError() on Windows) is the
+    connect's error
+*/
+static int qore_socket_confirm_connect(int fd) {
     // Try a zero-byte send to confirm connection.  This is needed on macOS,
     // where poll() may report writable readiness before connect completion.
     unsigned loop = 0;
@@ -519,9 +534,19 @@ int qore_socket_confirm_connect(int fd) {
         // that was refused or that timed out, as the failure marks the socket unable to send before the send
         // checks the pending error), while the connect's own error is still pending in SO_ERROR
         int raw = sock_get_raw_error();
-        int val;
-        if (qore_socket_read_pending_error(fd, val) != QORE_SOCKET_ERROR && val) {
-            raw = val;
+        // a read that a signal interrupts is made again, a bounded number of times; if it cannot be made, the
+        // send's error is reported
+        for (unsigned rloop = 0; rloop < max_nonblock_ops; ++rloop) {
+            int val;
+            if (qore_socket_read_pending_error(fd, val) != QORE_SOCKET_ERROR) {
+                if (val) {
+                    raw = val;
+                }
+                break;
+            }
+            if (sock_get_error() != EINTR) {
+                break;
+            }
         }
         qore_socket_set_raw_error(raw);
         return -1;
@@ -562,7 +587,15 @@ static int qore_socket_check_connect_ready(int fd) {
 
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
     {
-        int err = qore_dbg_connect_error_after_so_error_read.load(std::memory_order_relaxed);
+        // the first check that reads the pending error as 0 takes the first error, if set, and the others the error
+        // of every check
+        int err = 0;
+        if (qore_dbg_connect_first_error_after_so_error_read.load(std::memory_order_relaxed)) {
+            err = qore_dbg_connect_first_error_after_so_error_read.exchange(0, std::memory_order_relaxed);
+        }
+        if (!err) {
+            err = qore_dbg_connect_error_after_so_error_read.load(std::memory_order_relaxed);
+        }
         if (err) {
             // the connect fails now, after its pending error was read as 0
             qore_socket_dbg_connect_failure = {fd, err};
@@ -9262,6 +9295,9 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             } else {
                 qore_socket_private::closeDescriptor(fd);
             }
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+            qore_socket_dbg_errno_after_connect_close();
+#endif
         }
     }
 

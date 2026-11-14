@@ -131,15 +131,10 @@ DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const 
 DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
-//! Confirms the connection of a nonblocking connect whose pending error (SO_ERROR) was read as 0
-/** Makes a zero-byte send; when the connect failed after its pending error was read, the error the send fails with
-    describes the state of the socket (EPIPE on Darwin), so the connect's own error, which is still pending, is taken
-    from SO_ERROR instead
-
-    @return 0 = connected, 1 = still in progress, -1 = the connect failed: errno (WSAGetLastError() on Windows) is the
-    connect's error
-*/
-DLLLOCAL int qore_socket_confirm_connect(int fd);
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+//! Debug builds: sets errno to qore_dbg_errno_after_connect_close if it is not 0
+DLLLOCAL void qore_socket_dbg_errno_after_connect_close();
+#endif
 
 class QoreSandboxManager;
 class QoreSocketObject;
@@ -2676,6 +2671,10 @@ public:
 #endif
         }
         shared_fd.reset();
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+        // the descriptor is closed now or by its last use
+        qore_socket_dbg_errno_after_connect_close();
+#endif
         sock = QORE_INVALID_SOCKET;
         // Bump fd_generation so any sync I/O helper currently in its
         // poll-wait phase (with outer_lock released) sees the generation
@@ -4849,6 +4848,20 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_che
     connect is checked in an I/O thread: the C++ unit tests run one after the other, so no other connect sees it.
 */
 DLLLOCAL extern std::atomic<int> qore_dbg_connect_error_after_so_error_read;
+
+//! Debug builds: if not 0, the first check that qore_dbg_connect_error_after_so_error_read applies to fails with this
+//! error instead, and this is reset to 0
+/** For the C++ unit tests of connects whose attempts fail with different errors (Happy Eyeballs)
+*/
+DLLLOCAL extern std::atomic<int> qore_dbg_connect_first_error_after_so_error_read;
+
+//! Debug builds: if not 0, errno is set to this after a failed connect attempt's descriptor is given up or a socket's
+//! descriptor is closed
+/** For the C++ unit tests of the error that a failed connect reports: models a system call made while the failed
+    attempt is given up or the socket is closed that changes errno, so that an error read from errno after it is not
+    the connect's
+*/
+DLLLOCAL extern std::atomic<int> qore_dbg_errno_after_connect_close;
 #endif
 #endif
 
