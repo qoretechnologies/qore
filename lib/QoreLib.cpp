@@ -2766,7 +2766,7 @@ static qore_background_lvalue_e qore_background_lvalue_walk(QoreValue n, const Q
     bool range = false;
     const char* key = nullptr;
     QoreString key_buf;
-    if (const QoreSquareBracketsOperatorNode* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (const QoreSquareBracketsOperatorNode* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         container = op->getLeft();
         element = true;
     } else if (const QoreHashObjectDereferenceOperatorNode* op =

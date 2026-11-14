@@ -276,7 +276,7 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
             // Cast operators should return their target type, not the generic 'auto' type
             return cast_op->getCastTypeInfo();
         }
-        if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+        if (auto* rt_const = qore_get_runtime_constant_ref_node(node)) {
             // RuntimeConstantRefNode holds the type of the constant (e.g., list<string>)
             if (auto* ce = rt_const->getConstantEntry()) {
                 return ce->typeInfo;
@@ -419,7 +419,7 @@ static bool expressionMayCreateNodeTemp(const QoreValue& val) {
     if (auto* var_ref = dynamic_cast<const VarRefNode*>(node)) {
         return !isImmediateCleanupFreeType(var_ref->getTypeInfo());
     }
-    if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+    if (auto* rt_const = qore_get_runtime_constant_ref_node(node)) {
         if (auto* ce = rt_const->getConstantEntry()) {
             return !isImmediateCleanupFreeType(ce->typeInfo);
         }
@@ -475,7 +475,7 @@ static bool expressionMayCreateNodeTemp(const QoreValue& val) {
         return expressionMayCreateNodeTemp(unop->getExp())
             || !isImmediateCleanupFreeType(getExprTypeInfo(val));
     }
-    if (auto* sub = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (auto* sub = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         return expressionMayCreateNodeTemp(sub->getLeft())
             || expressionMayCreateNodeTemp(sub->getRight())
             || !isImmediateCleanupFreeType(getExprTypeInfo(val));
@@ -496,7 +496,7 @@ template <typename F>
 static bool anyOperandMayCreateTemp(const QoreValue& val, F operand_may_create_temp) {
     const AbstractQoreNode* node = val.getInternalNode();
     if (!node || val.isValue() || dynamic_cast<const VarRefNode*>(node)
-            || dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+            || qore_get_runtime_constant_ref_node(node)) {
         return false;
     }
     // the conservative answer, as for an unknown kind of expression: a temp scope is created
@@ -548,7 +548,7 @@ static bool anyOperandMayCreateTemp(const QoreValue& val, F operand_may_create_t
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
         return operand_may_create_temp(unop->getExp());
     }
-    if (auto* sub = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (auto* sub = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         return operand_may_create_temp(sub->getLeft()) || operand_may_create_temp(sub->getRight());
     }
     if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
@@ -777,7 +777,7 @@ static QoreIRValue tryDescriptorPluginUnaryLowering(QoreIRLowering& lowering, Qo
 static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
         QoreParseContext* parse_context, const QoreValue& expr, const AbstractQoreNode* node,
         std::string& error) {
-    if (auto* subscript = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (auto* subscript = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         return tryDescriptorPluginSubscriptLowering(lowering, builder, parse_context, expr, subscript, error);
     }
     if (auto* slice = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
@@ -1038,7 +1038,7 @@ static LocalVar* qoreIrGetHoistableGlobalStringLengthLocal(const QoreValue& expr
     if (!expr.hasNode()) {
         return nullptr;
     }
-    auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
+    auto* call = qore_get_function_call_node(expr.getInternalNode());
     // only a call of the Qore builtin, never a user or module function with the same name
     if (!call || call->hasExplicitTypeArgs() || !qoreIrIsGlobalStringLengthName(call->getName())
             || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
@@ -1117,7 +1117,7 @@ static bool qoreIrExpressionInvalidatesListSizeHoist(const QoreValue& expr,
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
         return qoreIrExpressionInvalidatesListSizeHoist(unop->getExp(), candidates);
     }
-    if (auto* sub = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (auto* sub = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         return qoreIrExpressionInvalidatesListSizeHoist(sub->getLeft(), candidates)
             || qoreIrExpressionInvalidatesListSizeHoist(sub->getRight(), candidates);
     }
@@ -1286,7 +1286,7 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
             value_candidates, cancelled);
         return;
     }
-    if (auto* sub = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (auto* sub = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         qoreIrCollectListSizeHoistCandidates(sub->getLeft(), list_candidates, invalidation_candidates,
             value_candidates, cancelled);
         qoreIrCollectListSizeHoistCandidates(sub->getRight(), list_candidates, invalidation_candidates,
@@ -5522,7 +5522,7 @@ static bool extractLValuePath(const QoreValue& expr,
     }
 
     // Navigation: QoreSquareBracketsOperatorNode (container[index])
-    if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         const QoreValue right = sb->getRight();
         // Multi-index slice (e.g. l[1,3,5] or str[1,45,3..4,x,5]): lower each
         // sub-expression as a dynamic operand and emit a ListIndexSlice
@@ -5604,7 +5604,7 @@ static bool isConstIndexListSubscript(const std::unordered_set<const LocalVar*>&
     if (!node) return false;
 
     // Check if this is a square brackets operator (list subscript)
-    const auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    const auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!sb) return false;
 
     // Get the index expression - must be a compile-time constant value (literal or const expression)
@@ -5810,7 +5810,7 @@ static bool getLValueBaseValue(const QoreValue& value, QoreValue& base) {
             cur = op->getLeft();
             continue;
         }
-        if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             cur = op->getLeft();
             continue;
         }
@@ -6204,7 +6204,7 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
             std::vector<QoreValue> key_exprs;
             QoreValue n = lv_expr;
             while (n.getType() == NT_OPERATOR) {
-                if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(n.getInternalNode())) {
+                if (auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(n.getInternalNode())) {
                     key_exprs.push_back(sb->getRight());
                     n = sb->getLeft();
                 } else if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(n.getInternalNode())) {
@@ -6233,7 +6233,7 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
                 if (key_val.isValid()) {
                     selector_operands.push_back(key_val);
                 }
-            } else if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+            } else if (auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                     lv_expr.getInternalNode())) {
                 QoreIRValue index_val = lowerExpression(sb->getRight(), error);
                 if (index_val.isValid()) {
@@ -6360,7 +6360,7 @@ QoreIRValue QoreIRLowering::lowerExpressionImpl(const QoreValue& expr, std::stri
         }
         return inst->result;
     }
-    if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+    if (auto* rt_const = qore_get_runtime_constant_ref_node(node)) {
         // Delayed constants are evaluated once during parse commit.  Lower
         // resolved scalar/literal values directly so AOT does not need an
         // unserializable RuntimeConstantRefNode for primitive folded constants
@@ -10877,7 +10877,7 @@ static bool collectListIndexRangeSelectors(const QoreValue& rhs, std::vector<Qor
 
 QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!op) {
         return QoreIRValue();
     }
@@ -11106,7 +11106,7 @@ static bool qore_ir_lvalue_root_in(const QoreValue& lvalue, const qore_ir_select
         if (dynamic_cast<const SelfVarrefNode*>(node)) {
             return false;
         }
-        if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             n = sb->getLeft();
             continue;
         }
@@ -11192,7 +11192,7 @@ static bool qore_ir_expr_may_write_locals(const QoreValue& expr, const qore_ir_s
         }
         return false;
     }
-    if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         return qore_ir_expr_may_write_locals(sb->getLeft(), locals)
             || qore_ir_expr_may_write_locals(sb->getRight(), locals);
     }
@@ -11327,7 +11327,7 @@ static bool qore_ir_consumer_expr_is_pure(const QoreValue& expr) {
 bool QoreIRLowering::decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
         const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue,
         const StatementBlock* block, bool pure_consumer_ok) {
-    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(source.getInternalNode());
+    auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(source.getInternalNode());
     if (!op || !dynamic_cast<const QoreParseListNode*>(op->getRight().getInternalNode())) {
         return false;
     }
@@ -11420,7 +11420,7 @@ bool QoreIRLowering::decideLazySelectorSource(const QoreValue& source, const std
 }
 
 bool QoreIRLowering::getLazySelectorSource(const QoreValue& expr, LazySelectorSource& src) const {
-    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(expr.getInternalNode());
+    auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(expr.getInternalNode());
     // the AST interpreter iterates only a parse list of selectors with a range lazily (rhs_list_range)
     if (!op || !dynamic_cast<const QoreParseListNode*>(op->getRight().getInternalNode())) {
         return false;
@@ -11509,7 +11509,7 @@ bool QoreIRLowering::getForeachSource(const QoreValue& list, ForeachSourceOperat
         src.operand = op->get(0);
         src.first = op->get(1);
         src.second = op->get(2);
-    } else if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    } else if (auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         // a list of selectors with a range is iterated with IteratorCreateSelectors, or built first if its
         // evaluation cannot be observed (decideLazySelectorSource())
         if (op->hasRhsListRange()) {
@@ -12348,7 +12348,7 @@ QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& erro
             if (!op->needsReturnValue()) {
                 auto& insts = builder.getBlock()->instructions;
                 if (!insts.empty()) {
-                    auto* path_inst = dynamic_cast<QoreIRLValuePathInstruction*>(insts.back().get());
+                    auto* path_inst = qore_ir_inst_cast<QoreIRLValuePathInstruction*>(insts.back().get());
                     if (path_inst) {
                         path_inst->result = QoreIRValue();  // invalid → IR interpreter discards immediately
                     }
@@ -12664,7 +12664,7 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
             }
         }
         // background foo(args) — free function call
-        else if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
+        else if (auto* fcn = qore_get_function_call_node(inner)) {
             if (fcn->getFunction()
                     && qore_ir_background_args_are_start_values(fcn->getParseArgs(), fcn->getArgs())) {
                 std::vector<QoreIRValue> operands;
@@ -12852,7 +12852,7 @@ LocalVar* QoreIRLowering::backgroundLeafParam(std::string key, const QoreValue& 
 static QoreValue qore_ir_lvalue_path_root(QoreValue expr) {
     while (true) {
         const AbstractQoreNode* node = expr.getInternalNode();
-        if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             expr = sb->getLeft();
         } else if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
             expr = hd->getLeft();
@@ -13564,7 +13564,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 const auto* map = separator_value->getEncoding() == QCS_DEFAULT
                     ? dynamic_cast<const QoreMapOperatorNode*>(base_expr.getInternalNode()) : nullptr;
                 const auto* sprintf_call = map
-                    ? dynamic_cast<const FunctionCallNode*>(map->getMapExpression().getInternalNode()) : nullptr;
+                    ? qore_get_function_call_node(map->getMapExpression().getInternalNode()) : nullptr;
                 const AbstractQoreFunctionVariant* variant = sprintf_call ? sprintf_call->getVariant() : nullptr;
                 const FunctionEntry* fe = sprintf_call ? sprintf_call->getFunctionEntry() : nullptr;
                 std::string namespace_path;
@@ -14375,7 +14375,7 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     // emitPartialSliceRemove() (qore#5675).
     std::vector<QoreIRBasicBlock*> partial_blocks(dynamic_operands.size(), nullptr);
     if (allow_slice && lv_path.back().kind == LVPathStepKind::ListIndexSlice) {
-        auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(lvalue.getInternalNode());
+        auto* sb = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(lvalue.getInternalNode());
         size_t count = lv_path.back().slice_operand_ids.size();
         if (sb && dynamic_cast<const QoreParseListNode*>(sb->getRight().getInternalNode())
                 && count <= dynamic_operands.size()) {
@@ -14763,7 +14763,7 @@ static bool qore_ir_conversion_accepts_type(QoreIROpcode opcode, const QoreTypeI
 
 QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    auto* call = dynamic_cast<const FunctionCallNode*>(node);
+    auto* call = qore_get_function_call_node(node);
     if (!call) {
         return QoreIRValue();
     }
@@ -15337,7 +15337,7 @@ static bool qore_ir_parse_fixed_sprintf_int(const QoreValue& format_value,
 
 QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    auto* call = dynamic_cast<const FunctionCallNode*>(node);
+    auto* call = qore_get_function_call_node(node);
     if (!call) {
         return QoreIRValue();
     }
@@ -16093,7 +16093,7 @@ static QoreIROpcode analyzeFoldPatternIntern(const QoreValue& fold_expr, const Q
     }
 
     // Check for min/max function calls: min($1, $2) or max($1, $2)
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (auto* call = qore_get_function_call_node(node)) {
         const char* func_name = call->getName();
         // only the Qore builtins, never a user or module function with the same name
         if (func_name && (strcmp(func_name, "min") == 0 || strcmp(func_name, "max") == 0)
@@ -16711,7 +16711,7 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
     }
     if (dynamic_cast<const VarRefNode*>(node)
             || dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)
-            || dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+            || qore_get_runtime_constant_ref_node(node)) {
         return false;
     }
     // the implicit arguments in the body of a closure and of the code that a call reference refers to are their own

@@ -2420,7 +2420,7 @@ static bool qore_aot_resolve_runtime_constant_path_impl(const RuntimeConstantRef
         }
 
         const AbstractQoreNode* value_node = v.getInternalNode();
-        if (auto* nested_rcr = dynamic_cast<const RuntimeConstantRefNode*>(value_node)) {
+        if (auto* nested_rcr = qore_get_runtime_constant_ref_node(value_node)) {
             // Follow alias chains before accepting a root mapping for the stored
             // node; otherwise `const A = B; const B = C;` can resolve only one
             // level deep.
@@ -10449,7 +10449,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     if (it != writer.const_reverse_map->end()) {
                         return it->second.path;
                     }
-                    if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(n)) {
+                    if (auto* rcr = qore_get_runtime_constant_ref_node(n)) {
                         std::string path;
                         if (qore_aot_resolve_runtime_constant_path(rcr, writer.const_reverse_map, path)) {
                             return path;
@@ -10460,7 +10460,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
 
                 // Case 1: no-arg function call default (e.g., getcwd(), now()); a call with explicit type
                 // arguments (inner<T>()) is written as an expression below, which keeps them (issue #5964)
-                auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
+                auto* fcn = qore_get_function_call_node(node);
                 const QoreTypeParamInstantiation* fcn_type_args = fcn ? fcn->getExplicitTypeParamInstantiation()
                     : nullptr;
                 if (fcn && fcn->getName() && (!fcn->getArgs() || fcn->getArgs()->empty())
@@ -10485,7 +10485,7 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 //   e.g. `hash<auto> options = DefaultsMap`. At call time we want
                 //   to return the constant's current value, so serialize the
                 //   constant's FQN and rebuild a RuntimeConstantRefNode at load.
-                if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+                if (auto* rcr = qore_get_runtime_constant_ref_node(node)) {
                     (void)rcr;  // silence unused-if-no-CRM warning
                     std::string fqn = resolveConstFqn(node);
                     if (!fqn.empty()) {
@@ -12420,7 +12420,7 @@ bool qoreAOTForEachBackgroundHelperParam(const QoreIRFunction& func, F&& f) {
             if (inst->opcode == QoreIROpcode::BackgroundInt) {
                 // a background call of a function, of a closure or of a resolved self or static method is an
                 // expression instruction with the same opcode (see QoreIRLowering::lowerExprOpOrInvoke())
-                const auto* bi = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                const auto* bi = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst.get());
                 if (!bi || bi->kind != QoreIRBackgroundKind::Helper || !bi->helper_ir) {
                     continue;
                 }
@@ -12861,7 +12861,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
     }
 
     // FunctionCallNode: regular function call
-    if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (auto* call = qore_get_function_call_node(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::FUNC_CALL));
         // Emit namespace-qualified name so runtime lookup lands on
         // the exact function the parser resolved, not a same-named
@@ -13453,7 +13453,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
 
     // Square-bracket operator: required for nested lvalues such as
     // `\hash[key]` carried inside ParseReferenceNode metadata.
-    if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+    if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SQUARE_BRACKET));
         return write_inline_expr(sq->getLeft()) && write_inline_expr(sq->getRight());
     }
@@ -14179,7 +14179,7 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
 
     // RuntimeConstantRefNode: reference to a compile-time constant
     // Look up the constant's evaluated value node in the reverse map
-    if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+    if (auto* rcr = qore_get_runtime_constant_ref_node(node)) {
         std::string path;
         if (qore_aot_resolve_runtime_constant_path(rcr, const_reverse_map, path)) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
@@ -15009,205 +15009,205 @@ void serializeEmbeddedSource(QoreAOTBinaryWriter& writer,
 static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst, std::string* error = nullptr) {
     // Check specific subclasses from most to least derived to avoid false matches.
     // Order matters because some subclasses derive from others (e.g. InvokeSimError from Throw).
-    if (dynamic_cast<const QoreIRConstInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRConstInstruction*>(inst)) {
         return QoreIRInstGroup::Const;
     }
-    if (dynamic_cast<const QoreIRBranchIfInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRBranchIfInstruction*>(inst)) {
         return QoreIRInstGroup::BranchIf;
     }
-    if (dynamic_cast<const QoreIRBranchInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRBranchInstruction*>(inst)) {
         return QoreIRInstGroup::Branch;
     }
-    if (dynamic_cast<const QoreIRSwitchIntInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRSwitchIntInstruction*>(inst)) {
         return QoreIRInstGroup::SwitchInt;
     }
-    if (dynamic_cast<const QoreIRSwitchStringInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRSwitchStringInstruction*>(inst)) {
         return QoreIRInstGroup::SwitchString;
     }
-    if (dynamic_cast<const QoreIRPhiInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRPhiInstruction*>(inst)) {
         return QoreIRInstGroup::Phi;
     }
-    if (dynamic_cast<const QoreIRGuardInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRGuardInstruction*>(inst)) {
         return QoreIRInstGroup::Guard;
     }
-    if (dynamic_cast<const QoreIRReturnInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRReturnInstruction*>(inst)) {
         return QoreIRInstGroup::Return;
     }
-    if (dynamic_cast<const QoreIRThrowInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst)) {
         return QoreIRInstGroup::Throw;
     }
-    if (dynamic_cast<const QoreIRAddAssignLocalIntInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRAddAssignLocalIntInstruction*>(inst)) {
         return QoreIRInstGroup::FusedAddLocal;
     }
-    if (dynamic_cast<const QoreIRIncrementLocalIntInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRIncrementLocalIntInstruction*>(inst)) {
         return QoreIRInstGroup::FusedIncLocal;
     }
-    if (dynamic_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst)) {
         return QoreIRInstGroup::FusedBrLtLocal;
     }
-    if (dynamic_cast<const QoreIRLocalInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRLocalInstruction*>(inst)) {
         return QoreIRInstGroup::Local;
     }
-    if (dynamic_cast<const QoreIRVarInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRVarInstruction*>(inst)) {
         return QoreIRInstGroup::Var;
     }
-    if (dynamic_cast<const QoreIRImplicitArgInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRImplicitArgInstruction*>(inst)) {
         return QoreIRInstGroup::ImplicitArg;
     }
-    if (dynamic_cast<const QoreIRHashKeyStoreInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRHashKeyStoreInstruction*>(inst)) {
         return QoreIRInstGroup::HashKeyStore;
     }
-    if (dynamic_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst)) {
         return QoreIRInstGroup::HashKeyStoreDynamic;
     }
-    if (dynamic_cast<const QoreIRLValuePathInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRLValuePathInstruction*>(inst)) {
         return QoreIRInstGroup::LValuePath;
     }
-    if (dynamic_cast<const QoreIRHashKeyAccessInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRHashKeyAccessInstruction*>(inst)) {
         return QoreIRInstGroup::HashKeyAccess;
     }
-    if (dynamic_cast<const QoreIRListIndexStoreInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRListIndexStoreInstruction*>(inst)) {
         return QoreIRInstGroup::ListIndexStore;
     }
-    if (dynamic_cast<const QoreIRMapHashKeyInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRMapHashKeyInstruction*>(inst)) {
         return QoreIRInstGroup::MapHashKey;
     }
-    if (dynamic_cast<const QoreIRSelfMemberInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRSelfMemberInstruction*>(inst)) {
         return QoreIRInstGroup::SelfMember;
     }
-    if (dynamic_cast<const QoreIRStaticVarInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRStaticVarInstruction*>(inst)) {
         return QoreIRInstGroup::StaticVar;
     }
-    if (dynamic_cast<const QoreIRNewObjectInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRNewObjectInstruction*>(inst)) {
         return QoreIRInstGroup::NewObject;
     }
-    if (dynamic_cast<const QoreIRLoadConstantInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRLoadConstantInstruction*>(inst)) {
         return QoreIRInstGroup::LoadConst;
     }
-    if (dynamic_cast<const QoreIRCreateClosureInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRCreateClosureInstruction*>(inst)) {
         return QoreIRInstGroup::CreateClosure;
     }
-    if (dynamic_cast<const QoreIRCreateCallRefInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRCreateCallRefInstruction*>(inst)) {
         return QoreIRInstGroup::CreateCallRef;
     }
-    if (dynamic_cast<const QoreIRCreateMethodRefInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRCreateMethodRefInstruction*>(inst)) {
         return QoreIRInstGroup::CreateMethodRef;
     }
-    if (dynamic_cast<const QoreIRCreateParseRefInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRCreateParseRefInstruction*>(inst)) {
         return QoreIRInstGroup::CreateParseRef;
     }
-    if (dynamic_cast<const QoreIRNewHashDeclInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRNewHashDeclInstruction*>(inst)) {
         return QoreIRInstGroup::NewHashDecl;
     }
-    if (dynamic_cast<const QoreIRNewComplexHashInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRNewComplexHashInstruction*>(inst)) {
         return QoreIRInstGroup::NewComplexHash;
     }
-    if (dynamic_cast<const QoreIRNewComplexListInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRNewComplexListInstruction*>(inst)) {
         return QoreIRInstGroup::NewComplexList;
     }
-    if (dynamic_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
         return QoreIRInstGroup::NewComplexBuffer;
     }
-    if (dynamic_cast<const QoreIRPluginInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRPluginInstruction*>(inst)) {
         return QoreIRInstGroup::Plugin;
     }
-    if (dynamic_cast<const QoreIRVrnConstructInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRVrnConstructInstruction*>(inst)) {
         return QoreIRInstGroup::VrnConstruct;
     }
-    if (dynamic_cast<const QoreIRNewHashDeclFromHashInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRNewHashDeclFromHashInstruction*>(inst)) {
         return QoreIRInstGroup::NewHashDeclFromHash;
     }
-    if (dynamic_cast<const QoreIRLValueInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRLValueInstruction*>(inst)) {
         return QoreIRInstGroup::LValue;
     }
     // Check specific call instruction types before generic expr
-    if (dynamic_cast<const QoreIRCallDirectInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRCallDirectInstruction*>(inst)) {
         return QoreIRInstGroup::CallDirect;
     }
-    if (dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
         return QoreIRInstGroup::InvokeMethodDirect;
     }
-    if (dynamic_cast<const QoreIRCallMethodDirectInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRCallMethodDirectInstruction*>(inst)) {
         return QoreIRInstGroup::CallMethodDirect;
     }
-    if (dynamic_cast<const QoreIRCallStaticDirectInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRCallStaticDirectInstruction*>(inst)) {
         return QoreIRInstGroup::CallStaticDirect;
     }
-    if (dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
         return QoreIRInstGroup::InvokeDotEvalMethodDirect;
     }
-    if (dynamic_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst)) {
         return QoreIRInstGroup::DotEvalMethodDirect;
     }
-    if (dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
         return QoreIRInstGroup::Invoke;
     }
-    if (dynamic_cast<const QoreIRIteratorCreateInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRIteratorCreateInstruction*>(inst)) {
         return QoreIRInstGroup::IteratorCreate;
     }
-    if (dynamic_cast<const QoreIRIteratorNextInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(inst)) {
         return QoreIRInstGroup::IteratorNext;
     }
-    if (dynamic_cast<const QoreIROnBlockExitInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIROnBlockExitInstruction*>(inst)) {
         return QoreIRInstGroup::OnBlockExit;
     }
-    if (dynamic_cast<const QoreIRScopeEnterInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRScopeEnterInstruction*>(inst)) {
         return QoreIRInstGroup::ScopeEnter;
     }
-    if (dynamic_cast<const QoreIRScopeExitInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRScopeExitInstruction*>(inst)) {
         return QoreIRInstGroup::ScopeExit;
     }
-    if (dynamic_cast<const QoreIRLandingPadInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRLandingPadInstruction*>(inst)) {
         return QoreIRInstGroup::LandingPad;
     }
-    if (dynamic_cast<const QoreIRSwitchRegexMatchInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRSwitchRegexMatchInstruction*>(inst)) {
         return QoreIRInstGroup::SwitchRegexMatch;
     }
-    if (dynamic_cast<const QoreIRRefForeachInitInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRRefForeachInitInstruction*>(inst)) {
         return QoreIRInstGroup::RefForeachInit;
     }
-    if (dynamic_cast<const QoreIRMakeHashConstKeysInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRMakeHashConstKeysInstruction*>(inst)) {
         return QoreIRInstGroup::MakeHashConstKeys;
     }
-    if (dynamic_cast<const QoreIRMakeListInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRMakeListInstruction*>(inst)) {
         return QoreIRInstGroup::MakeList;
     }
-    if (dynamic_cast<const QoreIRMakeHashInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRMakeHashInstruction*>(inst)) {
         return QoreIRInstGroup::MakeHash;
     }
-    if (dynamic_cast<const QoreIRSwitchCaseMatchInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRSwitchCaseMatchInstruction*>(inst)) {
         return QoreIRInstGroup::SwitchCaseMatch;
     }
-    if (dynamic_cast<const QoreIRContextInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRContextInstruction*>(inst)) {
         return QoreIRInstGroup::Context;
     }
-    if (dynamic_cast<const QoreIRBackquoteInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRBackquoteInstruction*>(inst)) {
         return QoreIRInstGroup::Backquote;
     }
-    if (dynamic_cast<const QoreIRFindInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRFindInstruction*>(inst)) {
         return QoreIRInstGroup::Find;
     }
-    if (dynamic_cast<const QoreIRBackgroundInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst)) {
         return QoreIRInstGroup::Background;
     }
-    if (dynamic_cast<const QoreIRContextRefInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRContextRefInstruction*>(inst)) {
         return QoreIRInstGroup::ContextRef;
     }
-    if (dynamic_cast<const QoreIRSummarizeInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRSummarizeInstruction*>(inst)) {
         return QoreIRInstGroup::Summarize;
     }
-    if (dynamic_cast<const QoreIRListIndexAccessInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRListIndexAccessInstruction*>(inst)) {
         return QoreIRInstGroup::ListIndexAccess;
     }
-    if (auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst)) {
+    if (auto* expr_inst = qore_ir_inst_cast<const QoreIRExprInstruction*>(inst)) {
         if (expr_inst->opcode == QoreIROpcode::CallClosureDirect) {
             return QoreIRInstGroup::CallClosureDirect;
         }
     }
-    if (dynamic_cast<const QoreIRExprInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRExprInstruction*>(inst)) {
         return QoreIRInstGroup::Expr;
     }
-    if (dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+    if (qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(inst)) {
         return QoreIRInstGroup::DebugStatement;
     }
     if (typeid(*inst) == typeid(QoreIRInstruction)) {
@@ -15335,7 +15335,7 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
             diag += " (";
             diag += std::to_string(static_cast<uint8_t>(group));
             diag += ")";
-            if (const auto* lci = dynamic_cast<const QoreIRLoadConstantInstruction*>(inst)) {
+            if (const auto* lci = qore_ir_inst_cast<const QoreIRLoadConstantInstruction*>(inst)) {
                 diag += ": ";
                 diag += qoreAOTDescribeExpr(lci->expr);
                 if (writer.const_reverse_map && lci->expr.hasNode()) {

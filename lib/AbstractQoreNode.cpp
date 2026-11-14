@@ -765,7 +765,7 @@ QoreValue copy_value_and_resolve_lvar_refs_not_lvalue(const QoreValue& n, Except
 
 //! Returns true if the node is a step of an lvalue's access path, whose first operand is the next step
 static bool qore_background_lvalue_path_step(const AbstractQoreNode* node) {
-    return dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)
+    return qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)
         || dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
         || dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)
         || dynamic_cast<const QoreCastOperatorNode*>(node);

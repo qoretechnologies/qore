@@ -279,7 +279,7 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
             && intrinsic != QoreIRIntrinsic::StringLength)) {
         return false;
     }
-    const auto* call = dynamic_cast<const FunctionCallNode*>(
+    const auto* call = qore_get_function_call_node(
         expr.getInternalNode());
     // only a call of the Qore builtin, never a user or module function with the same name
     if (!call || call->hasExplicitTypeArgs() || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
@@ -293,7 +293,7 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
 static const FunctionCallNode* qore_ir_get_synthetic_global_pseudo_call(const QoreValue& expr,
         bool pseudo, const char* fallback_method_name) {
     return pseudo && fallback_method_name && expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
 }
 
 static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntrinsic intrinsic,
@@ -644,7 +644,7 @@ static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_function_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
@@ -702,7 +702,7 @@ qore_ir_get_call_type_instantiation(const QoreValue& expr) {
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
     if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
@@ -980,7 +980,7 @@ static bool qore_ir_fast_entry_args_allow_optional_scalar_guard(
         return false;
     }
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     const QoreFunction* function = call ? call->getFunction() : nullptr;
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
@@ -1207,13 +1207,13 @@ static bool qore_llvm_is_aot_deferred_source_function_call(const QoreValue& expr
     if (!expr.hasNode()) {
         return false;
     }
-    const auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
+    const auto* call = qore_get_function_call_node(expr.getInternalNode());
     return call && call->getAOTDeferredSourceFunction();
 }
 
 static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     // only the Qore builtins, never a user or module function with the same name
     if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
@@ -1228,7 +1228,7 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
         const QoreValue& expr, const QoreIRFunction* ir_func,
         QoreIRValue argument, bool aot_mode) {
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     if (!call || call->hasExplicitTypeArgs()) {
         return nullptr;
     }
@@ -6111,7 +6111,7 @@ llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDeferBlock(const QoreIRBasicBlock
                 if (inst->exception_target) {
                     targets.insert(inst->exception_target);
                 }
-                if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                if (const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst.get())) {
                     if (throw_inst->exception_target) {
                         targets.insert(throw_inst->exception_target);
                     }
@@ -11469,7 +11469,7 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
     }
 
     // background foo(args) — free function call
-    if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
+    if (auto* fcn = qore_get_function_call_node(inner)) {
         if (!fcn->getFunction()) {
             return false;
         }
@@ -12218,7 +12218,7 @@ static std::string formatQoreIRFallbackInstruction(const QoreIRInstruction* inst
     }
 
     const QoreValue* expr = nullptr;
-    if (auto* invoke = dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
+    if (auto* invoke = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
         desc += " (invoke opcode ";
         if (const char* name = qoreIROpcodeDiagnosticName(invoke->invoke_opcode)) {
             desc += name;
@@ -12228,27 +12228,27 @@ static std::string formatQoreIRFallbackInstruction(const QoreIRInstruction* inst
         }
         desc += ")";
         expr = &invoke->expr;
-    } else if (auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst)) {
+    } else if (auto* expr_inst = qore_ir_inst_cast<const QoreIRExprInstruction*>(inst)) {
         expr = &expr_inst->expr;
-    } else if (auto* static_var = dynamic_cast<const QoreIRStaticVarInstruction*>(inst)) {
+    } else if (auto* static_var = qore_ir_inst_cast<const QoreIRStaticVarInstruction*>(inst)) {
         expr = &static_var->expr;
-    } else if (auto* load_const = dynamic_cast<const QoreIRLoadConstantInstruction*>(inst)) {
+    } else if (auto* load_const = qore_ir_inst_cast<const QoreIRLoadConstantInstruction*>(inst)) {
         expr = &load_const->expr;
-    } else if (auto* create_closure = dynamic_cast<const QoreIRCreateClosureInstruction*>(inst)) {
+    } else if (auto* create_closure = qore_ir_inst_cast<const QoreIRCreateClosureInstruction*>(inst)) {
         expr = &create_closure->expr;
-    } else if (auto* create_call_ref = dynamic_cast<const QoreIRCreateCallRefInstruction*>(inst)) {
+    } else if (auto* create_call_ref = qore_ir_inst_cast<const QoreIRCreateCallRefInstruction*>(inst)) {
         expr = &create_call_ref->expr;
-    } else if (auto* create_method_ref = dynamic_cast<const QoreIRCreateMethodRefInstruction*>(inst)) {
+    } else if (auto* create_method_ref = qore_ir_inst_cast<const QoreIRCreateMethodRefInstruction*>(inst)) {
         expr = &create_method_ref->expr;
-    } else if (auto* create_parse_ref = dynamic_cast<const QoreIRCreateParseRefInstruction*>(inst)) {
+    } else if (auto* create_parse_ref = qore_ir_inst_cast<const QoreIRCreateParseRefInstruction*>(inst)) {
         expr = &create_parse_ref->expr;
-    } else if (auto* new_hd = dynamic_cast<const QoreIRNewHashDeclInstruction*>(inst)) {
+    } else if (auto* new_hd = qore_ir_inst_cast<const QoreIRNewHashDeclInstruction*>(inst)) {
         expr = &new_hd->expr;
-    } else if (auto* new_ch = dynamic_cast<const QoreIRNewComplexHashInstruction*>(inst)) {
+    } else if (auto* new_ch = qore_ir_inst_cast<const QoreIRNewComplexHashInstruction*>(inst)) {
         expr = &new_ch->expr;
-    } else if (auto* new_cl = dynamic_cast<const QoreIRNewComplexListInstruction*>(inst)) {
+    } else if (auto* new_cl = qore_ir_inst_cast<const QoreIRNewComplexListInstruction*>(inst)) {
         expr = &new_cl->expr;
-    } else if (auto* new_cb = dynamic_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
+    } else if (auto* new_cb = qore_ir_inst_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
         expr = &new_cb->expr;
     }
 
@@ -12398,7 +12398,7 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
         // the entered block, which the parse tree outlives the native code with; without it, the block is resolved
         // from the marker's file and line
         const StatementBlock* block = nullptr;
-        if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+        if (auto* dbg_inst = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(inst)) {
             block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
         }
         if (block) {
@@ -20288,7 +20288,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     inv->receiver_type_info;
                 if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
                     if (!invoke_explicit_inst) {
-                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                        const auto* call = qore_get_function_call_node(
                             inv->expr.getInternalNode());
                         invoke_explicit_inst = call
                             ? call->getExplicitTypeParamInstantiation() : nullptr;
@@ -20313,7 +20313,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const AbstractQoreFunctionVariant* variant = nullptr;
                     bool method_call = false;
                     if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                        aot_invoke_direct_call = dynamic_cast<const FunctionCallNode*>(expr_node);
+                        aot_invoke_direct_call = qore_get_function_call_node(expr_node);
                         if (aot_invoke_direct_call) {
                             variant = aot_invoke_direct_call->getVariant();
                         }
@@ -20429,7 +20429,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
                 if (inv->invoke_opcode == QoreIROpcode::CallDirect && !aot_mode) {
                     // CallDirect: extract function/variant/pgm from the FunctionCallNode
-                    const auto* call = dynamic_cast<const FunctionCallNode*>(
+                    const auto* call = qore_get_function_call_node(
                             inv->expr.getInternalNode());
                     assert(call);
                     // Use the func captured at IR-lowering time.  Re-reading
@@ -20568,7 +20568,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // pointer to the current function's FE.
                     const FunctionCallNode* aot_call = aot_invoke_direct_call
                         ? aot_invoke_direct_call
-                        : dynamic_cast<const FunctionCallNode*>(inv->expr.getInternalNode());
+                        : qore_get_function_call_node(inv->expr.getInternalNode());
                     const BatchCalleeInfo* aot_approach_b_callee = nullptr;
                     llvm::Function* aot_approach_b_fn = nullptr;
                     // the date kind checks of a fast entry call with date arguments for date<absolute>/
@@ -21286,7 +21286,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                             module, llvm_func, inst);
                 } else {
-                    const auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(
+                    const auto* rt_const = qore_get_runtime_constant_ref_node(
                             inv->expr.getInternalNode());
                     assert(rt_const);
                     llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
@@ -22644,7 +22644,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const QoreTypeParamInstantiation* explicit_inst =
                 direct_inst->explicit_type_param_inst;
             if (!explicit_inst) {
-                const auto* call = dynamic_cast<const FunctionCallNode*>(
+                const auto* call = qore_get_function_call_node(
                     direct_inst->expr.getInternalNode());
                 explicit_inst = call
                     ? call->getExplicitTypeParamInstantiation() : nullptr;
@@ -22694,7 +22694,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     || fused_aggregate_projection
                 ? nullptr : &call_date_kind_guards;
             if (aot_mode && !aot_direct_variant && direct_inst->expr.hasNode()) {
-                const auto* call = dynamic_cast<const FunctionCallNode*>(
+                const auto* call = qore_get_function_call_node(
                     direct_inst->expr.getInternalNode());
                 const QoreFunction* function = call ? call->getFunction() : nullptr;
                 const AbstractQoreFunctionVariant* candidate = function
@@ -24328,7 +24328,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // qore_rt_call_function_direct and crashing at runtime.
                 const QoreFunction* resolved_func = direct_inst->func;
                 if (!resolved_func) {
-                    if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                    if (auto* call = qore_get_function_call_node(
                             direct_inst->expr.getInternalNode())) {
                         resolved_func = call->getFunction();
                     }
@@ -34320,7 +34320,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::BackgroundInt: {
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
             llvm::Value* result = nullptr;
-            const auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
+            const auto* bg_inst = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst);
             if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper) {
                 // the expression is evaluated by its helper in the new thread
                 if (!emitBackgroundHelper(bg_inst, module, llvm_func, &result, error)) {
@@ -36138,7 +36138,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
                     int32_t string_index_char = 1;
                     if (expr_inst->expr.hasNode()) {
-                        if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                        if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
                             string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                         }
@@ -36187,7 +36187,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
                     int32_t string_index_char = 1;
                     if (expr_inst->expr.hasNode()) {
-                        if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                        if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
                             string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                         }
@@ -36918,7 +36918,7 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
         return false;
     }
 
-    auto* sq_brackets = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    auto* sq_brackets = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!sq_brackets) {
         return false;
     }

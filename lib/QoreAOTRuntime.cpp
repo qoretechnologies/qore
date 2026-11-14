@@ -6320,7 +6320,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
         }
         // Function call
-        const auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
+        const auto* fcn = qore_get_function_call_node(node);
         if (fcn && fcn->getFunction()) {
             ctx->call_targets[i].func = fcn->getFunction();
             ctx->call_targets[i].pgm = fcn->getProgram();
@@ -7575,7 +7575,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode());
+            auto* rcr = qore_get_runtime_constant_ref_node(expr.getInternalNode());
             auto* lci = new QoreIRLoadConstantInstruction(rcr, expr);
             lci->opcode = opcode;
             expr.discard(nullptr);

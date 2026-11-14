@@ -378,7 +378,7 @@ static bool write_slot_PLUS(AOTExprSlotWriteCtx& ctx) {
 
 static bool write_slot_SQUARE_BRACKET(AOTExprSlotWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
-    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!op) {
         return false;
     }
