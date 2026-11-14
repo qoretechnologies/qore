@@ -5274,6 +5274,9 @@ public:
     }
 
 private:
+    //! uses DnsServer to resolve a name to the IPv6 and the IPv4 loopback addresses
+    friend class ConnectErrorAfterSoErrorReadTest;
+
     enum class Case {
         //! the server answers every query
         Answered,
@@ -17434,27 +17437,6 @@ private:
         return listener.getPort();
     }
 
-    //! Returns the number of address families that a name resolves to for a TCP connection
-    static int countFamilies(const char* name) {
-        addrinfo hints{};
-        hints.ai_family = AF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
-        addrinfo* res = nullptr;
-        if (getaddrinfo(name, "1", &hints, &res) || !res) {
-            return 0;
-        }
-        bool v4 = false, v6 = false;
-        for (addrinfo* p = res; p; p = p->ai_next) {
-            if (p->ai_family == AF_INET) {
-                v4 = true;
-            } else if (p->ai_family == AF_INET6) {
-                v6 = true;
-            }
-        }
-        freeaddrinfo(res);
-        return (v4 ? 1 : 0) + (v6 ? 1 : 0);
-    }
-
     //! A temporary directory for a UNIX socket, removed with the socket file when it goes out of scope
     class SocketDir {
     public:
@@ -17593,8 +17575,9 @@ private:
 
     //! Happy Eyeballs: the error of the attempt that fails last is reported, not errno after it is given up
     /** The first attempt fails with ECONNREFUSED, the second with ETIMEDOUT, and errno is changed after each attempt
-        is given up; the error reported is ETIMEDOUT.  Needs localhost to resolve to an IPv6 and an IPv4 address with
-        a listener on both, for two attempts.
+        is given up; the error reported is ETIMEDOUT.  The name is resolved by a DNS server of the test to the IPv6
+        and the IPv4 loopback addresses, on both of which a listener listens, for two attempts (localhost resolves to
+        one address on many systems).
     */
     static void runHappyEyeballsLastError(UnitTestCounters& c) {
         ExceptionSink xsink;
@@ -17605,16 +17588,43 @@ private:
         if (port <= 0) {
             return;
         }
-        int families = countFamilies("localhost");
-        if (!v6 || families != 2) {
-            printf("  connect error: Happy Eyeballs last error: skipped: IPv6 loopback listener: %s, localhost "
-                "families: %d\n", v6 ? "yes" : "no", families);
+        if (!v6) {
+            printf("  connect error: Happy Eyeballs last error: skipped: the IPv6 loopback listener cannot be made on "
+                "the port\n");
             return;
         }
+        HappyEyeballsLayeredConnectTest::DnsServer dns;
+        int rc = dns.start("127.0.0.1", "::1", 0);
+        UT_ASSERT_EQ(c, 0, rc, "connect error: Happy Eyeballs last error: the DNS server starts");
+        if (rc) {
+            return;
+        }
+        // the answers are sent at once
+        dns.release();
+        // a local class: its members take no visibility attribute
+        struct ServersHelper {
+            ServersHelper(int port) : prev(qore_dbg_cares_set_servers("127.0.0.1:" + std::to_string(port))) {
+            }
+            ~ServersHelper() {
+                qore_dbg_cares_set_servers(prev);
+            }
+            std::string prev;
+        } servers(dns.getPort());
+
         std::string service = std::to_string(port);
+        const char* name = "qore-connect-error.test";
+        {
+            QoreSocket client;
+            rc = client.connectINET2(name, service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect error: Happy Eyeballs last error: the connect succeeds without the "
+                "hook");
+            xsink.clear();
+        }
+        UT_ASSERT(c, dns.getQueries() > 0, "connect error: Happy Eyeballs last error: the name is resolved by the "
+            "DNS server");
         HookHelper hook(ETIMEDOUT, ECONNREFUSED, CloseErrno);
         QoreSocket client;
-        int rc = client.connectINET2("localhost", service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
+        rc = client.connectINET2(name, service.c_str(), Q_AF_UNSPEC, Q_SOCK_STREAM, 0, 30000, &xsink);
         UT_ASSERT_EQ(c, 0, qore_dbg_connect_first_error_after_so_error_read.load(),
             "connect error: Happy Eyeballs last error: the first attempt took the first error");
         checkError(c, "connect error: Happy Eyeballs attempts fail with different errors", rc, client, xsink,
