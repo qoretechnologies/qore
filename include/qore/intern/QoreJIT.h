@@ -891,6 +891,13 @@ public:
     */
     static uint64_t getMaxJITIRInstructions();
 
+    //! Returns the largest estimated size of the code that runs the on_block_exit handlers of a function that is
+    //! compiled natively (see QoreIRFunction::getHandlerCostEstimate()), 0 for no limit
+    /** Defaults to 120000 (a function whose catch blocks have a local and a handler gets there at about 56 of them,
+        and takes about ten seconds to compile); QORE_JIT_MAX_HANDLER_COST overrides it (qore#6104)
+    */
+    static uint64_t getMaxJITHandlerCost();
+
     //! Returns the process-wide LLVM optimization level used for JIT compilation.
     /** 0 (no optimization) to 3 (most aggressive); the default is 3, matching the default of the
         qcc AOT compiler.  Overridable with the

@@ -5050,6 +5050,37 @@ static std::string qore_ir_next_handler_name(QoreIRFunction* parent) {
     return "handler_" + std::to_string(parent->handler_name_seq++) + "@" + parent->name;
 }
 
+//! The handler functions compiled by a lowering and the lowerings of the handlers nested in it (#6087)
+/** A handler's body is lowered inline at the exits of its block and compiled to a function of its own, and so are the
+    handlers nested in it, each time: the statement of a handler nested n deep in the bodies of other handlers was
+    lowered 2^n times, each copy with its own handler function, although the functions were the same.  A handler
+    function depends only on the handler's code and on what it takes from its parent function, so a handler compiled
+    again with the same parent slots is given the function compiled first.
+*/
+struct QoreIRLowering::HandlerIRCache {
+    struct Entry {
+        //! the parent's local slots that the function was compiled with
+        std::unordered_map<const LocalVar*, uint32_t> parent_slots;
+        const StatementBlock* source_statement_block;
+        void* source_dpgm_addr;
+        QoreProgram* pgm;
+        qore_program_id_t pgm_id;
+        bool emit_debug_statements;
+        LocalVar* self_local;
+        std::shared_ptr<QoreIRFunction> func;
+
+        bool matches(const QoreIRFunction& parent, LocalVar* n_self_local) const {
+            return self_local == n_self_local && source_statement_block == parent.source_statement_block
+                && source_dpgm_addr == parent.source_dpgm_addr && pgm == parent.pgm && pgm_id == parent.pgm_id
+                && emit_debug_statements == parent.emit_debug_statements && parent_slots == parent.local_var_slots;
+        }
+    };
+    //! the function whose lowering created the cache
+    const QoreIRFunction* root = nullptr;
+    //! the functions compiled for each handler body
+    std::unordered_map<const StatementBlock*, std::vector<Entry>> handlers;
+};
+
 int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& handlers,
         QoreIRFunction* parent_func, std::string& error) {
     // Compile a specific set of handlers (for a block level) without accumulation
@@ -5086,14 +5117,9 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         }
 
         // Create handler IR function
-        auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name(parent_func));
-        // the statements of the handler are debugged as those of the function that it belongs to
-        handler_func->source_statement_block = parent_func->source_statement_block;
-        handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;
-        // a handler belongs to the Program of the function it is part of (see QoreJIT::workReferencesPgm())
-        handler_func->pgm = parent_func->pgm;
-        handler_func->pgm_id = parent_func->pgm_id;
-        handler_func->emit_debug_statements = parent_func->emit_debug_statements;
+        // the name is taken also for a handler given a function compiled before, so that the names of the others do
+        // not depend on it
+        std::string handler_name = qore_ir_next_handler_name(parent_func);
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
         // the locals that the handler declares get slots in the function first, as the inline lowering of a handler
@@ -5102,6 +5128,34 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // reference, \var) could not be serialized against the slot table of the function (qcc failed for a
         // closure; qore#5657); a local that has a slot keeps it
         qore_ir_reserve_handler_local_slots(*parent_func, handler.code);
+
+        // the same handler compiled before with the same parent slots has the same function (see HandlerIRCache)
+        // a lowering that lowers another function starts a cache of its own
+        if (!handler_ir_cache || (!handler_body && handler_ir_cache->root != parent_func)) {
+            handler_ir_cache = std::make_shared<HandlerIRCache>();
+            handler_ir_cache->root = parent_func;
+        }
+        {
+            const std::vector<HandlerIRCache::Entry>& cached = handler_ir_cache->handlers[handler.code];
+            auto i = std::find_if(cached.begin(), cached.end(), [&](const HandlerIRCache::Entry& e) {
+                return e.matches(*parent_func, self_local);
+            });
+            if (i != cached.end()) {
+                handler.obe_inst->handler_ir = i->func;
+                compiled_count++;
+                continue;
+            }
+        }
+
+        auto handler_func = std::make_unique<QoreIRFunction>(std::move(handler_name));
+        // the statements of the handler are debugged as those of the function that it belongs to
+        handler_func->source_statement_block = parent_func->source_statement_block;
+        handler_func->source_dpgm_addr = parent_func->source_dpgm_addr;
+        // a handler belongs to the Program of the function it is part of (see QoreJIT::workReferencesPgm())
+        handler_func->pgm = parent_func->pgm;
+        handler_func->pgm_id = parent_func->pgm_id;
+        handler_func->emit_debug_statements = parent_func->emit_debug_statements;
+
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
         handler_func->local_var_slots = parent_func->local_var_slots;
         handler_func->parent_slot_count = parent_slot_count;
@@ -5131,6 +5185,13 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // the handler runs in the frame of the function: its calls through self are made on the same object
         // (issue #5823)
         handler_lowering.self_local = self_local;
+        // the handlers nested in the handler share the functions compiled for the function
+        handler_lowering.handler_ir_cache = handler_ir_cache;
+        // what the function is compiled with, for the cache
+        HandlerIRCache::Entry cache_entry{parent_func->local_var_slots, parent_func->source_statement_block,
+            parent_func->source_dpgm_addr, parent_func->pgm, parent_func->pgm_id,
+            parent_func->emit_debug_statements, self_local, nullptr};
+        const unsigned bg_helpers_before = *bg_helper_count;
 
         // Lower the handler body into the handler IR function.  Any failure
         // here is an outer-function lowering failure — we no longer keep an
@@ -5180,12 +5241,21 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);
         compiled_count++;
+
+        // a function with background helpers is not shared: the names of their parameters are unique in the function
+        if (nested_error.empty() && *bg_helper_count == bg_helpers_before) {
+            cache_entry.func = handler.obe_inst->handler_ir;
+            handler_ir_cache->handlers[handler.code].push_back(std::move(cache_entry));
+        }
     }
 
     return had_failure ? -1 : compiled_count;
 }
 
 int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
+    // nothing adds to saved_top_level_handlers, so this compiles nothing: the handlers are compiled by
+    // compileBlockHandlerIRs(), which shares their functions (HandlerIRCache, #6087); a lowering here would have to
+    // pass handler_ir_cache to the lowerings of the handlers as it does
     // Phase B2: Handler IR compilation with parent slot inheritance
     // QoreIRVerifier has been updated to handle pre-seeded parent slots
     // Handler functions can now be compiled with parent scope access.
@@ -22018,7 +22088,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
-        if (!pred || !static_cast<bool>(*pred)) {
+        // only a terminal streaming operator without a predicate passes none; a stage's predicate is evaluated also
+        // when it is the constant NOTHING, which is false, as the AST interpreter does (qore#6071)
+        if (!pred) {
             return builder.createConstBool(true, pred_loc)->result;
         }
 
@@ -23372,7 +23444,9 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
-        if (!pred || !static_cast<bool>(*pred)) {
+        // only a terminal streaming operator without a predicate passes none; a stage's predicate is evaluated also
+        // when it is the constant NOTHING, which is false, as the AST interpreter does (qore#6071)
+        if (!pred) {
             return builder.createConstBool(true, pred_loc)->result;
         }
 
@@ -23972,8 +24046,11 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
 
     // the predicate runs with the element as the implicit argument and its index as the implicit element, which are
     // restored on every path (QoreFunctionalStreamingOperator::predicateMatches()); see lowerWithImplicitContext()
+    // takewhile and takeuntil evaluate their predicate also when it is NOTHING, which is false
+    // (QoreFunctionalStreamingOperator::predicateMatches()), where a terminal operator whose predicate is NOTHING has
+    // none (QoreStreamingOperatorNode::evalCommon()), as the AST interpreter does (qore#6071)
     auto lower_predicate = [&](QoreIRValue element_val, QoreIRValue index_val) -> QoreIRValue {
-        if (!op->hasPredicate()) {
+        if (!op->hasPredicate() && qore_streaming_kind_is_terminal(op->getKind())) {
             return builder.createConstBool(true, loc)->result;
         }
         return lowerWithImplicitContext(element_val, index_val, loc, stream_cleanup.get(), error,

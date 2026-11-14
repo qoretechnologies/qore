@@ -72,6 +72,24 @@ printf("%y\n", h.fullType()); # "hash<string, int>"
     When the referenced value already satisfies the restriction, binding the reference leaves the lvalue
     untouched.
 
+    A local whose type names a type parameter keeps the concrete constraint of the invocation that created its
+    storage.  Taking a reference to the local, or capturing it in a closure, preserves that constraint after the
+    invocation returns, including when the reference or closure is used by another thread or another generic
+    invocation.  The runtime reference type names the concrete target type:
+    @code{.py}
+reference<*T> sub make_reference<T>() {
+    *T value;
+    return \value;
+}
+
+reference<*string> text = make_reference<string>();
+text = "value";
+text = NOTHING; # *string still accepts NOTHING
+# text = 42;   # RUNTIME-TYPE-ERROR: the target expects *string
+    @endcode
+
+    Creating the reference does not assign the local or change its coercion or container-narrowing rules.
+
     The @ref reference_or_nothing_type "*reference" has special behavior when used as an argument type
     restriction.  In this case, if no value is assigned to the reference in the call, the local variable
     can be assigned to any value in the code block, even if the called did not pass a value to the reference.

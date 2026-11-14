@@ -246,6 +246,7 @@ QoreValue ParseReferenceNode::doPartialEval(QoreValue n, RuntimeConfig& rc, Qore
 }
 
 ReferenceNode* ParseReferenceNode::evalToRef(ExceptionSink* xsink) const {
+    const QoreTypeInfo* ref_target_type = getRuntimeReferenceTarget();
     //printd(5, "ParseReferenceNode::evalToRef() '%s'\n", QoreTypeInfo::getName(typeInfo));
     QoreObject* self = nullptr;
     const void* lvalue_id = nullptr;
@@ -254,19 +255,20 @@ ReferenceNode* ParseReferenceNode::evalToRef(ExceptionSink* xsink) const {
     //printd(5, "ParseReferenceNode::evalToRef() this: %p nv: %p lvexp: %p lvalue_id: %p\n", this, nv, lvexp,
     //  lvalue_id);
     if (nv) {
-        const QoreTypeInfo* refti = QoreTypeInfo::getUniqueReturnComplexReference(typeInfo);
+        const QoreTypeInfo* refti = ref_target_type;
         return new ReferenceNode(nv, refti, self, lvalue_id, qc);
     }
     return nullptr;
 }
 
 ReferenceNode* ParseReferenceNode::evalToRef(RuntimeConfig& rc, ExceptionSink* xsink) const {
+    const QoreTypeInfo* ref_target_type = getRuntimeReferenceTarget();
     QoreObject* self = nullptr;
     const void* lvalue_id = nullptr;
     const qore_class_private* qc = nullptr;
     QoreValue nv = doPartialEval(lvexp, rc, self, lvalue_id, qc, xsink);
     return nv
-        ? new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc)
+        ? new ReferenceNode(nv, ref_target_type, self, lvalue_id, qc)
         : nullptr;
 }
 
@@ -289,6 +291,7 @@ size_t ParseReferenceNode::pathKeyCount(const QoreValue& lvexp) {
 
 ReferenceNode* ParseReferenceNode::evalToRefWithResolvedPathKeys(RuntimeConfig* rc, QoreValue keys,
         ExceptionSink* xsink) const {
+    const QoreTypeInfo* ref_target_type = getRuntimeReferenceTarget();
     size_t count = pathKeyCount(lvexp);
     if (keys.getType() != NT_LIST || keys.get<const QoreListNode>()->size() != count) {
         xsink->raiseException("RUNTIME-ERROR", "the reference expects the %zu keys of its path", count);
@@ -303,11 +306,12 @@ ReferenceNode* ParseReferenceNode::evalToRefWithResolvedPathKeys(RuntimeConfig* 
         : doPartialEval(lvexp, self, lvalue_id, qc, xsink, &resolved);
     assert(*xsink || resolved.pos == count);
     return nv
-        ? new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc)
+        ? new ReferenceNode(nv, ref_target_type, self, lvalue_id, qc)
         : nullptr;
 }
 
 ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(QoreValue selector, ExceptionSink* xsink) const {
+    const QoreTypeInfo* ref_target_type = getRuntimeReferenceTarget();
     // the keys of a path of two or more steps, evaluated by compiled code from the root out
     if (pathKeyCount(lvexp) >= 2) {
         return evalToRefWithResolvedPathKeys(nullptr, selector, xsink);
@@ -330,7 +334,7 @@ ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(QoreValue selec
         }
 
         QoreValue nv(new QoreHashObjectDereferenceOperatorNode(loc, left, selector.refSelf()));
-        return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
+        return new ReferenceNode(nv, ref_target_type, self, lvalue_id, qc);
     }
 
     auto* sb = lvexp.hasNode()
@@ -347,7 +351,7 @@ ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(QoreValue selec
         }
 
         QoreValue nv(new QoreSquareBracketsOperatorNode(loc, left, selector.refSelf()));
-        return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
+        return new ReferenceNode(nv, ref_target_type, self, lvalue_id, qc);
     }
 
     return evalToRef(xsink);
@@ -355,6 +359,7 @@ ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(QoreValue selec
 
 ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(RuntimeConfig& rc, QoreValue selector,
         ExceptionSink* xsink) const {
+    const QoreTypeInfo* ref_target_type = getRuntimeReferenceTarget();
     // the keys of a path of two or more steps, evaluated by compiled code from the root out
     if (pathKeyCount(lvexp) >= 2) {
         return evalToRefWithResolvedPathKeys(&rc, selector, xsink);
@@ -377,7 +382,7 @@ ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(RuntimeConfig& 
         }
 
         QoreValue nv(new QoreHashObjectDereferenceOperatorNode(loc, left, selector.refSelf()));
-        return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
+        return new ReferenceNode(nv, ref_target_type, self, lvalue_id, qc);
     }
 
     auto* sb = lvexp.hasNode()
@@ -394,7 +399,7 @@ ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(RuntimeConfig& 
         }
 
         QoreValue nv(new QoreSquareBracketsOperatorNode(loc, left, selector.refSelf()));
-        return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
+        return new ReferenceNode(nv, ref_target_type, self, lvalue_id, qc);
     }
 
     return evalToRef(rc, xsink);
@@ -410,24 +415,26 @@ ReferenceNode* ParseReferenceNode::evalToRefWithResolvedHashKey(RuntimeConfig& r
 }
 
 IntermediateParseReferenceNode* ParseReferenceNode::evalToIntermediate(ExceptionSink* xsink) const {
+    const QoreTypeInfo* ref_target_type = getRuntimeReferenceTarget();
     //printd(5, "ParseReferenceNode::evalToIntermediate() '%s'\n", QoreTypeInfo::getName(typeInfo));
     QoreObject* self = nullptr;
     const void* lvalue_id = nullptr;
     const qore_class_private* qc = nullptr;
     QoreValue nv = doPartialEval(lvexp, self, lvalue_id, qc, xsink);
     return nv
-        ? new IntermediateParseReferenceNode(loc, nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self,
+        ? new IntermediateParseReferenceNode(loc, nv, ref_target_type, self,
             lvalue_id, qc)
         : nullptr;
 }
 
 IntermediateParseReferenceNode* ParseReferenceNode::evalToIntermediate(RuntimeConfig& rc, ExceptionSink* xsink) const {
+    const QoreTypeInfo* ref_target_type = getRuntimeReferenceTarget();
     QoreObject* self = nullptr;
     const void* lvalue_id = nullptr;
     const qore_class_private* qc = nullptr;
     QoreValue nv = doPartialEval(lvexp, rc, self, lvalue_id, qc, xsink);
     return nv
-        ? new IntermediateParseReferenceNode(loc, nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self,
+        ? new IntermediateParseReferenceNode(loc, nv, ref_target_type, self,
             lvalue_id, qc)
         : nullptr;
 }
@@ -526,8 +533,8 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
         // target. Complex lvalues such as \self.member must preserve the outer reference
         // layer because the lvalue is the member itself.
         const QoreTypeInfo* ref_target = direct_var_ref ? QoreTypeInfo::getReferenceTarget(argTypeInfo) : nullptr;
-        parse_context.typeInfo = typeInfo = qore_get_complex_hard_reference_type(
-            ref_target ? ref_target : argTypeInfo);
+        setTypeInfo(qore_get_complex_hard_reference_type(ref_target ? ref_target : argTypeInfo));
+        parse_context.typeInfo = typeInfo;
     } else {
         parse_context.typeInfo = nullptr;
     }

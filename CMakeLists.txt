@@ -72,6 +72,15 @@ option(SINGLE_COMPILATION_UNIT
        "Build libqore as a single compilation unit for faster builds"
        ON)
 
+set(SINGLE_COMPILATION_UNIT_CHUNKS 1 CACHE STRING
+    "With SINGLE_COMPILATION_UNIT: split libqore into this many unity chunks compiled in parallel (1 = one single compilation unit; see cmake/QoreScuChunks.cmake)")
+if (NOT SINGLE_COMPILATION_UNIT_CHUNKS MATCHES "^[1-9][0-9]?[0-9]?$" OR SINGLE_COMPILATION_UNIT_CHUNKS GREATER 256)
+    message(FATAL_ERROR "SINGLE_COMPILATION_UNIT_CHUNKS must be a positive integer, got '${SINGLE_COMPILATION_UNIT_CHUNKS}'")
+endif ()
+if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1 AND NOT SINGLE_COMPILATION_UNIT)
+    message(WARNING "SINGLE_COMPILATION_UNIT_CHUNKS=${SINGLE_COMPILATION_UNIT_CHUNKS} is ignored because SINGLE_COMPILATION_UNIT is OFF")
+endif ()
+
 option(ENABLE_ALLOC_TRACKING
        "Enable malloc/free interposer for memory leak tracking (adds overhead to all allocations; debug only)"
        OFF)
@@ -1848,7 +1857,9 @@ set(LIBQORE_CPP_SRC
     lib/QoreTypeSpecMatchRegistry.cpp
     lib/QoreIRExprRegistry.cpp
     lib/JITRuntime.cpp
+    lib/JITRuntimeGivenArgs.cpp
     lib/QoreIRInterpreter.cpp
+    lib/QoreIRInterpreterGivenArgs.cpp
     lib/QoreIRIntrinsic.cpp
     lib/QoreIRBuilder.cpp
     lib/QoreIRAnalysis.cpp
@@ -2529,12 +2540,31 @@ if (SINGLE_COMPILATION_UNIT)
     # with "can't write output file" (job 175756).  Keeping the mtime stable
     # means a reconfigure (e.g. the post-module-install AOT re-probe) does
     # not relink libqore at all.
-    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
-        "${_scu_content}")
-    configure_file(
-        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
-        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        COPYONLY)
+    if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
+        # several unity chunks instead of the one wrapper (qore-test-base image builds, where the single unit
+        # compiles on one core for many minutes); the chunk assignment rule is in cmake/QoreScuChunks.cmake
+        include(cmake/QoreScuChunks.cmake)
+        # a change of the cost table changes the assignment, so it must trigger a reconfigure
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/cmake/scu-chunk-costs.txt)
+        qore_scu_split_chunks("${_scu_content}" ${SINGLE_COMPILATION_UNIT_CHUNKS}
+            ${CMAKE_SOURCE_DIR}/cmake/scu-chunk-costs.txt
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk LIBQORE_SCU_SRC LIBQORE_SCU_ISOLATED_SRC)
+        # a stale single wrapper from an earlier configure must not be picked up by anything
+        file(REMOVE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp)
+    else ()
+        file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
+            "${_scu_content}")
+        configure_file(
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+            COPYONLY)
+        set(LIBQORE_SCU_SRC ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp)
+        # chunk files of an earlier chunked configure of this build directory are not used any more
+        file(GLOB _scu_old_chunks ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk*)
+        if (_scu_old_chunks)
+            file(REMOVE ${_scu_old_chunks})
+        endif ()
+    endif ()
     unset(_scu_content)
     # Files that must be compiled separately from the SCU:
     # - qore-main.cpp: includes platform dynamic-loader headers such as
@@ -2542,7 +2572,15 @@ if (SINGLE_COMPILATION_UNIT)
     # - qore_git_revision.cpp: so git hash changes only recompile this tiny file
     # - qore_aot_runtime_identity.cpp: so AOT runtime identity changes only recompile this tiny file
     # - AllocTracking.cpp: defines global malloc/free symbols
-    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp)
+    # - JITRuntimeGivenArgs.cpp, QoreIRInterpreterGivenArgs.cpp: the code of the calls that give the references of
+    #   their temporary arguments to the callee (issue #5882); in the SCU, it would change how the compiler inlines
+    #   the helpers that the code of the calls that give nothing uses, and so that code
+    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
+        lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp)
+    if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
+        # sources that cannot share a translation unit with the LLVM users (see cmake/QoreScuChunks.cmake)
+        list(APPEND LIBQORE_EXTRA_SRC ${LIBQORE_SCU_ISOLATED_SRC})
+    endif ()
     if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
         list(APPEND LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
     endif ()
@@ -2558,20 +2596,20 @@ if (SINGLE_COMPILATION_UNIT)
     # #include lines keeps it exactly in sync with what is actually compiled and
     # forces a recompile whenever any member changes (or a .qpp -> .cpp is
     # regenerated by qpp).
-    file(STRINGS ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        _scu_include_lines REGEX "^#include \"")
-    set(_scu_object_deps "")
-    foreach (_scu_line ${_scu_include_lines})
-        string(REGEX REPLACE "^#include \"([^\"]+)\".*$" "\\1" _scu_inc "${_scu_line}")
-        if (_scu_inc AND NOT _scu_inc STREQUAL _scu_line)
-            list(APPEND _scu_object_deps "${_scu_inc}")
-        endif ()
+    foreach (_scu_file ${LIBQORE_SCU_SRC})
+        file(STRINGS ${_scu_file} _scu_include_lines REGEX "^#include \"")
+        set(_scu_object_deps "")
+        foreach (_scu_line ${_scu_include_lines})
+            string(REGEX REPLACE "^#include \"([^\"]+)\".*$" "\\1" _scu_inc "${_scu_line}")
+            if (_scu_inc AND NOT _scu_inc STREQUAL _scu_line)
+                list(APPEND _scu_object_deps "${_scu_inc}")
+            endif ()
+        endforeach ()
+        list(REMOVE_DUPLICATES _scu_object_deps)
+        set_source_files_properties(${_scu_file} PROPERTIES OBJECT_DEPENDS "${_scu_object_deps}")
     endforeach ()
-    list(REMOVE_DUPLICATES _scu_object_deps)
-    set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        PROPERTIES OBJECT_DEPENDS "${_scu_object_deps}")
 
-    add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_EXTRA_SRC} ${LIBQORE_SOURCE_HEADERS})
+    add_library(libqore SHARED ${LIBQORE_SCU_SRC} ${LIBQORE_EXTRA_SRC} ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
 endif (SINGLE_COMPILATION_UNIT)
@@ -2784,6 +2822,12 @@ if (QORE_STACK_USAGE_REPORT)
     string(REPLACE "#define " "" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
     string(REPLACE " " "=" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
     string(REPLACE ";" " " _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    # the budgets are calibrated for the single compilation unit; a chunked or separate-units build inlines differently
+    if (SINGLE_COMPILATION_UNIT AND SINGLE_COMPILATION_UNIT_CHUNKS EQUAL 1)
+        set(_qore_stack_usage_scu 1)
+    else ()
+        set(_qore_stack_usage_scu 0)
+    endif ()
     file(WRITE "${CMAKE_BINARY_DIR}/stack-usage-config.txt"
         "# written by CMake for tools/check-stack-usage.py\n"
         "compiler=${CMAKE_CXX_COMPILER_ID}\n"
@@ -2793,6 +2837,7 @@ if (QORE_STACK_USAGE_REPORT)
         "cxx-flags=${CMAKE_CXX_FLAGS}\n"
         "hardening=${_qore_stack_usage_macros}\n"
         "ipo=${QORE_LIB_IPO_VALUE}\n"
+        "single-compilation-unit=${_qore_stack_usage_scu}\n"
         "target=${QORE_LIB_TARGET_VALUE}\n")
 endif()
 
@@ -2895,7 +2940,7 @@ endif()
 #target_link_libraries(qr libqore)
 
 if (SINGLE_COMPILATION_UNIT)
-    set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_EXTRA_SRC})
+    set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${LIBQORE_SCU_SRC} ${LIBQORE_EXTRA_SRC})
 else (SINGLE_COMPILATION_UNIT)
     set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC})
 endif (SINGLE_COMPILATION_UNIT)
@@ -3150,6 +3195,9 @@ set(_qcc_format_sources
 #                      the AOT compiler shared with it, extractLValueBaseVarRef(),
 #                      now lives in QoreIRAnalysis.cpp -- if the compiler ever
 #                      calls into the interpreter again, this decision changes.
+#                      QoreIRInterpreterGivenArgs.cpp compiles part of it (its
+#                      calls that give their temporary arguments) in a unit of
+#                      its own, and is out for the same reason.
 #   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
 #   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
 #                      how many objects are compiled at once, never what they
@@ -3160,6 +3208,7 @@ set(_qcc_format_excluded_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreterGivenArgs.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRPrinter.cpp
 )
 
@@ -3308,6 +3357,7 @@ add_custom_command(
         -P ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
     COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP}
     DEPENDS ${QCC_FORMAT_STAMP} ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
+        ${CMAKE_SOURCE_DIR}/cmake/QoreQmodPathUtils.cmake
     COMMENT "Removing stale source qmod symlinks after qcc format changes"
     VERBATIM
 )
@@ -3330,7 +3380,7 @@ qore_record_cflags(QORE_LIB_CFLAGS_VALUE "${QORE_LIB_CFLAGS_VALUE}")
 # the build type and its flags, which get_qore_library_info() reports with the compiler version: they decide the frame
 # sizes of the library (see examples/test/qore/stack/recursion-frame-budget.qtest)
 qore_record_cflags(QORE_LIB_BUILD_TYPE_CFLAGS_VALUE "${_qore_lib_build_type_flags}")
-if (SINGLE_COMPILATION_UNIT)
+if (SINGLE_COMPILATION_UNIT AND SINGLE_COMPILATION_UNIT_CHUNKS EQUAL 1)
     set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 1)
 else()
     set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 0)

@@ -200,7 +200,8 @@ public class Http3StreamContext inherits AbstractStreamContext {
                 wake_callback();
             }
         }
-        int deadline = timeout_ms > 0 ? clock_getmillis() + timeout_ms : 0;
+        # the deadline is on the monotonic clock: a step of the system clock does not change the wait
+        int deadline = timeout_ms > 0 ? clock_get_monotonic_us() / 1000 + timeout_ms : 0;
         while (sock.submitQuicStreamData(session_id, stream_id, data, end_stream) == 1) {
             # the data already queued must be sent before the stream can drain
             if (wake_callback) {
@@ -208,7 +209,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
             }
             int wait_ms = -1;
             if (deadline) {
-                wait_ms = deadline - clock_getmillis();
+                wait_ms = deadline - clock_get_monotonic_us() / 1000;
                 if (wait_ms <= 0) {
                     throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the send buffer did not drain within %d "
                         "ms; %d bytes were not sent", stream_id, timeout_ms, data.size());

@@ -164,10 +164,16 @@ protected:
     tplist_t::iterator pos;
     bool stopflag = false,
         stopped = false;
+    //! True once the task running on this worker took it out of the pool (ThreadPool::detachCurrentThread());
+    //! read and written with the pool's lock held
+    bool detached = false;
 
     DLLLOCAL void finalize(ExceptionSink* xsink);
 
 public:
+    //! The worker whose task runs in the current thread, or nullptr
+    DLLLOCAL static thread_local ThreadPoolThread* current;
+
     DLLLOCAL ThreadPoolThread(ThreadPool& n_tp, ExceptionSink* xsink);
 
     DLLLOCAL ~ThreadPoolThread() {
@@ -233,6 +239,20 @@ public:
     DLLLOCAL tplist_t::iterator getPos() const {
         return pos;
     }
+
+    DLLLOCAL ThreadPool& getPool() const {
+        return tp;
+    }
+
+    //! Returns true if the worker left the pool; must be called with the pool's lock held
+    DLLLOCAL bool isDetached() const {
+        return detached;
+    }
+
+    //! Marks the worker as out of the pool; must be called with the pool's lock held
+    DLLLOCAL void setDetached() {
+        detached = true;
+    }
 };
 
 class ThreadPool : public AbstractPrivateData {
@@ -252,7 +272,8 @@ protected:
     QoreCondition stopCond;
 
     tplist_t ah,  // allocated thread list
-        fh;        // free thread list
+        fh,        // free thread list
+        dh;        // detached thread list: workers whose task took them out of the pool (detachCurrentThread())
 
     // quit flag
     bool quit = false;
@@ -269,11 +290,11 @@ protected:
         detach = false;        // detach flag
 
     //! The sandbox manager of the Program that created the pool, or nullptr if it has none
-    /** Each worker of the pool holds a thread slot of this manager while it is in the pool (in \a fh or \a ah), and
-        the pool's own thread holds one until the pool has stopped, so the pool's threads count against the thread
-        limit of the sandbox of the Program that created the pool.  Slots are acquired and released only with \a m
-        held (or in the constructor), so the number of slots held is always the number of workers plus \a reserved
-        plus one for the pool's own thread.
+    /** Each worker of the pool holds a thread slot of this manager while it is in the pool (in \a fh or \a ah) or
+        detached from it (in \a dh, until it ends), and the pool's own thread holds one until the pool has stopped, so
+        the pool's threads count against the thread limit of the sandbox of the Program that created the pool.  Slots
+        are acquired and released only with \a m held (or in the constructor), so the number of slots held is always
+        the number of workers plus \a reserved plus one for the pool's own thread.
     */
     QoreSandboxManager* sbx;
 
@@ -492,6 +513,7 @@ public:
         assert(q.empty());
         assert(ah.empty());
         assert(fh.empty());
+        assert(dh.empty());
         assert(!reserved);
         if (sbx) {
             sbx->deref(nullptr);
@@ -513,6 +535,14 @@ public:
 
         for (tplist_t::iterator i = fh.begin(), e = fh.end(); i != e; ++i) {
             if (i != fh.begin())
+                str.concat(", ");
+            str.sprintf("%d", (*i)->getId());
+        }
+
+        str.concat("] detached: [");
+
+        for (tplist_t::iterator i = dh.begin(), e = dh.end(); i != e; ++i) {
+            if (i != dh.begin())
                 str.concat(", ");
             str.sprintf("%d", (*i)->getId());
         }
@@ -613,10 +643,16 @@ public:
             }
 
             tplist_t::iterator i = tpt->getPos();
-            ah.erase(i);
+            if (tpt->isDetached()) {
+                // a worker that its task took out of the pool ends after the task, and releases its slot below
+                dh.erase(i);
+            } else {
+                ah.erase(i);
+            }
 
             // requeue thread if possible
-            if ((!maxidle && release_ms) || ((int)fh.size() < maxidle) || q.size() > fh.size()) {
+            if (!tpt->isDetached()
+                    && ((!maxidle && release_ms) || ((int)fh.size() < maxidle) || q.size() > fh.size())) {
                 fh.push_back(tpt);
                 if (waiting || (release_ms && (int)fh.size() > minidle))
                     cond.signal();
@@ -636,6 +672,12 @@ public:
     }
 
     DLLLOCAL void worker(ExceptionSink* xsink);
+
+    //! Takes the worker running the current task out of the pool; see ThreadPool::detachCurrentThread()
+    /** @return true if the current thread is a worker of this pool and is detached from it (or already was), false
+        if it is not a worker of this pool, or if the pool is stopping
+    */
+    DLLLOCAL bool detachCurrentThread();
 
     //! Wakes the pools waiting for a slot of the given sandbox manager after a slot of it was released
     /** Must be called without any pool lock held, as it takes the lock of each waiting pool; called by

@@ -1936,6 +1936,9 @@ DLLLOCAL ClosureParseEnvironment* thread_get_closure_parse_env();
 
 DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const QoreTypeInfo* typeInfo, QoreValue& nval,
     bool assign, bool read_only = false);
+//! Creates a local's closure storage with the owning invocation's concrete constraint.
+DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const LocalVar* local, const QoreTypeInfo* runtimeTypeInfo,
+    QoreValue& nval, bool assign);
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
@@ -2125,6 +2128,10 @@ public:
 
     CalleeContextHelper(const CalleeContextHelper&) = delete;
     CalleeContextHelper& operator=(const CalleeContextHelper&) = delete;
+
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
 
 private:
     //! the current thread
@@ -2814,6 +2821,10 @@ public:
     DLLLOCAL ArgvContextHelper(QoreListNode* argv, ExceptionSink* n_xsink);
     // calls deref(xsink) on list in destructor
     DLLLOCAL ~ArgvContextHelper();
+
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
 
 private:
     QoreListNode* old_argv;

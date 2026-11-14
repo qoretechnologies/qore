@@ -515,7 +515,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             task_cnt.dec();
         };
         try {
-            cache{name}.timer_id = controller.addTimer(now_us() + delay, sub () {
+            cache{name}.timer_id = controller.addTimerDelay(delay, sub () {
                 controller.submitTask(task, cancel_cb);
             });
         } catch () {

@@ -997,6 +997,23 @@ public:
     DLLLOCAL int64_t addTimer(const DateTimeNode* deadline, QoreValue udata, ExceptionSink* xsink,
         const std::string& owner = std::string());
 
+    //! Adds a timer that fires after the given delay, measured on the monotonic clock
+    /** As addTimer(), but the deadline is the time of the call plus \a delay_us on the monotonic clock: a step of the
+        system clock does not move it, as it moves a timer that addTimer() armed for now plus an interval.
+
+        @param delay_us the delay in microseconds; 0 or less fires at once
+        @param udata Qore user data to associate with the timer (referenced)
+        @param xsink for exception handling
+        @param owner optional owner identifier; see addTimer()
+        @return the timer ID (> 0)
+    */
+    DLLLOCAL int64_t addTimerDelay(int64_t delay_us, QoreValue udata, ExceptionSink* xsink,
+        const std::string& owner = std::string());
+
+    //! Adds a timer with the given deadline: since the epoch, or on the monotonic clock if \a monotonic is true
+    DLLLOCAL int64_t addTimerIntern(int64_t deadline_us, bool monotonic, const char* method, QoreValue udata,
+        ExceptionSink* xsink, const std::string& owner);
+
     //! Cancels a timer
     /** @param id the timer ID returned by addTimer()
         @param xsink for exception handling
@@ -1146,6 +1163,8 @@ private:
         CancelCountRef* cancel_count = nullptr;
         QoreProgram* pgm = nullptr;       //!< For CancelByProgram: the program being destroyed
         int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
+        //! For AddTimer: true if timer_deadline_us is on the monotonic clock (addTimerDelay()), not since the epoch
+        bool timer_monotonic = false;
         int64_t timer_id = 0;           //!< For AddTimer/CancelTimer: timer ID
         QoreHashNode* continue_poll_result = nullptr;  //!< For ContinuePollResult: new poll info (or nullptr)
         QoreHashNode* continue_poll_ex = nullptr;      //!< For ContinuePollResult: exception (or nullptr)

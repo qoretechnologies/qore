@@ -8163,10 +8163,10 @@ public class WebSocketClientHcioPollOp {
         #! Timer generation used to ignore stale callbacks after reschedule/cancel
         int heartbeat_generation = 0;
 
-        #! Last inbound WebSocket frame activity timestamp in milliseconds
+        #! Last inbound WebSocket frame activity timestamp in milliseconds, on the monotonic clock
         int last_recv_activity_ms;
 
-        #! Last automatic heartbeat PING timestamp in milliseconds
+        #! Last automatic heartbeat PING timestamp in milliseconds, on the monotonic clock
         int last_ping_sent_ms = 0;
 
         #! Client-initiated close cause tag surfaced to observers
@@ -8241,7 +8241,7 @@ public class WebSocketClientHcioPollOp {
         self.raw_callback = raw_callback;
         self.on_poll_complete = on_poll_complete;
         self.has_extensions = active_extensions ? True : False;
-        last_recv_activity_ms = clock_getmillis();
+        last_recv_activity_ms = clock_get_monotonic_us() / 1000;
 
         # Get connection and stream ID (protocol-agnostic)
         conn = stream.getConnection();
@@ -8652,8 +8652,8 @@ public class WebSocketClientHcioPollOp {
                 # wait for the server's answer
                 try {
                     AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
-                    close_timer_id = controller.addTimer(now_us()
-                        + milliseconds(close_timeout_ms), sub () { self.handleCloseTimer(); });
+                    close_timer_id = controller.addTimerDelay(milliseconds(close_timeout_ms),
+                        sub () { self.handleCloseTimer(); });
                 } catch (hash<ExceptionInfo> ex) {
                     timer_err = ex;
                 }
@@ -8733,7 +8733,7 @@ public class WebSocketClientHcioPollOp {
             } else if (!callbacks_cleared) {
                 try {
                     AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
-                    close_timer_id = controller.addTimer(now_us() + milliseconds(close_timeout_ms
+                    close_timer_id = controller.addTimerDelay(milliseconds(close_timeout_ms
                         ? close_timeout_ms : DefaultCloseWaitMs), sub () { self.handleCloseTimer(); });
                     timer = True;
                 } catch (hash<ExceptionInfo> ex) {
@@ -8990,7 +8990,7 @@ public class WebSocketClientHcioPollOp {
 
     private noteRecvActivity() {
         AutoLock al(heartbeat_mutex);
-        last_recv_activity_ms = clock_getmillis();
+        last_recv_activity_ms = clock_get_monotonic_us() / 1000;
         rescheduleHeartbeatTimerLocked();
     }
 
@@ -9006,7 +9006,7 @@ public class WebSocketClientHcioPollOp {
             return;
         }
 
-        int now = clock_getmillis();
+        int now = clock_get_monotonic_us() / 1000;
         *int next_delay_ms;
 
         if (heartbeat_ms > 0) {
@@ -9036,7 +9036,7 @@ public class WebSocketClientHcioPollOp {
         int generation = heartbeat_generation;
         AsyncSocketIo::AsyncSocketIoController controller =
             AsyncSocketIo::getGlobalAsyncIoController();
-        heartbeat_timer_id = controller.addTimer(now_us() + milliseconds(next_delay_ms),
+        heartbeat_timer_id = controller.addTimerDelay(milliseconds(next_delay_ms),
             sub () { self.handleHeartbeatTimer(generation); });
     }
 
@@ -9064,7 +9064,7 @@ public class WebSocketClientHcioPollOp {
             }
             remove heartbeat_timer_id;
 
-            int now = clock_getmillis();
+            int now = clock_get_monotonic_us() / 1000;
             int recv_idle_ms = now - last_recv_activity_ms;
             if (idle_timeout_ms > 0 && recv_idle_ms >= idle_timeout_ms) {
                 close_idle = True;

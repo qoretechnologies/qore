@@ -97,6 +97,14 @@ public:
         ResolvedCallReferenceNode(n_needs_eval), CallReferenceNodeLocation(loc) {
     }
 
+    //! calls the code with a temporary argument list that the caller owns
+    /** A reference whose call can take the values of the list over for its parameters, as the AST interpreter's call
+        moves its evaluated arguments into the parameters (issue #5882), does so; the others call execValue()
+    */
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+        return execValue(args, xsink);
+    }
+
     //! returns the effective parse options of the context that created the reference value, or nullptr for a
     //! reference that its own code calls in place (a reference in the parse tree)
     /** a call through the reference runs with the permissions of the context that created it: the functional domains
@@ -174,6 +182,8 @@ public:
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
 
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreFunction* getFunction() const;
 
     DLLLOCAL const QoreMethod* getMethod() const {
@@ -212,6 +222,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
@@ -324,6 +336,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 };
 
 class MethodCallReferenceNode : public LocalMethodCallReferenceNode {
@@ -345,6 +359,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 };
 
 //! a call reference to a user function from within the same QoreProgram object
@@ -358,6 +374,8 @@ public:
 
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
             const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
         return LocalFunctionCallReferenceNode::is_equal_hard(v, xsink);
@@ -433,6 +451,8 @@ public:
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
             const LexicalSemanticPolicy& policy) const override;
 
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
     }
@@ -484,6 +504,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const;
 
@@ -541,6 +563,8 @@ public:
             LexicalSemanticPolicy policy, ExceptionSink* xsink) const override;
     DLLLOCAL QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
         const LexicalSemanticPolicy& policy) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const;
 

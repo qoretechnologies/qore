@@ -2129,6 +2129,28 @@ long long q_atoll(const char* str) {
    return atoll(str);
 }
 
+#ifdef DEBUG
+// the offset that debug builds add to the system clock, to test code under a step of the system clock (see
+// dbg_set_realtime_offset()); the monotonic clock is not affected
+std::atomic<int64> qore_dbg_realtime_offset_us{0};
+
+// adds the offset of the system clock to a time in seconds and the given number of units per second
+static void q_dbg_apply_realtime_offset(int64& seconds, int& frac, int64 units_per_sec) {
+    int64 off_us = qore_dbg_realtime_offset_us.load(std::memory_order_relaxed);
+    if (!off_us) {
+        return;
+    }
+    int64 total = seconds * units_per_sec + frac + off_us * (units_per_sec / 1000000);
+    seconds = total / units_per_sec;
+    int64 rem = total % units_per_sec;
+    if (rem < 0) {
+        rem += units_per_sec;
+        --seconds;
+    }
+    frac = static_cast<int>(rem);
+}
+#endif
+
 // returns seconds since epoch
 int64 q_epoch() {
 #ifdef HAVE_CLOCK_GETTIME
@@ -2144,7 +2166,12 @@ int64 q_epoch() {
         return 0;
     }
 #endif
-    return ts.tv_sec;
+    int64 seconds = ts.tv_sec;
+#ifdef DEBUG
+    int frac = 0;
+    q_dbg_apply_realtime_offset(seconds, frac, 1000000);
+#endif
+    return seconds;
 }
 
 // returns seconds since epoch and gets microseconds
@@ -2166,7 +2193,11 @@ int64 q_epoch_us(int &us) {
     }
     us = ts.tv_usec;
 #endif
-    return ts.tv_sec;
+    int64 seconds = ts.tv_sec;
+#ifdef DEBUG
+    q_dbg_apply_realtime_offset(seconds, us, 1000000);
+#endif
+    return seconds;
 }
 
 // returns a monotonic-clock timestamp in microseconds (immune to realtime clock adjustments).
@@ -2215,7 +2246,11 @@ int64 q_epoch_ns(int &ns) {
     }
     ns = ts.tv_usec * 1000;
 #endif
-    return ts.tv_sec;
+    int64 seconds = ts.tv_sec;
+#ifdef DEBUG
+    q_dbg_apply_realtime_offset(seconds, ns, 1000000000);
+#endif
+    return seconds;
 }
 
 QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg) {

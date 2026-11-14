@@ -416,6 +416,11 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("max_queue_size drop during setup window", \maxQueueSizeDropsDuringSetupWindowTest());
         addTestCase("H2/H3 stream backpressure drops slow client", \streamBackpressureDropsTest());
         addTestCase("idle_timeout closes idle connection", \idleTimeoutTest());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("a step forward of the system clock does not close an idle connection",
+                \clockStepIdleTest());
+            addTestCase("a step back of the system clock does not stop the heartbeat", \clockStepHeartbeatTest());
+        }
         addTestCase("HTTP/1.0 opening handshake is rejected", \http10HandshakeTest());
         addTestCase("stop() delivers the messages sent before it", \stopDeliversSentMessagesTest());
         addTestCase("stop() in registered() delivers the buffered messages", \stopInRegisteredTest());
@@ -1402,6 +1407,82 @@ class WebSocketHandlerTest inherits QUnit::Test {
             "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n", version,
             connection));
         return s.readHTTPHeader(10s);
+    }
+
+    #! Starts a server with the given handler options and returns its port; the server is stopped by the caller
+    private int startClockStepServer(HttpServer hs, MyWsHandler h) {
+        hs.setHandler("ws-handler", "", NOTHING, h);
+        hs.setDefaultHandler("ws-handler", h);
+        return hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+    }
+
+    #! Waits until the handler has a connection
+    private static waitRegistered(MyWsHandler h) {
+        int deadline = clock_get_monotonic_us() + 10000000;
+        while (!h.getConnectionIds() && clock_get_monotonic_us() < deadline) {
+            usleep(10ms);
+        }
+        if (!h.getConnectionIds()) {
+            throw "TEST-ERROR", "connection not registered in time";
+        }
+    }
+
+    #! A step forward of the system clock does not close a connection for the idle timeout
+    /** The heartbeat and idle timers are armed and measured on the monotonic clock: on the system clock, a step
+        forward of an hour fired the heartbeat timer at once and made the connection look idle for an hour, so it was
+        closed.  The step is made with dbg_set_realtime_offset() (debug builds).
+    */
+    clockStepIdleTest() {
+        # the heartbeat timer wakes the server's checks every second; the idle check comes first
+        MyWsHandler h({"heartbeat": 1, "idle_timeout": 60, "logger": logger});
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        on_exit hs.stop();
+        int p = startClockStepServer(hs, h);
+
+        WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + p});
+        wsc.connect();
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        waitRegistered(h);
+
+        call_function("dbg_set_realtime_offset", 3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        # the heartbeat timer runs at least twice meanwhile
+        usleep(2500ms);
+        assertTrue(h.getConnectionIds().val(), "the connection stays open");
+    }
+
+    #! A step back of the system clock does not stop the heartbeat
+    /** On the system clock, a step back of an hour delayed the heartbeat timer by an hour and made the time since the
+        last frame negative, so no PING was sent.  The step is made with dbg_set_realtime_offset() (debug builds).
+    */
+    clockStepHeartbeatTest() {
+        MyWsHandler h({"heartbeat": 1, "logger": logger});
+        HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        on_exit hs.stop();
+        int p = startClockStepServer(hs, h);
+
+        Socket s();
+        s.connect("localhost:" + p);
+        on_exit s.close();
+        hash<auto> hdr = sendHandshake(s, "1.1", "Upgrade");
+        assertEq(101, hdr.status_code, "the WebSocket handshake succeeds");
+        # the heartbeat timer is armed when the connection is registered, before the system clock steps back
+        waitRegistered(h);
+
+        call_function("dbg_set_realtime_offset", -3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        # frames that the handler sends are skipped until the PING, at most for 20 seconds
+        int deadline = clock_get_monotonic_us() + 20000000;
+        *int op;
+        while (op != WSOP_Ping && clock_get_monotonic_us() < deadline) {
+            op = ws_read_message(s, 20s).op;
+        }
+        assertEq(WSOP_Ping, op, "the client receives a PING after the heartbeat interval");
     }
 
     #! a connection with no inbound activity for the idle timeout is closed to reclaim resources

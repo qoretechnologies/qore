@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes, or AOT
+# test-platform: macos - qcc AOT code generation and linking of executables
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTGenericLocalTypeTest
+
+#! a local of a generic function whose type names its type parameters refuses the values that the instantiated type
+#! refuses in every mode and in AOT (qore#5885)
+/** A qcc executable rebuilt such a local without its type: the type path of the local names the function's type
+    parameter, which the type resolver only resolves with the function's signature.  The IR interpreter wrote an int,
+    float or bool value to a local of an on_exit, on_success or on_error block directly when the local's declared type
+    accepted it, which a type naming type parameters does before they are substituted.
+*/
+class AOTGenericLocalTypeTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/AOTGenericLocalType/probe.q";
+        string debug_probe = get_script_dir() + "/AOTGenericLocalType/probe-debug.q";
+        string ref_probe = get_script_dir() + "/AOTGenericLocalType/probe-ref.q";
+        string lazy_provider = get_script_dir() + "/AOTGenericLocalType/lazy-provider.qc";
+        string lazy_consumer = get_script_dir() + "/AOTGenericLocalType/lazy-consumer.qc";
+        *string ast_out;
+    }
+
+    constructor() : Test("generic local types", "1.0", \ARGV) {
+        addTestCase("AST results", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        addTestCase("qcc executables with a debugger attached match AST", \debugged());
+        addTestCase("lazy function IR of a preloaded qcc object matches AST", \lazyFunctionIr());
+        addTestCase("references to selected elements of generic locals load in qcc", \referencedElements());
+        set_return_value(main());
+    }
+
+    astReference() {
+        string out = getAst();
+        assertRegex("(?m)^union<string, int> float => RUNTIME-TYPE-ERROR: <lvalue> expects type '\\*union<string, "
+            "int>', but got type 'float' instead$", out, out);
+        assertRegex("(?m)^union<string, int> int => 1$", out, out);
+        assertRegex("(?m)^\\*string float => RUNTIME-TYPE-ERROR: <lvalue> expects type '\\*string'", out, out);
+        assertRegex("(?m)^\\*int string => RUNTIME-TYPE-ERROR: <lvalue> expects type '\\*int'", out, out);
+        assertRegex("(?m)^block \\*string float => RUNTIME-TYPE-ERROR", out, out);
+        assertRegex("(?m)^on_exit \\*string float => RUNTIME-TYPE-ERROR", out, out);
+        assertRegex("(?m)^on_exit \\*string int => RUNTIME-TYPE-ERROR: <lvalue> expects type '\\*string', but got "
+            "type 'integer' instead$", out, out);
+        assertRegex("(?m)^on_exit \\*string bool => RUNTIME-TYPE-ERROR", out, out);
+        assertRegex("(?m)^on_exit \\*int float => RUNTIME-TYPE-ERROR", out, out);
+        assertRegex("(?m)^on_success \\*string float => RUNTIME-TYPE-ERROR", out, out);
+        assertRegex("(?m)^closure \\*string float => RUNTIME-TYPE-ERROR", out, out);
+        assertRegex("(?m)^method \\*string float => RUNTIME-TYPE-ERROR", out, out);
+        assertRegex("(?m)^method \\*string string => 1$", out, out);
+        assertRegex("(?m)^nested closure \\*string float => RUNTIME-TYPE-ERROR", out, out);
+        assertRegex("(?m)^closure forwarded \\*string float => RUNTIME-TYPE-ERROR: <lvalue> expects type "
+            "'\\*string'", out, out);
+        assertRegex("(?m)^closure forwarded \\*string string => 1$", out, out);
+        assertRegex("(?m)^closure forwarded \\*int string => RUNTIME-TYPE-ERROR: <lvalue> expects type '\\*int'",
+            out, out);
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-generic-local-type-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+            # the IR of the closures built when they are first called (qore#5885)
+            assertEq(expected, run((exe, "-b", "--enable-debug"), "QORE_DISABLE_AOT_NATIVE_CLOSURES=1"),
+                "qcc " + level + " with lazy closure IR");
+        }
+    }
+
+    #! with a debugger attached, a qcc executable runs the functions with the IR that it builds from the AOT image
+    debugged() {
+        string expected = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", debug_probe));
+        assertRegex("(?m)^debug forwarded \\*string float => RUNTIME-TYPE-ERROR: <lvalue> expects type '\\*string'",
+            expected, expected);
+        assertRegex("(?m)^debug forwarded \\*string string => 1$", expected, expected);
+        assertRegex("(?m)^debug on_exit \\*string int => RUNTIME-TYPE-ERROR", expected, expected);
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-generic-local-type-debug-");
+            string exe = dir.path + "/probe-debug";
+            run((qcc_bin, level, "-o", exe, debug_probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level + " with a debugger");
+        }
+    }
+
+    #! the functions of a preloaded .qo that run while qcc parses another file run with IR built from the AOT image
+    lazyFunctionIr() {
+        TmpDir dir("qore-aot-generic-local-type-lazy-");
+        # the AST reference: the provider's class and a call of its check method in one script
+        string script = dir.path + "/ast.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("%modern\n" + (map $1, ReadOnlyFile::readTextFile(lazy_provider).split("\n"), $1 != "%new-style")
+            .join("\n") + "\nprintf(\"%s\\n\", GenericProvider::check());\n");
+        f.close();
+        string expected = trim(run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", script)));
+        assertEq("opt:RUNTIME-TYPE-ERROR optok:accepted oex:RUNTIME-TYPE-ERROR fwd:RUNTIME-TYPE-ERROR", expected);
+
+        string provider_qo = dir.path + "/provider.qo";
+        string consumer_qo = dir.path + "/consumer.qo";
+        string exe = dir.path + "/lazy";
+        run((qcc_bin, "-c", "--parse-option=PO_MODERN", "-o", provider_qo, lazy_provider));
+        # the provider's code runs here with lazy function IR
+        run((qcc_bin, "-c", "-L", dir.path, "--parse-option=PO_MODERN", "-o", consumer_qo, lazy_consumer));
+        run((qcc_bin, "-o", exe, provider_qo, consumer_qo));
+        assertEq("parse: " + expected + "\nrun: " + expected + "\n", run((exe, "-b", "--enable-debug")));
+    }
+
+    #! the result type of a selection from a local whose type names a type parameter is resolved with the function's
+    #! signature (qore#6121); before, the executable failed to load
+    referencedElements() {
+        string expected = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", ref_probe));
+        assertRegex("(?m)^read list element => ", expected, expected);
+        foreach string mode in ("ir", "jit", "tiered") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, ref_probe)), mode);
+        }
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-aot-generic-local-type-ref-");
+            string exe = dir.path + "/probe-ref";
+            run((qcc_bin, level, "-o", exe, ref_probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args, *string env) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (env ? env + " " : "") + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

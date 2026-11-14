@@ -5724,6 +5724,8 @@ public:
         runMappedAddress(c);
 #ifdef DARWIN
         runCancelledScan(c);
+        runDescriptorScans(c);
+        runDescendantSockets(c);
 #endif
     }
 
@@ -5866,6 +5868,198 @@ private:
             "specific bind: a bind without a sink is checked against the socket table");
         UT_ASSERT(c, qore_is_thread_cancel_requested(),
             "specific bind: a scan without a sink leaves the cancellation request pending");
+    }
+
+    //! The process descriptors are scanned for a port check only if the socket table can omit a socket
+    /** Whether the table lists the sockets of the accessible processes is decided once for each socket type, by the
+        first check that finds no holder in the table (the checks above have made it).  If the table lists them, a
+        check scans no descriptors; otherwise, a check that finds no holder scans them once.  Either way the port is
+        refused as before.  The scans are counted for the calling thread only, so the checks of other threads do not
+        change the count.
+    */
+    static void runDescriptorScans(UnitTestCounters& c) {
+        int mode = qore_socket_table_check_mode(SOCK_STREAM);
+        UT_ASSERT(c, mode == 1 || mode == -1 || mode == 0,
+            "specific bind: the socket table check mode is a known value");
+        printf("  specific bind: TCP port checks use %s\n", mode == 1 ? "the socket table alone"
+            : (mode == -1 ? "the socket table and the process descriptors" : "an undecided socket table check"));
+        for (int i = 0; i < 3; ++i) {
+            Fd l{open(AF_INET, false, true)};
+            UT_ASSERT(c, l.fd >= 0, "specific bind: the scan count socket is opened");
+            if (l.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(l.fd, AF_INET, "0.0.0.0", 0), "specific bind: the scan count socket is bound");
+            mode = qore_socket_table_check_mode(SOCK_STREAM);
+            size_t before = qore_socket_descriptor_scan_count();
+            UT_ASSERT_EQ(c, 0, listenOn(l.fd), "specific bind: the scan count socket listens");
+            size_t scans = qore_socket_descriptor_scan_count() - before;
+            if (mode == 1) {
+                UT_ASSERT_EQ(c, (size_t)0, scans,
+                    "specific bind: a listen scans no process descriptors when the socket table lists their sockets");
+            } else if (mode == -1) {
+                UT_ASSERT_EQ(c, (size_t)1, scans,
+                    "specific bind: a listen that finds no holder scans the process descriptors once when the socket "
+                    "table can omit sockets");
+            }
+            // a specific address of the port of the listener on the wildcard address is refused, as before, by the
+            // check that finds the listener
+            Fd s{open(AF_INET, false, true)};
+            UT_ASSERT_EQ(c, EADDRINUSE, s.fd >= 0 ? bindTo(s.fd, AF_INET, "127.0.0.1", portOf(l.fd)) : -1,
+                "specific bind: 127.0.0.1 with SO_REUSEADDR is refused the port of a listener on 0.0.0.0");
+        }
+    }
+
+    //! A child process that waits until its parent ends it
+    struct Child {
+        pid_t pid = -1;
+        //! the write end of the pipe on which the child waits; closing it ends the child
+        int wfd = -1;
+
+        DLLLOCAL ~Child() {
+            end();
+        }
+
+        //! ends the child and returns its exit status (see ut_wait_child()), or 0 if there is no child
+        DLLLOCAL int end() {
+            if (wfd >= 0) {
+                ::close(wfd);
+                wfd = -1;
+            }
+            int rc = 0;
+            if (pid > 0) {
+                rc = ut_wait_child(pid);
+                pid = -1;
+            }
+            return rc;
+        }
+    };
+
+    //! Starts a child that keeps the descriptors that it inherits until @a child ends it
+    /** The child makes only async-signal-safe calls.  A child started later inherits the pipe of an earlier one, so
+        children are ended in the reverse order of their start.
+
+        @param own_listener if true, the child first makes a TCP socket of its own that reuses the address and listens
+        on 0.0.0.0 on a port that the system assigns
+
+        @return the port of the child's listener if @a own_listener is true, 0 if not, -1 for an error
+    */
+    static int startChild(Child& child, bool own_listener) {
+        int wait_pipe[2];
+        if (pipe(wait_pipe)) {
+            return -1;
+        }
+        int port_pipe[2] = {-1, -1};
+        if (own_listener && pipe(port_pipe)) {
+            ::close(wait_pipe[0]);
+            ::close(wait_pipe[1]);
+            return -1;
+        }
+        pid_t pid = fork();
+        if (!pid) {
+            ::close(wait_pipe[1]);
+            if (own_listener) {
+                ::close(port_pipe[0]);
+                int port = -1;
+                int fd = socket(AF_INET, SOCK_STREAM, 0);
+                int one = 1;
+                struct sockaddr_in sin = {};
+                sin.sin_len = sizeof(sin);
+                sin.sin_family = AF_INET;
+                socklen_t len = sizeof(sin);
+                if (fd >= 0 && !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one))
+                    && !::bind(fd, reinterpret_cast<struct sockaddr*>(&sin), sizeof(sin)) && !::listen(fd, 5)
+                    && !getsockname(fd, reinterpret_cast<struct sockaddr*>(&sin), &len)) {
+                    port = ntohs(sin.sin_port);
+                }
+                if (write(port_pipe[1], &port, sizeof(port)) != sizeof(port)) {
+                    _exit(1);
+                }
+                ::close(port_pipe[1]);
+            }
+            char ch;
+            while (read(wait_pipe[0], &ch, 1) < 0 && errno == EINTR) {
+            }
+            _exit(0);
+        }
+        ::close(wait_pipe[0]);
+        if (pid < 0) {
+            ::close(wait_pipe[1]);
+            if (own_listener) {
+                ::close(port_pipe[0]);
+                ::close(port_pipe[1]);
+            }
+            return -1;
+        }
+        child.pid = pid;
+        child.wfd = wait_pipe[1];
+        if (!own_listener) {
+            return 0;
+        }
+        ::close(port_pipe[1]);
+        int port = -1;
+        ssize_t n;
+        while ((n = read(port_pipe[0], &port, sizeof(port))) < 0 && errno == EINTR) {
+        }
+        ::close(port_pipe[0]);
+        return n == sizeof(port) ? port : -1;
+    }
+
+    //! A socket that this process shares with a child process does not make the socket table look complete
+    /** For a process whose socket table it filters, macOS 27 lists only the sockets that the process created, also
+        when a child process holds them too, and the process descriptors show such a socket in the child as well.  The
+        decision of the port checks, made while a child shares a listener of this process, must not take the table to
+        list the sockets of other processes: the listener of another program on 0.0.0.0, which the table of this
+        process does not list then, refuses a bind of 127.0.0.1 to its port.
+
+        The test scope of the checks of this thread makes the outcome independent of the host: the table lists only
+        the sockets that this process holds, as a filtered table would, and only this process and its descendants are
+        scanned, so that sockets of other processes of the user, which make a filtered table look incomplete, do not
+        decide it.  The decision is made again in this test, and the one made before, and the test scope, are restored
+        at its end.
+    */
+    static void runDescendantSockets(UnitTestCounters& c) {
+        struct Restore {
+            int state;
+            int scope;
+            DLLLOCAL ~Restore() {
+                qore_socket_port_check_test_scope(scope);
+                qore_socket_table_check_exchange(SOCK_STREAM, state);
+            }
+        } restore{qore_socket_table_check_exchange(SOCK_STREAM, 0),
+            qore_socket_port_check_test_scope(QORE_SOCKET_TEST_OWN_TREE | QORE_SOCKET_TEST_FILTERED_TABLE)};
+
+        // a listener of this process that a child shares; bound and listening without the port checks
+        Fd s{open(AF_INET, false, true)};
+        UT_ASSERT(c, s.fd >= 0 && !bindTo(s.fd, AF_INET, "0.0.0.0", 0) && !::listen(s.fd, 5),
+            "specific bind: the shared listener listens");
+        Child sharer;
+        UT_ASSERT_EQ(c, 0, startChild(sharer, false), "specific bind: the child that shares the listener is started");
+
+        // the first listen that finds no holder in the table makes the decision
+        Fd l{open(AF_INET, false, true)};
+        UT_ASSERT(c, l.fd >= 0 && !bindTo(l.fd, AF_INET, "0.0.0.0", 0) && !listenOn(l.fd),
+            "specific bind: the listener that makes the decision listens");
+        int mode = qore_socket_table_check_mode(SOCK_STREAM);
+        printf("  specific bind: with a shared socket, TCP port checks use %s\n", mode == 1
+            ? "the socket table alone" : (mode == -1 ? "the socket table and the process descriptors"
+            : "an undecided socket table check"));
+        // within the test scope, the only sockets of other processes that the table lists are those that this process
+        // shares with its child
+        UT_ASSERT(c, mode != 1, "specific bind: a socket shared with a child does not make the socket table look "
+            "complete");
+
+        Child holder;
+        int port = startChild(holder, true);
+        UT_ASSERT(c, port > 0, "specific bind: the other program listens on 0.0.0.0");
+        if (port > 0) {
+            Fd b{open(AF_INET, false, true)};
+            UT_ASSERT_EQ(c, EADDRINUSE, b.fd >= 0 ? bindTo(b.fd, AF_INET, "127.0.0.1", port) : -1,
+                "specific bind: 127.0.0.1 with SO_REUSEADDR is refused the port of another program's listener on "
+                "0.0.0.0 after the decision was made while a child shared a socket of this process");
+        }
+        UT_ASSERT_EQ(c, 0, holder.end(), "specific bind: the other program ends");
+        UT_ASSERT_EQ(c, 0, sharer.end(), "specific bind: the child that shares the listener ends");
     }
 #endif
 
@@ -17273,6 +17467,17 @@ static QoreValue f_dbg_poll_wait_close_before_open_state(const QoreListNode* par
 #endif
 
 #ifdef DEBUG
+//! Debug-only: dbg_set_realtime_offset(us): sets the offset in microseconds that is added to the system clock (now_us(),
+//! clock_getmillis(), clock_getmicros() and the deadlines of AsyncIoController::addTimer()), as a step of the system
+//! clock would change it, and returns the previous offset; the monotonic clock is not affected.  A test that sets it
+//! must set it back to 0, also when it fails, as the offset is process-wide
+static QoreValue f_dbg_set_realtime_offset(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 off_us = get_param_value(params, 0).getAsBigInt();
+    return qore_dbg_realtime_offset_us.exchange(off_us, std::memory_order_relaxed);
+}
+#endif
+
+#ifdef DEBUG
 //! Debug-only: runs Http1DuplexSendFailureTest: response recovery after a concurrent write of the request body
 //! (buffered or streamed) fails, before and after the final response header, on a new and on a reused connection
 static QoreValue f_dbg_run_http1_duplex_tests(const QoreListNode* params, RuntimeConfig& rc,
@@ -22518,6 +22723,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_poll_wait_close_before_open_state", f_dbg_poll_wait_close_before_open_state,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_set_realtime_offset", f_dbg_set_realtime_offset, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "us");
     qns.addBuiltinVariant("dbg_aot_split_method_ref", f_dbg_aot_split_method_ref, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "encoded");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,

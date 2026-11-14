@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs a script in a child process that sets its own --exec-mode, or AOT
+# test-platform: macos - JIT and AOT code generation of the calls that give their temporary arguments to the callee
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class TempArgReleaseFrameTest
+
+#! issue #5882: the frame on the call stack when the temporary argument of a call is released
+/** The AST interpreter moves the evaluated arguments of a call into the callee's parameters, so the last reference of
+    a temporary argument is released by the callee, after its local variables and on_exit handlers and while its frame
+    is still on the call stack; the IR interpreter, JIT, tiered and AOT code released it in the caller once the callee's
+    frame had been popped, so a destructor that raised an exception or read the call stack saw another call stack.
+
+    The script next to the test runs in every execution mode (its functions compiled before they run, with
+    QORE_JIT_SYNC_COMPILE), on the IR tier and as AOT executables, and its output, which shows the call stack of each
+    release, must be that of the AST interpreter.
+*/
+class TempArgReleaseFrameTest inherits QUnit::Test {
+    public {
+        #! the script
+        const Script = "release-frame-cases";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("temporary argument release frame", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        # the functions are compiled to native code before they run, not in the background
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_JIT_SYNC_COMPILE=1", libqore_dir, libqore_dir);
+
+        addTestCase("AST semantics", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter
+    private astTest() {
+        string out = astOutput();
+        assertEq(38, (select out.split("\n"), $1 =~ /^[a-z ]+: /).size(), "cases");
+        hash<string, string> exp = {
+            "function": "rel a [\"Rec::destructor\", \"nocall\", \"case_function\"]",
+            "function two": "rel b [\"Rec::destructor\", \"two\", \"case_function_two\"]; "
+                "rel a [\"Rec::destructor\", \"two\", \"case_function_two\"]",
+            "function varargs": "rel a [\"Rec::destructor\", \"va\", \"case_function_varargs\"]; "
+                "rel b [\"Rec::destructor\", \"va\", \"case_function_varargs\"]",
+            # the implicit argument list, which holds the argument that the callee does not declare, is released
+            # first, then the parameters
+            "function argv": "argv 1; rel b [\"Rec::destructor\", \"argv_user\", \"case_function_argv\"]; "
+                "rel a [\"Rec::destructor\", \"argv_user\", \"case_function_argv\"]",
+            "method argv": "argv 1; rel b [\"Rec::destructor\", \"C::margv\", \"case_method_argv\"]; "
+                "rel a [\"Rec::destructor\", \"C::margv\", \"case_method_argv\"]",
+            "static method argv": "argv 1; rel b [\"Rec::destructor\", \"C::smargv\", "
+                "\"case_static_method_argv\"]; rel a [\"Rec::destructor\", \"C::smargv\", "
+                "\"case_static_method_argv\"]",
+            "function locals": "body; on_exit; rel local [\"Rec::destructor\", \"withlocal\", "
+                "\"case_function_locals\"]; rel a [\"Rec::destructor\", \"withlocal\", \"case_function_locals\"]",
+            "method": "rel a [\"Rec::destructor\", \"C::m\", \"case_method\"]",
+            "static method": "rel a [\"Rec::destructor\", \"C::sm\", \"case_static_method\"]",
+            "closure": "rel a [\"Rec::destructor\", \"<anonymous closure>\", \"case_closure\"]; "
+                "rel b [\"Rec::destructor\", \"<anonymous closure>\", \"case_closure\"]",
+            "call reference": "rel a [\"Rec::destructor\", \"nocall\", \"case_call_reference\"]; "
+                "rel b [\"Rec::destructor\", \"nocall\", \"case_call_reference\"]",
+            "constructor": "rel a [\"Rec::destructor\", \"K::constructor\", \"case_constructor\"]",
+            "method call reference": "rel a [\"Rec::destructor\", \"C::m\", \"case_method_call_reference\"]; "
+                "rel b [\"Rec::destructor\", \"C::m\", \"case_method_call_reference\"]",
+            "static call reference": "rel a [\"Rec::destructor\", \"C::sm\", \"case_static_call_reference\"]; "
+                "rel b [\"Rec::destructor\", \"C::sm\", \"case_static_call_reference\"]",
+            "throw static call reference": "catch DTOR [\"Dtor::destructor\", \"C::sm\", "
+                "\"case_throw_static_call_reference\"]",
+            "try function": "catch DTOR [\"Dtor::destructor\", \"nocall\", \"case_try_function\"]",
+            "throw method": "catch DTOR [\"Dtor::destructor\", \"C::m\", \"case_throw_method\"]",
+            "throw closure": "catch DTOR [\"Dtor::destructor\", \"<anonymous closure>\", \"case_throw_closure\"]",
+        };
+        hash<string, string> lines = map {$1.substr(0, $1.find(": ")): $1.substr($1.find(": ") + 2)},
+            out.split("\n"), $1 =~ /: /;
+        foreach hash<auto> i in (exp.pairIterator()) {
+            assertEq(i.value, lines{i.key}, i.key);
+        }
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, scriptPath())),
+                mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST
+    #! interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("temp-arg-release-frame-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/%s%s", dir.path, Script, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/" + Script + ".q";
+    }
+
+    #! the output of the script with the AST interpreter
+    private string astOutput() {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+    }
+}

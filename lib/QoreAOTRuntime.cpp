@@ -300,7 +300,9 @@ static bool aotLocalTypeMatches(const LocalVar* lv, const char* type_path,
     }
 
     std::string type_error;
-    const QoreTypeInfo* resolved_ti = type_resolver->resolve(type_path, type_error);
+    // a type that names the type parameters of a generic function (qore#5885)
+    const QoreTypeInfo* resolved_ti = type_resolver->resolveForSignature(type_path, type_error,
+        qore_aot_get_type_param_owner());
     return resolved_ti && type_error.empty()
         && (QoreTypeInfo::isOutputIdentical(declared_ti, resolved_ti)
             || QoreTypeInfo::isOutputIdentical(lv->getTypeInfoForLValue(), resolved_ti));
@@ -327,7 +329,9 @@ static bool aotLocalTypeKnownMismatch(const LocalVar* lv, const char* type_path,
     }
 
     std::string type_error;
-    const QoreTypeInfo* resolved_ti = type_resolver->resolve(type_path, type_error);
+    // a type that names the type parameters of a generic function (qore#5885)
+    const QoreTypeInfo* resolved_ti = type_resolver->resolveForSignature(type_path, type_error,
+        qore_aot_get_type_param_owner());
     return resolved_ti && type_error.empty()
         && !QoreTypeInfo::isOutputIdentical(lv->getTypeInfo(), resolved_ti)
         && !QoreTypeInfo::isOutputIdentical(lv->getTypeInfoForLValue(), resolved_ti);
@@ -1343,6 +1347,14 @@ bool qore_aot_apply_explicit_type_args(FunctionCallBase& call,
 
     Thread-local because several Programs can register AOT slots concurrently. */
 static thread_local std::string aot_slot_resolve_error;
+
+//! Records the first error of the expressions read since it was last cleared (qore#6121)
+/** A slot whose expression cannot be read leaves the reader at an unknown position in the slot map entry, so the
+    reads after it fail for no reason of their own; this keeps the cause, which the reader of the slot map reports
+    instead of what fails after it.
+
+    Thread-local because several Programs can read AOT expressions concurrently. */
+static thread_local std::string aot_expr_read_error;
 
 //! Describes an unresolvable AOT symbol, naming the modules that could have provided it
 /** An AOT artifact only references symbols that resolved when it was compiled, so a symbol that
@@ -2825,6 +2837,9 @@ QoreValue readOneExpr(
     const auto* kinfo = getAOTExprKindInfo(ekind);
     if (!kinfo || !kinfo->is_supported || !kinfo->read_fn) {
         err = "unsupported expression kind " + std::to_string(ekind);
+        if (aot_expr_read_error.empty()) {
+            aot_expr_read_error = err;
+        }
         return QoreValue();
     }
     AOTExprReadCtx rctx{
@@ -2832,6 +2847,10 @@ QoreValue readOneExpr(
     };
     QoreValue value = kinfo->read_fn(rctx);
     ParseNode::bindSemanticPolicy(value, LexicalSemanticPolicy());
+    // the first error is the cause; an expression that contains the failed one reports it again (qore#6121)
+    if (!err.empty() && aot_expr_read_error.empty()) {
+        aot_expr_read_error = err;
+    }
     return value;
 }
 
@@ -3408,12 +3427,24 @@ static QoreAOTContext* buildContextFromSlotMap(
     // The slot-map roots are reconstructed here, outside the scopes used to read their nested expressions.
     LexicalParsePolicyHelper semantic_scope{LexicalSemanticPolicy()};
     const uint8_t* entry_payload_start = ptr;
-    auto setBuildError = [name, build_error](const std::string& msg) {
+    // the first expression slot whose expression could not be read, with the cause (qore#6121)
+    std::string slot_read_error;
+    auto setBuildError = [name, build_error, &slot_read_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
             *build_error = "AOT slot map registration failed for '";
             *build_error += name ? name : "<unknown>";
             *build_error += "': ";
-            *build_error += msg;
+            if (!slot_read_error.empty()) {
+                // the reader is at an unknown position in the entry after a slot that it could not read, so what
+                // fails after it is a consequence of it
+                *build_error += "cannot read ";
+                *build_error += slot_read_error;
+                *build_error += " (and then: ";
+                *build_error += msg;
+                *build_error += ")";
+            } else {
+                *build_error += msg;
+            }
         }
     };
 
@@ -3421,6 +3452,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     // legitimately (CLOSURE_CREATE) leaves it set, so a stale message from an earlier, successfully
     // registered function would otherwise be reported against this one.  Start each function clean.
     aot_slot_resolve_error.clear();
+    aot_expr_read_error.clear();
 
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
@@ -3665,7 +3697,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 std::string type_error;
                 const QoreTypeInfo* ti = nullptr;
                 if (ltype && *ltype) {
-                    ti = ctx_type_resolver->resolve(ltype, type_error);
+                    // the type of a local of a generic function can name its type parameters, which only the
+                    // function's signature resolves; resolved without it, the type is lost and the local accepts
+                    // any value (qore#5885)
+                    ti = ctx_type_resolver->resolveForSignature(ltype, type_error, qore_aot_get_type_param_owner());
                     if (!type_error.empty()) {
                         type_error.clear();
                     }
@@ -3780,11 +3815,27 @@ static QoreAOTContext* buildContextFromSlotMap(
         const char* kind_name;
         uint8_t& has_unsupported;
         uint8_t initially_unsupported;
+        std::string& slot_read_error;
 
         ~ExprUnsupportedTraceGuard() {
             if (enabled && !initially_unsupported && has_unsupported) {
                 fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] kind=%s(%u) marked unsupported\n",
                     func_name, slot, kind_name ? kind_name : "UNKNOWN", kind_byte);
+            }
+            // the first slot that fails because an expression in it could not be read is the cause of the failure
+            // of the function (qore#6121)
+            if (!initially_unsupported && has_unsupported && slot_read_error.empty()
+                    && !aot_expr_read_error.empty()) {
+                // a description of the failure recorded for this slot names the part of the expression that could
+                // not be read; a description of another slot is stale
+                std::string prefix = "expr slot " + std::to_string(slot) + " (";
+                if (!aot_slot_resolve_error.compare(0, prefix.size(), prefix)) {
+                    // "expr slot N (KIND): ..." -> "expression slot N (KIND): ..."
+                    slot_read_error = "expression" + aot_slot_resolve_error.substr(4);
+                } else {
+                    slot_read_error = "expression slot " + std::to_string(slot) + " ("
+                        + (kind_name ? kind_name : "UNKNOWN") + "): " + aot_expr_read_error;
+                }
             }
         }
     };
@@ -3823,8 +3874,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             has_unsupported = true;
             break;
         }
+        // an error of an expression read for an earlier slot that did not make that slot fail is not a cause
+        if (!has_unsupported) {
+            aot_expr_read_error.clear();
+        }
         ExprUnsupportedTraceGuard unsupported_trace{
-            trace_slot_reg, name, i, kind_byte, expr_kind_name, has_unsupported, has_unsupported};
+            trace_slot_reg, name, i, kind_byte, expr_kind_name, has_unsupported, has_unsupported, slot_read_error};
 
         switch (kind) {
             case AOTExprKind::NEW_OBJECT:
@@ -4956,7 +5011,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (ref_type_path && *ref_type_path) {
                         std::string type_error;
                         QoreAOTTypeResolver type_resolver(pgm);
-                        ref_ti = type_resolver.resolve(ref_type_path, type_error);
+                        // the type of a reference to a local of a generic function can name its type parameters
+                        // (qore#5885)
+                        ref_ti = type_resolver.resolveForSignature(ref_type_path, type_error,
+                            qore_aot_get_type_param_owner());
                         if (!ref_ti) {
                             printd(0, "AOT v2: cannot resolve PARSE_REF type '%s' for expr slot %d of '%s': %s\n",
                                 ref_type_path, i, name, type_error.c_str());
@@ -4992,11 +5050,21 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (type_path && *type_path) {
                         QoreAOTTypeResolver type_resolver(pgm);
                         std::string type_error;
-                        result_type_info = type_resolver.resolve(type_path, type_error);
+                        // the type can name the type parameters of the generic function (qore#6121)
+                        result_type_info = type_resolver.resolveForSignature(type_path, type_error,
+                            qore_aot_get_type_param_owner());
                         if (!result_type_info || !type_error.empty()) {
                             if (trace_slot_reg) {
                                 fprintf(stderr, "[aot-slot-reg] '%s': HASH_DEREF expr[%d] cannot resolve "
                                     "result type '%s': %s\n", name, i, type_path, type_error.c_str());
+                            }
+                            // the operands are not read, so the reader is at an unknown position in the entry
+                            if (slot_read_error.empty()) {
+                                slot_read_error = "expression slot " + std::to_string(i) + " (HASH_DEREF): "
+                                    "cannot resolve hash-dereference result type '" + type_path + "'";
+                                if (!type_error.empty()) {
+                                    slot_read_error += ": " + type_error;
+                                }
                             }
                             has_unsupported = true;
                             continue;
@@ -6525,7 +6593,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             std::string type_error;
             const QoreTypeInfo* ti = nullptr;
             if (bltype && *bltype) {
-                ti = ctx_type_resolver->resolve(bltype, type_error);
+                // a type that names the type parameters of a generic function (qore#5885)
+                ti = ctx_type_resolver->resolveForSignature(bltype, type_error, qore_aot_get_type_param_owner());
                 if (!type_error.empty()) {
                     type_error.clear();
                 }
@@ -6927,7 +6996,10 @@ static QoreAOTContext* buildContextFromSlotMap(
         // name the symbol that failed to resolve when one was recorded; without it the caller sees only
         // "unsupported AOT slot metadata" and has no way to tell a stale module from a real metadata problem
         std::string msg = "unsupported AOT slot metadata";
-        if (!aot_slot_resolve_error.empty()) {
+        if (!slot_read_error.empty()) {
+            // setBuildError() reports the slot that could not be read
+            aot_slot_resolve_error.clear();
+        } else if (!aot_slot_resolve_error.empty()) {
             msg += ": ";
             msg += aot_slot_resolve_error;
             aot_slot_resolve_error.clear();
@@ -8338,8 +8410,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
         std::string type_error;
         QoreAOTTypeResolver type_resolver(pgm);
+        // a type that names the type parameters of a generic function (qore#5885)
         const QoreTypeInfo* ti = (ltype && *ltype)
-            ? type_resolver.resolve(ltype, type_error) : nullptr;
+            ? type_resolver.resolveForSignature(ltype, type_error, qore_aot_get_type_param_owner()) : nullptr;
         qore_program_private* pp = qore_program_private::get(
             *(local_owner_pgm ? local_owner_pgm : pgm));
         return pp->createLocalVar(lname, ti);
@@ -8751,6 +8824,10 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
         error = "lazy closure IR is attached to a non-closure variant";
         return nullptr;
     }
+    // the IR is built when the closure is first called, out of the context build that names the type parameters of
+    // the generic function that the closure is in (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb->getUserSignature()
+        ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
 
     std::string open_error;
     const QoreAOTBinaryReader* retained_reader = lazy_ir.metadata->getReader(open_error);
@@ -8925,6 +9002,9 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_function_ir(
     const QoreAOTLazyFunctionIR::Entry& lazy_entry = lazy_ir.entries[entry_index];
     const char* name = lazy_entry.aot_func
         ? lazy_entry.aot_func->name : lazy_entry.source_name.c_str();
+    // the types of the IR can name the type parameters of the function (qore#5885)
+    QoreAOTTypeParamOwnerHelper type_param_owner_helper(uvb && uvb->getUserSignature()
+        ? uvb->getUserSignature()->getTypeParamOwner() : nullptr);
     std::unique_ptr<QoreIRFunction> ir = context->materializeDebugIR(name, error);
     if (!ir) {
         delete context;

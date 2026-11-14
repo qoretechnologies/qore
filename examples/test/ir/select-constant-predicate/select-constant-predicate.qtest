@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - JIT and AOT code generation of fused functional pipelines with constant predicates
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class SelectConstantPredicateTest
+
+#! issue #6071: a constant NOTHING predicate in a fused pipeline is taken as no predicate
+/** The AST interpreter evaluates the predicate of select, of the select expression of map, of takewhile and of
+    takeuntil for each element and tests its boolean value, so the constant NOTHING selects nothing, as 0, "", (), {}
+    and False do.  The IR lowering of fused pipelines took a predicate whose value is NOTHING as the missing
+    predicate of a terminal streaming operator (first, any, all, count), which matches every element, so
+    (select (1, 2), NOTHING) gave [1, 2] and takewhile NOTHING, l gave l.  A terminal streaming operator whose
+    predicate is NOTHING has none in the AST interpreter, which every mode must keep.
+
+    The script next to the test writes each constant predicate literally in the operators, in a function and in the
+    top-level code, over lists and iterators, with and without map stages, as the source of foreach and with the
+    results of foldl, a list, first, any and count; it runs in every execution mode, on the IR tier and as AOT
+    executables, and its output must be that of the AST interpreter.
+*/
+class SelectConstantPredicateTest inherits QUnit::Test {
+    public {
+        #! lines of the output of the AST interpreter that every execution mode and AOT must give
+        const ExpectedAstLines = (
+            "function nothing select: []",
+            "function nothing fold select: null",
+            "function nothing select map: []",
+            "function nothing fold select map: null",
+            "function nothing map-select: []",
+            "function nothing hash map-select: {}",
+            "function nothing select iterator: []",
+            "function nothing first select: null",
+            "function nothing any select: False",
+            "function nothing count select: 0",
+            "function nothing takewhile: []",
+            "function nothing takeuntil: [1, 2, 3]",
+            "function nothing map takewhile: []",
+            "function nothing foreach select: []",
+            "function nothing foreach takewhile: []",
+            # a terminal streaming operator whose predicate is NOTHING has none
+            "function nothing first pred: 1",
+            "function nothing any pred: True",
+            "function nothing all pred: True",
+            "function nothing count pred: 3",
+            "top-level nothing fold select: null",
+            "top-level nothing select map: []",
+            "top-level nothing takewhile: []",
+            "function zero select: []",
+            "function empty-string select: []",
+            "function empty-list select: []",
+            "function empty-hash select: []",
+            "function false select: []",
+            "function false count pred: 0",
+            "function true fold select: 6",
+            "function true select map: [2, 4, 6]",
+            "function one fold select: 6",
+            "function string select: [1, 2, 3]",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        #! the output of the AST interpreter
+        string ast_output;
+    }
+
+    constructor() : QUnit::Test("constant predicate in a fused pipeline", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("AST reference", \astTest());
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! checks the output of the AST interpreter, which the other modes must give
+    private astTest() {
+        string out = astOutput();
+        hash<string, bool> lines = map {$1: True}, out.split("\n");
+        foreach string line in (ExpectedAstLines) {
+            assertTrue(lines{line}, "AST: " + line);
+        }
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        string exp = astOutput();
+        string path = scriptPath();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode, path)), mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin, path)),
+            ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks that the executables give the output of the AST interpreter
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        string exp = astOutput();
+        TmpDir dir("select-constant-predicate-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = dir.path + "/select-constant-predicate" + opt;
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+            assertEq(exp, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/select-constant-predicate.q";
+    }
+
+    #! the output of the AST interpreter, run once
+    private string astOutput() {
+        if (!ast_output) {
+            ast_output = ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, scriptPath()));
+        }
+        return ast_output;
+    }
+}

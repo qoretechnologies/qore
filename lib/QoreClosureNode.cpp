@@ -193,6 +193,12 @@ QoreValue QoreClosureNode::dispatchValue(const QoreListNode* args, ExceptionSink
     return closure->exec(*this, pgm, args, 0, class_ctx, xsink);
 }
 
+QoreValue QoreClosureNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->exec(*this, pgm, args, 0, class_ctx, xsink, true);
+}
+
 QoreValue QoreClosureNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
         ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
@@ -226,6 +232,14 @@ QoreValue QoreObjectClosureNode::dispatchValue(const QoreListNode* args, Excepti
     QoreProgram* pgm = obj->getProgram();
     ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
     return closure->exec(*this, pgm, args, obj, class_ctx, xsink);
+}
+
+QoreValue QoreObjectClosureNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    QoreClosureSelfContextHelper csch(obj);
+    QoreProgram* pgm = obj->getProgram();
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->exec(*this, pgm, args, obj, class_ctx, xsink, true);
 }
 
 QoreValue QoreObjectClosureNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,

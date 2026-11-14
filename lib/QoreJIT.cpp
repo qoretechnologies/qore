@@ -1414,6 +1414,26 @@ bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& err
     fall back to the IR tier, which already executes the function.
     See QoreJIT::getMaxJITIRInstructions().
 */
+//! Returns false when \a handler_cost exceeds the limit of QoreJIT::getMaxJITHandlerCost() (qore#6104)
+/** Like jit_check_size_budget(), for a function with many on_block_exit handlers and locals: the code that runs the
+    handlers takes a number of instructions in the product of the two, which makes its compilation take minutes
+    though the function is small; it stays on the IR tier.
+*/
+static bool jit_check_handler_budget(const std::string& func_name, size_t handler_cost, std::string& error) {
+    const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITHandlerCost());
+    if (!budget || handler_cost <= budget) {
+        return true;
+    }
+    error = "function '" + func_name + "' is too expensive for native compilation (about " + std::to_string(handler_cost)
+        + " instructions to run its on_block_exit handlers; limit " + std::to_string(budget)
+        + "); it remains on the IR tier";
+    if (q_env_is_set("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[JIT] skipped native compilation of '%s' (handler budget exceeded; about %zu instructions; "
+            "limit %zu)\n", func_name.c_str(), handler_cost, budget);
+    }
+    return false;
+}
+
 static bool jit_check_size_budget(const std::string& func_name, size_t instruction_count,
         std::string& error) {
     const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITIRInstructions());
@@ -1782,7 +1802,8 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
         }
     }
 
-    if (!jit_check_size_budget(func_name, func.getInstructionCount(), error)) {
+    if (!jit_check_size_budget(func_name, func.getInstructionCount(), error)
+            || !jit_check_handler_budget(func_name, func.getHandlerCostEstimate(), error)) {
         return false;
     }
 
@@ -1994,6 +2015,17 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             }
         }
         if (!jit_check_size_budget(root_func_name, batch_instruction_count, error)) {
+            return false;
+        }
+        size_t batch_handler_cost = rewrite_root
+            ? rewrite_root->getHandlerCostEstimate()
+            : root_func.getHandlerCostEstimate();
+        for (const auto& callee : callees) {
+            if (callee.ir_func) {
+                batch_handler_cost += callee.ir_func->getHandlerCostEstimate();
+            }
+        }
+        if (!jit_check_handler_budget(root_func_name, batch_handler_cost, error)) {
             return false;
         }
     }
@@ -2556,6 +2588,34 @@ uint64_t QoreJIT::getJITThreshold() {
 // compiler thread's stack on platforms with small thread stacks (musl), and even an unoptimized
 // native compile of such a function can stall Program teardown for minutes or exhaust the memory of
 // a constrained container.  Such functions therefore stay on the IR tier.
+uint64_t QoreJIT::getMaxJITHandlerCost() {
+    static constinit QoreLazyValue<uint64_t> cost_setting([]() -> uint64_t {
+        constexpr uint64_t default_max = 120000;
+        QoreEnvironmentValue env_holder("QORE_JIT_MAX_HANDLER_COST");
+        const char* env = env_holder.c_str();
+        if (!env || !*env) {
+            return default_max;
+        }
+        // only an unsigned decimal integer, as for QORE_JIT_MAX_IR_INSTRUCTIONS
+        const char* start = env;
+        while (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r' || *start == '\v'
+                || *start == '\f') {
+            ++start;
+        }
+        if (*start < '0' || *start > '9') {
+            return default_max;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(start, &end, 10);
+        if (!end || end == start || *end) {
+            return default_max;
+        }
+        // 0 means "no limit"
+        return static_cast<uint64_t>(value);
+    });
+    return cost_setting.get();
+}
+
 uint64_t QoreJIT::getMaxJITIRInstructions() {
     // function-local so the value cannot be read before its initializer runs, and is computed once
     static constinit QoreLazyValue<uint64_t> budget_setting([]() -> uint64_t {

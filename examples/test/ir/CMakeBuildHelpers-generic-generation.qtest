@@ -35,7 +35,7 @@ class CMakeGenericGenerationTest inherits CMakeBuildHelpersTestBase::GenericQccO
         - the provider rewritten with the same content: no relink
     */
     testGenerationMap() {
-        TmpDir tmp("qore-cmake-qcc-generation-");
+        TmpDir tmp("qore-cmake-qcc-generation-", NOTHING, cmakeTmpBase());
         hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
         settleGenericBaseline(project);
         publishProviderAlone(project);

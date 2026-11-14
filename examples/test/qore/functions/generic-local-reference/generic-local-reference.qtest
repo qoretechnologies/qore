@@ -1,0 +1,74 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - generic reference checks run in children with explicit modes and qcc
+# test-platform: macos - JIT/AOT generic reference binding, thread handoff and Program teardown
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class GenericLocalReferenceTest
+
+class GenericLocalReferenceTest inherits QUnit::Test {
+    private {
+        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libdir + DirSep + "qcc";
+        string prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+    }
+
+    constructor() : QUnit::Test("GenericLocalReference", "1.0", \ARGV) {
+        foreach string fixture in ("values", "background", "controls", "parameters", "programs", "aot-local") {
+            string worker_name = fixture;
+            foreach string mode in (ExecModeHarness::ExecModes) {
+                string execution_mode = mode;
+                addTestCase(worker_name + ": " + mode,
+                    sub () { checkMode(worker_name, execution_mode); });
+            }
+            addTestCase(worker_name + ": tiered IR", sub () { checkMode(worker_name, "tiered", True); });
+            addTestCase(worker_name + ": qcc -O0", sub () { checkAot(worker_name, 0); });
+            addTestCase(worker_name + ": qcc -O3", sub () { checkAot(worker_name, 3); });
+        }
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string checked(string command, bool ir_tier = False) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False,
+            ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
+        assertEq(0, result.rc, command + "\n" + result.out);
+        if (ir_tier) ExecModeHarness::check_ir_tier(result);
+        else if (result.mode) ExecModeHarness::check_native(result);
+        return result.out;
+    }
+
+    private checkMode(string name, string mode, bool ir_tier = False) {
+        string worker = get_script_dir() + "/" + name + ".q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/" + name + ".expected");
+        foreach bool debug in (False, True) {
+            string options = debug ? " -b --enable-debug " : " -b ";
+            assertEq(expected, checked(prefix + quote(qore_bin) + options + "--exec-mode=" + mode
+                + " " + quote(worker), ir_tier), sprintf("%s debug=%y", mode, debug));
+        }
+    }
+
+    private checkAot(string name, int opt) {
+        string worker = get_script_dir() + "/" + name + ".q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/" + name + ".expected");
+        TmpDir tmp("generic-local-reference-");
+        string exe = tmp.path + "/values";
+        checked(prefix + quote(qcc_bin) + sprintf(" -O%d -o ", opt) + quote(exe) + " " + quote(worker));
+        assertTrue(is_file(exe), "qcc produced the executable");
+        foreach bool debug in (False, True) {
+            assertEq(expected, checked(prefix + quote(exe) + (debug ? " -b --enable-debug" : " -b")),
+                sprintf("qcc -O%d debug=%y", opt, debug));
+        }
+    }
+}
