@@ -3843,8 +3843,8 @@ struct IRConsumedCallArgs {
     IRValueSlots& values;
     IRCleanupSlots& cleanup;
     const std::vector<uint8_t>& consumed_call_args;
-    const std::unordered_map<uint32_t, int32_t>& weak_load_temp_slots;
-    const std::vector<int32_t>& borrowed_temp_remaining;
+    std::unordered_map<uint32_t, int32_t>& weak_load_temp_slots;
+    std::vector<int32_t>& borrowed_temp_remaining;
 
     //! Gives the references of the temporary arguments that the call consumes to the call, before it is made
     /** The call releases them in the callee's frame, as the AST interpreter moves its argument list into the parameters
@@ -8546,20 +8546,24 @@ DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallClosureGiven(const IRConsumedCallArgs&
     return used_inline_ir;
 }
 
-DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallDirectGiven(IRValueSlots& values, IRCleanupSlots& cleanup,
-        const std::vector<uint32_t>& value_use_counts, std::unordered_map<uint32_t, int32_t>& weak_load_temp_slots,
-        std::vector<int32_t>& borrowed_temp_remaining, RuntimeLocationCache rl_cache, const QoreIRFunction& func,
-        QoreIRInstruction* inst, QoreIRCallDirectInstruction* direct_inst, QoreProgram* pgm,
-        const QoreTypeParamInstantiation* explicit_inst, bool has_last_use_args, bool type_name_fast_path,
-        bool debug_active, uint64_t* nanboxed_args, int nargs, QoreValue& res,
+DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallDirectGiven(const IRConsumedCallArgs& consumed,
+        RuntimeLocationCache rl_cache, const QoreIRFunction& func, QoreIRCallDirectInstruction* direct_inst,
+        QoreProgram* pgm, bool debug_active, uint64_t* nanboxed_args, QoreValue& res,
         bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    // a call that gives its arguments has last-use arguments and no explicit type parameter instantiation (see the
+    // CallDirect case of QoreIRInterpreter::execute()); what is constant or can be derived on this path is not passed,
+    // so that the call pushes no more arguments than the other calls of execute(), whose frame includes them
+    const std::vector<uint32_t>& value_use_counts = func.interpreter_value_use_counts;
+    int nargs = static_cast<int>(direct_inst->operands.size());
+    bool type_name_fast_path = nargs == 1 && qore_ir_interpreter_is_type_name_builtin_call(direct_inst->expr);
     bool used_inline_ir;
     IRGivenCallArgs given(nargs, xsink);
-    giveLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0, value_use_counts,
-        &weak_load_temp_slots, borrowed_temp_remaining, given);
-    irCallDirect(given, values, cleanup, value_use_counts, weak_load_temp_slots, borrowed_temp_remaining, rl_cache,
-        func, inst, direct_inst, pgm, explicit_inst, has_last_use_args, type_name_fast_path, debug_active,
-        nanboxed_args, nargs, res, used_inline_ir, inline_may_invalidate_external_caches, xsink);
+    giveLastUseCallArgSlots(consumed.values, consumed.cleanup, direct_inst->operands, 0, value_use_counts,
+        &consumed.weak_load_temp_slots, consumed.borrowed_temp_remaining, given);
+    irCallDirect(given, consumed.values, consumed.cleanup, value_use_counts, consumed.weak_load_temp_slots,
+        consumed.borrowed_temp_remaining, rl_cache, func, direct_inst, direct_inst, pgm, nullptr, true,
+        type_name_fast_path, debug_active, nanboxed_args, nargs, res, used_inline_ir,
+        inline_may_invalidate_external_caches, xsink);
     // a reference given to the call that it did not release is released when it returns
     given.release();
     return used_inline_ir;
@@ -8568,8 +8572,10 @@ DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallDirectGiven(IRValueSlots& values, IRCl
 DLLLOCAL QORE_IR_COLD_NOINLINE bool irCallStaticDirectGiven(const IRConsumedCallArgs& consumed,
         QoreIRCallStaticDirectInstruction* static_inst, QoreProgram* pgm, RuntimeLocationCache rl_cache,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_inst,
-        uint64_t* nanboxed_args, int nargs, QoreValue& res, bool& inline_may_invalidate_external_caches,
-        ExceptionSink* xsink) {
+        uint64_t* nanboxed_args, QoreValue& res, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink) {
+    // the number of the arguments is derived, not passed, so that the call pushes no more arguments than the other
+    // calls of QoreIRInterpreter::execute(), whose frame includes them
+    int nargs = static_cast<int>(static_inst->operands.size());
     bool used_inline_ir;
     IRGivenCallArgs given(nargs, xsink);
     consumed.give(static_inst, given);
@@ -8660,18 +8666,13 @@ DLLLOCAL QORE_IR_COLD_NOINLINE QoreValue irEvalInvokeGiven(const IRConsumedCallA
 DLLLOCAL bool irCallClosureGiven(const IRConsumedCallArgs& consumed, IRValueSlots& values, QoreIRInstruction* inst,
         QoreValue ref_val, uint64_t ref_bits, QoreProgram* pgm, int nargs, QoreValue& result,
         bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
-DLLLOCAL bool irCallDirectGiven(IRValueSlots& values, IRCleanupSlots& cleanup,
-        const std::vector<uint32_t>& value_use_counts, std::unordered_map<uint32_t, int32_t>& weak_load_temp_slots,
-        std::vector<int32_t>& borrowed_temp_remaining, RuntimeLocationCache rl_cache, const QoreIRFunction& func,
-        QoreIRInstruction* inst, QoreIRCallDirectInstruction* direct_inst, QoreProgram* pgm,
-        const QoreTypeParamInstantiation* explicit_inst, bool has_last_use_args, bool type_name_fast_path,
-        bool debug_active, uint64_t* nanboxed_args, int nargs, QoreValue& res,
-        bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
+DLLLOCAL bool irCallDirectGiven(const IRConsumedCallArgs& consumed, RuntimeLocationCache rl_cache,
+        const QoreIRFunction& func, QoreIRCallDirectInstruction* direct_inst, QoreProgram* pgm, bool debug_active,
+        uint64_t* nanboxed_args, QoreValue& res, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
 DLLLOCAL bool irCallStaticDirectGiven(const IRConsumedCallArgs& consumed,
         QoreIRCallStaticDirectInstruction* static_inst, QoreProgram* pgm, RuntimeLocationCache rl_cache,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* explicit_inst,
-        uint64_t* nanboxed_args, int nargs, QoreValue& res, bool& inline_may_invalidate_external_caches,
-        ExceptionSink* xsink);
+        uint64_t* nanboxed_args, QoreValue& res, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
 DLLLOCAL bool irCallMethodDirectGiven(const IRConsumedCallArgs& consumed,
         QoreIRCallMethodDirectInstruction* direct_inst, QoreObject* self, QoreProgram* pgm, uint64_t* nanboxed_args,
         int nargs, QoreValue& res, bool& inline_may_invalidate_external_caches, ExceptionSink* xsink);
@@ -18871,10 +18872,9 @@ load_local_done:
                     if (has_last_use_args && !explicit_inst) {
                         // the references of the temporary arguments are given to the call, which releases them in the
                         // callee's frame, as the AST interpreter moves its argument list into the parameters
-                        used_inline_ir = irCallDirectGiven(values, cleanup, value_use_counts, weak_load_temp_slots,
-                            borrowed_temp_remaining, rl_cache, func, inst, direct_inst, pgm, explicit_inst,
-                            has_last_use_args, type_name_fast_path, debug_active, nanboxed_args, nargs, res,
-                            inline_may_invalidate_external_caches, xsink);
+                        used_inline_ir = irCallDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
+                            weak_load_temp_slots, borrowed_temp_remaining}, rl_cache, func, direct_inst, pgm,
+                            debug_active, nanboxed_args, res, inline_may_invalidate_external_caches, xsink);
                     } else {
                         IRNoGivenCallArgs no_given;
                         irCallDirect(no_given, values, cleanup, value_use_counts, weak_load_temp_slots,
@@ -18977,8 +18977,8 @@ load_local_done:
                         // callee's frame, as the AST interpreter moves its argument list into the parameters
                         used_inline_ir = irCallStaticDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
                             weak_load_temp_slots, borrowed_temp_remaining}, static_inst, pgm, rl_cache,
-                            receiver_type_info, explicit_inst, nanboxed_args, nargs, res,
-                            inline_may_invalidate_external_caches, xsink);
+                            receiver_type_info, explicit_inst, nanboxed_args, res, inline_may_invalidate_external_caches,
+                            xsink);
                     } else {
                         IRNoGivenCallArgs no_given;
                         irCallStaticDirect(no_given, static_inst, pgm, rl_cache, receiver_type_info, explicit_inst,

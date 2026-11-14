@@ -19966,9 +19966,14 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
     if (!variant) {
         return false;
     }
-    // copy() must go through dispatch_method_on_object → execCopy to create a new object
-    if (method->getNameStr() == "copy") {
-        return false;
+    // copy() must go through dispatch_method_on_object → execCopy to create a new object; the length and the bytes
+    // of the name are compared inline (a std::string == const char* that the compiler leaves out of line calls
+    // strlen() at every call)
+    {
+        const std::string& name = method->getNameStr();
+        if (name.size() == 4 && !memcmp(name.data(), "copy", 4)) {
+            return false;
+        }
     }
     // the variant of an overloaded static method called through an object is the one resolved at parse time, which
     // the arguments may not match at run time: the slow path resolves it again, as the AST call does (qore#5990)
