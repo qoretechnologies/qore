@@ -240,7 +240,8 @@ public class HttpAsyncSocketIoController {
     /** @param controller the shared async I/O controller to delegate polling to
         @param logger optional logger interface for debugging
         @param opts optional configuration options:
-        - \c max_handler_threads: maximum number of handler threads (default 0 = unlimited)
+        - \c max_handler_threads: maximum number of handler threads (default 0 = unlimited); a thread taken out of
+          the pool with detachHandlerThread() does not count against it
         - \c min_idle_handler_threads: minimum idle handler threads (default 0)
         - \c max_idle_handler_threads: maximum idle handler threads (default 0)
         - \c lingering_close_timeout: the maximum time to wait for an HTTP/1.x client to close its side of the
@@ -1022,6 +1023,23 @@ public class HttpAsyncSocketIoController {
     submitToHandlerPool(HttpAsyncTarget target, code<nothing()> body) {
         handler_pool.submit(\runHandlerPoolTask());
         handler_task_queue.push({"target": target, "body": body});
+    }
+
+    #! Takes the handler-pool thread that runs the calling task out of the handler pool
+    /** For a task that keeps its thread for the life of a connection, as a persistent HTTP/1.x handler session does
+        (it keeps thread-bound resources such as a database transaction across the requests of the connection), so
+        that it does not count against \c max_handler_threads and other requests are still served; see
+        @ref Qore::Thread::ThreadPool::detachCurrentThread() "ThreadPool::detachCurrentThread()".  The thread ends when
+        its task returns, and stop() waits for it.
+
+        @return @ref True if the calling thread is a thread of the handler pool and is now detached from it (or
+        already was), @ref False if it is not, or if the pool is stopping
+
+        @since HttpServerAsyncIo 1.0
+    */
+    bool detachHandlerThread() {
+        *ThreadPool pool = handler_pool;
+        return pool ? pool.detachCurrentThread() : False;
     }
 
     private runHandlerPoolTask() {

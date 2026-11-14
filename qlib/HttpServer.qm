@@ -243,6 +243,10 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - the thread of a persistent HTTP/1.x connection (a handler that called
+      @ref HttpServer::AbstractHttpRequestHandler::setPersistent() "setPersistent()") leaves the handler pool for the
+      life of the connection, so it does not count against \c max_handler_threads and the other requests of the
+      server are still served however many persistent connections are open (issue #5758)
     - every Server-Sent Events stream bounds the data held for its client (the \c sse_max_buffer_size listener
       option, default 1 MiB): queueing an event never waits for a client that stops reading, on HTTP/1.x, HTTP/2 and
       HTTP/3 alike, and a client whose data would exceed the bound is dropped, with a warning in the listener's log
@@ -709,6 +713,11 @@ public hashdecl HttpServerOptionInfo {
     #! Maximum number of handler threads for the async I/O thread pool (0 = unlimited)
     /** Controls the maximum number of concurrent threads that can be used for request processing.
         Set to 0 (default) for unlimited.
+
+        The thread of a persistent HTTP/1.x connection (a handler that called
+        @ref HttpServer::AbstractHttpRequestHandler::setPersistent() "setPersistent()") leaves the pool for the life
+        of the connection and does not count against this limit (only against the thread limit of a sandbox, see
+        @ref sandbox_resources), so persistent connections never take every thread of the pool.
 
         @since HttpServer 1.6
     */
@@ -3461,6 +3470,20 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (asyncIo && asyncTarget) {
             asyncIo.addIdleConnection(sock, listener, getAsyncConnectionContext(cx), asyncTarget, ttl);
         }
+    }
+
+    #! Takes the handler thread that runs the current request out of the async I/O handler pool
+    /** Called when an HTTP/1.x handler enters persistent mode, whose thread stays with the connection until
+        persistence ends: the thread then no longer counts against \c max_handler_threads, so the other requests of
+        the server are still served however many persistent connections are open (qore#5758).
+
+        @return @ref True if the thread was detached from the handler pool, @ref False if the server does not use
+        async I/O or the current thread is not a thread of its handler pool
+
+        @since HttpServer 1.7
+    */
+    bool detachHandlerThread() {
+        return asyncIo ? asyncIo.detachHandlerThread() : False;
     }
 
     #! Closes an HTTP/1.x connection after its last response, which the current handler thread sent
@@ -7749,6 +7772,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             };
             register_fn(sock_key, pq);
             on_exit deregister_fn(sock_key);
+            # this thread stays with the connection until persistence ends: it leaves the handler pool, so that it
+            # does not count against max_handler_threads for that time (qore#5758)
+            serv.detachHandlerThread();
             if (!cx.close && s.isOpen()) {
                 serv.returnConnectionToAsyncIo(s, cx, self);
             }
