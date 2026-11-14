@@ -478,9 +478,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      of its handlers has (a handler nested in other handlers, whose function the copies of its statement share,
 //!      #6087) is written as the handler flag 2 followed by the u32 index of that function in the order in which the
 //!      handler functions of the function are written (see QoreAOTSharedHandlerTable); flag 1 is followed by the
-//!      function itself, as before; a reader of the earlier formats refuses flag 2.  The slot map entry of a function
-//!      has the u32 count of its LValuePath instructions after the u8 one, which a function with more than 255 of
-//!      them overflowed (#6127).
+//!      function itself, as before; a reader of the earlier formats would read flag 2 as flag 1, so it is the
+//!      header's format version, which such a reader refuses, that keeps it from reading these images.  The slot map
+//!      entry of a function has the u32 count of its LValuePath instructions after the u8 one (its low byte, which
+//!      readers of this format ignore), which a function with more than 255 of them overflowed (#6127).
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
