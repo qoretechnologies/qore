@@ -49,6 +49,10 @@ public class Main inherits QUnit::Test {
         addTestCase("Test display names with format characters (issue #6066)", \testDisplayNameFormatChars(),
             NOTHING);
         addTestCase("Test addresses in quoted strings (issue #6066)", \testQuotedStringAddresses(), NOTHING);
+        addTestCase("Test recipients of entries with several addresses (issue #6134)", \testListRecipients(),
+            NOTHING);
+        addTestCase("Test the time to get the recipients of long entries (issue #6134)", \testListRecipientsTime(),
+            NOTHING);
 
         set_return_value(main());
     }
@@ -1607,7 +1611,8 @@ lorem ipsum\r
             "John <jörg@müller.de>", "jörg@müller.de"), parsed.getTO());
         assertEq(("Doe, Jörg <d@x.com>", "Doe, Jörg <d@x.com>"), parsed.getCC());
         assertEq(msg.getRecipients(), parsed.getRecipients());
-        assertEq(("j@x.com", "a@x.com", "jörg@müller.de", "jörg@müller.de", "d@x.com", "d@x.com", "m@x.com"),
+        # every address of an entry, once (issue #6134)
+        assertEq(("j@x.com", "d@x.com", "plain@x.com", "a@x.com", "jörg@müller.de", "m@x.com"),
             parsed.getRecipients());
         # and written again as it was parsed (a folded header is parsed as one line)
         assertEq(unfold(msg.serializeRaw()), parsed.serializeRaw());
@@ -1656,8 +1661,8 @@ lorem ipsum\r
             "Subject: s\r\n\r\nbody\r\n";
         parsed = new Message(raw);
         assertEq("j@x.com", parsed.getFrom());
-        # the address of a header with a list of mailboxes is its first address, as before
-        assertEq(("j@x.com", "jm@x.com"), parsed.getRecipients());
+        # every address of a header with a list of mailboxes is a recipient (issue #6134)
+        assertEq(("j@x.com", "m@x.com", "plain@x.com", "jm@x.com"), parsed.getRecipients());
         string hdr = parsed.getHeaderString();
         string jb = mime_encode_header_word_b("Jöhn");
         assertEq(sprintf("From: %s <j@x.com>\r\n", jb), getFromLine(hdr));
@@ -1674,7 +1679,7 @@ lorem ipsum\r
 
         # a recipient added to a parsed message
         parsed.addTO("Ann <a@x.com>");
-        assertEq(("j@x.com", "a@x.com", "jm@x.com"), parsed.getRecipients());
+        assertEq(("j@x.com", "m@x.com", "plain@x.com", "a@x.com", "jm@x.com"), parsed.getRecipients());
         assertEq("To: Ann <a@x.com>\r\n", getHeaderLines(parsed.getHeaderString(), "To")[1]);
     }
 
@@ -1689,17 +1694,18 @@ lorem ipsum\r
                 {"in": "jörg@müller.de (Jörg)", "rcpt": "jörg@müller.de"},
                 {"in": "Jörg <j@x.com> (c)", "rcpt": "j@x.com"},
                 {"in": "\"Jörg\" <j@x.com>", "rcpt": "j@x.com"},
-                {"in": "Grüppe: a@x.com, b@x.com;", "rcpt": "a@x.com", "hdr": "To: "
+                {"in": "Grüppe: a@x.com, b@x.com;", "rcpt": ("a@x.com", "b@x.com"), "hdr": "To: "
                     + mime_encode_header_word_b("Grüppe") + ": a@x.com, b@x.com;"},
-                {"in": "Müller, Jörg <m@x.com>, Ann <a@x.com>", "rcpt": "a@x.com"},
-                {"in": "Jörg <j@x.com>, ,b@x.com", "rcpt": "j@x.com"},
+                {"in": "Müller, Jörg <m@x.com>, Ann <a@x.com>", "rcpt": ("m@x.com", "a@x.com")},
+                {"in": "Jörg <j@x.com>, ,b@x.com", "rcpt": ("j@x.com", "b@x.com")},
                 {"in": "Jörg <j@x.com>,", "rcpt": "j@x.com"},
                 {"in": "(a,b) Jörg <j@x.com>", "rcpt": "j@x.com"},
                 {"in": "Jörg <j@[192.0.2.1]>", "rcpt": "j@[192.0.2.1]"},
-                {"in": "\"a,b\" <a@x.com>, Jö <c@x.com>", "rcpt": "c@x.com"},
-                {"in": "Jö <a@x.com>, \"unterminated <b@x.com>", "rcpt": "b@x.com"},
+                {"in": "\"a,b\" <a@x.com>, Jö <c@x.com>", "rcpt": ("a@x.com", "c@x.com")},
+                {"in": "Jö <a@x.com>, \"unterminated <b@x.com>", "rcpt": ("a@x.com", "b@x.com")},
                 {"in": "Jö (x <a@x.com>", "rcpt": "a@x.com"},
-                {"in": "Jö <a@x.com>, plain@x.com, (c) Ann <a2@x.com>", "rcpt": "a2@x.com"},
+                {"in": "Jö <a@x.com>, plain@x.com, (c) Ann <a2@x.com>",
+                    "rcpt": ("a@x.com", "plain@x.com", "a2@x.com")},
                 {"in": "Jö =?UTF-8?Q?x?= <a@x.com>", "rcpt": "a@x.com"},
                 {"in": "\"=?UTF-8?Q?=3Cvictim@x.com=3E?=\" Jö <a@x.com>", "rcpt": "a@x.com"},
                 {"in": "Jö \"jö rg\"@x.com", "rcpt": "\"jö rg\"@x.com"},
@@ -1711,12 +1717,15 @@ lorem ipsum\r
             Message msg(Sender, Subject);
             msg.addTO(i."in");
             msg.setBody("body");
-            assertEq((i.rcpt,), msg.getRecipients(), i."in");
+            list<string> rcpts = i.rcpt.typeCode() == NT_LIST ? i.rcpt : (i.rcpt,);
+            assertEq(rcpts, msg.getRecipients(), i."in");
             string hdr = msg.getHeaderString();
             list<string> to = getHeaderLines(hdr, "To");
             assertEq(1, to.size(), i."in");
             # only printable ASCII text and the addresses are written
-            assertTrue(replace(to[0], i.rcpt, "").substr(0, -2).isDataPrintableAscii(), i."in");
+            string text = to[0];
+            map text = replace(text, $1, ""), rcpts;
+            assertTrue(text.substr(0, -2).isDataPrintableAscii(), i."in");
             if (i.hdr) {
                 assertEq(i.hdr + "\r\n", to[0], i."in");
             }
@@ -1841,7 +1850,7 @@ lorem ipsum\r
                 {"in": "\"Jörg v@e.com\" a@x.com", "out": "a@x.com"},
                 {"in": "\"a\\\"v@e.com\" a@x.com", "out": "a@x.com"},
                 {"in": "Jö \"x y\"@x.com", "out": "\"x y\"@x.com"},
-                {"in": "\"x y\"@x.com, b@x.com", "out": "\"x y\"@x.com"},
+                {"in": "\"x y\"@x.com, b@x.com", "out": "\"x y\"@x.com", "rcpt": ("\"x y\"@x.com", "b@x.com")},
                 {"in": "\"v@e.com\" \"x y\"@x.com", "out": "\"x y\"@x.com"},
                 # an address in a quoted string is found if there is no other, as before
                 {"in": "\"Jörg j@x.com\"", "out": "j@x.com"},
@@ -1853,10 +1862,10 @@ lorem ipsum\r
             Message msg(Sender, Subject);
             msg.addTO(i."in");
             msg.setBody("body");
-            assertEq((i.out,), msg.getRecipients(), i."in");
+            assertEq(i.rcpt ?? (i.out,), msg.getRecipients(), i."in");
             Message parsed(msg.serializeRaw());
-            assertEq((i.out,), parsed.getRecipients(), i."in");
-            assertEq((i.out,), (new Message(parsed.serializeRaw())).getRecipients(), i."in");
+            assertEq(i.rcpt ?? (i.out,), parsed.getRecipients(), i."in");
+            assertEq(i.rcpt ?? (i.out,), (new Message(parsed.serializeRaw())).getRecipients(), i."in");
         }
     }
 
@@ -1965,5 +1974,128 @@ lorem ipsum\r
         msg.setBody("body");
         assertThrows("HEADER-ERROR", \msg.getHeaderString(), ("\r\n", False));
         assertNRegex("\x01", msg.getHeaderString());
+    }
+
+    # issue #6134: every address of a To, CC or BCC entry with several addresses is a recipient
+    testListRecipients() {
+        # value, recipients
+        list<list<auto>> cases = (
+            # plain addresses
+            ("a@x.com, b@y.com", ("a@x.com", "b@y.com")),
+            ("a@x.com,b@y.com,,c@z.com,", ("a@x.com", "b@y.com", "c@z.com")),
+            # display names
+            ("Ann <a@x.com>, Bob <b@y.com>", ("a@x.com", "b@y.com")),
+            ("<a@x.com>, Bob b@y.com", ("a@x.com", "b@y.com")),
+            # quoted names with commas, colons, semicolons and addresses
+            ("\"Doe, John\" <j@x.com>, \"Roe; Jane: a@evil.com\" <r@y.com>", ("j@x.com", "r@y.com")),
+            ("\"a\\\"b, c\" <j@x.com>, k@y.com", ("j@x.com", "k@y.com")),
+            # an unquoted comma in a single display name
+            ("Doe, John <j@x.com>", ("j@x.com",)),
+            # comments
+            ("a@x.com (Doe, John), b@y.com (c@evil.com, (nested, d@evil.com))", ("a@x.com", "b@y.com")),
+            # a domain literal and a quoted local part
+            ("a@[1.2.3.4], \"b,c\"@y.com", ("a@[1.2.3.4]", "\"b,c\"@y.com")),
+            # groups, also an empty one
+            ("Team: a@x.com, Bob <b@y.com>;, c@z.com", ("a@x.com", "b@y.com", "c@z.com")),
+            ("undisclosed-recipients:;, a@x.com", ("a@x.com",)),
+            ("A: a@x.com;B: b@y.com;", ("a@x.com", "b@y.com")),
+            # a colon after an address is not the end of the name of a group
+            ("a@x.com Re: b@y.com", ("a@x.com",)),
+            ("Ann <a@x.com> Re: b@y.com, c@z.com", ("a@x.com", "c@z.com")),
+            # non-ASCII names and addresses
+            ("Jörg Müller <j@x.com>, \"Müller, Jörg\" <jörg@müller.de>, zoë@x.com", ("j@x.com", "jörg@müller.de",
+                "zoë@x.com")),
+            # duplicates: the domain is not case-sensitive, the local part is
+            ("a@x.com, A <a@X.COM>, A@x.com", ("a@x.com", "A@x.com")),
+            # an unterminated quoted string, comment or angle address does not hide the addresses after it
+            ("\"Doe <j@x.com>, b@y.com", ("j@x.com", "b@y.com")),
+            ("a@x.com (note, b@y.com", ("a@x.com", "b@y.com")),
+            ("[ext a@x.com, b@y.com", ("a@x.com", "b@y.com")),
+        );
+        foreach list<auto> c in (cases) {
+            string val = c[0];
+            # created
+            Message msg(Sender, Subject);
+            msg.addTO(val);
+            msg.setBody("body");
+            assertEq(c[1], msg.getRecipients(), "created: " + val);
+            # the header entry is not changed
+            assertEq((val,), msg.getTO(), val);
+            # parsed, and parsed again after it is serialized
+            Message parsed(msg.serializeRaw());
+            assertEq(c[1], parsed.getRecipients(), "parsed: " + val);
+            Message reparsed(parsed.serializeRaw());
+            assertEq(c[1], reparsed.getRecipients(), "reparsed: " + val);
+        }
+
+        # getEmailAddresses() returns the duplicates of an entry and an empty group has no address
+        assertEq(("a@x.com", "a@X.COM", "A@x.com"), Message::getEmailAddresses("a@x.com, A <a@X.COM>, A@x.com"));
+        assertEq((), Message::getEmailAddresses("undisclosed-recipients:;"));
+        assertEq(("j@x.com",), Message::getEmailAddresses("=?UTF-8?Q?a@evil.com,?= <j@x.com>"));
+
+        # an entry with no address cannot be added
+        {
+            Message msg(Sender, Subject);
+            assertThrows("MESSAGE-ADDTO-ERROR", \msg.addTO(), "undisclosed-recipients:;");
+        }
+
+        # To, CC and BCC entries, with duplicates between them, in order
+        {
+            Message msg(Sender, Subject);
+            msg.addTO("a@x.com, Bob <b@y.com>");
+            msg.addTO("c@z.com");
+            msg.addCC("B@Y.com, \"Doe, Dan\" <d@x.com>");
+            msg.addBCC("Hidden: e@x.com, a@x.com;");
+            msg.setBody("body");
+            assertEq(("a@x.com", "b@y.com", "c@z.com", "B@Y.com", "d@x.com", "e@x.com"), msg.getRecipients());
+            assertEq(("a@x.com, Bob <b@y.com>", "c@z.com"), msg.getTO());
+            assertEq(("a@x.com, Bob <b@y.com>", "c@z.com"), msg.getInfo().to);
+            assertEq(("B@Y.com, \"Doe, Dan\" <d@x.com>",), msg.getCC());
+            # the header text is unchanged
+            string hdr = msg.getHeaderString();
+            assertEq(("To: a@x.com, Bob <b@y.com>\r\n", "To: c@z.com\r\n"), getHeaderLines(hdr, "To"));
+            assertEq(("CC: B@Y.com, \"Doe, Dan\" <d@x.com>\r\n",), getHeaderLines(hdr, "CC"));
+        }
+
+        # parsed headers, with encoded words that cannot hide or add a separator or an address
+        {
+            string raw = "From: s@x.com\r\n"
+                "To: a@x.com, =?UTF-8?Q?Doe=2C_John_evil@y.com,?= <j@x.com>, Team: b@y.com, c@z.com;\r\n"
+                "CC: =?UTF-8?B?w4RubmE=?= <anna@x.com>,\r\n \"Müller, Jörg\" <jm@x.com>, undisclosed-recipients:;\r\n"
+                "BCC: (c, d@evil.com) e@x.com, A@X.COM\r\n"
+                "Subject: s\r\n\r\nbody\r\n";
+            Message parsed(raw);
+            assertEq(("a@x.com", "j@x.com", "b@y.com", "c@z.com", "anna@x.com", "jm@x.com", "e@x.com", "A@X.COM"),
+                parsed.getRecipients());
+            Message reparsed(parsed.serializeRaw());
+            assertEq(parsed.getRecipients(), reparsed.getRecipients());
+            assertEq(parsed.getTO(), reparsed.getTO());
+        }
+    }
+
+    # issue #6134: the time to get the recipients is linear in the length of an entry
+    testListRecipientsTime() {
+        int size = 100000;
+        hash<string, string> inputs = {
+            "commas": strmul(",", size),
+            "addresses": strmul("a@x.com,", size / 8),
+            "groups": strmul("g:", size / 2) + "a@x.com" + strmul(";", size / 2),
+            "quotes": strmul("\"a,\" ", size / 5) + "<a@x.com>",
+            "unterminated quotes": strmul("\"a, ", size / 4) + "<a@x.com>",
+            "comments": strmul("(", size / 2) + strmul(")", size / 2) + " a@x.com",
+            "unterminated": "\"(<[" + strmul("a@x.com, ", size / 9),
+            "non-ascii": strmul("Jörg <j@x.com>, ", size / 16),
+        };
+        foreach hash<auto> i in (inputs.pairIterator()) {
+            date start = now_us();
+            list<string> l = Message::getEmailAddresses(i.value);
+            date elapsed = now_us() - start;
+            assertGe(i.key == "commas" ? 0 : 1, l.size(), i.key);
+            # well under a second for 100KB; a quadratic algorithm takes minutes
+            assertLt(10s, elapsed, i.key);
+            if (m_options.verbose) {
+                printf("%s: %d addresses in %y\n", i.key, l.size(), elapsed);
+            }
+        }
     }
 }

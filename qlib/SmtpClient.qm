@@ -213,6 +213,10 @@ smtp.sendMessage(msg);@endcode
       \c SMTPUTF8 extension; otherwise \c SMTP-SEND-ERROR is raised before the credentials or the message are
       sent; an address with a quoted local part with a \c "<", a \c ">" or white space is refused with
       \c MESSAGE-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6066">issue 6066</a>)
+    - A message is sent to every address of a \c To, \c CC or \c BCC entry with several addresses or a group, with
+      one \c RCPT \c TO command for each address, and \c SMTPUTF8 is used if any of them has non-ASCII
+      characters; only the first address of an entry got the message (fixed in MailMessage 1.5.1,
+      <a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
     - A server reply that is not valid UTF-8 (ex: an \c EHLO reply with a Latin-1 host name) is read bytewise; it
       made sending fail with \c INVALID-ENCODING
     - A message is now always sent with SMTP transparency
@@ -968,12 +972,16 @@ smtp.setToken(new_access_token);
           character that is not part of a CRLF line break is sent as CRLF, and a \c "." is added at the start of
           every line that starts with \c "."; see
           @ref SmtpClient::SmtpSendPollOperation::getData() "SmtpSendPollOperation::getData()"
+        - The message is sent to every address of every \c To, \c CC and \c BCC entry, with one \c RCPT \c TO
+          command for each address, as returned by
+          @ref MailMessage::Message::getRecipients() "Message::getRecipients()": an entry can be a list of
+          mailboxes or a group (ex: <tt>a\@x.com, Ann \<b\@y.com\></tt>), and an address is sent once
         - A message whose sender or recipient address has non-ASCII characters (an internationalized email address,
           see @ref MailMessage::Message::getEmailAddress() "Message::getEmailAddress()"), or whose header has such an
-          address (ex: <tt>"Ann <a\@x.com>, jörg\@müller.de"</tt> in a \c To header, whose envelope recipient is
-          <tt>a\@x.com</tt>), is sent with the \c SMTPUTF8 parameter of the \c MAIL \c FROM command (RFC 6531)
-          if the server advertises the \c SMTPUTF8 extension in its reply to \c EHLO; otherwise
-          \c SMTP-SEND-ERROR is raised before the credentials or the message are sent
+          address (ex: <tt>"a\@x.com jörg\@müller.de"</tt> in a \c To header, which is not a list of mailboxes
+          and whose envelope recipient is <tt>a\@x.com</tt>), is sent with the \c SMTPUTF8 parameter of the
+          \c MAIL \c FROM command (RFC 6531) if the server advertises the \c SMTPUTF8 extension in its reply to
+          \c EHLO; otherwise \c SMTP-SEND-ERROR is raised before the credentials or the message are sent
         - An address with a quoted local part that has a \c "<", a \c ">" or white space is refused with
           \c MESSAGE-ERROR; see
           @ref SmtpClient::SmtpSendPollOperation::checkEnvelope() "SmtpSendPollOperation::checkEnvelope()"
@@ -1956,8 +1964,9 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
     #! @cond nodoc
     # returns True if the message can only be sent with the SMTPUTF8 extension (RFC 6531): the sender or a recipient
     # address has non-ASCII characters, or the message header has non-ASCII text, which is an address, since other
-    # text with non-ASCII characters is encoded (ex: "Ann <a@x.com>, jörg@müller.de" in a To header, whose envelope
-    # recipient is a@x.com)
+    # text with non-ASCII characters is encoded (ex: "a@x.com jörg@müller.de" in a To header, which is not a list of
+    # mailboxes, and whose envelope recipient is a@x.com; every address of a list of mailboxes is a recipient: issue
+    # #6134)
     private static bool needsSmtpUtf8(string sender, list<string> recipients, string mstr) {
         if (!sender.isDataAscii() || (select recipients, !$1.isDataAscii())) {
             return True;

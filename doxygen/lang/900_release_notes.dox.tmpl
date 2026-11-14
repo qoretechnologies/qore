@@ -1272,6 +1272,9 @@
       - only the display names of the \c To, \c CC and \c BCC headers are encoded, valid addresses are kept whole,
         and internationalized addresses are accepted, also by the @ref smtpclientintro "SmtpClient" module with
         servers that support \c SMTPUTF8 (<a href="https://github.com/qoretechnologies/qore/issues/6066">issue 6066</a>)
+      - every address of a \c To, \c CC or \c BCC entry with several addresses or a group is a recipient, so that the
+        @ref smtpclientintro "SmtpClient" module sends the message to all of them; only the first one was
+        (<a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
       - see @ref mailmessage_v1_5_1 for all changes
 
     - @ref mapperintro "Mapper" module
