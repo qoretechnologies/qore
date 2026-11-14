@@ -6007,7 +6007,9 @@ void QoreIRToLLVM::emitExceptionExitCatchUnwind(llvm::Module& module) {
     // catch block with no exit block: see the lowering of TryStatement) are left after the temporaries of the
     // statements left and before the frame's handlers, temporaries and locals, as the AST interpreter leaves a catch
     // block before the blocks around it (#5968); the frame's exits unwind to the same depth again afterwards, which
-    // closes nothing more
+    // closes nothing more.  A throw or rethrow statement leaving the frame closes such a catch block itself (see
+    // QoreIRLowering::catchScopesClosedByThrow()), and a synthetic rethrow leaving the frame is in none (such a catch
+    // block has no blocks or statements of its own exception paths), so their exits do not call it
     if (!catch_depth_saved) {
         return;
     }
@@ -22678,7 +22680,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
-            emitExceptionExitCatchUnwind(module);
             emitOnBlockExitExec(module);
             emitPreinstantiatedCleanup(module, true);
             emitInvokeCleanup(module);
@@ -22748,7 +22749,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
-            emitExceptionExitCatchUnwind(module);
             emitOnBlockExitExec(module);
             emitPreinstantiatedCleanup(module, true);
             emitInvokeCleanup(module);
