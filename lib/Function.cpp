@@ -7154,6 +7154,9 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
     // losing writer cannot clobber the fields describing the generation that did win.
     IRContextFlags derived_flags;
     if (ir) {
+        // Deserialized debug IR has no source-variant pointer. Restore its owner before classifying constructor
+        // argument locals, just as source lowering does (#6086).
+        ir->source_variant = getAbstractFunctionVariant();
         ir->computeIROnlyLocals();
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
