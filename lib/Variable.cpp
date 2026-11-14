@@ -1335,6 +1335,22 @@ void QoreLValueReferencePrograms::releaseIntern(ExceptionSink* xsink) {
     }
 }
 
+QoreValue LValueHelper::getNativeValue() const {
+    assert(val && val->optimized());
+    QoreValue rv = val->getValue();
+    if (rv.isPointer()) {
+        // a large int or a special float, which a value holds in a new node (qore#6094)
+        AbstractQoreNode* n = rv.getInternalNode();
+        try {
+            tvec.push_back(n);
+        } catch (...) {
+            n->deref(nullptr);
+            throw;
+        }
+    }
+    return rv;
+}
+
 void LValueHelper::saveTemp(QoreValue val) {
     if (val.isEnum()) {
         val.discard(nullptr);
@@ -2263,7 +2279,7 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
                     clearPtr();
                     return -1;
                 }
-                if (cast_op->checkValue(vl.xsink, val ? val->getValue() : *qv, true)) {
+                if (cast_op->checkValue(vl.xsink, getValue(), true)) {
                     clearPtr();
                     return -1;
                 }
@@ -2401,7 +2417,7 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
                     clearPtr();
                     return -1;
                 }
-                if (cast_op->checkValue(vl.xsink, val ? val->getValue() : *qv, true)) {
+                if (cast_op->checkValue(vl.xsink, getValue(), true)) {
                     clearPtr();
                     return -1;
                 }
@@ -2769,7 +2785,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
             case LVPathStepKind::Cast:
                 // the value so far must have the cast's type, as doLValue() checks a cast in an lvalue
                 assert(step.cast_node);
-                if (step.cast_node->checkValue(vl.xsink, val ? val->getValue() : *qv, true)) {
+                if (step.cast_node->checkValue(vl.xsink, getValue(), true)) {
                     clearPtr();
                     return -1;
                 }
@@ -4316,11 +4332,8 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
     QoreValue tmp = lvh.remove(static_assignment);
     if (static_assignment)
         tmp.ref();
-#ifdef DEBUG
-    assert(!rv.assignAssumeInitial(tmp));
-#else
-    rv.assignAssumeInitial(tmp);
-#endif
+    // rv stores a large int or a special float natively and returns the node that held it (qore#6094)
+    discard(rv.assignAssumeInitial(tmp), xsink);
 }
 
 void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, const QoreParseListNode* pln) {
