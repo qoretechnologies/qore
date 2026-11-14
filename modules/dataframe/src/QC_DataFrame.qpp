@@ -1259,6 +1259,16 @@ static DataFrame DataFrame::fromColumnarResult(auto result) [flags=RET_VALUE_ONL
 //! Returns per-column descriptive statistics
 /** @return list of ColumnStats hashes with count, mean, std, min, max, quartiles
 
+    A NaN value of a \c float64 column cannot be ordered for the minimum, the maximum and the quartiles, so it raises
+    \c NAN-COMPARE-ERROR, as with the <=> operator and sortBy(); null values are left out.  To describe a column
+    without its NaN values, drop them first: a NaN is never greater than or equal to \c -\@inf\@, while every other
+    number is (a null value is left out too).
+
+    @par Example:
+    @code{.py}
+    list<hash<ColumnStats>> stats = df.filter("v", ">=", -@inf@).describe();
+    @endcode
+
     @throw NAN-COMPARE-ERROR if a float64 column has a NaN value, which cannot be ordered for the minimum, the
     maximum and the quartiles, as with the <=> operator and sortBy()
 */

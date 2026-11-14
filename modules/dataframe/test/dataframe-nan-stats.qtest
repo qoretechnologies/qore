@@ -38,6 +38,11 @@ class DataFrameNanStatsTest inherits QUnit::Test {
         assertEq(2.5, s.q50);
         assertEq(3.5, s.q75);
         assertEq(5.0, s.max);
+        # the NaN values are dropped as the docs show
+        DataFrame::DataFrame nan({"v": (1.0, @nan@, 3.0)});
+        assertEq(2, nan.filter("v", ">=", -@inf@).describe()[0].count, "describe() without the NaN values");
+        assertEq((2.0,), (new DataFrame::DataFrame({"g": (1, 1, 1), "v": (1.0, @nan@, 3.0)}))
+            .filter("v", ">=", -@inf@).groupBy(("g",)).agg({"v": "median"}).getColumn("v"), "median without NaN");
     }
 
     aggTest() {
