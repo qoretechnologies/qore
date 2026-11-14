@@ -95,7 +95,7 @@ bool lvalue_ref::scanNode(RSetHelper& rsh, QoreValue vexp) {
     if (ntype == NT_VARREF) {
         return vexp.get<VarRefNode>()->scanMembers(rsh);
     } else if (ntype == NT_OPERATOR) {
-        QoreSquareBracketsOperatorNode* op = dynamic_cast<QoreSquareBracketsOperatorNode*>(vexp.getInternalNode());
+        QoreSquareBracketsOperatorNode* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(vexp.getInternalNode());
         if (op) {
             assert(op->getRight().getType() == NT_INT);
             // we scan the whole list here because we have a reference to the list

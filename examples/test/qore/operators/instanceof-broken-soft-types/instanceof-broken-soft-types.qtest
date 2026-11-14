@@ -26,8 +26,6 @@ class InstanceofBrokenSoftTypesTest inherits QUnit::Test {
         #! the output of the worker in every execution mode
         const Expected = "direct=[True, True]\nclosure=[True, True]\nmodern=[False, False]\nstable=True\n";
 
-        #! the execution modes that the worker is run in
-        const ExecModes = ("ast", "ir", "jit", "tiered");
     }
 
     private {
@@ -48,6 +46,7 @@ class InstanceofBrokenSoftTypesTest inherits QUnit::Test {
 
         addTestCase("a %broken-soft-types module called from %modern code in each execution mode",
             \testModuleExecModes());
+        addTestCase("a %broken-soft-types module called from %modern code on the IR tier", \testModuleIrTier());
         addTestCase("%broken-soft-types is refused with %modern", \testRefusedWithModern());
         addTestCase("code that is not %modern is not lowered or compiled", \testNotModernRefused());
 
@@ -55,11 +54,18 @@ class InstanceofBrokenSoftTypesTest inherits QUnit::Test {
     }
 
     testModuleExecModes() {
-        foreach string mode in (ExecModes) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
             string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
                 libqore_dir, qore_bin, mode, get_script_dir() + DirSep + "instanceof-broken-soft-types-worker.qr"));
             assertEq(Expected, out, mode);
         }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testModuleIrTier() {
+        assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin,
+            get_script_dir() + DirSep + "instanceof-broken-soft-types-worker.qr")));
     }
 
     testRefusedWithModern() {

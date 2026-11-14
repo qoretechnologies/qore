@@ -1,0 +1,7 @@
+a="A" b="B" | m0 | K | 6 | text! | 20 | 2 | global | text | 7 | static text
+int 1 text | string x text? | textm0global
+[15, 25, 35] "text" 3 "5-text" [5, "text", [10, 20, 30]] {t: 5, s: "text"}
+a="A" b="B" | m0 | K | 11 | changed! | 99 | 42 | global | changed | 8 | static changed
+int 1 changed | string x changed? | changedm0global
+[20, 109, 40] "changed" 3 "10-changed" [10, "changed", [10, 99, 30]] {t: 10, s: "changed"}
+3 X

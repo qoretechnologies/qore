@@ -137,6 +137,12 @@ public:
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
+    //! calls the closure with arguments in source order with the names in \a arg_names, which are bound to the
+    //! parameters of the closure by name (M4 phase 3)
+    DLLLOCAL QoreValue execNamed(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
+            const name_vec_t& arg_names, QoreObject* self, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL QoreClosureBase* evalBackground(ExceptionSink* xsink) const;
 
     DLLLOCAL const LVarSet* getVList() const {

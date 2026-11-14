@@ -18078,8 +18078,213 @@ static void ut_quic_send_batch_take_back(UnitTestCounters& c) {
 }
 #endif
 
+//! a scratch object of QoreThreadScratch that counts its live objects; each test case uses a type of its own
+template <int N>
+struct UtCountedScratch {
+    static std::atomic<int> live;
+    static std::atomic<int> created;
+    UtCountedScratch() {
+        ++live;
+        ++created;
+    }
+    ~UtCountedScratch() {
+        --live;
+    }
+    UtCountedScratch(const UtCountedScratch&) = delete;
+    UtCountedScratch& operator=(const UtCountedScratch&) = delete;
+};
+
+template <int N>
+std::atomic<int> UtCountedScratch<N>::live{0};
+template <int N>
+std::atomic<int> UtCountedScratch<N>::created{0};
+
+//! uses the scratch object of type UtCountedScratch<N> of the calling thread
+template <int N>
+static void ut_use_counted_scratch(void*) {
+    QoreThreadScratch<UtCountedScratch<N>> scratch;
+    // the object exists while it is used
+    assert(scratch && UtCountedScratch<N>::live.load() > 0);
+}
+
+//! Per-thread scratch objects (QoreThreadScratch) are released in every thread that uses them
+/** A registered thread keeps its object and releases it when the thread's data is deleted, also when it is first used
+    by the destructor of thread-local data, which runs after the thread's objects were released; a thread without
+    thread data does not keep one, and frees the object of each use (nothing would release one that it kept).
+*/
+static void ut_thread_scratch(UnitTestCounters& c) {
+    typedef UtCountedScratch<1> Unregistered;
+    typedef UtCountedScratch<2> Registered;
+    typedef UtCountedScratch<3> TldDestructor;
+    typedef UtCountedScratch<4> AllocFails;
+    // the counters are static: each run of the unit tests in the process starts them again (the objects of the
+    // previous run were all released)
+    Unregistered::created = 0;
+    Registered::created = 0;
+    TldDestructor::created = 0;
+    AllocFails::created = 0;
+
+    // a thread without thread data frees the object after each use; it sends QUIC datagrams too (their buffers are
+    // freed after the send: run under valgrind, no memory is left)
+    int unregistered_live_in_use = -1;
+    int unregistered_live_after = -1;
+    int unregistered_sent = 0;
+    std::thread unregistered([&] () {
+        for (int i = 0; i < 2; ++i) {
+            QoreThreadScratch<Unregistered> scratch;
+            unregistered_live_in_use = scratch ? Unregistered::live.load() : -1;
+        }
+        unregistered_live_after = Unregistered::live.load();
+        int fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd < 0) {
+            return;
+        }
+        ON_BLOCK_EXIT([fd] () { ::close(fd); });
+        struct sockaddr_in addr = {};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t len = sizeof(addr);
+        if (::bind(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr))
+                || getsockname(fd, reinterpret_cast<struct sockaddr*>(&addr), &len)) {
+            return;
+        }
+        QuicPacketBatch batch;
+        static const uint8_t data[] = {'q', 'u', 'i', 'c'};
+        batch.addPacket(data, sizeof(data));
+        for (int i = 0; i < 2; ++i) {
+            int rc = sendQuicPacketsBatch(fd, batch, reinterpret_cast<struct sockaddr*>(&addr), len);
+            if (rc > 0) {
+                unregistered_sent += rc;
+            }
+        }
+    });
+    unregistered.join();
+    UT_ASSERT_EQ(c, 2, unregistered_sent, "thread scratch: a thread without thread data sends QUIC datagrams");
+    UT_ASSERT_EQ(c, 1, unregistered_live_in_use,
+        "thread scratch: a thread without thread data has an object while it uses it");
+    UT_ASSERT_EQ(c, 0, unregistered_live_after,
+        "thread scratch: a thread without thread data frees the object after each use");
+    UT_ASSERT_EQ(c, 2, Unregistered::created.load(),
+        "thread scratch: a thread without thread data allocates an object for each use");
+
+    // a registered thread keeps one object for all uses and releases it when the thread's data is deleted
+    bool same_object = false;
+    int registered_live_kept = -1;
+    std::thread registered([&] () {
+        QoreForeignThreadHelper foreign;
+        Registered* first;
+        {
+            QoreThreadScratch<Registered> scratch;
+            first = scratch ? &*scratch : nullptr;
+        }
+        {
+            QoreThreadScratch<Registered> scratch;
+            same_object = first && scratch && &*scratch == first;
+        }
+        registered_live_kept = Registered::live.load();
+    });
+    registered.join();
+    UT_ASSERT(c, same_object, "thread scratch: a registered thread keeps its object between uses");
+    UT_ASSERT_EQ(c, 1, registered_live_kept, "thread scratch: a registered thread's object is kept after its use");
+    UT_ASSERT_EQ(c, 0, Registered::live.load(),
+        "thread scratch: a registered thread's object is released when the thread's data is deleted");
+    UT_ASSERT_EQ(c, 1, Registered::created.load(), "thread scratch: a registered thread allocates one object");
+
+    // an object first used by the destructor of thread-local data, which runs after the thread's objects were
+    // released, is released too
+    std::thread tld_thread([] () {
+        QoreForeignThreadHelper foreign;
+        q_save_thread_local_data(q_get_unique_thread_local_data_key(), nullptr, ut_use_counted_scratch<3>);
+    });
+    tld_thread.join();
+    UT_ASSERT_EQ(c, 1, TldDestructor::created.load(),
+        "thread scratch: the destructor of thread-local data uses a scratch object");
+    UT_ASSERT_EQ(c, 0, TldDestructor::live.load(),
+        "thread scratch: an object first used by the destructor of thread-local data is released");
+
+#ifdef DEBUG
+    // an object that cannot be allocated is reported, and is allocated by a later use
+    bool failed_unregistered = false;
+    std::thread fail_unregistered([&] () {
+        qore_thread_test_set_alloc_fails(true);
+        QoreThreadScratch<AllocFails> scratch;
+        failed_unregistered = !scratch;
+        qore_thread_test_set_alloc_fails(false);
+    });
+    fail_unregistered.join();
+    UT_ASSERT(c, failed_unregistered,
+        "thread scratch: an allocation failure is reported in a thread without thread data");
+
+    bool failed_registered = false;
+    bool allocated_later = false;
+#ifdef __linux__
+    int send_rc = 0;
+    int send_errno = 0;
+#endif
+    int recv_rc = 0;
+    std::string recv_err;
+    int recv_errno = 0;
+    std::thread fail_registered([&] () {
+        QoreForeignThreadHelper foreign;
+        qore_thread_test_set_alloc_fails(true);
+        {
+            QoreThreadScratch<AllocFails> scratch;
+            failed_registered = !scratch;
+        }
+        int fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd >= 0) {
+            ON_BLOCK_EXIT([fd] () { ::close(fd); });
+            struct sockaddr_in addr = {};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            socklen_t len = sizeof(addr);
+            if (!::bind(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr))
+                    && !getsockname(fd, reinterpret_cast<struct sockaddr*>(&addr), &len)) {
+#ifdef __linux__
+                // only sendmmsg() takes its buffers from the thread's scratch object; the send fails, so the socket
+                // has no datagram for the receive below
+                QuicPacketBatch batch;
+                static const uint8_t data[] = {'q', 'u', 'i', 'c'};
+                batch.addPacket(data, sizeof(data));
+                errno = 0;
+                send_rc = sendQuicPacketsBatch(fd, batch, reinterpret_cast<struct sockaddr*>(&addr), len);
+                send_errno = errno;
+#endif
+                ExceptionSink xsink;
+                recv_rc = qore_quic_test_recv_dispatch(fd, &xsink);
+                if (xsink) {
+                    QoreValue err = xsink.getExceptionErr();
+                    recv_err = err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "?";
+                    QoreValue arg = xsink.getExceptionArg();
+                    recv_errno = static_cast<int>(arg.getAsBigInt());
+                    xsink.clear();
+                }
+            }
+        }
+        qore_thread_test_set_alloc_fails(false);
+        QoreThreadScratch<AllocFails> scratch;
+        allocated_later = static_cast<bool>(scratch);
+    });
+    fail_registered.join();
+    UT_ASSERT(c, failed_registered, "thread scratch: an allocation failure is reported in a registered thread");
+    UT_ASSERT(c, allocated_later, "thread scratch: the object is allocated by a use after a failure");
+    UT_ASSERT_EQ(c, 0, AllocFails::live.load(), "thread scratch: no object is left after the threads end");
+#ifdef __linux__
+    // sendmmsg() and recvmmsg() take their buffers from the thread's scratch objects
+    UT_ASSERT_EQ(c, -1, send_rc, "thread scratch: a QUIC send fails without its buffers");
+    UT_ASSERT_EQ(c, ENOMEM, send_errno, "thread scratch: a QUIC send without its buffers fails with ENOMEM");
+#endif
+    UT_ASSERT_EQ(c, -1, recv_rc, "thread scratch: a QUIC receive fails without its buffers");
+    UT_ASSERT(c, recv_err == "QUIC-RECV-ERROR",
+        "thread scratch: a QUIC receive without its buffers raises QUIC-RECV-ERROR");
+    UT_ASSERT_EQ(c, ENOMEM, recv_errno, "thread scratch: a QUIC receive without its buffers fails with ENOMEM");
+#endif
+}
+
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+
+    ut_thread_scratch(c);
 
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
@@ -19116,6 +19321,24 @@ static QoreValue f_dbg_new_hashdecl_hash_without_sink(const QoreListNode* params
 */
 static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return q_get_lvalue_scan_count();
+}
+
+//! returns the number of values visited by removal bookkeeping in the current thread
+static QoreValue f_dbg_get_lvalue_removal_visit_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_lvalue_removal_visit_count();
+}
+
+//! returns the number of object identity probes made by removal bookkeeping in the current thread
+static QoreValue f_dbg_get_lvalue_removal_probe_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_lvalue_removal_probe_count();
+}
+
+//! returns the number of lazy removal-tracker states allocated in the current thread
+static QoreValue f_dbg_get_lvalue_removal_allocation_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_lvalue_removal_allocation_count();
 }
 
 //! returns the number of objects that recursive-reference scans have entered in the current thread
@@ -22472,6 +22695,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_arg_presence", f_dbg_arg_presence, QCF_USES_EXTRA_ARGS, QDOM_DEBUG_HOOK,
         listTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_lvalue_removal_visit_count", f_dbg_get_lvalue_removal_visit_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_lvalue_removal_allocation_count", f_dbg_get_lvalue_removal_allocation_count,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_lvalue_removal_probe_count", f_dbg_get_lvalue_removal_probe_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

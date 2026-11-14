@@ -131,6 +131,11 @@ class QoreClosureBase : public ResolvedCallReferenceNode {
 public:
     QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override = 0;
 
+    //! calls the closure with arguments in source order with the names in \a arg_names, which are bound to the
+    //! parameters of its single variant by name (see qore_call_ref_invoke_named())
+    DLLLOCAL virtual QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+            ExceptionSink* xsink) const = 0;
+
     QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
         return dispatchValue(args, xsink);
     }
@@ -323,6 +328,8 @@ public:
     }
 
     DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+            ExceptionSink* xsink) const override;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
@@ -377,6 +384,8 @@ public:
     }
 
     DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+            ExceptionSink* xsink) const override;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return obj->getProgram();

@@ -1671,6 +1671,7 @@ if (x == y)
     |@ref number_type "number"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'\\x01' == True</tt> is @ref True "True", <tt>c'a' == True</tt> is @ref False "False")
     |@ref date_type "date"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If each hash has the same keys and the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
@@ -1705,6 +1706,7 @@ if (x != y)
     |@ref number_type "number"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'a' != True</tt> is @ref True "True")
     |@ref date_type "date"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If the hashes have different keys or the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
@@ -2322,6 +2324,13 @@ if (x || y)
     with \c x holding 1.5, <tt>softint v = 10; v *= x</tt> leaves the int 15, and <tt>timeout t; t *= x</tt>
     raises \c RUNTIME-TYPE-ERROR as <tt>timeout t = x</tt> does).  An operation whose result is refused leaves no
     new hash key or list element behind.
+
+    @anchor native_member_callback_lvalue
+    @note When object \c += or \c -=, or member @ref remove "removal" or @ref delete "deletion", calls a native
+    member gate or accessor, the parent lvalue is released before the callback runs. The operation retains its
+    original target object: a callback can replace or remove the variable or container holding it, and that write
+    is preserved. A successful compound assignment returns the original target object. Pending parent member
+    notifications run after the operation, and exceptions from callbacks propagate to the caller.
 
     @anchor compound_assignment_parse_checks
     @note A compound assignment, \c ++ or \c -- whose result the declared type of its lvalue can never accept is

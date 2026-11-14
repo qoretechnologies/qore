@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of calls whose argument release raises an exception
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ArgReleaseRaisesReturnValueTest
+
+#! The value of a call is released when the release of an argument raises an exception (#6051)
+/** When the release of an argument raised an exception after the call returned its value, the call of a user
+    variant (UserVariantBase::eval(), evalWithoutHelper() and UserClosureVariant::evalClosure()) released the
+    parameters after it had released the value only with an exception pending, and returned the value with the
+    exception; the IR interpreter's direct call returned without releasing its value when the release of a last-use
+    argument raised.  The callers take no value with an exception, so it leaked in the ir, jit and tiered modes.
+    ArgReleaseRaisesReturnValue.q gives the output of the AST interpreter, which counts the live objects, in every
+    execution mode and compiled with qcc.
+*/
+class ArgReleaseRaisesReturnValueTest inherits QUnit::Test {
+    public {
+        #! the output of ArgReleaseRaisesReturnValue.q with the AST interpreter
+        const Expected = "df: [\"~df-p\", \"~f-t\", \"caught:PX\"] live=0
+dfl: [\"~dfl-p\", \"~fl-t\", \"caught:PX\"] live=0
+dft: [\"~dft-p\", \"~ft-t\", \"caught:PX\"] live=0
+das: [\"~das-p\", \"~f-t\", \"caught:PX\"] live=0
+f: [\"~f-p\", \"~f-t\", \"caught:PX\"] live=0
+m: [\"~m-p\", \"~m-t\", \"caught:PX\"] live=0
+s: [\"~s-p\", \"~s-t\", \"caught:PX\"] live=0
+cl: [\"~cl-p\", \"~cl-t\", \"caught:PX\"] live=0
+cr: [\"~cr-p\", \"~f-t\", \"caught:PX\"] live=0
+df: [\"~df-p\", \"~f-t\", \"caught:PX\"] live=0
+dfl: [\"~dfl-p\", \"~fl-t\", \"caught:PX\"] live=0
+dft: [\"~dft-p\", \"~ft-t\", \"caught:PX\"] live=0
+das: [\"~das-p\", \"~f-t\", \"caught:PX\"] live=0
+f: [\"~f-p\", \"~f-t\", \"caught:PX\"] live=0
+m: [\"~m-p\", \"~m-t\", \"caught:PX\"] live=0
+s: [\"~s-p\", \"~s-t\", \"caught:PX\"] live=0
+cl: [\"~cl-p\", \"~cl-t\", \"caught:PX\"] live=0
+cr: [\"~cr-p\", \"~f-t\", \"caught:PX\"] live=0
+df: [\"~df-p\", \"~f-t\", \"caught:PX\"] live=0
+dfl: [\"~dfl-p\", \"~fl-t\", \"caught:PX\"] live=0
+dft: [\"~dft-p\", \"~ft-t\", \"caught:PX\"] live=0
+das: [\"~das-p\", \"~f-t\", \"caught:PX\"] live=0
+f: [\"~f-p\", \"~f-t\", \"caught:PX\"] live=0
+m: [\"~m-p\", \"~m-t\", \"caught:PX\"] live=0
+s: [\"~s-p\", \"~s-t\", \"caught:PX\"] live=0
+cl: [\"~cl-p\", \"~cl-t\", \"caught:PX\"] live=0
+cr: [\"~cr-p\", \"~f-t\", \"caught:PX\"] live=0
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("ArgReleaseRaisesReturnValueTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/ArgReleaseRaisesReturnValue.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the value of a call when the release of an argument raises", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the value of a call when the release of an argument raises", opt), \aotTest(),
+                (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-arg-release-raises-return-value-");
+        string exe = tmp.path + DirSep + "arg-release-raises-return-value";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

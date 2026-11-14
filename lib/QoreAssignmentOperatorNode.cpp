@@ -60,7 +60,7 @@ static const VarRefNode* get_lvalue_root_var_ref(QoreValue value) {
             value = op->getLeft();
             continue;
         }
-        if (const auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        if (const auto* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
             value = op->getLeft();
             continue;
         }

@@ -34,6 +34,8 @@
       must return a compatible type, which the parser enforces: the output is the same in every mode
     - qore#5990: a named call binds the names to the variants of the receiver's static type and is dispatched by
       position to the class of the object like the same positional call (named-virtual-dispatch)
+    - M4 phase 3: a named call through a call reference or closure binds its arguments by name when it is made, to
+      the variants of the referenced function or method, or to the closure's variant (named-callrefs)
 
     The scripts next to the test run in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
     their output must be that of the AST interpreter, which the test runs first.  The output of the AST interpreter
@@ -44,7 +46,8 @@ class CompiledOverloadErrorsTest inherits QUnit::Test {
         #! the scripts
         const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins",
             "assigned", "named", "named-runtime", "named-runtime-methods", "named-virtual-dispatch", "access-control",
-            "or-nothing-casts", "override-returns", "named-background", "named-aot-text", "generic-method-overrides");
+            "or-nothing-casts", "override-returns", "named-background", "named-aot-text", "generic-method-overrides",
+            "named-callrefs");
     }
 
     private {

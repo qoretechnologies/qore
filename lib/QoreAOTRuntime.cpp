@@ -181,6 +181,7 @@
 #include "qore/intern/QoreFoldlOperatorNode.h"
 #include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/QoreStreamingOperatorNode.h"
+#include "qore/intern/FindNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
@@ -224,7 +225,8 @@ static bool isAOTInitFunctionName(const char* name) {
     return name && (!strncmp(name, "__const_init::", 14)
         || !strncmp(name, "__svar_init::", 13)
         || !strncmp(name, "__gvar_init::", 13)
-        || !strncmp(name, "__module_init::", 15));
+        || !strncmp(name, "__module_init::", 15)
+        || !strncmp(name, "__module_del::", 14));
 }
 
 static std::string describeAOTClassRef(const char* class_ref);
@@ -4289,7 +4291,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 has_unsupported = true;
                 continue;
             }
-            case AOTExprKind::CALLREF_CALL: {
+            case AOTExprKind::CALLREF_CALL:
+            case AOTExprKind::CALLREF_CALL_NAMED: {
                 std::string callee_err;
                 QoreValue callee = readOneExpr(reader, ptr, end, callee_err, pgm,
                     ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
@@ -4302,6 +4305,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                 QoreParseListNode* args = nullptr;
+                // an argument of this call could not be read (the flag of the function can be set by another slot)
+                bool arg_failed = false;
                 if (num_args > 0) {
                     args = new QoreParseListNode(&loc_builtin);
                     for (uint8_t j = 0; j < num_args; ++j) {
@@ -4315,17 +4320,33 @@ static QoreAOTContext* buildContextFromSlotMap(
                             callee.discard(nullptr);
                             arg.discard(nullptr);
                             has_unsupported = true;
+                            arg_failed = true;
                             args = nullptr;
                             break;
                         }
                         args->add(arg, &loc_builtin);
                     }
                 }
-                if (has_unsupported) {
+                if (arg_failed) {
                     continue;
+                }
+                // a named call has the names of its arguments after them
+                const name_vec_t* arg_names = nullptr;
+                if (kind == AOTExprKind::CALLREF_CALL_NAMED) {
+                    std::string names_err;
+                    arg_names = qore_aot_read_callref_arg_names(reader, ptr, end, names_err);
+                    if (!arg_names) {
+                        printd(0, "AOT v2: error reading callref argument names for slot %d: %s\n", i,
+                            names_err.c_str());
+                        delete args;
+                        callee.discard(nullptr);
+                        has_unsupported = true;
+                        continue;
+                    }
                 }
                 auto* call = new CallReferenceCallNode(&loc_builtin, callee, args);
                 call->resolveParseArgs();
+                call->setRuntimeArgNames(arg_names);
                 ctx->exprs[i] = toBitsNB(QoreValue(call));
                 continue;
             }
@@ -5415,6 +5436,25 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::FIND: {
+                uint8_t mode_byte = QoreAOTBinaryReader::readU8(ptr);
+                QoreValue operands[3];
+                std::string err;
+                for (unsigned j = 0; j < 3 && err.empty(); ++j) {
+                    operands[j] = readOneExpr(reader, ptr, end, err, pgm, ctx->locals, num_locals, ctx->globals,
+                        num_globals, local_owner_pgm);
+                }
+                if (!err.empty() || mode_byte > static_cast<uint8_t>(FindNode::One)) {
+                    for (auto& v : operands) {
+                        v.discard(nullptr);
+                    }
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(new FindNode(&loc_builtin, operands[0], operands[1],
+                        operands[2], static_cast<FindNode::Mode>(mode_byte))));
+                }
+                continue;
+            }
             case AOTExprKind::STREAMING: {
                 auto streaming_kind = static_cast<QoreStreamingOperatorNode::Kind>(
                     QoreAOTBinaryReader::readU8(ptr));
@@ -6297,9 +6337,15 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ctx->call_targets[i].runtime_arg_names = true;
                 continue;
             }
+            // a named call through a call reference or closure (CallReferenceCallNode::evalRuntimeNamedWithArgs())
+            const CallReferenceCallNode* crc = dynamic_cast<const CallReferenceCallNode*>(node);
+            if (crc && crc->getRuntimeArgNames()) {
+                ctx->call_targets[i].runtime_arg_names = true;
+                continue;
+            }
         }
         // Function call
-        const auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
+        const auto* fcn = qore_get_function_call_node(node);
         if (fcn && fcn->getFunction()) {
             ctx->call_targets[i].func = fcn->getFunction();
             ctx->call_targets[i].pgm = fcn->getProgram();
@@ -7554,7 +7600,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr.getInternalNode());
+            auto* rcr = qore_get_runtime_constant_ref_node(expr.getInternalNode());
             auto* lci = new QoreIRLoadConstantInstruction(rcr, expr);
             lci->opcode = opcode;
             expr.discard(nullptr);
@@ -11246,7 +11292,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     QoreProgram* shadow_pgm,
     const char* mod_path,
     bool write_shadow,
-    ExceptionSink* failure_sink);
+    ExceptionSink* failure_sink,
+    bool script_load = false);
 static void preInitStaticVarsInProgram(QoreProgram* pgm);
 
 static std::string makeAOTRegistrationFailureMessage(const char* label,
@@ -11663,6 +11710,13 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
                                     pp->sb.setLVarsFromAOTContext(ctx);
+                                    {
+                                        // the default arguments that read a top-level local (qore#5868)
+                                        std::string top_default_error;
+                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
+                                            registration_errors.push_back(std::move(top_default_error));
+                                        }
+                                    }
                                     ++registered;
                                     toplevel_registered = true;
                                     printd(2, "AOT v3: registered _toplevel from slot map\n");
@@ -11712,7 +11766,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true, /*failure_sink=*/nullptr);
+                            /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
                     }
                 }
             }
@@ -11754,6 +11808,13 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                         toplevel_func->fn_ptr, ctx);
                                     // Set LVList so doTopLevelInstantiation() can instantiate the locals
                                     pp->sb.setLVarsFromAOTContext(ctx);
+                                    {
+                                        // the default arguments that read a top-level local (qore#5868)
+                                        std::string top_default_error;
+                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
+                                            registration_errors.push_back(std::move(top_default_error));
+                                        }
+                                    }
                                     ++registered;
                                     toplevel_registered = true;
                                     printd(2, "AOT v2: registered _toplevel from slot map\n");
@@ -11824,7 +11885,8 @@ static int executeInitFunctions(QoreProgram* pgm,
     QoreProgram* shadow_pgm,
     const char* mod_path,
     bool write_shadow,
-    ExceptionSink* failure_sink);
+    ExceptionSink* failure_sink,
+    bool script_load);
 
 struct AotModuleState {
     QoreProgram* pgm = nullptr;
@@ -11865,6 +11927,11 @@ struct AotModuleState {
     };
     ShadowInitState shadow_init_state = SHADOW_NOT_STARTED;
     int shadow_init_tid = 0;     //!< owner thread while SHADOW_IN_PROGRESS
+    //! The compiled body of the module's \c del closure (a MODULE_DEL init function), built by the pass that
+    //! populates the shadow (the module's own Program, whose locals it owns), run by qore_aot_module_delete() when
+    //! the module is unloaded (#6015)
+    std::unique_ptr<QoreAOTContext> del_ctx;
+    AotFunctionPtr del_fn = nullptr;
 };
 
 //! Map from module name to per-module state
@@ -12535,6 +12602,10 @@ static bool aotInitDescriptorNeedsExecution(const AOTInitFuncDescriptor& desc, Q
         }
 
         case AOTCompiledInitFunc::MODULE_INIT:
+            return write_shadow;
+
+        // the context of the del closure is built, but the closure not run, by the pass that populates the shadow
+        case AOTCompiledInitFunc::MODULE_DEL:
             return write_shadow;
 
         case AOTCompiledInitFunc::OUTLINED_HELPER:
@@ -13460,6 +13531,13 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
                                     pp->sb.setLVarsFromAOTContext(ctx);
+                                    {
+                                        // the default arguments that read a top-level local (qore#5868)
+                                        std::string top_default_error;
+                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
+                                            registration_errors.push_back(std::move(top_default_error));
+                                        }
+                                    }
                                     ++registered;
                                     toplevel_registered = true;
                                     printd(2, "AOT v3: registered _toplevel from slot map\n");
@@ -13509,7 +13587,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true, /*failure_sink=*/nullptr);
+                            /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
                     }
                 }
             }
@@ -13551,6 +13629,13 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                         toplevel_func->fn_ptr, ctx);
                                     // Set LVList so doTopLevelInstantiation() can instantiate the locals
                                     pp->sb.setLVarsFromAOTContext(ctx);
+                                    {
+                                        // the default arguments that read a top-level local (qore#5868)
+                                        std::string top_default_error;
+                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
+                                            registration_errors.push_back(std::move(top_default_error));
+                                        }
+                                    }
                                     ++registered;
                                     toplevel_registered = true;
                                     printd(2, "AOT v3: registered _toplevel from slot map\n");
@@ -14088,17 +14173,88 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init_v2(QoreNamespace* root_ns, Qor
     qore_aot_module_ns_init_impl(root_ns, qore_ns, xsink);
 }
 
+//! Runs the compiled \c del closure of an AOT module in the module's own Program, as QoreUserModule::runDelCallback()
+//! runs the del closure of a source module
+static void runAOTModuleDelClosure(const std::string& mod_name, const std::string& mod_path, QoreProgram* pgm,
+        QoreAOTContext* ctx, AotFunctionPtr fn_ptr, bool count_thread = true) {
+    assert(ctx && fn_ptr);
+    ExceptionSink xsink;
+    if (pgm) {
+        // a script's Program that is being cleared has no thread to count: the thread that clears it runs the closure
+        std::unique_ptr<ProgramThreadCountContextHelper> tch;
+        if (count_thread) {
+            tch.reset(new ProgramThreadCountContextHelper(&xsink, pgm, true));
+        }
+        if (!xsink) {
+            // the module's code runs in its own Program, as the init closure does
+            ProgramCallContextHelper call_ctx(pgm);
+            // the unloading Program does not run the del closure on its own behalf: it runs with the module's
+            // options, with the module's name and path as its context, as the init closure does
+            QoreModuleLifecycleBarrierHelper lifecycle_barrier;
+            LoadTimeParseOptionsHelper lifecycle_po(pgm->getParseOptions());
+            struct ModuleNamePathContextHelper {
+                const char* old_name;
+                const char* old_path;
+
+                ModuleNamePathContextHelper(const char* name, const char* path)
+                        : old_name(set_module_context_name(name)), old_path(set_module_context_path(path)) {
+                }
+
+                ~ModuleNamePathContextHelper() {
+                    set_module_context_path(old_path);
+                    set_module_context_name(old_name);
+                }
+            };
+            ModuleNamePathContextHelper module_ctx(mod_name.c_str(), mod_path.empty() ? nullptr : mod_path.c_str());
+            qore_ns_private* mod_ns = findNamespaceByPath(
+                qore_ns_private::get(*qore_program_private::get(*pgm)->RootNS), mod_name);
+            std::unique_ptr<QoreParseClassHelper> parse_ctx_helper;
+            if (mod_ns) {
+                parse_ctx_helper = std::make_unique<QoreParseClassHelper>(nullptr, mod_ns);
+            }
+            // the compiled body expects its body locals to be instantiated, as a function called by evalTiered
+            // expects them; instantiate them around the call as for the init closure
+            int instantiated = 0;
+            for (LocalVar* lv : ctx->all_body_locals) {
+                if (lv) {
+                    lv->instantiate(QoreParseOptions());
+                    ++instantiated;
+                }
+            }
+            try {
+                fn_ptr(ctx, &xsink);
+            } catch (const QoreJITException&) {
+                // xsink is already populated at the raise site
+            }
+            for (int k = instantiated - 1; k >= 0; --k) {
+                LocalVar* lv = ctx->all_body_locals[k];
+                if (lv) {
+                    lv->uninstantiate(&xsink);
+                }
+            }
+        }
+    }
+    delete ctx;
+    xsink.handleExceptions();
+}
+
 extern "C" DLLEXPORT void qore_aot_module_delete() {
     // Use the module context name to clean up only the module being unloaded
     // (set by QoreBuiltinModule::~QoreBuiltinModule via QoreModuleNameContextHelper)
     const char* mod_name = get_module_context_name();
     QoreProgram* pgm = nullptr;
     if (mod_name) {
+        std::unique_ptr<QoreAOTContext> del_ctx;
+        AotFunctionPtr del_fn = nullptr;
+        std::string del_path;
         {
             AutoLocker aot_state_al(get_aot_module_state_lock());
             auto it = aot_module_map.find(mod_name);
             if (it != aot_module_map.end()) {
                 pgm = it->second.pgm;
+                del_ctx = std::move(it->second.del_ctx);
+                del_fn = it->second.del_fn;
+                del_path = it->second.path;
                 aot_module_map.erase(it);
             }
             // Clear per-module state if it matches the module being deleted
@@ -14109,6 +14265,10 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
                 aot_module_funcs = nullptr;
                 aot_module_num_funcs = 0;
             }
+        }
+        // the module's del closure runs before its Program is torn down
+        if (del_ctx) {
+            runAOTModuleDelClosure(mod_name, del_path, pgm, del_ctx.release(), del_fn);
         }
         if (pgm) {
             // Clear namespace data before deref to release cross-program
@@ -14122,11 +14282,23 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
     } else {
         // Fallback: no module context — clean up all (shutdown path)
         std::vector<QoreProgram*> programs;
+        struct DelInfo {
+            std::string name;
+            std::string path;
+            QoreProgram* pgm;
+            std::unique_ptr<QoreAOTContext> ctx;
+            AotFunctionPtr fn;
+        };
+        std::vector<DelInfo> dels;
         {
             AutoLocker aot_state_al(get_aot_module_state_lock());
             for (auto& entry : aot_module_map) {
                 if (entry.second.pgm) {
                     programs.push_back(entry.second.pgm);
+                }
+                if (entry.second.del_ctx) {
+                    dels.push_back({entry.first, entry.second.path, entry.second.pgm,
+                        std::move(entry.second.del_ctx), entry.second.del_fn});
                 }
             }
             aot_module_map.clear();
@@ -14135,6 +14307,10 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
             aot_module_path.clear();
             aot_module_funcs = nullptr;
             aot_module_num_funcs = 0;
+        }
+        // the del closures run before the Programs of the modules are torn down
+        for (auto& d : dels) {
+            runAOTModuleDelClosure(d.name, d.path, d.pgm, d.ctx.release(), d.fn);
         }
         for (QoreProgram* p : programs) {
             p->waitForTerminationAndDeref(nullptr);
@@ -14200,6 +14376,81 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) 
     // see the same call in qore_aot_module_ns_init_impl()
     retryPendingAOTModuleInitsForProgram(pgm, xsink, !result.waitTimedOut());
     return xsink ? -1 : 0;
+}
+
+//! Test hook: the del closures start in the reverse of the order in which the modules are kept, so that a test sees
+//! the order that the dependencies give rather than the order of the unordered map (see
+//! qore_aot_run_all_module_del_closures())
+static bool aotReverseDelOrderTestHook() {
+    static constinit QoreEnvFlag enabled_env("QORE_AOT_TEST_REVERSE_DEL_ORDER");
+    const bool enabled = enabled_env.get();
+    return enabled;
+}
+
+DLLLOCAL void qore_aot_run_all_module_del_closures() {
+    struct DelInfo {
+        std::string name;
+        std::string path;
+        QoreProgram* pgm;
+        std::unique_ptr<QoreAOTContext> ctx;
+        AotFunctionPtr fn;
+    };
+    std::vector<DelInfo> dels;
+    {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        for (auto& entry : aot_module_map) {
+            if (entry.second.del_ctx) {
+                dels.push_back({entry.first, entry.second.path, entry.second.pgm, std::move(entry.second.del_ctx),
+                    entry.second.del_fn});
+            }
+        }
+    }
+    if (aotReverseDelOrderTestHook()) {
+        std::reverse(dels.begin(), dels.end());
+    }
+    // the closure of a module that requires another module, directly or through other modules, runs before that of
+    // the module it requires, which it can use; a cycle (not possible for loaded modules) runs the rest in any order
+    // the modules that a module requires, directly or through other modules (also user modules loaded from source and
+    // native binary modules), found once for each module
+    std::unordered_map<std::string, std::unordered_set<std::string>> requires_map;
+    auto requires_module = [&requires_map](const std::string& from, const std::string& target) {
+        auto ri = requires_map.find(from);
+        if (ri == requires_map.end()) {
+            std::unordered_set<std::string> all;
+            std::vector<std::string> todo{from};
+            while (!todo.empty()) {
+                std::string name = std::move(todo.back());
+                todo.pop_back();
+                std::set<std::string> deps;
+                QMM.getModuleDependencies(name.c_str(), deps);
+                for (const std::string& d : deps) {
+                    if (all.insert(d).second) {
+                        todo.push_back(d);
+                    }
+                }
+            }
+            ri = requires_map.emplace(from, std::move(all)).first;
+        }
+        return ri->second.find(target) != ri->second.end();
+    };
+    while (!dels.empty()) {
+        size_t pick = 0;
+        for (size_t i = 0; i < dels.size(); ++i) {
+            bool required = false;
+            for (size_t j = 0; j < dels.size() && !required; ++j) {
+                if (i != j) {
+                    required = requires_module(dels[j].name, dels[i].name);
+                }
+            }
+            if (!required) {
+                pick = i;
+                break;
+            }
+        }
+        DelInfo d = std::move(dels[pick]);
+        dels.erase(dels.begin() + pick);
+        runAOTModuleDelClosure(d.name, d.path, d.pgm, d.ctx.release(), d.fn);
+    }
 }
 
 DLLLOCAL void qore_aot_clear_all_module_opaque_targets(ExceptionSink& xsink) {
@@ -15209,7 +15460,8 @@ static int executeInitFunctions(
         QoreProgram* shadow_pgm,
         const char* mod_path,
         bool write_shadow,
-        ExceptionSink* failure_sink) {
+        ExceptionSink* failure_sink,
+        bool script_load) {
     if (exec_infos.empty() || descriptors.empty()) {
         return 0;
     }
@@ -15310,6 +15562,7 @@ static int executeInitFunctions(
             }
 
             case AOTCompiledInitFunc::OUTLINED_HELPER:
+            case AOTCompiledInitFunc::MODULE_DEL:
                 return nullptr;
         }
         return nullptr;
@@ -15447,6 +15700,11 @@ static int executeInitFunctions(
             continue;
         }
         const AOTInitFuncDescriptor& desc = descriptors[di];
+        // the module's del closure runs when the module is unloaded (see qore_aot_module_delete())
+        if (desc.target_type == AOTCompiledInitFunc::MODULE_DEL) {
+            desc_done[di] = true;
+            continue;
+        }
         bool is_module_init = (desc.target_type == AOTCompiledInitFunc::MODULE_INIT);
         if (is_module_init != run_module_init) {
             continue;
@@ -15871,6 +16129,12 @@ static int executeInitFunctions(
                 break;
             }
 
+            case AOTCompiledInitFunc::MODULE_DEL: {
+                // never reached: a del closure is skipped above and run when the module is unloaded
+                result.discard(&xsink);
+                break;
+            }
+
             case AOTCompiledInitFunc::OUTLINED_HELPER: {
                 // Outlined helpers are LLVM-lowered and linked into the module
                 // but called BY their outer init function — not run at module
@@ -15977,6 +16241,52 @@ static int executeInitFunctions(
         // process); every later per-Program pass owns them here and loses them at teardown.
         if (retained_ctx && (!shadow_pgm || !write_shadow)) {
             aotAdoptScriptPendingConstantContext(pgm, rec);
+        }
+    }
+
+    // The context of the module's del closure is built in the module's own Program by the pass that populates the
+    // shadow (see AotModuleState::del_ctx), so only that pass keeps it; the context of any other import is freed
+    // with the others, as the closure runs only once, when the module is unloaded (#6015).  A compiled script holds
+    // the closures of the local modules that it embeds in its Program, which runs them when it is cleared.
+    if (write_shadow && (shadow_pgm || script_load)) {
+        for (size_t di = 0; di < descriptors.size(); ++di) {
+            if (descriptors[di].target_type != AOTCompiledInitFunc::MODULE_DEL) {
+                continue;
+            }
+            auto it = exec_map.find(descriptors[di].name);
+            if (it == exec_map.end() || !it->second->ctx || !it->second->fn_ptr) {
+                continue;
+            }
+            if (script_load) {
+                // a script: the Program that the closure was built for owns it and runs it when it is cleared
+                struct ScriptDel : public AOTScriptDelClosure {
+                    QoreProgram* pgm;
+                    std::string name;
+                    std::string path;
+                    std::unique_ptr<QoreAOTContext> ctx;
+                    AotFunctionPtr fn;
+
+                    ScriptDel(QoreProgram* pgm, const std::string& name, const std::string& path,
+                            QoreAOTContext* ctx, AotFunctionPtr fn) : pgm(pgm), name(name), path(path), ctx(ctx),
+                            fn(fn) {
+                    }
+
+                    void run() override {
+                        runAOTModuleDelClosure(name, path, pgm, ctx.release(), fn, true);
+                    }
+                };
+                qore_program_private::get(*pgm)->aot_script_dels.push_back(std::make_unique<ScriptDel>(pgm,
+                    descriptors[di].ns_path, descriptors[di].item_name, it->second->ctx, it->second->fn_ptr));
+                deferred_contexts.insert(it->second->ctx);
+            } else if (shadow_pgm && mod_name) {
+                AutoLocker aot_state_al(get_aot_module_state_lock());
+                auto sit = aot_module_map.find(mod_name);
+                if (sit != aot_module_map.end() && !sit->second.del_ctx) {
+                    sit->second.del_ctx.reset(it->second->ctx);
+                    sit->second.del_fn = it->second->fn_ptr;
+                    deferred_contexts.insert(it->second->ctx);
+                }
+            }
         }
     }
 
@@ -16716,7 +17026,8 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
                 executeInitFunctions(tpgm, init_func_contexts,
                     init_descriptors, label ? label : "<script>",
                     /*shadow_pgm=*/nullptr, /*mod_path=*/nullptr,
-                    /*write_shadow=*/true, /*failure_sink=*/nullptr);
+                    /*write_shadow=*/true, /*failure_sink=*/nullptr,
+                    /*script_load=*/true);
             }
         }
     }
@@ -16926,7 +17237,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                             /*shadow_pgm=*/nullptr,
                             /*mod_path=*/nullptr,
                             /*write_shadow=*/true,
-                            /*failure_sink=*/nullptr);
+                            /*failure_sink=*/nullptr,
+                    /*script_load=*/true);
                     }
                 }
             } else {
@@ -17283,7 +17595,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                     /*shadow_pgm=*/nullptr,
                     /*mod_path=*/nullptr,
                     /*write_shadow=*/true,
-                    /*failure_sink=*/nullptr);
+                    /*failure_sink=*/nullptr,
+                    /*script_load=*/true);
                 if (time_on) {
                     us_init += now_us() - t1;
                 }
