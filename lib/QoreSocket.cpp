@@ -14176,7 +14176,7 @@ static int qore_socket_for_each_process_socket(int socktype, int port, F&& f, Ex
 static std::atomic<int> qore_socket_table_lists_sockets[2] = {{0}, {0}};
 //! the state of qore_socket_table_lists_sockets of a table that can omit sockets
 static constexpr int QORE_SOCKET_TABLE_OMITS = -1000;
-//! the number of comparisons that cannot tell after which a table is taken to omit sockets
+//! the number of checks whose comparison cannot tell after which the next check takes a table to omit sockets
 static constexpr int QORE_SOCKET_TABLE_MAX_UNDECIDED = 3;
 //! the maximum number of comparisons of the table with the process descriptors in one check
 /** A comparison that finds a socket of the descriptors missing from the table is repeated, up to this number of
@@ -14194,10 +14194,11 @@ static constexpr unsigned QORE_SOCKET_TABLE_MAX_COMPARISONS = 3;
     its children can hold too, by fork(), and the descriptors show them in the children as well), the table alone is
     the answer of every check, and the descriptors, whose scan costs a system call for every process and for every
     socket descriptor, are not scanned again.  A socket that is bound, connected or closed between the two snapshots
-    can be missing from the table, so the comparison is repeated before the table is taken to omit sockets; every
-    check then scans the descriptors.  A comparison that finds no such socket of another process, or for which a
-    snapshot cannot be read, cannot tell: nothing is decided, and after
-    QORE_SOCKET_TABLE_MAX_UNDECIDED such comparisons the table is taken to omit sockets.
+    can explain a socket missing from the table, so a comparison that finds one missing is repeated, up to
+    QORE_SOCKET_TABLE_MAX_COMPARISONS comparisons in all, before the table is taken to omit sockets in that check;
+    every check then scans the descriptors.  A comparison that finds no such socket of another process, or for which a
+    snapshot cannot be read, cannot tell: the check decides nothing and is counted, per socket type, and once
+    QORE_SOCKET_TABLE_MAX_UNDECIDED checks have been counted, the next check takes the table to omit sockets.
 
     @return 1 if the table lists the sockets of the descriptors, 0 if it omits some or the outcome is not known, -1 if
     cancellation was raised in @a xsink
