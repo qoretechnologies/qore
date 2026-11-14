@@ -7897,6 +7897,16 @@ static QORE_INTERN_ALWAYS_INLINE void qore_ir_close_catch_scopes(std::vector<IRC
     qore_ir_close_catch_scopes_pending(stack, scope_count, xsink);
 }
 
+//! Consumes the failed call's argument list and result before caller-local unwinding (#6098).
+/** Keep this exceptional cleanup out of the interpreter's hot dispatch function. */
+static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode* args, QoreValue result,
+        ExceptionSink* xsink) {
+    if (args) {
+        args->deref(xsink);
+    }
+    result.discard(xsink);
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -9627,14 +9637,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 setPhiValue(phi, incoming_value);
                 ++ip;
             }
-        }
-        if (ip >= block->instructions.size()) {
-            if (xsink) {
-                xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block after phi");
+            // Only phi processing can advance ip after the block-entry check above.
+            if (ip >= block->instructions.size()) {
+                if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR", "fell off end of basic block after phi");
+                }
+                unwindForException();
+                cleanupLocalCaches();
+                return exitAfterUnwind();
             }
-            unwindForException();
-            cleanupLocalCaches();
-            return exitAfterUnwind();
         }
         {
         // Save current block pointer to detect block changes (branches) after switch
@@ -17979,28 +17990,34 @@ load_local_done:
                         && !explicit_inst
                         && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs, &func) > 0;
                     if (has_last_use_args && !prefer_inline_ir && !type_name_fast_path) {
-                        ReferenceHolder<QoreListNode> arg_list(
-                            buildArgList(values, direct_inst->operands, 0, xsink), xsink);
-                        if (xsink && *xsink) {
-                            return returnAfterUnhandledException();
+                        QoreValue res;
+                        // The call's arguments are released before its exception check: a destructor that raises
+                        // must discard the result before the next instruction can take it as a return value (#6093).
+                        {
+                            ReferenceHolder<QoreListNode> arg_list(
+                                buildArgList(values, direct_inst->operands, 0, xsink), xsink);
+                            if (xsink && *xsink) {
+                                return returnAfterUnhandledException();
+                            }
+                            consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
+                                value_use_counts, &weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                            if (xsink && *xsink) {
+                                return returnAfterUnhandledException();
+                            }
+                            RuntimeConfig& rc = rc_get_current_ref();
+                            QoreProgram* call_pgm = direct_inst->pgm ? direct_inst->pgm : rc.getProgram();
+                            if (!call_pgm) {
+                                call_pgm = getProgram();
+                            }
+                            // the call stack frame of the called code is located at the call
+                            qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
+                            res = direct_inst->func->evalFunctionTmpArgs(
+                                direct_inst->variant, *arg_list, call_pgm, rc, xsink,
+                                explicit_inst);
+                            qore_ir_clear_call_site(rl_cache.loc_ptr);
                         }
-                        consumeLastUseCallArgSlots(values, cleanup, direct_inst->operands, 0,
-                            value_use_counts, &weak_load_temp_slots, borrowed_temp_remaining, xsink);
                         if (xsink && *xsink) {
-                            return returnAfterUnhandledException();
-                        }
-                        RuntimeConfig& rc = rc_get_current_ref();
-                        QoreProgram* call_pgm = direct_inst->pgm ? direct_inst->pgm : rc.getProgram();
-                        if (!call_pgm) {
-                            call_pgm = getProgram();
-                        }
-                        // the call stack frame of the called code is located at the call
-                        qore_ir_set_call_site(rl_cache.loc_ptr, inst->loc);
-                        QoreValue res = direct_inst->func->evalFunctionTmpArgs(
-                            direct_inst->variant, *arg_list, call_pgm, rc, xsink,
-                            explicit_inst);
-                        qore_ir_clear_call_site(rl_cache.loc_ptr);
-                        if (xsink && *xsink) {
+                            res.discard(xsink);
                             return returnAfterUnhandledException();
                         }
                         if (direct_inst->has_ref_args) {
@@ -18494,6 +18511,8 @@ load_local_done:
                 QoreValue res = qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list);
 
                 if (xsink && *xsink) {
+                    // The list still owns rejected arguments; release it before unwinding caller locals (#6098).
+                    qore_ir_release_failed_method_call(arg_list.release(), res, xsink);
                     return returnAfterUnhandledException();
                 }
                 // Skip invalidation for built-in methods without reference arguments
