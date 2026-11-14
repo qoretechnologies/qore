@@ -2453,6 +2453,17 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
                 case ColumnType::FLOAT64: {
                     double va = cd.float_data(a), vb = cd.float_data(b);
                     cmp = (va < vb) ? -1 : (va > vb) ? 1 : 0;
+                    // a NaN value compares neither less nor greater; it raises NAN-COMPARE-ERROR, as with the <=>
+                    // operator, which is checked only for values that are not ordered, so that it costs nothing
+                    // for the others
+                    if (!cmp && (std::isnan(va) || std::isnan(vb))) {
+                        if (!cmp_failed) {
+                            cmp_xsink.raiseException("NAN-COMPARE-ERROR", "NaN in floating-point value on %s hand "
+                                "side of logical comparison operator", std::isnan(va) ? "left" : "right");
+                            cmp_failed = true;
+                        }
+                        return false;
+                    }
                     break;
                 }
                 case ColumnType::INT64: {

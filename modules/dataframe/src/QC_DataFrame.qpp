@@ -1002,7 +1002,12 @@ DataFrame DataFrame::takeRows(list<int> indices) [flags=RET_VALUE_ONLY] {
     DataFrame multi = df.sortBy(("dept", "salary"), (True, False));
     @endcode
 
+    Null values come last.  The cells of a column that holds any value are ordered as the \c <=> operator orders
+    them, and a NaN value of a \c float64 column or of a column that holds any value raises \c NAN-COMPARE-ERROR
+    when it is compared, as with the \c <=> operator.
+
     @throw DATAFRAME-COLUMN-ERROR if column not found
+    @throw NAN-COMPARE-ERROR if a NaN value is compared with another value
 
 */
 DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=RET_VALUE_ONLY] {
