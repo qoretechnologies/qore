@@ -13982,18 +13982,52 @@ extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
     return static_cast<int64_t>(jit_obe_handlers.size());
 }
 
+//! Gives the value that a handler run while an exception leaves its block returned to the parent (#5992)
+/** The value replaces the value of the return that the exception interrupted, as in the AST interpreter, where the
+    handler runs with the block's return value: it is kept in the parent's hold slot, which the parent releases after
+    its locals (or when a try statement of the parent catches the exception), and the value it replaces there is
+    released.  Returns true if the handler's value was taken.  A handler that ends without a return gives no value;
+    a return without a value cannot be told from it.
+*/
+static inline bool qore_rt_obe_hold_return(uint64_t* hold, bool error, uint64_t rv_bits, ExceptionSink* xsink) {
+    if (!hold || !error || fromBits(rv_bits).isNothing()) {
+        return false;
+    }
+    uint64_t replaced = *hold;
+    *hold = rv_bits;
+    fromBits(replaced).discard(xsink);
+    return true;
+}
+
+static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
+        ExceptionSink* xsink, bool inline_lowered, uint64_t* hold);
+
 extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered) {
+    qore_rt_exec_on_block_exit_intern(saved_count, xsink, inline_lowered, nullptr);
+}
+
+//! Runs the handlers registered since saved_count as qore_rt_exec_on_block_exit() does; the value that a handler run
+//! while an exception is pending returns is kept in \a hold (see qore_rt_obe_hold_return()); returns 1 if one was
+extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink,
+        uint64_t* hold) {
+    return qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, hold);
+}
+
+// inlined in both entry points, so that qore_rt_exec_on_block_exit_impl() has no hold check (#5992)
+static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
+        ExceptionSink* xsink, bool inline_lowered, uint64_t* hold) {
     size_t start = static_cast<size_t>(saved_count);
     if (jit_obe_handlers.size() <= start) {
-        return;
+        return 0;
     }
     // handlers lowered inline (or discarded by a deopt) are only dropped: nothing runs, so no sink and no slot cache
     // state are needed (qore#5927)
     if (inline_lowered) {
         jit_obe_handlers.resize(start);
-        return;
+        return 0;
     }
 
+    int8_t held = 0;
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
 
@@ -14074,7 +14108,11 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     }
-                    fromBits(rv_bits).discard(&obe_xsink);
+                    if (qore_rt_obe_hold_return(hold, error, rv_bits, &obe_xsink)) {
+                        held = 1;
+                    } else {
+                        fromBits(rv_bits).discard(&obe_xsink);
+                    }
                 } else {
                     assert(jit_obe_handlers[i].compiled_fn);
                     const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
@@ -14090,7 +14128,11 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     }
-                    fromBits(rv_bits).discard(&obe_xsink);
+                    if (qore_rt_obe_hold_return(hold, error, rv_bits, &obe_xsink)) {
+                        held = 1;
+                    } else {
+                        fromBits(rv_bits).discard(&obe_xsink);
+                    }
                     if (hf) {
                         for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
                             hf->all_body_locals[j]->uninstantiate(&obe_xsink);
@@ -14125,6 +14167,7 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
 
     // Remove handlers for this function scope
     jit_obe_handlers.resize(start);
+    return held;
 }
 
 // Backward-compatible wrapper that calls the implementation with inline_lowered=false

@@ -79,6 +79,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Return in a try Statement in a Handler Replaces the Return Value
+    A @ref return "return" in a @ref try "try statement" in the code of an @ref on_exit "on_exit",
+    @ref on_success "on_success" or @ref on_error "on_error" statement replaces the value of the return that left the
+    block when the try statement ends, as a return statement in the handler does; the value was kept before (see
+    @ref try_return).
+
     @par Functional-Domain Attribute Lists
     <tt>[dom=</tt> after a parameter list starts a @ref function_domains "functional-domain attribute list", so an
     index expression that assigns to a variable named \c dom (<tt>x[dom = y]</tt>) must be written

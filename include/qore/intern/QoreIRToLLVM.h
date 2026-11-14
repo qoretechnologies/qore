@@ -657,6 +657,26 @@ private:
     bool holding_return_values = false;
     //! Returns true if \a alloca_ptr is the cleanup alloca of one of return_value_ids
     bool isReturnValueAlloca(llvm::Value* alloca_ptr) const;
+    //! the slot that keeps the value that a handler run out of line while an exception leaves its block returned
+    //! (#5992)
+    /** The value replaces the value of the return that the exception interrupted, as in the AST interpreter: the
+        runtime keeps it here (qore_rt_exec_on_block_exit_hold()), the code after the handlers releases the values of
+        return_value_ids when it did (see handler_return_hold_sites), and the slot is released with them, after the
+        locals of an exit on an exception or at the catch block of a try statement of the function.  Created at the
+        entry of a function with handlers.
+    */
+    llvm::Value* handler_return_hold = nullptr;
+    //! the calls that run handlers out of line with handler_return_hold, after which the values of return_value_ids
+    //! are released if a handler's value replaced them (see finalizeHandlerReturnHoldSites())
+    std::vector<llvm::CallInst*> handler_return_hold_sites;
+    //! Emits the call that runs the handlers registered since \a saved_count out of line with handler_return_hold
+    /** @param release_returns true if the values of the function's returns are released after the call when a
+        handler's value was kept: false where a try statement of the function can catch the exception
+    */
+    llvm::CallInst* emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count, bool release_returns);
+    //! Releases the values of return_value_ids after each call of handler_return_hold_sites that kept a handler's
+    //! value, now that their cleanup allocas are known
+    void finalizeHandlerReturnHoldSites(llvm::Module& module);
     //! the blocks at the start of the catch paths of try statements that release the values of the returns of their
     //! try blocks (QoreIRFunction::catch_interrupted_returns), filled once the function is lowered, as the catch
     //! block is lowered before the try block (qore#5941)

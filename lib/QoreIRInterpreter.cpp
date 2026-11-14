@@ -1062,6 +1062,24 @@ public:
         return true;
     }
 
+    //! removes all pushes for the id, as removeAll(), and returns the index that its entry had among the temp entries
+    //! (those that IRCallFrame::TempCleanupMark::cleanup_size counts), or SIZE_MAX if it had none there
+    size_t removeAllIndexed(uint32_t id) {
+        if (id >= counts.size() || !counts[id]) {
+            return SIZE_MAX;
+        }
+        counts[id] = 0;
+        if (isSlotOwned(id)) {
+            eraseEntry(id);
+            return SIZE_MAX;
+        }
+        auto it = std::find(entries.begin(), entries.end(), id);
+        assert(it != entries.end());
+        size_t index = static_cast<size_t>(it - entries.begin());
+        entries.erase(it);
+        return index;
+    }
+
     //! removes all pushes for the id
     bool removeAll(uint32_t id) {
         if (id >= counts.size() || !counts[id]) {
@@ -1281,6 +1299,13 @@ public:
         held_returns.push_back(v);
     }
 
+    //! Releases the reference that holdReturn() keeps to \a v, if any (#5992)
+    DLLLOCAL void releaseHeldReturn(QoreValue v, ExceptionSink* xsink) {
+        if (!held_returns.empty()) [[unlikely]] {
+            releaseHeldReturnIntern(v, xsink);
+        }
+    }
+
     //! Releases the values that holdReturn() keeps, after the locals of the frame
     DLLLOCAL void releaseHeldReturns(ExceptionSink* xsink) {
         for (QoreValue& v : held_returns) {
@@ -1331,6 +1356,20 @@ private:
     std::vector<uint8_t> real_slots;
     //! the values of a return that an exception interrupted, released after the locals of the frame (#5920)
     std::vector<QoreValue> held_returns;
+
+    //! Releases the references that holdReturn() keeps to \a v, if any (see releaseHeldReturn())
+    /** A value can be held more than once: each slot of a return that holds it (the Return's, a RefSelf's, a
+        DiscardTempsKeep's) is held with a reference of its own.
+    */
+    DLLLOCAL __attribute__((noinline, cold)) void releaseHeldReturnIntern(QoreValue v, ExceptionSink* xsink) {
+        for (size_t i = held_returns.size(); i; --i) {
+            if (held_returns[i - 1].hasNode() && held_returns[i - 1].getInternalNode() == v.getInternalNode()) {
+                QoreValue held = held_returns[i - 1];
+                held_returns.erase(held_returns.begin() + (i - 1));
+                held.discard(xsink);
+            }
+        }
+    }
 };
 
 //! A set of local variables that allocates no memory once its capacity covers the locals it holds
@@ -1785,6 +1824,25 @@ static QORE_IR_COLD_NOINLINE uint32_t qore_ir_exception_branch_temp_scope(const 
         }
     }
     return scope_id;
+}
+
+//! Removes the temp entry of a value that ReleaseOwnedTemp releases
+/** The marks of the temp scopes entered after the entry was pushed count it (cleanup_size): they are moved down with
+    the entries after it, so that the release of each of those scopes still releases its own temps (#5992: the value
+    of a return that a handler's return replaces is a temp of the replaced return's statement).
+*/
+static QORE_INTERN_NOINLINE void qore_ir_remove_released_temp(IRCleanupSlots& cleanup,
+        std::vector<IRCallFrame::TempCleanupMark>& marks, uint32_t id) {
+    size_t index = cleanup.removeAllIndexed(id);
+    if (index == SIZE_MAX) {
+        return;
+    }
+    for (size_t i = marks.size(); i; --i) {
+        if (marks[i - 1].cleanup_size <= index) {
+            break;
+        }
+        --marks[i - 1].cleanup_size;
+    }
 }
 
 struct IRCallFramePool {
@@ -7381,11 +7439,25 @@ static QORE_INTERN_NOINLINE void releaseHandlerParentCache(std::vector<QoreValue
     }
 }
 
+// The value that a handler run while an exception leaves its block returned replaces the value of the return that the
+// exception interrupted, as in the AST interpreter, where the handler runs with the block's return value: the values
+// that the frame holds for that return (see exceptionBranchTempScope()) are released, and the handler's value is held
+// in their place until the frame's locals are released (#5992)
+static QORE_INTERN_NOINLINE void qore_ir_handler_return_replaces(QoreValue rv, ExceptionSink* xsink) {
+    IRCallFramePool& pool = TlFramePool::get();
+    assert(pool.top);
+    IRLocalSlotCache& cache = pool.frames[pool.top - 1]->locals_slot_cache;
+    cache.releaseHeldReturns(xsink);
+    if (rv.hasNode()) {
+        cache.holdReturn(rv);
+    }
+}
+
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         std::vector<QoreValue>* parent_slot_cache = nullptr, const StatementBlock* dbg_statements = nullptr,
-        QoreProgram* dbg_pgm = nullptr) {
+        QoreProgram* dbg_pgm = nullptr, bool exception_pending = false) {
     // Every on_block_exit handler must have been compiled to IR by
     // QoreIRLowering::compileAllHandlerIRs/compileBlockHandlerIRs before
     // the enclosing IR function is executed — a handler-lowering failure
@@ -7412,6 +7484,11 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
     QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink, nullptr, nullptr, nullptr,
                                &handler.handler_ir->pre_instantiated_cache, nullptr, dbg_statements, dbg_pgm,
                                false, nullptr, parent_slot_cache, true);
+    // a handler that ends without a return gives no value; a return without a value cannot be told from it
+    if (exception_pending && !rv.isNothing() && parent_slot_cache) [[unlikely]] {
+        qore_ir_handler_return_replaces(rv, obe_xsink);
+        return;
+    }
     rv.discard(obe_xsink);
 }
 
@@ -7442,7 +7519,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
                     }
-                    executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements, dbg_pgm);
+                    executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache, dbg_statements, dbg_pgm, error);
                     // Restore td->catchException BEFORE clearing xsink to avoid
                     // a use-after-free window where td->catchException points to
                     // the freed exception chain
@@ -8233,7 +8310,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                 }
                             }
                             executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
-                                        dbgHandlerStatements(), dbgHandlerProgram());
+                                        dbgHandlerStatements(), dbgHandlerProgram(), error);
                             // Restore td->catchException BEFORE clearing xsink to avoid
                             // a use-after-free window where td->catchException points to
                             // the freed exception chain
@@ -10744,7 +10821,7 @@ next_instruction:
                                         }
                                     }
                                     executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
-                                        dbgHandlerStatements(), dbgHandlerProgram());
+                                        dbgHandlerStatements(), dbgHandlerProgram(), error);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -15290,9 +15367,13 @@ load_local_done:
                     // a value that is not a node has no reference to release: its entry stays for the slot's next
                     // value, as when the slot is overwritten (the release of a fused pipeline's stage value runs for
                     // each element, see QoreIRLowering::lowerLazyPipelineFused())
-                    removeAllCleanupEntries(cleanup, id);
+                    qore_ir_remove_released_temp(cleanup, temp_cleanup_marks, id);
                     QoreValue v = values[id];
                     values[id] = QoreValue();
+                    // the value of a return that a handler's return replaced, released on the way of an exception
+                    // that the handler's return raised: the reference that the branch to the exception target kept
+                    // for it (see exceptionBranchTempScope()) is released with it (#5992)
+                    frame.locals_slot_cache.releaseHeldReturn(v, xsink);
                     v.discard(xsink);
                     // the release of a fused pipeline's stage input (a second operand) runs on the normal path only:
                     // an exception that a destructor raises leaves the pipeline there, as it leaves the AST
@@ -15524,7 +15605,7 @@ load_local_done:
                                         }
                                     }
                                     executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache.vector(),
-                                        dbgHandlerStatements(), dbgHandlerProgram());
+                                        dbgHandlerStatements(), dbgHandlerProgram(), error);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
