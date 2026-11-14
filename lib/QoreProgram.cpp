@@ -4184,7 +4184,7 @@ int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocatio
         QoreParseOptions all = pwo.parse_options | po;
         if (module_mask_added && isModern(all) && !isModern(all & ~module_mask_added)) {
             desc->concat("; %modern is complete only with ");
-            describeParseOptions(module_mask_added & all, *desc);
+            describeParseOptions(module_mask_added, *desc);
             desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
                 "load_module_masked())");
             desc->concat("; remove the option, or load the module with a mask that does not add them");

@@ -3882,9 +3882,10 @@ QoreParseOptions qore_get_inherited_module_parse_options(const QoreParseOptions&
     @param p the Program loading the module, if any
     @param exclude the options the module does not inherit
     @param mask the module parse option mask
+    @param added if not nullptr, receives the restrictions that the mask adds and that are not inherited
 */
 static QoreParseOptions get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
-        const QoreModuleParseOptionMask& mask) {
+        const QoreModuleParseOptionMask& mask, QoreParseOptions* added = nullptr) {
     QoreParseOptions inherited;
     if (p) {
         QoreParseOptions parent_po = p->getParseOptions();
@@ -3893,6 +3894,9 @@ static QoreParseOptions get_masked_module_parse_options(QoreProgram* p, const Qo
         if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
             inherited |= PO_ENABLE_DEBUG;
         }
+    }
+    if (added) {
+        *added = mask.add & ~(inherited & ~mask.strip);
     }
     return mask.apply(inherited);
 }
@@ -3963,8 +3967,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     // parse options for the module: those inherited from the current program, if any, with the module parse option
     // mask applied, disabling style and types options already set with USER_MOD_PO
     const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
+    // the restrictions that the mask adds and that the module would not have without it
+    QoreParseOptions mask_added;
     QoreParseOptions parseOptions = USER_MOD_PO
-        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask);
+        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added);
+    mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
     QoreString modulePath(path);
     modulePath += QORE_DIR_SEP_STR;
@@ -3976,10 +3983,10 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, parseOptions);
         // the restrictions that the mask added, named in the error of a directive that conflicts with them
-        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & parseOptions);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
     } else {
         pholder = mpgm = new QoreProgram(parseOptions);
-        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & parseOptions);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
         mpgm->setScriptPath(modulePath.c_str());
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
@@ -4931,18 +4938,21 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     // parse options for the module: those inherited from the current program, if any, with the module parse option
     // mask applied, disabling style and types options already set with USER_MOD_PO
     const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
+    // the restrictions that the mask adds and that the module would not have without it
+    QoreParseOptions mask_added;
     QoreParseOptions po = USER_MOD_PO
-        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask);
+        | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added);
+    mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
     const char* td = p ? p->parseGetScriptDir() : nullptr;
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
         // the restrictions that the mask added, named in the error of a directive that conflicts with them
-        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & po);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
     } else {
         pholder = mpgm = new QoreProgram(po);
-        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & po);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
@@ -5071,15 +5081,18 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     // parse options for the module: those inherited from the current program, if any, with the module parse option
     // mask applied, disabling style and types options already set with USER_MOD_PO
     const QoreModuleParseOptionMask load_mask = getLoadParseOptionMask();
-    QoreParseOptions po = USER_MOD_PO | get_masked_module_parse_options(p, PO_REQUIRE_TYPES, load_mask);
+    // the restrictions that the mask adds and that the module would not have without it
+    QoreParseOptions mask_added;
+    QoreParseOptions po = USER_MOD_PO | get_masked_module_parse_options(p, PO_REQUIRE_TYPES, load_mask, &mask_added);
+    mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
         // the restrictions that the mask added, named in the error of a directive that conflicts with them
-        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & po);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
     } else {
         pholder = mpgm = new QoreProgram(po);
-        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, load_mask.add & po);
+        qore_program_private::setModuleMaskAddedParseOptions(*mpgm, mask_added);
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see

@@ -297,6 +297,24 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
                 "adds", out, tcase.name);
             assertEq(-1, out.find("LOADED"), tcase.name);
         }
+
+        # the loading Program has the restrictions that the mask adds already: the mask adds nothing, and the error
+        # does not name it
+        {
+            string script = tmp.path + "/mask-inherited.q";
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\n%%strong-encapsulation\n%%no-summarize\n"
+                "string mod = \"%s/LegacyCompatMod.qm\";\nset_module_parse_option_mask(new ParseOptions(), "
+                "new ParseOptions((\"strong-encapsulation\", \"no-summarize\")));\ntry {\n    load_module(mod);\n"
+                "    printf(\"LOADED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+                "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path));
+            f.close();
+            out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            assertRegex("PARSE-OPTION-ERROR: %modern \\(which the options set complete\\) cannot be used while "
+                "%broken-range is in effect", out, "inherited");
+            assertEq(-1, out.find("module parse option mask"), "inherited: the mask is not named: " + out);
+            assertEq(-1, out.find("LOADED"), "inherited");
+        }
     }
 
     #! an executable cannot be linked from an object whose parse options have %modern with a compatibility option that
@@ -341,6 +359,7 @@ class ModernOptionConsistencyTest inherits QUnit::Test {
         BinaryInputStream input(data.substr(pos + 8, 8));
         StreamReader r(input);
         int lo = r.readi8LSB();
+        assertEq(PO_MODERN, lo & PO_MODERN, "the object is %modern");
         assertEq(0, lo & PO_BROKEN_RANGE, "the object has no compatibility option");
         BinaryOutputStream bout();
         StreamWriter w(bout);
