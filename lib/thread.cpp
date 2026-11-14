@@ -2779,6 +2779,14 @@ bool thread_closure_var_on_stack(const ClosureVarValue* cvv) {
     return tlpd->cvstack.hasCvv(cvv);
 }
 
+ClosureVarValue* thread_instantiate_closure_var(const LocalVar* local, const QoreTypeInfo* runtimeTypeInfo,
+        QoreValue& nval, bool assign) {
+    // Binding can allocate. Finish it before changing the variable stack or transferring the initial value.
+    ClosureVarValue* cvv = local->createClosureValue(runtimeTypeInfo, nval, assign);
+    ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    return tlpd->cvstack.instantiateNew(cvv, tlpd->getNextVarOrder());
+}
+
 void thread_instantiate_closure_var(ClosureVarValue* cvar) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)
@@ -3971,6 +3979,13 @@ void CalleeContextHelper::restoreContext() {
     td->rc->cls = old_rc_class;
 }
 
+void CalleeContextHelper::releaseArgv() {
+    if (argv_xsink && td->current_implicit_arg) {
+        td->current_implicit_arg->deref(argv_xsink);
+        td->current_implicit_arg = nullptr;
+    }
+}
+
 void CalleeContextHelper::restoreArgv() {
     // as ~ArgvContextHelper()
     if (td->current_implicit_arg) {
@@ -4228,6 +4243,14 @@ ArgvContextHelper::~ArgvContextHelper() {
         td->current_implicit_arg->deref(xsink);
     td->current_implicit_arg = old_argv;
     //printd(5, "ArgvContextHelper::~ArgvContextHelper() setting argv: %p\n", old_argv);
+}
+
+void ArgvContextHelper::releaseArgv() {
+    ThreadData* td  = thread_data.get();
+    if (td->current_implicit_arg) {
+        td->current_implicit_arg->deref(xsink);
+        td->current_implicit_arg = nullptr;
+    }
 }
 
 SingleArgvContextHelper::SingleArgvContextHelper(QoreValue val, ExceptionSink* n_xsink) : xsink(n_xsink) {

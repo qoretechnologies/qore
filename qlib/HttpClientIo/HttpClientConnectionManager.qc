@@ -3334,8 +3334,8 @@ printf("%d connection(s) migrated\n", migrated);
         # caller (which re-enters advanceAsyncHE) so H2 still starts even if H3
         # never settles.  The callback runs on a controller worker thread.
         int HappyEyeballsStaggerMs = 100;
-        race.stagger_timer_id = controller.addTimer(
-            now_us() + milliseconds(HappyEyeballsStaggerMs),
+        race.stagger_timer_id = controller.addTimerDelay(
+            milliseconds(HappyEyeballsStaggerMs),
             sub () {
                 AutoLock al(async_race_lock);
                 if (!async_races.hasKey(key)) {
@@ -3612,8 +3612,8 @@ printf("%d connection(s) migrated\n", migrated);
     private armAsyncRaceRecheckTimer(AsyncRace race) {
         heAbandonRaceRecheckTimer(race);
         string key = race.key;
-        race.race_recheck_timer_id = controller.addTimer(
-            now_us() + milliseconds(AsyncHappyEyeballsRaceRecheckMs),
+        race.race_recheck_timer_id = controller.addTimerDelay(
+            milliseconds(AsyncHappyEyeballsRaceRecheckMs),
             sub () {
                 AutoLock al(async_race_lock);
                 if (!async_races.hasKey(key)) {
