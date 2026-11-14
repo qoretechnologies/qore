@@ -1225,8 +1225,10 @@ int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const 
         return_value = ir_return_value;
         return 0;
     }
-    // If IR execution raised an exception, propagate it
+    // If IR execution raised an exception, propagate it; a return that an exception raised after it (by the destructor
+    // of a local) leaves the value it returns to be released here (#6029)
     if (*xsink) {
+        ir_return_value.discard(xsink);
         return 0;
     }
     // IR execution failed without raising an exception.  This path only

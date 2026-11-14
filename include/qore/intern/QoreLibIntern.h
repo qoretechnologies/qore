@@ -1334,6 +1334,9 @@ public:
 
 DLLLOCAL extern std::atomic<bool> qore_initialized;
 DLLLOCAL extern std::atomic<bool> qore_shutdown;
+//! set by qore_cleanup() once no thread but the calling one runs and none can be waited for any more: no thread can be
+//! started from then on (THREAD-CREATION-FAILURE), and a wait cannot be cancelled by another thread (qore#6045)
+DLLLOCAL extern std::atomic<bool> qore_thread_start_closed;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
 //! set by qore_cleanup() once the types are freed; Qore values released after that are released too late
 DLLLOCAL extern std::atomic<bool> qore_types_deleted;

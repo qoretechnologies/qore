@@ -6292,6 +6292,14 @@
                   "name": "generic_scoped_identifier"
                 },
                 {
+                  "type": "PREC_DYNAMIC",
+                  "value": 1,
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "generic_type"
+                  }
+                },
+                {
                   "type": "SYMBOL",
                   "name": "scoped_identifier"
                 },
@@ -9739,8 +9747,11 @@
               "type": "SEQ",
               "members": [
                 {
-                  "type": "STRING",
-                  "value": "<"
+                  "type": "IMMEDIATE_TOKEN",
+                  "content": {
+                    "type": "STRING",
+                    "value": "<"
+                  }
                 },
                 {
                   "type": "SEQ",
@@ -9777,8 +9788,11 @@
               "type": "SEQ",
               "members": [
                 {
-                  "type": "STRING",
-                  "value": "<"
+                  "type": "IMMEDIATE_TOKEN",
+                  "content": {
+                    "type": "STRING",
+                    "value": "<"
+                  }
                 },
                 {
                   "type": "STRING",
@@ -9787,8 +9801,11 @@
               ]
             },
             {
-              "type": "STRING",
-              "value": "<>"
+              "type": "IMMEDIATE_TOKEN",
+              "content": {
+                "type": "STRING",
+                "value": "<>"
+              }
             }
           ]
         }
@@ -10196,8 +10213,7 @@
     ],
     [
       "function_declaration",
-      "primary_expression",
-      "generic_type"
+      "primary_expression"
     ],
     [
       "argument_list",
@@ -10223,24 +10239,8 @@
       "complex_type"
     ],
     [
-      "simple_type",
-      "generic_type"
-    ],
-    [
-      "type_parameter",
-      "simple_type"
-    ],
-    [
       "primary_expression",
       "simple_type"
-    ],
-    [
-      "primary_expression",
-      "generic_type"
-    ],
-    [
-      "generic_type",
-      "generic_scoped_identifier"
     ],
     [
       "generic_scoped_identifier",
@@ -10288,10 +10288,6 @@
     [
       "_type_keyword",
       "_declared_name"
-    ],
-    [
-      "_declared_name",
-      "generic_type"
     ],
     [
       "_declared_name",

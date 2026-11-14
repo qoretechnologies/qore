@@ -734,6 +734,10 @@ private:
         CF_NONE = 0,
         CF_SKIP_LVARS = 1,       //!< skip local var cleanup (for return - pre-instantiation handles it)
         CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break and return)
+        //! close the catch blocks left (CatchScope entries) in their place among the other cleanups: a catch block
+        //! is closed after its own blocks and before the blocks that enclose it, whose on_exit handlers then see
+        //! the exception of an enclosing catch block, as in the AST interpreter (qore#6017)
+        CF_CATCH_SCOPES = 4,
     };
 
     //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
@@ -888,7 +892,7 @@ private:
         //! non-local exit inside the handler body cannot re-enter the same
         //! handler range. Cleanup entries below that Scope still run.
         enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar,
-            ForeachElement, ForeachSource };
+            ForeachElement, ForeachSource, CatchScope };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
@@ -903,6 +907,15 @@ private:
         QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
         QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any
         size_t temp_scope_depth = 0;               //!< temp scopes open when the entry was pushed
+        //! the lowering state where the entry was pushed: the number of scope_stack entries, catch_cleanup_depth and
+        //! the number of try_catch_cleanup_depth_stack entries
+        /** The handlers of a Scope entry that a return, break or continue runs are lowered with this state: they
+            run after the exit has left the blocks, catch blocks and try statements inside the block, so code in them
+            must not count those (qore#6017)
+        */
+        size_t open_scopes = 0;
+        int open_catch_depth = 0;
+        size_t open_try_depth = 0;
         //! true for the Scope entry of a statement block with on_exit/on_success/on_error handlers
         bool block_scope = false;
         //! the exception target of the body of the block of a Scope entry with handlers (block_scope)

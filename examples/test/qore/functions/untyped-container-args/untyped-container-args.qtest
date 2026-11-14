@@ -47,7 +47,8 @@ class UntypedContainerArgsTest inherits QUnit::Test {
             "overload-empty": "ov(list<int>):list<int>",
             "fallthrough-match": "fall(list<int>):list<int>",
             "fallthrough-auto": "fall(auto):list<auto>",
-            "fallthrough-any": "anyv(any):list<auto>",
+            # an `any` parameter strips the complex type of a list, as an assignment to `any` does (issue #6032)
+            "fallthrough-any": "anyv(any):list",
             "any-loses": "anyv(list<int>):list<int>",
             "generic-list-wins": "gen(list):list",
             "list-auto-wins": "gena(list<auto>):list<auto>",
