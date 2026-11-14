@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket close handshakes over HTTP/2 and HTTP/3 sockets during the setup of a connection
+/*  WebSocketStreamCloseInSetup.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A close frame of the client that arrives while the server sets up an HTTP/2 or HTTP/3 WebSocket connection, after
+    the registration of the connection's stream listener and before direct sends are enabled, is answered after the
+    messages that the connection sent before it, which were buffered until then (issue #5957): the answer and the end
+    of the stream were written first, and the buffered messages after them (RFC 6455 section 5.5.1: no data frame
+    follows a close frame).  The same holds for the close frame that the server sends for a message that is too big.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketStreamCloseInSetupTest
+
+#! the longest wait for an event that a correct server always produces
+const HangGuard = 60s;
+
+#! Echoes every message, and reports when it has answered the client's close frame
+class SetupWindowConnection inherits WebSocketConnection {
+    private {
+        SetupWindowHandler setup_handler;
+    }
+
+    constructor(SetupWindowHandler handler) : WebSocketConnection(handler) {
+        setup_handler = handler;
+    }
+
+    #! the echo is buffered: direct sends are not enabled yet
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+        setup_handler.echoed.dec();
+    }
+
+}
+
+#! Holds the setup of each connection after the registration of its stream listener until the test releases it
+class SetupWindowHandler inherits WebSocketHandler {
+    public {
+        #! signaled when the setup of the connection is held
+        Counter in_window(1);
+        #! signaled when the connection has buffered its echo
+        Counter echoed(1);
+        #! signaled by the test to release the setup of the connection
+        Counter release(1);
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid, *hash<auto> conn) {
+        return new SetupWindowConnection(self);
+    }
+
+    private streamListenerRegistered(WebSocketConnection wsc) {
+        in_window.dec();
+        release.waitForZero(HangGuard);
+    }
+}
+
+class WebSocketStreamCloseInSetupTest inherits QUnit::Test {
+    private {
+        Logger logger;
+
+        const CertPem = TestCertificates::CertPem;
+        const KeyPem = TestCertificates::KeyPem;
+
+        #! the maximum message size of the cases with a message that is too big
+        const MaxMessageSize = 1024;
+    }
+
+    constructor() : Test("WebSocketStreamCloseInSetupTest", "1.0") {
+        addTestCase("HTTP/2: a close answered during the setup follows the messages sent before it", \h2Test());
+        addTestCase("HTTP/3: a close answered during the setup follows the messages sent before it", \h3Test());
+        addTestCase("HTTP/2: a close for a message too big during the setup follows the messages sent before it",
+            \h2TooBigTest());
+        addTestCase("HTTP/3: a close for a message too big during the setup follows the messages sent before it",
+            \h3TooBigTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("ws-close-in-setup", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelError());
+        logger.addAppender(new StdoutAppender());
+    }
+
+    h2Test() {
+        closeInSetupImpl("h2");
+    }
+
+    h3Test() {
+        closeInSetupImpl("h3");
+    }
+
+    h2TooBigTest() {
+        closeInSetupImpl("h2", True);
+    }
+
+    h3TooBigTest() {
+        closeInSetupImpl("h3", True);
+    }
+
+    #! The client sends a message and then a close frame, or a message that is too big, while the server holds the
+    #! setup of the connection
+    /** The setup is released once the client has the close frame of the server, as the answer to its own or for the
+        message that is too big; without the fix, the message sent before it was written only then, after the close
+        frame
+    */
+    private closeInSetupImpl(string protocol, bool too_big = False) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        SetupWindowHandler handler({"logger": logger} + (too_big
+            ? {"extensions": ("permessage-deflate",), "max_message_size": MaxMessageSize}
+            : NOTHING));
+        # the setup is released also if the test fails before it releases it
+        on_exit if (handler.release.getCount()) {
+            handler.release.dec();
+        }
+        server.setDefaultHandler("ws", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+
+        Queue queue();
+        hash<auto!> conn_opts = protocol == "h2"
+            ? {"url": "wss://localhost:" + port, "http_version": "2.0"}
+            : {"url": "wss://127.0.0.1:" + port, "http3_mode": "required"};
+        if (too_big) {
+            conn_opts.extensions = (new PerMessageDeflateExtension(),);
+        }
+        WebSocketClient wsc(sub (*data msg) {
+            queue.push(msg);
+        }, conn_opts + {"ssl_verify_cert": False, "logger": logger});
+        on_exit try { wsc.disconnect(); } catch () {}
+        wsc.connect();
+
+        assertEq(0, handler.in_window.waitForZero(HangGuard), "the setup of the connection is held");
+        wsc.send("hello");
+        assertEq(0, handler.echoed.waitForZero(HangGuard), "the echo is buffered");
+        object op = wsc.getPollOperation();
+        if (too_big) {
+            assertTrue(wsc.hasPerMessageDeflate(), "permessage-deflate is negotiated");
+            # a small compressed frame that decompresses to more than the limit
+            wsc.send(strmul("z", MaxMessageSize * 16));
+        } else {
+            op.sendClose(WSCC_NormalClosure, "bye");
+        }
+
+        list<string> received = ();
+        while (True) {
+            auto msg = queue.get(HangGuard);
+            if (!exists msg) {
+                break;
+            }
+            received += msg.toString();
+        }
+        handler.release.dec();
+        assertEq(("ECHO:hello",), received, "the message sent before the close frame reaches the client");
+        assertEq(too_big ? WSCC_MessageTooBig : WSCC_NormalClosure, op.getCloseCode(),
+            "the close code of the server's close frame");
+    }
+}
