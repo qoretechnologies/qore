@@ -228,8 +228,14 @@ int typed_hash_decl_private::parseInit() {
         if (resolveParseParent()) {
             err = -1;
         }
+        // the parent is initialized first, which recurses to the most distant parent that is not yet initialized: a
+        // long chain of inheritance stops while enough stack remains, and the hashdecl is initialized without its
+        // parent, as for a parent that cannot be resolved (issue #6047)
+        if (parentHashDecl && parse_check_stack(loc)) {
+            releaseParentHashDecl();
+            err = -1;
+        }
         if (parentHashDecl) {
-            // Initialize parent first
             const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->parseInit();
 
             // Check for circular inheritance

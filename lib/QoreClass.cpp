@@ -34,6 +34,7 @@
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreDeferredRelease.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/qore_program_private.h"
@@ -1249,7 +1250,9 @@ int qore_class_private::initialize() {
 // issue #2657: initialize class hierarchy first before initializing code and members
 int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     assert(scl);
-    if (scl->initializeHierarchy(cls, qcp_set)) {
+    // the hierarchy is initialized recursively from each class to its most distant base class: a long chain of
+    // inheritance stops while enough stack remains (issue #6047)
+    if (parse_check_stack(loc) || scl->initializeHierarchy(cls, qcp_set)) {
         initialized = true;
         return -1;
     }
@@ -1283,6 +1286,10 @@ int qore_class_private::initializeMembers() {
         parse_resolve_class_members = true;
 
         if (scl) {
+            // recurses to the base classes that are not yet initialized (see initializeHierarchy())
+            if (parse_check_stack(loc)) {
+                return -1;
+            }
             return scl->initializeMembers(cls);
         }
     }
@@ -1358,6 +1365,10 @@ int qore_class_private::initializeIntern() {
 
     // initialize parent classes
     if (scl) {
+        // recurses to the base classes that are not yet initialized (see initializeHierarchy())
+        if (parse_check_stack(loc)) {
+            return -1;
+        }
         int rc = scl->initialize(cls);
         if (rc) {
             return -1;
@@ -4429,8 +4440,10 @@ BCSMList::BCSMList(const BCSMList& old) {
 }
 
 BCSMList::~BCSMList() {
+    // the release of a base class can release its own base classes in turn: a long chain of inheritance is released
+    // with a bounded recursion (issue #6047)
     for (auto& i : *this) {
-        qore_class_private::derefClass(*i.first, false, false, false);
+        qore_release_base_class(i.first);
     }
 }
 
@@ -5314,7 +5327,8 @@ QoreObject* qore_class_private::execCopyImpl(LexicalSemanticPolicy policy, QoreO
 int qore_class_private::addBaseClassesToSubclass(QoreClass* child, bool is_virtual) {
     //printd(5, "qore_class_private::addBaseClassesToSubclass() this: %p '%s' sc: %p '%s' is_virtual: %d scl: %p\n",
     //  this, name.c_str(), sc, sc->getName(), is_virtual, scl);
-    if (scl && scl->addBaseClassesToSubclass(cls, child, is_virtual)) {
+    // recurses to the most distant base class (see initializeHierarchy())
+    if (scl && (parse_check_stack(loc) || scl->addBaseClassesToSubclass(cls, child, is_virtual))) {
         return -1;
     }
     assert(child->priv->scl);
@@ -6347,9 +6361,14 @@ void qore_class_private::parseResolveAbstract() {
     if (!parse_resolve_abstract && !(committed && !sys)) {
         parse_resolve_abstract = true;
 
-        if (!scl)
+        if (!scl) {
             return;
+        }
 
+        // recurses to the base classes whose abstract methods are not yet resolved (see initializeHierarchy())
+        if (parse_check_stack(loc)) {
+            return;
+        }
         scl->parseResolveAbstract();
 
         // search for new concrete variants of abstract variants last

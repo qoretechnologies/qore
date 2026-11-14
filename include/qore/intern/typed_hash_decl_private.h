@@ -34,6 +34,7 @@
 #define _QORE_INTERN_TYPED_HASH_DECL_PRIVATE_H
 
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
 #include <algorithm>
 #include <functional>
@@ -679,7 +680,9 @@ public:
     */
     DLLLOCAL void releaseParentHashDecl() {
         if (parentHashDecl) {
-            const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->deref();
+            // the release of the parent can release its own parent in turn: a long chain of inheritance is released
+            // with a bounded recursion (issue #6047)
+            qore_release_parent_hashdecl(const_cast<typed_hash_decl_private*>(get(*parentHashDecl)));
             parentHashDecl = nullptr;
         }
     }

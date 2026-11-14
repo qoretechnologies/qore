@@ -26,6 +26,8 @@ public class ParseStackBoundaryTest inherits QUnit::Test {
         addTestCase("parse-time stack boundary", \check());
         addTestCase("nested module loads", \moduleCheck());
         addTestCase("nested optional module loads", \tryModuleCheck());
+        addTestCase("class inheritance chain", \classChainCheck());
+        addTestCase("hashdecl inheritance chain", \hashdeclChainCheck());
         set_return_value(main());
     }
 
@@ -198,5 +200,46 @@ public class ParseStackBoundaryTest inherits QUnit::Test {
         source = dir.path + "/load-module.q";
         writeFile(source, "int sub run() { load_module(\"StackTry0\"); return call_function(\"StackTry0::count\"); }\n");
         runSource(exe, libdir, source, ChainLength, mdir);
+    }
+
+    #! the number of classes or hashdecls in an inheritance chain
+    const InheritanceLength = 300;
+
+    #! A chain of classes each inheriting the previous one is parse-initialized from the last class to the first
+    private classChainCheck() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-parse-stack-classes-");
+        string exe = build(dir.path, root, libdir);
+        string source = dir.path + "/class-chain.q";
+        string code = "class C0 { int depth() { return 0; } }\n";
+        for (int i = 1; i < InheritanceLength; ++i) {
+            code += sprintf("class C%d inherits C%d { int depth() { return %d; } }\n", i, i - 1, i);
+        }
+        code += sprintf("int sub run() { C0 c = new C%d(); return c.depth(); }\n", InheritanceLength - 1);
+        writeFile(source, code);
+        runSource(exe, libdir, source, InheritanceLength - 1);
+    }
+
+    #! A chain of hashdecls each inheriting the previous one is parse-initialized from the last hashdecl to the first
+    private hashdeclChainCheck() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("runtime built without native stack protection");
+        }
+        string root = realpath(get_script_dir() + "/../../../../..");
+        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        TmpDir dir("qore-parse-stack-hashdecls-");
+        string exe = build(dir.path, root, libdir);
+        string source = dir.path + "/hashdecl-chain.q";
+        string code = "hashdecl H0 { int k0 = 0; }\n";
+        for (int i = 1; i < InheritanceLength; ++i) {
+            code += sprintf("hashdecl H%d inherits H%d { int k%d = %d; }\n", i, i - 1, i, i);
+        }
+        code += sprintf("int sub run() { hash<H%d> h(); return h.size() - 1; }\n", InheritanceLength - 1);
+        writeFile(source, code);
+        runSource(exe, libdir, source, InheritanceLength - 1);
     }
 }
