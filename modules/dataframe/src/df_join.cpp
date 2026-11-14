@@ -132,9 +132,10 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
     The schema is the left key column's if the values come from it only, and otherwise the schema that holds the
     values of both, as dataFrameMergeColumnSchema() merges them (decimals of different precisions and scales,
     temporal columns of different time units or zones, with the native type dropped if it does not describe both),
-    or none if there is none.  A date schema and a timestamp schema, which it does not merge, give the schema of the
-    side that has one, with the unit "us" if their units differ, the zone "UTC" if their zones differ, and no native
-    type.  Date key columns hold dates of one kind (checked before).
+    or none if there is none.  A date schema and a timestamp schema (date32[day] or date64[ms] and timestamp key
+    columns), which it does not merge, give the timestamp schema, so that the times of day are kept, with the unit
+    "us" if their units differ, the zone "UTC" if their zones differ, and no native type.  Date key columns hold dates
+    of one kind (checked before).
 */
 static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const ColumnData& right, bool right_values) {
     // a key column of another type keeps the schema of the left key column if its values come from it only, or the
@@ -179,12 +180,13 @@ static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const Col
             return;
         }
     }
-    // schemas of different kinds (a date and a timestamp schema): the one of the side that has one, with the unit
-    // "us" if their units differ and the zone "UTC" if their zones differ, and no native type then
-    const ColumnData& src = left.has_columnar_schema ? left : right;
-    if (!src.has_columnar_schema) {
-        return;
-    }
+    // schemas of different kinds: both sides have one here, as dataFrameMergeColumnSchema() merges a plain date
+    // column with any temporal schema; a date and a timestamp schema give the timestamp schema, so that the times of
+    // day are kept, with the unit "us" if their units differ and the zone "UTC" if their zones differ, and no native
+    // type
+    assert(left.has_columnar_schema && right.has_columnar_schema);
+    const ColumnData& src = right.columnar_schema.kind == QoreColumnarTypeKind::Timestamp
+        && left.columnar_schema.kind != QoreColumnarTypeKind::Timestamp ? right : left;
     dataFrameCopyDateSchema(dest, src);
     // the native type of one kind describes no column of the other kind
     dest.columnar_schema.native_type.clear();
