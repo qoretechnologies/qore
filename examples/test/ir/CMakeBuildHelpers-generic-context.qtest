@@ -39,7 +39,7 @@ class CMakeGenericContextTest inherits CMakeBuildHelpersTestBase::GenericQccObje
           rebuilds what the consumer closure needs
     */
     testContextTransitions() {
-        TmpDir tmp("qore-cmake-qcc-context-");
+        TmpDir tmp("qore-cmake-qcc-context-", NOTHING, cmakeTmpBase());
         hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
         settleGenericBaseline(project);
 

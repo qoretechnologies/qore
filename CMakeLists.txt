@@ -3347,6 +3347,7 @@ add_custom_command(
         -P ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
     COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP}
     DEPENDS ${QCC_FORMAT_STAMP} ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
+        ${CMAKE_SOURCE_DIR}/cmake/QoreQmodPathUtils.cmake
     COMMENT "Removing stale source qmod symlinks after qcc format changes"
     VERBATIM
 )
