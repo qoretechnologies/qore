@@ -648,6 +648,17 @@ static void ut_string_compare_soft_and_concat_chars(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 1, ab.compareSoft(&empty, &xsink), "compareSoft(): a string is greater than an empty one");
     UT_ASSERT_EQ(c, 0, empty.compareSoft(&empty, &xsink), "compareSoft(): empty strings are equal");
     UT_ASSERT_EQ(c, -1, abc.compareSoft(&b, &xsink), "compareSoft(): the first different byte decides");
+    // compare() orders an empty string before any other string, as compareSoft() does (qore#6090)
+    UT_ASSERT_EQ(c, -1, empty.compare(&ab), "compare(): an empty string is less");
+    UT_ASSERT_EQ(c, 1, ab.compare(&empty), "compare(): a string is greater than an empty one");
+    UT_ASSERT_EQ(c, 0, empty.compare(&empty), "compare(): empty strings are equal");
+    UT_ASSERT(c, empty.compare("ab") < 0, "compare(const char*): an empty string is less");
+    UT_ASSERT_EQ(c, 0, empty.compare(""), "compare(const char*): an empty string equals \"\"");
+    UT_ASSERT_EQ(c, 0, empty.compare(static_cast<const char*>(nullptr)), "compare(const char*): an empty string "
+        "equals a null string");
+    UT_ASSERT(c, ab.compare(static_cast<const char*>(nullptr)) > 0, "compare(const char*): a string is greater "
+        "than a null string");
+    UT_ASSERT(c, ab.compare("") > 0, "compare(const char*): a string is greater than \"\"");
     {
         QoreString latin1("ab", QCS_ISO_8859_1);
         UT_ASSERT_EQ(c, -1, latin1.compareSoft(&abc, &xsink), "compareSoft(): converted prefix");
