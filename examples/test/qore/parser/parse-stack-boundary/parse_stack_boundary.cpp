@@ -227,7 +227,8 @@ static bool read_file(const char* path, std::string& rv) {
 
 //! Parses the source of source_path in a foreign thread and calls its run() function, which returns an integer:
 //! prints "parsed <value>", "stack error" if the parse or the run (a module that it loads at run time) failed with
-//! the parse stack error as the first exception, or "run stack error" if the run raised STACK-LIMIT-EXCEEDED
+//! the parse stack error as the first exception, or the parse with STACK-LIMIT-EXCEEDED (raised by the code that ran
+//! while a module was loaded), or "run stack error" if the run raised STACK-LIMIT-EXCEEDED
 static void* load_source(void*) {
     QoreForeignThreadHelper foreign;
     std::string code;
@@ -254,24 +255,25 @@ static void* load_source(void*) {
         }
         program->parse(code.c_str(), source_path, &xsink);
     }
-    if (!xsink) {
+    bool parsed = !xsink;
+    if (parsed) {
         ValueHolder rv(program->callFunction("run", nullptr, &xsink), &xsink);
         if (!xsink) {
             std::printf("parsed %lld\n", (long long)rv->getAsBigInt());
             return nullptr;
         }
     }
-    if (is_stack_error(xsink)) {
+    std::string desc = describe(xsink);
+    bool stack_limit = !desc.compare(0, strlen("STACK-LIMIT-EXCEEDED:"), "STACK-LIMIT-EXCEEDED:");
+    if (is_stack_error(xsink) || (!parsed && stack_limit)) {
+        // the parse ran short of stack, or the code that ran while a module was loaded (its constant initializers)
         std::puts("stack error");
+    } else if (stack_limit) {
+        // code that was parsed can still run short of stack
+        std::puts("run stack error");
     } else {
-        std::string desc = describe(xsink);
-        if (!desc.compare(0, strlen("STACK-LIMIT-EXCEEDED:"), "STACK-LIMIT-EXCEEDED:")) {
-            // code that was parsed can still run short of stack
-            std::puts("run stack error");
-        } else {
-            std::fprintf(stderr, "%zuK source: unexpected error: %s\n", current_size / 1024, desc.c_str());
-            ++failures;
-        }
+        std::fprintf(stderr, "%zuK source: unexpected error: %s\n", current_size / 1024, desc.c_str());
+        ++failures;
     }
     xsink.clear();
     return nullptr;

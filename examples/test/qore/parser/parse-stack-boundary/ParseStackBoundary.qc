@@ -290,7 +290,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
     /** As tryModuleCheck() for modules compiled with \c qcc: an AOT module loads the modules that it depends on when
         it is initialized, and a module that the chain cannot load within the stack of the thread is not a module that
         is not available, so the code that loads the first module fails with the stack error, and never parses its
-        fallback code.  The modules shipped with %Qore are not used: a constant initializer of DataProvider has a
+        fallback code.  The constant of each module is initialized with a recursion when the module is loaded, which
+        runs short of the stack (\c STACK-LIMIT-EXCEEDED) at sizes where the parse does not.  The modules shipped with %Qore are not used: a constant initializer of DataProvider has a
         compiled frame larger than the stack guard, which crashes the thread where the stack runs out in it (issue
         #6124)
     */
@@ -314,6 +315,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             writeFile(path, sprintf("%%modern\n%s"
                 "module StackAot%d { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
                 "public namespace StackAot%d {\n"
+                "public int sub deep(int n) { return n ? deep(n - 1) + 1 : 0; }\n"
+                "public const Depth = deep(1500);\n"
                 "public int sub count() { return %s + 1; }\n"
                 "}\n",
                 i + 1 < AotChainLength
