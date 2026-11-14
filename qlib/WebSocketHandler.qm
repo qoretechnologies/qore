@@ -1132,6 +1132,23 @@ public class WebSocketConnection {
         }
     }
 
+    #! Records that the WebSocket frame state of the HTTP/2 or HTTP/3 stream sent the connection's close frame
+    /** The frame state closes the connection itself for an error in the client's frames; no data frame may follow
+        its close frame (RFC 6455 section 5.5.1), so a message sent afterwards raises \c WEBSOCKET-CLOSING-ERROR, and
+        the frames still buffered before direct sends were enabled are discarded.  A send that the stream refuses
+        before this is called raises the same error.
+
+        @note Internal API — not intended for use by subclasses.
+
+        @since WebSocketHandler 2.8
+    */
+    noteStreamCloseSent() {
+        AutoLock al(send_lock);
+        close_frame_queued = True;
+        while (pollDataImmediate()) {
+        }
+    }
+
     #! Answers the client's close frame on an HTTP/2 or HTTP/3 stream and ends the stream
     /** As both close frames have then been exchanged, the server closes the connection at once (RFC 6455 section
         5.5.1), which ends the stream (RFC 8441 section 5, RFC 9220 section 3).
@@ -1155,24 +1172,14 @@ public class WebSocketConnection {
             }
             close_frame_queued = True;
         }
-        # the wait is bounded by the close timeout (and the send timeout if it is shorter), as the close handshake
-        # ends then anyway; a send timeout of 0 does not make it unlimited
-        int wait_ms = get_duration_milliseconds(handler.getCloseTimeout());
-        int send_ms = get_duration_milliseconds(handler.getSendTimeout());
-        if (send_ms > 0 && (wait_ms <= 0 || send_ms < wait_ms)) {
-            wait_ms = send_ms;
-        }
-        if (wait_ms <= 0) {
-            wait_ms = get_duration_milliseconds(WebSocketHandler::DefaultCloseTimeout);
-        }
         try {
             # a close frame without a status code (1005) is answered with one without a status code: 1005 is never
-            # sent (RFC 6455 section 7.4.1); the answer waits for the stream's send buffer to drain: the stream
-            # refuses data while more than its backpressure threshold is waiting to be sent, for example the rest of
-            # a large message that the client is still reading, and the answer and the end of the stream were
-            # dropped then (issue #5861)
-            ctx.sendDataWithTimeout(ws_encode_message(code == WSCC_NoStatusRcvd ? binary() : code.encodeMsb(2),
-                WSOP_Close), wait_ms, True);
+            # sent (RFC 6455 section 7.4.1); the answer is sent as the stream's close frame, which is never refused
+            # for a full send buffer (the answer and the end of the stream were dropped then, issue #5861), and
+            # which is not sent if the stream's frame state sent a close frame before (issue #6077); the stream is
+            # ended either way
+            ctx.sendWebSocketClose(ws_encode_message(code == WSCC_NoStatusRcvd ? binary() : code.encodeMsb(2),
+                WSOP_Close), True);
         } catch (hash<ExceptionInfo> ex) {
             # the client may have ended the stream already, or does not read; the handler's cleanup ends the stream
             # (see WebSocketHandler::finishConnection())
@@ -1874,8 +1881,13 @@ class WebSocketStreamProcessor {
             binary body = (code == WSCC_NoStatusRcvd || code == WSCC_AbnormalClosure)
                 ? binary()
                 : code.encodeMsb(2) + reason.toBinary();
-            ctx.sendDataWithTimeout(ws_encode_message(body, WSOP_Close),
-                get_duration_milliseconds(handler.getSendTimeout()));
+            # the stream's close frame, which is never refused for a full send buffer; a close frame that the
+            # stream's frame state sent before ends the close: no second one is sent (issue #6077)
+            if (!ctx.sendWebSocketClose(ws_encode_message(body, WSOP_Close))) {
+                handler.logDebug("H2/H3 WebSocket close frame not sent: the connection sent a close frame before");
+                markClosedOnce();
+                return;
+            }
         } catch (hash<ExceptionInfo> ex) {
             # the client does not read, or it has ended the stream: the stream is not closed cleanly
             handler.logDebug("H2/H3 WebSocket close frame not sent: %s: %s", ex.err, ex.desc);
@@ -2058,6 +2070,8 @@ class WebSocketStreamProcessor {
                     # the frame state closed the connection with this code, for example 1009 for a message that is
                     # too big; the application reads it in connectionClosed() (issue #5861)
                     wsc.setCloseInfo(frame.code ?? WSCC_ProtocolError, frame.reason);
+                    # the frame state sent its close frame: no data frame follows it (issue #6077)
+                    wsc.noteStreamCloseSent();
                     markClosedOnce();
                     return;
                 }
@@ -2228,7 +2242,7 @@ class WebSocketStreamProcessor {
         *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
         if (ctx) {
             try {
-                ctx.sendData(ws_encode_message("", WSOP_Close));
+                ctx.sendWebSocketClose(ws_encode_message("", WSOP_Close));
             } catch () {}
         }
     }
