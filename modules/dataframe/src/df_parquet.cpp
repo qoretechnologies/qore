@@ -1570,7 +1570,8 @@ static std::shared_ptr<arrow::DataType> columnarDescriptorToArrowType(
 
 //! returns the quotient of a division by a positive divisor rounded down (toward negative infinity)
 /** A negative dividend a is divided as ~a (-a - 1, which is not negative), and the quotient is complemented back:
-    floor(a / b) = ~(~a / b); one unsigned division by a constant, with no remainder or branch.
+    floor(a / b) = ~(~a / b); one unsigned division (by a constant where it is inlined with a constant divisor, as
+    at every call here), with no remainder or branch.
 */
 static inline int64_t floorDiv(int64_t a, int64_t b) {
     uint64_t sign = static_cast<uint64_t>(a >> 63);
