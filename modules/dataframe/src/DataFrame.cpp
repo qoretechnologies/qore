@@ -1732,16 +1732,51 @@ QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
                 src_col.data->dense_buffer->hasNullableElements(), static_cast<size_t>(count),
                 src_col.data->dense_buffer->getDecimalPrecision(), src_col.data->dense_buffer->getDecimalScale()),
                 xsink);
-            for (int64_t i = 0; i < count; ++i) {
-                if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
-                    delete df;
-                    return nullptr;
+            const QoreBufferNode* src_buffer = src_col.data->dense_buffer;
+            QoreBufferElementType element_type = src_col.data->dense_buffer_type;
+            // a fixed-width element is copied as it is stored, not as a Qore value, which a buffer cannot always
+            // store again: a buffer<float32> does not accept a NaN or infinite value; a bool buffer is bit-packed,
+            // and a string buffer does not store its elements in place
+            size_t width = element_type == QoreBufferElementType::Bool || element_type == QoreBufferElementType::String
+                ? 0 : qore_buffer_element_storage_size(element_type);
+            const uint8_t* src_data = width ? static_cast<const uint8_t*>(src_buffer->getRawData()) : nullptr;
+            uint8_t* dst_data = src_data && count ? static_cast<uint8_t*>(buffer->getRawData()) : nullptr;
+            if (dst_data) {
+                for (int64_t i = 0; i < count; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    memcpy(dst_data + static_cast<size_t>(i) * width,
+                        src_data + static_cast<size_t>(indices[i]) * width, width);
                 }
-                ValueHolder value(src_col.data->dense_buffer->getReferencedEntry(static_cast<size_t>(indices[i]),
-                    xsink), xsink);
-                if (buffer->setEntry(static_cast<size_t>(i), *value, xsink)) {
-                    delete df;
-                    return nullptr;
+                // the null elements are set after the values are copied
+                const uint8_t* src_validity = src_buffer->getRawValidityData();
+                size_t validity_offset = src_buffer->getRawValidityBitOffset();
+                for (int64_t i = 0; src_validity && i < count; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    size_t bit = validity_offset + static_cast<size_t>(indices[i]);
+                    if (!(src_validity[bit / 8] & (uint8_t(1) << (bit % 8)))
+                            && buffer->setEntry(static_cast<size_t>(i), QoreValue(), xsink)) {
+                        delete df;
+                        return nullptr;
+                    }
+                }
+            } else {
+                for (int64_t i = 0; i < count; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "selecting dense DataFrame rows")) {
+                        delete df;
+                        return nullptr;
+                    }
+                    ValueHolder value(src_buffer->getReferencedEntry(static_cast<size_t>(indices[i]), xsink),
+                        xsink);
+                    if (buffer->setEntry(static_cast<size_t>(i), *value, xsink)) {
+                        delete df;
+                        return nullptr;
+                    }
                 }
             }
 
