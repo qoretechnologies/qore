@@ -2090,7 +2090,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             waitForAllThreadsToTerminateIntern();
             // a foreign thread that runs in the Program at the end of the process is not waited for, and the data
             // that it uses is not destroyed (see leaveForeignThreads())
-            leave = qore_shutdown.load(std::memory_order_acquire)
+            leave = qore_shutdown.load(std::memory_order_acquire) && !ptid
                 && (getOtherForeignThreadCountIntern() > 0 || leaveForeignThreadsInModuleCode());
             if (leave) {
                 // the Program is kept allocated for the thread

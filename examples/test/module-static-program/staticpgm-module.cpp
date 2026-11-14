@@ -231,16 +231,33 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
 //! does (a daemon thread of the Python module, for example); the thread never ends if c blocks
 static QoreValue f_staticpgm_foreign_call(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
     // the thread owns a reference to the call reference
-    QoreValue* code = new QoreValue(args->retrieveEntry(0).refSelf());
-    std::thread([code]() {
-        ExceptionSink thread_xsink;
-        if (q_register_foreign_thread() != QFT_ERROR) {
-            code->get<ResolvedCallReferenceNode>()->invoke(nullptr, &thread_xsink).discard(&thread_xsink);
-        }
-        code->discard(&thread_xsink);
-        delete code;
-        thread_xsink.handleExceptions();
-    }).detach();
+    std::unique_ptr<QoreValue> code_holder(new QoreValue());
+    try {
+        *code_holder = args->retrieveEntry(0).refSelf();
+    } catch (...) {
+        xsink->raiseException("STATICPGM-ERROR", "cannot keep the call reference");
+        return QoreValue();
+    }
+    QoreValue* code = code_holder.get();
+    std::thread t;
+    try {
+        t = std::thread([code]() {
+            ExceptionSink thread_xsink;
+            if (q_register_foreign_thread() != QFT_ERROR) {
+                code->get<ResolvedCallReferenceNode>()->invoke(nullptr, &thread_xsink).discard(&thread_xsink);
+            }
+            code->discard(&thread_xsink);
+            delete code;
+            thread_xsink.handleExceptions();
+        });
+    } catch (const std::exception& e) {
+        code_holder->discard(xsink);
+        xsink->raiseException("STATICPGM-ERROR", "cannot start the thread: %s", e.what());
+        return QoreValue();
+    }
+    // the thread owns the reference now
+    code_holder.release();
+    t.detach();
     return QoreValue();
 }
 #endif

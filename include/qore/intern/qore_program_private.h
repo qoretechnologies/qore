@@ -2006,10 +2006,12 @@ public:
         if (!canEnterIntern(tid)) {
             return false;
         }
-        ++tidmap[tid];
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
         if (tid == q_gettid() && q_thread_is_foreign()) {
             foreign_tids.insert(tid);
         }
+        ++tidmap[tid];
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2146,10 +2148,12 @@ public:
                 "inherited");
             return -1;
         }
-        ++tidmap[tid];
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
         if (tid == q_gettid() && q_thread_is_foreign()) {
             foreign_tids.insert(tid);
         }
+        ++tidmap[tid];
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2181,10 +2185,12 @@ public:
                 "be accessed at runtime");
         }
 
-        ++tidmap[tid];
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
         if (tid == q_gettid() && q_thread_is_foreign()) {
             foreign_tids.insert(tid);
         }
+        ++tidmap[tid];
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
         }
@@ -2209,10 +2215,12 @@ public:
                 "cannot be accessed at runtime");
         }
 
-        ++tidmap[tid];
+        // recorded first: an exception from the allocation leaves the counts as they were (a stale tid is ignored, as
+        // only the TIDs in tidmap are counted)
         if (tid == q_gettid() && q_thread_is_foreign()) {
             foreign_tids.insert(tid);
         }
+        ++tidmap[tid];
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
         }
