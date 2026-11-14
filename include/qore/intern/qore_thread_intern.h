@@ -3010,14 +3010,48 @@ DLLLOCAL extern QorePThreadAttr ta_default;
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 #endif
 
+//! The TLS model of q_thread_stack_limit_tls
+/** initial-exec where glibc keeps static TLS in reserve for the libraries that are loaded with dlopen() (as libqore is
+    by an embedding runtime), so that the read is a single instruction; the default model elsewhere: musl does not
+    support initial-exec TLS in a library loaded with dlopen()
+*/
+#if defined(__GLIBC__) && defined(__ELF__)
+#define QORE_TLS_STACK_LIMIT_MODEL __attribute__((tls_model("initial-exec")))
+#else
+#define QORE_TLS_STACK_LIMIT_MODEL
+#endif
+
+//! The stack limit of the current thread (ThreadData::stack_limit), or 0 if it has none or no thread data
+/** Set with the limit (ThreadData::setStackLimit()), so that q_thread_stack_reserve_exceeded() is a comparison inline;
+    atomic only because the primary thread's limit can be set by another thread (enforcePrimaryStackSize()), and
+    constant-initialized, so that its reads need no TLS initialization guard
+*/
+DLLLOCAL extern constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls QORE_TLS_STACK_LIMIT_MODEL;
+
 //! Returns true if less than the given number of bytes remain above the current thread's stack limit
 /** For native code that recurses without an exception sink to report check_stack()'s exception, such as IR
-    lowering: it stops before the next recursion step could exhaust the stack.  Always false for a thread with no
-    stack limit, and where the stack is not managed.
+    lowering and parse initialization: it stops before the next recursion step could exhaust the stack.  Always false
+    for a thread with no stack limit, and where the stack is not managed.
 
     @param reserve the stack, in bytes, that the caller needs before it reaches its next check
 */
-DLLLOCAL bool q_thread_stack_reserve_exceeded(size_t reserve);
+DLLLOCAL inline bool q_thread_stack_reserve_exceeded(size_t reserve) {
+#ifdef QORE_MANAGE_STACK
+    size_t limit = q_thread_stack_limit_tls.load(std::memory_order_relaxed);
+    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
+    if (!limit) {
+        return false;
+    }
+    size_t pos = get_stack_pos();
+#ifdef STACK_DIRECTION_DOWN
+    return pos < limit + reserve;
+#else
+    return pos + reserve > limit;
+#endif
+#else
+    return false;
+#endif
+}
 
 //! Accounts for the stack that the recursion replaced by a deferred deletion would have used
 /** A deletion nested too deeply is deferred to a loop that makes it from a shallower frame (see
