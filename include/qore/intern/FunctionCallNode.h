@@ -663,7 +663,8 @@ DLLLOCAL inline const FunctionCallNode* qore_get_function_call_node(const Abstra
         return nullptr;
     }
     qore_type_t t = n->getType();
-    const FunctionCallNode* rv = (t == NT_FUNCTION_CALL || t == NT_PROGRAM_FUNC_CALL)
+    // a plain function call is the common case: it is tested first
+    const FunctionCallNode* rv = (__builtin_expect(t == NT_FUNCTION_CALL, 1) || t == NT_PROGRAM_FUNC_CALL)
         ? static_cast<const FunctionCallNode*>(n)
         : nullptr;
     assert(rv == dynamic_cast<const FunctionCallNode*>(n));
