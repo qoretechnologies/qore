@@ -77,14 +77,14 @@ k7[1]: [\"x\", \"~k7-bodyin\", \"~k7-m\", \"~k7-h\", \"caught\", \"~k7-l\", \"rv
             - k3, k4: a handler's return replaces the value only after the handler's own handlers have run
             - k5, k6: the return of a handler of a handler does not release the function's interrupted return (IR)
             - k7: a try statement of the function that catches the exception releases the replaced value only at the
-              catch (IR)
+              catch (IR), or after the try block's locals (native code, since #5992's b459b78be9)
         */
         const KnownDiffs = {
             "ir": ("k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k5[1]", "k6[0]", "k6[1]", "k7[0]", "k7[1]"),
-            "jit": ("k1[1]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k6[0]", "k7[0]"),
-            "tiered": ("k1[1]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k6[0]", "k7[0]"),
-            "qcc -O0": ("k1[0]", "k1[1]", "k2[0]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]"),
-            "qcc -O3": ("k1[0]", "k1[1]", "k2[0]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]"),
+            "jit": ("k1[1]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k6[0]", "k7[0]", "k7[1]"),
+            "tiered": ("k1[1]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k5[0]", "k6[0]", "k7[0]", "k7[1]"),
+            "qcc -O0": ("k1[0]", "k1[1]", "k2[0]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k7[0]", "k7[1]"),
+            "qcc -O3": ("k1[0]", "k1[1]", "k2[0]", "k2[1]", "k3[0]", "k3[1]", "k4[0]", "k4[1]", "k7[0]", "k7[1]"),
         };
 
         #! the optimization levels of the AOT compiles
