@@ -30,6 +30,13 @@
     generations, that declarations naming each other are freed with their Program, that a declaration named only by a
     surviving value is freed with the value, and that declarations naming each other whose values survive their
     Program are freed with the values.
+
+    deleted-program-types/module-cycles.qr and module-cycles-httpserver.qr (debug builds) load the DataProvider and the
+    HttpServer modules, whose classes name each other, and check that the library cleanup leaves no declaration of a
+    Program behind (valgrind reported the parse tree of their Programs as definitely lost);
+    deleted-program-types/survivors.qr (debug builds) checks that the finder that the cleanup uses (the debug function
+    dbg_cyclic_type_declarations()) does not find declarations that objects and hashes still reference, and that the
+    cleanup leaves no declaration behind.
 */
 class DeletedProgramTypesTest inherits QUnit::Test {
     public {
@@ -97,6 +104,16 @@ class DeletedProgramTypesTest inherits QUnit::Test {
         foreach string mode in (ExecModes) {
             addTestCase("the declarations of module Programs are freed in order at the end: " + mode,
                 sub () { testModuleTeardown(mode); });
+        }
+        foreach string mode in (ExecModes) {
+            foreach string script in (("module-cycles.qr", "module-cycles-httpserver.qr")) {
+                addTestCase("declarations that keep each other after their Program is deleted are freed at the end: "
+                    + script + ": " + mode, sub () { testModuleCycles(mode, script); });
+            }
+        }
+        foreach string mode in (ExecModes) {
+            addTestCase("declarations that are still referenced are not garbage at the end: " + mode,
+                sub () { testSurvivors(mode); });
         }
         foreach string mode in (ExecModes) {
             addTestCase("a module that loads a native module at run time is deleted first: " + mode,
@@ -187,6 +204,47 @@ class DeletedProgramTypesTest inherits QUnit::Test {
         assertEq(0, status, out);
         # warnings of the load path (ex: a stale AOT module) can precede the output
         assertRegex("(^|\n)ok\n$", out);
+    }
+
+    #! The declarations of a module's Program that keep each other are freed at the end of the process (qore#5790)
+    /** A declaration that survives the deletion of its Program (the imported copies and the objects of the Program
+        reference it) keeps a reference to each declaration that it names, so classes that name each other (the
+        DataProvider module's DataProviderPipeline and PipelineQueue, and the HttpServer module's classes) kept each
+        other alive after the last value that referenced them was released: nothing freed them, and the memory of the module's Program (its parse tree and
+        the AOT data of a compiled module) was reported as definitely lost by valgrind.  The library cleanup frees them
+        now; a debug libqore counts the declarations of Programs that are left after qore_cleanup() when
+        QORE_TEARDOWN_REPORT is set, and the count must be 0.
+    */
+    testModuleCycles(string mode, string script) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the count of the declarations left after qore_cleanup() is only built with DEBUG");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_TEARDOWN_REPORT=1 QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s/deleted-program-types/%s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, mode, get_script_dir(), script), \status);
+        assertEq(0, status, out);
+        assertRegex("(^|\n)ok\n", out);
+        assertRegex("\\[TEARDOWN\\] declarations of Programs left after qore_cleanup\\(\\): 0\n", out);
+    }
+
+    #! Declarations that survive their Programs and are still referenced are not freed by the cleanup (qore#5790)
+    /** The library cleanup frees the survivors that only each other keep; the finder that it uses (debug builds:
+        dbg_cyclic_type_declarations()) must not find a declaration that an object or a hash still references, or that a
+        referenced one holds as a base class, a hashdecl parent or an imported source, or names.
+    */
+    testSurvivors(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the count of the declarations left after qore_cleanup() is only built with DEBUG");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_TEARDOWN_REPORT=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+            "--exec-mode=%s %s/deleted-program-types/survivors.qr 2>&1", libqore_dir, libqore_dir, qore_bin, mode,
+            get_script_dir()), \status);
+        assertEq(0, status, out);
+        assertEq(6, (map $1, out.split("\n"), $1 =~ /cyclic=0$/).size(), out);
+        assertNRegex("cyclic=[1-9]", out);
+        assertRegex("\\[TEARDOWN\\] declarations of Programs left after qore_cleanup\\(\\): 0\n", out);
     }
 
     #! A module that loads a native module at run time is deleted before it (qore#5790)

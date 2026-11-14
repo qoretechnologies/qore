@@ -551,6 +551,15 @@ void qore_cleanup() {
     // Qore values released from here on are released after their types (see qore_ns_private::~qore_ns_private())
     qore_types_deleted.store(true, std::memory_order_release);
 
+    // the declarations of the Programs that were deleted have been freed (see delete_qore_types()), unless a value or
+    // a Program held at static scope still references them; debug builds count the others, which were leaked
+#ifdef DEBUG
+    if (q_env_is_set("QORE_TEARDOWN_REPORT")) {
+        fprintf(stderr, "[TEARDOWN] declarations of Programs left after qore_cleanup(): %zu\n",
+            qore_count_live_user_type_owners());
+    }
+#endif
+
     // delete threading infrastructure
     delete_qore_threads();
 
