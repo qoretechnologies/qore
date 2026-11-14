@@ -36,9 +36,9 @@ class BackgroundDeletedSelfCallTest inherits QUnit::Test {
     }
 
     astReference() {
-        assertEq("side first\npre started\nside op\nop started\nside alive\nside alive-arg\nB::m(1)\nalive started\n"
-            "side static\nB::sm(2)\nstatic started\nside qual\nqualified started\nside copy\ncopy started\n"
-            "side sroot\nstatic root started\n", getAst());
+        assertEq("side first\npre done\nside op\nop done\nside alive\nside alive-arg\nB::m(1)\nalive done\n"
+            "side static\nB::sm(2)\nstatic done\nside qual\nqualified done\nside copy\ncopy done\nside sroot\n"
+            "static root done\nroot done\n", getAst());
     }
 
     sourceModes() {
