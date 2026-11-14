@@ -68,8 +68,6 @@ class GenericStaticCallListTest inherits QUnit::Test {
             },
         };
 
-        #! the execution modes that the worker is run in
-        const ExecModes = ("ast", "ir", "jit", "tiered");
     }
 
     private {
@@ -89,6 +87,7 @@ class GenericStaticCallListTest inherits QUnit::Test {
         }
 
         addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
         addTestCase("compiled program", \testCompiledProgram());
         addTestCase("malformed calls are refused", \testRefused());
         addTestCase("the locations of the tokens after a call", \testLocations());
@@ -97,11 +96,17 @@ class GenericStaticCallListTest inherits QUnit::Test {
     }
 
     testExecModes() {
-        foreach string mode in (ExecModes) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
             string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
                 libqore_dir, qore_bin, mode, getWorker()));
             checkWorkerOutput(mode, out);
         }
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", libqore_dir, qore_bin, getWorker())));
     }
 
     testCompiledProgram() {

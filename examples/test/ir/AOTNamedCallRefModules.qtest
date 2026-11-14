@@ -1,0 +1,244 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT module compilation and loading of deferred cross-module call references
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTNamedCallRefModulesTest
+
+#! Named calls through call references to another module's functions and static methods in AOT modules (M4 phase 3)
+/** A call reference in a module to a function or static method of another module (<tt>\\Provider::f()</tt>) is
+    compiled as a deferred call reference, which is resolved when it is evaluated in the loaded module.  A named call
+    through it binds its arguments by parameter name when it is made, as through any other call reference, so the
+    values are compared between the modules loaded from source and from their compiled \c .qmod files, in every
+    execution mode.
+*/
+class AOTNamedCallRefModulesTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! the module whose functions and static methods are referenced
+        const ProviderSource = "%modern
+
+module XnrProvider {
+    version = \"1.0\";
+    desc = \"M4 phase 3 deferred named call reference test: provider\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace XnrProvider {
+    public string sub f(int count, string label) {
+        return sprintf(\"f(int count, string label) count=%y label=%y\", count, label);
+    }
+
+    public string sub f(string label, float count) {
+        return sprintf(\"f(string label, float count) label=%y count=%y\", label, count);
+    }
+
+    public class K {
+        public static string s(int count, string label) {
+            return sprintf(\"K::s(int count, string label) count=%y label=%y\", count, label);
+        }
+
+        public static string s(string label, float count) {
+            return sprintf(\"K::s(string label, float count) label=%y count=%y\", label, count);
+        }
+    }
+}
+";
+
+        #! the module that makes the calls
+        const ConsumerSource = "%modern
+%requires XnrProvider
+
+module XnrConsumer {
+    version = \"1.0\";
+    desc = \"M4 phase 3 deferred named call reference test: consumer\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace XnrConsumer {
+    public string sub viaFunctionRef(auto v) {
+        code r = \\XnrProvider::f();
+        return r(label: \"x\", count: v);
+    }
+
+    public string sub viaStaticRef(auto v) {
+        code r = \\XnrProvider::K::s();
+        return r(count: v, label: \"y\");
+    }
+
+    public string sub unknownName(auto v) {
+        code r = \\XnrProvider::f();
+        try {
+            return r(label: \"x\", cnt: v);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+";
+
+        #! the script that calls the consumer
+        const Script = "%modern
+%requires XnrConsumer
+foreach auto v in ((1, 2.5)) {
+    printf(\"%s\\n%s\\n\", XnrConsumer::viaFunctionRef(v), XnrConsumer::viaStaticRef(v));
+}
+printf(\"%s\\n\", XnrConsumer::unknownName(1));
+";
+
+        #! the provider, consumer and entry point of an executable built from per-file objects: the consumer is compiled
+        #! with a source symbol manifest that names the provider's file for its function and class, so its call
+        #! references to them are compiled as deferred references (DeferredFunctionCallReferenceNode,
+        #! DeferredStaticMethodCallReferenceNode), resolved when they are evaluated
+        const ProviderCode = "string sub f(int count, string label) {
+    return sprintf(\"f(int count, string label) count=%y label=%y\", count, label);
+}
+string sub f(string label, float count) {
+    return sprintf(\"f(string label, float count) label=%y count=%y\", label, count);
+}
+class K {
+    static string s(int count, string label) {
+        return sprintf(\"K::s(int count, string label) count=%y label=%y\", count, label);
+    }
+    static string s(string label, float count) {
+        return sprintf(\"K::s(string label, float count) label=%y count=%y\", label, count);
+    }
+}
+";
+
+        const ConsumerCode = "string sub viaFunctionRef(auto v) {
+    code r = \\f();
+    return r(label: \"x\", count: v);
+}
+string sub viaStaticRef(auto v) {
+    code r = \\K::s();
+    return r(count: v, label: \"y\");
+}
+string sub unknownName(auto v) {
+    code r = \\f();
+    try {
+        return r(label: \"x\", cnt: v);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        const MainCode = "int sub main() {
+    foreach auto v in ((1, 2.5)) {
+        printf(\"%s\\n%s\\n\", viaFunctionRef(v), viaStaticRef(v));
+    }
+    printf(\"%s\\n\", unknownName(1));
+    return 0;
+}
+";
+
+        const Expected = "f(int count, string label) count=1 label=\"x\"
+K::s(int count, string label) count=1 label=\"y\"
+f(string label, float count) label=\"x\" count=2.5
+K::s(string label, float count) label=\"y\" count=2.5
+RUNTIME-OVERLOAD-ERROR
+";
+    }
+
+    constructor() : QUnit::Test("AOTNamedCallRefModulesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("source and AOT modules give the same values in every mode", \testValues());
+        addTestCase("deferred call references of per-file objects", \testDeferred());
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! Compiles a module source to a .qmod and returns the compiler output
+    private string compileModule(string module_dir, string name) {
+        return backquote(sprintf("QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --compile-module --strip-source "
+            "--output %s/%s.qmod %s/%s.qm 2>&1", libqore_dir, module_dir, qore_bin, module_dir, name, module_dir,
+            name));
+    }
+
+    testValues() {
+        TmpDir src("qore-aot-xnr-src-");
+        write(src.path + "/XnrProvider.qm", ProviderSource);
+        write(src.path + "/XnrConsumer.qm", ConsumerSource);
+        TmpDir aot("qore-aot-xnr-qmod-");
+        write(aot.path + "/XnrProvider.qm", ProviderSource);
+        write(aot.path + "/XnrConsumer.qm", ConsumerSource);
+        string out = compileModule(aot.path, "XnrProvider");
+        assertTrue(is_file(aot.path + "/XnrProvider.qmod"), "compiled the provider: " + out);
+        out = compileModule(aot.path, "XnrConsumer");
+        assertTrue(is_file(aot.path + "/XnrConsumer.qmod"), "compiled the consumer: " + out);
+        # the compiled modules only: the sources would be loaded in their place if the qmods could not be
+        unlink(aot.path + "/XnrProvider.qm");
+        unlink(aot.path + "/XnrConsumer.qm");
+
+        TmpDir run_dir("qore-aot-xnr-run-");
+        string script = run_dir.path + "/run.qr";
+        write(script, Script);
+        foreach string mode in (Modes) {
+            foreach hash<auto> dir in (("source": src.path, "qmod": aot.path).pairIterator()) {
+                string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s "
+                    "%s 2>&1", libqore_dir, libqore_dir, dir.value, qore_bin, mode, script);
+                assertEq(Expected, backquote(cmd), sprintf("%s modules, mode %s", dir.key, mode));
+            }
+        }
+    }
+
+    testDeferred() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+            return;
+        }
+        TmpDir tmp("qore-aot-xnr-deferred-");
+        string provider = tmp.path + DirSep + "provider.qc";
+        string consumer = tmp.path + DirSep + "consumer.qc";
+        string main = tmp.path + DirSep + "main.q";
+        write(provider, ProviderCode);
+        write(consumer, ConsumerCode);
+        write(main, MainCode);
+        string manifest = tmp.path + DirSep + "symbols.manifest";
+        write(manifest, sprintf("format=1\nfunction\tf\t%s\nclass\tK\t%s\n", provider, provider));
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        foreach string opt in (("-O0", "-O3")) {
+            string lib = tmp.path + DirSep + "lib" + opt;
+            mkdir(lib);
+            string out = backquote(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/provider.qo %s 2>&1", env,
+                qcc_bin, lib, lib, provider));
+            assertTrue(is_file(lib + "/provider.qo"), "compiled the provider: " + out);
+            out = backquote(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --source-symbol-manifest=%s -o "
+                "%s/consumer.qo %s 2>&1", env, qcc_bin, lib, manifest, lib, consumer));
+            assertTrue(is_file(lib + "/consumer.qo"), "compiled the consumer: " + out);
+            out = backquote(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/main.qo %s 2>&1", env, qcc_bin,
+                lib, lib, main));
+            assertTrue(is_file(lib + "/main.qo"), "compiled the entry point: " + out);
+            string exe = tmp.path + DirSep + "deferred" + opt;
+            out = backquote(sprintf("%s %s %s -o %s %s/*.qo 2>&1", env, qcc_bin, opt, exe, lib));
+            assertTrue(is_file(exe), "linked the executable " + opt + ": " + out);
+            assertEq(Expected, backquote(sprintf("%s %s 2>&1", env, exe)), "deferred references " + opt);
+        }
+    }
+}

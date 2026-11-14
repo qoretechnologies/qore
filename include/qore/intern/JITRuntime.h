@@ -509,6 +509,12 @@ void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tra
 //! Returns 1 if the value is a reference, 0 otherwise
 uint8_t qore_rt_value_is_reference(uint64_t value);
 
+//! Returns the argument of an `any` parameter with the complex type of a list or hash stripped (qore#6032)
+/** Takes the reference of \a value and returns a reference: a shared container is copied with a plain type, as
+    QoreTypeInfo::acceptInputParam() does for an `any` parameter; any other value is returned as it is
+*/
+uint64_t qore_rt_strip_any_param(uint64_t value);
+
 //! As qore_rt_load_local(), except that a reference held by the variable is returned itself
 uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);
 
@@ -820,6 +826,13 @@ int64_t qore_rt_get_on_block_exit_count();
 //! Execute on_block_exit handlers registered since saved_count, in LIFO order.
 //! Removes executed handlers from the stack.
 void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
+
+//! Runs the handlers as qore_rt_exec_on_block_exit() does, keeping the value that a handler run while an exception
+//! is pending returns in \a hold, which replaces the value of the return that the exception interrupted (#5992)
+/** @return 1 if a handler's value was kept in \a hold, after which the parent releases the values of the
+    interrupted return
+*/
+int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold);
 
 //! Discard (without firing) on_block_exit handlers registered since saved_count,
 //! truncating the thread-local handler stack back to that mark.  Used by the JIT

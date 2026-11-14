@@ -19,7 +19,11 @@ The feature is "named arguments", **not** "call by name": names are bound to
 positional parameter slots at parse time, and the call still executes through
 Qore's single positional `QoreListNode*` calling convention. No new runtime
 call ABI, no new IR opcode, and no AOT wire-format change were introduced
-(the v1 scope; see [Deferred work (v2)](#deferred-work-v2)).
+(the v1 scope; see [Deferred work (v2)](#deferred-work-v2)). M4 later added
+the binding by name at run time of calls whose variant is only known then,
+with names carried to the call (see
+[Closures And Call References](#closures-and-call-references) for the AOT
+expression kinds it added).
 
 Core landing commits (anchors below are starting points and will drift):
 
@@ -396,14 +400,36 @@ queries rely on this schema.
 
 ## Closures And Call References
 
-Call references and closures execute through
-`execValue(const QoreListNode* args)`, so the ABI stays positional. Named
-calls are accepted only when the concrete function object and the selected
-variant are known at parse time (e.g. an inline-invoked closure literal,
-`(sub (int x) { return x; })(x: 5)`). Otherwise `lib/CallReferenceNode.cpp`
-(~162) rejects the call with `NAMED-CALL-NOT-SUPPORTED`. Generic `code`
-values and external call references without parse-time parameter names are
-rejected; lifting this is part of v2.
+The code that a call through a call reference or closure runs is only known
+when the call is made, so a named call through one binds its arguments by name
+then (M4 phase 3). The public `ResolvedCallReferenceNode::execValue()` ABI
+stays positional:
+
+- `CallReferenceCallNode` keeps the interned names of its arguments
+  (`runtime_arg_names`, `qore_intern_call_arg_names()`) instead of raising
+  `NAMED-CALL-NOT-SUPPORTED` at parse time, and calls
+  `qore_call_ref_invoke_named()` with the value of its expression.
+- `qore_call_ref_invoke_named()` dispatches to the internal
+  `ResolvedCallReferenceNodeIntern::dispatchNamed()` virtual (function,
+  method, static method, local and deferred references: the named entry of
+  the referenced function or method with the Program and class context of
+  the positional `dispatchValue()`), to `QoreClosureBase::dispatchNamed()`
+  (the closure's single variant: the evaluated arguments are bound with
+  `runtimeFindVariantNamed()`, so errors match named function calls, and the
+  closure is called positionally) and to the sandbox-bound wrapper. A call
+  reference implemented outside of the library raises
+  `NAMED-CALL-NOT-SUPPORTED` at run time. No virtual is added to a public
+  class.
+- IR lowers a named call reference call to `Call` with the callee as the
+  first operand; the IR interpreter, the JIT runtime
+  (`qore_rt_call_with_args_impl()`) and AOT call
+  `CallReferenceCallNode::evalRuntimeNamedWithArgs()`. Background copies keep
+  the names (`call_ref_call_copy()`, IR and JIT background helpers).
+- AOT writes the names with the new expression kinds `CALLREF_CALL_NAMED`
+  (128: the `CALLREF_CALL` layout followed by a name string ref per
+  argument, in the inline, slot and instruction-registry writers) and
+  `EN_CALLREF_CALL_NAMED` (27, expression-tree nodes); the run-time call
+  target is marked `runtime_arg_names`.
 
 ## Varargs And `argv`
 
@@ -436,15 +462,9 @@ their parameter names to be public must rename defensively before release.
 
 Not implemented; intentionally out of v1 scope:
 
-- **Runtime-resolved variants.** Named calls where the variant cannot be
-  fixed at parse time (some virtual/abstract/dynamic dispatch shapes,
-  multi-variant callrefs) require names to survive into the call opcode: a
-  `Call`-family opcode variant carrying a parallel names array, runtime
-  variant lookup taking positional types plus names, and AOT serialization
-  extended along the established pattern (new `QORE_AOT_FEAT_*` bit, new
-  per-call name section, and matching writer/reader hooks in the slot-map
-  **and** handler-IR serializers — the recurring footgun precedent is the
-  LVPath slice work, commit `d31e62cf1`).
+- **Runtime-resolved variants** are implemented (M4: functions, methods and
+  static methods in phases 1 and 2, call references and closures in phase 3;
+  see [Closures And Call References](#closures-and-call-references)).
 - **Named calls through typed callable values.** `code<T(int x, *string s)>`
   currently models parameter types but not names; carrying names in the
   callable type would enable named calls through typed `code` values without

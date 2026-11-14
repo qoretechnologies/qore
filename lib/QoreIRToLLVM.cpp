@@ -279,7 +279,7 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
             && intrinsic != QoreIRIntrinsic::StringLength)) {
         return false;
     }
-    const auto* call = dynamic_cast<const FunctionCallNode*>(
+    const auto* call = qore_get_function_call_node(
         expr.getInternalNode());
     // only a call of the Qore builtin, never a user or module function with the same name
     if (!call || call->hasExplicitTypeArgs() || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
@@ -293,7 +293,7 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
 static const FunctionCallNode* qore_ir_get_synthetic_global_pseudo_call(const QoreValue& expr,
         bool pseudo, const char* fallback_method_name) {
     return pseudo && fallback_method_name && expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
 }
 
 static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntrinsic intrinsic,
@@ -644,7 +644,7 @@ static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_function_call_node(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
@@ -702,7 +702,7 @@ qore_ir_get_call_type_instantiation(const QoreValue& expr) {
     if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         node = dot->getMethodCall();
     }
-    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+    if (const auto* call = qore_get_function_call_node(node)) {
         return call->getTypeParamInstantiation();
     }
     if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
@@ -980,7 +980,7 @@ static bool qore_ir_fast_entry_args_allow_optional_scalar_guard(
         return false;
     }
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     const QoreFunction* function = call ? call->getFunction() : nullptr;
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
@@ -1207,13 +1207,13 @@ static bool qore_llvm_is_aot_deferred_source_function_call(const QoreValue& expr
     if (!expr.hasNode()) {
         return false;
     }
-    const auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
+    const auto* call = qore_get_function_call_node(expr.getInternalNode());
     return call && call->getAOTDeferredSourceFunction();
 }
 
 static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     // only the Qore builtins, never a user or module function with the same name
     if (!call || !qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         return false;
@@ -1228,7 +1228,7 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(
         const QoreValue& expr, const QoreIRFunction* ir_func,
         QoreIRValue argument, bool aot_mode) {
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     if (!call || call->hasExplicitTypeArgs()) {
         return nullptr;
     }
@@ -3119,7 +3119,11 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                         alloca_builder.CreateStore(alloca_builder.CreateCall(is_ref_fn, {arg_val}), ref_flag);
                     }
                 };
-                if (fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
+                // an `any` parameter strips the complex type of a list or hash argument, as the call path does
+                // (UserVariantBase::setupCall(), instantiateFastCallParams()), which can make a new value that the
+                // parameter owns: it is not borrowed (qore#6032)
+                const bool strip_any = var->getTypeInfo() == anyTypeInfo;
+                if (!strip_any && fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
                     alloca_builder.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
                     local_allocas[key] = LocalCacheSlot(alloca);
@@ -3152,6 +3156,11 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                     alloca_builder.CreateStore(native_val, alloca);
                     preinstantiated_entry_loads.push_back(arg_val);
                 } else {
+                    if (strip_any) {
+                        auto strip_fn = module.getOrInsertFunction("qore_rt_strip_any_param",
+                                llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        arg_val = alloca_builder.CreateCall(strip_fn, {arg_val});
+                    }
                     alloca_builder.CreateStore(arg_val, alloca);
                     set_fast_entry_reference_flag();
                     // NaN-boxed: track alloca for load+decref at exit.  Combined with
@@ -3290,6 +3299,122 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
     }
 }
 
+//! Returns true if a handler of \a func, run out of line, can return a value (see handler_return_hold, #5992)
+static bool qore_ir_handlers_return_value(const QoreIRFunction& func) {
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode != QoreIROpcode::OnBlockExit) {
+                continue;
+            }
+            const auto* obe = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+            if (!obe->handler_ir) {
+                continue;
+            }
+            for (const auto& hblock : obe->handler_ir->blocks) {
+                for (const auto& hinst : hblock->instructions) {
+                    if (hinst->opcode == QoreIROpcode::Return
+                            && static_cast<const QoreIRReturnInstruction*>(hinst.get())->has_value) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+//! Returns true if an exception at an instruction whose exception target is \a target can reach a catch block of the
+//! function (a LandingPad or a CatchException on its exception path), conservatively (#5992)
+static bool qore_ir_exception_reaches_catch(const QoreIRBasicBlock* target) {
+    std::vector<const QoreIRBasicBlock*> work;
+    std::unordered_set<const QoreIRBasicBlock*> seen;
+    if (target) {
+        work.push_back(target);
+    }
+    while (!work.empty()) {
+        const QoreIRBasicBlock* block = work.back();
+        work.pop_back();
+        if (!block || !seen.insert(block).second) {
+            continue;
+        }
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::LandingPad || inst->opcode == QoreIROpcode::CatchException) {
+                return true;
+            }
+            if (inst->exception_target) {
+                work.push_back(inst->exception_target);
+            }
+            if (isTerminator(inst->opcode)) {
+                qore_ir_visit_successors(*inst, [&work](QoreIRBasicBlock* succ) {
+                    work.push_back(succ);
+                });
+            }
+        }
+    }
+    return false;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::CallInst* QoreIRToLLVM::emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count,
+        bool release_returns) {
+    if (!handler_return_hold) {
+        auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        return builder->CreateCall(helper, {saved_count, xsink_arg});
+    }
+    auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit_hold",
+            llvm::FunctionType::get(builder->getInt8Ty(), {i64_type, ptr_type, ptr_type}, false));
+    llvm::CallInst* call = builder->CreateCall(helper, {saved_count, xsink_arg, handler_return_hold});
+    // a handler's value replaces the function's interrupted return only where no try statement of the function
+    // catches the exception: in a try statement, it is the value of the try block's return, which the catch releases
+    // (catch_interrupted_returns), and the function's return is still pending, as the AST interpreter's try statement
+    // runs its block with a return value of its own
+    if (release_returns) {
+        handler_return_hold_sites.push_back(call);
+    }
+    return call;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::finalizeHandlerReturnHoldSites(llvm::Module& module) {
+    if (handler_return_hold_sites.empty()) {
+        return;
+    }
+    std::vector<llvm::Value*> allocas;
+    for (uint32_t id : return_value_ids) {
+        auto i = invoke_alloca_map.find(id);
+        // an SSA-direct value has no alloca (nullptr)
+        if (i != invoke_alloca_map.end() && i->second
+                && std::find(allocas.begin(), allocas.end(), i->second) == allocas.end()) {
+            allocas.push_back(i->second);
+        }
+    }
+    std::vector<llvm::CallInst*> sites;
+    sites.swap(handler_return_hold_sites);
+    if (allocas.empty()) {
+        return;
+    }
+    llvm::IRBuilderBase::InsertPointGuard insert_point_guard(*builder);
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    llvm::Value* nothing = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+    for (llvm::CallInst* call : sites) {
+        llvm::Instruction* next = call->getNextNode();
+        assert(next);
+        if (!next) {
+            continue;
+        }
+        builder->SetInsertPoint(next);
+        // the values of the interrupted return that the handler's value replaced are released (#5992)
+        llvm::Value* replaced = builder->CreateICmpNE(call, llvm::ConstantInt::get(builder->getInt8Ty(), 0));
+        for (llvm::Value* a : allocas) {
+            llvm::Value* val = builder->CreateLoad(i64_type, a);
+            builder->CreateStore(builder->CreateSelect(replaced, nothing, val), a);
+            builder->CreateCall(helper, {builder->CreateSelect(replaced, val, nothing), xsink_arg});
+        }
+    }
+}
+
 // documented in QoreIRToLLVM.h
 void QoreIRToLLVM::finalizeCatchReturnReleases(llvm::Module& module) {
     if (catch_return_release_blocks.empty()) {
@@ -3333,6 +3458,9 @@ bool QoreIRToLLVM::isReturnValueAlloca(llvm::Value* alloca_ptr) const {
     if (!alloca_ptr) {
         return false;
     }
+    if (alloca_ptr == handler_return_hold) {
+        return true;
+    }
     for (uint32_t id : return_value_ids) {
         auto i = invoke_alloca_map.find(id);
         if (i != invoke_alloca_map.end() && i->second == alloca_ptr) {
@@ -3346,6 +3474,12 @@ bool QoreIRToLLVM::isReturnValueAlloca(llvm::Value* alloca_ptr) const {
 void QoreIRToLLVM::emitHeldReturnValueRelease(llvm::Module& module) {
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    // the value of a handler's return that replaced an interrupted return (#5992)
+    if (handler_return_hold) {
+        llvm::Value* val = builder->CreateLoad(i64_type, handler_return_hold);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), handler_return_hold);
+        builder->CreateCall(helper, {val, xsink_arg});
+    }
     for (uint32_t id : return_value_ids) {
         auto i = invoke_alloca_map.find(id);
         // an SSA-direct value has no alloca (nullptr)
@@ -3731,11 +3865,15 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
     // the locals that an on_block_exit handler declares are released by the handler (#6002): they are no body locals
     // of its IR function, as their variables on the runtime stack are those that the function the handler belongs to
     // instantiated, so the handler releases their values, in the order of their slots, which the function reserved
-    // in declaration order (see QoreIRLowering::compileBlockHandlerIRs()); the function removes the variables
+    // in declaration order (see QoreIRLowering::compileBlockHandlerIRs()); the function removes the variables.  A
+    // closure-bound local of the handler is popped from the closure stack, as the IR interpreter and the AST
+    // interpreter give it up at the end of its block (#6012): the pop finds the variable in the current frame by its
+    // LocalVar (the name pointer of the variable, which no other variable shares), so it pops nothing if the handler
+    // raised before the declaration, and never a variable of the function with the same name
     if (current_ir_func->parent_slot_count && !current_ir_func->handler_own_locals.empty()) {
         std::vector<std::pair<uint32_t, const LocalVar*>> own;
         for (const LocalVar* var : current_ir_func->handler_own_locals) {
-            if (!var || var->closureUse()) {
+            if (!var) {
                 continue;
             }
             auto slot_it = current_ir_func->local_var_slots.find(var);
@@ -3753,6 +3891,7 @@ std::vector<QoreIRToLLVM::ExitReleaseEntry> QoreIRToLLVM::getExitReleaseSequence
                 }
                 entry.aot_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
             }
+            entry.pop_closure = var->closureUse();
             push_body(var, entry);
         }
     }
@@ -4012,12 +4151,13 @@ std::vector<const void*> QoreIRToLLVM::getLocalsInReverseDeclarationOrder(const 
 }
 
 std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& module) {
-    if (local_reload_trackers.empty() && local_reload_deferred.empty()) {
+    if (local_reload_trackers.empty() && local_reload_deferred.empty()
+            && preinstantiated_entry_cleanup_by_local.empty()) {
         return {};
     }
-    // A local's reload tracker holds a reference to the value of its native cache, and its deferred slot one to the
-    // value that the cache held before (see ensureLocalCacheFresh()); either can be the last reference to its value,
-    // so the locals are released in reverse declaration order, a local's deferred value, the older one, first.  The
+    // A local's entry cleanup can own its initial value, its reload tracker the value of its native cache, and its
+    // deferred slot the value that the cache held before (see ensureLocalCacheFresh()). Any can be the last owner,
+    // so locals are released in reverse declaration order, each local's entry value then deferred value first. The
     // allocas are left NOTHING, which the next reload and the exit cleanup of the function release as nothing.
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -4027,6 +4167,15 @@ std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& m
         builder->CreateCall(helper, {val, xsink_arg});
     };
     llvm::MapVector<const void*, bool> keys;
+    size_t count = 0;
+    for (const auto& entry : preinstantiated_entry_cleanup_by_local) {
+        if (!(++count % 100)) {
+            (void)qore_check_cancel(nullptr, "LLVM handler entry cleanup collection");
+        }
+        if (releasesReloadStorageForHandlers(entry.first)) {
+            keys.insert({entry.first, true});
+        }
+    }
     for (const auto& entry : local_reload_deferred) {
         if (releasesReloadStorageForHandlers(entry.first)) {
             keys.insert({entry.first, true});
@@ -4038,10 +4187,16 @@ std::vector<const void*> QoreIRToLLVM::releaseLocalReloadStorage(llvm::Module& m
         }
     }
     std::vector<const void*> released = getLocalsInReverseDeclarationOrder(keys);
-    size_t count = 0;
+    count = 0;
     for (const void* key : released) {
         if (!(++count % 100)) {
             (void)qore_check_cancel(nullptr, "LLVM handler local reload storage release");
+        }
+        // A handler's inherited local (and a parameter) can also own its entry-time load. It is independent of
+        // the reload tracker and must be released before a nested handler replaces the runtime local (#6005).
+        auto entry_it = preinstantiated_entry_cleanup_by_local.find(key);
+        if (entry_it != preinstantiated_entry_cleanup_by_local.end()) {
+            release(entry_it->second);
         }
         auto deferred_it = local_reload_deferred.find(key);
         if (deferred_it != local_reload_deferred.end()) {
@@ -4082,8 +4237,8 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
     // frame has, and a handler that assigns or removes a local releases the value it replaces right away (qore#5942).
     // The storage released is the storage that the function has once it is lowered: code lowered after a site can
     // run before it, and a site creates no storage of its own, which every later flush of the function's statements
-    // would rotate.  A local without a reload tracker is left to the invalidation of the caches after the handlers,
-    // as before.  The locals released are reloaded eagerly after the handlers: code can read a local's native cache
+    // would rotate. A local without a reload tracker or entry owner is left to cache invalidation, as before.
+    // The locals released are reloaded eagerly after the handlers: code can read a local's native cache
     // without the stale check (fused local operations), and the reference that backed the cache was released.
     // the sites are taken from the member, which is left empty on any exit
     std::vector<HandlerSite> sites;
@@ -4108,18 +4263,20 @@ void QoreIRToLLVM::finalizeHandlerSites(llvm::Module& module, llvm::Function* ll
             builder->SetInsertPoint(site.call->getParent());
         }
         for (const void* key : released) {
-            // only a local whose cache was backed by its tracker is reloaded, into its cache and its tracker, which
-            // the release left NOTHING, so that nothing is rotated through its deferred slot; reloadLocalFromRuntime()
-            // would create the storage that a local lacks, after the exit cleanup of the function that releases it
-            // was emitted.  A local without a tracker is left to the invalidation of the caches after the handlers.
+            // Reload into the existing tracker, or the entry owner if it alone backed the cache. Both were cleared,
+            // so no old value rotates through the deferred slot. reloadLocalFromRuntime() would create missing
+            // storage after the exit cleanup that would need to release it was emitted; no new storage is created.
             auto tracker_it = local_reload_trackers.find(key);
+            auto entry_it = preinstantiated_entry_cleanup_by_local.find(key);
+            llvm::Value* owner = tracker_it != local_reload_trackers.end() ? tracker_it->second
+                : entry_it != preinstantiated_entry_cleanup_by_local.end() ? entry_it->second : nullptr;
             auto alloca_it = local_allocas.find(key);
-            if (tracker_it == local_reload_trackers.end() || alloca_it == local_allocas.end()) {
+            if (!owner || alloca_it == local_allocas.end()) {
                 continue;
             }
             llvm::Value* reloaded = emitLocalCacheLoad(key, *builder, module);
             builder->CreateStore(reloaded, alloca_it->second.storage());
-            builder->CreateStore(reloaded, tracker_it->second);
+            builder->CreateStore(reloaded, owner);
             markLocalCacheFresh(key, llvm_func);
         }
     }
@@ -4169,10 +4326,8 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
     // every local afterwards) runs only when a handler is pending (qore#5927)
     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, obe_saved_count);
     publishLocalsForHandlers(module);
-    auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     // every local is reloaded below
-    recordHandlerSite(builder->CreateCall(helper, {obe_saved_count, xsink_arg}), false);
+    recordHandlerSite(emitOnBlockExitHoldCall(module, obe_saved_count, true), false);
     // On-block-exit handlers execute user code and can mutate AST-visible/AOT
     // body locals through the runtime local stack.  Refresh eagerly here:
     // fused local ops can read allocas directly, so a lazy epoch alone is not
@@ -4491,11 +4646,15 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
     // an exit on an exception keeps the values of the returns that it interrupts until after the locals (qore#5941)
     bool hold_returns = false;
     if (exception_exit) {
+        // the value of a handler's return that replaced an interrupted return is held as one (#5992)
+        hold_returns = handler_return_hold != nullptr;
         for (uint32_t id : return_value_ids) {
+            if (hold_returns) {
+                break;
+            }
             auto i = invoke_alloca_map.find(id);
             if (i != invoke_alloca_map.end() && i->second) {
                 hold_returns = true;
-                break;
             }
         }
         holding_return_values = hold_returns;
@@ -5796,6 +5955,7 @@ void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
     // reload tracker, promoted per-temps if any) — always decref them.
     // the temporaries of the statements left are released before the on_block_exit handlers run, as in the AST
     emitExitStatementCleanup(module, false, true);
+    emitExceptionExitCatchUnwind(module);
     emitOnBlockExitExec(module);
     emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
@@ -5840,6 +6000,31 @@ void QoreIRToLLVM::emitCatchUnwind(llvm::Module& module) {
     builder->CreateCall(helper, {saved_depth, xsink_arg});
     builder->CreateBr(continuation);
     builder->SetInsertPoint(term);
+}
+
+void QoreIRToLLVM::emitExceptionExitCatchUnwind(llvm::Module& module) {
+    // the catch blocks that an exception (or a thread_exit) leaving the frame leaves and that no exit block closed (a
+    // catch block with no exit block: see the lowering of TryStatement) are left after the temporaries of the
+    // statements left and before the frame's handlers, temporaries and locals, as the AST interpreter leaves a catch
+    // block before the blocks around it (#5968); the frame's exits unwind to the same depth again afterwards, which
+    // closes nothing more.  A throw or rethrow statement leaving the frame closes such a catch block itself (see
+    // QoreIRLowering::catchScopesClosedByThrow()), and a synthetic rethrow leaving the frame is in none (such a catch
+    // block has no blocks or statements of its own exception paths), so their exits do not call it
+    if (!catch_depth_saved) {
+        return;
+    }
+    auto helper = module.getOrInsertFunction("qore_rt_catch_unwind",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    if (!catch_scope_count) {
+        builder->CreateCall(helper, {catch_depth_saved, xsink_arg});
+        return;
+    }
+    // the base is set when the frame's first catch scope is entered: with none open, nothing is unwound
+    llvm::Value* active = builder->CreateLoad(i64_type, catch_scope_count);
+    llvm::Value* saved = builder->CreateLoad(i64_type, llvm::cast<llvm::AllocaInst>(catch_depth_saved));
+    llvm::Value* target = builder->CreateSelect(builder->CreateICmpNE(active, llvm::ConstantInt::get(i64_type, 0)),
+        saved, llvm::ConstantInt::get(i64_type, UINT64_MAX));
+    builder->CreateCall(helper, {target, xsink_arg});
 }
 
 void QoreIRToLLVM::emitCatchScopeEnter(llvm::Module& module) {
@@ -6111,7 +6296,7 @@ llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDeferBlock(const QoreIRBasicBlock
                 if (inst->exception_target) {
                     targets.insert(inst->exception_target);
                 }
-                if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                if (const auto* throw_inst = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst.get())) {
                     if (throw_inst->exception_target) {
                         targets.insert(throw_inst->exception_target);
                     }
@@ -11469,7 +11654,7 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
     }
 
     // background foo(args) — free function call
-    if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
+    if (auto* fcn = qore_get_function_call_node(inner)) {
         if (!fcn->getFunction()) {
             return false;
         }
@@ -12004,6 +12189,7 @@ void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
     // and the normal-check error path identical in behavior.
     // the temporaries of the statements left are released before the on_block_exit handlers run, as in the AST
     emitExitStatementCleanup(module, false, true);
+    emitExceptionExitCatchUnwind(module);
     emitOnBlockExitExec(module);
     emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
@@ -12218,7 +12404,7 @@ static std::string formatQoreIRFallbackInstruction(const QoreIRInstruction* inst
     }
 
     const QoreValue* expr = nullptr;
-    if (auto* invoke = dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
+    if (auto* invoke = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
         desc += " (invoke opcode ";
         if (const char* name = qoreIROpcodeDiagnosticName(invoke->invoke_opcode)) {
             desc += name;
@@ -12228,27 +12414,27 @@ static std::string formatQoreIRFallbackInstruction(const QoreIRInstruction* inst
         }
         desc += ")";
         expr = &invoke->expr;
-    } else if (auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst)) {
+    } else if (auto* expr_inst = qore_ir_inst_cast<const QoreIRExprInstruction*>(inst)) {
         expr = &expr_inst->expr;
-    } else if (auto* static_var = dynamic_cast<const QoreIRStaticVarInstruction*>(inst)) {
+    } else if (auto* static_var = qore_ir_inst_cast<const QoreIRStaticVarInstruction*>(inst)) {
         expr = &static_var->expr;
-    } else if (auto* load_const = dynamic_cast<const QoreIRLoadConstantInstruction*>(inst)) {
+    } else if (auto* load_const = qore_ir_inst_cast<const QoreIRLoadConstantInstruction*>(inst)) {
         expr = &load_const->expr;
-    } else if (auto* create_closure = dynamic_cast<const QoreIRCreateClosureInstruction*>(inst)) {
+    } else if (auto* create_closure = qore_ir_inst_cast<const QoreIRCreateClosureInstruction*>(inst)) {
         expr = &create_closure->expr;
-    } else if (auto* create_call_ref = dynamic_cast<const QoreIRCreateCallRefInstruction*>(inst)) {
+    } else if (auto* create_call_ref = qore_ir_inst_cast<const QoreIRCreateCallRefInstruction*>(inst)) {
         expr = &create_call_ref->expr;
-    } else if (auto* create_method_ref = dynamic_cast<const QoreIRCreateMethodRefInstruction*>(inst)) {
+    } else if (auto* create_method_ref = qore_ir_inst_cast<const QoreIRCreateMethodRefInstruction*>(inst)) {
         expr = &create_method_ref->expr;
-    } else if (auto* create_parse_ref = dynamic_cast<const QoreIRCreateParseRefInstruction*>(inst)) {
+    } else if (auto* create_parse_ref = qore_ir_inst_cast<const QoreIRCreateParseRefInstruction*>(inst)) {
         expr = &create_parse_ref->expr;
-    } else if (auto* new_hd = dynamic_cast<const QoreIRNewHashDeclInstruction*>(inst)) {
+    } else if (auto* new_hd = qore_ir_inst_cast<const QoreIRNewHashDeclInstruction*>(inst)) {
         expr = &new_hd->expr;
-    } else if (auto* new_ch = dynamic_cast<const QoreIRNewComplexHashInstruction*>(inst)) {
+    } else if (auto* new_ch = qore_ir_inst_cast<const QoreIRNewComplexHashInstruction*>(inst)) {
         expr = &new_ch->expr;
-    } else if (auto* new_cl = dynamic_cast<const QoreIRNewComplexListInstruction*>(inst)) {
+    } else if (auto* new_cl = qore_ir_inst_cast<const QoreIRNewComplexListInstruction*>(inst)) {
         expr = &new_cl->expr;
-    } else if (auto* new_cb = dynamic_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
+    } else if (auto* new_cb = qore_ir_inst_cast<const QoreIRNewComplexBufferInstruction*>(inst)) {
         expr = &new_cb->expr;
     }
 
@@ -12398,7 +12584,7 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
         // the entered block, which the parse tree outlives the native code with; without it, the block is resolved
         // from the marker's file and line
         const StatementBlock* block = nullptr;
-        if (auto* dbg_inst = dynamic_cast<const QoreIRDebugStatementInstruction*>(inst)) {
+        if (auto* dbg_inst = qore_ir_inst_cast<const QoreIRDebugStatementInstruction*>(inst)) {
             block = dynamic_cast<const StatementBlock*>(dbg_inst->statement);
         }
         if (block) {
@@ -12604,6 +12790,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     return_value_family.clear();
     holding_return_values = false;
     catch_return_release_blocks.clear();
+    handler_return_hold = nullptr;
+    handler_return_hold_sites.clear();
     {
         std::unordered_map<uint32_t, const QoreIRInstruction*> defs;
         std::vector<uint32_t> returned;
@@ -13472,6 +13660,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // assigned.
         if (has_on_block_exit_handlers) {
             getOrCreateLocalReloadEpoch(llvm_func);
+        }
+        // see handler_return_hold (#5992): only a function with a handler that can return a value has it
+        if (has_on_block_exit_handlers && qore_ir_handlers_return_value(func)) {
+            llvm::IRBuilder<> hold_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+            handler_return_hold = hold_builder.CreateAlloca(i64_type, nullptr, "handler_return_hold");
+            hold_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), handler_return_hold);
         }
 
         // Save the catch-scope stack depth at entry for functions containing
@@ -15626,6 +15820,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // the temporaries of the statements left are released before the on_block_exit handlers run, as in the
         // AST
         emitExitStatementCleanup(module, false, true);
+        emitExceptionExitCatchUnwind(module);
         emitOnBlockExitExec(module);
         emitPreinstantiatedCleanup(module, true);
         emitInvokeCleanup(module);
@@ -15744,6 +15939,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // the release and reload of the locals' reload storage around the handlers run out of line, now that the
     // function's reload storage is known
     finalizeHandlerSites(module, llvm_func);
+    // the release of the values of an interrupted return that a handler's return replaced (#5992)
+    finalizeHandlerReturnHoldSites(module);
 
     finalizeIteratorReleases(module, llvm_func);
 
@@ -20288,7 +20485,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     inv->receiver_type_info;
                 if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
                     if (!invoke_explicit_inst) {
-                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                        const auto* call = qore_get_function_call_node(
                             inv->expr.getInternalNode());
                         invoke_explicit_inst = call
                             ? call->getExplicitTypeParamInstantiation() : nullptr;
@@ -20313,7 +20510,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const AbstractQoreFunctionVariant* variant = nullptr;
                     bool method_call = false;
                     if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                        aot_invoke_direct_call = dynamic_cast<const FunctionCallNode*>(expr_node);
+                        aot_invoke_direct_call = qore_get_function_call_node(expr_node);
                         if (aot_invoke_direct_call) {
                             variant = aot_invoke_direct_call->getVariant();
                         }
@@ -20429,7 +20626,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
                 if (inv->invoke_opcode == QoreIROpcode::CallDirect && !aot_mode) {
                     // CallDirect: extract function/variant/pgm from the FunctionCallNode
-                    const auto* call = dynamic_cast<const FunctionCallNode*>(
+                    const auto* call = qore_get_function_call_node(
                             inv->expr.getInternalNode());
                     assert(call);
                     // Use the func captured at IR-lowering time.  Re-reading
@@ -20568,7 +20765,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // pointer to the current function's FE.
                     const FunctionCallNode* aot_call = aot_invoke_direct_call
                         ? aot_invoke_direct_call
-                        : dynamic_cast<const FunctionCallNode*>(inv->expr.getInternalNode());
+                        : qore_get_function_call_node(inv->expr.getInternalNode());
                     const BatchCalleeInfo* aot_approach_b_callee = nullptr;
                     llvm::Function* aot_approach_b_fn = nullptr;
                     // the date kind checks of a fast entry call with date arguments for date<absolute>/
@@ -21286,7 +21483,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
                             module, llvm_func, inst);
                 } else {
-                    const auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(
+                    const auto* rt_const = qore_get_runtime_constant_ref_node(
                             inv->expr.getInternalNode());
                     assert(rt_const);
                     llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
@@ -22318,15 +22515,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto it = scope_obe_counts.find(lp_inst->try_scope_id);
                 if (it != scope_obe_counts.end()) {
                     llvm::Value* saved_count = it->second;
-                    auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
-                            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
                     // the blocks left by the exception have usually run their handlers already; the handlers run
                     // through the runtime only if one is still registered (see emitOnBlockExitExec())
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
                     publishLocalsForHandlers(module);
                     // the locals whose reload storage is released before the handlers run are reloaded right after
                     // them (see finalizeHandlerSites())
-                    recordHandlerSite(builder->CreateCall(helper, {saved_count, xsink_arg}), true);
+                    recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count, false), true);
                     endPendingHandlerRun(done_bb);
                     // On-block-exit handlers execute through the AST path and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths: the instruction that
@@ -22375,6 +22570,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     catch_return_release_blocks.emplace_back(release, &i->second);
                 }
             }
+            // the value that a handler run while the exception was pending returned (see handler_return_hold) is the
+            // value of the return that the exception interrupted, which the try statement releases next, after the
+            // value of the return that it replaced (qore#5941, #5992)
+            if (handler_return_hold) {
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                llvm::Value* held = builder->CreateLoad(i64_type, handler_return_hold);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), handler_return_hold);
+                builder->CreateCall(decref_fn, {held, xsink_arg});
+            }
             // A thread_exit is not an exception: the catch block is not entered, and the unwind continues
             // through the instruction's exception target, the try statement's propagation block; an exception
             // pending with it is deleted, as TryStatement::execImpl() does (qore_catch_thread_exit())
@@ -22408,6 +22613,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Catch cleanup ===
         case QoreIROpcode::CatchCleanup: {
+            // the exit block of a catch block closes every catch block of the frame opened since its try statement
+            // began: its own, and a nested one without an exit block that a call raising the exception left open
+            // (#5968)
+            if (current_ir_func && catch_depth_saved) {
+                auto ci = current_ir_func->catch_exit_depths.find(inst);
+                if (ci != current_ir_func->catch_exit_depths.end()) {
+                    auto unwind_fn = module.getOrInsertFunction("qore_rt_catch_unwind",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    llvm::Value* depth = llvm::ConstantInt::get(i64_type, ci->second);
+                    if (catch_scope_count) {
+                        // the frame's catch scopes are counted from the depth of the catch stack at its first one,
+                        // which this catch block opened or followed
+                        llvm::Value* base = builder->CreateLoad(i64_type, catch_depth_saved);
+                        builder->CreateCall(unwind_fn, {builder->CreateAdd(base, depth), xsink_arg});
+                        builder->CreateStore(depth, catch_scope_count);
+                    } else {
+                        builder->CreateCall(unwind_fn, {builder->CreateAdd(catch_depth_saved, depth), xsink_arg});
+                    }
+                    return true;
+                }
+            }
             // Restore previous td->catchException and delete the caught exception
             auto helper = module.getOrInsertFunction("qore_rt_catch_end",
                     llvm::FunctionType::get(void_type, {ptr_type}, false));
@@ -22661,7 +22887,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const QoreTypeParamInstantiation* explicit_inst =
                 direct_inst->explicit_type_param_inst;
             if (!explicit_inst) {
-                const auto* call = dynamic_cast<const FunctionCallNode*>(
+                const auto* call = qore_get_function_call_node(
                     direct_inst->expr.getInternalNode());
                 explicit_inst = call
                     ? call->getExplicitTypeParamInstantiation() : nullptr;
@@ -22711,7 +22937,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     || fused_aggregate_projection
                 ? nullptr : &call_date_kind_guards;
             if (aot_mode && !aot_direct_variant && direct_inst->expr.hasNode()) {
-                const auto* call = dynamic_cast<const FunctionCallNode*>(
+                const auto* call = qore_get_function_call_node(
                     direct_inst->expr.getInternalNode());
                 const QoreFunction* function = call ? call->getFunction() : nullptr;
                 const AbstractQoreFunctionVariant* candidate = function
@@ -24345,7 +24571,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // qore_rt_call_function_direct and crashing at runtime.
                 const QoreFunction* resolved_func = direct_inst->func;
                 if (!resolved_func) {
-                    if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                    if (auto* call = qore_get_function_call_node(
                             direct_inst->expr.getInternalNode())) {
                         resolved_func = call->getFunction();
                     }
@@ -34337,7 +34563,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::BackgroundInt: {
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
             llvm::Value* result = nullptr;
-            const auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
+            const auto* bg_inst = qore_ir_inst_cast<const QoreIRBackgroundInstruction*>(inst);
             if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper) {
                 // the expression is evaluated by its helper in the new thread
                 if (!emitBackgroundHelper(bg_inst, module, llvm_func, &result, error)) {
@@ -34963,6 +35189,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
+            emitExceptionExitCatchUnwind(module);
             emitOnBlockExitExec(module);
             emitPreinstantiatedCleanup(module, true);
             emitInvokeCleanup(module);
@@ -35511,16 +35738,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::FunctionType::get(void_type, {i64_type}, false));
                     builder->CreateCall(discard_fn, {saved_count});
                 } else {
-                    auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit_impl",
-                            llvm::FunctionType::get(void_type, {i64_type, ptr_type, builder->getInt1Ty()}, false));
                     // the handlers run through the runtime only if one of the scope is registered (see
                     // emitOnBlockExitExec())
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
                     publishLocalsForHandlers(module);
                     // the locals whose reload storage is released before the handlers run are reloaded right after
                     // them (see finalizeHandlerSites())
-                    recordHandlerSite(builder->CreateCall(helper, {saved_count, xsink_arg, builder->getInt1(false)}),
-                        true);
+                    recordHandlerSite(emitOnBlockExitHoldCall(module, saved_count,
+                        !qore_ir_exception_reaches_catch(inst->exception_target)), true);
                     endPendingHandlerRun(done_bb);
                     // On-block-exit handlers execute user code and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths, as at a landing pad: this
@@ -36155,7 +36380,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
                     int32_t string_index_char = 1;
                     if (expr_inst->expr.hasNode()) {
-                        if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                        if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
                             string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                         }
@@ -36204,7 +36429,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
                     int32_t string_index_char = 1;
                     if (expr_inst->expr.hasNode()) {
-                        if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                        if (auto* sq = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(
                                 expr_inst->expr.getInternalNode())) {
                             string_index_char = sq->hasStringIndexChar() ? 1 : 0;
                         }
@@ -36935,7 +37160,7 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
         return false;
     }
 
-    auto* sq_brackets = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    auto* sq_brackets = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node);
     if (!sq_brackets) {
         return false;
     }

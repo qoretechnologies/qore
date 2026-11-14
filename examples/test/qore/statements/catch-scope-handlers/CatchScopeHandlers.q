@@ -394,6 +394,101 @@ sub x2() {
     try { x2i(); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
 }
 
+# a call that raises an exception in a catch block with only simple statements in no exception region of its frame:
+# the catch block is left with the frame, before its locals are released
+sub k1i() {
+    D loc("local");
+    try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) { thrower(); }
+}
+sub k1() {
+    try { k1i(); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+sub k2i() {
+    D loc("local");
+    try { throw "A", "", new D("arg"); } catch () { thrower(); }
+}
+sub k2() {
+    try { k2i(); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+sub k3i() {
+    D loc("local");
+    {
+        D inner("inner");
+        try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) { log += "c:" + ex.err; thrower(); }
+    }
+}
+sub k3() {
+    try { k3i(); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+sub k4i() {
+    D loc("local");
+    for (int i = 0; i < 3; ++i) {
+        try { throw "A" + i, "", new D("arg" + i); } catch (hash<ExceptionInfo> ex) { log += "c:" + ex.err; }
+        if (i == 1) {
+            try { throw "B" + i, "", new D("b" + i); } catch (hash<ExceptionInfo> ex) { thrower(); }
+        }
+    }
+}
+sub k4() {
+    try { k4i(); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+
+# a thread_exit in a catch block with only simple statements in no exception region of its frame
+sub k5i() {
+    D loc("local");
+    try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) { thread_exit; }
+}
+sub k5() {
+    Counter c(1);
+    background sub () { on_exit c.dec(); k5i(); }();
+    c.waitForZero();
+}
+# a call that raises an exception in a catch block with only simple statements in a try block: the catch block is
+# left before the exception is caught, and before the locals of the blocks around it are released
+sub k6() {
+    try {
+        try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) { thrower(); }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+    log += "after";
+}
+sub k7() {
+    try {
+        D loc("local");
+        {
+            D inner("inner");
+            try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) { thrower(); }
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+# a thread_exit in a catch block with only simple statements in a loop in a try block
+sub k8i() {
+    try {
+        D loc("local");
+        while (True) {
+            try { throw "A", "", new D("arg"); } catch (hash<ExceptionInfo> ex) { thread_exit; }
+        }
+    } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
+}
+sub k8() {
+    Counter c(1);
+    background sub () { on_exit c.dec(); k8i(); }();
+    c.waitForZero();
+}
+# a statement of a catch block that can raise in a try statement in another try block, after a partial removal
+sub s2() {
+    list<int> m = (0, 1, 2, 3, 4);
+    try {
+        try {
+            remove m[sel("a", 1)..sel("b", 2), nothing_bound, sel("c", 4)..nothing_bound];
+        } catch (hash<ExceptionInfo> ex) {
+            log += "caught:" + ex.err;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += "outer:" + ex.err;
+    }
+    log += sprintf("%y", m);
+}
+
 # the functions are called directly, so that they run as native code in the jit and tiered modes, and each twice, so
 # that the second call runs the code that the first one compiled in the tiered mode
 sub call(string fn) {
@@ -437,11 +532,21 @@ sub call(string fn) {
         case "s1": s1(); break;
         case "x1": x1(); break;
         case "x2": x2(); break;
+        case "k1": k1(); break;
+        case "k2": k2(); break;
+        case "k3": k3(); break;
+        case "k4": k4(); break;
+        case "k5": k5(); break;
+        case "k6": k6(); break;
+        case "k7": k7(); break;
+        case "k8": k8(); break;
+        case "s2": s2(); break;
     }
 }
 foreach string fn in (("h1", "h2", "h3", "h4", "h5", "n1", "n2", "n3", "n4", "d1", "d2", "e1", "f1", "f2", "t1", "o1",
         "o2", "a1", "r1", "r2", "r3", "r4", "w1", "w2", "w3", "c1", "c2", "c3", "v1", "v2", "v3", "s1",
-        "x1", "x2")) {
+        "x1", "x2", "k1", "k2", "k3", "k4", "k5", "k6",
+        "k7", "k8", "s2")) {
     for (int i = 0; i < 2; ++i) {
         log = ();
         call(fn);

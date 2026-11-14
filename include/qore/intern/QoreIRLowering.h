@@ -726,6 +726,10 @@ private:
         CF_NONE = 0,
         CF_SKIP_LVARS = 1,       //!< skip local var cleanup (for return - pre-instantiation handles it)
         CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break and return)
+        //! close the catch blocks left (CatchScope entries) in their place among the other cleanups: a catch block
+        //! is closed after its own blocks and before the blocks that enclose it, whose on_exit handlers then see
+        //! the exception of an enclosing catch block, as in the AST interpreter (qore#6017)
+        CF_CATCH_SCOPES = 4,
     };
 
     //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
@@ -880,24 +884,39 @@ private:
         //! non-local exit inside the handler body cannot re-enter the same
         //! handler range. Cleanup entries below that Scope still run.
         enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar,
-            ForeachElement, ForeachSource };
+            ForeachElement, ForeachSource, CatchScope };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
+        //! for a HandlerBarrier entry: the number of handlers of the protected scope that stay registered while the
+        //! handler runs (those registered before it), which a return in the handler runs after it (#5992)
+        size_t keep_handlers = 0;
+        //! for the last entry of a try statement that an exit leaves (the Scope entry of its try block, the
+        //! CatchScope entry of its catch block): try_depth in the statement, 0 for the other entries (#5992)
+        int try_end_depth = 0;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
         QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord/ForeachElement
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries
-        LocalVar* catch_var = nullptr;             //!< the local of a CatchVar entry (the catch block's parameter), if any
-        //! the value of the CatchException of the catch block of a CatchVar entry, which closes it (see
-        //! QoreIRFunction::catch_cleanup_results)
+        LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
+        //! the value of the CatchException of the catch block of a CatchScope entry, which the CatchCleanup that
+        //! closes it releases (see QoreIRFunction::catch_cleanup_results, #6079)
         uint32_t catch_result_id = 0;
         QoreIRValue foreach_iterator;              //!< iterator handle released by a ForeachSource entry, if any
         QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
         QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any
         size_t temp_scope_depth = 0;               //!< temp scopes open when the entry was pushed
+        //! the lowering state where the entry was pushed: the number of scope_stack entries, catch_cleanup_depth and
+        //! the number of try_catch_cleanup_depth_stack entries
+        /** The handlers of a Scope entry that a return, break or continue runs are lowered with this state: they
+            run after the exit has left the blocks, catch blocks and try statements inside the block, so code in them
+            must not count those (qore#6017)
+        */
+        size_t open_scopes = 0;
+        int open_catch_depth = 0;
+        size_t open_try_depth = 0;
         //! true for the Scope entry of a statement block with on_exit/on_success/on_error handlers
         bool block_scope = false;
         //! the exception target of the body of the block of a Scope entry with handlers (block_scope)
@@ -998,7 +1017,6 @@ private:
         QoreIRBasicBlock* break_target = nullptr;
         QoreIRBasicBlock* continue_target = nullptr;
         bool is_switch = false;
-        int catch_cleanup_depth = 0;   //!< catch_cleanup_depth when this flow target was created
         size_t cleanup_stack_depth = 0;  //!< cleanup_stack depth when this flow target was created
         QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
         size_t temp_scope_depth = 0;     //!< temp scopes open when this flow target was created
@@ -1035,6 +1053,20 @@ private:
     };
     //! the active catch blocks, innermost last (see the lowering of TryStatement, #5968)
     std::vector<CatchExitInfo> catch_exit_stack;
+    //! A block with an exception path of its own (lowerStatementBlock()), and the catch blocks without exit blocks
+    //! whose statements' exceptions go to it
+    struct AnchorCatchInfo {
+        //! the block's exception path
+        QoreIRBasicBlock* anchor = nullptr;
+        //! catch_cleanup_depth in the block
+        int catch_depth = 0;
+        //! the catch variables of those catch blocks
+        std::vector<LocalVar*> vars;
+        //! true if there is any
+        bool any = false;
+    };
+    //! the blocks with exception paths of their own being lowered, innermost last (#5968)
+    std::vector<AnchorCatchInfo> anchor_catch_stack;
 
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
@@ -1045,6 +1077,46 @@ private:
     //! the values of the Return instructions in the try block of each enclosing try statement, innermost last (see
     //! QoreIRFunction::catch_interrupted_returns)
     std::vector<std::vector<uint32_t>> try_return_value_stack;
+    //! the number of try statements (their try and catch blocks) that enclose the code being lowered
+    /** A try statement runs its blocks with a return value of its own (TryStatement::execImpl()), so a return in a
+        try statement in a handler does not replace the value of the return that the handler runs after (#5992).
+    */
+    int try_depth = 0;
+    //! the value of the return statement whose block cleanups are being lowered, which a return in a handler that
+    //! they lower inline replaces (#5992)
+    /** As in the AST interpreter, where the handlers of a block run with the block's return value and a return
+        statement in one replaces it and releases the replaced value (ReturnStatement::execImpl()), the return of a
+        handler releases this value when it replaces it.  An invalid value is no value (a return without one), or
+        none to release.
+    */
+    QoreIRValue pending_return;
+    //! the value that pending_return took a reference of its own to before the block cleanups, if any, which holds a
+    //! reference of the frame until the frame ends; released with it (#5992)
+    QoreIRValue pending_return_base;
+    //! true while the block cleanups of a return statement are lowered (see pending_return)
+    bool pending_return_active = false;
+    //! try_depth at the return statement of pending_return
+    int pending_return_try_depth = 0;
+    //! the nesting of emitBlockCleanups() and lowerHandlersAtExit() calls (see QORE_IR_INLINE_HANDLER_BUDGET in
+    //! QoreIRLowering.cpp)
+    int exit_lowering_nesting = 0;
+    //! the nesting of the handler bodies being lowered inline by lowerHandlerAtExit()
+    int inline_handler_body_depth = 0;
+    //! the handler bodies lowered inline since the outermost exit being lowered began
+    size_t inline_handlers_lowered = 0;
+    class ExitLoweringNesting;
+    //! the value of the return that a return in a try statement in a handler replaces when the walk of its
+    //! cleanups leaves the outermost try statement in the handler (try_end_depth == try_replaced_depth), as the AST
+    //! interpreter's try statement replaces it when it ends (TryStatement::execImpl(), #5992)
+    QoreIRValue try_replaced_return;
+    //! the value that try_replaced_return took a reference of its own to (see pending_return_base)
+    QoreIRValue try_replaced_return_base;
+    //! the try_depth of the try statement whose end releases try_replaced_return, or 0
+    int try_replaced_depth = 0;
+    //! Returns true if a return at the current point replaces the value of pending_return (see there)
+    DLLLOCAL bool replacesPendingReturn() const;
+    //! Releases the value of the return that a return in a handler replaces (see pending_return)
+    DLLLOCAL void releaseReplacedReturn(const QoreProgramLocation* loc);
     //! the depth of the statements lowered, for the nesting of DebugStatement instructions (#5816)
     uint16_t debug_nest_depth = 0;
     //! the depth of the statements of the catch block lowered, or -1 (QORE_IR_DEBUG_NEST_IN_CATCH)
@@ -1073,7 +1145,9 @@ private:
         catch block, and is closed by the statement, as no code can see its exception afterwards (#5968).
     */
     int catchScopesClosedByThrow() const {
-        return catchScopesLeftByThrow() > 0 && !catch_exit_stack.back().has_exit ? 1 : 0;
+        // the innermost catch block that the statement is in: the handlers of a block left by a return, break or
+        // continue are lowered with the state of their block (catch_cleanup_depth, qore#6017)
+        return catchScopesLeftByThrow() > 0 && !catch_exit_stack[catch_cleanup_depth - 1].has_exit ? 1 : 0;
     }
 
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr

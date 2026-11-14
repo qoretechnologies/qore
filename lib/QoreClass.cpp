@@ -8335,16 +8335,16 @@ static QoreValue eval_normal_method_named(const NormalMethodFunction& f, Excepti
 QoreValue NormalMethodFunction::evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
         const QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) const {
-    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, nullptr, explicit_type_param_instantiation,
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
+    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, pgm_ctx, explicit_type_param_instantiation,
         arg_names, policy);
 }
 
 QoreValue NormalMethodFunction::evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self,
         QoreListNode* args, const qore_class_private* cctx,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) const {
-    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, nullptr, explicit_type_param_instantiation,
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
+    return eval_normal_method_named(*this, xsink, rc, self, args, cctx, pgm_ctx, explicit_type_param_instantiation,
         arg_names, policy);
 }
 
@@ -8378,13 +8378,13 @@ template <typename ArgList>
 static QoreValue eval_static_method_named(const StaticMethodFunction& f, ExceptionSink* xsink, RuntimeConfig& rc,
         ArgList args, const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) {
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) {
     const QoreClass* qc = f.getClass();
     const AbstractQoreFunctionVariant* variant = nullptr;
     QoreSourceProgramHolder spgm_holder(xsink);
     CodeEvaluationHelper ceh(xsink, rc, &f, variant, f.getName(), args, nullptr, qore_class_private::get(*qc), cctx,
-        qore_get_method_pgm_context(*qc, spgm_holder), receiver_type_info, explicit_type_param_instantiation, false,
-        arg_names, policy);
+        qore_get_method_pgm_context(*qc, spgm_holder, pgm_ctx), receiver_type_info, explicit_type_param_instantiation,
+        false, arg_names, policy);
     if (*xsink) {
         return QoreValue();
     }
@@ -8398,17 +8398,17 @@ static QoreValue eval_static_method_named(const StaticMethodFunction& f, Excepti
 QoreValue StaticMethodFunction::evalMethodNamed(ExceptionSink* xsink, RuntimeConfig& rc, const QoreListNode* args,
         const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) const {
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
     return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
-        explicit_type_param_instantiation, arg_names, policy);
+        explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
 }
 
 QoreValue StaticMethodFunction::evalMethodTmpArgsNamed(ExceptionSink* xsink, RuntimeConfig& rc, QoreListNode* args,
         const qore_class_private* cctx, const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation, const name_vec_t& arg_names,
-        LexicalSemanticPolicy policy) const {
+        LexicalSemanticPolicy policy, QoreProgram* pgm_ctx) const {
     return eval_static_method_named(*this, xsink, rc, args, cctx, receiver_type_info,
-        explicit_type_param_instantiation, arg_names, policy);
+        explicit_type_param_instantiation, arg_names, policy, pgm_ctx);
 }
 
 const qore_class_private* MethodVariantBase::getClassPriv() const {
