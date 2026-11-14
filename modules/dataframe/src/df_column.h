@@ -16,6 +16,7 @@
 
 #include <Eigen/Dense>
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cmath>
@@ -419,21 +420,19 @@ static inline void dataFrameCopySchema(ColumnData& dest, const ColumnData& src) 
     }
 }
 
-//! Returns true if two columns have the same type and the same columnar schema (but for its name), so that the
-//! cells of both can be stored in one column with that schema (qore#6116)
-static inline bool dataFrameSameColumnType(const ColumnData& a, const ColumnData& b) {
-    if (a.type != b.type || a.has_columnar_schema != b.has_columnar_schema) {
-        return false;
-    }
-    if (!a.has_columnar_schema) {
-        return true;
-    }
-    const QoreColumnarTypeDescriptor& x = a.columnar_schema;
-    const QoreColumnarTypeDescriptor& y = b.columnar_schema;
-    return x.kind == y.kind && x.buffer_type == y.buffer_type && x.precision == y.precision && x.scale == y.scale
-        && x.fixed_size == y.fixed_size && x.time_unit == y.time_unit && x.timezone == y.timezone
-        && x.native_type == y.native_type && x.children.empty() && y.children.empty();
-}
+//! Merges the columnar schema of a column into a schema for the cells of several columns of one type (qore#6116)
+/** The first column gives the schema (has_schema and schema, with no name); each other column is merged into it:
+    two decimal128 schemas make one with the largest number of integer digits and the largest scale (if it has at most
+    38 digits), two temporal schemas one with the time unit "us" if their units differ and the time zone "UTC" if
+    their zones differ (a plain date column is one of absolute dates in microseconds with no time zone), and a
+    column that is nullable makes the schema nullable.
+
+    @return true if the schema holds the cells of the column exactly, false if the columns cannot share one schema
+    (columns of different types, a column of durations and one of absolute dates, decimals of more than 38 digits,
+    buffers of different element types)
+*/
+DLLLOCAL bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& schema,
+        const ColumnData& first, const ColumnData& src);
 
 //! Makes a date column a column of durations: gives it the columnar schema of durations in microseconds, so that
 //! its cells are returned as relative dates (qore#6107)

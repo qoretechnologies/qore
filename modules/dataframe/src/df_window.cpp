@@ -748,25 +748,50 @@ static std::shared_ptr<ColumnData> meltValueColumn(const std::vector<Column>& co
         const std::vector<size_t>& val_indices, int64_t n_rows, ExceptionSink* xsink) {
     int64_t out_rows = n_rows * static_cast<int64_t>(val_indices.size());
     // Value column: a float64 column of the values of int64 and float64 columns; a column of the type and the
-    // columnar schema of value columns of one type and schema; or the column that the column hash constructor makes
-    // of the values of other columns (qore#6116)
+    // merged columnar schema of value columns of one type whose schemas can be merged (decimals of different
+    // precisions and scales, timestamps of different units); a column that holds the values of columns that hold any
+    // value whose schemas cannot be merged (decimals of more than 38 digits); or the column that the column hash
+    // constructor makes of the values of other columns (qore#6116)
     bool numeric = true;
     bool same = !val_indices.empty();
+    bool same_type = !val_indices.empty();
+    bool has_schema = false;
+    QoreColumnarTypeDescriptor schema;
+    if (!val_indices.empty()) {
+        const ColumnData& first = *columns[val_indices[0]].data;
+        has_schema = first.has_columnar_schema;
+        if (has_schema) {
+            schema = first.columnar_schema;
+            schema.name.clear();
+        }
+    }
     for (size_t vi = 0; vi < val_indices.size(); ++vi) {
         const ColumnData& vcd = *columns[val_indices[vi]].data;
         if (vcd.type != ColumnType::FLOAT64 && vcd.type != ColumnType::INT64) {
             numeric = false;
         }
-        if (vi && !dataFrameSameColumnType(vcd, *columns[val_indices[0]].data)) {
-            same = false;
+        if (vi) {
+            const ColumnData& first = *columns[val_indices[0]].data;
+            if (vcd.type != first.type) {
+                same_type = false;
+            }
+            if (same && !dataFrameMergeColumnSchema(has_schema, schema, first, vcd)) {
+                same = false;
+            }
         }
+    }
+    // values of columns that hold any value are copied as they are, with a schema only if one holds them all
+    if (!same && same_type && columns[val_indices[0]].data->type == ColumnType::AUTO) {
+        same = true;
+        has_schema = false;
     }
     std::shared_ptr<ColumnData> val_cd;
     if (numeric) {
         val_cd = std::make_shared<ColumnData>();
         // float64 columns of one schema (float32 columns, for example) keep it
-        if (same && columns[val_indices[0]].data->type == ColumnType::FLOAT64) {
-            dataFrameCopySchema(*val_cd, *columns[val_indices[0]].data);
+        if (same && columns[val_indices[0]].data->type == ColumnType::FLOAT64 && has_schema) {
+            val_cd->columnar_schema = schema;
+            val_cd->has_columnar_schema = true;
         }
         val_cd->type = ColumnType::FLOAT64;
         val_cd->n_rows = out_rows;
@@ -789,13 +814,16 @@ static std::shared_ptr<ColumnData> meltValueColumn(const std::vector<Column>& co
             }
         }
     } else if (same) {
-        // the cells of value columns of one type and schema are copied with their type and schema
+        // the cells of value columns of one type are copied with their type and their merged schema
         const ColumnData& first = *columns[val_indices[0]].data;
         val_cd = std::make_shared<ColumnData>();
         val_cd->type = first.type;
         val_cd->n_rows = out_rows;
         val_cd->null_mask.assign(out_rows, 0);
-        dataFrameCopySchema(*val_cd, first);
+        if (has_schema) {
+            val_cd->columnar_schema = schema;
+            val_cd->has_columnar_schema = true;
+        }
         switch (first.type) {
             case ColumnType::STRING:
                 val_cd->str_data.resize(out_rows);

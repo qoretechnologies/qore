@@ -119,11 +119,23 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
     that the dates of both keep their values on export.  The two hold dates of one kind (checked before).
 */
 static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const ColumnData& right, bool right_values) {
-    // a key column of another type keeps the schema of the left key column if its values come from it only, or if
-    // the right key column has the same schema (a decimal128 column, for example; qore#6116)
+    // a key column of another type keeps the schema of the left key column if its values come from it only, or the
+    // schema that holds the values of both key columns (two decimal128 columns of different precisions and scales,
+    // for example), if there is one (qore#6116)
     if (left.type != ColumnType::DATE) {
-        if (!right_values || dataFrameSameColumnType(left, right)) {
+        if (!right_values) {
             dataFrameCopySchema(dest, left);
+            return;
+        }
+        bool has_schema = left.has_columnar_schema;
+        QoreColumnarTypeDescriptor schema;
+        if (has_schema) {
+            schema = left.columnar_schema;
+            schema.name.clear();
+        }
+        if (dataFrameMergeColumnSchema(has_schema, schema, left, right) && has_schema) {
+            dest.columnar_schema = schema;
+            dest.has_columnar_schema = true;
         }
         return;
     }
@@ -156,7 +168,6 @@ static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const Col
 static void appendKeyRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols, const std::vector<Column>& src_cols,
         const std::vector<size_t>& col_indices, int64_t row_idx);
 
-// Append a row from src columns to dest columns (or null if row_idx < 0)
 // Append the cell of a row of a source column to a column of the same type (or null if row_idx < 0)
 static inline void appendCell(ColumnData& dest, const ColumnData& src, int64_t row_idx) {
     int64_t idx = dest.n_rows;

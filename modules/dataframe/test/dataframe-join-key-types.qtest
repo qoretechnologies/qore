@@ -20,6 +20,7 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
     constructor() : Test("DataFrameJoinKeyTypesTest", "1.0", \ARGV) {
         addTestCase("join() of key columns of different types", \joinTypesTest());
         addTestCase("join() keys", \joinKeyTest());
+        addTestCase("join() column schemas", \schemaTest());
         set_return_value(main());
     }
 
@@ -95,6 +96,15 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
         DataFrame::DataFrame t = tl.join(tr, ("a", "k"), "outer");
         assertEq(("string", "auto"), t.dtypes()[0..1], "key column types");
         assertEq(4, t.numRows(), "rows");
+        # numbers match by their exact values at any precision (qore#6107): 0.1 and 0.1 widened to the maximum
+        # precision match, 0.1 at a higher precision does not; 1e-1000 (more than 4096 bits) matches itself widened
+        number zmax = number("0." + strmul("0", 1700));
+        number a = 0.1n;
+        number hi = number("0.1000000000000000000000000000000000000000000000000000000000000000000000000000");
+        number tn = number("1e-1000");
+        DataFrame::DataFrame numl({"k": (c'z', a, tn, -0n)});
+        DataFrame::DataFrame numr({"k": (c'y', a + zmax, hi, tn + zmax, 0n), "b": (1, 2, 4, 8, 16)});
+        assertEq((2, 8, 16), numl.join(numr, ("k",)).getColumn("b"), "number keys");
         # a decimal key column keeps its schema
         DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
             {"v": (1.25n, 2.5n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}}));
@@ -102,5 +112,54 @@ class DataFrameJoinKeyTypesTest inherits QUnit::Test {
             list<auto> v = DataFrame::DataFrame::fromArrowIpc(dec.join(dec, ("v",), how).toArrowIpc()).getColumn("v");
             assertTrue(v[0].typeCode() == NT_NUMBER && v[0] == 1.25n, sprintf("%s join of decimal keys: %y", how, v));
         }
+    }
+
+    #! the columns of a join keep their schemas, and decimal key columns of different schemas get a common one
+    schemaTest() {
+        string dir = get_script_dir() + DirSep + "data" + DirSep;
+        DataFrame::DataFrame f32 = DataFrame::DataFrame::readParquet(dir + "dense_float32.parquet");
+        f32.addColumn("k", (1, 2, 3, 4, 5, 6));
+        hash<auto> f32_schema = schema(f32, "v");
+        DataFrame::DataFrame g({"k": (2, 3, 9), "z": (7, 8, 9)});
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.25n, 2.5n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}}));
+        DataFrame::DataFrame dec12 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.25n, 3.5n)}, {"v": {"schema": {"kind": "decimal128", "precision": 12, "scale": 2}}}));
+        DataFrame::DataFrame dec_s3 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.25n, 4.125n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 3}}}));
+        foreach string how in (("inner", "left", "right", "outer")) {
+            # a float32 non-key column and a float32 key column keep their schema
+            DataFrame::DataFrame j = f32.join(g, ("k",), how);
+            assertEq(f32_schema, schema(j, "v"), how + ": a float32 non-key column");
+            j = f32.join(f32, ("v",), how);
+            assertEq(f32_schema, schema(j, "v"), how + ": a float32 key column");
+            # decimal key columns of one schema keep it, of two schemas get a common one, which holds the keys of
+            # both sides exactly on export
+            j = dec.join(dec, ("v",), how);
+            assertEq(("decimal128", 10, 2), schema(j, "v"){"kind", "precision", "scale"}.values(),
+                how + ": one schema");
+            j = dec.join(dec12, ("v",), how);
+            list<auto> v = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc()).getColumn("v");
+            assertTrue((select v, $1.typeCode() == NT_NUMBER).size() == v.size(), sprintf("%s: numbers %y", how, v));
+            if (how == "right" || how == "outer") {
+                assertEq(("decimal128", 12, 2), schema(j, "v"){"kind", "precision", "scale"}.values(),
+                    how + ": two precisions");
+                j = dec.join(dec_s3, ("v",), how);
+                assertEq(("decimal128", 11, 3), schema(j, "v"){"kind", "precision", "scale"}.values(),
+                    how + ": two scales");
+                list<auto> v3 = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc()).getColumn("v");
+                assertTrue((select v3, $1 == 4.125n).size() == 1, sprintf("%s: 4.125 kept: %y", how, v3));
+            }
+        }
+    }
+
+    #! returns the columnar schema of a column: its kind, element type, precision, scale, time unit and zone
+    private hash<auto> schema(DataFrame::DataFrame df, string name) {
+        foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
+            if (column.name == name) {
+                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone"};
+            }
+        }
+        return {};
     }
 }

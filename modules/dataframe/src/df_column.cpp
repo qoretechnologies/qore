@@ -237,6 +237,75 @@ void ColumnData::appendAutoValue(QoreValue value) {
     auto_data.push_back(value.refSelf());
 }
 
+bool dataFrameMergeColumnSchema(bool& has_schema, QoreColumnarTypeDescriptor& schema,
+        const ColumnData& first, const ColumnData& src) {
+    if (src.type != first.type) {
+        return false;
+    }
+    if (src.type == ColumnType::DATE) {
+        if (src.isDuration() != first.isDuration()) {
+            return false;
+        }
+    } else if (has_schema != src.has_columnar_schema) {
+        return false;
+    }
+    if (!src.has_columnar_schema) {
+        if (has_schema) {
+            // a plain date column: absolute dates in microseconds with no time zone
+            if (schema.time_unit != "us") {
+                schema.time_unit = "us";
+            }
+            if (!schema.timezone.empty()) {
+                schema.timezone = "UTC";
+            }
+        }
+        return true;
+    }
+    const QoreColumnarTypeDescriptor& other = src.columnar_schema;
+    if (!has_schema) {
+        // a temporal schema merged into a plain date column
+        schema = other;
+        schema.name.clear();
+        has_schema = true;
+        if (schema.time_unit != "us") {
+            schema.time_unit = "us";
+        }
+        if (!schema.timezone.empty()) {
+            schema.timezone = "UTC";
+        }
+        return true;
+    }
+    if (schema.kind != other.kind || schema.buffer_type != other.buffer_type || schema.fixed_size != other.fixed_size
+            || !schema.children.empty() || !other.children.empty()) {
+        return false;
+    }
+    if (schema.kind == QoreColumnarTypeKind::Decimal128
+            && (schema.precision != other.precision || schema.scale != other.scale)) {
+        int32_t int_digits = std::max(schema.precision - schema.scale, other.precision - other.scale);
+        int32_t scale = std::max(schema.scale, other.scale);
+        if (int_digits + scale > 38) {
+            return false;
+        }
+        schema.precision = int_digits + scale;
+        schema.scale = scale;
+        schema.native_type.clear();
+    } else if (schema.precision != other.precision || schema.scale != other.scale) {
+        return false;
+    }
+    if (schema.time_unit != other.time_unit) {
+        schema.time_unit = "us";
+        schema.native_type.clear();
+    }
+    if (schema.timezone != other.timezone) {
+        schema.timezone = "UTC";
+        schema.native_type.clear();
+    }
+    if (other.nullable) {
+        schema.nullable = true;
+    }
+    return true;
+}
+
 void dataFrameSetDurationSchema(ColumnData& col) {
     col.columnar_schema = QoreColumnarTypeDescriptor();
     col.columnar_schema.kind = QoreColumnarTypeKind::Duration;

@@ -18,6 +18,7 @@
 class DataFrameMeltTypesTest inherits QUnit::Test {
     constructor() : Test("DataFrameMeltTypesTest", "1.0", \ARGV) {
         addTestCase("melt() of columns of any type", \meltTest());
+        addTestCase("melt() of columns with schemas", \schemaTest());
         set_return_value(main());
     }
 
@@ -77,5 +78,53 @@ class DataFrameMeltTypesTest inherits QUnit::Test {
         assertEq(0, empty.melt(("id",)).numRows(), "an empty frame");
         DataFrame::DataFrame ids({"id": (1, 2)});
         assertEq(0, ids.melt(("id",)).numRows(), "identifier columns only");
+    }
+
+    #! value columns of one type with different schemas: a common schema, or a column that holds any value
+    schemaTest() {
+        # decimals of different precisions and scales: a common decimal schema, which keeps every digit
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "p": (12345678901234567.89n,), "q": (2.5n,), "r": (1234567890123456789012.5n,),
+        }, {
+            "p": {"schema": {"kind": "decimal128", "precision": 20, "scale": 2}},
+            "q": {"schema": {"kind": "decimal128", "precision": 22, "scale": 1}},
+            "r": {"schema": {"kind": "decimal128", "precision": 23, "scale": 1}},
+        }));
+        DataFrame::DataFrame m = dec.melt(("id",), ("p", "q"));
+        assertEq(("decimal128", 23, 2), schema(m, "value"){"kind", "precision", "scale"}.values(), "decimal schema");
+        list<auto> v = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+        assertTrue(v[0] == 12345678901234567.89n && v[1] == 2.5n, sprintf("decimal values: %y", v));
+        # decimals whose common schema would have more than 38 digits: a column that holds the exact numbers
+        m = dec.melt(("id",), ("p", "r"));
+        assertEq("auto", m.dtypes()[2], "more than 38 digits");
+        assertEq((12345678901234567.89n, 1234567890123456789012.5n), m.getColumn("value"), "exact numbers");
+        # float32 value columns keep their schema
+        string dir = get_script_dir() + DirSep + "data" + DirSep;
+        DataFrame::DataFrame f32 = DataFrame::DataFrame::readParquet(dir + "dense_float32.parquet");
+        f32.addColumn("k", (1, 2, 3, 4, 5, 6));
+        DataFrame::DataFrame f2 = f32.join(f32, ("k",));
+        m = f2.melt(("k",), ("v", "v_right"));
+        assertEq(schema(f32, "v"), schema(m, "value"), "float32 values");
+        # timestamps of different units: microseconds
+        DataFrame::DataFrame ts = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": (1,), "a": (2024-01-01T10:00:00.5Z,), "b": (2024-01-02T10:00:00Z,),
+        }, {
+            "a": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True}},
+            "b": {"schema": {"kind": "timestamp", "time_unit": "s", "timezone": "UTC", "nullable": True}},
+        }));
+        m = ts.melt(("id",));
+        assertEq("us", schema(m, "value").time_unit, "timestamp unit");
+        list<auto> tv = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+        assertTrue(tv[0] == 2024-01-01T10:00:00.5Z && tv[1] == 2024-01-02T10:00:00Z, sprintf("timestamps: %y", tv));
+    }
+
+    #! returns the columnar schema of a column: its kind, element type, precision, scale, time unit and zone
+    private hash<auto> schema(DataFrame::DataFrame df, string name) {
+        foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
+            if (column.name == name) {
+                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone"};
+            }
+        }
+        return {};
     }
 }
