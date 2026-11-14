@@ -136,6 +136,38 @@ static const QoreTypeInfo* qore_plus_element_value_type(const QoreTypeInfo* ti) 
     return nullptr;
 }
 
+//! the type of the container that the operator gives for operand values of the given value types and member types,
+//! if it is known more precisely than the base type of the container; see qore_arith_container_rule_t
+static const QoreTypeInfo* qore_plus_container_type(qore_type_t lt, const QoreTypeInfo* lti, qore_type_t rt,
+        const QoreTypeInfo* rti) {
+    if (lt == NT_LIST || rt == NT_LIST) {
+        // a list and a value added to it as one element; the type of a list made of two lists depends on the values
+        if (lt == rt) {
+            return nullptr;
+        }
+        const QoreTypeInfo* list_ti = lt == NT_LIST ? lti : rti;
+        const QoreTypeInfo* value_ti = qore_plus_element_value_type(lt == NT_LIST ? rti : lti);
+        if (!list_ti || !value_ti) {
+            return nullptr;
+        }
+        bool from_values = false;
+        const QoreTypeInfo* rv = qore_plus_list_add_type(QoreTypeInfo::getElementType(list_ti), value_ti, from_values);
+        return from_values ? nullptr : rv;
+    }
+    // a hash or an object plus NOTHING is the hash or the object, on either side
+    if (lt == NT_NOTHING && (rt == NT_HASH || rt == NT_OBJECT)) {
+        return rti;
+    }
+    if (rt == NT_NOTHING && (lt == NT_HASH || lt == NT_OBJECT)) {
+        return lti;
+    }
+    // two hashes of the same type give a hash of that type, as the rule for operands of one type each gives it
+    if (lt == NT_HASH && rt == NT_HASH && lti && rti && QoreTypeInfo::isOutputIdentical(lti, rti)) {
+        return lti;
+    }
+    return nullptr;
+}
+
 QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
@@ -438,7 +470,8 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     {
         const QoreTypeInfo* arith_ti;
         bool single;
-        switch (qore_arith_parse_result_type(QoreArithParseOp::Plus, leftTypeInfo, rightTypeInfo, arith_ti, single)) {
+        switch (qore_arith_parse_result_type(QoreArithParseOp::Plus, leftTypeInfo, rightTypeInfo, arith_ti, single,
+                qore_plus_container_type)) {
             case QoreArithParseResult::Scalar:
                 returnTypeInfo = arith_ti;
                 break;

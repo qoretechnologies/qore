@@ -216,6 +216,11 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
     int err = parse_init_value(left, parse_context);
     const QoreTypeInfo* typeInfo = parse_context.typeInfo;
+    // a receiver of a type parameter's type has its bound (the methods of a class bound), or any type if it has none,
+    // whose method is then dispatched at run time (qore#5774)
+    if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(typeInfo)) {
+        typeInfo = src;
+    }
     bool readonly_receiver = parse_is_readonly_receiver_expression(left, parse_context.pflag);
 
     // Store the source type for iterator element type inference in map operators

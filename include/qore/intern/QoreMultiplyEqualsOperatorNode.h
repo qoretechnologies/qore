@@ -55,6 +55,13 @@ protected:
 
     //! returns how the operator treats the given lvalue type with an operand of the given type
     DLLLOCAL static lvalue_e getLValueKind(const QoreTypeInfo* lti, const QoreTypeInfo* rti) {
+        // a value of a type parameter has its bound, or a type known only at run time (qore#5774)
+        if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(lti)) {
+            lti = src;
+        }
+        if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(rti)) {
+            rti = src;
+        }
         if (QoreTypeInfo::isType(lti, NT_NUMBER)) {
             return lvalue_e::KEEP;
         }

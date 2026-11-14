@@ -430,6 +430,8 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
             // Record facts after this case block and restore for next case
             nth.recordBranchAndRestore();
             ash.recordBranchAndRestore();
+            // the next case block can follow this one when it falls through (qore#5937)
+            ash.applyChangesSinceSave();
         }
         w = w->next;
     }

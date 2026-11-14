@@ -268,8 +268,9 @@ public class AzureDocumentIntelligenceRestClientIo
         inherits RestClientIo::RestClientIo,
         AzureDocumentIntelligenceRestClientBase {
     private {
-        # Configure the test sleeper before sharing a client between threads.
+        # Configure the test sleeper and clock before sharing a client between threads.
         *code<nothing(timeout)> sleeper;
+        *code<date()> clock;
     }
 
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
@@ -282,6 +283,16 @@ public class AzureDocumentIntelligenceRestClientIo
         sleeper = s;
     }
 
+    #! Sets a deterministic clock for tests before the client is shared
+    /** The deadline of @ref analyzeDocument() and of its polling is measured with this clock; by default it is
+        @ref Qore::now_us() "now_us()"
+
+        @param c callback returning the current time
+    */
+    setClock(code<date()> c) {
+        clock = c;
+    }
+
     #! Copies transport ownership and test configuration without retaining bound job callbacks
     /** @param new_url the new resource endpoint
         @return an independently usable client with the same credentials
@@ -291,6 +302,7 @@ public class AzureDocumentIntelligenceRestClientIo
         AzureDocumentIntelligenceRestClientIo rv = cast<AzureDocumentIntelligenceRestClientIo>(
             RestClientIo::copyWithUrl(normalizeEndpoint(new_url)));
         rv.sleeper = sleeper;
+        rv.clock = clock;
         return rv;
     }
 
@@ -328,7 +340,8 @@ public class AzureDocumentIntelligenceRestClientIo
                     || !body.base64Source.val()))) {
             throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR", "supply exactly one nonempty document source";
         }
-        date deadline = now_us() + milliseconds(int(overall_to));
+        code<date()> now = clock ?? \Qore::now_us();
+        date deadline = now() + milliseconds(int(overall_to));
 
         string submit_path = sprintf(
             "/documentintelligence/documentModels/%s:analyze?api-version=%s",
@@ -357,11 +370,12 @@ public class AzureDocumentIntelligenceRestClientIo
 
         string poll_path = servicePath(getUrl(), op_location);
         int retry_delay = retryAfter(submit_resp.headers."retry-after");
-        code<nothing(timeout)> wait = sleeper ?? (nothing sub (timeout delay) { Qore::usleep(delay); });
+        # a timeout is in milliseconds, and usleep() takes microseconds
+        code<nothing(timeout)> wait = sleeper ?? (nothing sub (timeout delay) { Qore::usleep(int(delay) * 1000); });
         # Every call owns its poller and callbacks. Copies and concurrent jobs never share job state.
         QoreAsyncJobUtils::AsyncJobPoller poller(
             hash<auto> sub (string job_id) {
-                int remaining = get_duration_milliseconds(deadline - now_us());
+                int remaining = get_duration_milliseconds(deadline - now());
                 if (remaining <= 0) {
                     throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR", "analysis deadline exceeded";
                 }
@@ -376,17 +390,18 @@ public class AzureDocumentIntelligenceRestClientIo
             },
             bool sub (hash<auto> status) { return inlist(status.status, TerminalStatuses); },
             "Azure Document Intelligence analysis", "AZURE-DOCUMENT-INTELLIGENCE-ERROR");
+        poller.setClock(now);
         poller.setSleeper(nothing sub (timeout delay) {
-            int remaining = get_duration_milliseconds(deadline - now_us());
+            int remaining = get_duration_milliseconds(deadline - now());
             if (remaining > 0) { wait(min(max(int(delay), retry_delay), remaining)); }
         });
         hash<auto> final_status;
         try {
             if (retry_delay > 0) {
-                int remaining = get_duration_milliseconds(deadline - now_us());
+                int remaining = get_duration_milliseconds(deadline - now());
                 if (remaining > 0) { wait(min(retry_delay, remaining)); }
             }
-            int remaining = get_duration_milliseconds(deadline - now_us());
+            int remaining = get_duration_milliseconds(deadline - now());
             if (remaining <= 0) {
                 throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR", "analysis deadline exceeded after submission";
             }

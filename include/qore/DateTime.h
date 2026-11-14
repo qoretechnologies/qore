@@ -333,6 +333,16 @@ public:
    */
    DLLEXPORT int64 getEpochMicrosecondsUTC() const;
 
+   //! gets the number of microseconds since January 1, 1970Z for the current date, if it fits in an int64
+   /** For a relative date, the microseconds are those of getRelativeMicroseconds(): the whole duration.
+
+       @param micros the number of microseconds; set only if the function returns true
+       @return true if the number of microseconds fits in an int64, false if getEpochMicrosecondsUTC() would wrap
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT bool getEpochMicrosecondsUTCChecked(int64& micros) const;
+
    //! gets the number of milliseconds since January 1, 1970Z for the current date
    /**
       @return the number of milliseconds since January 1, 1970Z

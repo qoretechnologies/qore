@@ -33,6 +33,8 @@ module CMakeBuildHelpersTestBase {
 }
 
 %requires(reexport) QUnit
+%requires Util
+%requires FsUtil
 
 /** The tests of the exported CMake build helpers build CMake projects with the cmake in the PATH and the Qore under
     test:
@@ -56,7 +58,7 @@ class MyTest inherits CMakeBuildHelpersTestBase::GenericQccObjectTest {
     }
 
     testScenario() {
-        TmpDir tmp("qore-cmake-qcc-scenario-");
+        TmpDir tmp("qore-cmake-qcc-scenario-", NOTHING, cmakeTmpBase());
         hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
         string out = run(buildCommand(project.build_dir));
     }
@@ -88,6 +90,8 @@ public class CMakeBuildTest inherits QUnit::Test {
     private:internal {
         #! the number of jobs a test build runs, once determined
         *int build_jobs;
+        #! the directory for the temporary directories of the test cases, once determined
+        *string cmake_tmp_base;
     }
 
     #! Finds the Qore under test and the cmake in the PATH
@@ -122,6 +126,34 @@ public class CMakeBuildTest inherits QUnit::Test {
 
     private string run(string cmd) {
         return backquote("{ " + cmd + "; } 2>&1");
+    }
+
+    #! Returns the directory for the temporary directories of the test cases, named as CMake names it
+    /** The standard temporary location is a real path, but CMake names paths by its own translations (below
+        realpath("/tmp") by their path below /tmp, as on macOS, where /tmp is a link to /private/tmp, and below the
+        physical working directory by their path below $PWD) in what it generates and in the paths it derives (an
+        install prefix below DESTDIR, for example); the test cases compare paths that CMake gives back with the paths
+        of their directories, so these are created below the directory as CMake names it, which cmake itself gives
+    */
+    private string cmakeTmpBase() {
+        if (cmake_tmp_base) {
+            return cmake_tmp_base;
+        }
+        string dir = tmp_location();
+        if (cmake) {
+            TmpFile script("qore-cmake-tmp-base-", ".cmake");
+            script.file.write("get_filename_component(_dir \"${QORE_TEST_DIR}\" ABSOLUTE)\n"
+                "message(STATUS \"qore-test-dir=${_dir}\")\n");
+            script.file.close();
+            string out = backquote(sprintf("%s -DQORE_TEST_DIR=%s -P %s 2>&1", shellQuote(cmake), shellQuote(dir),
+                shellQuote(script.path)));
+            *string cmake_dir = (out =~ x/^-- qore-test-dir=(.*)$/m)[0];
+            # the translated path must name the same directory
+            if (cmake_dir && is_dir(cmake_dir) && realpath(cmake_dir) == realpath(dir)) {
+                dir = cmake_dir;
+            }
+        }
+        return cmake_tmp_base = dir;
     }
 
     #! Skips the test case unless the qcc of the build tree has its test hooks (CMake option QORE_QCC_TEST_HOOKS)

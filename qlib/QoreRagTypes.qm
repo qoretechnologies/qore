@@ -306,7 +306,8 @@ public hashdecl RateLimitEventInfo {
 public hashdecl RateLimitedCallInfo {
     #! The request's estimated tokens
     int tokens = 0;
-    #! The latest monotonic time at which the request may be admitted or retried after a rejection
+    #! The latest time of the limiter's clock at which the request may be admitted or retried after a rejection
+    /** See @ref QoreRagUtils::EmbedderRateLimiter::getClockUs() "EmbedderRateLimiter::getClockUs()" */
     int deadline_us;
     #! Maximum retries after HTTP 429 rejections; zero disables them
     int max_retries = 8;
@@ -338,10 +339,14 @@ public hashdecl RateLimitedCallInfo {
     @ref getShared() returns one process-wide limiter per key, so independently constructed clients for the
     same provider account (for example, a new embedder per request) share one window.
 
+    Times are measured with the limiter's clock (@ref getClockUs()), the monotonic clock by default; a test can
+    replace the clock and the waits for admission with @ref setClock() and @ref setWaiter(), so it decides with
+    virtual time instead of waiting.
+
     @par Example
     @code{.py}
 EmbedderRateLimiter limiter = EmbedderRateLimiter::getShared("provider|key-digest|model", 2000, 3000000);
-int ticket = limiter.admit(estimated_tokens, clock_get_monotonic_us() + 60000000);
+int ticket = limiter.admit(estimated_tokens, limiter.getClockUs() + 60000000);
 try {
     hash<auto> resp = send();
     limiter.settle(ticket, resp.usage.total_tokens);
@@ -380,6 +385,10 @@ public class EmbedderRateLimiter {
         int blocked_until_us = 0;
         #! Last issued ticket identifier
         int last_id = 0;
+        #! Clock (test seam): returns the current time in monotonic microseconds; see @ref setClock()
+        *code<int()> clock;
+        #! Waiter (test seam): called instead of each timed wait for admission; see @ref setWaiter()
+        *code<bool(int)> waiter;
     }
 
     private:internal {
@@ -452,10 +461,67 @@ public class EmbedderRateLimiter {
         return {"requests": requests_per_window, "tokens": tokens_per_window};
     }
 
+    #! Returns the current time of the limiter's clock in monotonic microseconds
+    /** Deadlines passed to @ref admit() and @ref call() are measured with this clock: by default
+        @ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()", or the clock set with @ref setClock()
+
+        @par Example
+        @code{.py}
+int ticket = limiter.admit(estimated_tokens, limiter.getClockUs() + 60000000);
+        @endcode
+
+        @since QoreRagTypes 1.0
+    */
+    int getClockUs() {
+        return nowUs();
+    }
+
+    #! Sets the clock of the limiter (test seam)
+    /** Admission instants, windows, blocks and deadlines are measured with this clock instead of
+        @ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()"; it is usually set together with a waiter
+        (see @ref setWaiter()) that advances it, so a test decides with virtual time instead of waiting.  Set it
+        before the limiter is used; the clock is called with the limiter's lock held and must not call the
+        limiter.
+
+        @param c returns the current time in microseconds; it must never go backwards
+
+        @since QoreRagTypes 1.0
+    */
+    setClock(code<int()> c) {
+        AutoLock al(m);
+        clock = c;
+    }
+
+    #! Sets the waiter of the limiter (test seam)
+    /** By default a request that does not fit waits on the limiter's condition variable until it can be admitted
+        or its deadline, or until it is woken by @ref settle(), @ref block() or @ref setLimits().  With a waiter,
+        each such timed wait is replaced by a call to the waiter with the time to wait; the waiter is called with
+        the limiter's lock held and must not call the limiter.  When it returns @ref False, the request is checked
+        again at once, as after the timed wait (a test advances its clock in the waiter to pass the time); when it
+        returns @ref True, the request waits on the condition variable without a time limit, until it is woken
+        as above or its thread is cancelled.  Set it before the limiter is used.
+
+        @param w called with the time to wait in milliseconds; returns @ref True to wait until woken
+
+        @par Example
+        @code{.py}
+int now_us = 0;
+list<int> waits = ();
+limiter.setClock(int sub () { return now_us; });
+limiter.setWaiter(bool sub (int ms) { push waits, ms; now_us += ms * 1000; return False; });
+        @endcode
+
+        @since QoreRagTypes 1.0
+    */
+    setWaiter(code<bool(int)> w) {
+        AutoLock al(m);
+        waiter = w;
+    }
+
     #! Admits one request, waiting until it fits in the window
     /** @param tokens the request's estimated tokens
-        @param deadline_us the latest monotonic time (see
-            @ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()") at which the request may be admitted
+        @param deadline_us the latest time of the limiter's clock (see @ref getClockUs()) at which the request
+            may be admitted
 
         @return the ticket identifier to pass to @ref settle()
 
@@ -507,7 +573,12 @@ public class EmbedderRateLimiter {
                 ready = deadline_us;
             }
             # round up so a wait never ends before the time it waits for
-            cond.wait(m, max(1, (ready - now + 999) / 1000));
+            int wait_ms = max(1, (ready - now + 999) / 1000);
+            if (!waiter) {
+                cond.wait(m, wait_ms);
+            } else if (waiter(wait_ms)) {
+                cond.wait(m);
+            }
         }
     }
 
@@ -580,7 +651,7 @@ public class EmbedderRateLimiter {
         @code{.py}
 hash<auto> resp = limiter.call(<RateLimitedCallInfo>{
     "tokens": 1200,
-    "deadline_us": clock_get_monotonic_us() + 60000000,
+    "deadline_us": limiter.getClockUs() + 60000000,
     "error_code": "RERANKER-RATE-LIMIT-ERROR",
 }, auto sub () { return client.restPost("/rerank", body); },
     *int sub (auto resp) { return resp.body.usage.total_tokens; });
@@ -707,9 +778,9 @@ hash<auto> resp = limiter.call(<RateLimitedCallInfo>{
         }
     }
 
-    #! Monotonic clock; overridable for deterministic tests
+    #! Monotonic clock: the clock set with @ref setClock(), if any; overridable for deterministic tests
     private int nowUs() {
-        return clock_get_monotonic_us();
+        return clock ? clock() : clock_get_monotonic_us();
     }
 
     #! Called with the lock held when a request is admitted; the default does nothing

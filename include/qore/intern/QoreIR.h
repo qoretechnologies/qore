@@ -48,6 +48,9 @@
 #include <qore/Qore.h>
 #include <qore/intern/QoreTypeInfo.h>
 
+//! how the thread of a background helper uses the object of the starting code (defined in qore_thread_intern.h)
+enum QoreBackgroundHelperSelf : uint8_t;
+
 class LocalVar;
 class Var;
 class VarRefNode;
@@ -1498,6 +1501,10 @@ public:
     // Transient: ReleaseOwnedTemp in the exception cleanup of a functional operator, which only runs once the loop has
     // ended (see qore_ir_is_exception_only_release())
     bool exception_cleanup_release = false;
+    // Transient: a call with an argument that the IR interpreter's analysis found it can consume, which gives the
+    // references of its temporary arguments to the callee (see IRConsumedCallArgs in QoreIRInterpreter.cpp, issue
+    // #5882); set with the interpreter's analysis of the function, before the function runs
+    bool interpreter_gives_call_args = false;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
     uint8_t aot_string_case_comparison_operand = 0;
@@ -1588,7 +1595,11 @@ public:
     const AbstractStatement* statement;
 
     //! the depth of the statement in its function: 0 for a statement of the function's block (#5816)
-    /** The debugger's exception events of the IR interpreter are made for each statement that an exception leaves,
+    /** For a DebugBlock with locals, if QORE_IR_DEBUG_NEST_VALID is set, the depth of the statement that contains the
+        block, which its locals are recorded on (#5999); it is not set for a block at depth 0 (the inline body of an
+        on_exit handler declared at function level), whose locals are recorded on the last statement entered.
+
+        The debugger's exception events of the IR interpreter are made for each statement that an exception leaves,
         from the innermost, as with the AST interpreter: the statements that a frame is in are the statements of its
         last DebugStatement instructions at each depth up to that of the current statement
     */
@@ -3013,10 +3024,11 @@ public:
     std::vector<LocalVar*> helper_params;
     //! Helper only: the parameters that hold values other than the starting code's local variables
     std::vector<std::unique_ptr<LocalVar, QoreIROwnedLocalVarDeleter>> owned_params;
-    //! Helper only: true if the new thread runs with the object of the starting code, for calls of its methods
-    /** The object is held for the thread's duration, as with a background call of a method of the object.
+    //! Helper only: how the new thread uses the object of the starting code, for calls of its methods
+    /** The object is held for the thread's duration, as with a background call of a method of the object; it is
+        checked when the thread starts only when the expression is such a call (qore#5973).
     */
-    bool helper_uses_self = false;
+    QoreBackgroundHelperSelf helper_uses_self = static_cast<QoreBackgroundHelperSelf>(0);
 };
 
 //! @name Inline call-state cache publication
@@ -3629,7 +3641,7 @@ public:
     }
 
     //! Constructor for deserialized case (no AST statement available)
-    QoreIROnBlockExitInstruction(obe_type_e n_obe_type, std::unique_ptr<QoreIRFunction> n_handler_ir)
+    QoreIROnBlockExitInstruction(obe_type_e n_obe_type, std::shared_ptr<QoreIRFunction> n_handler_ir)
             : QoreIRInstruction(QoreIROpcode::OnBlockExit, inst_class_id), obe_type(n_obe_type),
               handler_ir(std::move(n_handler_ir)) {
     }
@@ -3639,7 +3651,13 @@ public:
     obe_type_e obe_type = OBE_Unconditional;
     //! Compiled handler body; required for IR/JIT/AOT execution.
     //! Missing handler IR is a lowering/metadata error, not an AST fallback.
-    std::unique_ptr<QoreIRFunction> handler_ir;
+    /** Shared: the instructions of the copies of a handler's statement that its enclosing handlers' bodies give
+        when they are lowered both inline and out of line have one handler function, as its code is the same
+        (QoreIRLowering::compileBlockHandlerIRs(), #6087).  A walk of the handlers of a function that visits each
+        handler function once must therefore remember the ones it has visited, or it takes time exponential in the
+        nesting of the handlers.
+    */
+    std::shared_ptr<QoreIRFunction> handler_ir;
     //! Transient scope ownership used by transforms that may split a function.
     /** A zero value means that ownership metadata is unavailable. This field
      *  is intentionally not part of the persistent IR format.
@@ -4100,6 +4118,35 @@ public:
             cached_instruction_count.store(instruction_count, std::memory_order_relaxed);
         }
         return instruction_count;
+    }
+
+    //! Returns the estimated number of LLVM instructions of the code that runs the on_block_exit handlers of the function
+    /** The code that runs the pending handlers at each exit that can leave a scope with a handler publishes every local
+        of the function to the runtime and reloads it afterwards, so its size is the product of the handlers and of
+        the locals: a function with 200 try statements whose catch blocks have a local and a handler took tens of
+        minutes to compile with the JIT, though it has fewer IR instructions than the limit of
+        QoreJIT::getMaxJITIRInstructions() (qore#6104).  Used with QoreJIT::getMaxJITHandlerCost() to keep such a
+        function on the IR tier.  Memoized like getInstructionCount().
+    */
+    size_t getHandlerCostEstimate() const {
+        size_t cost = cached_handler_cost.load(std::memory_order_relaxed);
+        if (!cost) {
+            size_t handlers = 0;
+            for (const auto& block : blocks) {
+                for (const auto& inst : block->instructions) {
+                    if (inst && inst->opcode == QoreIROpcode::OnBlockExit) {
+                        ++handlers;
+                    }
+                }
+            }
+            // the code of a handler run takes about 18 instructions for each local, and a handler is run at about two
+            // places (measured: 83 runs for 40 handlers of 41 locals, 62k of the 93k instructions of the function)
+            cost = handlers * 2 * 18 * (static_cast<size_t>(total_local_count) + 1);
+            // zero marks "not computed"
+            cached_handler_cost.store(cost ? cost : 1, std::memory_order_relaxed);
+            return cost;
+        }
+        return cost == 1 ? 0 : cost;
     }
 
     QoreIRBasicBlock* createBlock(const std::string& block_name) {
@@ -4638,7 +4685,11 @@ public:
 
     //! Return the implicit argv/self contexts required by this function.
     //! Opaque AST callbacks and closure captures are handled conservatively.
-    ContextUsage getContextUsage(const LocalVar* argvid, const LocalVar* selfid) const;
+    /** @param visited_handlers the handler functions already walked, which are skipped (handler functions can be
+        shared, #6087); null for a walk of its own
+    */
+    ContextUsage getContextUsage(const LocalVar* argvid, const LocalVar* selfid,
+            std::unordered_set<const QoreIRFunction*>* visited_handlers = nullptr) const;
 
     //! Returns true if all body locals are IR-only (managed by LLVM allocas,
     //! never accessed via thread-local stack).  When true, callers can skip
@@ -4785,6 +4836,7 @@ private:
     uint32_t next_value_id = 1;
     //! Memoized getInstructionCount() result; 0 = not yet computed
     mutable std::atomic<size_t> cached_instruction_count{0};
+    mutable std::atomic<size_t> cached_handler_cost{0};
 };
 
 //! Check if an opcode is a block terminator (transfers control flow)

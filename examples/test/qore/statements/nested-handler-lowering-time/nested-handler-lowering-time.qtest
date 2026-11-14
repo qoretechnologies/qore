@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation of handlers that share their handler functions
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../ExecModeHarness.qm
+
+%exec-class NestedHandlerLoweringTimeTest
+
+#! The lowering of on_exit handlers nested in the bodies of other handlers takes time polynomial in the nesting (#6087)
+/** A handler's body is lowered inline at the exits of its block and compiled to a handler function of its own, and so
+    were the handlers nested in it, each time: a handler nested n deep was lowered 2^n times, each copy with a handler
+    function of its own, so that the functions of NestedHandlerLoweringTime.q, whose handlers are nested 16 and 12
+    deep, took many minutes to lower and to compile to native code.  The copies of a handler now share its handler
+    function, in the IR and in the native code.  NestedHandlerLoweringTime.q gives the output of the AST interpreter
+    in every execution mode, also where an exception runs the shared handler functions out of line; without the fix,
+    the child processes take longer than the time limit of the test run.
+*/
+class NestedHandlerLoweringTimeTest inherits QUnit::Test {
+    public {
+        #! the output of NestedHandlerLoweringTime.q with the AST interpreter
+        const Expected = "noreturn: -1 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,core
+return 0x0: -1 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,core
+throw 0x0 -1: -1 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x20000000 -1: \"CORE-ERROR\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x0 0: \"LEVEL-0\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x20000000 0: \"LEVEL-0\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x0 7: \"LEVEL-7\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x20000000 7: \"LEVEL-7\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x0 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x20000000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+return 0x1: 0 0
+throw 0x1 -1: 0 0
+throw 0x20000001 -1: 0 0
+throw 0x1 0: \"LEVEL-0\" 0
+throw 0x20000001 0: \"LEVEL-0\" 0
+throw 0x1 7: 0 0
+throw 0x20000001 7: 0 0
+throw 0x1 11: 0 0
+throw 0x20000001 11: 0 0
+return 0x8: 3 0,1,2,3
+throw 0x8 -1: 3 0,1,2,3
+throw 0x20000008 -1: 3 0,1,2,3
+throw 0x8 0: \"LEVEL-0\" 0,1,2,3
+throw 0x20000008 0: \"LEVEL-0\" 0,1,2,3
+throw 0x8 7: 3 0,1,2,3
+throw 0x20000008 7: 3 0,1,2,3
+throw 0x8 11: 3 0,1,2,3
+throw 0x20000008 11: 3 0,1,2,3
+return 0x220: 5 0,1,2,3,4,5
+throw 0x220 -1: 5 0,1,2,3,4,5
+throw 0x20000220 -1: 5 0,1,2,3,4,5
+throw 0x220 0: \"LEVEL-0\" 0,1,2,3,4,5
+throw 0x20000220 0: \"LEVEL-0\" 0,1,2,3,4,5
+throw 0x220 7: 5 0,1,2,3,4,5
+throw 0x20000220 7: 5 0,1,2,3,4,5
+throw 0x220 11: 5 0,1,2,3,4,5
+throw 0x20000220 11: 5 0,1,2,3,4,5
+return 0x1000: 12 0,1,2,3,4,5,6,7,8,9,10,11,12
+throw 0x1000 -1: -1 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x20001000 -1: \"CORE-ERROR\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x1000 0: \"LEVEL-0\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x20001000 0: \"LEVEL-0\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x1000 7: \"LEVEL-7\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x20001000 7: \"LEVEL-7\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x1000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+throw 0x20001000 11: \"LEVEL-11\" 0,1,2,3,4,5,6,7,8,9,10,11,core
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+    }
+
+    constructor() : QUnit::Test("NestedHandlerLoweringTimeTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/NestedHandlerLoweringTime.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": handlers nested 16 deep", \modeTest(), (mode,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        # the functions are lowered and compiled to native code at their first call (ExecModeHarness::TraceEnv)
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+}

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
 
@@ -214,7 +215,14 @@ int QoreClosureParseNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             const qore_class_private* qc = parse_get_class_priv();
             needs_type_context = parse_get_signature_type_param_context() || (qc && qc->hasTypeParams());
         }
-        err = uf->parseInitClosure();
+        {
+            // the closure runs when it is called: any number of times, including none, and after the code parsed after
+            // it, so its code is a deferred scope whose assignments and deletions of the variables it captures may
+            // have run after its creation (qore#5937)
+            ParseDeferredScopeHelper deferred_scope;
+            ParseLoopAssignedStateHelper loop_assigned_state;
+            err = uf->parseInitClosure();
+        }
         uf->parseCommit();
         if (uf->defaultsNeedObject()) {
             defaults_need_object = true;
@@ -264,7 +272,7 @@ const char* QoreClosureParseNode::getTypeName() const {
 }
 
 QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
-        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const {
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args) const {
     if (is_deferred) {
         // A closure inside a constant expression has its parse-init deferred (deferCodeInitialization() in
         // parseInitImpl()) so that recursive constant values are available when it is initialized (#4903).  The
@@ -284,7 +292,7 @@ QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QorePr
         }
     }
     assert(uf);
-    return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink);
+    return uf->evalClosure(closure_base, pgm, args, self, class_ctx, xsink, tmp_args);
 }
 
 QoreValue QoreClosureParseNode::execNamed(const QoreClosureBase& closure_base, QoreProgram* pgm,

@@ -43,6 +43,7 @@
 #include <memory>
 #include <list>
 #include <mutex>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -522,6 +523,11 @@ struct AOTSlotMap {
         instruction evaluates for them (qore#5939)
     */
     std::unordered_set<uint64_t> ast_expr_bits;
+    //! the handler functions whose slots buildAOTSlotMap() has added, with the function whose handler each is
+    /** A handler function can be shared by several handlers (QoreIROnBlockExitInstruction::handler_ir, #6087); its
+        slots are added once for each function that it is a handler of.
+    */
+    std::set<std::pair<const void*, const void*>> handler_slot_maps_built;
 
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {
@@ -881,6 +887,20 @@ DLLLOCAL std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo 
     text, with the default values of the parameters) can have newlines (qore#6026)
 */
 DLLLOCAL const char* qore_aot_find_class_ref_end(const char* ref);
+
+//! finds the method of a class that an AOT image names, whatever its access
+/** The compiler checked the access when it resolved the method: an image is loaded without the class context of the
+    code that calls it, in which QoreClass::findMethod() and QoreClass::findStaticMethod() do not find a
+    private:internal method of the class, such as one that a closure in a method of a final class calls through self,
+    which the compiler resolves itself (qore#5975); the class's own context finds it, a normal method before a static
+    one
+
+    @param qc the class
+    @param method_name the name of the method
+
+    @return the method, or nullptr if the class has none of that name
+*/
+DLLLOCAL const QoreMethod* qore_aot_find_named_method(const QoreClass* qc, const char* method_name);
 
 //! Resolves a class reference emitted by qore_aot_encode_class_ref().
 DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,

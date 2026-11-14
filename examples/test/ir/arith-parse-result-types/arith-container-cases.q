@@ -207,6 +207,74 @@ sub others() {
     show("char / int", list<auto> sub () { return map s[$1] / 2, (0, 1); });
 }
 
+#! a hashdecl that inherits D: a value of type hash<D> can be a hash<D2>
+hashdecl D2 inherits D {
+    int y = 2;
+}
+
+#! a class for the cases of object operands that can be NOTHING
+class OptObj {
+    public {
+        int m = 1;
+    }
+}
+
+#! a value of an optional hashdecl type minus keys keeps the hashdecl: the parse type of the result allows it
+*hash<D> sub optionalHashdeclMinus(*hash<D> h) {
+    return h - ("s",);
+}
+
+#! returns its argument with its optional type, which a local variable initialized with the value would not keep
+*string sub optString(*string s) {
+    return s;
+}
+
+#! returns its argument with its optional type
+*hash<auto> sub optHash(*hash<auto> h) {
+    return h;
+}
+
+#! returns its argument with its optional type
+*hash<D> sub optHashD(*hash<D> h) {
+    return h;
+}
+
+#! an optional hashdecl, hash, list or object operand of + or - gives the container type of the operand, as its value
+#! does at runtime, or NOTHING: the parse type of the result is the container type or NOTHING, not the base type of
+#! the container
+sub optionalContainers() {
+    list<*hash<D>> lod = (<D>{"x": 2}, NOTHING);
+    hash<D> d = <D>{"x": 3};
+    show("*hash<D> - list<string>", list<auto> sub () { return map $1 - ("s",), lod; });
+    show("*hash<D> - string", list<auto> sub () { return map $1 - "s", lod; });
+    show("*hash<D> - *string", list<auto> sub () { return map $1 - optString("s"), lod; });
+    show("*hash<D> - list<string> (function)", list<auto> sub () { return map optionalHashdeclMinus($1), lod; });
+    show("*hash<D> + hash<D>", list<auto> sub () { return map $1 + d, lod; });
+    show("hash<D> + *hash<D>", list<auto> sub () { return map d + $1, lod; });
+    show("*hash<D> + *hash<D>", list<auto> sub () { return map $1 + optHashD(d), lod; });
+    show("*hash<D> + hash<auto>", list<auto> sub () { return map $1 + {"y": 1}, lod; });
+
+    # a hash<D> value can be a hash<D2>, which a hash<D> minus a key also is
+    list<*hash<D>> lod2 = (optHashD(<D2>{}), NOTHING);
+    show("*hash<D> (hash<D2>) - string", list<auto> sub () { return map $1 - "s", lod2; });
+
+    list<*hash<string, int>> loi = ({"a": 1, "b": 2}, NOTHING);
+    hash<string, int> hi = {"c": 3};
+    show("*hash<string, int> - string", list<auto> sub () { return map $1 - "a", loi; });
+    show("*hash<string, int> + hash<string, int>", list<auto> sub () { return map $1 + hi, loi; });
+
+    list<*list<int>> lol = ((1, 2), NOTHING);
+    show("*list<int> + int", list<auto> sub () { return map $1 + 3, lol; });
+    show("int + *list<int>", list<auto> sub () { return map 3 + $1, lol; });
+
+    list<*OptObj> loo = (new OptObj(), NOTHING);
+    show("*OptObj + *hash<auto> (NOTHING)", list<auto> sub () { return map $1 + optHash(), loo; });
+    show("*OptObj + *hash<auto>", list<auto> sub () { return map $1 + optHash({"a": 1}), loo; });
+    show("*OptObj - *string", list<auto> sub () { return map $1 - optString("s"), loo; });
+    show("*OptObj - *string (NOTHING)", list<auto> sub () { return map $1 - optString(), loo; });
+}
+
 containers();
 unions();
 others();
+optionalContainers();

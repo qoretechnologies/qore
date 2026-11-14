@@ -63,6 +63,8 @@ int QoreRemoveOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     int err = 0;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
+        // the operator clears the lvalue: a variable without a value is not an error here (qore#5937)
+        QoreParseContextFlagScope fs(parse_context, PF_LVALUE_NOT_READ);
         err = parse_init_value(exp, parse_context);
         operand_analysis = parse_context.analysis;
     }
@@ -78,7 +80,7 @@ int QoreRemoveOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
         if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
             LocalVar* lvar = vrn->ref.id;
             if (lvar) {
-                lvar->parseUnassigned();
+                lvar->parseCleared();
                 lvar->parseDeleted();
                 // Reset narrowed type so the variable reverts to its declared
                 // type after branch merging (e.g., auto v; v = rec; ... remove v;
