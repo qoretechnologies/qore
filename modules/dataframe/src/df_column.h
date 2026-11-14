@@ -154,22 +154,6 @@ enum DataFrameDateKind : int {
     DFDK_RELATIVE = 2,
 };
 
-//! Gives the microseconds of a date for a date cell, as dataFrameDateMicros() does, and its kind, with one call into
-//! the date (qore#6107)
-/** @return the kind of the date (DFDK_ABSOLUTE or DFDK_RELATIVE), or 0 if a DATAFRAME-DATE-RANGE-ERROR exception
-    was raised
-*/
-static inline int dataFrameDateMicrosKind(const DateTimeNode* dt, int64_t& out, ExceptionSink* xsink) {
-    int64 micros;
-    int kind = dt->getEpochMicrosecondsUTCCheckedKind(micros);
-    if (kind) {
-        out = micros;
-        return kind;
-    }
-    dataFrameDateOutOfRange(dt, xsink);
-    return 0;
-}
-
 //! Compares two values as the core <=> operator does (qore#6097)
 /** @param cmp the result: -1, 0 or 1
     @return 0 for success, -1 if the operator raises an exception (NAN-COMPARE-ERROR for a NaN value)
@@ -409,6 +393,17 @@ static inline DateTimeNode* dataFrameMakeDuration(int64_t seconds, int microseco
     }
     return DateTimeNode::makeRelative(0, 0, static_cast<int>(seconds / 86400), 0, 0,
         static_cast<int>(seconds % 86400), microseconds);
+}
+
+//! Gives a date column made of the cells of another the columnar schema of the other (its time unit and zone, or
+//! that its dates are durations), with no name, so that its cells are returned and exported as those of the other
+//! (qore#6107)
+static inline void dataFrameCopyDateSchema(ColumnData& dest, const ColumnData& src) {
+    if (src.type == ColumnType::DATE && src.has_columnar_schema) {
+        dest.columnar_schema = src.columnar_schema;
+        dest.columnar_schema.name.clear();
+        dest.has_columnar_schema = true;
+    }
 }
 
 //! Makes a date column a column of durations: gives it the columnar schema of durations in microseconds, so that

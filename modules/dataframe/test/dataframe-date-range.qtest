@@ -98,8 +98,11 @@ class DataFrameDateRangeTest inherits QUnit::Test {
                 label + ": column hash");
             assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame(({"v": d},)); }, (),
                 label + ": records");
-            DataFrame::DataFrame nulls({"v": (first, NOTHING)});
+            # a column of time values is filled only with time values (qore#6107)
+            DataFrame::DataFrame nulls({"v": (1h, NOTHING)});
             assertThrows("DATAFRAME-DATE-RANGE-ERROR", \nulls.fillna(), d, label + ": fillna()");
+            DataFrame::DataFrame dates({"v": (first, NOTHING)});
+            assertEq(NOTHING, dates.fillna(d).getColumn("v")[1], label + ": fillna() of a column of dates");
         }
     }
 

@@ -23,6 +23,7 @@ class DataFramePlainDurationsTest inherits QUnit::Test {
         addTestCase("absolute dates and durations", \mixedTest());
         addTestCase("export", \exportTest());
         addTestCase("long durations", \longTest());
+        addTestCase("join()", \joinTest());
         set_return_value(main());
     }
 
@@ -43,6 +44,9 @@ class DataFramePlainDurationsTest inherits QUnit::Test {
         DataFrame::DataFrame filled = dates.fillna(2h);
         checkDurations((1h, 2h), filled.getColumn("d"), "fillna() of a column of durations");
         assertEq(NOTHING, filled.getColumn("a")[1], "fillna() of a column of absolute dates with a duration");
+        # a date of the other kind leaves the value null even outside the range of a date cell
+        assertEq(NOTHING, (new DataFrame::DataFrame({"d": (1h, NOTHING)})).fillna(1970-01-01Z + years(300000))
+            .getColumn("d")[1], "fillna() with a far date");
         filled = dates.fillna(2024-02-01T00:00:00Z);
         assertEq(NOTHING, filled.getColumn("d")[1], "fillna() of a column of durations with an absolute date");
         assertTrue(filled.getColumn("a")[1] == 2024-02-01T00:00:00Z, "fillna() of a column of absolute dates");
@@ -88,6 +92,40 @@ class DataFramePlainDurationsTest inherits QUnit::Test {
         assertEq(expected, map get_duration_microseconds($1), df.getColumn("v"), "column");
         assertEq(expected, map get_duration_microseconds($1),
             DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()).getColumn("v"), "Arrow IPC");
+        # an Arrow duration in seconds whose microseconds do not fit in an int64: 123456789 s is exported, and
+        # patched to 10000000000000 s
+        DataFrame::DataFrame secs = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "v": (123456789s,),
+        }, {
+            "v": {"schema": {"kind": "duration", "time_unit": "s", "nullable": True}},
+        }));
+        string hex = make_hex_string(secs.toArrowIpc());
+        assertEq(1, (hex =~ x/(15cd5b0700000000)/g).size(), "the value in the IPC data");
+        binary patched = parse_hex_string(replace(hex, "15cd5b0700000000", "00a0724e18090000"));
+        assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () {
+            DataFrame::DataFrame back = DataFrame::DataFrame::fromArrowIpc(patched);
+            # the value may be converted when it is read
+            back.getColumn("v");
+        }, (), "a duration in seconds outside the range");
+    }
+
+    #! the columns of a join keep their durations
+    joinTest() {
+        DataFrame::DataFrame left({"g": (1, 1, 2), "d": (1h, 2h, 3h)});
+        DataFrame::DataFrame right({"g": (1, 2, 3), "e": (10s, 20s, 30s)});
+        foreach string how in (("inner", "left", "right", "outer", "cross")) {
+            DataFrame::DataFrame j = left.join(right, how == "cross" ? () : ("g",), how);
+            foreach string col in (("d", "e")) {
+                foreach auto v in (j.getColumn(col)) {
+                    if (exists v) {
+                        assertTrue(is_date_relative(v), sprintf("%s join, %s: %y", how, col, v));
+                    }
+                }
+            }
+        }
+        # a key column of durations
+        DataFrame::DataFrame j = left.join(new DataFrame::DataFrame({"d": (1h, 3h), "x": (1, 2)}), ("d",));
+        assertTrue(is_date_relative(j.getColumn("d")[0]), "a key column of durations");
     }
 
     #! checks that the values are durations equal to the expected ones

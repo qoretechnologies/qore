@@ -2987,15 +2987,15 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
                         // of the column (a duration in a column of absolute dates or the reverse), leaves the value
                         // null (qore#6107)
                         if (value.getType() == NT_DATE) {
-                            int kind = dataFrameDateMicrosKind(value.get<const DateTimeNode>(), new_data->date_data[i],
-                                xsink);
-                            if (!kind) {
-                                delete df;
-                                return nullptr;
-                            }
-                            if ((kind == DFDK_RELATIVE) != new_data->isDuration()) {
+                            // the kind is checked first, so that a date of the other kind leaves the value null
+                            // even if it is outside the range of a date cell
+                            const DateTimeNode* dt = value.get<const DateTimeNode>();
+                            if (dt->isRelative() != new_data->isDuration()) {
                                 new_data->null_mask[i] = 1;
                                 new_data->date_data[i] = 0;
+                            } else if (dataFrameDateMicros(dt, new_data->date_data[i], xsink)) {
+                                delete df;
+                                return nullptr;
                             }
                         } else {
                             new_data->null_mask[i] = 1;

@@ -205,6 +205,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         for (const auto& col : columns) {
             auto cd = std::make_shared<ColumnData>();
             cd->type = col.data->type;
+            dataFrameCopyDateSchema(*cd, *col.data);
             cd->n_rows = 0;
             Column out_col;
             out_col.name = col.name;
@@ -217,6 +218,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         for (const auto& col : other->columns) {
             auto cd = std::make_shared<ColumnData>();
             cd->type = col.data->type;
+            dataFrameCopyDateSchema(*cd, *col.data);
             cd->n_rows = 0;
             std::string name = col.name;
             if (df->col_index.count(name)) {
@@ -399,6 +401,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
                 const ColumnData& src = *src_col.data;
                 auto cd = std::make_shared<ColumnData>();
                 cd->type = src.type;
+                dataFrameCopyDateSchema(*cd, src);
                 cd->n_rows = n_rows;
                 cd->null_mask.resize(n_rows, 0);
 
@@ -525,6 +528,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         const Column& lc = columns[left_key_indices[i]];
         auto cd = std::make_shared<ColumnData>();
         cd->type = lc.data->type;
+        dataFrameCopyDateSchema(*cd, *lc.data);
         cd->n_rows = 0;
         Column out_col;
         out_col.name = lc.name;
@@ -543,6 +547,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         }
         auto cd = std::make_shared<ColumnData>();
         cd->type = columns[i].data->type;
+        dataFrameCopyDateSchema(*cd, *columns[i].data);
         cd->n_rows = 0;
         Column out_col;
         out_col.name = columns[i].name;
@@ -561,6 +566,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         }
         auto cd = std::make_shared<ColumnData>();
         cd->type = other->columns[i].data->type;
+        dataFrameCopyDateSchema(*cd, *other->columns[i].data);
         cd->n_rows = 0;
         std::string name = other->columns[i].name;
         if (df->col_index.count(name)) {

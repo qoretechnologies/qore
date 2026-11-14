@@ -345,8 +345,8 @@ public:
 
    //! gets the microseconds of getEpochMicrosecondsUTCChecked() and whether the date is absolute or relative
    /** For a caller that stores the microseconds of many dates and must tell absolute dates from relative dates
-       (durations), with one call per date and no second output: the kinds of several dates can be combined with a
-       bitwise or.
+       (durations), with one call per date and no second output: the caller compares the result with the kind of
+       the dates before.
 
        @param micros the number of microseconds; set only if the function does not return 0
        @return 0 if the number of microseconds does not fit in an int64 (getEpochMicrosecondsUTC() would wrap), 1 if
