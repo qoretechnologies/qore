@@ -9,6 +9,9 @@
       Qore dates have a resolution of a microsecond
     - dense_float32.parquet, which dataframe-dense-rows.qtest reads: a float32 column with NaN and infinite values
       (qore#6092); a DataFrame writes float64 columns
+    - date_range_seconds.parquet and date_range_millis.parquet, which dataframe-date-range.qtest reads: timestamps
+      in seconds and milliseconds outside the range of a DataFrame date column (qore#6092), which a DataFrame cannot
+      hold
 
     Each file has the columns "id" (int64) and "v", with one row per row group, so that a filter can skip row
     groups by their statistics.
@@ -24,6 +27,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <utility>
 
 //! writes the given values with their row numbers in the column "id"
 static int write(const std::string& path, const std::shared_ptr<arrow::Array>& value_array) {
@@ -90,6 +94,29 @@ int main(int argc, char** argv) {
         }
         std::shared_ptr<arrow::Array> value_array;
         if (!values.Finish(&value_array).ok() || write(dir + "/dense_float32.parquet", value_array)) {
+            return 1;
+        }
+    }
+
+    // timestamps in seconds and milliseconds, the first in the range of a DataFrame date column (int64 microseconds
+    // since the epoch) and the second outside it
+    const std::pair<arrow::TimeUnit::type, const char*> units[] = {
+        {arrow::TimeUnit::SECOND, "date_range_seconds.parquet"},
+        {arrow::TimeUnit::MILLI, "date_range_millis.parquet"},
+    };
+    for (const auto& [unit, name] : units) {
+        arrow::TimestampBuilder values(arrow::timestamp(unit, "UTC"), arrow::default_memory_pool());
+        const int64_t cells[] = {
+            unit == arrow::TimeUnit::SECOND ? 9223372036854 : 0,
+            unit == arrow::TimeUnit::SECOND ? 9223372036855 : 9223372036854776,
+        };
+        for (int64_t cell : cells) {
+            if (!values.Append(cell).ok()) {
+                return 1;
+            }
+        }
+        std::shared_ptr<arrow::Array> value_array;
+        if (!values.Finish(&value_array).ok() || write(dir + "/" + name, value_array)) {
             return 1;
         }
     }

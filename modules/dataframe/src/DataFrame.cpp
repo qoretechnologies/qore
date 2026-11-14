@@ -206,10 +206,9 @@ static int storeRecordValue(ColumnData& data, int64_t i, QoreValue value, Except
             break;
         case ColumnType::DATE:
             if (value.getType() == NT_DATE) {
-                data.date_data[i] = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
-            } else {
-                data.null_mask[i] = 1;
+                return dataFrameDateMicros(value.get<const DateTimeNode>(), data.date_data[i], xsink);
             }
+            data.null_mask[i] = 1;
             break;
         case ColumnType::AUTO:
             data.setAutoValue(i, value, nullptr);
@@ -2575,7 +2574,11 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
                     case ColumnType::DATE:
                         // as when a column is built: a value that is not a date leaves the value null
                         if (value.getType() == NT_DATE) {
-                            new_data->date_data[i] = value.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                            if (dataFrameDateMicros(value.get<const DateTimeNode>(), new_data->date_data[i],
+                                    xsink)) {
+                                delete df;
+                                return nullptr;
+                            }
                         } else {
                             new_data->null_mask[i] = 1;
                         }

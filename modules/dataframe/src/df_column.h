@@ -93,6 +93,31 @@ static inline int dataFrameUtf8Bytes(const char* data, size_t len, const QoreEnc
 //! the same key; a string that cannot be converted keeps its bytes
 DLLLOCAL std::string dataFrameUtf8Key(QoreValue v);
 
+//! Raises DATAFRAME-DATE-RANGE-ERROR for a date or time value outside the range of a date cell (qore#6092)
+/** @param desc a description of the value
+*/
+DLLLOCAL void dataFrameRaiseDateRangeError(const char* desc, ExceptionSink* xsink);
+
+//! Returns the microseconds since the epoch of a date at the edge of the range of a date cell
+/** @return 0 for success, -1 if a DATAFRAME-DATE-RANGE-ERROR exception was raised
+*/
+DLLLOCAL int dataFrameEdgeDateMicros(const DateTimeNode* dt, int64_t& out, ExceptionSink* xsink);
+
+//! Stores a date as the microseconds since the epoch of a date cell, an int64 (qore#6092)
+/** @return 0 for success, -1 if a DATAFRAME-DATE-RANGE-ERROR exception was raised for a date outside the range of
+    an int64 of microseconds since the epoch, which the cell cannot hold
+*/
+static inline int dataFrameDateMicros(const DateTimeNode* dt, int64_t& out, ExceptionSink* xsink) {
+    // the microseconds of a date whose seconds since the epoch are in this range fit in an int64
+    constexpr int64 max_seconds = std::numeric_limits<int64_t>::max() / 1000000 - 1;
+    int64 seconds = dt->getEpochSecondsUTC();
+    if (seconds <= max_seconds && seconds >= -max_seconds) {
+        out = dt->getEpochMicrosecondsUTC();
+        return 0;
+    }
+    return dataFrameEdgeDateMicros(dt, out, xsink);
+}
+
 //! Safely extracts a Qore string value, including short-string values and NUL characters.
 static inline bool getDataFrameString(QoreValue v, std::string& out) {
     if (v.getType() != NT_STRING) {

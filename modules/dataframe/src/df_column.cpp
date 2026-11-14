@@ -413,6 +413,34 @@ std::string dataFrameUtf8Key(QoreValue v) {
     return out;
 }
 
+void dataFrameRaiseDateRangeError(const char* desc, ExceptionSink* xsink) {
+    xsink->raiseException("DATAFRAME-DATE-RANGE-ERROR", "%s is outside the range of a DataFrame date, which is "
+        "stored in microseconds since the epoch in an int64 (from -290308-12-21T19:59:05.224192Z to "
+        "294247-01-10T04:00:54.775807Z)", desc);
+}
+
+int dataFrameEdgeDateMicros(const DateTimeNode* dt, int64_t& out, ExceptionSink* xsink) {
+    int64 seconds = dt->getEpochSecondsUTC();
+    // the microseconds of an absolute date in the last second of either end of the range can still fit
+    if (!dt->isRelative()) {
+        // the seconds times a million can overflow where the sum with the microseconds does not, at the start of
+        // the range
+        __int128 micros = static_cast<__int128>(seconds) * 1000000 + dt->getMicrosecond();
+        if (micros >= std::numeric_limits<int64_t>::min() && micros <= std::numeric_limits<int64_t>::max()) {
+            out = static_cast<int64_t>(micros);
+            return 0;
+        }
+    }
+    QoreString desc;
+    if (dt->isRelative()) {
+        desc.sprintf("the time value of " QLLD " seconds", (int64)seconds);
+    } else {
+        desc.sprintf("the date " QLLD " seconds after the epoch", (int64)seconds);
+    }
+    dataFrameRaiseDateRangeError(desc.c_str(), xsink);
+    return -1;
+}
+
 int64_t ColumnData::countNonNull() const {
     int64_t count = 0;
     for (int64_t i = 0; i < n_rows; ++i) {
@@ -596,8 +624,9 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
                     col->null_mask[i] = 1;
                     col->date_data[i] = 0;
                 } else if (v.getType() == NT_DATE) {
-                    const DateTimeNode* dt = v.get<const DateTimeNode>();
-                    col->date_data[i] = dt->getEpochMicrosecondsUTC();
+                    if (dataFrameDateMicros(v.get<const DateTimeNode>(), col->date_data[i], xsink)) {
+                        return nullptr;
+                    }
                 } else {
                     // Non-date value in a date column → treat as null
                     // (type inference should prevent this; if it happens,
@@ -775,7 +804,9 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                 } else if (col->type != ColumnType::DATE) {
                     return buildColumnData(values, ColumnType::STRING, xsink);
                 }
-                col->date_data[i] = v.get<const DateTimeNode>()->getEpochMicrosecondsUTC();
+                if (dataFrameDateMicros(v.get<const DateTimeNode>(), col->date_data[i], xsink)) {
+                    return nullptr;
+                }
                 break;
 
             default:

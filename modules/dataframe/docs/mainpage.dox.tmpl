@@ -31,6 +31,13 @@
     (\c auto) is kept as it is, and is compared with the other values, and used in a group or join key, in UTF-8,
     so that equal strings in different encodings are equal.
 
+    The cells of a \c date column are stored as the microseconds since the epoch in an int64, which holds the dates
+    from \c -290308-12-21T19:59:05.224192Z to \c 294247-01-10T04:00:54.775807Z (and time values of the same
+    size); storing a date outside that range, from a list or hash, a Parquet file (a timestamp in seconds or
+    milliseconds), @ref Qore::DataFrame::DataFrame::fillna() "DataFrame::fillna()" or any other operation, raises
+    \c DATAFRAME-DATE-RANGE-ERROR, and the date is not stored.  A column that holds any value (\c auto) holds any
+    date.
+
     String values and column names are kept whole, including any NUL characters: a NUL character is data, and it
     is kept through every operation, CSV, Parquet and Arrow IPC, and conversion back to %Qore values.  A column name
     with a NUL character cannot be a hash key, so the methods returning column names as hash keys (such as

@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-date-range.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameDateRangeTest
+
+#! A date column stores the microseconds since the epoch in an int64; a date outside that range raises
+#! DATAFRAME-DATE-RANGE-ERROR instead of being stored as another date (qore#6092)
+class DataFrameDateRangeTest inherits QUnit::Test {
+    private {
+        #! the first and last dates of the range, and the dates just outside it
+        date first = gmtime(-9223372036855, 224192);
+        date last = gmtime(9223372036854, 775807);
+        date before_first = gmtime(-9223372036855, 224191);
+        date after_last = gmtime(9223372036854, 775808);
+        #! dates far outside the range
+        date far_future = 1970-01-01Z + years(300000);
+        date far_past = 1970-01-01Z - years(300000);
+    }
+
+    constructor() : Test("DataFrameDateRangeTest", "1.0", \ARGV) {
+        addTestCase("range limits", \limitTest());
+        addTestCase("store paths", \storeTest());
+        addTestCase("Parquet timestamps", \parquetTest());
+        set_return_value(main());
+    }
+
+    #! the first and last dates of the range are stored as they are
+    limitTest() {
+        DataFrame::DataFrame df({"v": (first, last)});
+        assertEq("date", df.dtypes()[0], "a date column");
+        assertEq((-9223372036854775807 - 1, 9223372036854775807), map get_epoch_microseconds($1), df.getColumn("v"),
+            "the limits of the range");
+    }
+
+    #! every way of storing a date in a date column raises an error for a date outside the range
+    storeTest() {
+        foreach date d in ((before_first, after_last, far_future, far_past)) {
+            string label = sprintf("%y", d);
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame(({"v": d},)); }, (),
+                label + ": records");
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (d,)}); }, (),
+                label + ": column hash");
+            # a column that becomes a date column with its first value
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (first, d)}); }, (),
+                label + ": inferred date column");
+            # records whose first row has a date
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () {
+                new DataFrame::DataFrame(({"v": first}, {"v": d}));
+            }, (), label + ": records after a date");
+            DataFrame::DataFrame df({"id": (1, 2)});
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", \df.addColumn(), ("v", (first, d)), label + ": addColumn()");
+            DataFrame::DataFrame nulls({"v": (first, NOTHING)});
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", \nulls.fillna(), d, label + ": fillna()");
+        }
+    }
+
+    #! a Parquet timestamp in seconds or milliseconds outside the range raises an error when it is read, and one in
+    #! the range is read (data/gen-filter-fixtures.cpp)
+    parquetTest() {
+        string dir = get_script_dir() + DirSep + "data" + DirSep;
+        assertThrows("DATAFRAME-DATE-RANGE-ERROR", \DataFrame::DataFrame::readParquet(),
+            dir + "date_range_seconds.parquet", "timestamp[s] outside the range");
+        assertThrows("DATAFRAME-DATE-RANGE-ERROR", \DataFrame::DataFrame::readParquet(),
+            dir + "date_range_millis.parquet", "timestamp[ms] outside the range");
+        DataFrame::DataFrame df = DataFrame::DataFrame::readParquet(dir + "date_range_seconds.parquet",
+            <DataFrame::ParquetReadOptions>{"row_groups": (0,)});
+        assertEq((9223372036854000000,), map get_epoch_microseconds($1), df.getColumn("v"),
+            "the last second of the range");
+    }
+}

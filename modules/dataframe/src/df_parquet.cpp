@@ -2341,17 +2341,33 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
         cd->type = ColumnType::DATE;
         cd->date_data.resize(n);
         auto ts_type = std::static_pointer_cast<arrow::TimestampType>(arrow_type);
+        // a timestamp in seconds or milliseconds can be outside the range of a date cell, an int64 of microseconds
+        // since the epoch; the first one is reported
+        bool out_of_range = false;
+        int64_t out_of_range_value = 0;
         if (!copyArrowChunks<arrow::TimestampArray>(arr, *cd, xsink, "converting Arrow timestamp column",
-                [ts_type](ColumnData& data, int64_t idx, const arrow::TimestampArray& chunk, int64_t i) {
+                [ts_type, &out_of_range, &out_of_range_value](ColumnData& data, int64_t idx,
+                        const arrow::TimestampArray& chunk, int64_t i) {
                     int64_t val = chunk.Value(i);
+                    bool overflow = false;
                     switch (ts_type->unit()) {
-                        case arrow::TimeUnit::SECOND: val *= 1000000; break;
-                        case arrow::TimeUnit::MILLI:  val *= 1000; break;
+                        case arrow::TimeUnit::SECOND: overflow = __builtin_mul_overflow(val, 1000000, &val); break;
+                        case arrow::TimeUnit::MILLI:  overflow = __builtin_mul_overflow(val, 1000, &val); break;
                         case arrow::TimeUnit::MICRO:  break;
                         case arrow::TimeUnit::NANO:   val /= 1000; break;
                     }
+                    if (overflow && !out_of_range) {
+                        out_of_range = true;
+                        out_of_range_value = chunk.Value(i);
+                    }
                     data.date_data[idx] = val;
                 }, [](ColumnData& data, int64_t idx) { data.date_data[idx] = 0; })) {
+            return nullptr;
+        }
+        if (out_of_range) {
+            QoreStringMaker desc("the timestamp " QLLD " %s after the epoch", (int64)out_of_range_value,
+                ts_type->unit() == arrow::TimeUnit::SECOND ? "seconds" : "milliseconds");
+            dataFrameRaiseDateRangeError(desc.c_str(), xsink);
             return nullptr;
         }
     } else {
