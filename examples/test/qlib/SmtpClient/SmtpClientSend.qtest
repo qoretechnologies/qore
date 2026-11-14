@@ -68,6 +68,8 @@ class MockSmtpServer {
         string smtputf8_keyword = "SMTPUTF8";
         #! If True, the SMTPUTF8 keyword is the last line of the EHLO reply
         bool smtputf8_last = False;
+        #! If True, the first line of the EHLO reply has a Latin-1 byte, which is not valid UTF-8
+        bool ehlo_latin1 = False;
     }
 
     constructor(bool require_auth = True, *string certificate) {
@@ -101,6 +103,11 @@ class MockSmtpServer {
 
     bool isSecure() {
         return secure;
+    }
+
+    #! Writes a Latin-1 byte, which is not valid UTF-8, in the first line of the EHLO reply
+    setEhloLatin1(bool latin1 = True) {
+        ehlo_latin1 = latin1;
     }
 
     #! Advertises the SMTPUTF8 extension in the EHLO reply, with the given keyword line, as the last line or not
@@ -244,7 +251,11 @@ class MockSmtpServer {
 
             if (line =~ /^EHLO /i) {
                 ++ehlo_count;
-                client.send("250-mock.smtp.test Hello\r\n");
+                if (ehlo_latin1) {
+                    client.send(<3235302d6d6f636b2e6578e46d706c652048656c6c6f0d0a>);
+                } else {
+                    client.send("250-mock.smtp.test Hello\r\n");
+                }
                 if (offer_starttls && !secure) {
                     client.send("250-STARTTLS\r\n");
                 }
@@ -387,6 +398,7 @@ public class SmtpClientSendTest inherits QUnit::Test {
         addTestCase("SMTPUTF8 addresses refused without server support (issue #6066)", \testSmtpUtf8Unsupported());
         addTestCase("SMTPUTF8 keyword detection (issue #6066)", \testSmtpUtf8Keyword());
         addTestCase("SMTPUTF8 for non-ASCII header addresses (issue #6066)", \testSmtpUtf8HeaderAddress());
+        addTestCase("SMTPUTF8 with a reply that is not valid UTF-8 (issue #6066)", \testSmtpUtf8InvalidUtf8Reply());
         addTestCase("send poll operation API", \testSendPollOperationApi());
         addTestCase("send with no recipients error", \testNoRecipientsError());
         addTestCase("XOAUTH2 send", \testXoauth2Send());
@@ -1111,6 +1123,49 @@ public class SmtpClientSendTest inherits QUnit::Test {
             foreach string mode in ("implicit", "connected", "poll") {
                 SmtpClient smtp(url);
                 MailMessage::Message msg("s@test.com", "Keyword Test");
+                msg.addTO("jörg@müller.de");
+                msg.setBody("Hello");
+                code send = sub () {
+                    if (mode == "poll") {
+                        SmtpSendPollOperation op(smtp, msg);
+                        runPollOp(op);
+                    } else {
+                        if (mode == "connected") {
+                            smtp.connect();
+                        }
+                        smtp.sendMessage(msg);
+                    }
+                };
+                if (i.ok) {
+                    send();
+                    assertEq("MAIL FROM: <s@test.com> SMTPUTF8",
+                        (select server.getReceivedCommands(), $1 =~ /^MAIL FROM:/i).last(), label + " " + mode);
+                } else {
+                    assertThrows("SMTP-SEND-ERROR", "does not support the SMTPUTF8 extension", send, NOTHING,
+                        label + " " + mode);
+                    smtp.forceDisconnect();
+                }
+            }
+            assertNothing(server.getServerError(), label);
+        }
+    }
+
+    #! issue #6066: the SMTPUTF8 keyword is found in an EHLO reply with a byte that is not valid UTF-8 in another
+    #! line, on a new and on an existing connection
+    testSmtpUtf8InvalidUtf8Reply() {
+        foreach hash<auto> i in ({"keyword": "SMTPUTF8", "last": True, "ok": True},
+                {"keyword": "SMTPUTF8", "last": False, "ok": True},
+                {"keyword": "SMTPUTF8X", "last": True, "ok": False}) {
+            MockSmtpServer server(True);
+            server.setEhloLatin1();
+            server.setSmtpUtf8(True, i.keyword, i."last");
+            server.start();
+            on_exit server.wait();
+            string url = sprintf("esmtp://testuser:testpass@localhost:%d", server.getPort());
+            string label = sprintf("%y last: %y", i.keyword, i."last");
+            foreach string mode in ("implicit", "connected", "poll") {
+                SmtpClient smtp(url);
+                MailMessage::Message msg("s@test.com", "Latin-1 Test");
                 msg.addTO("jörg@müller.de");
                 msg.setBody("Hello");
                 code send = sub () {

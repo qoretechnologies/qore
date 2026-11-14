@@ -46,6 +46,9 @@ public class Main inherits QUnit::Test {
         addTestCase("Test text after non-ASCII addresses (issue #6066)", \testNonAsciiOffsets(), NOTHING);
         addTestCase("Test format characters and comments around addresses (issue #6066)",
             \testFormatCharsAndComments(), NOTHING);
+        addTestCase("Test display names with format characters (issue #6066)", \testDisplayNameFormatChars(),
+            NOTHING);
+        addTestCase("Test addresses in quoted strings (issue #6066)", \testQuotedStringAddresses(), NOTHING);
 
         set_return_value(main());
     }
@@ -1809,6 +1812,52 @@ lorem ipsum\r
         assertEq(("j@x.com",), parsed.getRecipients());
         # the encoded format character is separated from the address by a space
         assertEq(("Jö \ufeff j@x.com",), parsed.getTO());
+    }
+
+    # issue #6066: the format characters at the start and the end of a display name are kept (ex: directional
+    # formatting characters, which must stay balanced, or a soft hyphen); they are trimmed for the address only
+    testDisplayNameFormatChars() {
+        foreach string name in ("‫שלום‬", "­Jö", "Jö­", "‎Jörg Müller‏", "﻿Jö") {
+            foreach string rcpt in (name + " <a@x.com>", name + " <a@x.com>, Ann <b@x.com>",
+                    name + " <​a@x.com​>") {
+                Message msg(Sender, Subject);
+                msg.addTO(rcpt);
+                msg.setBody("body");
+                Message parsed(msg.serializeRaw());
+                string to = parsed.getTO()[0];
+                assertEq(name + " <a@x.com>", to.substr(0, name.length() + 10), sprintf("%y", rcpt));
+                assertEq(msg.getRecipients(), parsed.getRecipients(), sprintf("%y", rcpt));
+                # parsed and written again, the name is the same
+                assertEq(parsed.getTO(), (new Message(parsed.serializeRaw())).getTO(), sprintf("%y", rcpt));
+            }
+        }
+    }
+
+    # issue #6066: an address in a quoted string is not the address of a mailbox when there is another address
+    # after it, as a reader of the header sees it; a quoted local part is part of an address
+    testQuotedStringAddresses() {
+        foreach hash<auto> i in ({"in": "\"v@e.com\" a@x.com", "out": "a@x.com"},
+                {"in": "\"v@e.com\" (w@e.com) a@x.com", "out": "a@x.com"},
+                {"in": "\"Jörg v@e.com\" a@x.com", "out": "a@x.com"},
+                {"in": "\"a\\\"v@e.com\" a@x.com", "out": "a@x.com"},
+                {"in": "Jö \"x y\"@x.com", "out": "\"x y\"@x.com"},
+                {"in": "\"x y\"@x.com, b@x.com", "out": "\"x y\"@x.com"},
+                {"in": "\"v@e.com\" \"x y\"@x.com", "out": "\"x y\"@x.com"},
+                # an address in a quoted string is found if there is no other, as before
+                {"in": "\"Jörg j@x.com\"", "out": "j@x.com"},
+                {"in": "foo \"j@x.com\" bar", "out": "j@x.com"},
+                {"in": "\"j@x.com\"", "out": "j@x.com"},
+                # an unterminated quoted string is text
+                {"in": "\"v@e.com a@x.com", "out": "v@e.com"}) {
+            assertEq(i.out, Message::getEmailAddress(i."in"), i."in");
+            Message msg(Sender, Subject);
+            msg.addTO(i."in");
+            msg.setBody("body");
+            assertEq((i.out,), msg.getRecipients(), i."in");
+            Message parsed(msg.serializeRaw());
+            assertEq((i.out,), parsed.getRecipients(), i."in");
+            assertEq((i.out,), (new Message(parsed.serializeRaw())).getRecipients(), i."in");
+        }
     }
 
     # issue #6066: a list of mailboxes is folded before a mailbox that would make the line longer than 76

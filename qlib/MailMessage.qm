@@ -169,7 +169,8 @@ msg.addTO("My Best Friend <you@friend.com>");
         quoted local parts and non-ASCII (internationalized) addresses, which were rejected, and returns an
         address in quotes, brackets or braces (as in CSV data); an encoded word, white space (including Unicode
         white space), format characters (ex: a byte order mark) and text before an address are never part of the
-        address returned, and an address in a comment is not the address of a mailbox
+        address returned, and an address in a comment or before another address in a quoted string is not the
+        address of a mailbox
       - the sender and recipient addresses of a parsed message are taken from the raw headers, so that an address
         in an encoded word is not taken as the sender's or a recipient's address, and the \c From, \c To, \c CC
         and \c BCC headers of a parsed message are written again as they were parsed, or with only their text
@@ -1274,7 +1275,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
           <tt>"j\@x.com"</tt> or <tt>'j\@x.com'</tt>, as in CSV data)
         - the address in angle brackets at the end of the string
         - the string, if it is an address
-        - otherwise the first address in the string that is not in a comment (text in parentheses), and that starts
+        - otherwise the first address in the string that is not in a comment (text in parentheses) or, if there is
+          one, not in a quoted string (a quoted local part is part of an address), and that starts
           after white space or one of <tt>,;:<>()[]"</tt> (or at the start of the string) and ends before white
           space, one of <tt>,;:<>()[]"'/?#&{}|!*\\</tt> or the end of the string, with only format characters
           between them and the address (ex: \c "j@x.com" for <tt>"j\@x.com (John)"</tt>,
@@ -1314,10 +1316,18 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         if (Message::isAddrSpec(t)) {
             return t;
         }
-        # the first address in the string that is not part of another word or in a comment, as a reader of the
-        # header sees it
-        if (str.find("(") >= 0) {
-            str = Message::removeComments(str);
+        # the first address in the string that is not part of another word or in a comment or a quoted string, as
+        # a reader of the header sees it; an address in a quoted string is found if there is no other (ex: in
+        # "\"John j@x.com\"", which was accepted before)
+        bool has_quote = str.find("\"") >= 0;
+        if (str.find("(") >= 0 || has_quote) {
+            addr = regex_extract(Message::removeComments(str, True), AddrScanRegex)[0];
+            if (exists addr || !has_quote) {
+                return addr;
+            }
+            if (str.find("(") >= 0) {
+                str = Message::removeComments(str, False);
+            }
         }
         return regex_extract(str, AddrScanRegex)[0];
     }
@@ -1344,15 +1354,18 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     }
 
     # returns the string with its comments (RFC 5322 section 3.2.2: text in parentheses outside quoted strings,
-    # which can be nested) replaced with a space; an unterminated comment is kept; linear in the length of the
-    # string
-    private static string removeComments(string str) {
+    # which can be nested) replaced with a space, and also its quoted strings if quotes is True, except a quoted
+    # local part (a quoted string followed by "@"); an unterminated comment or quoted string is kept; linear in the
+    # length of the string
+    private static string removeComments(string str, bool quotes) {
+        list<string> c = str.splitChars();
+        int n = c.size();
         string rv = "";
         string comment = "";
         int depth = 0;
-        bool quoted;
         bool escaped;
-        foreach string ch in (str.splitChars()) {
+        for (int i = 0; i < n; ++i) {
+            string ch = c[i];
             if (depth) {
                 comment += ch;
                 if (escaped) {
@@ -1367,17 +1380,29 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
                 }
                 continue;
             }
-            if (quoted) {
-                if (escaped) {
-                    escaped = False;
-                } else if (ch == "\\") {
-                    escaped = True;
-                } else if (ch == "\"") {
-                    quoted = False;
+            if (ch == "\"") {
+                string quoted = "\"";
+                int j = i + 1;
+                for (; j < n; ++j) {
+                    quoted += c[j];
+                    if (escaped) {
+                        escaped = False;
+                    } else if (c[j] == "\\") {
+                        escaped = True;
+                    } else if (c[j] == "\"") {
+                        break;
+                    }
                 }
-            } else if (ch == "\"") {
-                quoted = True;
-            } else if (ch == "(") {
+                if (j == n) {
+                    # an unterminated quoted string is text
+                    rv += quoted;
+                    break;
+                }
+                i = j;
+                rv += (quotes && (j + 1 == n || c[j + 1] != "@")) ? " " : quoted;
+                continue;
+            }
+            if (ch == "(") {
                 depth = 1;
                 comment = "(";
                 continue;
@@ -1641,11 +1666,13 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     # parsed header).  The address is found without a regular expression on the whole string, so the time is
     # linear in its length.
     private static *hash<auto> parseMailbox(string mailbox, bool decode) {
-        mailbox = Message::trimSpace(mailbox);
-        if (Message::isAddrSpec(mailbox)) {
-            return {"addr": mailbox};
+        # format characters are trimmed for the address only: they are part of a display name (ex: a directional
+        # formatting character)
+        string trimmed = Message::trimSpace(mailbox);
+        if (Message::isAddrSpec(trimmed)) {
+            return {"addr": trimmed};
         }
-        *string addr = Message::getAngleAddress(mailbox);
+        *string addr = Message::getAngleAddress(trimmed);
         if (!exists addr) {
             return;
         }

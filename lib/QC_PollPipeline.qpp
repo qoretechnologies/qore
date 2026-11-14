@@ -891,12 +891,27 @@ int PollPipelinePriv::addRequireContextKey(const char* key, const char* err_code
     });
 }
 
-int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern, const char* result_key,
-        ExceptionSink* xsink) {
-    std::shared_ptr<QoreRegex> re(new QoreRegex(pattern, 0, xsink), [](QoreRegex* r) { r->deref(); });
-    if (*xsink) {
+int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern, size_t pattern_len,
+        const char* result_key, ExceptionSink* xsink) {
+    // a value that is not valid UTF-8 (ex: a server reply with a Latin-1 byte) is matched with its invalid byte
+    // sequences never part of a match; without PCRE2_MATCH_INVALID_UTF (PCRE2 before 10.34) it is matched bytewise
+#ifdef PCRE2_MATCH_INVALID_UTF
+    uint32_t opts = PCRE2_UTF | PCRE2_MATCH_INVALID_UTF;
+#else
+    uint32_t opts = 0;
+#endif
+    int errorcode;
+    PCRE2_SIZE eo;
+    pcre2_code* code = pcre2_compile(reinterpret_cast<PCRE2_SPTR8>(pattern), pattern_len, opts, &errorcode, &eo,
+        nullptr);
+    if (!code) {
+        PCRE2_UCHAR buffer[qore_pcre2_errorbuf_size];
+        pcre2_get_error_message(errorcode, buffer, sizeof(buffer));
+        xsink->raiseException("REGEX-COMPILATION-ERROR", "Regular expression compilation failed at %lu ('%s'): %s",
+            static_cast<unsigned long>(eo), pattern, reinterpret_cast<const char*>(buffer));
         return -1;
     }
+    std::shared_ptr<pcre2_code> re(code, pcre2_code_free);
     std::string src(source_key);
     std::string res(result_key);
     return addTransform([src, re, res](Context& ctx, ExceptionSink* xsink) {
@@ -904,15 +919,38 @@ int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern,
             ctx.extra = new QoreHashNode(autoTypeInfo);
         }
         QoreValue v = ctx.extra->getKeyValue(src.c_str());
-        bool found = false;
+        const char* subject = nullptr;
+        size_t len = 0;
+        // a string in another encoding is matched in UTF-8; a string tagged UTF-8 is matched as it is, even if it
+        // is not valid UTF-8
+        TempEncodingHelper str;
         if (v.getType() == NT_STRING) {
-            found = re->exec(v.get<const QoreStringNode>(), xsink);
+            const QoreStringNode* s = v.get<const QoreStringNode>();
+            if (s->getEncoding() == QCS_UTF8) {
+                subject = s->c_str();
+                len = s->size();
+            } else {
+                if (!str.set(s, QCS_UTF8, xsink)) {
+                    return;
+                }
+                subject = str->c_str();
+                len = str->size();
+            }
         } else if (v.getType() == NT_BINARY) {
             const BinaryNode* b = v.get<const BinaryNode>();
-            found = re->exec(static_cast<const char*>(b->getPtr()), b->size(), xsink);
+            subject = static_cast<const char*>(b->getPtr());
+            len = b->size();
         }
-        if (*xsink) {
-            return;
+        bool found = false;
+        if (subject) {
+            pcre2_match_data* md = pcre2_match_data_create_from_pattern(re.get(), nullptr);
+            ON_BLOCK_EXIT(pcre2_match_data_free, md);
+            int rc = qore_pcre2_match(re.get(), reinterpret_cast<PCRE2_SPTR8>(subject), len, 0, 0, md);
+            if (rc > 0) {
+                found = true;
+            } else if (qore_pcre2_check_match_error(rc, xsink)) {
+                return;
+            }
         }
         ctx.extra->setKeyValue(res.c_str(), found, xsink);
     });
@@ -2799,7 +2837,10 @@ int PollPipeline::addContextOr(string result_key, string key_a, string key_b) [f
     @param result_key the context extra key for the boolean result
     @return the step index
 
-    @throw REGEX-COMPILATION-ERROR the pattern cannot be compiled
+    A value that is not valid UTF-8 (ex: a binary value, or a server reply with a Latin-1 byte) is matched too: its
+    invalid byte sequences are never part of a match, so a pattern of ASCII characters matches as it would bytewise.
+
+    @throw REGEX-COMPILATION-ERROR the pattern cannot be compiled, or it contains a NUL character
 
     @par Example:
     @code{.py}
@@ -2814,7 +2855,12 @@ int PollPipeline::addCheckRegex(string source_key, string pattern, string result
     if (*xsink) {
         return QoreValue();
     }
-    int rv = priv->addCheckRegex(source_key->c_str(), p->c_str(), result_key->c_str(), xsink);
+    // the pattern is not cut at a NUL character
+    if (memchr(p->c_str(), 0, p->size())) {
+        xsink->raiseException("REGEX-COMPILATION-ERROR", "the regular expression contains a NUL character");
+        return QoreValue();
+    }
+    int rv = priv->addCheckRegex(source_key->c_str(), p->c_str(), p->size(), result_key->c_str(), xsink);
     if (*xsink) {
         return QoreValue();
     }

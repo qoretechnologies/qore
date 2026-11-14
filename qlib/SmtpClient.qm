@@ -213,6 +213,8 @@ smtp.sendMessage(msg);@endcode
       \c SMTPUTF8 extension; otherwise \c SMTP-SEND-ERROR is raised before the credentials or the message are
       sent; an address with a quoted local part with a \c "<", a \c ">" or white space is refused with
       \c MESSAGE-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6066">issue 6066</a>)
+    - A server reply that is not valid UTF-8 (ex: an \c EHLO reply with a Latin-1 host name) is read bytewise; it
+      made sending fail with \c INVALID-ENCODING
     - A message is now always sent with SMTP transparency
       (<a href="https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.2">RFC 5321</a> section 4.5.2),
       whatever its SMTP mode: every CR or LF character that is not part of a CRLF line break is sent as CRLF, and
@@ -1396,6 +1398,22 @@ smtp.setEventQueue();
         }
     }
 
+    #! @cond nodoc
+    # returns the description of an SMTP reply: its lines without the reply codes, separated by "\n"
+    static string getResponseDesc(string text) {
+        string desc;
+        foreach string line in (text.split("\n")) {
+            trim line;
+            *string part = (line =~ x/^[0-9]{3}[ -](.*)$/)[0];
+            if (desc.size()) {
+                desc += "\n";
+            }
+            desc += part.val() ? part : line;
+        }
+        return desc;
+    }
+    #! @endcond
+
     private log(string msg) {
         if (log_info.val())
             call_function(log_info, "SmtpClient: " + trim(vsprintf(msg, argv)));
@@ -1629,13 +1647,14 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
         int code = code_value.typeCode() == NT_INT ? code_value : -1;
         string desc;
         if (text.val()) {
-            foreach string line in (text.split("\n")) {
-                trim line;
-                *string part = (line =~ x/^[0-9]{3}[ -](.*)$/)[0];
-                if (desc.size()) {
-                    desc += "\n";
+            try {
+                desc = SmtpClient::getResponseDesc(text);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "INVALID-ENCODING") {
+                    rethrow;
                 }
-                desc += part.val() ? part : line;
+                # a reply that is not valid UTF-8 (ex: a Latin-1 host name) is read bytewise, as Latin-1
+                desc = SmtpClient::getResponseDesc(force_encoding(text, "ISO-8859-1"));
             }
         }
         return <SmtpResponseInfo>{"code": code, "desc": desc};
@@ -1969,7 +1988,9 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
     # around it, as in the pipeline of a new connection (SmtpUtf8LineRegex)
     private static bool helloHasSmtpUtf8(hash<auto> hello_reply) {
         *string desc = hello_reply.EHLO.desc;
-        return exists desc && desc =~ /^[ \t]*SMTPUTF8[ \t]*$/mi;
+        # the reply is matched bytewise (as Latin-1), so that a byte that is not valid UTF-8 in another line (ex: a
+        # Latin-1 host name) does not hide the keyword, as in the pipeline
+        return exists desc && force_encoding(desc, "ISO-8859-1") =~ /^[ \t]*SMTPUTF8[ \t]*$/mi;
     }
 
     # returns the MAIL FROM command for the sender, with the SMTPUTF8 parameter if needed (RFC 6531 section 3.4)
@@ -2018,13 +2039,14 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         int code = code_value.typeCode() == NT_INT ? code_value : -1;
         string desc;
         if (text.val()) {
-            foreach string line in (text.split("\n")) {
-                trim line;
-                *string part = (line =~ x/^[0-9]{3}[ -](.*)$/)[0];
-                if (desc.size()) {
-                    desc += "\n";
+            try {
+                desc = SmtpClient::getResponseDesc(text);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "INVALID-ENCODING") {
+                    rethrow;
                 }
-                desc += part.val() ? part : line;
+                # a reply that is not valid UTF-8 (ex: a Latin-1 host name) is read bytewise, as Latin-1
+                desc = SmtpClient::getResponseDesc(force_encoding(text, "ISO-8859-1"));
             }
         }
         return <SmtpResponseInfo>{"code": code, "desc": desc};

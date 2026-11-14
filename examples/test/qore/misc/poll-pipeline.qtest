@@ -483,8 +483,33 @@ public class PollPipelineTest inherits QUnit::Test {
             assertEq(i.ok, extra.found_bin, i.text);
             assertFalse(extra.found_missing);
         }
+        # a value that is not valid UTF-8 is matched with its invalid bytes never part of a match
+        {
+            # a Latin-1 byte in the first line of the reply
+            binary bin = <3235302d6d61696c2e6578e46d706c652e636f6d0a32353020534d545055544638>;
+            Socket sock();
+            PollPipeline p(sock);
+            p.addSetContextValue("text", binary_to_string(bin, "UTF-8"));
+            p.addSetContextBinary("bin", bin);
+            p.addSetContextValue("latin1", binary_to_string(bin, "ISO-8859-1"));
+            p.addSetContextValue("bad", binary_to_string(<3235302d6d61696c2e6578e40a32353020534d54505554463858>,
+                "UTF-8"));
+            p.addCheckRegex("text", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found");
+            p.addCheckRegex("bin", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found_bin");
+            p.addCheckRegex("latin1", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found_latin1");
+            p.addCheckRegex("bad", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found_bad");
+            drivePollOp(p);
+            hash<auto> extra = p.getResult().extra;
+            assertTrue(extra.found);
+            assertTrue(extra.found_bin);
+            assertTrue(extra.found_latin1);
+            assertFalse(extra.found_bad);
+        }
         Socket sock();
         PollPipeline p(sock);
         assertThrows("REGEX-COMPILATION-ERROR", \p.addCheckRegex(), ("text", "(", "x"));
+        # a NUL character in the pattern is refused, not cut
+        assertThrows("REGEX-COMPILATION-ERROR", "NUL", \p.addCheckRegex(), ("text", "a\x00(", "x"));
+        assertThrows("REGEX-COMPILATION-ERROR", "NUL", \p.addCheckRegex(), ("text", "a\x00b", "x"));
     }
 }
