@@ -640,11 +640,6 @@ static bool qoreParquetStringStatsMayMatch(const std::shared_ptr<parquet::Statis
     }
     auto typed = std::static_pointer_cast<parquet::ByteArrayStatistics>(stats);
     std::string min = parquet::ByteArrayToString(typed->min());
-    // the core operators order an empty string after any other string (QoreString::compare()), while the statistics
-    // order it first, so a row group with an empty string can match any comparison but == with another string
-    if (min.empty() && !value.empty() && filter.op != "==") {
-        return true;
-    }
     return qoreParquetRangeMayMatch(
         qoreParquetCompareStringBytes(min, value),
         qoreParquetCompareStringBytes(parquet::ByteArrayToString(typed->max()), value),
