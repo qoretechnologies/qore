@@ -106,6 +106,10 @@ class DeletedProgramTypesTest inherits QUnit::Test {
             addTestCase("modules that load each other and a native module at run time are deleted first: " + mode,
                 sub () { testRuntimeLoadCycle(mode); });
         }
+        foreach string mode in (ExecModes) {
+            addTestCase("a cycle of AOT and user modules through a run time load is deleted: " + mode,
+                sub () { testRuntimeCycleUserModules(mode); });
+        }
         set_return_value(main());
     }
 
@@ -209,17 +213,36 @@ class DeletedProgramTypesTest inherits QUnit::Test {
         runRuntimeLoad(mode, ("RuntimeLoadCycleA", "RuntimeLoadCycleB"), "runtime-load-cycle.qr", "2");
     }
 
-    private runRuntimeLoad(string mode, list<string> modules, string script, string expected) {
+    #! A cycle of an AOT module that loads a module requiring it at run time, and user modules that the loaded module
+    #! requires (qore#6129)
+    /** RuntimeCycleUtil loads RuntimeCycleClient, which requires it and the user module RuntimeCycleServer, which
+        requires the user module RuntimeCycleFile, which requires RuntimeCycleUtil: the modules are in a cycle, which
+        is broken at one of them, so RuntimeCycleFile is deleted before RuntimeCycleServer, which requires it; a debug
+        build asserted that the record of the modules that require it was still there.
+    */
+    testRuntimeCycleUserModules(string mode) {
+        runRuntimeLoad(mode, ("RuntimeCycleUtil", "RuntimeCycleClient"), "runtime-cycle-user-modules.qr", "1",
+            ("RuntimeCycleServer", "RuntimeCycleFile"));
+    }
+
+    #! Runs \a script with the modules \a modules compiled to AOT modules and the source modules \a sources
+    private runRuntimeLoad(string mode, list<string> modules, string script, string expected,
+            list<string> sources = ()) {
         TmpDir tmp("qore-runtime-load-");
         string dir = get_script_dir() + DirSep + "deleted-program-types";
         string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
             libqore_dir);
+        # the source modules are loaded from the directory of the run
+        foreach string name in (sources) {
+            writeFile(tmp.path + DirSep + name + ".qm", ReadOnlyFile::readTextFile(dir + DirSep + name + ".qm"));
+        }
         # the modules are compiled with the module path of the run
+        string compile_path = tmp.path + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
         foreach string name in (modules) {
             string qmod = tmp.path + DirSep + name + ".qmod";
             int status;
-            string out = backquote(sprintf("%s %s --module -o %s %s/%s.qm 2>&1", env, qcc_bin, qmod, dir, name),
-                \status);
+            string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s --module -o %s %s/%s.qm 2>&1", env,
+                compile_path, qcc_bin, qmod, dir, name), \status);
             assertEq(0, status, out);
             assertTrue(is_file(qmod), "the AOT module was compiled: " + out);
         }

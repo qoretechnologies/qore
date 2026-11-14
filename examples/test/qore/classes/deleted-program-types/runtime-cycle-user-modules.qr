@@ -1,0 +1,11 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires RuntimeCycleUtil
+
+# RuntimeCycleUtil loads RuntimeCycleClient at run time, which requires it and the user modules RuntimeCycleServer and
+# RuntimeCycleFile, which require it in turn
+print(runtime_cycle_util() + "\n");

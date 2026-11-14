@@ -1065,7 +1065,13 @@ public:
             // remove dependents
             for (strset_t::iterator si = i->second.begin(), se = i->second.end(); si != se; ++si) {
                 md_map_t::iterator di = md_map.find(*si);
-                assert(di != md_map.end());
+                // a module in a dependency cycle (modules that load each other at run time, see
+                // trySetModuleProgramBinaryDependencyLocked()) can be deleted before a module that requires it, as
+                // QoreModuleManager::cleanup() breaks the cycle at one of them: its record of the modules that
+                // require it was removed with it, and there is nothing left to release (qore#6129)
+                if (di == md_map.end()) {
+                    continue;
+                }
 
                 strset_t::iterator dsi = di->second.find(i->first);
                 assert(dsi != di->second.end());
