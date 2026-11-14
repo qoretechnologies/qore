@@ -177,7 +177,8 @@ class DeletedProgramTypesTest inherits QUnit::Test {
             "DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s/deleted-program-types/module-teardown.qr 2>&1", libqore_dir,
             libqore_dir, qore_bin, mode, get_script_dir()), \status);
         assertEq(0, status, out);
-        assertEq("ok\n", out);
+        # warnings of the load path (ex: a stale AOT module) can precede the output
+        assertRegex("(^|\n)ok\n$", out);
     }
 
     private writeFile(string path, string data) {
