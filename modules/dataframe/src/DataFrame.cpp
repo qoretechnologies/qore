@@ -2024,8 +2024,20 @@ std::vector<uint8_t> QoreDataFrame::compareColumnMask(const std::string& column,
                         cmp_kind = ColumnType::AUTO;
                     }
                 } else if (op_contains || op_startswith || op_endswith) {
-                    QoreStringValueHelper sh(value);
-                    cmp_string = dataFrameStdString(*sh);
+                    // the value is converted to the encoding of the cells, the default encoding, as for a column
+                    // that holds any value (qoreDataFrameStringPredicate()), which raises a conversion error for the
+                    // first cell that is not null
+                    ExceptionSink conv_xsink;
+                    QoreStringValueHelper sh(value, QCS_DEFAULT, &conv_xsink);
+                    if (conv_xsink) {
+                        if (cd.countNonNull()) {
+                            xsink->assimilate(conv_xsink);
+                            return {};
+                        }
+                        conv_xsink.clear();
+                    } else {
+                        cmp_string = dataFrameStdString(*sh);
+                    }
                 }
                 break;
             case ColumnType::BOOL:

@@ -905,8 +905,8 @@ DataFrame DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
     the time zone.  \c "in" and \c "not_in" compare the cell with each value of the list with \c "==".  A null cell
     matches only \c "is_null", \c "==" with a null value (\c NOTHING or \c NULL), and \c "in" or \c "not_in"
     according to whether the list holds a null value; a cell that is not null matches a null value only with
-    \c "!=".  \c "contains", \c "startswith" and \c "endswith" compare the cell as a string and match no cell of a
-    typed column that is not a \c string column.
+    \c "!=".  \c "contains", \c "startswith" and \c "endswith" compare the cell as a string with \a value converted
+    to the encoding of the cell, and match no cell of a typed column that is not a \c string column.
 
     @par Example:
     @code{.py}
