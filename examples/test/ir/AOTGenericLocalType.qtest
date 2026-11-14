@@ -27,6 +27,8 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
         string probe = get_script_dir() + "/AOTGenericLocalType/probe.q";
         string debug_probe = get_script_dir() + "/AOTGenericLocalType/probe-debug.q";
+        string lazy_provider = get_script_dir() + "/AOTGenericLocalType/lazy-provider.qc";
+        string lazy_consumer = get_script_dir() + "/AOTGenericLocalType/lazy-consumer.qc";
         *string ast_out;
     }
 
@@ -35,6 +37,7 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
         addTestCase("compiled modes match AST", \sourceModes());
         addTestCase("qcc executables match AST", \compiled());
         addTestCase("qcc executables with a debugger attached match AST", \debugged());
+        addTestCase("lazy function IR of a preloaded qcc object matches AST", \lazyFunctionIr());
         set_return_value(main());
     }
 
@@ -96,6 +99,29 @@ class AOTGenericLocalTypeTest inherits QUnit::Test {
             run((qcc_bin, level, "-o", exe, debug_probe));
             assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level + " with a debugger");
         }
+    }
+
+    #! the functions of a preloaded .qo that run while qcc parses another file run with IR built from the AOT image
+    lazyFunctionIr() {
+        TmpDir dir("qore-aot-generic-local-type-lazy-");
+        # the AST reference: the provider's class and a call of its check method in one script
+        string script = dir.path + "/ast.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("%modern\n" + (map $1, ReadOnlyFile::readTextFile(lazy_provider).split("\n"), $1 != "%new-style")
+            .join("\n") + "\nprintf(\"%s\\n\", GenericProvider::check());\n");
+        f.close();
+        string expected = trim(run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", script)));
+        assertEq("opt:RUNTIME-TYPE-ERROR optok:accepted oex:RUNTIME-TYPE-ERROR fwd:RUNTIME-TYPE-ERROR", expected);
+
+        string provider_qo = dir.path + "/provider.qo";
+        string consumer_qo = dir.path + "/consumer.qo";
+        string exe = dir.path + "/lazy";
+        run((qcc_bin, "-c", "--parse-option=PO_MODERN", "-o", provider_qo, lazy_provider));
+        # the provider's code runs here with lazy function IR
+        run((qcc_bin, "-c", "-L", dir.path, "--parse-option=PO_MODERN", "-o", consumer_qo, lazy_consumer));
+        run((qcc_bin, "-o", exe, provider_qo, consumer_qo));
+        assertEq("parse: " + expected + "\nrun: " + expected + "\n", run((exe, "-b", "--enable-debug")));
     }
 
     private string getAst() {
