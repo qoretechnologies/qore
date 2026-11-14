@@ -2100,6 +2100,12 @@ public:
         qore_type_t fctype = fc.getType();
         if (fctype == NT_SELF_CALL) {
             SelfFunctionCallNode* sfcn = fc.get<SelfFunctionCallNode>();
+            // the background copy of a self call holds the object of the starting code, on which the call is made: a
+            // background expression nested in another one starts its thread in the thread of the outer one, which has
+            // no object of its own (qore#5971)
+            if (const SetSelfFunctionCallNode* set_self = dynamic_cast<const SetSelfFunctionCallNode*>(sfcn)) {
+                call_obj = set_self->getSelf();
+            }
             // issue #3223: do not override local class context if available
             if (!class_ctx) {
                 const QoreClass* qc = sfcn->getClass();
