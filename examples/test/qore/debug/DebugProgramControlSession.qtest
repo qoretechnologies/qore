@@ -127,6 +127,8 @@ fail(\"UNCAUGHT\");
 
 #! a program whose exceptions leave several statements: the thread stops once for each exception (#5906)
 const ExceptionOnceScript = "%modern
+# the unassigned value is deliberate: its run-time handling is tested
+%no-strict-parse-errors
 sub f() {
     *int src;
     if (True) {

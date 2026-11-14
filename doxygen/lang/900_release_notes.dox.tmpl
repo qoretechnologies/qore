@@ -531,6 +531,11 @@
     @ref modern "%modern" be set while one of them is in effect; legacy code that needs them is parsed without
     @ref modern "%modern" (see @ref modern_option_consistency).
 
+    @par Unassigned Local Variable Values Rejected Under \%modern
+    @ref modern "%modern" implies @ref strict-parse-errors "%strict-parse-errors", so a local variable that cannot
+    have been assigned whose value is returned, assigned or passed where @ref nothing "NOTHING" is not accepted fails
+    to parse; @ref no-strict-parse-errors "%no-strict-parse-errors" restores the run-time error.
+
     @par summarize Statement Rejected Under \%modern
     @ref modern "%modern" implies @ref no-summarize "%no-summarize", so the \c summarize statement fails to parse in
     files parsed in @ref modern "%modern" mode; rewrite it as a @ref context "context" loop or use
@@ -688,6 +693,12 @@
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Strict Parse Errors
+    The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the
+    errors that the parser can prove as parse errors, starting with a local variable that cannot have been assigned
+    whose value is given to a type that does not accept @ref nothing "NOTHING"
+    (<a href="https://github.com/qoretechnologies/qore/issues/5937">issue 5937</a>).
+
     @par Warning for a User Symbol that Unqualified Resolution Cannot Reach
     The strict @ref warning-language-traps "language-traps" warning is raised at the declaration of a user function,
     class, constant, hashdecl or global variable named like a @ref Qore "Qore" namespace symbol, which

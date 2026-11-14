@@ -152,6 +152,8 @@ QORE_INTERN_ALWAYS_INLINE int WhileStatement::execCommon(RuntimeConfig& rc, Qore
 }
 
 int WhileStatement::parseInitImpl(QoreParseContext& parse_context) {
+    // code of the loop can run more than once, so a read in it can follow an assignment parsed after it (qore#5937)
+    ParseDeferredScopeHelper deferred_scope;
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_TOP_LEVEL);
@@ -189,6 +191,8 @@ int WhileStatement::parseInitImpl(QoreParseContext& parse_context) {
         ash.recordSavedAsImplicitBranch();
         nth.mergeAndApply();
         ash.mergeAndApply();
+        // break and continue leave the body before its end (qore#5937)
+        ash.applyChangesSinceSave();
     }
 
     return err;

@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StrictParseErrorsTest
+
+#! %strict-parse-errors and the assignment state of local variables at their reads (qore#5937)
+/** A read of a local variable is assigned (an assignment runs before it on every path), unassigned (no assignment can
+    run before it) or not known.  With %strict-parse-errors, which %modern implies, an unassigned read whose value is
+    returned, assigned or passed as an argument where NOTHING is not accepted is a PARSE-TYPE-ERROR; every other read
+    that is not assigned raises the language-traps warning, as without the option.
+*/
+class StrictParseErrorsTest inherits QUnit::Test {
+    public {
+        #! the outcome of a case: an error with %strict-parse-errors, a warning, or no diagnostic
+        const Error = "error";
+        const Warn = "warn";
+        const Ok = "ok";
+
+        #! the code of the body of a function and the outcome with %strict-parse-errors; without it, an error is a
+        #! warning
+        const BodyCases = {
+            # consumers that do not accept NOTHING: the proven cases
+            "assignment": ("int x; int y = x;", Error),
+            "argument": ("int x; g(x);", Error),
+            "assignment, after delete": ("int x = 1; delete x; int y = x;", Error),
+            "assignment, after remove": ("int x = 1; remove x; int y = x;", Error),
+            "assignment, declared in a loop": ("for (int i = 0; i < 2; ++i) { int x; int y = x; }", Error),
+            # consumers that accept NOTHING
+            "optional lvalue": ("int x; *int y = x;", Warn),
+            "optional parameter": ("int x; go(x);", Warn),
+            "parameter with a default value": ("int x; gd(x);", Warn),
+            "operator": ("int x; auto y = x + 1;", Warn),
+            "method of a class": ("int x; C c(); c.m(x);", Warn),
+            "builtin function": ("int x; string s = string(x);", Warn),
+            # reads that are not proven unassigned
+            "assigned in one branch": ("bool c = True; int x; if (c) { x = 1; } int y = x;", Warn),
+            "assigned later in a loop": ("int x; for (int i = 0; i < 2; ++i) { if (i) { int y = x; } x = i; }",
+                Warn),
+            "deleted in one branch": ("bool c = True; int x = 1; if (c) { delete x; } int y = x;", Warn),
+            "deleted in a short-circuited operand": ("bool c = True; int x = 1; bool b = c || (delete x); "
+                "int y = x;", Warn),
+            "loop left by break": ("bool c = True; int x; while (c) { x = 1; if (c) break; delete x; } "
+                "int y = x;", Warn),
+            "catch block": ("int x; try { x = 1; } catch (hash<ExceptionInfo> ex) { int y = x; }", Warn),
+            "catch block after delete": ("int x = 1; try { delete x; throw 1; } catch (hash<ExceptionInfo> ex) "
+                "{ int y = x; }", Warn),
+            "switch fall-through": ("int x; switch (1) { case 1: x = 1; case 2: int y = x; }", Warn),
+            "reference taken": ("int x; reference<int> r = \\x; r = 1; int y = x;", Warn),
+            "assigned through a reference argument": ("int x; gr(\\x); int y = x;", Warn),
+            "assigned in an earlier closure": ("int x; code c = sub () { x = 1; }; c(); int y = x;", Warn),
+            "read in a closure": ("int x; code c = int sub () { return x; }; x = 1; c();", Warn),
+            "on_exit block": ("int x; on_exit { x = 1; } int y = x;", Warn),
+            "after a loop with an on_exit block": ("int x; for (int i = 0; i < 2; ++i) { on_exit { x = i; } } "
+                "int y = x;", Warn),
+            "map expression": ("int x; list<int> l = map x + $1, (1, 2);", Warn),
+            "declared in a for initialization": ("for (int i = 0, int x; i < 3; ++i) { if (i == 1) { int y = x; } "
+                "x = 7; }", Warn),
+            "declared in a map expression": ("list<auto> l = map (exists (int y) ? g(y) : (y = $1)), (1, 2);",
+                Warn),
+            "on_exit block before delete": ("int x = 0; { on_exit x = 1; delete x; } int y = x;", Warn),
+            # reads that inspect the absent value, and operands that are not read
+            "exists": ("int x; bool b = exists x;", Ok),
+            "null coalescing": ("int x; int y = x ?? 1;", Ok),
+            "value coalescing": ("int x; int y = x ?* 1;", Ok),
+            "delete of an unassigned local": ("int x; delete x;", Ok),
+            "assigned": ("int x = 1; int y = x;", Ok),
+            "assigned on every branch": ("bool c = True; int x; if (c) { x = 1; } else { x = 2; } int y = x;", Ok),
+        };
+
+        #! declarations used by the cases
+        const Decls = "sub g(int a) {}\nsub go(*int a) {}\nsub gd(int a = 1) {}\nsub gr(reference<int> r) "
+            "{ r = 1; }\nclass C { m(int a) {} }\n";
+    }
+
+    constructor() : QUnit::Test("StrictParseErrorsTest", "1.0") {
+        addTestCase("assignment states of reads with and without %strict-parse-errors", \stateTest());
+        addTestCase("return value", \returnTest());
+        addTestCase("top-level local", \topLevelTest());
+        addTestCase("%modern implies %strict-parse-errors", \modernTest());
+        addTestCase("%strict-parse-errors without %modern", \directiveTest());
+        addTestCase("ParseOptions names", \parseOptionsTest());
+        addTestCase("diagnostic metadata", \metadataTest());
+        set_return_value(main());
+    }
+
+    stateTest() {
+        foreach hash<auto> i in (BodyCases.pairIterator()) {
+            string src = Decls + "sub t() { " + i.value[0] + " }\n";
+            assertEq(i.value[1], outcome("%modern\n", src), i.key + " (%modern)");
+            assertEq(i.value[1] == Error ? Warn : i.value[1], outcome("%modern\n%no-strict-parse-errors\n", src),
+                i.key + " (%no-strict-parse-errors)");
+        }
+    }
+
+    returnTest() {
+        string src = "int sub t() { int x; return x; }\n";
+        assertEq(Error, outcome("%modern\n", src));
+        assertEq(Warn, outcome("%modern\n%no-strict-parse-errors\n", src));
+        # a return type that accepts NOTHING
+        assertEq(Warn, outcome("%modern\n", "*int sub t() { int x; return x; }\n"));
+    }
+
+    topLevelTest() {
+        # a top-level local is also a variable of the functions of the program, which can assign it when they are
+        # called
+        string src = "int counter;\nint sub readIt() { return counter; }\nint y = counter;\n";
+        assertEq(Warn, outcome("%modern\n", src));
+        # a local declared in a block of the top-level code is not
+        assertEq(Error, outcome("%modern\n", "if (True) { int x; int y = x; }\n"));
+    }
+
+    modernTest() {
+        string src = Decls + "sub t() { int x; g(x); }\n";
+        # %no-strict-parse-errors disables it before and after %modern
+        assertEq(Error, outcome("%modern\n", src));
+        assertEq(Warn, outcome("%modern\n%no-strict-parse-errors\n", src));
+        assertEq(Warn, outcome("%no-strict-parse-errors\n%modern\n", src));
+        # %strict-parse-errors after %no-strict-parse-errors enables it again
+        assertEq(Error, outcome("%modern\n%no-strict-parse-errors\n%strict-parse-errors\n", src));
+    }
+
+    directiveTest() {
+        string src = Decls + "sub t() { int x; g(x); }\n";
+        assertEq(Warn, outcome("%new-style\n%require-types\n", src));
+        assertEq(Error, outcome("%new-style\n%require-types\n%strict-parse-errors\n", src));
+    }
+
+    parseOptionsTest() {
+        string src = Decls + "sub t() { int x; g(x); }\n";
+        {
+            ParseOptions opts(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            opts.set("strict-parse-errors");
+            Program p(opts, True);
+            assertThrows("PARSE-TYPE-ERROR", "%strict-parse-errors", \p.parse(), (src, "strict-option"));
+        }
+        {
+            ParseOptions opts(PO_MODERN);
+            opts.set("no-strict-parse-errors");
+            Program p(opts, True);
+            p.parse(src, "no-strict-option");
+            assertTrue(p.existsFunction("t"));
+        }
+    }
+
+    metadataTest() {
+        # a Program that does not inherit the parse options of this test (%modern, no top-level statements)
+        Program p(PO_NEW_STYLE, True);
+        try {
+            p.parse("%modern\n" + Decls + "sub t() { int x; g(x); }\n", "metadata");
+            fail("no parse error");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-TYPE-ERROR", ex.err);
+            assertRegex("local variable 'x' cannot have been assigned where it is read, so it gives NOTHING to "
+                "argument 1 \\('a'\\), whose type 'int' does not accept NOTHING", ex.desc);
+        }
+    }
+
+    #! returns the outcome of parsing the code: Error for a parse exception, Warn for a language-traps warning
+    private string outcome(string directives, string src) {
+        # a Program that does not inherit the parse options of this test (%modern, no top-level statements)
+        Program p(PO_NEW_STYLE, True);
+        try {
+            *hash<auto> w = p.parse(directives + "%enable-warning language-traps\n" + src, "case",
+                WARN_ALL | WARN_LANGUAGE_TRAPS);
+            if (!w) {
+                return Ok;
+            }
+            assertEq("LANGUAGE-TRAP", w.err);
+            return Warn;
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-TYPE-ERROR", ex.err, ex.desc);
+            assertRegex("%strict-parse-errors", ex.desc);
+            return Error;
+        }
+    }
+}

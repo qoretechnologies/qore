@@ -1314,6 +1314,12 @@ public:
             assert(!(pwo.parse_options & modernIncompatibleOptions()));
             pwo.parse_options |= modernImpliedOptions();
         }
+        // %modern sets %strict-parse-errors, which %no-strict-parse-errors disables also with %modern
+        if (pwo.parse_options & QoreParseOptions::NO_STRICT_PARSE_ERRORS) {
+            pwo.parse_options &= ~QoreParseOptions::STRICT_PARSE_ERRORS;
+        } else if (isModern(pwo.parse_options)) {
+            pwo.parse_options |= QoreParseOptions::STRICT_PARSE_ERRORS;
+        }
     }
 
     DLLLOCAL bool hasModernParseOptions() const {

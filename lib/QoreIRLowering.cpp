@@ -5793,6 +5793,20 @@ bool QoreIRLowering::guaranteedStringType(const QoreValue* expr) const {
     return true;
 }
 
+bool QoreIRLowering::typedOpNeedsNothingFallback(QoreIROpcode int_op, const QoreValue& left,
+        const QoreValue& right) const {
+    // the int division of the AST interpreter, which it takes for two operands of int types, takes NOTHING as 0 as the
+    // typed division does
+    switch (int_op) {
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::MulInt:
+            return valueMayBeNothingDespiteType(left) && valueMayBeNothingDespiteType(right);
+        default:
+            return false;
+    }
+}
+
 QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const QoreValue& right,
         QoreIROpcode int_op, QoreIROpcode float_op, QoreIROpcode any_op) {
     if (isIntConstant(left) && isIntConstant(right)) {
@@ -5805,6 +5819,12 @@ QoreIROpcode QoreIRLowering::selectNumericOpcode(const QoreValue& left, const Qo
     if ((isIntConstant(left) && isFloatConstant(right))
             || (isFloatConstant(left) && isIntConstant(right))) {
         return float_op;
+    }
+    // an operand read from an lvalue that may have no value despite its type (qore#5937): the typed operations take
+    // NOTHING as 0, which gives the result of the AST interpreter for one such operand of +, - and *, and for any of
+    // the other operations; two such operands of +, - or * give NOTHING there
+    if (typedOpNeedsNothingFallback(int_op, left, right)) {
+        return any_op;
     }
     if (guaranteedIntType(&left) && guaranteedIntType(&right)) {
         return int_op;
@@ -6761,9 +6781,11 @@ bool QoreIRLowering::getAnalysis(const QoreValue& expr, QoreParseAnalysis& analy
                 }
                 // a local that delete or remove leaves without a value (also through a reference to it) can be
                 // NOTHING at a read that the single forward parse saw as assigned, as the read before a delete later
-                // in a loop body is in the next iteration, so the read's type is its type or NOTHING (qore#5710)
+                // in a loop body is in the next iteration, so the read's type is its type or NOTHING (qore#5710); so
+                // can a read where the local may not have been assigned, whatever its declared type (qore#5937)
                 if ((var_type == VT_LOCAL || var_type == VT_CLOSURE || var_type == VT_LOCAL_TS)
-                        && var->ref.id && var->ref.id->everDeleted()) {
+                        && var->ref.id && (var->ref.id->everDeleted()
+                            || var->getReadState() != qore_local_read_state_e::Assigned)) {
                     analysis.clearFlag(QoreParseAnalysis::DefinitelyAssigned);
                     analysis.clearFlag(QoreParseAnalysis::NeverNothing);
                     if (analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && analysis.known_type) {
@@ -7507,7 +7529,9 @@ void QoreIRLowering::setReferenceLoadExceptionTarget(QoreIRInstruction* load, co
             || var->getType() == VT_CLOSURE) && var->ref.id && var->ref.id->everDeleted();
         bool definitely_assigned = !ever_deleted && (analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
             || (local_definitely_assigned && plain_local));
-        if (ever_deleted && facts.type_info) {
+        // a read where the local may not have a value has its type or NOTHING (qore#5710, qore#5937): the type
+        // without NOTHING would let the optimizers take the value as one of the type
+        if ((ever_deleted || !definitely_assigned) && facts.type_info) {
             facts.type_info = get_or_nothing_type_check(facts.type_info);
         }
         facts.assigned_state = definitely_assigned
@@ -7743,8 +7767,10 @@ const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* e
     if (LocalVar* local = getLocalVarFromValue(*expr)) {
         const QoreTypeInfo* type = parse_context->guaranteedType(local);
         // a local that is the operand of delete or remove anywhere in its scope can be NOTHING when it is read, also
-        // when its declared type does not accept NOTHING, as the AST interpreter reads it (qore#5710)
-        if (type && local->everDeleted()) {
+        // when its declared type does not accept NOTHING, as the AST interpreter reads it (qore#5710); so can a read
+        // where it may not have been assigned (qore#5937)
+        const VarRefNode* var = expr->hasNode() ? dynamic_cast<const VarRefNode*>(expr->getInternalNode()) : nullptr;
+        if (type && (local->everDeleted() || (var && var->getReadState() != qore_local_read_state_e::Assigned))) {
             return get_or_nothing_type_check(type);
         }
         return type;
@@ -9913,14 +9939,15 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
 
     // Lambda to check if a leaf expression has string type using AST type info
     // Note: We check VarRefNode specifically because ParseNode::getTypeInfo() is protected
-    auto isStringTypedExpr = [](QoreValue e) -> bool {
+    auto isStringTypedExpr = [this](QoreValue e) -> bool {
         // Check for string literal
         if (e.getType() == NT_STRING) {
             return true;
         }
-        // Check VarRefNode's type info (public method)
+        // Check VarRefNode's type info (public method); a variable that may have no value despite its type is not a
+        // string operand (qore#5937): NOTHING + NOTHING is NOTHING, and the typed concatenation gives a string
         auto* var_node = dynamic_cast<const VarRefNode*>(e.getInternalNode());
-        if (var_node) {
+        if (var_node && !valueMayBeNothingDespiteType(e)) {
             const QoreTypeInfo* type_info = var_node->getTypeInfo();
             if (type_info && QoreTypeInfo::isType(type_info, NT_STRING)) {
                 return true;
@@ -10409,9 +10436,15 @@ QoreIRValue QoreIRLowering::lowerDivision(const QoreValue& expr, std::string& er
     if (!right.isValid()) {
         return QoreIRValue();
     }
-    QoreIROpcode op = selectNumericOpcode(div->getLeft(), div->getRight(),
-        QoreIROpcode::DivInt, QoreIROpcode::DivFloat, QoreIROpcode::DivAny,
-        QoreIROpcode::DivNumber);
+    // the AST interpreter divides with the int or float division that the parse chose from the parse types of the
+    // operands, for every value, which converts NOTHING to 0 as the typed operations do (qore#5937): an operand that
+    // may have no value despite its type does not change the operation
+    QoreIROpcode op = div->parseUsesIntDivision()
+        ? QoreIROpcode::DivInt
+        : div->parseUsesFloatDivision()
+            ? QoreIROpcode::DivFloat
+            : selectNumericOpcode(div->getLeft(), div->getRight(), QoreIROpcode::DivInt, QoreIROpcode::DivFloat,
+                QoreIROpcode::DivAny, QoreIROpcode::DivNumber);
     return lowerBinaryOpOrInvoke(op, expr, left, right, div->loc, error);
 }
 
@@ -13398,6 +13431,42 @@ static bool qoreIrListLiteralElementTypeIsExact(const QoreTypeInfo* elem_type) {
         || elem_type == boolTypeInfo || elem_type == numberTypeInfo || elem_type == binaryTypeInfo;
 }
 
+bool QoreIRLowering::valueMayBeNothingDespiteType(const QoreValue& elem) const {
+    if (!elem.hasNode()) {
+        return false;
+    }
+    const AbstractQoreNode* node = elem.getInternalNode();
+    switch (node->getType()) {
+        case NT_VARREF: {
+            const VarRefNode* var = static_cast<const VarRefNode*>(node);
+            qore_var_t var_type = var->getType();
+            if (var_type != VT_LOCAL && var_type != VT_CLOSURE && var_type != VT_LOCAL_TS) {
+                // a global or thread-local variable
+                return true;
+            }
+            QoreParseAnalysis analysis;
+            return !getAnalysis(elem, analysis) || !analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned);
+        }
+        case NT_SELF_VARREF:
+        case NT_CLASS_VARREF:
+            return true;
+        default:
+            break;
+    }
+    if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
+            || dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return true;
+    }
+    // +, - and * give NOTHING only for two operands without a value (one is taken as 0)
+    if (dynamic_cast<const QorePlusOperatorNode*>(node) || dynamic_cast<const QoreMinusOperatorNode*>(node)
+            || dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
+        const QoreBinaryOperatorNode<>* op = static_cast<const QoreBinaryOperatorNode<>*>(
+            static_cast<const QoreOperatorNode*>(node));
+        return valueMayBeNothingDespiteType(op->getLeft()) && valueMayBeNothingDespiteType(op->getRight());
+    }
+    return false;
+}
+
 QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     // Phase 3b diag: trace the pre-dynamic_cast pointer so a crashing
@@ -13436,6 +13505,17 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(parse_ti);
         if (!qoreIrListLiteralElementTypeIsExact(elem_type)) {
             parse_ti = nullptr;
+        } else {
+            // a value read from an lvalue whose type does not accept NOTHING can still be NOTHING: a local variable
+            // that may not have been assigned, and a member, static or global variable or a container element, which
+            // other code can clear at any time (qore#5937); the literal is then typed from its values, as the AST
+            // interpreter types it
+            for (size_t i = 0; i < list->size(); ++i) {
+                if (valueMayBeNothingDespiteType(list->get(i))) {
+                    parse_ti = nullptr;
+                    break;
+                }
+            }
         }
     }
     auto* inst = builder.createMakeList(values, list->loc, parse_ti);

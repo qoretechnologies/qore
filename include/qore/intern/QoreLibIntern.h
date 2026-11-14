@@ -355,6 +355,42 @@ private:
     int pflag;
 };
 
+//! Sets one parse flag while in scope and restores only that flag: unlike QoreParseContextFlagHelper, it keeps the
+//! flags that the code parsed in its scope sets for the code around it (ex: PF_NARROWED_TYPE)
+class QoreParseContextFlagScope {
+public:
+    DLLLOCAL QoreParseContextFlagScope(QoreParseContext& parse_context, int flag, bool set = true)
+            : parse_context(parse_context), flag(flag), was_set(parse_context.pflag & flag) {
+        if (set) {
+            parse_context.pflag |= flag;
+        }
+    }
+
+    DLLLOCAL ~QoreParseContextFlagScope() {
+        if (was_set) {
+            parse_context.pflag |= flag;
+        } else {
+            parse_context.pflag &= ~flag;
+        }
+    }
+
+    //! Clears the flag while in scope instead of setting it; the parse of an operand that is read in all cases (ex:
+    //! the key expression of an lvalue)
+    struct Clear {};
+    DLLLOCAL QoreParseContextFlagScope(QoreParseContext& parse_context, int flag, Clear)
+            : parse_context(parse_context), flag(flag), was_set(parse_context.pflag & flag) {
+        parse_context.pflag &= ~flag;
+    }
+
+    QoreParseContextFlagScope(const QoreParseContextFlagScope&) = delete;
+    QoreParseContextFlagScope& operator=(const QoreParseContextFlagScope&) = delete;
+
+private:
+    QoreParseContext& parse_context;
+    int flag;
+    bool was_set;
+};
+
 class QoreParseContextAnalysisHelper {
 public:
     DLLLOCAL QoreParseContextAnalysisHelper(QoreParseContext& parse_context)

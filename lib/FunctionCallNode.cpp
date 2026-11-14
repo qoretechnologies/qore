@@ -708,6 +708,30 @@ int FunctionCallBase::resolveExplicitTypeArgs(const QoreProgramLocation* loc) {
     return err;
 }
 
+//! Raises a parse error for each argument that is a read of a local variable proven unassigned whose parameter does
+//! not accept NOTHING and has no default value, with %strict-parse-errors (qore#5937)
+/** @return -1 if an error was raised, 0 if not
+*/
+static int qore_parse_check_unassigned_args(QoreProgram* pgm, const QoreProgramLocation* loc, const QoreListNode& args,
+        const AbstractFunctionSignature& sig) {
+    int err = 0;
+    unsigned num_params = sig.numParams();
+    for (unsigned i = 0, e = args.size(); i < e && i < num_params; ++i) {
+        // a parameter with a default value takes the default value for NOTHING
+        if (sig.hasDefaultArg(i)) {
+            continue;
+        }
+        const name_vec_t& names = sig.getParamNames();
+        QoreStringMaker desc("argument %d%s%s%s", i + 1, names.size() > i ? " ('" : "",
+            names.size() > i ? names[i].c_str() : "", names.size() > i ? "')" : "");
+        if (qore_parse_check_unassigned_read(pgm, loc, args.retrieveEntry(i), sig.getParamTypeInfo(i),
+                desc.c_str())) {
+            err = -1;
+        }
+    }
+    return err;
+}
+
 const name_vec_t* qore_intern_call_arg_names(name_vec_t&& names) {
     // a set does not move its elements, so the pointer to an interned list stays valid; the set is never destroyed,
     // so that a list stays valid also for code that runs while static objects are destroyed at exit
@@ -957,6 +981,15 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                 }
                 int64 flags = variant->getFlags();
                 check_flags(loc, func, flags, parse_context.pflag);
+                // a local variable that cannot have been assigned gives NOTHING to its parameter (qore#5937): only
+                // checked for a call of a function written in Qore that can resolve to this variant only, as another
+                // variant (an overload with fewer parameters, varargs, a builtin's) or a method of a subclass can
+                // take NOTHING at run time; named arguments are bound to parameters in another order
+                if (args && !named_args && !qc && variant->isUser() && func->hasSingleCallVariant()
+                        && qore_parse_check_unassigned_args(parse_context.pgm, loc, *args, *variant->getSignature())
+                        && !err) {
+                    err = -1;
+                }
             }
         } else {
             //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %p f: %lld (%lld) c: %lld (%lld)\n",
