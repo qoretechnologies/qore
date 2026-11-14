@@ -79,6 +79,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Completed Objects Are Released After Constructor Argument Errors
+    An exception while @ref constructor_argument_cleanup "releasing a completed constructor's arguments" now releases
+    the new object normally, running its destructor when no other reference remains; AST execution previously skipped
+    the destructor in this case.
+
     @par An Empty String Sorts Before Every Other String
     The @ref logical_less_than_operator "comparison operators", @ref logical_comparison_operator "<=>" and the
     functions that order strings with them (such as @ref Qore::sort() "sort()", \c min() and \c max()) now order an

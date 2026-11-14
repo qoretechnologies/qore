@@ -477,6 +477,16 @@ string s = a.create(1);
     |@ref auto_type "auto" <tt>@ref methodGate_methods "methodGate"(</tt>@ref string_type "string" <em>method_param_name</em><tt>, ...) {}</tt>|If this method is implemented in the class, it is called when methods are called on the object that do not exist in the current object and the return value of this method is returned as the value of the method call.\n\n\c methodGate() methods cannot be @ref overloaded_methods "overloaded" and are not inherited by subclasses.
     |<tt>@ref memberNotification_methods "memberNotification"(</tt>@ref string_type "string" <em>member_param_name</em><tt>) {}</tt>|If this method is implemented in the class, it is called when an object member is updated outside the class with the member name as the argument. Note that this method is called after the member has been updated and without locking; the call is not atomic respective to other threads that also may update the same member simultaneously.\n\n\c memberNotification() methods cannot be @ref overloaded_methods "overloaded" and are not inherited by subclasses.
 
+    @anchor constructor_argument_cleanup
+    @par Exceptions While Releasing Constructor Arguments
+    Once the constructor body and its local cleanup complete successfully, an exception raised while releasing
+    its parameters or implicit arguments does not turn the object into a partially constructed object: the
+    construction releases its reference normally, running the object's destructor when no other reference remains.
+    The argument exception remains primary; an exception raised by the object's destructor is chained after it.
+    A reference published by the constructor remains valid until it is released. If member initialization, a base
+    constructor, the constructor body, or its local cleanup fails, the existing partial-construction behavior still
+    applies and user destructors are not run.
+
     @subsection final_methods Final Methods
 	Methods declared <b><tt>final</tt></b> cannot be reimplemented in a subclass.  Methods can be declared <b><tt>final</tt></b> to prevent a subclass from altering the behavior of a method that is critical to the class's functionality.\n\n
 	None of the following special methods can be declared <b><tt>final</tt></b>:

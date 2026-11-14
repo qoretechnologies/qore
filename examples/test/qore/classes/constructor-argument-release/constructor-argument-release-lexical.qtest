@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalConstructorReleaseTest
+
+class LexicalConstructorReleaseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LexicalConstructorRelease", "1.0", \ARGV) {
+        addTestCase("lexical constructor entries release completed objects", \check());
+        set_return_value(main());
+    }
+    check() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS
+            | PO_STRICT_BOOLEAN_EVAL);
+        p.parse('our list<string> events = ();
+            class Arg { destructor() { push events, "argument"; throw "ARGUMENT"; } }
+            class Value {
+                constructor(any a) { push events, "constructed"; }
+                destructor() { push events, "product"; }
+            }
+            class Extra {
+                constructor(...) { push events, "constructed"; }
+                destructor() { push events, "product"; }
+            }
+            list<string> sub run(bool extra) {
+                events = ();
+                try {
+                    if (extra) { auto value = new Extra(new Arg()); }
+                    else { auto value = new Value(new Arg()); }
+                } catch (hash<ExceptionInfo> ex) { push events, ex.err; }
+                return events;
+            }', "lexical-constructor-release");
+        foreach bool extra in (False, True) {
+            assertEq(("constructed", "argument", "product", "ARGUMENT"), p.callFunction("run", extra));
+        }
+        p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        foreach bool extra in (False, True) {
+            assertEq(("constructed", "argument", "product", "ARGUMENT"), p.callFunction("run", extra));
+        }
+    }
+}
