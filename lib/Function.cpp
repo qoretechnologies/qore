@@ -8476,6 +8476,21 @@ void UserVariantBase::attemptJITCompilation() const {
         return;
     }
 
+    // the same for a function whose handlers and locals make its native code expensive to compile (qore#6104)
+    const size_t jit_handler_budget = static_cast<size_t>(QoreJIT::getMaxJITHandlerCost());
+    if (jit_handler_budget) {
+        const size_t handler_cost = ir->getHandlerCostEstimate();
+        if (handler_cost > jit_handler_budget) {
+            jit_compile_failed.store(true, std::memory_order_release);
+            jit_compile_state.store(2, std::memory_order_release);
+            if (q_env_is_set("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (handler budget exceeded; about %zu "
+                    "instructions; limit %zu)\n", ir->name.c_str(), handler_cost, jit_handler_budget);
+            }
+            return;
+        }
+    }
+
     // Enqueue for background JIT compilation instead of compiling synchronously.
     // This allows I/O threads and other critical threads to continue executing IR code
     // while the background thread performs expensive LLVM compilation.

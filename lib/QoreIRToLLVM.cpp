@@ -4654,6 +4654,96 @@ void QoreIRToLLVM::emitImplicitContextRestore(llvm::Module& module, const QoreIR
     }
 }
 
+bool QoreIRToLLVM::shouldShareReturnTail(const QoreIRFunction& func) const {
+    size_t returns = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (!inst) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::Return || inst->opcode == QoreIROpcode::ReturnNothing) {
+                // the signal of an outlined helper's return is set at each return
+                if (aot_mode && static_cast<const QoreIRReturnInstruction*>(inst.get())->outline_signal) {
+                    return false;
+                }
+                ++returns;
+            }
+        }
+    }
+    // the instructions of the sequence at a return, about as many as 16 for each local
+    return returns >= 4 && returns * (static_cast<size_t>(func.total_local_count) * 16 + 64) > 8192;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitSharedReturn(llvm::Function* llvm_func, llvm::Value* value) {
+    if (!return_tail) {
+        return_tail = llvm::BasicBlock::Create(ctx, "return_tail", llvm_func);
+        return_tail_value = llvm::PHINode::Create(llvm_func->getReturnType(), 0, "return_tail_value", return_tail);
+    }
+    return_tail_value->addIncoming(value, builder->GetInsertBlock());
+    builder->CreateBr(return_tail);
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitReturnTail(llvm::Module& module) {
+    if (!return_tail) {
+        return;
+    }
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    builder->SetInsertPoint(return_tail);
+    emitOnBlockExitExec(module);
+    emitPreinstantiatedCleanup(module);
+    emitInvokeCleanup(module);
+    emitLocalUninstantiation(module);
+    builder->CreateRet(return_tail_value);
+    if (saved_insert) {
+        builder->SetInsertPoint(saved_insert, saved_ip);
+    }
+}
+
+bool QoreIRToLLVM::holdsReturnValuesOnException() const {
+    // the value of a handler's return that replaced an interrupted return is held as one (#5992)
+    if (handler_return_hold) {
+        return true;
+    }
+    for (uint32_t id : return_value_ids) {
+        auto i = invoke_alloca_map.find(id);
+        if (i != invoke_alloca_map.end() && i->second) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::BasicBlock* QoreIRToLLVM::getExceptionExitTail(llvm::Function* llvm_func) {
+    if (!exception_exit_tail) {
+        exception_exit_tail = llvm::BasicBlock::Create(ctx, "exception_exit_tail", llvm_func);
+    }
+    return exception_exit_tail;
+}
+
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitExceptionExitTail(llvm::Module& module) {
+    if (!exception_exit_tail) {
+        return;
+    }
+    llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+    auto saved_ip = builder->GetInsertPoint();
+    builder->SetInsertPoint(exception_exit_tail);
+    // the exits released the temporaries of their statements (emitExitStatementCleanup()), which sets this
+    holding_return_values = holdsReturnValuesOnException();
+    emitOnBlockExitExec(module);
+    emitPreinstantiatedCleanup(module, true);
+    emitInvokeCleanup(module);
+    emitLocalUninstantiation(module);
+    builder->CreateRet(getNothingReturnValue());
+    if (saved_insert) {
+        builder->SetInsertPoint(saved_insert, saved_ip);
+    }
+}
+
 void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_ssa, bool exception_exit) {
     // an exit on an exception keeps the values of the returns that it interrupts until after the locals (qore#5941)
     bool hold_returns = false;
@@ -4678,14 +4768,31 @@ void QoreIRToLLVM::emitExitStatementCleanup(llvm::Module& module, bool pending_s
         // values that it holds, alive after the temporaries (qore#5884)
         emitIteratorCleanup(module, positionIterators());
     }
-    if (!hold_returns && exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow
-            && exit_temp_cleanup_array_count == exit_temp_cleanup_count
-            && exit_temp_cleanup_array_count >= 32) {
+    // the slots of the cleanup allocas of the values of the returns that the exception interrupts, which the exit
+    // releases after the locals and not here (qore#5989); the exit releases the other slots by the array unless one
+    // of them has no slot in it
+    std::vector<unsigned> held_slots;
+    bool array_exit = exit_temp_cleanup_array && !exit_temp_cleanup_array_overflow
+        && exit_temp_cleanup_array_count == exit_temp_cleanup_count && exit_temp_cleanup_array_count >= 32;
+    if (array_exit && hold_returns) {
+        for (uint32_t id : return_value_ids) {
+            auto i = invoke_alloca_map.find(id);
+            if (i == invoke_alloca_map.end() || !i->second || persistent_cleanup_allocas.count(i->second)) {
+                continue;
+            }
+            auto slot = exit_temp_cleanup_slot.find(i->second);
+            if (slot == exit_temp_cleanup_slot.end()) {
+                array_exit = false;
+                break;
+            }
+            held_slots.push_back(slot->second);
+        }
+    }
+    if (array_exit) {
         // the same releases as the inline sequence below, in the same (reverse registration) order, in one call
-        auto helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
-                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
-        builder->CreateCall(helper, {exit_temp_cleanup_array,
-            llvm::ConstantInt::get(i32_type, exit_temp_cleanup_array_count), xsink_arg});
+        // (for each run of slots between those that are held)
+        emitCleanupArrayRunSkipping(module, exit_temp_cleanup_array, exit_temp_cleanup_array_count,
+            std::move(held_slots));
     } else if (!invoke_result_allocas.empty()) {
         auto helper = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -5186,18 +5293,61 @@ void QoreIRToLLVM::finalizeOrderedErrorReturnEdges(llvm::Module& module, llvm::F
     }
 }
 
+// documented in QoreIRToLLVM.h
+void QoreIRToLLVM::emitCleanupArrayRunSkipping(llvm::Module& module, llvm::AllocaInst* array, unsigned count,
+        std::vector<unsigned> skip) {
+    auto helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+    std::sort(skip.begin(), skip.end());
+    skip.erase(std::unique(skip.begin(), skip.end()), skip.end());
+    // the runs of entries between the skipped ones, from the last: qore_rt_cleanup_run_allocas() releases the entries
+    // of a run last to first, which is the order of the inline sequence over all of them
+    unsigned end = count;
+    for (auto it = skip.rbegin(); it != skip.rend(); ++it) {
+        unsigned held = *it;
+        assert(held < count);
+        if (held < end) {
+            llvm::Value* first = builder->CreateGEP(ptr_type, array, llvm::ConstantInt::get(i32_type, held + 1),
+                "cleanup_run_from");
+            builder->CreateCall(helper, {first, llvm::ConstantInt::get(i32_type, end - (held + 1)), xsink_arg});
+        }
+        end = held;
+    }
+    if (end) {
+        builder->CreateCall(helper, {array, llvm::ConstantInt::get(i32_type, end), xsink_arg});
+    }
+}
+
 void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     if (invoke_result_allocas.empty()) {
         return;
     }
-    if (!holding_return_values && invoke_cleanup_array && !invoke_cleanup_array_overflow
+    if (invoke_cleanup_array && !invoke_cleanup_array_overflow
             && invoke_cleanup_array_count == invoke_result_allocas.size()
             && invoke_cleanup_array_count >= 32) {
-        auto helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
-                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
-        builder->CreateCall(helper, {invoke_cleanup_array,
-            llvm::ConstantInt::get(i32_type, invoke_cleanup_array_count), xsink_arg});
-        return;
+        // the value of an interrupted return is released after the locals (see holding_return_values), so its slot
+        // is not released here; the others are, in one call for each run of slots between the held ones (qore#5989)
+        std::vector<unsigned> held_slots;
+        bool held_known = true;
+        if (holding_return_values) {
+            for (uint32_t id : return_value_ids) {
+                auto i = invoke_alloca_map.find(id);
+                if (i == invoke_alloca_map.end() || !i->second) {
+                    continue;
+                }
+                auto slot = invoke_cleanup_slot.find(i->second);
+                if (slot == invoke_cleanup_slot.end()) {
+                    held_known = false;
+                    break;
+                }
+                held_slots.push_back(slot->second);
+            }
+        }
+        if (held_known) {
+            emitCleanupArrayRunSkipping(module, invoke_cleanup_array, invoke_cleanup_array_count,
+                std::move(held_slots));
+            return;
+        }
     }
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
@@ -5480,6 +5630,7 @@ void QoreIRToLLVM::registerInvokeCleanupAlloca(llvm::Value* alloca_ptr) {
             if (exit_temp_cleanup_array_count >= invoke_cleanup_array_capacity) {
                 exit_temp_cleanup_array_overflow = true;
             } else {
+                exit_temp_cleanup_slot.emplace(alloca_ptr, exit_temp_cleanup_array_count);
                 storeCleanupSlotAddress(exit_temp_cleanup_array, exit_temp_cleanup_array_count++, alloca_ptr);
             }
         }
@@ -5681,6 +5832,9 @@ void QoreIRToLLVM::emitLateExitCleanup(llvm::Function* llvm_func,
     }
 }
 
+//! the most llvm.lifetime.end markers that the exits of a function have in all (see emitLifetimeAnnotations())
+static constexpr size_t MaxLifetimeEndMarkers = 4096;
+
 void QoreIRToLLVM::emitLifetimeAnnotations(llvm::Function* llvm_func) {
     // Annotate entry-block alloca lifetimes so SROA/mem2reg can reason about
     // when each alloca's storage is live and promote promotable ones to SSA.
@@ -5763,15 +5917,21 @@ void QoreIRToLLVM::emitLifetimeAnnotations(llvm::Function* llvm_func) {
     }
 
     // Emit lifetime.end before every ret / resume terminator.
-    llvm::IRBuilder<> end_builder(llvm_func->getContext());
+    std::vector<llvm::Instruction*> exit_terms;
     for (llvm::BasicBlock& bb : *llvm_func) {
         llvm::Instruction* term = qoreGetTerminator(bb);
-        if (!term) {
-            continue;
+        if (term && (llvm::isa<llvm::ReturnInst>(term) || llvm::isa<llvm::ResumeInst>(term))) {
+            exit_terms.push_back(term);
         }
-        if (!llvm::isa<llvm::ReturnInst>(term) && !llvm::isa<llvm::ResumeInst>(term)) {
-            continue;
-        }
+    }
+    // an end marker is optional (a lifetime that has none lasts to the end of the function), and one for each
+    // alloca at each exit is a number of instructions in the product of the two: a function with thousands of
+    // allocas and dozens of exits had a hundred thousand of them (qore#5989).  Past a budget the exits have none
+    if (exit_terms.empty() || allocas.size() > MaxLifetimeEndMarkers / exit_terms.size()) {
+        return;
+    }
+    llvm::IRBuilder<> end_builder(llvm_func->getContext());
+    for (llvm::Instruction* term : exit_terms) {
         end_builder.SetInsertPoint(term);
         for (llvm::AllocaInst* ai : allocas) {
 #if LLVM_VERSION_MAJOR < 22
@@ -13521,6 +13681,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     owned_ir_local_alloca_keys.clear();
     invoke_result_allocas.clear();
     invoke_cleanup_slot.clear();
+    exit_temp_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
     temp_cleanup_marks.clear();
     exception_edges.clear();
@@ -13611,6 +13772,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     local_valid_epochs.clear();
     local_reload_boundary_cleanup_pending = false;
     error_return_block = nullptr;
+    exception_exit_tail = nullptr;
+    return_tail = nullptr;
+    return_tail_value = nullptr;
+    share_return_tail = shouldShareReturnTail(func);
     jit_deopt_block = nullptr;
     current_lowering_block_ = nullptr;
     // the implicit arguments and elements that an exception leaving the function restores at each instruction (see
@@ -15864,17 +16029,33 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     finalizeOrderedErrorReturnEdges(module, llvm_func);
     finalizeCatchReturnReleases(module);
 
-    if (error_return_block) {
+    if (error_return_block || exception_exit_tail || return_tail) {
         // Choose how boxed exit cleanup is emitted before writing any of it:
         // every exception and thread-exit check in the function branches here, so
         // with many locals the inline per-local triples need one PHI per local for
         // every one of those edges, and PHI elimination then expands each into a
         // COPY.  That product is what makes LLVM's register coalescer and
         // allocator superlinear on large function bodies.
-        prepareBoxedExitCleanupArray(llvm_func,
-                static_cast<size_t>(std::distance(
-                    llvm::pred_begin(error_return_block),
-                    llvm::pred_end(error_return_block))));
+        size_t error_edges = 0;
+        if (error_return_block) {
+            error_edges += static_cast<size_t>(std::distance(llvm::pred_begin(error_return_block),
+                llvm::pred_end(error_return_block)));
+        }
+        if (exception_exit_tail) {
+            error_edges += static_cast<size_t>(std::distance(llvm::pred_begin(exception_exit_tail),
+                llvm::pred_end(exception_exit_tail)));
+        }
+        if (return_tail) {
+            error_edges += static_cast<size_t>(std::distance(llvm::pred_begin(return_tail),
+                llvm::pred_end(return_tail)));
+        }
+        prepareBoxedExitCleanupArray(llvm_func, error_edges);
+    }
+    // the exits on an exception that no handler of the function takes, and the returns
+    emitExceptionExitTail(module);
+    emitReturnTail(module);
+
+    if (error_return_block) {
         builder->SetInsertPoint(error_return_block);
         // a call that raised an exception before its frame took the call site leaves no call site behind
         emitCallSiteClear();
@@ -20135,6 +20316,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // iterators (from foreach body early exit) - before the on_block_exit handlers run, as the AST
             // interpreter releases them when the statements unwind
             emitExitStatementCleanup(module, true);
+            if (share_return_tail) {
+                // the rest of the return is the same for every return (see emitReturnTail())
+                emitSharedReturn(llvm_func, return_value ? return_value : getNothingReturnValue());
+                return true;
+            }
             // Execute on_block_exit handlers before the remaining cleanup
             emitOnBlockExitExec(module);
             // Release entry-load refs for pre-instantiated locals (tiered compilation)
@@ -20198,6 +20384,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true);
+            if (share_return_tail) {
+                // the rest of the return is the same for every return (see emitReturnTail())
+                emitSharedReturn(llvm_func, return_value ? return_value : getNothingReturnValue());
+                return true;
+            }
             emitOnBlockExitExec(module);
             emitPreinstantiatedCleanup(module);
             emitInvokeCleanup(module);
@@ -22719,11 +22910,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
-            emitOnBlockExitExec(module);
-            emitPreinstantiatedCleanup(module, true);
-            emitInvokeCleanup(module);
-            emitLocalUninstantiation(module);
-            builder->CreateRet(getNothingReturnValue());
+            // the rest of the exit is the same for every exit on an exception (see emitExceptionExitTail())
+            holding_return_values = false;
+            builder->CreateBr(getExceptionExitTail(llvm_func));
             return true;
         }
 
@@ -22788,11 +22977,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
-            emitOnBlockExitExec(module);
-            emitPreinstantiatedCleanup(module, true);
-            emitInvokeCleanup(module);
-            emitLocalUninstantiation(module);
-            builder->CreateRet(getNothingReturnValue());
+            // the rest of the exit is the same for every exit on an exception (see emitExceptionExitTail())
+            holding_return_values = false;
+            builder->CreateBr(getExceptionExitTail(llvm_func));
             return true;
         }
 
@@ -35206,11 +35393,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
-            emitOnBlockExitExec(module);
-            emitPreinstantiatedCleanup(module, true);
-            emitInvokeCleanup(module);
-            emitLocalUninstantiation(module);
-            builder->CreateRet(getNothingReturnValue());
+            // the rest of the exit is the same for every exit on an exception (see emitExceptionExitTail())
+            holding_return_values = false;
+            builder->CreateBr(getExceptionExitTail(llvm_func));
             return true;
         }
 
