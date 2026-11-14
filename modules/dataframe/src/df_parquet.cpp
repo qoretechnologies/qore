@@ -1993,24 +1993,28 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                 break;
             }
             auto dur_type = std::static_pointer_cast<arrow::DurationType>(type);
-            int64_t secs = dt->getRelativeSeconds();
-            int64_t us = dt->getRelativeMicroseconds();
+            // each of the relative values is the whole duration in its unit (qore#6102)
             int64_t dv = 0;
             switch (dur_type->unit()) {
                 case arrow::TimeUnit::SECOND:
-                    dv = secs;
+                    dv = dt->getRelativeSeconds();
                     break;
                 case arrow::TimeUnit::MILLI:
-                    dv = secs * 1000 + us / 1000;
+                    dv = dt->getRelativeMilliseconds();
                     break;
                 case arrow::TimeUnit::MICRO:
-                    dv = secs * 1000000 + us;
+                    dv = dt->getRelativeMicroseconds();
                     break;
                 case arrow::TimeUnit::NANO:
-                    dv = secs * 1000000000 + us * 1000;
+                    if (__builtin_mul_overflow(dt->getRelativeMicroseconds(), static_cast<int64_t>(1000), &dv)) {
+                        status = arrow::Status::Invalid("a duration of ", dt->getRelativeMicroseconds(),
+                            " microseconds cannot be stored in nanoseconds in an int64");
+                    }
                     break;
             }
-            status = static_cast<arrow::DurationBuilder*>(builder)->Append(dv);
+            if (status.ok()) {
+                status = static_cast<arrow::DurationBuilder*>(builder)->Append(dv);
+            }
             break;
         }
         case arrow::Type::DECIMAL128: {

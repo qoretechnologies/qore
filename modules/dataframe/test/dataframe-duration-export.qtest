@@ -1,0 +1,49 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-duration-export.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameDurationExportTest
+
+#! A duration column is exported in the time unit of its schema with the values it holds (qore#6102)
+class DataFrameDurationExportTest inherits QUnit::Test {
+    constructor() : Test("DataFrameDurationExportTest", "1.0", \ARGV) {
+        addTestCase("Arrow IPC round trip", \roundTripTest());
+        set_return_value(main());
+    }
+
+    roundTripTest() {
+        # the values in each time unit: a time unit of seconds keeps whole seconds
+        hash<string, list<auto>> expected = {
+            "s": (7s, 1s, NOTHING),
+            "ms": (7s, 1500ms, NOTHING),
+            "us": (7s, 1500ms, NOTHING),
+            "ns": (7s, 1500ms, NOTHING),
+        };
+        foreach string unit in (keys expected) {
+            DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+                "v": (7s, 1500ms, NOTHING),
+            }, {
+                "v": {"schema": {"kind": "duration", "time_unit": unit, "nullable": True}},
+            }));
+            list<auto> actual = DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()).getColumn("v");
+            assertEq(3, actual.size(), unit + ": rows");
+            foreach auto value in (expected{unit}) {
+                if (exists value) {
+                    assertTrue(actual[$#] == value, sprintf("%s: row %d: %y", unit, $#, actual[$#]));
+                } else {
+                    assertEq(NOTHING, actual[$#], sprintf("%s: row %d", unit, $#));
+                }
+            }
+        }
+    }
+}
