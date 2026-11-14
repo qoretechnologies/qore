@@ -2615,6 +2615,44 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
             }
             dense[c] = same;
         }
+        // the columnar schema of a concatenated date column: the first column's, with the time unit that the cells
+        // hold, microseconds, if the columns have different time units (a column without a schema holds
+        // microseconds), and UTC if they have different time zones, as an export writes the cells in the schema's
+        // time unit and time zone (qore#6097)
+        auto concatSchema = [](const ColumnData& first, const std::string& name,
+                const std::vector<Snapshot>& snapshots) -> QoreColumnarTypeDescriptor {
+            QoreColumnarTypeDescriptor schema = first.columnar_schema;
+            if (first.type != ColumnType::DATE) {
+                return schema;
+            }
+            bool other_unit = false;
+            bool other_zone = false;
+            for (const Snapshot& snapshot : snapshots) {
+                auto it = snapshot.col_index.find(name);
+                if (it == snapshot.col_index.end()) {
+                    continue;
+                }
+                const ColumnData& src = *snapshot.columns[it->second].data;
+                std::string unit = src.has_columnar_schema && !src.columnar_schema.time_unit.empty()
+                    ? src.columnar_schema.time_unit : std::string("us");
+                std::string zone = src.has_columnar_schema ? src.columnar_schema.timezone : std::string();
+                std::string first_unit = schema.time_unit.empty() ? std::string("us") : schema.time_unit;
+                if (unit != first_unit) {
+                    other_unit = true;
+                }
+                if (zone != schema.timezone) {
+                    other_zone = true;
+                }
+            }
+            if (other_unit) {
+                schema.time_unit = "us";
+            }
+            if (other_zone) {
+                schema.timezone = "UTC";
+            }
+            return schema;
+        };
+
         // the columns concatenated as lists of values
         std::vector<size_t> list_cols;
         list_cols.reserve(num_cols);
@@ -2720,7 +2758,7 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                     return nullptr;
                 }
                 if (first.has_columnar_schema) {
-                    preserveColumnarSchema(*col.data, col.name, first.columnar_schema);
+                    preserveColumnarSchema(*col.data, col.name, concatSchema(first, col.name, snapshots));
                 }
             } else {
                 // a date column of absolute dates and one of time values (durations) make a column that holds any
@@ -2750,7 +2788,7 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                     return nullptr;
                 }
                 if (keep_schema) {
-                    preserveColumnarSchema(*col.data, col.name, first.columnar_schema);
+                    preserveColumnarSchema(*col.data, col.name, concatSchema(first, col.name, snapshots));
                 }
             }
             result->col_index[col.name] = result->columns.size();
