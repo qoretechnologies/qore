@@ -1422,13 +1422,18 @@ DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
 
     It is never less than the number of managers whose QSB_INTR_REQUESTED bit is set, so it is 0 only while no
     interrupt is requested: requestInterrupt() increments it before it sets the bit (and decrements it again if the bit
-    was already set), and clearInterrupt() and the destructor of a manager decrement it only after they have cleared a
-    set bit.  A clear that runs between a request's increment and its setting of the bit finds no bit and leaves the
-    count alone.  If the request set the bit first, such a clear would decrement the count before the request
-    incremented it, and a check in between would read 0 while the interrupt of another manager is pending.  It can be
-    one higher than the number of set bits for a moment, which only makes a check look up the manager.  All changes are
-    seq_cst, as the bit, and made before requestInterrupt() wakes the waiting threads: a waiter that registers its
-    wait and then reads 0 is woken by the wakeup that follows.
+    was already set), clearInterrupt() decrements it only after it has cleared a set bit, and the destructor of a
+    manager, which does not clear the bit, decrements it if it finds the bit set, when no other thread can request or
+    clear the manager's interrupt any more (the manager is reference-counted, and every caller holds a reference).  A
+    clear that runs between a request's increment and its setting of the bit finds no bit and leaves the count alone,
+    unless the bit was already set: then the clear removes the earlier request's count, and the request sets the bit
+    again and keeps its own increment.  If the request set the bit first, such a clear would decrement the
+    count before the request incremented it, and a check in between would read 0 while the interrupt of another
+    manager is pending.  For a moment it can be higher than the number of set bits by the number of requests and
+    clears in progress (a request from its increment until it sets the bit or takes the increment back, a clear from
+    its clearing of the bit until its decrement), which only makes a check look up the manager.  All changes are
+    seq_cst, as the bit, and requestInterrupt() makes its changes before it wakes the waiting threads: a waiter that
+    registers its wait and then reads 0 is woken by the wakeup that follows.
 */
 DLLLOCAL extern std::atomic<int> qore_sandbox_interrupt_count;
 
