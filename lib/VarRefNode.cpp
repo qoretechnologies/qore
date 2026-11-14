@@ -950,10 +950,14 @@ int qore_parse_check_unassigned_read(QoreProgram* pgm, const QoreProgramLocation
         return 0;
     }
     const VarRefNode* vrn = expr.get<const VarRefNode>();
+    // once the parse has raised an exception, the state of a variable can be a consequence of it: a declaration or an
+    // assignment whose type or value could not be parsed does not mark the variable assigned, so the error would not
+    // be proven (the code does not parse in any case)
     if (vrn->getReadState() != qore_local_read_state_e::Unassigned
             || !QoreTypeInfo::hasType(target_type)
             || QoreTypeInfo::parseAcceptsReturns(target_type, NT_NOTHING)
-            || !parse_check_parse_option(QoreParseOptions::STRICT_PARSE_ERRORS)) {
+            || !parse_check_parse_option(QoreParseOptions::STRICT_PARSE_ERRORS)
+            || pgm->parseExceptionRaised()) {
         return 0;
     }
     QoreStringMaker hint("assign '%s' before this use, or give %s an optional type if the absent value is "
