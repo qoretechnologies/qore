@@ -254,16 +254,120 @@ void appendKeyBytes(std::string& key, const char* data, size_t len) {
     key.append(data, len);
 }
 
-//! appends the key of a value that is not a list or a hash (see appendAutoValueKey())
-void appendScalarValueKey(std::string& key, QoreValue v) {
-    switch (v.getType()) {
+//! returns the value that a value of a column that holds any value stands for, and its type (qore#6107)
+/** An enum member stands for its value, as with the core operators, and an opaque or weak reference for the value
+    that it refers to (a weak reference to an object is keyed as the object; one whose object is deleted as no
+    value).  The tags of the value are checked inline, and the reference is resolved only for a reference.
+*/
+static inline QoreValue resolveKeyValue(QoreValue v, qore_type_t& t) {
+    // a float, held in the value, is told with no call into the library
+    if (v.isFloat()) {
+        t = NT_FLOAT;
+        return v;
+    }
+    if (v.isEnum()) {
+        v = v.getEnumBaseValue();
+    }
+    if (v.isOpaque()) {
+        v = v.resolveIndirect();
+    }
+    t = v.getType();
+    if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
+        v = v.resolveIndirect();
+        t = v.getType();
+    }
+    return v;
+}
+
+//! appends the key of a date: its kind and microseconds, so that two dates make one key if they are equal
+/** An absolute date is keyed by its microseconds since the epoch in UTC, so that two dates at the same instant in
+    different time zones make one key, as they are equal with the == operator; a relative date (a duration) by its
+    length in microseconds, as a column of durations orders them, so that 24h and 1D make one key (a month is 31
+    days and a year 365 days); a date whose microseconds do not fit in an int64 by its seconds and microseconds, or
+    by its parts (qore#6107).
+*/
+static void appendDateKey(std::string& key, const DateTimeNode* dt) {
+    int64 micros;
+    switch (dt->getEpochMicrosecondsUTCCheckedKind(micros)) {
+        case 1:
+            key += 'd';
+            key.append(reinterpret_cast<const char*>(&micros), sizeof(micros));
+            return;
+        case 2:
+            key += 'r';
+            key.append(reinterpret_cast<const char*>(&micros), sizeof(micros));
+            return;
+        default:
+            break;
+    }
+    if (dt->isRelative()) {
+        qore_tm parts;
+        dt->getInfo(parts);
+        int fields[] = {parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.us};
+        key += 'R';
+        key.append(reinterpret_cast<const char*>(fields), sizeof(fields));
+        return;
+    }
+    int64 seconds = dt->getEpochSecondsUTC();
+    int us = dt->getMicrosecond();
+    key += 'D';
+    key.append(reinterpret_cast<const char*>(&seconds), sizeof(seconds));
+    key.append(reinterpret_cast<const char*>(&us), sizeof(us));
+}
+
+//! appends the key of an arbitrary-precision number: the shortest decimal form that gives its value back at its
+//! precision, so that two numbers make one key if they are equal (qore#6107)
+static void appendNumberKey(std::string& key, const QoreNumberNode* n) {
+    key += 'n';
+    // -0 == 0
+    if (n->zero()) {
+        appendKeyBytes(key, "0", 1);
+        return;
+    }
+    QoreString str;
+    ExceptionSink xsink;
+    if (n->toStringRoundTrip(str, false, &xsink)) {
+        // a conversion error: the raw (unrounded) form
+        xsink.clear();
+        str.clear();
+        n->toString(str, QORE_NF_RAW);
+    }
+    appendKeyBytes(key, str.c_str(), str.size());
+}
+
+//! appends the key of a value that is not a list or a hash, whose type is given (see appendAutoValueKey())
+void appendScalarValueKey(std::string& key, QoreValue v, qore_type_t t) {
+    switch (t) {
         case NT_NOTHING:
         case NT_NULL:
             key += 'N';
             break;
         case NT_FLOAT:
-            appendDataFrameFloatKey(key, 'g', v.getAsFloat());
+            appendDataFrameFloatKey(key, 'g', v.isFloat() ? v.getDouble() : v.getAsFloat());
             break;
+        case NT_DATE:
+            appendDateKey(key, v.get<const DateTimeNode>());
+            break;
+        case NT_NUMBER:
+            appendNumberKey(key, v.get<const QoreNumberNode>());
+            break;
+        case NT_INT: {
+            int64 iv = v.getAsBigInt();
+            key += 'i';
+            key.append(reinterpret_cast<const char*>(&iv), sizeof(iv));
+            break;
+        }
+        case NT_BOOLEAN:
+            key += v.getAsBool() ? 'T' : 'F';
+            break;
+        case NT_STRING: {
+            // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in different
+            // encodings make the same key
+            key += 's';
+            std::string str = dataFrameUtf8Key(v);
+            appendKeyBytes(key, str.data(), str.size());
+            break;
+        }
         case NT_BINARY: {
             const BinaryNode* b = v.get<const BinaryNode>();
             key += 'x';
@@ -280,7 +384,9 @@ void appendScalarValueKey(std::string& key, QoreValue v) {
             break;
         }
         default: {
+            // another value (a char, for example): its type and its string form
             key += 'a';
+            key.append(reinterpret_cast<const char*>(&t), sizeof(t));
             std::string str = dataFrameUtf8Key(v);
             appendKeyBytes(key, str.data(), str.size());
             break;
@@ -290,19 +396,23 @@ void appendScalarValueKey(std::string& key, QoreValue v) {
 
 //! appends the key of a value of a column that holds any value (qore#6107)
 /** A float is keyed by its bits, as in a float64 column, as its string form can be the same for different floats; a
+    date by its kind and microseconds (see appendDateKey()); an arbitrary-precision number by its exact value; a
     binary value by its bytes; a list by its elements and a hash by its keys and values (in the order of its sorted
     keys, so that equal hashes with their keys in another order make the same key), so that two lists or hashes have
-    the same key only if they are equal; an object, a closure or a call reference by its identity; any other value
-    by its string form, which is compared in UTF-8, the encoding of the string cells, so that equal strings in
-    different encodings make the same key.  Each part has its tag and a part of any length its length, so that two
-    different values never make the same key.  The elements are walked with a stack of their own, so that a deeply
-    nested value cannot exhaust the thread's stack.
+    the same key only if they are equal; an object, a closure or a call reference by its identity; an enum member,
+    an opaque or a weak reference as the value it stands for (see resolveKeyValue()); an int, a bool or a string by
+    its value; any other value by its type and string form.  A string is compared in UTF-8, the encoding of the
+    string cells, so that equal strings in different encodings make the same key.  Values of different types never
+    make the same key: 1, 1.0, "1" and True make four keys.  Each part has its tag and a part of any length its
+    length, so that two different values never make the same key.  The elements are walked with a stack of their own, so that a deeply nested value
+    cannot exhaust the thread's stack.
 */
 void appendAutoValueKey(std::string& key, QoreValue top) {
     // a value that is not a list or a hash needs no stack
-    qore_type_t top_type = top.getType();
+    qore_type_t top_type;
+    top = resolveKeyValue(top, top_type);
     if (top_type != NT_LIST && top_type != NT_HASH) {
-        appendScalarValueKey(key, top);
+        appendScalarValueKey(key, top, top_type);
         return;
     }
     // a value to key, after the bytes of the hash key of the value, if any
@@ -318,8 +428,9 @@ void appendAutoValueKey(std::string& key, QoreValue top) {
         if (item.hash_key) {
             appendKeyBytes(key, item.hash_key, strlen(item.hash_key));
         }
-        QoreValue v = item.v;
-        switch (v.getType()) {
+        qore_type_t t;
+        QoreValue v = resolveKeyValue(item.v, t);
+        switch (t) {
             case NT_LIST: {
                 const QoreListNode* l = v.get<const QoreListNode>();
                 key += 'L';
@@ -354,11 +465,15 @@ void appendAutoValueKey(std::string& key, QoreValue top) {
                 break;
             }
             default:
-                appendScalarValueKey(key, v);
+                appendScalarValueKey(key, v, t);
                 break;
         }
     }
 }
+}
+
+void dataFrameAppendAutoValueKey(std::string& key, QoreValue v) {
+    appendAutoValueKey(key, v);
 }
 
 std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {

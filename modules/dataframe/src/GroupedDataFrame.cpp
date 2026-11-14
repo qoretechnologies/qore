@@ -151,6 +151,12 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
             case ColumnType::DATE:
                 append_fixed(key, &cd.date_data[row], sizeof(cd.date_data[row]));
                 break;
+            case ColumnType::AUTO:
+                // the key of a value of a column that holds any value delimits itself, and is appended with no
+                // temporary string
+                key += 'V';
+                dataFrameAppendAutoValueKey(key, cd.auto_data[row]);
+                break;
             default:
                 appendDataFrameKeyValue(key, get_key_value(cd, row));
                 break;

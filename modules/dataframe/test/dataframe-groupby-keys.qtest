@@ -6,6 +6,7 @@
 */
 
 %modern
+%allow-weak-references
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
 %requires QUnit
@@ -23,6 +24,10 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         addTestCase("several key columns", \multiTest());
         addTestCase("count()", \countTest());
         addTestCase("lists, hashes and binary values", \containerTest());
+        addTestCase("values of different types", \typeTest());
+        addTestCase("dates and numbers", \dateNumberTest());
+        addTestCase("weak references", \weakTest());
+        addTestCase("values in containers", \nestedTest());
         set_return_value(main());
     }
 
@@ -98,6 +103,78 @@ class DataFrameGroupByKeysTest inherits QUnit::Test {
         }
         DataFrame::DataFrame d({"k": (c'z', deep, deep), "v": (1, 2, 4)});
         assertEq((1.0, 6.0), d.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "deeply nested lists");
+    }
+
+    #! values of different types make different groups, in groupBy(), nunique and valueCounts() (qore#6107)
+    typeTest() {
+        DataFrame::DataFrame df({"k": (1, 1.0, "1", True, c'1', 1n, 1, "1"), "v": (1, 2, 4, 8, 16, 32, 64, 128)});
+        assertEq("auto", df.dtypes()[0]);
+        assertEq((65.0, 2.0, 132.0, 8.0, 16.0, 32.0), df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        assertEq(6, df.nunique("k"), "nunique()");
+        assertEq(6, df.valueCounts("k").numRows(), "valueCounts()");
+    }
+
+    #! dates are grouped by their instant or length, and numbers by their exact value (qore#6107)
+    dateNumberTest() {
+        DataFrame::DataFrame df({
+            "k": (c'z',
+                # absolute dates: microseconds apart, and the same instant in two time zones
+                2024-01-01T00:00:00.1Z, 2024-01-01T00:00:00.9Z, 2024-01-01T00:00:00Z, 2024-01-01T01:00:00+01:00,
+                # durations: of the same length, and of different lengths with the same string form
+                24h, 1D, 0s, 999999us, 500ms,
+                # numbers: equal, and different beyond the printed precision; -0 and 0
+                1.1n, 1.10n, 1.10000000000000000000001n, -0n, 0n),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384),
+        });
+        assertEq((1.0, 2.0, 4.0, 24.0, 96.0, 128.0, 256.0, 512.0, 3072.0, 4096.0, 24576.0),
+            df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+    }
+
+    #! a weak reference is grouped as the object, hash or list that it refers to (qore#6107)
+    weakTest() {
+        object o1 = new Mutex();
+        object o2 = new Mutex();
+        hash<auto> h1 = {"a": 1};
+        list<auto> l1 = (1, 2);
+        list<auto> k = (c'z', o1, NOTHING, o2, NOTHING, h1, NOTHING, l1);
+        k[2] := o1;
+        k[4] := o2;
+        k[6] := h1;
+        list<auto> wl;
+        wl := l1;
+        k += (wl,);
+        DataFrame::DataFrame df({"k": k, "v": (1, 2, 4, 8, 16, 32, 64, 128, 256)});
+        assertEq((1.0, 6.0, 24.0, 96.0, 384.0), df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+    }
+
+    #! values in lists and hashes are keyed as at the top level
+    nestedTest() {
+        object o1 = new Mutex();
+        object o2 = new Mutex();
+        code c1 = sub () {};
+        code c2 = sub () {};
+        code r1 = \get_default_encoding();
+        code r2 = \get_script_dir();
+        DataFrame::DataFrame df({
+            "k": (c'z',
+                # objects, closures and call references in a list and a hash
+                (o1, c1, r1), (o1, c1, r1), (o2, c1, r1), (o1, c2, r1), (o1, c1, r2),
+                {"o": o1, "c": c1}, {"o": o1, "c": c1}, {"o": o2, "c": c1},
+                # a hash reordered below the top level
+                ({"a": 1, "b": 2},), ({"b": 2, "a": 1},),
+                # NaN and -0.0 in a container
+                (@nan@, -0.0), (@nan@, 0.0)),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096),
+        });
+        assertEq((1.0, 6.0, 8.0, 16.0, 32.0, 192.0, 256.0, 1536.0, 6144.0),
+            df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        # a deeply nested hash is keyed with no recursion
+        auto deep = 1;
+        for (int i = 0; i < 100000; ++i) {
+            deep = {"a": deep};
+        }
+        DataFrame::DataFrame d({"k": (c'z', deep, deep), "v": (1, 2, 4)});
+        assertEq((1.0, 6.0), d.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "deeply nested hashes");
     }
 
     #! count() gives the key values of a float64 column and of a column of durations

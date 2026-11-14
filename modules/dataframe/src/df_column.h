@@ -413,6 +413,13 @@ static inline void dataFrameCopyDateSchema(ColumnData& dest, const ColumnData& s
 //! its cells are returned as relative dates (qore#6107)
 DLLLOCAL void dataFrameSetDurationSchema(ColumnData& col);
 
+//! Appends the key of a value of a column that holds any value: its type and its exact value (qore#6107)
+/** The key tells every two values apart that are not equal or not of the same type; it delimits itself (each part
+    has its tag, and a part of any length its length), so it can be appended to a key of several values with no
+    length of its own.
+*/
+DLLLOCAL void dataFrameAppendAutoValueKey(std::string& key, QoreValue v);
+
 //! Returns a key of the value of a row that is equal for equal values of the column and different for others
 /** A null value has a key of its own.  A float (in a float64 column or a column that holds any value) is keyed by
     its bits, so that two floats have the same key only if they are equal (with -0.0 equal to 0.0) or both NaN.

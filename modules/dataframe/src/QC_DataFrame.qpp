@@ -848,11 +848,17 @@ DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *stri
 
     Two rows are in one group if their values of each group column are equal: two floats only if they are equal
     (with \c -0.0 equal to \c 0.0) or both NaN, which make one group; the null values of a column make a group of
-    their own.  In a column that holds any value, a float is grouped by its value as in a \c float64 column, a
-    binary value by its bytes, a list or a hash by its elements (two lists make one group if their elements are
-    equal in order, and two hashes if they have the same keys with equal values, in any order), an object, a closure
-    or a call reference by its identity, and any other value by its string form (so the int \c 1 and the string
-    \c "1" make one group).
+    their own.  In a column that holds any value, a float is grouped by its value as in a \c float64 column; an
+    absolute date by its instant (two dates at the same instant in different time zones make one group); a relative
+    date by its length in microseconds, with a month counted as 31 days and a year as 365 days (so \c 24h and
+    \c 1D make one group, as they do in a column of durations); an arbitrary-precision number by its exact value; a
+    binary value by its bytes; a list or a hash by its elements (two lists make one group if their elements are
+    equal in order, and two hashes if they have the same keys with equal values, in any order); an object, a
+    closure or a call reference by its identity, and a weak reference as the object, hash or list that it refers
+    to; an enum member as its value; and any other value by its type and value.  Values of different types make
+    different groups: the int \c 1, the float \c 1.0, the string \c "1" and \c True make four groups.  To group
+    values of different types by a common value, group a typed column, or a column of the values cast to one type
+    (ex: <tt>df.withColumn("k", map $1.toString(), df.getColumn("k"))</tt>).
 
     @throw DATAFRAME-COLUMN-ERROR if a column name is not found
 

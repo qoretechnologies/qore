@@ -340,12 +340,8 @@ static int pivotKey(const ColumnData& cd, int64_t i, std::string& key, std::stri
     if (t == NT_DATE) {
         const DateTimeNode* dt = v.get<const DateTimeNode>();
         if (cd.type != ColumnType::DATE) {
-            int64 micros;
-            if (!dt->getEpochMicrosecondsUTCChecked(micros)) {
-                return dataFrameDateOutOfRange(dt, xsink);
-            }
-            key.assign(dt->isRelative() ? "r" : "d", 1);
-            key.append(reinterpret_cast<const char*>(&micros), sizeof(micros));
+            // the key of a value of a column that holds any value, as groupBy() makes it (qore#6107)
+            key = dataFrameValueKey(cd, i);
         }
         if (!label) {
             return 0;
@@ -379,27 +375,15 @@ static int pivotKey(const ColumnData& cd, int64_t i, std::string& key, std::stri
     }
     if (cd.type == ColumnType::AUTO) {
         switch (t) {
-            case NT_INT: {
-                int64 iv = v.getAsBigInt();
-                key.assign("i", 1);
-                key.append(reinterpret_cast<const char*>(&iv), sizeof(iv));
-                break;
-            }
-            case NT_FLOAT: {
-                double fv = v.getAsFloat();
-                if (fv == 0.0) {
-                    fv = 0.0;
-                }
-                key.assign("f", 1);
-                key.append(reinterpret_cast<const char*>(&fv), sizeof(fv));
-                break;
-            }
+            case NT_INT:
+            case NT_FLOAT:
             case NT_NUMBER:
             case NT_STRING:
             case NT_BOOLEAN:
             case NT_CHAR:
-                key.assign(t == NT_NUMBER ? "n" : (t == NT_STRING ? "s" : (t == NT_BOOLEAN ? "b" : "c")), 1);
-                key.append(dataFrameUtf8Key(v));
+                // the key of a value of a column that holds any value, as groupBy() makes it: its type and its
+                // exact value (qore#6107)
+                key = dataFrameValueKey(cd, i);
                 break;
             default:
                 xsink->raiseException("DATAFRAME-ERROR", "pivot column '%s' has a value of type '%s', which cannot "
