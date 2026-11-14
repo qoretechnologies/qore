@@ -2761,29 +2761,34 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
                     preserveColumnarSchema(*col.data, col.name, concatSchema(first, col.name, snapshots));
                 }
             } else {
-                // a date column of absolute dates and one of time values (durations) make a column that holds any
-                // value, as the date column of the first DataFrame would make dates of time values or time values of
-                // dates; date columns of time values only keep the schema of the first one, which makes their
-                // cells time values
+                // columns of different types make the column that the column hash constructor makes of their
+                // values (qore#6100), not one of the first column's type, which would convert the other values to
+                // it; a date column of absolute dates and one of time values (durations) make a column that holds
+                // any value, as a date column would make dates of time values or time values of dates; date columns
+                // of time values only keep the schema of the first one, which makes their cells time values
                 const ColumnData& first = *first_columns[c].data;
                 ColumnType type = first.type;
+                bool same_types = true;
                 bool keep_schema = false;
-                if (type == ColumnType::DATE) {
-                    bool duration = first.isDuration();
-                    for (size_t d = 1; d < snapshots.size(); ++d) {
-                        auto it = snapshots[d].col_index.find(col.name);
-                        if (it == snapshots[d].col_index.end()) {
-                            continue;
-                        }
-                        const ColumnData& src = *snapshots[d].columns[it->second].data;
-                        if (src.type != ColumnType::DATE || src.isDuration() != duration) {
-                            type = ColumnType::AUTO;
-                            break;
-                        }
+                bool duration = type == ColumnType::DATE && first.isDuration();
+                for (size_t d = 1; d < snapshots.size(); ++d) {
+                    auto it = snapshots[d].col_index.find(col.name);
+                    if (it == snapshots[d].col_index.end()) {
+                        continue;
                     }
-                    keep_schema = type == ColumnType::DATE && duration;
+                    const ColumnData& src = *snapshots[d].columns[it->second].data;
+                    if (src.type != first.type) {
+                        same_types = false;
+                    } else if (type == ColumnType::DATE && src.isDuration() != duration) {
+                        type = ColumnType::AUTO;
+                    }
                 }
-                col.data = buildColumnData(col_values.lists[c], type, xsink);
+                if (!same_types) {
+                    col.data = buildColumnDataAuto(col_values.lists[c], xsink);
+                } else {
+                    keep_schema = type == ColumnType::DATE && duration;
+                    col.data = buildColumnData(col_values.lists[c], type, xsink);
+                }
                 if (*xsink) {
                     return nullptr;
                 }
