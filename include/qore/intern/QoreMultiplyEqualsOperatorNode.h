@@ -91,6 +91,10 @@ public:
 
     DLLLOCAL int parseInitIntern(const char* name, QoreParseContext& parse_context) {
         assert(!parse_context.typeInfo);
+        // the operands' values are used: turn off the "return value ignored" flag of the statement, as += does
+        // (qore#6140)
+        QoreParseContextFlagHelper fh_rvi(parse_context);
+        fh_rvi.unsetFlags(PF_RETURN_VALUE_IGNORED);
         int err;
         {
             QoreParseContextFlagHelper fh(parse_context);
