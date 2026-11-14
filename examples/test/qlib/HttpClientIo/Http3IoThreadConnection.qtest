@@ -80,6 +80,15 @@ class RecordingManager inherits HttpClientIo::HttpClientConnectionManager {
         return (map $1.toInt(), keys h3_failed_families{key}) ?? ();
     }
 
+    #! Processes the failure of a connection with the given error, as when its poll operation raised it
+    /** The manager's own handling is called, also when failed results are skipped (see skipFailedResults())
+    */
+    failConnection(string key, HttpClientIo::HttpClientConnection conn, string err) {
+        HttpClientIo::HttpClientConnectionManager::handleConnectionResult(key, conn, <SocketPollResultInfo>{
+            "ex": <ExceptionInfo>{"err": err, "desc": "sendto/sendmmsg() failed"},
+        });
+    }
+
     #! Skips handleConnectionResult() for failed connections, as when it processes a failure only after the retry
     #! of the request has run (the request is woken before it runs): the failed connection stays in the pool for the
     #! retry, which evicts it
@@ -135,6 +144,8 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
         addTestCase("the retry tries another address family when it evicts the failed connection first",
             \familyFallbackEvictedTest());
         addTestCase("the family of a failed connection that a retry evicts is recorded", \evictedFamilyRecordedTest());
+        addTestCase("a send error during the handshake records the family, after it does not",
+            \sendErrorFamilyTest());
         addTestCase("a race of HTTP/3 and HTTP/2 made in an I/O worker keeps HTTP/3", \raceInWorkerTest());
         addTestCase("the bind of an HTTP/3 socket is subject to the sandbox", \sandboxBindTest());
         set_return_value(main());
@@ -255,6 +266,44 @@ public class Http3IoThreadConnectionTest inherits QUnit::Test {
             assertEq((AF_INET,), mgr.getFailedFamilies(sprintf("127.0.0.1:%d", port)), api + ": the family is "
                 "recorded");
         }
+    }
+
+    #! A send error of an HTTP/3 connection records its address family only if the QUIC handshake did not complete
+    /** QUIC-SEND-ERROR is raised when a datagram cannot be sent, as to an IPv6 address with no route: during the
+        handshake, the connection never reached a server in that family, so new connections try another one; on an
+        established connection, the server was reached in that family, which must not be avoided (issue #5944).  The
+        failure is processed by the manager as it receives an error raised by the connection's poll operation (no
+        send can be made to fail here), for a connection that failed its handshake (to a port that nothing receives
+        datagrams on) and for one that completed it (to the QUIC listener)
+    */
+    sendErrorFamilyTest() {
+        # nothing receives datagrams on this port
+        int port = get_free_port("127.0.0.1");
+        string key = sprintf("127.0.0.1:%d", port);
+        RecordingManager mgr = getManager({"protocol": "h3", "max_request_retries": 0});
+        on_exit mgr.closeAll();
+        mgr.skipFailedResults();
+        try {
+            get(mgr, sprintf("https://127.0.0.1:%d", port), "HTTP");
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, ex.desc);
+        }
+        list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections(key);
+        assertEq(1, conns.size());
+        assertEq(0, cast<HttpClientIo::Http3ClientConnection>(conns[0]).getSessionId(), "no handshake");
+        mgr.failConnection(key, conns[0], "QUIC-SEND-ERROR");
+        assertEq((AF_INET,), mgr.getFailedFamilies(key), "a send error during the handshake");
+
+        key = sprintf("127.0.0.1:%d", quic_port);
+        RecordingManager mgr2 = getManager({"protocol": "h3"});
+        on_exit mgr2.closeAll();
+        assertEq("reached", get(mgr2, sprintf("https://127.0.0.1:%d", quic_port), "HTTP"));
+        conns = mgr2.getConnections(key);
+        assertEq(1, conns.size());
+        assertTrue(cast<HttpClientIo::Http3ClientConnection>(conns[0]).getSessionId() > 0, "handshake completed");
+        mgr2.failConnection(key, conns[0], "QUIC-SEND-ERROR");
+        assertEq((), mgr2.getFailedFamilies(key), "a send error after the handshake");
     }
 
     #! A redirect to another origin is followed with a race of HTTP/3 and HTTP/2 for that origin; an asynchronous
