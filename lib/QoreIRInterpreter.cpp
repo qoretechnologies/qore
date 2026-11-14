@@ -18389,6 +18389,9 @@ load_local_done:
                 QoreValue res = qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list);
 
                 if (xsink && *xsink) {
+                    // The list still owns rejected arguments; release it before unwinding caller locals (#6098).
+                    arg_list = nullptr;
+                    res.discard(xsink);
                     return returnAfterUnhandledException();
                 }
                 // Skip invalidation for built-in methods without reference arguments
