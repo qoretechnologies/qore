@@ -5828,6 +5828,7 @@ void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
     // reload tracker, promoted per-temps if any) — always decref them.
     // the temporaries of the statements left are released before the on_block_exit handlers run, as in the AST
     emitExitStatementCleanup(module, false, true);
+    emitExceptionExitCatchUnwind(module);
     emitOnBlockExitExec(module);
     emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
@@ -5872,6 +5873,29 @@ void QoreIRToLLVM::emitCatchUnwind(llvm::Module& module) {
     builder->CreateCall(helper, {saved_depth, xsink_arg});
     builder->CreateBr(continuation);
     builder->SetInsertPoint(term);
+}
+
+void QoreIRToLLVM::emitExceptionExitCatchUnwind(llvm::Module& module) {
+    // the catch blocks that an exception (or a thread_exit) leaving the frame leaves and that no exit block closed (a
+    // catch block with no exit block: see the lowering of TryStatement) are left after the temporaries of the
+    // statements left and before the frame's handlers, temporaries and locals, as the AST interpreter leaves a catch
+    // block before the blocks around it (#5968); the frame's exits unwind to the same depth again afterwards, which
+    // closes nothing more
+    if (!catch_depth_saved) {
+        return;
+    }
+    auto helper = module.getOrInsertFunction("qore_rt_catch_unwind",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    if (!catch_scope_count) {
+        builder->CreateCall(helper, {catch_depth_saved, xsink_arg});
+        return;
+    }
+    // the base is set when the frame's first catch scope is entered: with none open, nothing is unwound
+    llvm::Value* active = builder->CreateLoad(i64_type, catch_scope_count);
+    llvm::Value* saved = builder->CreateLoad(i64_type, llvm::cast<llvm::AllocaInst>(catch_depth_saved));
+    llvm::Value* target = builder->CreateSelect(builder->CreateICmpNE(active, llvm::ConstantInt::get(i64_type, 0)),
+        saved, llvm::ConstantInt::get(i64_type, UINT64_MAX));
+    builder->CreateCall(helper, {target, xsink_arg});
 }
 
 void QoreIRToLLVM::emitCatchScopeEnter(llvm::Module& module) {
@@ -12036,6 +12060,7 @@ void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
     // and the normal-check error path identical in behavior.
     // the temporaries of the statements left are released before the on_block_exit handlers run, as in the AST
     emitExitStatementCleanup(module, false, true);
+    emitExceptionExitCatchUnwind(module);
     emitOnBlockExitExec(module);
     emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
@@ -15658,6 +15683,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // the temporaries of the statements left are released before the on_block_exit handlers run, as in the
         // AST
         emitExitStatementCleanup(module, false, true);
+        emitExceptionExitCatchUnwind(module);
         emitOnBlockExitExec(module);
         emitPreinstantiatedCleanup(module, true);
         emitInvokeCleanup(module);
@@ -22440,6 +22466,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Catch cleanup ===
         case QoreIROpcode::CatchCleanup: {
+            // the exit block of a catch block closes every catch block of the frame opened since its try statement
+            // began: its own, and a nested one without an exit block that a call raising the exception left open
+            // (#5968)
+            if (current_ir_func && catch_depth_saved) {
+                auto ci = current_ir_func->catch_exit_depths.find(inst);
+                if (ci != current_ir_func->catch_exit_depths.end()) {
+                    auto unwind_fn = module.getOrInsertFunction("qore_rt_catch_unwind",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    llvm::Value* depth = llvm::ConstantInt::get(i64_type, ci->second);
+                    if (catch_scope_count) {
+                        // the frame's catch scopes are counted from the depth of the catch stack at its first one,
+                        // which this catch block opened or followed
+                        llvm::Value* base = builder->CreateLoad(i64_type, catch_depth_saved);
+                        builder->CreateCall(unwind_fn, {builder->CreateAdd(base, depth), xsink_arg});
+                        builder->CreateStore(depth, catch_scope_count);
+                    } else {
+                        builder->CreateCall(unwind_fn, {builder->CreateAdd(catch_depth_saved, depth), xsink_arg});
+                    }
+                    return true;
+                }
+            }
             // Restore previous td->catchException and delete the caught exception
             auto helper = module.getOrInsertFunction("qore_rt_catch_end",
                     llvm::FunctionType::get(void_type, {ptr_type}, false));
@@ -22486,6 +22533,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
+            emitExceptionExitCatchUnwind(module);
             emitOnBlockExitExec(module);
             emitPreinstantiatedCleanup(module, true);
             emitInvokeCleanup(module);
@@ -22555,6 +22603,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
+            emitExceptionExitCatchUnwind(module);
             emitOnBlockExitExec(module);
             emitPreinstantiatedCleanup(module, true);
             emitInvokeCleanup(module);
@@ -34978,6 +35027,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // the temporaries of the statements left are released before the on_block_exit handlers run, as in
             // the AST
             emitExitStatementCleanup(module, true, true);
+            emitExceptionExitCatchUnwind(module);
             emitOnBlockExitExec(module);
             emitPreinstantiatedCleanup(module, true);
             emitInvokeCleanup(module);

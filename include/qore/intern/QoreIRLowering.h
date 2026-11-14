@@ -1045,6 +1045,20 @@ private:
     };
     //! the active catch blocks, innermost last (see the lowering of TryStatement, #5968)
     std::vector<CatchExitInfo> catch_exit_stack;
+    //! A block with an exception path of its own (lowerStatementBlock()), and the catch blocks without exit blocks
+    //! whose statements' exceptions go to it
+    struct AnchorCatchInfo {
+        //! the block's exception path
+        QoreIRBasicBlock* anchor = nullptr;
+        //! catch_cleanup_depth in the block
+        int catch_depth = 0;
+        //! the catch variables of those catch blocks
+        std::vector<LocalVar*> vars;
+        //! true if there is any
+        bool any = false;
+    };
+    //! the blocks with exception paths of their own being lowered, innermost last (#5968)
+    std::vector<AnchorCatchInfo> anchor_catch_stack;
 
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
@@ -1083,7 +1097,9 @@ private:
         catch block, and is closed by the statement, as no code can see its exception afterwards (#5968).
     */
     int catchScopesClosedByThrow() const {
-        return catchScopesLeftByThrow() > 0 && !catch_exit_stack.back().has_exit ? 1 : 0;
+        // the innermost catch block that the statement is in: the handlers of a block left by a return, break or
+        // continue are lowered with the state of their block (catch_cleanup_depth, qore#6017)
+        return catchScopesLeftByThrow() > 0 && !catch_exit_stack[catch_cleanup_depth - 1].has_exit ? 1 : 0;
     }
 
     //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr

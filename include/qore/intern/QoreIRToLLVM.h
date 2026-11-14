@@ -1636,6 +1636,8 @@ private:
     // Update specialized runtime catch-scope state around CatchException,
     // CatchCleanup, and Rethrow lowering.
     void emitCatchScopeEnter(llvm::Module& module);
+    //! Closes the catch blocks of the frame that are still open on an exception exit of the frame (#5968)
+    void emitExceptionExitCatchUnwind(llvm::Module& module);
     void emitCatchScopeExit(unsigned count);
 
     // Publish current LLVM local allocas to the runtime local stack before

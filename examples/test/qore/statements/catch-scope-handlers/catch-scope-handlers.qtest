@@ -26,7 +26,8 @@
     one and before the enclosing blocks (c1-c3), and the catch variable is released with the catch block (v1-v3).  A
     catch block whose statements can raise comes after the try block in native code (s1).  A catch block of simple
     statements in no exception region of its frame is closed, after its catch variable is released, by a throw or
-    rethrow in it (x1, x2).  CatchScopeHandlers.q gives the output of
+    rethrow in it (x1, x2), and left with the frame, before its locals are released, when a call in it raises an
+    exception (k1-k4).  CatchScopeHandlers.q gives the output of
     the AST interpreter in every execution mode and compiled with qcc.
 */
 class CatchScopeHandlersTest inherits QUnit::Test {
@@ -100,6 +101,14 @@ x1: [\"del:arg\", \"del:local\", \"caught:B\", \"del:local\", \"caught:A\", \"de
 x1: [\"del:arg\", \"del:local\", \"caught:B\", \"del:local\", \"caught:A\", \"del:arg\", \"del:local\", \"caught:A2\", \"del:arg\"]
 x2: [\"del:arg\", \"del:local\", \"caught:B\"]
 x2: [\"del:arg\", \"del:local\", \"caught:B\"]
+k1: [\"del:arg\", \"del:local\", \"caught:B\"]
+k1: [\"del:arg\", \"del:local\", \"caught:B\"]
+k2: [\"del:arg\", \"del:local\", \"caught:B\"]
+k2: [\"del:arg\", \"del:local\", \"caught:B\"]
+k3: [\"c:A\", \"del:arg\", \"del:inner\", \"del:local\", \"caught:B\"]
+k3: [\"c:A\", \"del:arg\", \"del:inner\", \"del:local\", \"caught:B\"]
+k4: [\"c:A0\", \"del:arg0\", \"c:A1\", \"del:arg1\", \"del:b1\", \"del:local\", \"caught:B\"]
+k4: [\"c:A0\", \"del:arg0\", \"c:A1\", \"del:arg1\", \"del:b1\", \"del:local\", \"caught:B\"]
 ";
 
         #! the optimization levels of the AOT compiles
