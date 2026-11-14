@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-default-encoding.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+# test-exec-mode: children - the checks run in a child qore process whose default character encoding is ISO-8859-1
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class DataFrameDefaultEncodingTest
+
+#! With a default character encoding other than UTF-8, the string cells of a DataFrame are still in UTF-8, while
+#! CSV files and column names are in the default encoding (qore#6092)
+class DataFrameDefaultEncodingTest inherits QUnit::Test {
+    private {
+        #! the child script; it has only ASCII characters, so that it means the same in any default encoding, and
+        #! prints each result as "<name>=<hex bytes>"
+        const ChildScript = "%modern
+%requires dataframe
+
+string dir = ARGV[0];
+# \"cafe\" with an e acute, in ISO-8859-1 (the default encoding of the process) and in UTF-8
+string iso_cafe = binary_to_string(<636166e9>, \"ISO-8859-1\");
+sub out(string name, data value) {
+    printf(\"%s=%s\\n\", name, make_hex_string(binary(value)));
+}
+out(\"default\", get_default_encoding());
+
+# a CSV file is written and read in the default encoding
+DataFrame::DataFrame df({\"v\": (iso_cafe, \"x\")});
+out(\"cell\", df.getColumn(\"v\")[0]);
+out(\"cell-encoding\", df.getColumn(\"v\")[0].encoding());
+df.writeCSV(dir + \"/out.csv\");
+out(\"csv-file\", ReadOnlyFile::readBinaryFile(dir + \"/out.csv\"));
+DataFrame::DataFrame read = DataFrame::DataFrame::readCSV(dir + \"/out.csv\");
+out(\"csv-read\", read.getColumn(\"v\")[0]);
+out(\"csv-read-encoding\", read.getColumn(\"v\")[0].encoding());
+
+# a pivot makes column names, in the default encoding, from string cells
+DataFrame::DataFrame long_df({\"i\": (1, 1), \"k\": (iso_cafe, \"x\"), \"n\": (1.0, 2.0)});
+out(\"pivot-name\", long_df.pivot(\"i\", \"k\", \"n\").columnNames()[1]);
+
+# a melt makes string cells, in UTF-8, from column names
+DataFrame::DataFrame wide = long_df.pivot(\"i\", \"k\", \"n\");
+out(\"melt-cell\", wide.melt((\"i\",), (wide.columnNames()[1],), \"var\", \"val\").getColumn(\"var\")[0]);
+";
+    }
+
+    constructor() : Test("DataFrameDefaultEncodingTest", "1.0", \ARGV) {
+        addTestCase("ISO-8859-1 default encoding", \defaultEncodingTest());
+        set_return_value(main());
+    }
+
+    defaultEncodingTest() {
+        TmpDir tmp("dataframe-default-encoding");
+        string script = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildScript);
+        f.close();
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string output = backquote(sprintf("QORE_CHARSET=ISO-8859-1 %s %s %s 2>&1", qore, script, tmp.path));
+        hash<string, string> results;
+        foreach string line in (output.split("\n")) {
+            *list<*string> parts = (line =~ x/^([a-z-]+)=([0-9a-f]*)$/);
+            if (parts) {
+                results{parts[0]} = parts[1];
+            }
+        }
+        string hex_ascii = make_hex_string(binary("ISO-8859-1"));
+        assertEq(hex_ascii, results.default, "the child's default encoding: " + output);
+        # "cafe" with an e acute in UTF-8 and in ISO-8859-1
+        string utf8 = "636166c3a9";
+        string iso = "636166e9";
+        assertEq(utf8, results.cell, "a string cell is in UTF-8");
+        assertEq(make_hex_string(binary("UTF-8")), results."cell-encoding", "a string cell is labelled UTF-8");
+        assertEq(make_hex_string(binary("v\n")) + iso + make_hex_string(binary("\nx\n")), results."csv-file",
+            "a CSV file is written in the default encoding");
+        assertEq(utf8, results."csv-read", "a CSV file is read in the default encoding");
+        assertEq(make_hex_string(binary("UTF-8")), results."csv-read-encoding", "a cell read from CSV is in UTF-8");
+        assertEq(iso, results."pivot-name", "a pivot column name is in the default encoding");
+        assertEq(utf8, results."melt-cell", "a melt cell made from a column name is in UTF-8");
+    }
+}

@@ -186,6 +186,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   WebSocket client in the test's own process only drives it
         # - callref-object-method-program and reflection-typed-hash-visibility (#5692): their probes run in child
         #   processes that set their own --exec-mode
+        # - dataframe-default-encoding (#6092): its checks run in a child process whose default character encoding is
+        #   ISO-8859-1
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -208,7 +210,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-6.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
-                                 "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest"]),
+                                 "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
+                                 "modules/dataframe/test/dataframe-default-encoding.qtest"]),
                          sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):

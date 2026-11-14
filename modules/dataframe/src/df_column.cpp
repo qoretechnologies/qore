@@ -402,6 +402,21 @@ int dataFrameConvertUtf8Bytes(const char* data, size_t len, const QoreEncoding* 
     return dataFrameConvertUtf8String(QoreValue(*str), out, xsink);
 }
 
+int dataFrameConvertFromUtf8(const std::string& utf8, const QoreEncoding* enc, std::string& out,
+        ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(utf8, QCS_UTF8));
+    ExceptionSink conv_xsink;
+    QoreStringValueHelper converted(QoreValue(*str), enc, &conv_xsink);
+    if (conv_xsink) {
+        conv_xsink.clear();
+        xsink->raiseException("DATAFRAME-ENCODING-ERROR", "a DataFrame string cannot be converted from UTF-8 to "
+            "encoding '%s'", enc->getCode());
+        return -1;
+    }
+    out.assign(converted->c_str(), converted->size());
+    return 0;
+}
+
 std::string dataFrameUtf8Key(QoreValue v) {
     std::string out;
     ExceptionSink xsink;
@@ -420,22 +435,36 @@ void dataFrameRaiseDateRangeError(const char* desc, ExceptionSink* xsink) {
 }
 
 int dataFrameEdgeDateMicros(const DateTimeNode* dt, int64_t& out, ExceptionSink* xsink) {
-    int64 seconds = dt->getEpochSecondsUTC();
-    // the microseconds of an absolute date in the last second of either end of the range can still fit
-    if (!dt->isRelative()) {
+    __int128 micros;
+    qore_tm parts;
+    bool relative = dt->isRelative();
+    if (relative) {
+        // the microseconds of a time value, computed from its parts as the core computes them (an average year of
+        // 365 days and a month of 31 days), but with no overflow; the parts are read with getInfo(), as
+        // DateTime::getYear() returns a short, which cannot hold the years of a long time value
+        dt->getInfo(parts);
+        micros = static_cast<__int128>(parts.year) * (86400ll * 365 * 1000000)
+            + static_cast<__int128>(parts.month) * (86400ll * 31 * 1000000)
+            + static_cast<__int128>(parts.day) * (86400ll * 1000000)
+            + static_cast<__int128>(parts.hour) * (3600ll * 1000000)
+            + static_cast<__int128>(parts.minute) * (60ll * 1000000)
+            + static_cast<__int128>(parts.second) * 1000000
+            + parts.us;
+    } else {
         // the seconds times a million can overflow where the sum with the microseconds does not, at the start of
         // the range
-        __int128 micros = static_cast<__int128>(seconds) * 1000000 + dt->getMicrosecond();
-        if (micros >= std::numeric_limits<int64_t>::min() && micros <= std::numeric_limits<int64_t>::max()) {
-            out = static_cast<int64_t>(micros);
-            return 0;
-        }
+        micros = static_cast<__int128>(dt->getEpochSecondsUTC()) * 1000000 + dt->getMicrosecond();
+    }
+    if (micros >= std::numeric_limits<int64_t>::min() && micros <= std::numeric_limits<int64_t>::max()) {
+        out = static_cast<int64_t>(micros);
+        return 0;
     }
     QoreString desc;
-    if (dt->isRelative()) {
-        desc.sprintf("the time value of " QLLD " seconds", (int64)seconds);
+    if (relative) {
+        desc.sprintf("the time value of %d years, %d months, %d days, %d hours, %d minutes, %d seconds and %d "
+            "microseconds", parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second, parts.us);
     } else {
-        desc.sprintf("the date " QLLD " seconds after the epoch", (int64)seconds);
+        desc.sprintf("the date " QLLD " seconds after the epoch", (int64)dt->getEpochSecondsUTC());
     }
     dataFrameRaiseDateRangeError(desc.c_str(), xsink);
     return -1;
@@ -726,6 +755,19 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
         return false;
     };
 
+    // the error of a string or date that cannot be stored in a string or date cell is raised only if the column
+    // keeps its type to the end: a later value can make it a string column, which stores a date as a string, or a
+    // column that holds any value, which stores any string and date
+    struct DeferredError {
+        ExceptionSink xsink;
+        //! true if the sink holds an error, which is not checked with the sink itself, a call into the library
+        bool raised = false;
+
+        ~DeferredError() {
+            xsink.clear();
+        }
+    } deferred;
+
     for (int64_t i = 0; i < n; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame column")) {
             return nullptr;
@@ -779,8 +821,8 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                 } else if (col->type != ColumnType::STRING) {
                     return buildColumnData(values, ColumnType::STRING, xsink);
                 }
-                if (dataFrameUtf8String(v, col->str_data[i], xsink)) {
-                    return nullptr;
+                if (!deferred.raised && dataFrameUtf8String(v, col->str_data[i], &deferred.xsink)) {
+                    deferred.raised = true;
                 }
                 break;
             }
@@ -804,14 +846,20 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                 } else if (col->type != ColumnType::DATE) {
                     return buildColumnData(values, ColumnType::STRING, xsink);
                 }
-                if (dataFrameDateMicros(v.get<const DateTimeNode>(), col->date_data[i], xsink)) {
-                    return nullptr;
+                if (!deferred.raised
+                        && dataFrameDateMicros(v.get<const DateTimeNode>(), col->date_data[i], &deferred.xsink)) {
+                    deferred.raised = true;
                 }
                 break;
 
             default:
                 return buildColumnData(values, ColumnType::AUTO, xsink);
         }
+    }
+
+    if (deferred.raised) {
+        xsink->assimilate(deferred.xsink);
+        return nullptr;
     }
 
     if (col->type == ColumnType::AUTO) {

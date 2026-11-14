@@ -32,6 +32,8 @@ class DataFrameDateRangeTest inherits QUnit::Test {
         addTestCase("range limits", \limitTest());
         addTestCase("store paths", \storeTest());
         addTestCase("Parquet timestamps", \parquetTest());
+        addTestCase("time values", \timeValueTest());
+        addTestCase("column type from later values", \laterTypeTest());
         set_return_value(main());
     }
 
@@ -63,6 +65,35 @@ class DataFrameDateRangeTest inherits QUnit::Test {
             DataFrame::DataFrame nulls({"v": (first, NOTHING)});
             assertThrows("DATAFRAME-DATE-RANGE-ERROR", \nulls.fillna(), d, label + ": fillna()");
         }
+    }
+
+    #! a time value (a relative date) is checked with its microseconds, which can overflow before its seconds
+    timeValueTest() {
+        # the microseconds of a time value in the range, near its end
+        date in_range = years(292471) + hours(1828) + seconds(54) + microseconds(100);
+        DataFrame::DataFrame df({"v": (in_range,)});
+        assertEq((9223372036854000100,), map get_epoch_microseconds($1), df.getColumn("v"),
+            "a time value near the end of the range");
+        foreach date d in ((years(300000), -years(300000), years(292471) + days(1000))) {
+            string label = sprintf("%y", d);
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame({"v": (d,)}); }, (),
+                label + ": column hash");
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", sub () { new DataFrame::DataFrame(({"v": d},)); }, (),
+                label + ": records");
+            DataFrame::DataFrame nulls({"v": (first, NOTHING)});
+            assertThrows("DATAFRAME-DATE-RANGE-ERROR", \nulls.fillna(), d, label + ": fillna()");
+        }
+    }
+
+    #! a date outside the range is stored if a later value makes the column one that holds it: a column that holds
+    #! any value, or a string column
+    laterTypeTest() {
+        DataFrame::DataFrame any({"v": (far_future, {})});
+        assertEq(("auto", far_future), (any.dtypes()[0], any.getColumn("v")[0]), "column hash: auto");
+        DataFrame::DataFrame str({"v": (far_future, "x")});
+        assertEq("string", str.dtypes()[0], "column hash: string");
+        DataFrame::DataFrame records(({"v": far_future}, {"v": {}}));
+        assertEq(("auto", far_future), (records.dtypes()[0], records.getColumn("v")[0]), "records: auto");
     }
 
     #! a Parquet timestamp in seconds or milliseconds outside the range raises an error when it is read, and one in

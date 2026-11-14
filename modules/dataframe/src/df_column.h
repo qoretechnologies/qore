@@ -89,6 +89,21 @@ static inline int dataFrameUtf8Bytes(const char* data, size_t len, const QoreEnc
     return dataFrameConvertUtf8Bytes(data, len, enc, out, xsink);
 }
 
+DLLLOCAL int dataFrameConvertFromUtf8(const std::string& utf8, const QoreEncoding* enc, std::string& out,
+        ExceptionSink* xsink);
+
+//! Converts the UTF-8 bytes of a string cell to the default encoding, the encoding of column names and of CSV files
+/** @return 0 for success, -1 if a DATAFRAME-ENCODING-ERROR exception was raised for a character that the default
+    encoding cannot represent
+*/
+static inline int dataFrameDefaultString(const std::string& utf8, std::string& out, ExceptionSink* xsink) {
+    if (QCS_DEFAULT == QCS_UTF8) {
+        out = utf8;
+        return 0;
+    }
+    return dataFrameConvertFromUtf8(utf8, QCS_DEFAULT, out, xsink);
+}
+
 //! Returns the UTF-8 form of a value for a group or join key, so that equal strings in different encodings make
 //! the same key; a string that cannot be converted keeps its bytes
 DLLLOCAL std::string dataFrameUtf8Key(QoreValue v);
@@ -108,12 +123,16 @@ DLLLOCAL int dataFrameEdgeDateMicros(const DateTimeNode* dt, int64_t& out, Excep
     an int64 of microseconds since the epoch, which the cell cannot hold
 */
 static inline int dataFrameDateMicros(const DateTimeNode* dt, int64_t& out, ExceptionSink* xsink) {
-    // the microseconds of a date whose seconds since the epoch are in this range fit in an int64
+    // the microseconds of an absolute date whose seconds since the epoch are in this range fit in an int64; the
+    // microseconds of a relative date (a time value) are computed from its parts, as they can overflow before its
+    // seconds can be checked
     constexpr int64 max_seconds = std::numeric_limits<int64_t>::max() / 1000000 - 1;
-    int64 seconds = dt->getEpochSecondsUTC();
-    if (seconds <= max_seconds && seconds >= -max_seconds) {
-        out = dt->getEpochMicrosecondsUTC();
-        return 0;
+    if (!dt->isRelative()) {
+        int64 seconds = dt->getEpochSecondsUTC();
+        if (seconds <= max_seconds && seconds >= -max_seconds) {
+            out = dt->getEpochMicrosecondsUTC();
+            return 0;
+        }
     }
     return dataFrameEdgeDateMicros(dt, out, xsink);
 }

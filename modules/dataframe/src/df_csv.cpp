@@ -499,7 +499,17 @@ void QoreDataFrame::writeCSV(const std::string& path,
                     file << cd.float_data(r);
                     break;
                 case ColumnType::STRING: {
-                    const std::string& s = cd.str_data[r];
+                    // a CSV file is in the default encoding, as are the column names in its header, and a string
+                    // cell is in UTF-8
+                    const std::string* cell = &cd.str_data[r];
+                    std::string converted;
+                    if (QCS_DEFAULT != QCS_UTF8) {
+                        if (dataFrameConvertFromUtf8(*cell, QCS_DEFAULT, converted, xsink)) {
+                            return;
+                        }
+                        cell = &converted;
+                    }
+                    const std::string& s = *cell;
                     if (s.find(sep) != std::string::npos
                             || s.find('"') != std::string::npos
                             || s.find('\n') != std::string::npos) {

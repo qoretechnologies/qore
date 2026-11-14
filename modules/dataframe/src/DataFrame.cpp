@@ -782,6 +782,7 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         }
 
         bool fast_failed = false;
+        ExceptionSink fast_xsink;
         for (int64_t i = 0; i < n; ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "building DataFrame from records")) {
                 delete df;
@@ -800,9 +801,12 @@ QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
                     fast_failed = true;
                     break;
                 }
-                if (storeRecordValue(*df->columns[c].data, i, value, xsink)) {
-                    delete df;
-                    return nullptr;
+                // a value that cannot be stored in the column's cell is stored by the path that infers the type of
+                // every column first, as a later value can make the column one that stores it, or raise its error
+                if (storeRecordValue(*df->columns[c].data, i, value, &fast_xsink)) {
+                    fast_xsink.clear();
+                    fast_failed = true;
+                    break;
                 }
             }
             if (fast_failed) {

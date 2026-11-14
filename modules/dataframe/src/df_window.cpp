@@ -356,7 +356,11 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
                 }
             }
             Column col;
-            col.name = unique_cols[c];
+            // a column name is in the default encoding, and a string cell in UTF-8
+            if (dataFrameDefaultString(unique_cols[c], col.name, xsink)) {
+                delete df;
+                return nullptr;
+            }
             col.data = std::move(cd);
             df->col_index[col.name] = df->columns.size();
             df->columns.push_back(std::move(col));
@@ -472,7 +476,11 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
             }
         }
         Column col;
-        col.name = unique_cols[c];
+        // a column name is in the default encoding, and a string cell in UTF-8
+        if (dataFrameDefaultString(unique_cols[c], col.name, xsink)) {
+            delete df;
+            return nullptr;
+        }
         col.data = std::move(cd);
         df->col_index[col.name] = df->columns.size();
         df->columns.push_back(std::move(col));
