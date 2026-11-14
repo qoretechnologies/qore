@@ -27,10 +27,17 @@ class FakeAzureDocIntelClient
         list<int> deadlines = ();
     }
 
-    constructor() : AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo(
+    #! creates the fake client
+    /** @param default_sleeper if True, the client waits with its own sleeper, which sleeps for real; otherwise it
+        does not wait
+    */
+    constructor(bool default_sleeper = False)
+            : AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo(
             {"url": "https://my-docint.cognitiveservices.azure.com",
              "apikey": "key"}) {
-        setSleeper(nothing sub (timeout to) {});
+        if (!default_sleeper) {
+            setSleeper(nothing sub (timeout to) {});
+        }
         setClock(date sub () { return clock_time; });
     }
 
@@ -103,6 +110,7 @@ public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
         addTestCase("terminal failures and unknown status retain safe job context", \failureTest());
         addTestCase("submission and fetch share a bounded deadline", \deadlineTest());
         addTestCase("retry guidance remains bounded by the total deadline", \retryTest());
+        addTestCase("the default sleeper waits the poll interval", \defaultSleeperTest());
         set_return_value(main());
     }
 
@@ -212,5 +220,20 @@ public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
         assertEq((1000, 1000, 1000), waits);
         assertEq(0, AzureDocumentIntelligenceRestClientBase::retryAfter("invalid"));
         assertEq(2000, AzureDocumentIntelligenceRestClientBase::retryAfter("2"));
+    }
+
+    #! the client waits with its own sleeper between polls (issue #6070)
+    /** The sleeper is given the poll interval in milliseconds; it slept that many microseconds.  The deadline is
+        measured with the fake clock, which does not advance, so only the two waits of 50 ms take time: they take at
+        least 100 ms
+    */
+    private defaultSleeperTest() {
+        FakeAzureDocIntelClient fake(True);
+        date start = now_us();
+        hash<auto> result = fake.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/a"},
+            {"poll_interval": 50ms, "analysis_timeout": 1m});
+        assertEq("Hello world.", result.content);
+        assertEq(3, (select fake.calls, $1.method == "GET").size());
+        assertGe(100, get_duration_milliseconds(now_us() - start));
     }
 }
