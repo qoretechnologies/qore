@@ -5046,7 +5046,7 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // an exception that the release raises (a destructor) is raised once the try statement has ended, as
                 // by the AST interpreter's try statement, which replaces the value after it has left its try and catch
                 // blocks: it goes past the statement's catch block, which would release the value of the try
-                // block's return, the value that the return goes on with (#6074)
+                // block's return, the value that the return goes on with (#6128)
                 builder.createCheckException(entry.loc)->exception_target = entry.try_outer_target;
             }
             try_replaced_depth = 0;
