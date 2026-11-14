@@ -636,6 +636,13 @@ public:
     void setSelfLocal(LocalVar* n_self_local) {
         self_local = n_self_local;
     }
+    //! Gives a plugin dispatch instruction the active handler (see withExceptionTarget())
+    /** An exception that the plugin operation raises then branches to an enclosing try/catch in the same function
+        instead of returning from the frame (qore#6135).
+    */
+    QoreIRPluginInstruction* withPluginExceptionTarget(QoreIRPluginInstruction* inst) const {
+        return withExceptionTarget(inst);
+    }
 
 private:
     //! the "self" local of the method lowered, if any (see setSelfLocal())

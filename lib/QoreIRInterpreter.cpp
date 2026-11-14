@@ -16200,6 +16200,10 @@ load_local_done:
                 auto* plugin_inst = static_cast<QoreIRPluginInstruction*>(inst);
                 uint32_t global_id = resolvePluginOperationId(*plugin_inst, xsink);
                 if (!global_id || (xsink && *xsink)) {
+                    // an exception raised in a try block branches to its handler in this frame
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
@@ -16222,6 +16226,10 @@ load_local_done:
                     QoreValue self = getIRValue(values, inst->operands[0]);
                     args_value = makePluginArgsList(inst->operands, 1, values, xsink);
                     if (xsink && *xsink) {
+                        args_value.discard(xsink);
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         unwindForException();
                         cleanupLocalCaches();
                         return exitAfterUnwind();
@@ -16230,6 +16238,10 @@ load_local_done:
                 } else if (inst->opcode == QoreIROpcode::PluginConstruct) {
                     args_value = makePluginArgsList(inst->operands, 0, values, xsink);
                     if (xsink && *xsink) {
+                        args_value.discard(xsink);
+                        if (branchToExceptionTarget(inst)) {
+                            break;
+                        }
                         unwindForException();
                         cleanupLocalCaches();
                         return exitAfterUnwind();
@@ -16250,6 +16262,10 @@ load_local_done:
 
                 args_value.discard(xsink);
                 if (xsink && *xsink) {
+                    // an exception raised in a try block branches to its handler in this frame
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();

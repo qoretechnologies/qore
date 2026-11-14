@@ -683,8 +683,9 @@ static QoreIRValue tryDescriptorPluginSubscriptLowering(QoreIRLowering& lowering
     if (!rhs.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginSubscript,
-        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs}, op->loc)->result;
+    return lowering.withPluginExceptionTarget(builder.createPluginOp(QoreIROpcode::PluginSubscript,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs},
+        op->loc))->result;
 }
 
 static QoreIRValue tryDescriptorPluginSliceLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
@@ -716,9 +717,9 @@ static QoreIRValue tryDescriptorPluginSliceLowering(QoreIRLowering& lowering, Qo
     if (!end.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginCall,
+    return lowering.withPluginExceptionTarget(builder.createPluginOp(QoreIROpcode::PluginCall,
         pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {seq, start, end},
-        op->loc)->result;
+        op->loc))->result;
 }
 
 static QoreIRValue tryDescriptorPluginBinaryLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
@@ -746,8 +747,9 @@ static QoreIRValue tryDescriptorPluginBinaryLowering(QoreIRLowering& lowering, Q
     if (!rhs.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginBinary,
-        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs}, op->loc)->result;
+    return lowering.withPluginExceptionTarget(builder.createPluginOp(QoreIROpcode::PluginBinary,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {lhs, rhs},
+        op->loc))->result;
 }
 
 static QoreIRValue tryDescriptorPluginUnaryLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
@@ -770,8 +772,9 @@ static QoreIRValue tryDescriptorPluginUnaryLowering(QoreIRLowering& lowering, Qo
     if (!value.isValid()) {
         return QoreIRValue();
     }
-    return builder.createPluginOp(QoreIROpcode::PluginUnary,
-        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {value}, op->loc)->result;
+    return lowering.withPluginExceptionTarget(builder.createPluginOp(QoreIROpcode::PluginUnary,
+        pluginOperationRefFromInfo(info, parse_context ? parse_context->pgm : nullptr), {value},
+        op->loc))->result;
 }
 
 static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRBuilder& builder,
