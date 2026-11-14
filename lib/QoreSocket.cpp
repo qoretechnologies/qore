@@ -94,6 +94,7 @@
 #include <netinet/tcp_var.h>
 #include <netinet/tcp_fsm.h>
 #include <libproc.h>
+#include <unordered_set>
 #endif
 
 // maximum number of non-blocking network operations before returning
@@ -13860,6 +13861,83 @@ struct QoreSocketTableEntry {
     pid_t pid = 0;
 };
 
+#ifdef DEBUG
+//! the number of scans of the process descriptors made by the thread (see qore_socket_descriptor_scan_count())
+static thread_local size_t qore_socket_descriptor_scans = 0;
+//! the test scope of the port checks made by the thread (see qore_socket_port_check_test_scope())
+static thread_local int qore_socket_test_scope = 0;
+
+//! Adds the identities of the sockets of this process to @a ids, as the socket table gives them (\c xso_so)
+static void qore_socket_own_socket_ids(std::unordered_set<uint64_t>& ids) {
+    pid_t self = getpid();
+    int needed = proc_pidinfo(self, PROC_PIDLISTFDS, 0, nullptr, 0);
+    if (needed <= 0 || needed > INT_MAX - 4096) {
+        return;
+    }
+    std::vector<proc_fdinfo> fds((needed + 4096) / sizeof(proc_fdinfo));
+    int got = proc_pidinfo(self, PROC_PIDLISTFDS, 0, fds.data(), static_cast<int>(fds.size() * sizeof(proc_fdinfo)));
+    if (got <= 0) {
+        return;
+    }
+    size_t fd_count = std::min(fds.size(), static_cast<size_t>(got) / sizeof(proc_fdinfo));
+    for (size_t j = 0; j < fd_count; ++j) {
+        if (fds[j].proc_fdtype != PROX_FDTYPE_SOCKET) {
+            continue;
+        }
+        socket_fdinfo info;
+        if (proc_pidfdinfo(self, fds[j].proc_fd, PROC_PIDFDSOCKETINFO, &info, sizeof(info)) == sizeof(info)) {
+            ids.insert(info.psi.soi_so);
+        }
+    }
+}
+#endif
+
+//! the maximum number of parent processes that qore_socket_is_descendant() follows
+static constexpr unsigned QORE_SOCKET_MAX_PROCESS_DEPTH = 256;
+
+//! Returns true if the process is this process or one of its descendants, or if that cannot be told
+/** @param pid the process
+    @param self this process
+    @param known the processes already checked, with the result; the processes checked are added
+*/
+static bool qore_socket_is_descendant(pid_t pid, pid_t self, std::unordered_map<pid_t, bool>& known) {
+    std::vector<pid_t> chain;
+    bool rv = true;
+    for (unsigned depth = 0; ; ++depth) {
+        if (pid == self) {
+            rv = true;
+            break;
+        }
+        auto i = known.find(pid);
+        if (i != known.end()) {
+            rv = i->second;
+            break;
+        }
+        if (pid <= 1) {
+            rv = false;
+            break;
+        }
+        if (depth == QORE_SOCKET_MAX_PROCESS_DEPTH) {
+            // cannot be told
+            rv = true;
+            break;
+        }
+        chain.push_back(pid);
+        struct proc_bsdinfo info;
+        if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != static_cast<int>(sizeof(info))) {
+            // the process has ended or cannot be read: it cannot be told
+            rv = true;
+            break;
+        }
+        pid = static_cast<pid_t>(info.pbi_ppid);
+    }
+    for (pid_t p : chain) {
+        known[p] = rv;
+    }
+    return rv;
+}
+
+
 //! Calls @a f with each socket of the type in the system's socket table that is bound to a port and not connected
 /** The table is the one that \c netstat reads (\c net.inet.tcp.pcblist64 or \c net.inet.udp.pcblist64);
     macOS can restrict which sockets appear in the returned snapshot.
@@ -13901,6 +13979,14 @@ static int qore_socket_for_each_bound_socket(int socktype, F&& f, ExceptionSink*
     }
     memcpy(&gen, buf.data(), sizeof(gen));
     size_t record_size = tcp ? sizeof(struct xtcpcb64) : sizeof(struct xinpcb64);
+#ifdef DEBUG
+    // a test emulates a table that lists only the sockets of this process
+    std::unique_ptr<std::unordered_set<uint64_t>> own_ids;
+    if (qore_socket_test_scope & QORE_SOCKET_TEST_FILTERED_TABLE) {
+        own_ids = std::make_unique<std::unordered_set<uint64_t>>();
+        qore_socket_own_socket_ids(*own_ids);
+    }
+#endif
     size_t cancel_check = 0;
     for (size_t pos = gen.xig_len; pos + sizeof(uint32_t) <= len; ) {
         if (xsink && !(cancel_check++ % 100) && qore_check_cancel(xsink, "reading the system's socket table")) {
@@ -13941,14 +14027,16 @@ static int qore_socket_for_each_bound_socket(int socktype, F&& f, ExceptionSink*
         e.options = inp.xi_socket.so_options;
         e.listening = tcp && (state == TCPS_LISTEN || (e.options & SO_ACCEPTCONN));
         e.uid = inp.xi_socket.so_uid;
+#ifdef DEBUG
+        if (own_ids && !own_ids->count(inp.xi_socket.xso_so)) {
+            continue;
+        }
+#endif
         f(static_cast<const QoreSocketTableEntry&>(e));
     }
     // the table has no end record
     return -1;
 }
-
-//! the number of scans of the process descriptors (see qore_socket_descriptor_scan_count())
-static std::atomic<size_t> qore_socket_descriptor_scans{0};
 
 //! Calls @a f with each socket of the type in the accessible process descriptors that is bound and not connected
 /** macOS can return a successful but filtered pcblist64 snapshot. The public libproc interface can
@@ -13965,7 +14053,13 @@ static std::atomic<size_t> qore_socket_descriptor_scans{0};
 */
 template <typename F>
 static int qore_socket_for_each_process_socket(int socktype, int port, F&& f, ExceptionSink* xsink) {
-    qore_socket_descriptor_scans.fetch_add(1, std::memory_order_relaxed);
+#ifdef DEBUG
+    ++qore_socket_descriptor_scans;
+    // a test limits the scan to this process and its descendants
+    const bool own_tree = qore_socket_test_scope & QORE_SOCKET_TEST_OWN_TREE;
+    const pid_t self = getpid();
+    std::unordered_map<pid_t, bool> descendants;
+#endif
     int bytes = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
     if (bytes <= 0 || bytes > INT_MAX - 4096) {
         return 0;
@@ -13989,6 +14083,11 @@ static int qore_socket_for_each_process_socket(int socktype, int port, F&& f, Ex
         if (pids[i] <= 0) {
             continue;
         }
+#ifdef DEBUG
+        if (own_tree && !qore_socket_is_descendant(pids[i], self, descendants)) {
+            continue;
+        }
+#endif
         int needed = proc_pidinfo(pids[i], PROC_PIDLISTFDS, 0, nullptr, 0);
         if (needed <= 0 || needed > INT_MAX - 4096) {
             continue;
@@ -14079,51 +14178,6 @@ static std::atomic<int> qore_socket_table_lists_sockets[2] = {{0}, {0}};
 static constexpr int QORE_SOCKET_TABLE_OMITS = -1000;
 //! the number of comparisons that cannot tell after which a table is taken to omit sockets
 static constexpr int QORE_SOCKET_TABLE_MAX_UNDECIDED = 3;
-
-//! the maximum number of parent processes that qore_socket_is_descendant() follows
-static constexpr unsigned QORE_SOCKET_MAX_PROCESS_DEPTH = 256;
-
-//! Returns true if the process is this process or one of its descendants, or if that cannot be told
-/** @param pid the process
-    @param self this process
-    @param known the processes already checked, with the result; the processes checked are added
-*/
-static bool qore_socket_is_descendant(pid_t pid, pid_t self, std::unordered_map<pid_t, bool>& known) {
-    std::vector<pid_t> chain;
-    bool rv = true;
-    for (unsigned depth = 0; ; ++depth) {
-        if (pid == self) {
-            rv = true;
-            break;
-        }
-        auto i = known.find(pid);
-        if (i != known.end()) {
-            rv = i->second;
-            break;
-        }
-        if (pid <= 1) {
-            rv = false;
-            break;
-        }
-        if (depth == QORE_SOCKET_MAX_PROCESS_DEPTH) {
-            // cannot be told
-            rv = true;
-            break;
-        }
-        chain.push_back(pid);
-        struct proc_bsdinfo info;
-        if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != static_cast<int>(sizeof(info))) {
-            // the process has ended or cannot be read: it cannot be told
-            rv = true;
-            break;
-        }
-        pid = static_cast<pid_t>(info.pbi_ppid);
-    }
-    for (pid_t p : chain) {
-        known[p] = rv;
-    }
-    return rv;
-}
 
 //! Returns 1 if the system's socket table lists every socket of the type that the process descriptors show
 /** The table that \c netstat reads is filtered by macOS for some processes; whether it is, is a property of the
@@ -14229,9 +14283,17 @@ static int qore_socket_table_lists_process_sockets(int socktype, ExceptionSink* 
     return 0;
 }
 
+#ifdef DEBUG
 // documented in qore_socket_private.h
 size_t qore_socket_descriptor_scan_count() {
-    return qore_socket_descriptor_scans.load(std::memory_order_relaxed);
+    return qore_socket_descriptor_scans;
+}
+
+// documented in qore_socket_private.h
+int qore_socket_port_check_test_scope(int flags) {
+    int rv = qore_socket_test_scope;
+    qore_socket_test_scope = flags;
+    return rv;
 }
 
 // documented in qore_socket_private.h
@@ -14244,6 +14306,7 @@ int qore_socket_table_check_mode(int socktype) {
 int qore_socket_table_check_exchange(int socktype, int state) {
     return qore_socket_table_lists_sockets[socktype == SOCK_STREAM ? 0 : 1].exchange(state, std::memory_order_acq_rel);
 }
+#endif
 
 //! Checks process socket descriptors when the system table omits sockets owned by other processes.
 /** @return 1 on a matching socket, 0 otherwise, -1 if cancellation was raised in @a xsink

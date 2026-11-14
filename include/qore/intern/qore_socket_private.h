@@ -202,6 +202,18 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     unless both sockets reuse the port and belong to the same user, as on Linux.  A bind without \c SO_REUSEADDR is
     refused by macOS itself.
 
+    Where macOS filters the table, every check that finds no holder in the table scans the descriptors of every
+    process of the user (\c proc_listpids(), \c PROC_PIDLISTFDS and \c PROC_PIDFDSOCKETINFO): a listen then takes
+    about 1.6 ms more with about 1,360 processes on the system.  Whether the table is filtered is decided once per
+    socket type, by comparing the table with the descriptors.  Known limits:
+    - a socket of another user is not found where the table is filtered, as its descriptors cannot be read
+      (\c EPERM); only the rules of macOS itself then apply to it
+    - in a process whose table is filtered, while no other process of the user outside the process and its
+      descendants holds a bound socket, a socket that the process created but that a process outside its descendants
+      now holds (the grandchild of a double fork that \c launchd adopted, or a socket passed with \c SCM_RIGHTS), or
+      the reuse of a process ID while the parents of a process are followed, can make the table look complete; the
+      checks then use the table alone and do not find the sockets of other processes
+
     On other systems, and for other binds, it is \c bind().
 
     @param sock the socket descriptor
@@ -238,9 +250,24 @@ DLLLOCAL int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, 
     @return 0 for success, \c QORE_SOCKET_ERROR for an error, with the system error number set
 */
 DLLLOCAL int qore_socket_listen_unshadowed(int sock, int backlog, ExceptionSink* xsink = nullptr);
-#ifdef DARWIN
-//! For the unit tests: the number of scans of the process descriptors that the port checks of macOS have made
+#if defined(DARWIN) && defined(DEBUG)
+//! Debug-only, for the unit tests: the number of scans of the process descriptors that the port checks of macOS have
+//! made in the calling thread
 DLLLOCAL size_t qore_socket_descriptor_scan_count();
+//! Debug-only test scope of the port checks of macOS: the process descriptors are scanned only in this process and
+//! its descendants (see qore_socket_port_check_test_scope())
+static constexpr int QORE_SOCKET_TEST_OWN_TREE = (1 << 0);
+//! Debug-only test scope of the port checks of macOS: the socket table lists only the sockets that this process
+//! holds, as macOS 27 lists only the sockets that a process created for a process whose table it filters (see
+//! qore_socket_port_check_test_scope())
+static constexpr int QORE_SOCKET_TEST_FILTERED_TABLE = (1 << 1);
+//! Debug-only, for the unit tests: sets the test scope of the port checks of macOS made in the calling thread
+/** @param flags a combination of \c QORE_SOCKET_TEST_OWN_TREE and \c QORE_SOCKET_TEST_FILTERED_TABLE, or 0 for
+    none
+
+    @return the previous flags, which a test gives back to this function when it ends
+*/
+DLLLOCAL int qore_socket_port_check_test_scope(int flags);
 //! For the unit tests: how the port checks of macOS find the sockets of a type (\c SOCK_STREAM or \c SOCK_DGRAM)
 /** @return 1 if from the system's socket table alone, -1 if from the process descriptors as well, 0 if not decided
     yet

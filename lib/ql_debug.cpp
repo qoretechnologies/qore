@@ -5849,7 +5849,8 @@ private:
     /** Whether the table lists the sockets of the accessible processes is decided once for each socket type, by the
         first check that finds no holder in the table (the checks above have made it).  If the table lists them, a
         check scans no descriptors; otherwise, a check that finds no holder scans them once.  Either way the port is
-        refused as before.
+        refused as before.  The scans are counted for the calling thread only, so the checks of other threads do not
+        change the count.
     */
     static void runDescriptorScans(UnitTestCounters& c) {
         int mode = qore_socket_table_check_mode(SOCK_STREAM);
@@ -5980,20 +5981,28 @@ private:
     }
 
     //! A socket that this process shares with a child process does not make the socket table look complete
-    /** macOS 27 lists in the socket table only the sockets that the calling process created, also when a child
-        process holds them too, and the process descriptors show such a socket in the child as well.  The decision of
-        the port checks, made while a child shares a listener of this process, must not take the table to list the
-        sockets of other processes: the listener of another program on 0.0.0.0, which the table of this process does
-        not list then, refuses a bind of 127.0.0.1 to its port.  The decision is made again in this test, and the one
-        made before is restored at its end.
+    /** For a process whose socket table it filters, macOS 27 lists only the sockets that the process created, also
+        when a child process holds them too, and the process descriptors show such a socket in the child as well.  The
+        decision of the port checks, made while a child shares a listener of this process, must not take the table to
+        list the sockets of other processes: the listener of another program on 0.0.0.0, which the table of this
+        process does not list then, refuses a bind of 127.0.0.1 to its port.
+
+        The test scope of the checks of this thread makes the outcome independent of the host: the table lists only
+        the sockets that this process holds, as a filtered table would, and only this process and its descendants are
+        scanned, so that sockets of other processes of the user, which make a filtered table look incomplete, do not
+        decide it.  The decision is made again in this test, and the one made before, and the test scope, are restored
+        at its end.
     */
     static void runDescendantSockets(UnitTestCounters& c) {
         struct Restore {
             int state;
+            int scope;
             DLLLOCAL ~Restore() {
+                qore_socket_port_check_test_scope(scope);
                 qore_socket_table_check_exchange(SOCK_STREAM, state);
             }
-        } restore{qore_socket_table_check_exchange(SOCK_STREAM, 0)};
+        } restore{qore_socket_table_check_exchange(SOCK_STREAM, 0),
+            qore_socket_port_check_test_scope(QORE_SOCKET_TEST_OWN_TREE | QORE_SOCKET_TEST_FILTERED_TABLE)};
 
         // a listener of this process that a child shares; bound and listening without the port checks
         Fd s{open(AF_INET, false, true)};
@@ -6010,6 +6019,10 @@ private:
         printf("  specific bind: with a shared socket, TCP port checks use %s\n", mode == 1
             ? "the socket table alone" : (mode == -1 ? "the socket table and the process descriptors"
             : "an undecided socket table check"));
+        // within the test scope, the only sockets of other processes that the table lists are those that this process
+        // shares with its child
+        UT_ASSERT(c, mode != 1, "specific bind: a socket shared with a child does not make the socket table look "
+            "complete");
 
         Child holder;
         int port = startChild(holder, true);
