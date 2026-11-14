@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class GenericParentInstantiationsTest
+
+#! the instantiations of a generic class that a class inherits (qore#6027)
+/** The members of a generic parent class that is inherited through two paths belong to one parent, so the type
+    arguments must be the same through both: a class that inherits `Box<int>` through one parent class and `Box<string>`
+    through another is a parse error, not a silent choice of the first.  A generic class is not instantiated without type
+    arguments (a class with type parameters needs `Box<auto>` for a value-erased instance).
+*/
+class GenericParentInstantiationsTest inherits QUnit::Test {
+    public {
+        const Box = "class Box<T> {\n"
+            "    public { hash<string, T> mi = {}; list<T> ml = (); T v; }\n"
+            "    constructor(T v) { self.v = v; }\n"
+            "}\n";
+    }
+
+    constructor() : QUnit::Test("GenericParentInstantiationsTest", "1.0", \ARGV) {
+        addTestCase("different type arguments through two parent classes", \testDiamondError());
+        addTestCase("the same type arguments through two parent classes", \testDiamondSame());
+        addTestCase("a generic parent class and the class it is instantiated through", \testGenericParent());
+        addTestCase("a generic class without type arguments", \testRaw());
+        addTestCase("a value-erased instance and its subclasses", \testAuto());
+        addTestCase("a generic parent class without type arguments", \testRawParent());
+        set_return_value(main());
+    }
+
+    private string parseError(string source) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse(Box + source, "<generic-parents>");
+            p.run();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+        return "";
+    }
+
+    private Program parseOk(string source) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(Box + source, "<generic-parents>");
+        return p;
+    }
+
+    testDiamondError() {
+        string err = parseError(
+            "class A inherits Box<int> { constructor() : Box(1) {} }\n"
+            "class B inherits Box<string> { constructor() : Box(\"s\") {} }\n"
+            "class Diamond inherits A, B { constructor() : A() {} }\n");
+        assertRegex("^PARSE-EXCEPTION: class 'Diamond' inherits generic class 'Box' with different type arguments: "
+            "'Box<int>' through 'A' and 'Box<string>' through 'B'$", err);
+        # the order of the parent classes does not matter
+        err = parseError(
+            "class A inherits Box<int> { constructor() : Box(1) {} }\n"
+            "class B inherits Box<string> { constructor() : Box(\"s\") {} }\n"
+            "class Diamond inherits B, A { constructor() : B() {} }\n");
+        assertRegex("'Box<string>' through 'B' and 'Box<int>' through 'A'", err);
+    }
+
+    testDiamondSame() {
+        Program p = parseOk(
+            "class A inherits Box<int> { constructor() : Box(1) {} }\n"
+            "class B inherits Box<int> { constructor() : Box(2) {} }\n"
+            "class Diamond inherits A, B { constructor() : A() {} }\n"
+            "string sub types() { Diamond d(); return d.mi.fullType() + \" \" + d.ml.fullType(); }\n");
+        assertEq("hash<string, int> list<int>", p.callFunction("types"));
+    }
+
+    testGenericParent() {
+        # the type arguments of a generic parent class are resolved through the class that passes them on
+        string g = "class G<U> inherits Box<U> { constructor(U v) : Box(v) {} }\n";
+        string err = parseError(g + "class H inherits G<int>, Box<string> { constructor() : G(1) {} }\n");
+        assertRegex("class 'H' inherits generic class 'Box' with different type arguments: 'Box<int>' through 'G' "
+            "and 'Box<string>' through 'Box'", err);
+        err = parseError(g + "class H inherits G<int>, G<string> { constructor() : G(1) {} }\n");
+        assertTrue(err != "", "a generic class with two instantiations is refused: " + err);
+
+        Program p = parseOk(g + "class H inherits G<int>, Box<int> { constructor() : G(1) {} }\n"
+            "string sub types() { H h(); return h.mi.fullType(); }\n");
+        assertEq("hash<string, int>", p.callFunction("types"));
+    }
+
+    testRaw() {
+        # an instance of a class with type parameters needs the type arguments; the message names the fix
+        string err = parseError("Box b(1);\n");
+        assertRegex("^MISSING-TYPE-ARGUMENTS: cannot instantiate generic class 'Box' without type arguments; use "
+            "'Box<auto>' for an explicitly value-erased instance$", err);
+    }
+
+    testRawParent() {
+        string msg = "^MISSING-TYPE-ARGUMENTS: cannot inherit generic class 'Box' without type arguments; use "
+            "'Box<auto>' for an explicitly value-erased parent$";
+        # at parse time: the class is not created, and no construction is needed to see the error
+        assertRegex(msg, parseError("class RawSub inherits Box { constructor() : Box(1) {} }\n"));
+        assertRegex(msg, parseError("class RawSub inherits Box {}\n"));
+        # through a namespace path, and as one of several parent classes
+        assertRegex(msg, parseError("namespace N { class A {} }\n"
+            "class RawSub inherits N::A, Box { constructor() : Box(1) {} }\n"));
+        # the generic class declared after the class that inherits it
+        string raw_sub = "class RawSub inherits Box {}\n";
+        Program fp(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            fp.parse(raw_sub + Box, "<generic-parents>");
+            assertTrue(False, "a forward-declared generic parent without type arguments is refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("^MISSING-TYPE-ARGUMENTS: cannot inherit generic class 'Box' without type arguments",
+                ex.err + ": " + ex.desc);
+        }
+        # a generic class that passes its parameter on needs the argument too
+        assertRegex("^MISSING-TYPE-ARGUMENTS: cannot inherit generic class 'Box' without type arguments",
+            parseError("class G<U> inherits Box { constructor(U v) : Box(v) {} }\n"));
+
+        # with type arguments, and as the explicit value-erased parent, the class is inherited
+        Program p = parseOk(
+            "class AutoSub inherits Box<auto> { constructor() : Box(1) {} }\n"
+            "class IntSub inherits Box<int> { constructor() : Box(1) {} }\n"
+            "string sub types() {\n"
+            "    AutoSub a(); IntSub i();\n"
+            "    return sprintf(\"%s %s\", a.mi.fullType(), i.mi.fullType());\n"
+            "}\n");
+        assertEq("hash<auto> hash<string, int>", p.callFunction("types"));
+
+        # a class declared [legacy_raw] defaults to a value-erased instance for raw use, so it can be inherited so
+        p = parseOk("class LBox<T> [legacy_raw] { public { list<T> ml = (); } }\n"
+            "class LSub inherits LBox {}\n"
+            "string sub types() { LSub s(); return s.ml.fullType(); }\n");
+        assertEq("list<auto>", p.callFunction("types"));
+    }
+
+    testAuto() {
+        Program p = parseOk(
+            "class AutoSub inherits Box<auto> { constructor() : Box(2) {} }\n"
+            "string sub types() {\n"
+            "    Box<auto> b(1);\n"
+            "    b.mi.x = \"any\";\n"
+            "    b.mi.y = 2;\n"
+            "    AutoSub s();\n"
+            "    s.mi.z = 3;\n"
+            "    s.mi.w = \"s\";\n"
+            "    return sprintf(\"%s %s %s %s\", b.mi.fullType(), b.ml.fullType(), s.mi.fullType(), s.ml.fullType());\n"
+            "}\n");
+        assertEq("hash<auto> list<auto> hash<auto> list<auto>", p.callFunction("types"));
+    }
+}

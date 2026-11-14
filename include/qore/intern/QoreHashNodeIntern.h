@@ -480,12 +480,25 @@ public:
         return h;
     }
 
+    //! returns the hashdecl of the two that inherits the other, or nullptr if neither inherits the other
+    DLLLOCAL static const TypedHashDecl* getInheritingHashDecl(const TypedHashDecl* a, const TypedHashDecl* b);
+
+    //! returns a copy of the hash with the type of its sum with \a other (ex: <tt>h + other</tt>)
     DLLLOCAL QoreHashNode* copyCheckNewType(const qore_hash_private& other) const {
         QoreHashNode* rv = copy();
         if (hashdecl || other.hashdecl) {
             if (!hashdecl || !other.hashdecl || !hashdecl->equal(other.hashdecl)) {
-                rv->priv->setHashDecl(nullptr);
-                rv->priv->complexTypeInfo = autoHashTypeInfo;
+                // issue #6023: if one hashdecl inherits the other, the result is a hash of the child, which declares
+                // every key of both
+                const TypedHashDecl* hd = hashdecl && other.hashdecl
+                    ? getInheritingHashDecl(hashdecl, other.hashdecl)
+                    : nullptr;
+                if (!hd) {
+                    rv->priv->setHashDecl(nullptr);
+                    rv->priv->complexTypeInfo = autoHashTypeInfo;
+                } else if (hd != hashdecl) {
+                    rv->priv->setHashDecl(hd);
+                }
             }
         } else {
             const QoreTypeInfo* orig_ctype, * ctype;
@@ -724,11 +737,8 @@ public:
         obj_count += dt;
     }
 
+    //! returns the type of the values of a typed hash; a hashdecl gives no single type to its members
     DLLLOCAL const QoreTypeInfo* getValueTypeInfo() const {
-        if (hashdecl) {
-            // For hashdecl-typed hashes, the value type is the hashdecl's type itself
-            return hashdecl->getTypeInfo();
-        }
         return complexTypeInfo ? QoreTypeInfo::getComplexHashValueType(complexTypeInfo) : nullptr;
     }
 

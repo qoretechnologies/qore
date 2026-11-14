@@ -944,10 +944,12 @@ public class WscActionWaitCount {
     /** Called by one thread at a time (the client's destructor): the wait clears the Queue it waits on when it ends
     */
     bool waitAtMost(int limit, timeout to) {
-        date deadline = now_us() + milliseconds(to);
+        # on the monotonic clock: a change of the system clock while the thread waits does not change the wait
+        int deadline_us = clock_get_monotonic_us() + to * 1000;
         on_exit clearWaiter();
         while (*Queue q = getWaiter(limit)) {
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            # rounded up, so the wait does not end before the timeout
+            int remaining = (deadline_us - clock_get_monotonic_us() + 999) / 1000;
             if (remaining <= 0) {
                 return False;
             }
@@ -3692,12 +3694,18 @@ ws.setEventQueue();
         @since WebSocketClient 2.5
     */
     private *hash<WscAsyncIoResources> closeAndWaitUnlocked(int cmd) {
+        # the operation is the closing one before its close frame is sent and before it stops being the client's:
+        # startPollSend(), which reads the operation without the lock, finds the one or the other at every moment, so a
+        # data message sent after the close frame raises WEBSOCKET-CLOSING-ERROR, never WEBSOCKET-NOT-CONNECTED-ERROR
+        *object op = poll_op;
+        if (op) {
+            closing_op = op;
+        }
+        on_exit if (op && closing_op == op) {
+            remove closing_op;
+        }
         *hash<WscAsyncIoResources> res = closeConnectionUnlocked(cmd);
         if (res) {
-            closing_op = res.op;
-            on_exit if (closing_op == res.op) {
-                remove closing_op;
-            }
             m.unlock();
             on_exit m.lock();
             waitCloseHandshake(res);
@@ -3979,9 +3987,12 @@ ws.setEventQueue();
         # the close timeout of the operation: the I/O timeout, or the default close timeout of
         # WebSocketClientPollOperationBase, 15 seconds; see startAsyncIo()
         timeout close_timeout = timeout_ms > 0 ? timeout_ms : 15s;
-        date deadline = now_us() + milliseconds(close_timeout * 2);
+        # on the monotonic clock, as the operation's close deadline: a change of the system clock while the thread
+        # waits must neither end the wait early nor make it longer
+        int deadline_us = clock_get_monotonic_us() + close_timeout * 2000;
         while (True) {
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            # rounded up, so the wait does not end before the bound
+            int remaining = (deadline_us - clock_get_monotonic_us() + 999) / 1000;
             if (remaining <= 0) {
                 logWarn("the WebSocket close handshake did not end within %y; closing the connection",
                     milliseconds(close_timeout * 2));
@@ -4153,10 +4164,11 @@ ws.setEventQueue();
             # not a cancellation point: a thread that stops waiting without the action (cancelled, timed out, or the
             # client is destroyed) passes a wakeup that may have been meant for it to the next waiter
             on_exit action_waiters.leave(!took);
-            date deadline = now_us() + milliseconds(to);
+            # on the monotonic clock: a change of the system clock while the thread waits does not change the wait
+            int deadline_us = clock_get_monotonic_us() + to * 1000;
             # the first waiter takes the action once it is released
             while (action_tid || action_waiters.first() != t) {
-                int remaining_us = (deadline - now_us()).durationMicroseconds();
+                int remaining_us = deadline_us - clock_get_monotonic_us();
                 if (remaining_us <= 0) {
                     # the next waiter is woken when this one leaves (see leave()), in case the action was released
                     # while this one timed out

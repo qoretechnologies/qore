@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # The locals of a block that an exception leaves are released after its handlers and before the debugger's exception
-# events of the statements that contain the block (#5867, #5921); see debugger-block-locals-unwind.qtest
+# events of the statements that contain the block (#5867, #5921, #5999); see debugger-block-locals-unwind.qtest
 
 %modern
 %allow-debugger
@@ -24,7 +24,7 @@ class D inherits DebugProgram {
     onExit(ProgramControl pgm, int s, reference result, reference rs, reference rts) {}
 }
 const FirstLine = 35;
-const LastLine = 388;
+const LastLine = 438;
 our list<string> log = ();
 class T { private { string n; } constructor(string n) { self.n = n; } destructor() { log += "~" + n; } }
 # a destructor that raises an exception
@@ -387,8 +387,59 @@ sub w3() {
     }
 }
 
+# the locals of a catch block that is not in a try statement are released before the exception event of the try
+# statement: the frame is still in the statements of the try block, whose ends did not run (#5999)
+sub y1() {
+    try {
+        throw "Y1A";
+    } catch () {
+        T a("y1");
+        throw "Y1";
+    }
+}
+sub y2() {
+    try {
+        throw "Y2A";
+    } catch () {
+        T a("y2a");
+        try {
+            if (True) {
+                throw "Y2B";
+            }
+        } catch () {
+            T b("y2b");
+            throw "Y2";
+        }
+    }
+}
+sub y3() {
+    foreach int i in (1, 2) {
+        try {
+            T x("y3x" + i);
+            throw "Y3A";
+        } catch () {
+            T a("y3a" + i);
+            if (i == 2) {
+                throw "Y3";
+            }
+        }
+    }
+}
+sub y4() {
+    try {
+        if (True) {
+            T x("y4x");
+            throw "Y4";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        T a("y4");
+        rethrow;
+    }
+}
+
 foreach string fn in (("a", "b", "c", "d", "e", "f", "g", "h", "i", "n2", "n3", "n4", "n5", "n6", "k1", "k2", "k3",
-        "k4", "k5", "m1", "m2", "m3", "m4", "m5", "v1", "v2", "v3", "v4", "v5", "w1", "w2", "w3")) {
+        "k4", "k5", "m1", "m2", "m3", "m4", "m5", "v1", "v2", "v3", "v4", "v5", "w1", "w2", "w3", "y1", "y2", "y3",
+        "y4")) {
     log = ();
     try { call_function(fn); } catch (hash<ExceptionInfo> ex) { log += "caught:" + ex.err; }
     printf("%s: %y\n", fn, log);

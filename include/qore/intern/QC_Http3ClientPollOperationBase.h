@@ -371,6 +371,13 @@ public:
         return inner_op ? inner_op->getAddressFamily() : AF_UNSPEC;
     }
 
+    //! Returns true once the QUIC handshake has completed, also after the connection has closed
+    /** Can be called from any thread
+    */
+    DLLLOCAL bool isHandshakeComplete() const {
+        return inner_op && inner_op->isHandshakeComplete();
+    }
+
     DLLLOCAL bool isQuicSessionOpen() const {
         if (!inner_op) {
             return false;

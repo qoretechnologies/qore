@@ -7074,9 +7074,19 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
     }
     std::unordered_set<QoreIRBasicBlock*> removed;
     removed.reserve(func.blocks.size() - reachable.size());
+    // the values that the unreachable blocks define, which no code that runs can define any more: those of the blocks
+    // that are removed and of the instructions that a block kept for its Return loses (a Return defines no value, and
+    // the value that a kept Return returns is defined by reachable code, so it is not one of them)
+    std::unordered_set<uint32_t> removed_values;
     for (const auto& block : func.blocks) {
         if (reachable.count(block.get())) {
             continue;
+        }
+        for (const auto& inst : block->instructions) {
+            (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block analysis");
+            if (inst->result.isValid()) {
+                removed_values.insert(inst->result.id);
+            }
         }
         // a Return with a value in an unreachable block (the exit of a return statement after a handler that throws
         // or exits the thread) is kept, alone in its block: the IR interpreter and native code take the slot of every
@@ -7103,13 +7113,17 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
         }
         removed.insert(block.get());
     }
-    if (removed.empty()) {
+    // the releases of the values that the blocks kept for their Returns lost are removed also when no block is
+    if (removed.empty() && removed_values.empty()) {
         return 0;
     }
+    auto is_removed_value = [&](QoreIRValue v) {
+        return v.isValid() && removed_values.count(v.id);
+    };
 
     // The removal decision is committed.  Finish all pointer and phi rewrites
     // even if cancellation arrives so no retained IR can reference an erased
-    // block.
+    // block or a value that it defined.
     for (const auto& block : func.blocks) {
         if (!reachable.count(block.get())) {
             continue;
@@ -7117,6 +7131,35 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
         (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
         if (removed.count(block->enclosing_loop_exit)) {
             block->enclosing_loop_exit = nullptr;
+        }
+        // the releases of values that a removed block defined: a functional operator releases the values that its
+        // loop derived from an element (the values of its map stages, a fold's accumulator and the incoming values of
+        // its Phi) after the loop, before the next element (QoreIRIteratorNextInstruction::release_values) and in its
+        // exception cleanup, from their slots, which hold none if the code that defines them did not run (an element
+        // that a select stage skipped, or a stage that a constant predicate makes unreachable: issue #6014); the
+        // release of a value that no code can define any more releases nothing, so it is removed with its definition
+        if (!removed_values.empty()) {
+            auto& instructions = block->instructions;
+            for (auto it = instructions.begin(); it != instructions.end();) {
+                (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
+                QoreIRInstruction& inst = **it;
+                if (inst.opcode == QoreIROpcode::ReleaseOwnedTemp && !inst.operands.empty()) {
+                    // the value that a ReleaseStageInput keeps (its second operand) is defined just before it, in the
+                    // same block, so it cannot be removed while the release is kept; the instruction is not made a
+                    // ReleaseOwnedTemp with one operand, whose exception that a destructor raises goes elsewhere
+                    assert(inst.operands.size() < 2 || !is_removed_value(inst.operands[1]));
+                    if (is_removed_value(inst.operands[0])
+                            || (inst.operands.size() == 2 && is_removed_value(inst.operands[1]))) {
+                        it = instructions.erase(it);
+                        continue;
+                    }
+                } else if (inst.opcode == QoreIROpcode::IteratorNext
+                        || inst.opcode == QoreIROpcode::IteratorNextSelectors) {
+                    auto& values = static_cast<QoreIRIteratorNextInstruction&>(inst).release_values;
+                    values.erase(std::remove_if(values.begin(), values.end(), is_removed_value), values.end());
+                }
+                ++it;
+            }
         }
         for (const auto& inst : block->instructions) {
             (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
@@ -10017,8 +10060,12 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                         facts = *current;
                     }
                     QoreIRValueFacts refined_facts = facts;
-                    refined_facts.type_info = load->local->getTypeInfo();
                     bool assigned = known.count(load->local);
+                    // a load where the local may not have been assigned has its type or NOTHING (qore#5937): its
+                    // declared type alone would let the optimizers take the value as one of the type
+                    refined_facts.type_info = assigned
+                        ? load->local->getTypeInfo()
+                        : get_or_nothing_type_check(load->local->getTypeInfo());
                     refined_facts.assigned_state = assigned
                         ? QoreIRAssignedState::Assigned
                         : QoreIRAssignedState::MaybeAssigned;
@@ -15563,6 +15610,11 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
                 }
             }
         }
+        // an instruction that changes a local (delete and remove of a local are generic lvalue path operations) can
+        // leave it without a value of its type (qore#5937), whether or not it can invalidate the caller's caches
+        if (const LocalVar* written = qore_ir_get_written_local(inst)) {
+            known.erase(written);
+        }
         if (!direct_call
                 && qore_ir_instruction_may_invalidate_caller_caches(
                     func, inst)) {
@@ -16224,6 +16276,8 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
     std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
     std::unordered_map<uint32_t, QoreIRValue> replacements;
     std::unordered_map<uint32_t, const QoreIRInstruction*> calls;
+    //! the operand that each call returns
+    std::unordered_map<const QoreIRInstruction*, size_t> call_params;
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -16271,6 +16325,7 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
             }
             replacements.emplace(call->result.id, replacement);
             calls.emplace(call->result.id, call);
+            call_params.emplace(call, static_cast<size_t>(param));
         }
     }
     if (replacements.empty()) {
@@ -16375,6 +16430,35 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
         }
         eliminated.insert(call->second);
     }
+    // The call released the arguments that it does not return when it returned, as the AST interpreter releases the
+    // argument list of a call: a temporary argument used by the call only is released where the call was
+    // (ReleaseOwnedTemp), and not when its statement ends (qore#6080).  The uses are counted on the values as the
+    // rewrite replaces them; an argument with another use is left to the end of its statement.
+    auto normalize = [&replacements](QoreIRValue v) {
+        auto r = replacements.find(v.id);
+        return r == replacements.end() ? v : r->second;
+    };
+    std::unordered_map<uint32_t, size_t> uses;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            auto call_param = eliminated.count(inst.get()) ? call_params.find(inst.get()) : call_params.end();
+            if (call_param != call_params.end()) {
+                int arg_start = qore_ir_call_arg_start(inst.get());
+                for (size_t i = arg_start < 0 ? inst->operands.size() : static_cast<size_t>(arg_start);
+                        i < inst->operands.size(); ++i) {
+                    if (i != call_param->second && inst->operands[i].isValid()) {
+                        ++uses[normalize(inst->operands[i]).id];
+                    }
+                }
+                continue;
+            }
+            (void)qore_ir_visit_value_operands(*inst, [&](QoreIRValue v) {
+                if (v.isValid()) {
+                    ++uses[normalize(v).id];
+                }
+            }, &check_count, "IR boxed return-parameter argument uses");
+        }
+    }
     for (const auto& block : func.blocks) {
         auto& instructions = block->instructions;
         for (auto inst = instructions.begin(); inst != instructions.end();) {
@@ -16384,6 +16468,32 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
                     "IR boxed return-parameter call folding");
             }
             if (eliminated.count(inst->get())) {
+                // the arguments that the call released, last first (see above)
+                std::vector<std::unique_ptr<QoreIRInstruction>> releases;
+                const QoreIRInstruction* call = inst->get();
+                int arg_start = qore_ir_call_arg_start(call);
+                size_t param = call_params.find(call)->second;
+                for (size_t i = call->operands.size(); arg_start >= 0 && i > static_cast<size_t>(arg_start); --i) {
+                    if (i - 1 == param || !call->operands[i - 1].isValid()) {
+                        continue;
+                    }
+                    QoreIRValue arg = normalize(call->operands[i - 1]);
+                    if (uses[arg.id] != 1) {
+                        continue;
+                    }
+                    auto release = std::make_unique<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
+                    release->operands.push_back(arg);
+                    release->loc = call->loc;
+                    release->cached_start_line = call->cached_start_line;
+                    release->temp_scope_id = call->temp_scope_id;
+                    releases.push_back(std::move(release));
+                }
+                if (!releases.empty()) {
+                    size_t pos = inst - instructions.begin();
+                    instructions.insert(inst, std::make_move_iterator(releases.begin()),
+                        std::make_move_iterator(releases.end()));
+                    inst = instructions.begin() + pos + releases.size();
+                }
                 if ((*inst)->opcode == QoreIROpcode::Invoke) {
                     const auto* invoke =
                         static_cast<const QoreIRInvokeInstruction*>(

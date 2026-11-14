@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception paths of catch blocks with handlers
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CatchScopeHandlersTest
+
+#! The handlers of a catch block that an exception leaves see the catch block's exception (#5968)
+/** A throw, rethrow or failed assertion in a catch block closed the catch block (restoring td->catchException and
+    deleting the caught exception) before it raised its exception in the IR interpreter and native code, so the
+    handlers of the catch block, and of the blocks in it, ran without the caught exception: a rethrow in an on_exit
+    handler failed (an assertion in a debug build).  The AST interpreter runs the catch block, with its handlers, with
+    its exception the current one, and deletes it after the catch block; a catch block in no block with handlers is
+    left before the locals of the enclosing blocks are released (d1, d2), also when the exception leaves a reference
+    foreach or context statement in it (r1-r3).  CatchScopeHandlers.q gives the output of
+    the AST interpreter in every execution mode and compiled with qcc.
+*/
+class CatchScopeHandlersTest inherits QUnit::Test {
+    public {
+        #! the output of CatchScopeHandlers.q with the AST interpreter
+        const Expected = "h1: [\"oh:A\", \"caught:B\"]
+h1: [\"oh:A\", \"caught:B\"]
+h2: [\"oh:A\", \"eh:B\", \"caught:B\"]
+h2: [\"oh:A\", \"eh:B\", \"caught:B\"]
+h3: [\"oh:A\", \"caught:B\"]
+h3: [\"oh:A\", \"caught:B\"]
+h4: [\"oh:A2\", \"caught:A2\"]
+h4: [\"oh:A2\", \"caught:A2\"]
+h5: [\"oh:A\", \"caught:A\"]
+h5: [\"oh:A\", \"caught:A\"]
+n1: [\"h2:C\", \"h1:A\", \"caught:B\"]
+n1: [\"h2:C\", \"h1:A\", \"caught:B\"]
+n2: [\"h1:A\", \"caught:B\"]
+n2: [\"h1:A\", \"caught:B\"]
+n3: [\"h2:C\", \"caught:B\"]
+n3: [\"h2:C\", \"caught:B\"]
+n4: [\"h3:A\", \"caught:B\"]
+n4: [\"h3:A\", \"caught:B\"]
+d1: [\"oh:A\", \"del:arg\", \"del:local\", \"caught:B\", \"del:arg\", \"del:local\", \"caught:B\"]
+d1: [\"oh:A\", \"del:arg\", \"del:local\", \"caught:B\", \"del:arg\", \"del:local\", \"caught:B\"]
+d2: [\"oh:A\", \"del:catchlocal\", \"del:arg\", \"del:local\", \"caught:B\"]
+d2: [\"oh:A\", \"del:catchlocal\", \"del:arg\", \"del:local\", \"caught:B\"]
+e1: [\"oh:A\", \"caught:B\"]
+e1: [\"oh:A\", \"caught:B\"]
+f1: [\"oh:A\", \"oh:A\"]
+f1: [\"oh:A\", \"oh:A\"]
+f2: [\"oh:A\", \"oh:A\", \"after:O\"]
+f2: [\"oh:A\", \"oh:A\", \"after:O\"]
+t1: [\"oh:A\"]
+t1: [\"oh:A\"]
+o1: [\"ih:A\", \"caught:B\", \"after:OUTER\"]
+o1: [\"ih:A\", \"caught:B\", \"after:OUTER\"]
+o2: [\"ih:A\", \"oh:OUTER\", \"caught:B\"]
+o2: [\"ih:A\", \"oh:OUTER\", \"caught:B\"]
+a1: [\"oh:A\", \"caught:ASSERTION-ERROR\"]
+a1: [\"oh:A\", \"caught:ASSERTION-ERROR\"]
+r1: [\"del:arg\", \"del:local\", \"caught:B\"]
+r1: [\"del:arg\", \"del:local\", \"caught:B\"]
+r2: [\"del:arg\", \"del:local\", \"caught:B\"]
+r2: [\"del:arg\", \"del:local\", \"caught:B\"]
+r3: [\"del:arg\", \"del:local\", \"caught:B\", \"del:arg\", \"del:local\", \"caught:B\"]
+r3: [\"del:arg\", \"del:local\", \"caught:B\", \"del:arg\", \"del:local\", \"caught:B\"]
+r4: [\"oh:A\", \"caught:B\"]
+r4: [\"oh:A\", \"caught:B\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("CatchScopeHandlersTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/CatchScopeHandlers.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the handlers of a catch block that an exception leaves", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the handlers of a catch block that an exception leaves", opt), \aotTest(),
+                (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-catch-scope-handlers-");
+        string exe = tmp.path + DirSep + "catch-scope-handlers";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

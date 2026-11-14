@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
@@ -75,6 +76,10 @@ int QoreMapSelectOperatorNode::getAsString(QoreString &str, int foff, ExceptionS
 }
 
 int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    // code of the loop can run more than once, so a read in it can follow an assignment parsed after it (qore#5937)
+    ParseDeferredScopeHelper deferred_scope;
+    // the code may run for no element, and leave before its end; see ParseLoopAssignedStateHelper
+    ParseLoopAssignedStateHelper loop_assigned_state;
     assert(!parse_context.typeInfo);
 
     // Preserve parse-analysis knowledge that this map-select's result is discarded.

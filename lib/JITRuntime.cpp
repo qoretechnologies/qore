@@ -752,17 +752,17 @@ static size_t qore_short_string_utf8_length(QoreValue v);
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
-// Empty strings sort at end (both "" vs "x" and "x" vs "" return 1)
+// An empty string is less than any other string (qore#6090)
 static inline int fast_string_compare(const QoreStringNode* ls, const QoreStringNode* rs) {
     size_t llen = ls->size();
     size_t rlen = rs->size();
 
-    // Handle empty strings - empty sorts at end (returns 1 if either is empty but not both)
+    // empty strings are equal whatever their encodings, and less than any other string
     if (!llen) {
-        return rlen ? 1 : 0;
+        return rlen ? -1 : 0;
     }
     if (!rlen) {
-        return 1;  // right is empty, left is not -> left > right (empty at end)
+        return 1;
     }
 
     // Compare bytes
@@ -1219,7 +1219,9 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
         *slot = 0;
         if (tagged & 1) {
             qore_rt_object_slot_release(bits, xsink);
-        } else {
+        } else if (qore_rt_bits_may_own_reference(bits)) {
+            // most slots hold no value that owns a reference at the exit of the frame: NOTHING, as the end of the
+            // statement or a return path released and cleared them already, or a scalar
             fromBits(bits).discard(xsink);
         }
     }
@@ -13982,18 +13984,52 @@ extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
     return static_cast<int64_t>(jit_obe_handlers.size());
 }
 
+//! Gives the value that a handler run while an exception leaves its block returned to the parent (#5992)
+/** The value replaces the value of the return that the exception interrupted, as in the AST interpreter, where the
+    handler runs with the block's return value: it is kept in the parent's hold slot, which the parent releases after
+    its locals (or when a try statement of the parent catches the exception), and the value it replaces there is
+    released.  Returns true if the handler's value was taken.  A handler that ends without a return gives no value;
+    a return without a value cannot be told from it.
+*/
+static inline bool qore_rt_obe_hold_return(uint64_t* hold, bool error, uint64_t rv_bits, ExceptionSink* xsink) {
+    if (!hold || !error || fromBits(rv_bits).isNothing()) {
+        return false;
+    }
+    uint64_t replaced = *hold;
+    *hold = rv_bits;
+    fromBits(replaced).discard(xsink);
+    return true;
+}
+
+static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
+        ExceptionSink* xsink, bool inline_lowered, uint64_t* hold);
+
 extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered) {
+    qore_rt_exec_on_block_exit_intern(saved_count, xsink, inline_lowered, nullptr);
+}
+
+//! Runs the handlers registered since saved_count as qore_rt_exec_on_block_exit() does; the value that a handler run
+//! while an exception is pending returns is kept in \a hold (see qore_rt_obe_hold_return()); returns 1 if one was
+extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink,
+        uint64_t* hold) {
+    return qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, hold);
+}
+
+// inlined in both entry points, so that qore_rt_exec_on_block_exit_impl() has no hold check (#5992)
+static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
+        ExceptionSink* xsink, bool inline_lowered, uint64_t* hold) {
     size_t start = static_cast<size_t>(saved_count);
     if (jit_obe_handlers.size() <= start) {
-        return;
+        return 0;
     }
     // handlers lowered inline (or discarded by a deopt) are only dropped: nothing runs, so no sink and no slot cache
     // state are needed (qore#5927)
     if (inline_lowered) {
         jit_obe_handlers.resize(start);
-        return;
+        return 0;
     }
 
+    int8_t held = 0;
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
 
@@ -14074,7 +14110,11 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     }
-                    fromBits(rv_bits).discard(&obe_xsink);
+                    if (qore_rt_obe_hold_return(hold, error, rv_bits, &obe_xsink)) {
+                        held = 1;
+                    } else {
+                        fromBits(rv_bits).discard(&obe_xsink);
+                    }
                 } else {
                     assert(jit_obe_handlers[i].compiled_fn);
                     const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
@@ -14090,7 +14130,11 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     }
-                    fromBits(rv_bits).discard(&obe_xsink);
+                    if (qore_rt_obe_hold_return(hold, error, rv_bits, &obe_xsink)) {
+                        held = 1;
+                    } else {
+                        fromBits(rv_bits).discard(&obe_xsink);
+                    }
                     if (hf) {
                         for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
                             hf->all_body_locals[j]->uninstantiate(&obe_xsink);
@@ -14125,6 +14169,7 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
 
     // Remove handlers for this function scope
     jit_obe_handlers.resize(start);
+    return held;
 }
 
 // Backward-compatible wrapper that calls the implementation with inline_lowered=false
@@ -22433,7 +22478,7 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
 
 //! starts a background helper thread with the values given by native or interpreted starting code
 static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const uint64_t* values, int nvalues, bool uses_self, ExceptionSink* xsink) {
+        const uint64_t* values, int nvalues, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink) {
     assert(nvalues >= 0);
     std::vector<QoreValue> vals;
     vals.reserve(nvalues);
@@ -22444,7 +22489,7 @@ static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& cod
     const QoreProgramLocation* loc = get_runtime_location();
     QoreProgramLocationHelper loc_helper(loc ? loc : &loc_builtin);
     return toBits(do_op_background_helper(code, params, vals.empty() ? nullptr : vals.data(), vals.size(),
-        uses_self, xsink));
+        self_mode, xsink));
 }
 
 QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& inst, const QoreValue* values,
@@ -22481,8 +22526,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
     QoreBackgroundHelperCode code;
     code.aot_fn = helper_fn;
     code.aot_ctx = ctx;
+    // the mode is a QoreBackgroundHelperSelf value of the instruction that the native code was compiled from
+    assert(uses_self >= QBHS_NONE && uses_self <= QBHS_HELD);
     return qore_background_helper_start(code, params.empty() ? nullptr : params.data(), values, nvalues,
-        uses_self != 0, xsink);
+        static_cast<QoreBackgroundHelperSelf>(uses_self), xsink);
 }
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_throwing(

@@ -214,6 +214,8 @@ QORE_INTERN_ALWAYS_INLINE int ForStatement::execCommon(RuntimeConfig& rc, QoreVa
 }
 
 int ForStatement::parseInitImpl(QoreParseContext& parse_context) {
+    // code of the loop can run more than once, so a read in it can follow an assignment parsed after it (qore#5937)
+    ParseDeferredScopeHelper deferred_scope;
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_TOP_LEVEL);
@@ -294,6 +296,9 @@ int ForStatement::parseInitImpl(QoreParseContext& parse_context) {
             ash.recordSavedAsImplicitBranch();
             ash.mergeAndApply();
         }
+        // the code after the loop can follow any point of the body that break or continue leaves, and assignments
+        // in the body may have run (qore#5937)
+        ash.applyChangesSinceSave();
     }
 
     return err;
