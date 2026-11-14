@@ -191,7 +191,9 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     A socket bound to a specific address of a port also receives the clients of that address instead of a socket on
     a wildcard address of the port.  Linux refuses a bind with \c SO_REUSEADDR of a specific address to a given port
     if a socket on a wildcard address that covers it holds the port and listens or does not reuse the address; macOS
-    allows it.  On macOS, therefore, such a bind fails with \c EADDRINUSE, as found in the system's socket table:
+    allows it.  On macOS, therefore, such a bind fails with \c EADDRINUSE, as found in the system's socket table or,
+    where macOS filters the table (for some processes, such as a program that another program started, macOS 27
+    lists only the sockets that the process created), in the accessible process descriptors:
     - of a stream socket, if a socket that is not connected holds a wildcard address that covers the address on the
       port, whether it listens or not, because a connection request to a stream socket that is bound but not
       listening is dropped on macOS, while Linux gives it to the socket that listens
@@ -199,6 +201,28 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     .
     unless both sockets reuse the port and belong to the same user, as on Linux.  A bind without \c SO_REUSEADDR is
     refused by macOS itself.
+
+    Where macOS filters the table, every check that finds no holder in the table lists every process ID
+    (\c proc_listpids()) and scans the descriptors of every process it can read (\c PROC_PIDLISTFDS and
+    \c PROC_PIDFDSOCKETINFO); a process of another user costs a failing call.  The cost grows with the number of
+    processes on the system and depends on the host: a bind and listen took about 1 to 2 ms more with about 900 to
+    1,400 processes.  Whether the table is filtered is decided once per socket type, by comparing the table with the
+    descriptors, each comparison with a full scan.  A comparison that finds a socket of the descriptors missing from
+    the table is repeated, because a socket bound, connected or closed between the two snapshots can explain the
+    difference, up to QORE_SOCKET_TABLE_MAX_COMPARISONS (3) comparisons in all within one check; when every one of
+    them finds a socket missing, the table is taken to omit sockets in that same check.  A comparison that cannot
+    tell (it finds no socket of another process, or a snapshot cannot be read) decides nothing; the checks whose
+    comparison could not tell are counted per socket type, the count is never reset, and once
+    QORE_SOCKET_TABLE_MAX_UNDECIDED (3) of them have been counted, the next check takes the table to omit sockets.
+    Once the table is taken to omit sockets, every check scans the descriptors (see
+    qore_socket_table_lists_process_sockets()).  Known limits:
+    - a socket of another user is not found where the table is filtered, as its descriptors cannot be read
+      (\c EPERM); only the rules of macOS itself then apply to it
+    - in a process whose table is filtered, while no other process of the user outside the process and its
+      descendants holds a bound socket, a socket that the process created but that a process outside its descendants
+      now holds (the grandchild of a double fork that \c launchd adopted, or a socket passed with \c SCM_RIGHTS), or
+      the reuse of a process ID while the parents of a process are followed, can make the table look complete; the
+      checks then use the table alone and do not find the sockets of other processes
 
     On other systems, and for other binds, it is \c bind().
 
@@ -236,6 +260,37 @@ DLLLOCAL int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, 
     @return 0 for success, \c QORE_SOCKET_ERROR for an error, with the system error number set
 */
 DLLLOCAL int qore_socket_listen_unshadowed(int sock, int backlog, ExceptionSink* xsink = nullptr);
+#if defined(DARWIN) && defined(DEBUG)
+//! Debug-only, for the unit tests: the number of scans of the process descriptors that the port checks of macOS have
+//! made in the calling thread
+DLLLOCAL size_t qore_socket_descriptor_scan_count();
+//! Debug-only test scope of the port checks of macOS: the process descriptors are scanned only in this process and
+//! its descendants (see qore_socket_port_check_test_scope())
+static constexpr int QORE_SOCKET_TEST_OWN_TREE = (1 << 0);
+//! Debug-only test scope of the port checks of macOS: the socket table lists only the sockets that this process
+//! holds, as macOS 27 lists only the sockets that a process created for a process whose table it filters (see
+//! qore_socket_port_check_test_scope())
+static constexpr int QORE_SOCKET_TEST_FILTERED_TABLE = (1 << 1);
+//! Debug-only, for the unit tests: sets the test scope of the port checks of macOS made in the calling thread
+/** @param flags a combination of \c QORE_SOCKET_TEST_OWN_TREE and \c QORE_SOCKET_TEST_FILTERED_TABLE, or 0 for
+    none
+
+    @return the previous flags, which a test gives back to this function when it ends
+*/
+DLLLOCAL int qore_socket_port_check_test_scope(int flags);
+//! For the unit tests: how the port checks of macOS find the sockets of a type (\c SOCK_STREAM or \c SOCK_DGRAM)
+/** @return 1 if from the system's socket table alone, -1 if from the process descriptors as well, 0 if not decided
+    yet
+*/
+DLLLOCAL int qore_socket_table_check_mode(int socktype);
+//! For the unit tests: sets the decision of the port checks of macOS for a socket type and returns the previous one
+/** @param socktype \c SOCK_STREAM or \c SOCK_DGRAM
+    @param state the state to set, as returned by an earlier call; 0 for a decision that has not been made yet
+
+    @return the previous state, which a test gives back to this function when it ends
+*/
+DLLLOCAL int qore_socket_table_check_exchange(int socktype, int state);
+#endif
 DLLLOCAL int sock_get_error();
 DLLLOCAL void sock_set_raw_error(int rc);
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,
