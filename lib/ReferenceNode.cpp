@@ -453,7 +453,9 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
     }
     const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
     parse_context.typeInfo = typeInfo;
-    if (!lvexp) {
+    // A failed operand initialization can leave a declaration without a LocalVar; neither lvalue validation nor
+    // promotion to a thread-safe local is valid until initialization succeeds.
+    if (err || !lvexp) {
         return err;
     }
     if (parse_lvalue_root_read_only(lvexp)) {
