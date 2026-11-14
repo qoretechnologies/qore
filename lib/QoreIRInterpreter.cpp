@@ -15355,6 +15355,18 @@ load_local_done:
                     QoreTypeInfo::acceptAssignment(return_type, "<return statement>", checked, xsink);
                     checked.discard(xsink);
                     if (xsink && *xsink) {
+                        // the rejected value is the value of the return that the exception interrupts: it is kept
+                        // until the locals of the blocks that the exception leaves are released, as the AST
+                        // interpreter releases the value of a return after them, and native code with its cleanup
+                        // slot.  When the return statement has a temp scope, the checked value is one of its temps,
+                        // which the exception releases, and the Return gives another slot; otherwise the checked value
+                        // is the one that the Return gives, whose slot the exception holds itself
+                        // (exceptionBranchTempScope(), unwindForException()).  A try statement of the frame that
+                        // catches the exception releases it before its catch block, the frame's exit after its locals
+                        // (#5996)
+                        if (value.hasNode() && !frame.cleanup.isReturnSlot(inst->operands.front().id)) {
+                            frame.locals_slot_cache.holdReturn(value.refSelf());
+                        }
                         if (inst->exception_target) {
                             // the handler is in this frame: only the raising statement's temps are dead there
                             cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
