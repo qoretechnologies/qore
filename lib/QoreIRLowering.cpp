@@ -4966,6 +4966,10 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         if (entry.try_end_depth && entry.try_end_depth == try_replaced_depth
                 && !blockHasTerminator(builder.getBlock())) {
             if (try_replaced_return.isValid()) {
+                // only once the try statement has ended without an exception: a destructor of a local of its block
+                // can raise one when the block is left, which interrupts the return (qore#5941), and the value that
+                // it would have replaced is kept
+                builder.createCheckException(entry.loc)->exception_target = getCurrentExceptionTarget();
                 builder.createReleaseOwnedTemp(try_replaced_return, entry.loc);
                 if (try_replaced_return_base.isValid() && try_replaced_return_base.id != try_replaced_return.id) {
                     builder.createReleaseOwnedTemp(try_replaced_return_base, entry.loc);
