@@ -1530,6 +1530,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("PollPipeline", "addContextOr", ("result_key", "key_a", "key_b"));
         assertNamedClassMethodVariantCount("PollPipeline", "addRequireContextKey",
             ("context_key", "error_code", "desc"));
+        assertNamedClassMethodVariantCount("PollPipeline", "addCheckRegex", ("source_key", "pattern", "result_key"));
         assertNamedClassMethodVariantCount("PollPipeline", "addGoto", ("target_step",));
         assertNamedClassMethodVariantCount("PollPipeline", "addPushQueue", ("queue_id",));
         assertNamedClassMethodVariantCount("PollPipeline", "addDrainQueueSend", ("queue_id",));

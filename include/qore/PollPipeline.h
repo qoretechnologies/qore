@@ -340,6 +340,15 @@ public:
     */
     DLLEXPORT int addRequireContextKey(const char* key, const char* err_code, const char* desc);
 
+    //! Stores whether a regular expression matches the value of a context key
+    /** Sets ctx.extra[result_key] to true if the string or binary value of ctx.extra[source_key] matches the
+        regular expression \a pattern (in UTF-8), false otherwise; the pattern is compiled when the step is added
+
+        @return the step index, or -1 if the pattern cannot be compiled (an exception is raised in \a xsink)
+    */
+    DLLEXPORT int addCheckRegex(const char* source_key, const char* pattern, const char* result_key,
+            ExceptionSink* xsink);
+
     //! Adds a result delivery step
     DLLEXPORT int addDeliverResult();
 

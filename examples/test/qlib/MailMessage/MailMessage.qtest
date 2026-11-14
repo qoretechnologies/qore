@@ -42,6 +42,10 @@ public class Main inherits QUnit::Test {
         addTestCase("Test address header round trips (issue #6066)", \testAddressRoundTrips(), NOTHING);
         addTestCase("Test address header folding (issue #6066)", \testAddressFolding(), NOTHING);
         addTestCase("Test long address headers (issue #6066)", \testLongAddressHeaders(), NOTHING);
+        addTestCase("Test address headers written again unchanged (issue #6066)", \testStableRoundTrips(), NOTHING);
+        addTestCase("Test text after non-ASCII addresses (issue #6066)", \testNonAsciiOffsets(), NOTHING);
+        addTestCase("Test format characters and comments around addresses (issue #6066)",
+            \testFormatCharsAndComments(), NOTHING);
 
         set_return_value(main());
     }
@@ -1722,6 +1726,91 @@ lorem ipsum\r
         }
     }
 
+    # issue #6066: a header is written the same way after it is parsed and written again, any number of times
+    testStableRoundTrips() {
+        foreach string rcpt in (
+                "jörg@müller.de (Jörg Müller-Lüdenscheidt Ölmühlenbesitzer Großherzöglicher Hoflieferant)",
+                "Jörg Müller-Lüdenscheidt Ölmühlenbesitzer Großherzöglicher Hoflieferant Fürstenzell j@x.com",
+                "(" + strmul("Größenwahn ", 12, 1) + ") j@x.com",
+                "Grüppe Ölmühlenbesitzer Großherzöglicher Hoflieferant Fürstenzell: a@x.com, b@x.com;",
+                "Jörg <j@x.com> (Kommentar mit Ölmühlenbesitzer Großherzöglicher Hoflieferant Fürstenzell)") {
+            Message msg(Sender, Subject);
+            msg.addTO(rcpt);
+            msg.setBody("body");
+            Message parsed(msg.serializeRaw());
+            string ser = parsed.serializeRaw();
+            for (int i = 0; i < 4; ++i) {
+                Message reparsed(ser);
+                assertEq(ser, reparsed.serializeRaw(), sprintf("%y round %d", rcpt, i));
+                assertEq(parsed.getTO(), reparsed.getTO(), rcpt);
+                ser = reparsed.serializeRaw();
+            }
+            # the text of the header is the text given
+            assertEq((rcpt,), parsed.getTO());
+        }
+    }
+
+    # issue #6066: the text after an address with non-ASCII characters is kept, and lines are folded by their
+    # length in characters
+    testNonAsciiOffsets() {
+        foreach hash<auto> i in ({"in": "Jörg jörg@müller.de&x", "rcpt": "jörg@müller.de"},
+                {"in": "jörg@müller.de/Vertrieb (Jörg)", "rcpt": "jörg@müller.de"}) {
+            Message msg(Sender, Subject);
+            msg.addTO(i."in");
+            msg.setBody("body");
+            assertEq((i.rcpt,), msg.getRecipients(), i."in");
+            Message parsed(msg.serializeRaw());
+            assertEq((i."in",), parsed.getTO(), i."in");
+            assertEq((i.rcpt,), parsed.getRecipients(), i."in");
+        }
+
+        # mailboxes of 32 characters and more bytes: two fit on a line of 76 characters
+        list<string> l = map sprintf("Ann <ännchen.müller.%02d@münchen.de>", $1), xrange(1, 10);
+        Message msg(Sender, Subject);
+        msg.addTO(l.join(", "));
+        msg.setBody("body");
+        list<string> lines = getHeaderLines(msg.getHeaderString(), "To")[0].substr(0, -2).split("\r\n");
+        assertEq(5, lines.size());
+        foreach string line in (lines) {
+            assertLe(78, line.length(), line);
+        }
+        assertEq("To: " + l[0] + ", " + l[1] + ",", lines[0]);
+    }
+
+    # issue #6066: format characters (ex: a byte order mark) around an address are not part of it, and an address
+    # in a comment is not the address of a mailbox
+    testFormatCharsAndComments() {
+        foreach string str in ("\ufeffjohn@x.com", "John <john@x.com>\ufeff", "john@x.com\u00ad",
+                "John\u200b <john@x.com>", "<john@x.com\u200b>", "John <john@x.com>\u200e",
+                "\u202ajohn@x.com\u202c", "John <john@x.com> \u200b",
+                "john@x.com!", "john@x.com*", "john@x.com|k@x.com", "john@x.com\\", "x \ufeffjohn@x.com\ufeff y") {
+            assertEq("john@x.com", Message::getEmailAddress(str), sprintf("%y", str));
+        }
+        # not in an address
+        assertNothing(Message::getEmailAddress("jo\u200bhn@x.com"));
+        assertNothing(Message::getEmailAddress("john@x\ufeff.com"));
+        assertNothing(Message::getEmailAddress("<jo\u200bhn@x.com>"));
+
+        foreach string str in ("(Jörg v@evil.com) a@x.com", "(v@evil.com) a@x.com", "(a (v@evil.com) b) a@x.com",
+                "(a \\) v@evil.com) a@x.com", "\"(\" a@x.com", "a@x.com (v@evil.com)") {
+            assertEq("a@x.com", Message::getEmailAddress(str), str);
+            Message msg(Sender, Subject);
+            msg.addTO(str);
+            msg.setBody("body");
+            assertEq(("a@x.com",), msg.getRecipients(), str);
+            Message parsed(msg.serializeRaw());
+            assertEq(("a@x.com",), parsed.getRecipients(), str);
+        }
+        # a format character before an address in a header with non-ASCII text is kept as text
+        Message msg(Sender, Subject);
+        msg.addTO("Jö \ufeffj@x.com");
+        msg.setBody("body");
+        Message parsed(msg.serializeRaw());
+        assertEq(("j@x.com",), parsed.getRecipients());
+        # the encoded format character is separated from the address by a space
+        assertEq(("Jö \ufeff j@x.com",), parsed.getTO());
+    }
+
     # issue #6066: a list of mailboxes is folded before a mailbox that would make the line longer than 76
     # characters
     testAddressFolding() {
@@ -1753,7 +1842,9 @@ lorem ipsum\r
     testLongAddressHeaders() {
         foreach string prefix in ("a", "ö") {
             foreach string val in (prefix + "<" + strmul("\t", 20000) + ">x", prefix + "<" + strmul(" ", 20000) + "x<",
-                    prefix + strmul("<a", 10000), prefix + strmul(" \"a", 10000), prefix + strmul("a,", 10000)) {
+                    prefix + strmul("<a", 10000), prefix + strmul(" \"a", 10000), prefix + strmul("a,", 10000),
+                    # unterminated domain literals
+                    prefix + " " + strmul("a@[", 7000), prefix + strmul("a@[", 7000) + "]") {
                 date start = now_us();
                 Message parsed("From: a@x.com\r\nTo: " + val + "\r\nSubject: s\r\n\r\nbody\r\n");
                 string hdr = parsed.getHeaderString();
@@ -1765,6 +1856,16 @@ lorem ipsum\r
                 assertEq(1, getHeaderLines(hdr, "To").size());
                 assertEq(parsed.getRecipients(), reparsed.getRecipients());
             }
+        }
+        # a created message with unterminated domain literals
+        {
+            date start = now_us();
+            Message msg(Sender, Subject);
+            msg.addTO("b@x.com ö " + strmul("a@[", 7000));
+            msg.setBody("body");
+            Message parsed(msg.serializeRaw());
+            assertEq(("b@x.com",), parsed.getRecipients());
+            assertLt(5s, now_us() - start);
         }
         # several such headers
         string val = "a<" + strmul("\t", 20000) + ">x";

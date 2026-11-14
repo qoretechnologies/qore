@@ -1765,11 +1765,9 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         # --- an address with non-ASCII characters needs the SMTPUTF8 extension (RFC 6531); this is checked before
         # the credentials are sent ---
         if (smtputf8) {
-            # the keyword of a reply line, case-insensitive: a continuation line or the last line of the reply (the
-            # reply text has the lines without their line breaks, separated by "\n"); the first line is the greeting
-            addCheckContains("hello_text", "\n250-SMTPUTF8\n", "smtputf8_line");
-            addCheckContains("hello_text", "\n250 SMTPUTF8", "smtputf8_last");
-            addContextOr("server_has_smtputf8", "smtputf8_line", "smtputf8_last");
+            # a line of the reply (the reply text has the lines without their line breaks, separated by "\n") that is
+            # the keyword after the reply code, case-insensitive, as helloHasSmtpUtf8() checks on a connection
+            addCheckRegex("hello_text", SmtpUtf8LineRegex, "server_has_smtputf8");
             addRequireContextKey("server_has_smtputf8", "SMTP-SEND-ERROR",
                 SmtpSendPollOperation::getSmtpUtf8Error(sender, recipients));
         }
@@ -1960,11 +1958,18 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
             "the address %y with non-ASCII characters", addr);
     }
 
+    # a line of an EHLO reply that is the SMTPUTF8 keyword after the reply code, in any case, with optional white
+    # space around it
+    private {
+        const SmtpUtf8LineRegex = "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$";
+    }
+
     # returns True if the EHLO reply of a connection advertises SMTPUTF8: a line of the reply (after the reply
-    # code) is the keyword, case-insensitive, as in the pipeline of a new connection
+    # code, which the reply description does not have) is the keyword, in any case, with optional white space
+    # around it, as in the pipeline of a new connection (SmtpUtf8LineRegex)
     private static bool helloHasSmtpUtf8(hash<auto> hello_reply) {
         *string desc = hello_reply.EHLO.desc;
-        return exists desc && desc =~ /(^|\n)SMTPUTF8($|\n)/i;
+        return exists desc && desc =~ /^[ \t]*SMTPUTF8[ \t]*$/mi;
     }
 
     # returns the MAIL FROM command for the sender, with the SMTPUTF8 parameter if needed (RFC 6531 section 3.4)

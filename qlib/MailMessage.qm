@@ -168,7 +168,8 @@ msg.addTO("My Best Friend <you@friend.com>");
         every RFC 5322 \c atext character (ex: <tt>J.O'B\@x.com</tt> was returned as <tt>B\@x.com</tt>), accepts
         quoted local parts and non-ASCII (internationalized) addresses, which were rejected, and returns an
         address in quotes, brackets or braces (as in CSV data); an encoded word, white space (including Unicode
-        white space) and text before an address are never part of the address returned
+        white space), format characters (ex: a byte order mark) and text before an address are never part of the
+        address returned, and an address in a comment is not the address of a mailbox
       - the sender and recipient addresses of a parsed message are taken from the raw headers, so that an address
         in an encoded word is not taken as the sender's or a recipient's address, and the \c From, \c To, \c CC
         and \c BCC headers of a parsed message are written again as they were parsed, or with only their text
@@ -1267,14 +1268,17 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         \c "John Doe <john@example.com>")
 
         @return the email address, or @ref nothing if there is none; RFC 2047 encoded words in the string are text,
-        never part of an address, and the white space around the string (including Unicode white space) is ignored:
+        never part of an address, and the white space (including Unicode white space) and format characters (ex: a
+        byte order mark) around the string are ignored:
         - the address in quotes, square brackets or braces, if the string is an address in them (ex:
           <tt>"j\@x.com"</tt> or <tt>'j\@x.com'</tt>, as in CSV data)
         - the address in angle brackets at the end of the string
         - the string, if it is an address
-        - otherwise the first address in the string that starts after white space or one of <tt>,;:<>()[]"</tt> (or
-          at the start of the string) and ends before white space, one of <tt>,;:<>()[]"'/?#&{}</tt> or the end of
-          the string (ex: \c "j@x.com" for <tt>"j\@x.com (John)"</tt> or <tt>"j\@x.com?subject=hi"</tt>)
+        - otherwise the first address in the string that is not in a comment (text in parentheses), and that starts
+          after white space or one of <tt>,;:<>()[]"</tt> (or at the start of the string) and ends before white
+          space, one of <tt>,;:<>()[]"'/?#&{}|!*\\</tt> or the end of the string, with only format characters
+          between them and the address (ex: \c "j@x.com" for <tt>"j\@x.com (John)"</tt>,
+          <tt>"(v\@x.com) j\@x.com"</tt> or <tt>"j\@x.com?subject=hi"</tt>)
 
         @note an address with non-ASCII characters can only be sent to an SMTP server that supports the \c SMTPUTF8
         extension (RFC 6531); see @ref SmtpClient::SmtpClient::sendMessage() "SmtpClient::sendMessage()"
@@ -1310,7 +1314,11 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         if (Message::isAddrSpec(t)) {
             return t;
         }
-        # the first address in the string that is not part of another word
+        # the first address in the string that is not part of another word or in a comment, as a reader of the
+        # header sees it
+        if (str.find("(") >= 0) {
+            str = Message::removeComments(str);
+        }
         return regex_extract(str, AddrScanRegex)[0];
     }
 
@@ -1320,19 +1328,63 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         return regex_subst(str, "=\\?[^?\\s]+\\?[QqBb]\\?[^?\\s]*\\?=", " ", RE_Global);
     }
 
-    # returns the string without white space, including Unicode white space, at its start and end; linear in the
-    # length of the string
+    # returns the string without white space, including Unicode white space, and format characters (ex: a byte
+    # order mark) at its start and end; linear in the length of the string
     private static string trimSpace(string str) {
-        str = regex_subst(str, "\\A[" + SpaceChars + "]+", "");
-        if (!regex(str, "[" + SpaceChars + "]\\z")) {
+        str = regex_subst(str, "\\A[" + TrimChars + "]+", "");
+        if (!regex(str, "[" + TrimChars + "]\\z")) {
             return str;
         }
         list<string> chars = str.splitChars();
         int end = chars.size();
-        while (end && Message::isSpace(chars[end - 1])) {
+        while (end && (Message::isSpace(chars[end - 1]) || regex(chars[end - 1], "\\A\\p{Cf}\\z"))) {
             --end;
         }
         return str.substr(0, end);
+    }
+
+    # returns the string with its comments (RFC 5322 section 3.2.2: text in parentheses outside quoted strings,
+    # which can be nested) replaced with a space; an unterminated comment is kept; linear in the length of the
+    # string
+    private static string removeComments(string str) {
+        string rv = "";
+        string comment = "";
+        int depth = 0;
+        bool quoted;
+        bool escaped;
+        foreach string ch in (str.splitChars()) {
+            if (depth) {
+                comment += ch;
+                if (escaped) {
+                    escaped = False;
+                } else if (ch == "\\") {
+                    escaped = True;
+                } else if (ch == "(") {
+                    ++depth;
+                } else if (ch == ")" && !--depth) {
+                    rv += " ";
+                    comment = "";
+                }
+                continue;
+            }
+            if (quoted) {
+                if (escaped) {
+                    escaped = False;
+                } else if (ch == "\\") {
+                    escaped = True;
+                } else if (ch == "\"") {
+                    quoted = False;
+                }
+            } else if (ch == "\"") {
+                quoted = True;
+            } else if (ch == "(") {
+                depth = 1;
+                comment = "(";
+                continue;
+            }
+            rv += ch;
+        }
+        return rv + comment;
     }
 
     # returns the text in quotes, square brackets or braces if the string is in them
@@ -1477,6 +1529,10 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     private {
         # white space, including Unicode white space (ex: a no-break space, a line or paragraph separator, NEL)
         const SpaceChars = "\\s\\p{Z}\\x{85}";
+        # white space and format characters (ex: a byte order mark, a zero width space, a soft hyphen, a
+        # directional formatting character), which are trimmed from a string and can be before or after an
+        # address, but not in it
+        const TrimChars = SpaceChars + "\\p{Cf}";
         # a non-ASCII character that can be in an address (RFC 6532 section 3.2): a letter, a mark, a digit, a
         # punctuation character or a symbol, not white space or a control or format character
         const NonAsciiRegex = "(?:(?=[^\\x00-\\x7f])[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S}])";
@@ -1493,12 +1549,15 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         # the characters besides white space that can be before an address in a string, and that separate the
         # words of an address header for its encoding
         const AddrStartChars = ",;:<>()\\[\\]\"";
-        # the characters besides white space that can be after an address in a string
-        const AddrEndRegex = "(?=\\z|[" + SpaceChars + ",;:<>()\\[\\]\"'/?#&{}])";
-        # an address in a string that is not part of another word
-        const AddrScanRegex = "(?:\\A|[" + SpaceChars + AddrStartChars + "])(" + AddrSpecRegex + ")" + AddrEndRegex;
-        # an address at the start of a word
-        const AddrWordRegex = "\\A(" + AddrSpecRegex + ")" + AddrEndRegex;
+        # the end of an address in a string: format characters, then white space, one of these characters or the
+        # end of the string
+        const AddrEndRegex = "\\p{Cf}*(?=\\z|[" + SpaceChars + ",;:<>()\\[\\]\"'/?#&{}|!*\\\\])";
+        # an address in a string that is not part of another word: after the start of the string, white space or
+        # one of AddrStartChars, and format characters
+        const AddrScanRegex = "(?:\\A|[" + SpaceChars + AddrStartChars + "])\\p{Cf}*(" + AddrSpecRegex + ")"
+            + AddrEndRegex;
+        # an address at the start of a word, after format characters
+        const AddrWordRegex = "\\A(\\p{Cf}*)(" + AddrSpecRegex + ")" + AddrEndRegex;
         # the characters that separate the words of an address header
         const AddrSpecials = {",": True, ";": True, ":": True, "<": True, ">": True, "(": True, ")": True,
             "[": True, "]": True, "\"": True};
@@ -1675,7 +1734,8 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
     private static list<int> getLineLengths(string str, string eol) {
         int first = str.find(eol);
         int last = str.rfind(eol);
-        return (first < 0 ? str.size() : first, last < 0 ? str.size() : str.size() - last - eol.size());
+        int len = str.length();
+        return (first < 0 ? len : first, last < 0 ? len : len - last - eol.length());
     }
 
     # returns the mailboxes separated by commas, with a folded line before a mailbox that would make the line
@@ -1717,7 +1777,12 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         # twice
         bool no_quote;
         bool no_angle;
+        # the offset of the character that ended an unterminated domain literal: a domain literal that starts before
+        # it is unterminated too, so that every character is read at most twice
+        int literal_end = -1;
         string word = "";
+        # the last character added to the word
+        string word_last = "";
         int i = 0;
         while (i < n) {
             string ch = c[i];
@@ -1752,6 +1817,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
                     # a quoted local part: the quoted string is the start of the word after it
                     if (i < n && c[i] == "@") {
                         word += quoted;
+                        word_last = "\"";
                         continue;
                     }
                     Message::addAddressWord(\words, \word, decode);
@@ -1781,7 +1847,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
                 if (j == n) {
                     no_angle = True;
                 }
-            } else if (ch == "[" && word.substr(-1) == "@") {
+            } else if (ch == "[" && i > literal_end && word.val() && word_last == "@") {
                 # a domain literal is part of the address
                 int j = i;
                 string literal = "";
@@ -1790,30 +1856,41 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
                 }
                 if (j < n && c[j] == "]") {
                     word += literal + "]";
+                    word_last = "]";
                     i = j + 1;
                     continue;
                 }
+                literal_end = j;
             }
             if (AddrSpecials{ch}) {
                 Message::addAddressWord(\words, \word, decode);
                 words += {"t": "lit", "s": ch};
             } else {
                 word += ch;
+                word_last = ch;
             }
             ++i;
         }
         Message::addAddressWord(\words, \word, decode);
 
-        # encoded words separated by white space are one encoded word
+        # encoded words separated by white space are one encoded word; the white space between two encoded words of
+        # a parsed header ("dec") is not text (RFC 2047 section 6.2), so it is not added, and a value that is parsed
+        # and written again is the same
         list<hash<auto>> merged = ();
+        # True for a word of merged that ends with an encoded word of a parsed header
+        list<bool> merged_dec = ();
         foreach hash<auto> w in (words) {
             int k = merged.size();
+            bool dec = w.dec ?? False;
             if (w.t == "enc" && k >= 2 && merged[k - 1].t == "ws" && merged[k - 2].t == "enc") {
-                merged[k - 2].s += " " + w.s;
+                merged[k - 2].s += (merged_dec[k - 2] && dec ? "" : " ") + w.s;
+                merged_dec[k - 2] = dec;
                 pop merged;
+                pop merged_dec;
                 continue;
             }
             merged += w;
+            merged_dec += dec;
         }
 
         string rv = "";
@@ -1855,10 +1932,14 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         if (!word.val()) {
             return;
         }
-        *string addr = regex_extract(word, AddrWordRegex)[0];
-        if (exists addr) {
-            words += {"t": "lit", "s": addr};
-            Message::addAddressText(\words, word.substr(addr.size()), decode);
+        *list<*string> m = regex_extract(word, AddrWordRegex);
+        if (m) {
+            # format characters before the address are text
+            string prefix = m[0] ?? "";
+            Message::addAddressText(\words, prefix, decode);
+            words += {"t": "lit", "s": m[1]};
+            # the offset is in characters
+            Message::addAddressText(\words, word.substr(prefix.length() + m[1].length()), decode);
         } else {
             Message::addAddressText(\words, word, decode);
         }
@@ -1872,7 +1953,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
             return;
         }
         if (decode && regex(text, EncodedWordRegex)) {
-            words += {"t": "enc", "s": mime_decode_header(text)};
+            words += {"t": "enc", "s": mime_decode_header(text), "dec": True};
         } else if (text.isDataPrintableAscii()) {
             words += {"t": "lit", "s": text};
         } else {

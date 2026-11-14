@@ -123,6 +123,7 @@ public class PollPipelineTest inherits QUnit::Test {
         addTestCase("branch on context int", \branchOnContextInt());
         addTestCase("check contains on binary values", \checkContainsBinary());
         addTestCase("require context key", \requireContextKey());
+        addTestCase("check regex", \checkRegex());
         set_return_value(main());
     }
 
@@ -460,5 +461,30 @@ public class PollPipelineTest inherits QUnit::Test {
                 assertThrows("TEST-REQUIRE-ERROR", "^no SMTPUTF8$", \drivePollOp(), (p,));
             }
         }
+    }
+
+    checkRegex() {
+        # an anchored, multi-line, case-insensitive match of a string and of a binary value
+        foreach hash<auto> i in ({"text": "250-mock\n250-smtputf8\n250 OK", "ok": True},
+                {"text": "250-mock\n250 SMTPUTF8 ", "ok": True},
+                {"text": "250-mock\n250 SMTPUTF8X", "ok": False},
+                {"text": "250-mock\n250 SMTPUTF8 EXTRA", "ok": False},
+                {"text": "250-mock\n250-XSMTPUTF8\n250 OK", "ok": False}) {
+            Socket sock();
+            PollPipeline p(sock);
+            p.addSetContextValue("text", i.text);
+            p.addSetContextBinary("bin", binary(i.text));
+            assertEq(2, p.addCheckRegex("text", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found"));
+            p.addCheckRegex("bin", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found_bin");
+            p.addCheckRegex("missing", ".*", "found_missing");
+            drivePollOp(p);
+            hash<auto> extra = p.getResult().extra;
+            assertEq(i.ok, extra.found, i.text);
+            assertEq(i.ok, extra.found_bin, i.text);
+            assertFalse(extra.found_missing);
+        }
+        Socket sock();
+        PollPipeline p(sock);
+        assertThrows("REGEX-COMPILATION-ERROR", \p.addCheckRegex(), ("text", "(", "x"));
     }
 }

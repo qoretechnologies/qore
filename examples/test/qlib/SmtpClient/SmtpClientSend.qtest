@@ -291,7 +291,7 @@ class MockSmtpServer {
                 }
             } else if (line =~ /^MAIL FROM:/i) {
                 # RFC 5321 section 4.1.1.11: an unknown parameter is refused
-                if (line =~ / SMTPUTF8$/i && (!offer_smtputf8 || smtputf8_keyword.upr() != "SMTPUTF8")) {
+                if (line =~ / SMTPUTF8$/i && (!offer_smtputf8 || trim(smtputf8_keyword).upr() != "SMTPUTF8")) {
                     client.send("555 5.5.4 SMTPUTF8 not supported\r\n");
                 } else {
                     client.send("250 2.1.0 OK\r\n");
@@ -1091,9 +1091,16 @@ public class SmtpClientSendTest inherits QUnit::Test {
         foreach hash<auto> i in ({"keyword": "smtputf8", "last": False, "ok": True},
                 {"keyword": "SmtpUtf8", "last": True, "ok": True},
                 {"keyword": "SMTPUTF8", "last": True, "ok": True},
+                {"keyword": "SMTPUTF8 ", "last": False, "ok": True},
+                {"keyword": "SMTPUTF8 ", "last": True, "ok": True},
                 {"keyword": "XSMTPUTF8", "last": False, "ok": False},
                 {"keyword": "SMTPUTF8X", "last": False, "ok": False},
-                {"keyword": "X-SMTPUTF8", "last": False, "ok": False}) {
+                {"keyword": "X-SMTPUTF8", "last": False, "ok": False},
+                {"keyword": "SMTPUTF8 EXTRA", "last": False, "ok": False},
+                # negative keywords as the last line of the reply
+                {"keyword": "XSMTPUTF8", "last": True, "ok": False},
+                {"keyword": "SMTPUTF8X", "last": True, "ok": False},
+                {"keyword": "SMTPUTF8 EXTRA", "last": True, "ok": False}) {
             MockSmtpServer server(True);
             server.setSmtpUtf8(True, i.keyword, i."last");
             server.start();
