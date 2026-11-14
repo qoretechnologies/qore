@@ -90,13 +90,6 @@ static ExceptionSink module_xsink;
 static std::unique_ptr<QoreProgramHelper> qph;
 
 #ifdef STATICPGM_CODE
-//! the Program of the module if a foreign thread is left blocked in it (QORE_STATICPGM_FOREIGN_BLOCK)
-/** the Program cannot be deleted while the thread runs in it, as the deletion would wait for the thread forever: the
-    module leaves it as a host language does that abandons the threads that use it at exit (ex: the daemon threads
-    of Python, see the python module); the pointer keeps it reachable
-*/
-static QoreProgramHelper* abandoned_qph = nullptr;
-
 //! the code of a foreign thread that blocks in a call to the function "staticpgm_block" of the Program
 /** the thread is registered with Qore and never ends: the process exits while it runs in the Program
 */
@@ -255,6 +248,7 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
             thread_xsink.handleExceptions();
         }).detach();
         (*qph)->callFunction("foreign_wait_ready", nullptr, &xsink);
+    }
     // a foreign thread blocks in the Program, which then still runs code when the library is cleaned up: its code
     // has the functions "staticpgm_block", which blocks forever, and "staticpgm_wait_blocked", which returns once
     // the thread has entered "staticpgm_block" (see program-cleanup-at-exit.qtest)
@@ -266,8 +260,6 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
             xsink.raiseException("STATICPGM-ERROR", "cannot start a foreign thread: %s", e.what());
             return;
         }
-        // the Program is never deleted: the thread never leaves it
-        abandoned_qph = qph.release();
         pgm->callFunction("staticpgm_wait_blocked", nullptr, &xsink);
     }
 #endif
