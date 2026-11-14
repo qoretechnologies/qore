@@ -38,9 +38,13 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <future>
 #include <thread>
 
 static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
+#ifdef STATICPGM_CODE
+static void staticpgm_cleanup_callback(QoreProgram* pgm);
+#endif
 static void staticpgm_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void staticpgm_module_delete();
 
@@ -172,6 +176,8 @@ sub foreign_block() {
 sub foreign_release() {
     foreign_ready.dec();
 }
+sub foreign_probe() {
+}
 sub foreign_wait_ready() {
     foreign_ready.waitForZero();
 }
@@ -209,6 +215,9 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     // and blocks in Qore code that nothing ends, as a daemon thread of the Python module does when it waits in
     // Queue::get() at the end of the process; the module returns when the thread is in the Qore call (the Program
     // counts the thread), so the state at the end of the process does not depend on timing
+    if (!xsink && getenv("QORE_STATICPGM_FOREIGN_ENTRY")) {
+        qore_register_program_cleanup_callback(staticpgm_cleanup_callback);
+    }
     if (!xsink && getenv("QORE_STATICPGM_FOREIGN_THREAD")) {
         std::thread([]() {
             // the thread never ends: the exceptions it can raise before it blocks are reported with its sink
@@ -227,6 +236,34 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
 }
 
 #ifdef STATICPGM_CODE
+//! the cleanup callback of QORE_STATICPGM_FOREIGN_ENTRY: a foreign thread tries to enter the Program that is cleaned up
+/** The callback runs after the teardown has decided that no foreign thread runs in the Program, before its data is
+    destroyed: the entry must be refused (PROGRAM-ERROR) then, not accepted into a Program whose data is destroyed
+    meanwhile; the result is printed for the test (program-cleanup-at-exit.qtest)
+*/
+static void staticpgm_cleanup_callback(QoreProgram* pgm) {
+    if (!qph || pgm != (*qph).operator->()) {
+        return;
+    }
+    std::promise<bool> refused;
+    std::future<bool> result = refused.get_future();
+    std::thread t([&refused]() {
+        ExceptionSink thread_xsink;
+        bool r = false;
+        if (q_register_foreign_thread() == QFT_OK) {
+            (*qph)->callFunction("foreign_probe", nullptr, &thread_xsink);
+            r = (bool)thread_xsink;
+            thread_xsink.clear();
+            q_deregister_foreign_thread();
+        }
+        refused.set_value(r);
+    });
+    bool r = result.get();
+    t.join();
+    printf("staticpgmcode: foreign thread entry %s\n", r ? "refused" : "accepted");
+    fflush(stdout);
+}
+
 //! staticpgm_foreign_call(code c): runs c in a thread that the library does not control, as a thread of another runtime
 //! does (a daemon thread of the Python module, for example); the thread never ends if c blocks
 static QoreValue f_staticpgm_foreign_call(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {

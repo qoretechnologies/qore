@@ -2054,6 +2054,26 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     }
 }
 
+//! the Programs that are left allocated at the end of the process; never destroyed, so they stay reachable
+static std::set<QoreProgram*>* left_programs = nullptr;
+static std::mutex* left_programs_lock = new std::mutex;
+
+void qore_program_private::leaveAllocated() {
+    std::lock_guard<std::mutex> al(*left_programs_lock);
+    if (!left_programs) {
+        left_programs = new std::set<QoreProgram*>;
+    }
+    // the reference is taken once per Program
+    if (left_programs->insert(pgm).second) {
+        depRef();
+    }
+}
+
+bool qore_program_private::hasLeftPrograms() {
+    std::lock_guard<std::mutex> al(*left_programs_lock);
+    return left_programs && !left_programs->empty();
+}
+
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // the code of the Program's classes that runs while it is deleted (its exit hooks, the cleanup callback and the
     // destructors run when its data is deleted) runs in it although its last reference may have been released (see
@@ -2094,8 +2114,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
                 && (getOtherForeignThreadCountIntern() > 0 || leaveForeignThreadsInModuleCode());
             if (leave) {
                 // the Program is kept allocated for the thread
-                depRef();
+                leaveAllocated();
             } else if (!ptid) {
+                // no foreign thread can enter the Program from now on (see canEnterIntern()): the decision above is
+                // final, and is made before any of the Program's data is destroyed
+                foreign_teardown = qore_shutdown.load(std::memory_order_acquire);
                 if (!ns_const) {
                     l = new QoreListNode(autoTypeInfo);
                     qore_root_ns_private::clearConstants(*RootNS, **l);
@@ -2127,37 +2150,22 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 #endif
     }
 
-    bool leave_late = false;
     if (need_cleanup) {
         AutoLocker al(plock);
-        // a foreign thread can have entered the Program while the cleanup callback ran: it is not waited for, and the
-        // data that it uses is not destroyed (see leaveForeignThreads()); no thread can enter once ptid is set, so the
-        // decision is final
-        if (qore_shutdown.load(std::memory_order_acquire) && getOtherForeignThreadCountIntern() > 0) {
-            // the Program is kept allocated for the thread
-            depRef();
-            leave_late = true;
-        } else {
-            // mark the program so that only code from this thread can run during data destruction
-            ptid = q_gettid();
-            // the fast paths that run the code of its variants without entering it take the call path from now on,
-            // which refuses the calls of other threads and of other Programs (qore#5822)
-            markUserVariantsDeleted();
+        // mark the program so that only code from this thread can run during data destruction
+        ptid = q_gettid();
+        // the fast paths that run the code of its variants without entering it take the call path from now on,
+        // which refuses the calls of other threads and of other Programs (qore#5822)
+        markUserVariantsDeleted();
 #ifdef DEBUG
-            if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
-                hook(pgm, DbgTeardownPoint::BeforeFinalWait);
-            }
-#endif
-            // threads could enter the Program while the cleanup callback ran (ptid was not set yet): wait for them to
-            // leave it, as its data is destroyed below; no other thread can enter it now
-            waitForAllThreadsToTerminateIntern();
-            clr = true;
+        if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
+            hook(pgm, DbgTeardownPoint::BeforeFinalWait);
         }
-    }
-    if (leave_late) {
-        printd(5, "qore_program_private::waitForTerminationAndClear() leaving pgm: %p: a foreign thread entered it\n",
-            pgm);
-        return;
+#endif
+        // threads could enter the Program while the cleanup callback ran (ptid was not set yet): wait for them to
+        // leave it, as its data is destroyed below; no other thread can enter it now
+        waitForAllThreadsToTerminateIntern();
+        clr = true;
     }
 
     if (clr) {

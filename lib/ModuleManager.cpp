@@ -5763,6 +5763,12 @@ void QoreModuleManager::delUser() {
     // and no other thread can enter module code from now on; those that are in it are waited for below
     qore_close_module_programs();
 
+    // a foreign thread runs module code that nothing will end: the modules are left as they are (see
+    // qore_cleanup() and qore_program_private::leaveForeignThreads())
+    if (qore_foreign_threads_in_module_code.load(std::memory_order_acquire)) {
+        return;
+    }
+
 #ifdef HAVE_SIGNAL_HANDLING
     // the signal handlers that module code set belong to the module's Program; the signal thread runs until the end of
     // the cleanup, so they are removed now: a handler entering a module's Program between the wait for its threads

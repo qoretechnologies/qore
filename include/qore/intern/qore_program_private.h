@@ -501,6 +501,7 @@ public:
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
     std::set<int> foreign_tids;  // the tids in tidmap of foreign threads
+    bool foreign_teardown = false; // true if the teardown at the end of the process refuses foreign threads; under plock
     unsigned thread_count = 0;   // number of threads currently running in this Program
     // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
     bool cancel_new_threads = false;
@@ -2026,6 +2027,11 @@ public:
         fail while the Program's data is valid.  After the teardown (ptid is -1), no thread can enter it.
     */
     DLLLOCAL bool canEnterIntern(int tid) const {
+        // once the teardown has found no foreign thread in the Program at the end of the process (foreign_teardown), none
+        // can enter it: it is not waited for, and the data that it would use is destroyed meanwhile
+        if (foreign_teardown && tid == q_gettid() && q_thread_is_foreign()) {
+            return false;
+        }
         return !ptid || ptid == tid || (ptid > 0 && tidmap.find(tid) != tidmap.end());
     }
 
@@ -2344,6 +2350,15 @@ public:
         return qore_foreign_threads_in_module_code.load(std::memory_order_acquire)
             && pwo.parse_options.hasAny(QoreParseOptions(PO_IN_MODULE));
     }
+
+    //! keeps the Program allocated, and reachable by the library, for the rest of the process (see leaveForeignThreads())
+    /** The Program is not freed, so that a foreign thread that runs in it never finds it destroyed; it is held by a list
+        that lives as long as the process, so a leak checker finds it still reachable, not lost.  Called with plock held
+    */
+    DLLLOCAL void leaveAllocated();
+
+    //! Returns true if a Program has been left allocated (see leaveAllocated())
+    DLLLOCAL static bool hasLeftPrograms();
 
     //! Returns true if the Program is left as it is because a foreign thread still runs in it
     /** Once qore_cleanup() has waited for the threads of the library (qore_shutdown is set), a foreign thread can be

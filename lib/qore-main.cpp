@@ -469,6 +469,13 @@ void qore_cleanup() {
     // left as they are (see qore_program_private::leaveForeignThreads()).  The Programs of the modules no longer need
     // module lifetime, and the Programs of the user modules, which delUser() deleted, are freed now, before the binary
     // modules are deleted
+    // a foreign thread runs module code that nothing will end: the modules, their Programs and the library are left as
+    // they are, reachable, until the process ends (see qore_program_private::leaveForeignThreads())
+    if (qore_foreign_threads_in_module_code.load(std::memory_order_acquire)) {
+        printd(5, "qore_cleanup() leaving the modules as they are: a foreign thread runs module code\n");
+        return;
+    }
+
     qore_release_module_program_pins();
 
     // delete all loadable modules
@@ -481,6 +488,15 @@ void qore_cleanup() {
     // no thread can be started by that code: the threads have been waited for and are not waited for again
     qore_thread_start_closed.store(true, std::memory_order_release);
     qore_program_private::clearRemainingPrograms();
+
+    // a Program that a foreign thread runs in was left as it is (see qore_program_private::leaveForeignThreads()): the
+    // thread can be blocked in Qore code for as long as the process lives and uses the library's data (the types, the
+    // system namespace, the thread data), so the library is not torn down any further; everything that remains is
+    // reachable and is released with the process
+    if (qore_program_private::hasLeftPrograms()) {
+        printd(5, "qore_cleanup() leaving the library as it is: a Program was left for a foreign thread\n");
+        return;
+    }
 
     // All module programs and their callable UserVariantBase objects are gone, so native entry
     // points can no longer be reached and the LLVM execution engine may now be released safely.

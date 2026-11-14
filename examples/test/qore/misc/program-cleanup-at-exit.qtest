@@ -88,6 +88,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             \staticProgramForeignThreadTest());
         addTestCase("a thread of another runtime that is blocked in the code of a user module does not hold up the end "
             "of the process", \staticProgramForeignThreadInModuleTest());
+        addTestCase("a foreign thread cannot enter a Program once its teardown at the end of the process has begun",
+            \staticProgramForeignEntryTest());
         set_return_value(main());
     }
 
@@ -279,6 +281,27 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
             assertEq(0, runChild(code + " exit(0);", 0, "staticpgmcode", options, NOTHING, tenv), "exit(0): " + mode);
             assertEq(7, runChild(code + " exit(7);", 7, "staticpgmcode", options, NOTHING, tenv), "exit(7): " + mode);
+        }
+    }
+
+    #! a foreign thread tries to enter the Program of "staticpgmcode" while the library cleans it up
+    /** The teardown has found no foreign thread in the Program and does not wait for foreign threads, so one that
+        entered meanwhile would run in a Program whose data is destroyed: the entry is refused (PROGRAM-ERROR).  The
+        cleanup callback of the module runs in the window between the decision and the destruction of the data; it
+        starts the foreign thread and waits for its result (QORE_STATICPGM_FOREIGN_ENTRY), so the order is the same
+        at every run
+    */
+    private staticProgramForeignEntryTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string output = "";
+            assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgmcode", "--exec-mode=" + mode, \output,
+                "QORE_STATICPGM_FOREIGN_ENTRY=1 timeout -s KILL 120 "), "normal end: " + mode);
+            assertRegex("staticpgmcode: foreign thread entry refused", output, "the entry was refused: " + mode);
         }
     }
 
