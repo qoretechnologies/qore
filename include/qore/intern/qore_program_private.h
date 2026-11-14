@@ -500,6 +500,7 @@ public:
     // for the thread counter, used only with plock
     QoreCondition pcond;
     ptid_map_t tidmap;           // map of tids -> thread count in program object
+    std::set<int> foreign_tids;  // the tids in tidmap of foreign threads
     unsigned thread_count = 0;   // number of threads currently running in this Program
     // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
     bool cancel_new_threads = false;
@@ -2006,6 +2007,9 @@ public:
             return false;
         }
         ++tidmap[tid];
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2143,6 +2147,9 @@ public:
             return -1;
         }
         ++tidmap[tid];
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         // decThreadCount() publishes the transition to idle, so the transition to active is published here as well
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
@@ -2175,6 +2182,9 @@ public:
         }
 
         ++tidmap[tid];
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
         }
@@ -2200,6 +2210,9 @@ public:
         }
 
         ++tidmap[tid];
+        if (tid == q_gettid() && q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
         if (!thread_count++) {
             activityTransitionIntern(activity, false);
         }
@@ -2225,6 +2238,7 @@ public:
         assert(i != tidmap.end());
         if (!--i->second) {
             tidmap.erase(i);
+            foreign_tids.erase(tid);
             // a thread that still holds the parse lock releases its deferred references when it releases the lock
             if (parse_tid != tid) {
                 derefs = takeDeferredDerefs(tid, clear);
@@ -2306,6 +2320,53 @@ public:
         ptid_map_t::iterator i = tidmap.find(tid);
         unsigned adj = (i != tidmap.end() ? i->second : 0);
         return thread_count > adj;
+    }
+
+    //! Returns the number of threads other than the calling thread that are foreign threads running in this Program
+    /** A foreign thread is a thread of another runtime (a daemon thread of the Python module, for example) registered
+        with q_register_foreign_thread(); called with plock held
+    */
+    DLLLOCAL unsigned getOtherForeignThreadCountIntern() const {
+        int tid = q_gettid();
+        unsigned count = 0;
+        for (int ftid : foreign_tids) {
+            if (ftid != tid) {
+                ptid_map_t::const_iterator i = tidmap.find(ftid);
+                if (i != tidmap.end()) {
+                    count += i->second;
+                }
+            }
+        }
+        return count;
+    }
+
+    //! Returns true if the Program of a module is left because a foreign thread runs in module code
+    /** A foreign thread that runs in module code is not counted in the Program of its module (the entries into the
+        Programs of the modules are counted by the thread, see qore_module_uncounted_entry()), so every Program of a
+        module is left; see leaveForeignThreads()
+    */
+    DLLLOCAL bool leaveForeignThreadsInModuleCode() const {
+        return qore_foreign_threads_in_module_code.load(std::memory_order_acquire)
+            && pwo.parse_options.hasAny(QoreParseOptions(PO_IN_MODULE));
+    }
+
+    //! Returns true if the Program is left as it is because a foreign thread still runs in it
+    /** Once qore_cleanup() has waited for the threads of the library (qore_shutdown is set), a foreign thread can be
+        blocked in Qore code for as long as the process lives (a daemon thread of the Python module in Queue::get(),
+        for example): the deletion of the Program (see waitForTerminationAndClear()) does not wait for it, as that would
+        hang the end of the process (every python3 process with a blocked daemon thread, qore#6045), and the data that
+        the thread uses is not destroyed under it, so the Program is left as it is until the process ends.  The other
+        threads are waited for as before
+    */
+    DLLLOCAL bool leaveForeignThreads() {
+        if (!qore_shutdown.load(std::memory_order_acquire)) {
+            return false;
+        }
+        if (leaveForeignThreadsInModuleCode()) {
+            return true;
+        }
+        AutoLocker al(plock);
+        return getOtherForeignThreadCountIntern() > 0;
     }
 
     //! Claims parse ownership, which serializes namespace writers for this Program
@@ -2395,7 +2456,9 @@ public:
         unsigned adj = (i != tidmap.end() ? i->second : 0);
 
         // a batch JIT compile that reads the Program's code holds it as well (see tryHoldForCompile())
-        while ((thread_count - adj) || parse_count || compile_holds) {
+        // the foreign threads that remain at the end of the process are not waited for (see leaveForeignThreads())
+        while ((thread_count - adj - (qore_shutdown.load(std::memory_order_acquire)
+            ? getOtherForeignThreadCountIntern() : 0)) || parse_count || compile_holds) {
             ++thread_waiting;
 #ifdef DEBUG
             if (compile_holds) {

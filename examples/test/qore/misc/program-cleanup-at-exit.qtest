@@ -86,6 +86,8 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             \staticProgramSandboxLimitTest());
         addTestCase("a thread of another runtime that is blocked in Qore code does not hold up the end of the process",
             \staticProgramForeignThreadTest());
+        addTestCase("a thread of another runtime that is blocked in the code of a user module does not hold up the end "
+            "of the process", \staticProgramForeignThreadInModuleTest());
         set_return_value(main());
     }
 
@@ -250,6 +252,33 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
             assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options, NOTHING, tenv), "exit(0): " + mode);
             assertEq(7, runChild("exit(7);", 7, "staticpgmcode", options, NOTHING, tenv), "exit(7): " + mode);
+        }
+    }
+
+    #! a thread of another runtime is blocked in the code of a user module when the process ends normally
+    /** the Program of a user module is deleted, and its data cleared, in the module cleanup, which waited for every
+        thread that runs module code: the blocked thread never leaves it, so the process hung.  The thread is started by
+        staticpgm_foreign_call() of the module "staticpgmcode" from the user module ForeignBlockModule, and the script
+        ends when it is blocked there (the module's start() returns then)
+    */
+    private staticProgramForeignThreadInModuleTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        # the module ForeignBlockModule is in the directory of this test
+        string mod_dir = get_script_dir();
+        string module_path = (ENV.QORE_MODULE_DIR ? ENV.QORE_MODULE_DIR + ":" : "") + mod_dir;
+        string tenv = sprintf("QORE_MODULE_DIR=%s timeout -s KILL 120 ", module_path);
+        string code = "%requires ForeignBlockModule\nForeignBlockModule::start();";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            string output = "";
+            assertEq(0, runChild(code, 0, "staticpgmcode", options, \output, tenv), "normal end: " + mode);
+            assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
+            assertEq(0, runChild(code + " exit(0);", 0, "staticpgmcode", options, NOTHING, tenv), "exit(0): " + mode);
+            assertEq(7, runChild(code + " exit(7);", 7, "staticpgmcode", options, NOTHING, tenv), "exit(7): " + mode);
         }
     }
 

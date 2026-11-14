@@ -5785,6 +5785,10 @@ void QoreModuleManager::delUser() {
         for (QoreUserModule* um : user_modules) {
             QoreProgram* pgm = um->getProgram();
             pgm->waitForTermination();
+            // a foreign thread that runs in the Program keeps its data (see qore_program_private::leaveForeignThreads())
+            if (qore_program_private::get(*pgm)->leaveForeignThreads()) {
+                continue;
+            }
             qore_program_private::get(*pgm)->clearNamespaceData(&xsink);
         }
         qore_aot_clear_all_module_namespace_data(xsink);

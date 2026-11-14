@@ -578,18 +578,7 @@ void qore_program_private::clearRemainingPrograms() {
         last_id = p->priv->programId;
         printd(5, "qore_program_private::clearRemainingPrograms() clearing pgm: %p pgmid: " QLLD "\n", p,
             (int64)last_id);
-        // a thread that another runtime owns (registered with q_register_foreign_thread()) can still be running Qore
-        // code in the Program, blocked in a call that nothing will end (a daemon thread of the Python module that waits
-        // in Queue::get(), for example): waiting for it would hang the process at its normal end, and the data of the
-        // Program cannot be cleared while the thread uses it, so the Program is left as it is (deliberately, also for a thread that would end soon: the library's threads have been
-        // waited for already; the owner must not wait for the thread when it releases the Program), as it was before its
-        // data was cleared here at all
-        if (p->priv->hasOtherThreads()) {
-            printd(5, "qore_program_private::clearRemainingPrograms() not clearing pgm: %p pgmid: " QLLD
-                ": other threads are running in it\n", p, (int64)last_id);
-        } else {
-            p->priv->waitForTerminationAndClear(&xsink);
-        }
+        p->priv->waitForTerminationAndClear(&xsink);
         // the owner's references keep the Program; if the Program has lost them while it was cleared, it is released
         // here as by any other last reference
         p->deref(&xsink);
@@ -619,8 +608,12 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
         own = i->second;
     }
     tidmap.clear();
+    foreign_tids.clear();
     if (own) {
         tidmap[tid] = own;
+        if (q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
     }
     thread_count = own;
     thread_waiting = 0;
@@ -2088,13 +2081,21 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // we only clear the internal data structures once
     bool clr = false;
     bool need_cleanup = false;
+    bool leave = false;
     {
         ReferenceHolder<QoreListNode> l(xsink);
         {
             AutoLocker al(plock);
             // wait for all threads to terminate
             waitForAllThreadsToTerminateIntern();
-            if (!ptid) {
+            // a foreign thread that runs in the Program at the end of the process is not waited for, and the data
+            // that it uses is not destroyed (see leaveForeignThreads())
+            leave = qore_shutdown.load(std::memory_order_acquire)
+                && (getOtherForeignThreadCountIntern() > 0 || leaveForeignThreadsInModuleCode());
+            if (leave) {
+                // the Program is kept allocated for the thread
+                depRef();
+            } else if (!ptid) {
                 if (!ns_const) {
                     l = new QoreListNode(autoTypeInfo);
                     qore_root_ns_private::clearConstants(*RootNS, **l);
@@ -2103,6 +2104,12 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
                 need_cleanup = true;
             }
         }
+    }
+
+    if (leave) {
+        printd(5, "qore_program_private::waitForTerminationAndClear() leaving pgm: %p: a foreign thread runs in it\n",
+            pgm);
+        return;
     }
 
     // Call the cleanup callback OUTSIDE plock and BEFORE ptid is set.

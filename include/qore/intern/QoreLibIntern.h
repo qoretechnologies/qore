@@ -1301,7 +1301,13 @@ DLLLOCAL extern std::atomic<bool> qore_shutdown;
 //! set by qore_cleanup() once no thread but the calling one runs and none can be waited for any more: no thread can be
 //! started from then on (THREAD-CREATION-FAILURE), and a wait cannot be cancelled by another thread (qore#6045)
 DLLLOCAL extern std::atomic<bool> qore_thread_start_closed;
+//! set by qore_stop_module_uncounted_entries() if a foreign thread runs in the code of a module that its Program does
+//! not count (see qore_program_private::leaveForeignThreads())
+DLLLOCAL extern std::atomic<bool> qore_foreign_threads_in_module_code;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
+//! Returns true if the calling thread is a foreign thread: a thread of another runtime registered with
+//! q_register_foreign_thread() or q_register_reserved_foreign_thread()
+DLLLOCAL bool q_thread_is_foreign() noexcept;
 //! set by qore_cleanup() once the types are freed; Qore values released after that are released too late
 DLLLOCAL extern std::atomic<bool> qore_types_deleted;
 

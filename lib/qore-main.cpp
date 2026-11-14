@@ -81,6 +81,7 @@ std::atomic<bool> qore_initialized = {false};
 // shutdown flag
 std::atomic<bool> qore_shutdown = {false};
 std::atomic<bool> qore_thread_start_closed = {false};
+std::atomic<bool> qore_foreign_threads_in_module_code = {false};
 std::atomic<bool> qore_types_deleted = {false};
 
 // exiting flag

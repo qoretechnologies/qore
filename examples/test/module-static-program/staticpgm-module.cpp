@@ -85,22 +85,6 @@ static ExceptionSink module_xsink;
 static std::unique_ptr<QoreProgramHelper> qph;
 
 #ifdef STATICPGM_CODE
-//! true if a thread that the library does not control is blocked in the Program (QORE_STATICPGM_FOREIGN_THREAD)
-static bool foreign_thread_started = false;
-
-//! gives up the Program of the helper above at static destruction when a foreign thread is blocked in it
-/** Declared after the helper, so it is destroyed before it.  Deleting a Program waits for its threads, and the thread
-    never ends, so the module, like the Python module (whose Program is never deleted while a daemon thread is blocked),
-    must not wait for it: the process ends with the thread blocked in the Program
-*/
-static struct ForeignThreadLeak {
-    ~ForeignThreadLeak() {
-        if (foreign_thread_started) {
-            (void)qph.release();
-        }
-    }
-} foreign_thread_leak;
-
 //! the code of the Program: a global object whose destructor runs code (closures, recursion, exceptions, containers)
 //! when the Program is deleted by a static destructor, after the main thread's thread-local objects were destroyed
 static const char* staticpgm_code = R"QORE(
@@ -226,7 +210,6 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     // Queue::get() at the end of the process; the module returns when the thread is in the Qore call (the Program
     // counts the thread), so the state at the end of the process does not depend on timing
     if (!xsink && getenv("QORE_STATICPGM_FOREIGN_THREAD")) {
-        foreign_thread_started = true;
         std::thread([]() {
             // the thread never ends: the exceptions it can raise before it blocks are reported with its sink
             ExceptionSink thread_xsink;
@@ -243,7 +226,30 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
 #endif
 }
 
+#ifdef STATICPGM_CODE
+//! staticpgm_foreign_call(code c): runs c in a thread that the library does not control, as a thread of another runtime
+//! does (a daemon thread of the Python module, for example); the thread never ends if c blocks
+static QoreValue f_staticpgm_foreign_call(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    // the thread owns a reference to the call reference
+    QoreValue* code = new QoreValue(args->retrieveEntry(0).refSelf());
+    std::thread([code]() {
+        ExceptionSink thread_xsink;
+        if (q_register_foreign_thread() != QFT_ERROR) {
+            code->get<ResolvedCallReferenceNode>()->invoke(nullptr, &thread_xsink).discard(&thread_xsink);
+        }
+        code->discard(&thread_xsink);
+        delete code;
+        thread_xsink.handleExceptions();
+    }).detach();
+    return QoreValue();
+}
+#endif
+
 static void staticpgm_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
+#ifdef STATICPGM_CODE
+    rns->addBuiltinVariant("staticpgm_foreign_call", f_staticpgm_foreign_call, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "code");
+#endif
 }
 
 static void staticpgm_module_delete() {

@@ -4536,10 +4536,20 @@ void qore_stop_module_uncounted_entries() {
         }
         // every thread is checked, also the signal thread and threads being deregistered, which can run module code
         // too, with the thread list lock held, which keeps their thread data in place, but without the leaf lock
+        // a foreign thread (a thread of another runtime, a daemon thread of the Python module, for example) is not waited
+        // for: it can be blocked in module code for as long as the process lives; the Programs of the modules are left
+        // as they are then (see qore_program_private::leaveForeignThreads())
         bool busy = thread_list.anyThreadData([self](ThreadData* td) -> bool {
-            return td != self && td->module_uncounted.load(std::memory_order_seq_cst);
+            return td != self && !td->foreign && td->module_uncounted.load(std::memory_order_seq_cst);
         });
         if (!busy) {
+            // no entry without the thread count can be made any more, so the foreign threads found now are the only
+            // ones that can be in module code without being counted in a Program
+            if (thread_list.anyThreadData([](ThreadData* td) -> bool {
+                    return td->foreign && td->module_uncounted.load(std::memory_order_seq_cst);
+                })) {
+                qore_foreign_threads_in_module_code.store(true, std::memory_order_release);
+            }
             return;
         }
         // a thread that has left its last entry since the generation was read has notified already
@@ -6733,6 +6743,11 @@ public:
 private:
     bool done = false;
 };
+
+bool q_thread_is_foreign() noexcept {
+    ThreadData* td = thread_data.get();
+    return td && td->foreign;
+}
 
 int q_register_foreign_thread() {
     // see if the current thread has already been registered
