@@ -420,6 +420,51 @@ DLLLOCAL void dataFrameSetDurationSchema(ColumnData& col);
 */
 DLLLOCAL void dataFrameAppendAutoValueKey(std::string& key, QoreValue v);
 
+//! Appends the length of a part of a key and the part
+static inline void appendDataFrameKeyBytes(std::string& key, const char* data, size_t len) {
+    uint64_t n = len;
+    key.append(reinterpret_cast<const char*>(&n), sizeof(n));
+    key.append(data, len);
+}
+
+//! Appends the key of a cell that is not null: the key of its value as a column that holds any value keys it
+//! (dataFrameAppendAutoValueKey()), whatever the type of the column, so that equal values of the same type in two
+//! columns of different storage (an int64 column and a column that holds any value) make the same key (qore#6116)
+static inline void dataFrameAppendCellKey(std::string& key, const ColumnData& cd, int64_t row) {
+    assert(!cd.isNull(row));
+    switch (cd.type) {
+        case ColumnType::FLOAT64:
+            appendDataFrameFloatKey(key, 'g', cd.float_data(row));
+            return;
+        case ColumnType::INT64: {
+            int64 iv = cd.int_data[row];
+            key += 'i';
+            key.append(reinterpret_cast<const char*>(&iv), sizeof(iv));
+            return;
+        }
+        case ColumnType::STRING:
+            // a string cell is in UTF-8
+            key += 's';
+            appendDataFrameKeyBytes(key, cd.str_data[row].data(), cd.str_data[row].size());
+            return;
+        case ColumnType::BOOL:
+            key += cd.bool_data[row] ? 'T' : 'F';
+            return;
+        case ColumnType::DATE: {
+            // a date cell is in the range of an int64 of microseconds: an absolute date or a duration
+            int64 micros = cd.date_data[row];
+            key += cd.isDuration() ? 'r' : 'd';
+            key.append(reinterpret_cast<const char*>(&micros), sizeof(micros));
+            return;
+        }
+        case ColumnType::AUTO:
+            dataFrameAppendAutoValueKey(key, cd.auto_data[row]);
+            return;
+        default:
+            return;
+    }
+}
+
 //! Returns a key of the value of a row that is equal for equal values of the column and different for others
 /** A null value has a key of its own.  A float (in a float64 column or a column that holds any value) is keyed by
     its bits, so that two floats have the same key only if they are equal (with -0.0 equal to 0.0) or both NaN.

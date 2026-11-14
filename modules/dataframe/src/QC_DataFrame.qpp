@@ -805,6 +805,11 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
     For non-key columns with the same name in both DataFrames, the right-side
     column is suffixed with "_right".
 
+    Two rows match if their key values are equal and of the same type, as groupBy() groups the values of a column
+    that holds any value: an int and a float, or an int and a string, never match (cast a key column to match
+    values of different types), while an int key column matches the ints of a column that holds any value.  A key
+    column of a right or outer join whose left and right key columns differ in type holds any value.
+
     @return new DataFrame object with joined rows
 
     @par Example:

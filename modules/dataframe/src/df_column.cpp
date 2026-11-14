@@ -444,8 +444,8 @@ void appendScalarValueKey(std::string& key, QoreValue v, qore_type_t t) {
     its value; any other value by its type and string form.  A string is compared in UTF-8, the encoding of the
     string cells, so that equal strings in different encodings make the same key.  Values of different types never
     make the same key: 1, 1.0, "1" and True make four keys.  Each part has its tag and a part of any length its
-    length, so that two different values never make the same key.  The elements are walked with a stack of their own, so that a deeply nested value
-    cannot exhaust the thread's stack.
+    length, so that two different values never make the same key.  The elements are walked with a stack of their
+    own, so that a deeply nested value cannot exhaust the thread's stack.
 */
 void appendAutoValueKey(std::string& key, QoreValue top) {
     // a value that is not a list or a hash needs no stack

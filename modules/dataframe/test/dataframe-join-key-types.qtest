@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-join-key-types.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameJoinKeyTypesTest
+
+#! join() matches keys by their type and exact value, and a key column of a right or outer join whose key columns
+#! differ in type holds any value (qore#6116)
+class DataFrameJoinKeyTypesTest inherits QUnit::Test {
+    constructor() : Test("DataFrameJoinKeyTypesTest", "1.0", \ARGV) {
+        addTestCase("join() of key columns of different types", \joinTypesTest());
+        addTestCase("join() keys", \joinKeyTest());
+        set_return_value(main());
+    }
+
+    #! a right or outer join of key columns of different types makes a key column that holds any value
+    joinTypesTest() {
+        list<list<auto>> pairs = (
+            ((1, 2), ("1", "3")),
+            ((1, 2), (1.5, 2.0)),
+            ((1h, 2h), (c'z', 1h)),
+        );
+        foreach list<auto> pair in (pairs) {
+            DataFrame::DataFrame l({"k": pair[0], "a": (10, 20)});
+            DataFrame::DataFrame r({"k": pair[1], "b": (100, 300)});
+            foreach string how in (("inner", "left", "right", "outer")) {
+                string label = sprintf("%s join of %y and %y", how, pair[0], pair[1]);
+                DataFrame::DataFrame j = l.join(r, ("k",), how);
+                list<hash<auto>> rows = j.toRecords();
+                list<auto> jkeys = map $1.k, rows;
+                # every key of the result is a key of one of the sides, with its type
+                foreach auto k in (jkeys) {
+                    assertTrue((select pair[0] + pair[1], $1.typeCode() == k.typeCode() && $1 === k).size() > 0,
+                        sprintf("%s: key %y", label, k));
+                }
+                if (how == "right" || how == "outer") {
+                    assertEq("auto", j.dtypes()[0], label + ": key column type");
+                }
+            }
+        }
+        # the right join of the issue
+        DataFrame::DataFrame l(({"k": 1, "a": 10}, {"k": 2, "a": 20}));
+        DataFrame::DataFrame r(({"k": "1", "b": 100}, {"k": "3", "b": 300}));
+        assertEq(({"k": "1", "a": NOTHING, "b": 100}, {"k": "3", "a": NOTHING, "b": 300}),
+            l.join(r, ("k",), "right").toRecords(), "an int key column and a string key column");
+    }
+
+    #! keys match by their type and exact value
+    joinKeyTest() {
+        # floats that differ after the sixth decimal place do not match; -0.0 matches 0.0
+        DataFrame::DataFrame l({"k": (1.0000001, 2.0, -0.0)});
+        DataFrame::DataFrame r({"k": (1.0000002, 2.0, 0.0), "b": (1, 2, 4)});
+        assertEq((2, 4), l.join(r, ("k",)).getColumn("b"), "float keys");
+        # an int64 key column matches the ints of a column that holds any value, a string column its strings,
+        # but an int never matches a string
+        DataFrame::DataFrame ints({"k": (1, 2)});
+        DataFrame::DataFrame any({"k": (c'z', 1, "2"), "b": (1, 2, 4)});
+        assertEq((2,), ints.join(any, ("k",)).getColumn("b"), "int64 and any-value keys");
+        DataFrame::DataFrame strs({"k": ("1", "2")});
+        assertEq((4,), strs.join(any, ("k",)).getColumn("b"), "string and any-value keys");
+        # lists and hashes match by their elements
+        DataFrame::DataFrame ll({"k": (c'z', (1, 2), {"a": 1})});
+        DataFrame::DataFrame rl({"k": (c'z', (3, 4), (1, 2), {"a": 2}, {"a": 1}), "b": (1, 2, 4, 8, 16)});
+        assertEq((1, 4, 16), ll.join(rl, ("k",)).getColumn("b"), "list and hash keys");
+        # several key columns with null values
+        DataFrame::DataFrame lm({"a": ("x", NOTHING, "x"), "k": (1.5, 1.5, NOTHING)});
+        DataFrame::DataFrame rm({"a": ("x", NOTHING, "x"), "k": (1.5, 1.5, NOTHING), "b": (1, 2, 4)});
+        assertEq((1, 2, 4), lm.join(rm, ("a", "k")).getColumn("b"), "several keys with null values");
+    }
+}

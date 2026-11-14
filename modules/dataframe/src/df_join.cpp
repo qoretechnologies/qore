@@ -60,10 +60,15 @@ static void reserveAppendCapacity(QoreDataFrameNS::ColumnData& col, int64_t rows
 
 namespace QoreDataFrameNS {
 
-// Build a key from column values at a given row index; each value is a tagged component with its length, so that
-// different value tuples always make different keys, and a null value never matches an empty string
+// Build a key from column values at a given row index; a null value is a component of its own, and any other value
+// is keyed by its type and exact value as groupBy() keys a column that holds any value, so that two values match
+// only if they are equal and of the same type (qore#6116); the key of a value delimits itself.  A key column whose
+// left and right columns have the same type, other than one that holds any value (typed[ki] true), is keyed with
+// no type tag, as the keys of both sides are of that type; any other by the key of its value as a column that holds
+// any value keys it, whatever the storage of its column, so that an int64 column matches the ints of a column that
+// holds any value
 static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
-        const std::vector<Column>& columns, int64_t row) {
+        const std::vector<Column>& columns, int64_t row, const std::vector<char>& typed) {
     std::string key;
     for (size_t ki = 0; ki < key_col_indices.size(); ++ki) {
         const ColumnData& cd = *columns[key_col_indices[ki]].data;
@@ -71,31 +76,37 @@ static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
             appendDataFrameKeyNull(key);
             continue;
         }
+        key += 'V';
+        if (!typed[ki]) {
+            dataFrameAppendCellKey(key, cd, row);
+            continue;
+        }
         switch (cd.type) {
-            case ColumnType::INT64:
-                appendDataFrameKeyValue(key, std::to_string(cd.int_data[row]));
-                break;
-            case ColumnType::FLOAT64:
-                appendDataFrameKeyValue(key, std::to_string(cd.float_data(row)));
-                break;
-            case ColumnType::STRING:
-                appendDataFrameKeyValue(key, cd.str_data[row]);
-                break;
-            case ColumnType::BOOL:
-                appendDataFrameKeyValue(key, cd.bool_data[row] ? "1" : "0", 1);
-                break;
-            case ColumnType::DATE:
-                appendDataFrameKeyValue(key, std::to_string(cd.date_data[row]));
-                break;
-            case ColumnType::AUTO: {
-                // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in
-                // different encodings make the same key
-                std::string value = dataFrameUtf8Key(cd.auto_data[row]);
-                appendDataFrameKeyValue(key, value.data(), value.size());
+            case ColumnType::FLOAT64: {
+                double value = cd.float_data(row);
+                if (value == 0.0) {
+                    // -0.0 == 0.0
+                    value = 0.0;
+                } else if (std::isnan(value)) {
+                    value = std::numeric_limits<double>::quiet_NaN();
+                }
+                key.append(reinterpret_cast<const char*>(&value), sizeof(value));
                 break;
             }
+            case ColumnType::INT64:
+                key.append(reinterpret_cast<const char*>(&cd.int_data[row]), sizeof(cd.int_data[row]));
+                break;
+            case ColumnType::STRING:
+                appendDataFrameKeyBytes(key, cd.str_data[row].data(), cd.str_data[row].size());
+                break;
+            case ColumnType::BOOL:
+                key += cd.bool_data[row] ? 'T' : 'F';
+                break;
+            case ColumnType::DATE:
+                key.append(reinterpret_cast<const char*>(&cd.date_data[row]), sizeof(cd.date_data[row]));
+                break;
             default:
-                appendDataFrameKeyValue(key, "", 0);
+                dataFrameAppendCellKey(key, cd, row);
                 break;
         }
     }
@@ -131,6 +142,11 @@ static void setJoinKeySchema(ColumnData& dest, const ColumnData& left, const Col
         dest.columnar_schema.timezone = "UTC";
     }
 }
+
+// Append a row of key columns to key columns of the result, of which a key column whose left and right key columns
+// differ in type holds any value (qore#6116)
+static void appendKeyRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols, const std::vector<Column>& src_cols,
+        const std::vector<size_t>& col_indices, int64_t row_idx);
 
 // Append a row from src columns to dest columns (or null if row_idx < 0)
 static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
@@ -193,6 +209,31 @@ static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
                     break;
             }
         }
+    }
+}
+
+static void appendKeyRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols, const std::vector<Column>& src_cols,
+        const std::vector<size_t>& col_indices, int64_t row_idx) {
+    for (size_t i = 0; i < col_indices.size(); ++i) {
+        ColumnData& dest = *dest_cols[i];
+        const ColumnData& src = *src_cols[col_indices[i]].data;
+        if (dest.type == src.type) {
+            std::vector<std::shared_ptr<ColumnData>> one(1, dest_cols[i]);
+            std::vector<size_t> one_index(1, col_indices[i]);
+            appendRow(one, src_cols, one_index, row_idx);
+            continue;
+        }
+        assert(dest.type == ColumnType::AUTO);
+        ++dest.n_rows;
+        if (src.isNull(row_idx)) {
+            dest.null_mask.push_back(1);
+            dest.appendAutoValue(QoreValue());
+            continue;
+        }
+        ExceptionSink value_xsink;
+        ValueHolder value(src.getValueAt(row_idx, &value_xsink), &value_xsink);
+        dest.null_mask.push_back(0);
+        dest.appendAutoValue(*value);
     }
 }
 
@@ -326,6 +367,14 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         }
     }
 
+    // the key columns whose left and right columns have the same type, other than one that holds any value, whose
+    // keys need no type tag
+    std::vector<char> typed_keys(left_key_indices.size());
+    for (size_t i = 0; i < left_key_indices.size(); ++i) {
+        ColumnType lt = columns[left_key_indices[i]].data->type;
+        typed_keys[i] = lt == other->columns[right_key_indices[i]].data->type && lt != ColumnType::AUTO;
+    }
+
     bool single_int64_key = left_key_indices.size() == 1
         && columns[left_key_indices[0]].data->type == ColumnType::INT64
         && other->columns[right_key_indices[0]].data->type == ColumnType::INT64;
@@ -384,7 +433,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
             if (r && !(r % 100) && qore_check_cancel(xsink, "joining DataFrames")) {
                 return nullptr;
             }
-            std::string key = buildJoinKey(right_key_indices, other->columns, r);
+            std::string key = buildJoinKey(right_key_indices, other->columns, r, typed_keys);
             right_hash[key].push_back(r);
         }
     }
@@ -564,11 +613,21 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
 
     // Key columns (from left)
     std::vector<size_t> out_key_src;  // left column index for each key
+    // true if a key column holds the keys of both sides, of different types (qore#6116)
+    bool mixed_keys = false;
     for (size_t i = 0; i < left_key_indices.size(); ++i) {
         const Column& lc = columns[left_key_indices[i]];
         auto cd = std::make_shared<ColumnData>();
-        cd->type = lc.data->type;
-        setJoinKeySchema(*cd, *lc.data, *other->columns[right_key_indices[i]].data, how == "right" || how == "outer");
+        const ColumnData& rkey = *other->columns[right_key_indices[i]].data;
+        bool right_values = how == "right" || how == "outer";
+        if (right_values && rkey.type != lc.data->type) {
+            // the key column holds the keys of both sides, of different types: it holds any value (qore#6116)
+            cd->type = ColumnType::AUTO;
+            mixed_keys = true;
+        } else {
+            cd->type = lc.data->type;
+            setJoinKeySchema(*cd, *lc.data, rkey, right_values);
+        }
         cd->n_rows = 0;
         Column out_col;
         out_col.name = lc.name;
@@ -620,6 +679,11 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         df->columns.push_back(std::move(out_col));
     }
 
+    // the function that appends the keys of a row: one for key columns of the same type on both sides, and one for
+    // key columns that hold the keys of both sides of different types (qore#6116)
+    void (*append_keys)(std::vector<std::shared_ptr<ColumnData>>&, const std::vector<Column>&,
+        const std::vector<size_t>&, int64_t) = mixed_keys ? appendKeyRow : appendRow;
+
     // Build dest column vectors for appendRow
     std::vector<std::shared_ptr<ColumnData>> key_dest, left_dest, right_dest;
     for (size_t i = 0; i < out_key_src.size(); ++i) {
@@ -663,7 +727,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
                 }
             }
         } else {
-            std::string key = buildJoinKey(left_key_indices, columns, l);
+            std::string key = buildJoinKey(left_key_indices, columns, l, typed_keys);
             string_it = right_hash.find(key);
             if (string_it != right_hash.end()) {
                 matched_rows = &string_it->second;
@@ -673,7 +737,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         if (matched_rows) {
             // Matched: emit one output row per right match
             for (int64_t r : *matched_rows) {
-                appendRow(key_dest, columns, out_key_src, l);
+                append_keys(key_dest, columns, out_key_src, l);
                 appendRow(left_dest, columns, left_nonkey_src, l);
                 appendRow(right_dest, other->columns, right_nonkey_src, r);
                 right_matched[r] = true;
@@ -681,7 +745,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
             }
         } else if (how == "left" || how == "outer") {
             // Left/outer: emit left row with null right columns
-            appendRow(key_dest, columns, out_key_src, l);
+            append_keys(key_dest, columns, out_key_src, l);
             appendRow(left_dest, columns, left_nonkey_src, l);
             appendRow(right_dest, other->columns, right_nonkey_src, -1);
             ++result_rows;
@@ -694,7 +758,7 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
         for (int64_t r = 0; r < other->n_rows; ++r) {
             if (!right_matched[r]) {
                 // Key from right side
-                appendRow(key_dest, other->columns, right_key_indices, r);
+                append_keys(key_dest, other->columns, right_key_indices, r);
                 appendRow(left_dest, columns, left_nonkey_src, -1);
                 appendRow(right_dest, other->columns, right_nonkey_src, r);
                 ++result_rows;
