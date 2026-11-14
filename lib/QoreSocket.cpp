@@ -432,7 +432,47 @@ static int qore_socket_set_raw_error(int rc) {
 #endif
 }
 
-// returns 0 = connected, 1 = still in progress, -1 = error
+// returns 0 = connected, 1 = still in progress, -1 = error with the connect's error in errno (WSAGetLastError() on
+// Windows)
+int qore_socket_confirm_connect(int fd) {
+    // Try a zero-byte send to confirm connection.  This is needed on macOS,
+    // where poll() may report writable readiness before connect completion.
+    unsigned loop = 0;
+    while (true) {
+        int rc = ::send(fd, nullptr, 0, 0);
+        if (!rc) {
+            return 0;
+        }
+        int e = sock_get_error();
+        if (e == EINPROGRESS || e == EAGAIN || e == ENOTCONN) {
+            return 1;
+        }
+        if (e == EINTR) {
+            // Yield after a bounded number of immediate retries so a signal storm cannot monopolize an async I/O
+            // worker.  A zero-byte send has no partial-progress state, so retrying it is safe on every supported
+            // platform.
+            if (++loop >= max_nonblock_ops) {
+                return 1;
+            }
+            continue;
+        }
+        // The connect can fail after the caller read SO_ERROR as 0 and before this send: the send then reports the
+        // state the failure left the socket in, not why the connect failed (Darwin reports EPIPE for a connection
+        // that was refused or that timed out, as the failure marks the socket unable to send before the send
+        // checks the pending error), while the connect's own error is still pending in SO_ERROR
+        int raw = sock_get_raw_error();
+        int val = 0;
+        socklen_t lon = sizeof(val);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon) != QORE_SOCKET_ERROR && val) {
+            raw = val;
+        }
+        qore_socket_set_raw_error(raw);
+        return -1;
+    }
+}
+
+// returns 0 = connected, 1 = still in progress, -1 = error with the connect's error in errno (WSAGetLastError() on
+// Windows)
 static int qore_socket_check_connect_ready(int fd) {
     unsigned loop = 0;
     int val;
@@ -462,27 +502,7 @@ static int qore_socket_check_connect_ready(int fd) {
         return -1;
     }
 
-    // Try a zero-byte send to confirm connection.  This is needed on macOS,
-    // where poll() may report writable readiness before connect completion.
-    while (true) {
-        int rc = ::send(fd, nullptr, 0, 0);
-        if (!rc) {
-            return 0;
-        }
-        int e = sock_get_error();
-        if (e == EINPROGRESS || e == EAGAIN || e == ENOTCONN) {
-            return 1;
-        }
-        if (e == EINTR) {
-            // As above, yield after a bounded number of immediate retries.  A zero-byte send
-            // has no partial-progress state, so retrying it is safe on every supported platform.
-            if (++loop >= max_nonblock_ops) {
-                return 1;
-            }
-            continue;
-        }
-        return -1;
-    }
+    return qore_socket_confirm_connect(fd);
 }
 
 static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
@@ -9093,8 +9113,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
 
         rc = startNextConnect(xsink);
         if (rc < 0 && !*xsink) {
-            qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host.c_str(),
-                service.c_str());
+            raiseConnectError(xsink);
         }
         if (rc <= 0) {
             if (rc == 0) {
@@ -9141,6 +9160,10 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             continue;
         }
         int rc = checkAttempt(i);
+        if (rc < 0) {
+            // the error is taken before the attempt is given up, which makes system calls of its own
+            last_error = sock_get_raw_error();
+        }
         if (rc == 0) {
             // Connected!
             winning_idx = (int)i;
@@ -9224,7 +9247,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
 
     if (!any_active) {
         sock->sock = QORE_INVALID_SOCKET;
-        qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host.c_str(), service.c_str());
+        raiseConnectError(xsink);
         return -1;
     }
 
@@ -9395,6 +9418,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
 
         int fd = create_nonblocking_socket(p.family, p.socktype, p.protocol);
         if (fd == QORE_INVALID_SOCKET) {
+            last_error = sock_get_raw_error();
             ++next_addr_idx;
             continue;
         }
@@ -9432,6 +9456,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
 #else
         if (errno != EINPROGRESS && errno != EAGAIN) {
 #endif
+            last_error = sock_get_raw_error();
             // the descriptor was never registered
             qore_owned_descriptor_release(a.owned);
             ++next_addr_idx;
@@ -9453,6 +9478,11 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
     }
 
     return -1; // no more addresses
+}
+
+void SocketConnectInetHappyEyeballsPollState::raiseConnectError(ExceptionSink* xsink) const {
+    qore_socket_error_intern(last_error ? last_error : sock_get_raw_error(), xsink, "SOCKET-CONNECT-ERROR",
+        "error in connect()", nullptr, host.c_str(), service.c_str());
 }
 
 int SocketConnectInetHappyEyeballsPollState::checkAttempt(size_t idx) {
@@ -9616,8 +9646,11 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
                 return -1;
             }
             if (rc) {
+                // the error is taken before the close, which makes system calls of its own
+                int err = sock_get_raw_error();
                 sock->close_and_reset();
-                qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", 0, name.c_str());
+                qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
+                    name.c_str());
                 return -1;
             }
 
@@ -9639,8 +9672,11 @@ int SocketConnectUnixPollState::continuePoll(ExceptionSink* xsink) {
             }
 
             if (rc < 0) {
+                // the error is taken before the close, which makes system calls of its own
+                int err = sock_get_raw_error();
                 sock->close_and_reset();
-                qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", 0, name.c_str());
+                qore_socket_error_intern(err, xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr,
+                    name.c_str());
                 return -1;
             }
         }
