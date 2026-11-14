@@ -13625,7 +13625,11 @@ load_local_done:
                         // through the full path to preserve enum identity and type checking
                         const QoreTypeInfo* target_ti = local_inst->local
                             ? local_inst->local->getTypeInfo() : nullptr;
-                        if (!QoreTypeInfo::parseAcceptsReturns(target_ti, val.getType())) {
+                        // a type that names type parameters (a local of a generic function, ex: *T) accepts any
+                        // value before its type parameters are substituted, which only the full path does
+                        // (LocalVarValue::resolveLValueTypeInfo()), as the AST interpreter does (qore#5885)
+                        if ((QoreTypeInfo::hasType(target_ti) && target_ti->getContainsTypeParameterCache() != 0)
+                                || !QoreTypeInfo::parseAcceptsReturns(target_ti, val.getType())) {
                             // Type mismatch: invalidate caches and use full
                             // type-checking path (will raise RUNTIME-TYPE-ERROR)
                             locals_slot_cache.release(local_inst->slot_id, xsink);
