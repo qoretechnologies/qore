@@ -15580,7 +15580,10 @@ load_local_done:
                     break;
                 }
                 unwindForException();
-                cleanupLocalCaches();
+                // the frame is left as by an exception that leaves it (returnAfterUnhandledException()): the locals
+                // that a handler declares are released at the exit of the handler, though their variables on the
+                // runtime stack are the function's, as the AST interpreter releases them at the end of their blocks
+                cleanupLocalCaches(false);
                 return exitAfterUnwind();
             case QoreIROpcode::GuardInt:
             case QoreIROpcode::GuardFloat:
