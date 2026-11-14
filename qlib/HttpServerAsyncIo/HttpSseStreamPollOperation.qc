@@ -87,8 +87,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         #! Heartbeat payload sent when the interval expires with no outbound traffic
         string heartbeat_msg = DefaultSseHeartbeatMsg;
 
-        #! Epoch microseconds of the last successful send (or construction)
-        int last_send_us = clock_getmicros();
+        #! Monotonic-clock microseconds of the last successful send (or construction)
+        int last_send_us = clock_get_monotonic_us();
 
         #! Optional callback retained for API compatibility
         /** SSE queue wakeups are driven by @ref notifier.  This callback is no
@@ -291,7 +291,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         # configured, wait for the notifier to signal us from queueEvent()
         # / queueRaw*().
         if (heartbeat_ms > 0) {
-            int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+            int elapsed_ms = (clock_get_monotonic_us() - last_send_us) / 1000;
             if (elapsed_ms >= heartbeat_ms) {
                 pending_data = heartbeat_msg;
                 *hash<SocketPollInfo> info = continueSend();
@@ -335,7 +335,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
                 queued_bytes -= pending_counted;
                 pending_counted = 0;
             }
-            last_send_us = clock_getmicros();
+            last_send_us = clock_get_monotonic_us();
             return NOTHING;
         } catch (hash<ExceptionInfo> ex) {
             state = STATE_DISCONNECTED;
