@@ -1058,6 +1058,14 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
     return err;
 }
 
+template <bool Lexical>
+QORE_INTERN_NOINLINE QoreValue AbstractMethodCallNode::execByName(LexicalSemanticPolicy policy, QoreObject* o,
+        const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+    return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
+}
+
 QoreValue SelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
@@ -1094,9 +1102,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
         // issue #5933: a qualified call of an abstract method is dispatched by the name of the method (not the
         // qualified name) on the class of the object, which implements it, also for an object of the class of the
         // call (issue #3070)
-        QoreRcCallSiteHelper call_site(rc, loc);
-        return execByNameImpl<Lexical>(policy, self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, rc,
-            xsink);
+        return execByName<Lexical>(policy, self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, rc, xsink);
     }
 
     if (!method) {
