@@ -635,6 +635,9 @@
       \c setRelativeDateSeconds() and \c makeRelativeFromSeconds(), the \c DateTimeNode overloads and
       \c DateTimeValueHelper(const QoreValue&, ExceptionSink*); the overloads without an \c ExceptionSink are
       deprecated and saturate such a result (it wrapped before; see \c QORE_DATE_UNCHECKED_DEPRECATED, issue #6103)
+    - a pointer to a \c DateTime or \c DateTimeNode given where a \c DateTime value is expected (a constructor,
+      \c DateTime::setDate(), a <tt>const DateTime&</tt> argument) is a compile error, as the deleted
+      \c DateTime(const DateTime*) shows; it was converted through \c DateTime(bool) to an empty date
     @endparblock
 
     @par qget Command-Line Changes

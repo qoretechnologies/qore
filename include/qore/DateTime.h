@@ -200,6 +200,16 @@ public:
    //! copy constructor
    DLLEXPORT DateTime(const DateTime &dt);
 
+   //! not available: a pointer to a DateTime would otherwise be converted to \c bool and give an empty date
+   /** Copy the value that the pointer refers to instead (<tt>DateTime dt(*ptr);</tt>).  As this constructor is
+       deleted and is a better conversion than DateTime(bool), a pointer to a DateTime (or to a class derived from
+       it, such as DateTimeNode) can no longer be converted implicitly to a DateTime either, so such a pointer passed
+       where a <tt>const DateTime&</tt> is expected is an error instead of an empty date.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL DateTime(const DateTime* dt) = delete;
+
    //! destroys the object and frees all memory
    DLLEXPORT ~DateTime();
 
@@ -277,6 +287,13 @@ public:
 
    //! sets the date from a DateTime reference
    DLLEXPORT void setDate(const DateTime &date);
+
+   //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+   /** Pass the value that the pointer refers to (<tt>dt.setDate(*ptr);</tt>).
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL void setDate(const DateTime* date) = delete;
 
    //! sets the time from hours, minutes, seconds, and milliseconds
    /**
@@ -372,6 +389,14 @@ public:
    */
    DLLEXPORT DateTime* add(const DateTime& dt, ExceptionSink* xsink) const;
 
+   //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+   /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+       (<tt>a.add(*ptr, xsink)</tt>), which add(const DateTime&, ExceptionSink*) const takes.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL DateTime* add(const DateTime* dt, ExceptionSink* xsink) const = delete;
+
    //! returns a newly allocated difference without modifying either operand
    /** @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
        subtractBy(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
@@ -404,6 +429,14 @@ public:
        @since %Qore 3.0
    */
    DLLEXPORT DateTime* subtractBy(const DateTime& dt, ExceptionSink* xsink) const;
+
+   //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+   /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+       (<tt>a.subtractBy(*ptr, xsink)</tt>), which subtractBy(const DateTime&, ExceptionSink*) const takes.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL DateTime* subtractBy(const DateTime* dt, ExceptionSink* xsink) const = delete;
 
    //! adds the given number of seconds (and microseconds) to the date/time value
    /** this is a very fast operation and particularly useful for date arithmentic on absolute date/time values

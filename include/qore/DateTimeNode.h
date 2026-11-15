@@ -278,6 +278,16 @@ public:
     */
     DLLEXPORT DateTimeNode* add(const DateTime& dt, ExceptionSink* xsink) const;
 
+    //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+    /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+        (<tt>date->add(*period, xsink)</tt> for a <tt>const DateTime* period</tt>; <tt>**holder</tt> for a
+        <tt>SimpleRefHolder&lt;DateTimeNode&gt; holder</tt>), which add(const DateTime&, ExceptionSink*) const
+        takes.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL DateTimeNode* add(const DateTime* dt, ExceptionSink* xsink) const = delete;
+
     //! subtracts a DateTime value from the current value and returns the new value, the caller owns the pointer's reference count
     /**
         @return a new DateTimeNode value, the caller owns the pointer's reference count
@@ -314,6 +324,16 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT DateTimeNode* subtractBy(const DateTime& dt, ExceptionSink* xsink) const;
+
+    //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+    /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+        (<tt>end_time->subtractBy(*start_time, xsink)</tt> for a <tt>const DateTime* start_time</tt>;
+        <tt>**holder</tt> for a <tt>SimpleRefHolder&lt;DateTimeNode&gt; holder</tt>), which
+        subtractBy(const DateTime&, ExceptionSink*) const takes.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL DateTimeNode* subtractBy(const DateTime* dt, ExceptionSink* xsink) const = delete;
 
     //! returns the negative time from the current time
     /** @deprecated a relative date with a component that is the smallest int gives a saturated result (it wrapped
