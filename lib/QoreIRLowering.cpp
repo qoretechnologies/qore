@@ -266,7 +266,7 @@ static void setPluginLoweringError(std::string& error, const QorePluginLoweringI
 /** The type is specialized for the function's type arguments first: a function lowered for an instantiation of a
     generic class or function (G<int>) has plain values for a type parameter whose type argument is plain, and the
     values of an enum argument (G<EI>) or of a type parameter with no argument are not plain (qore#6236); see
-    qore_ir_returns_plain(builder.getFunction(), )
+    QoreTypeInfo::parseReturnsPlain()
 
     @param func the function being lowered, or nullptr
 */
@@ -17506,7 +17506,8 @@ QoreIRValue QoreIRLowering::lowerWithSourceRelease(const QoreValue& expr, const 
     // a value of a type that is never a node (int, float, bool) holds no reference to release with the source, so it
     // needs no reference of its own; a string or a date can be the source's own node, so only those types are skipped
     if (result.isValid() && error.empty() && capture.node && capture.value.isValid()
-            && (always_ref || capture.may_alias) && !qore_ir_type_is_immediate_scalar(builder.getFunction(), getExprTypeInfo(expr))) {
+            && (always_ref || capture.may_alias)
+            && !qore_ir_type_is_immediate_scalar(builder.getFunction(), getExprTypeInfo(expr))) {
         QoreIRBasicBlock* block = builder.getBlock();
         if (block && (block->instructions.empty() || !isTerminator(block->instructions.back()->opcode))) {
             QoreIRValue value = result;
