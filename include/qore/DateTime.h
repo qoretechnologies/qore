@@ -128,8 +128,11 @@ public:
    //! constructor for an empty object
    /**
       @param r sets the "relative" flag for the object
+
+      @note explicit since %Qore 3.0: before, any pointer converted implicitly to an empty DateTime through this
+      constructor
    */
-   DLLEXPORT DateTime(bool r = false);
+   DLLEXPORT explicit DateTime(bool r = false);
 
    //! constructor for setting all parameters
    /** note that for absolute date/time values, the local time zone will be assumed

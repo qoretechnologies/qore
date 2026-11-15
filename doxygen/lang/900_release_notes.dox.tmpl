@@ -638,6 +638,8 @@
     - a pointer to a \c DateTime or \c DateTimeNode given where a \c DateTime value is expected (a constructor,
       \c DateTime::setDate(), a <tt>const DateTime&</tt> argument) is a compile error, as the deleted
       \c DateTime(const DateTime*) shows; it was converted through \c DateTime(bool) to an empty date
+    - \c DateTime(bool) is \c explicit, so a pointer of another type (ex: <tt>const AbstractQoreNode*</tt>) is no
+      longer converted implicitly to an empty \c DateTime; write <tt>DateTime(true)</tt> for an empty relative date
     @endparblock
 
     @par qget Command-Line Changes
