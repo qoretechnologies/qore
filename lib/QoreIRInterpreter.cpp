@@ -8876,6 +8876,20 @@ static QORE_INTERN_NOINLINE void qore_ir_release_failed_method_call(QoreListNode
     result.discard(xsink);
 }
 
+//! Dispatches the step event that the operation \a inst keeps (qore_ir_folded_debug_step()) before the operation,
+//! while a debugger is attached, as the DebugStatement instruction that it was, which then dispatches the operation
+//! (QoreIRDebugStatementInstruction::folded_host) with \c debug_active cleared, so that the event is not made again;
+//! the next instruction reads the debugger's state again.  Only fused local int operations that cannot raise an
+//! exception keep an event (qore_ir_fold_debug_statements()), so that no exception path runs with the cleared state,
+//! no other instruction pays for the check, and the frame keeps no state for it.
+#define QORE_IR_DISPATCH_FOLDED_DEBUG_STEP() \
+    if (debug_active) [[unlikely]] { \
+        if (QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) { \
+            inst = folded_step; \
+            goto dispatch_folded_step; \
+        } \
+    }
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -10672,6 +10686,8 @@ next_instruction:
             ++ip;
             goto next_instruction;
         }
+        // the dispatch of the step event of a statement that an operation keeps (qore_ir_folded_debug_step())
+dispatch_folded_step:
         if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
             // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is attached,
             // the current statement is set by the DebugStatement instruction of each statement and kept, so that the
@@ -10690,6 +10706,8 @@ next_instruction:
             fflush(stderr);
         }
 
+        // the operation whose step event ran (qore_ir_folded_debug_step()), in the event's location
+dispatch_folded_step_host:
         switch (inst->opcode) {
             case QoreIROpcode::ConstInt: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
@@ -13162,6 +13180,7 @@ load_local_done:
             }
             // Fused local int operations — reduce dispatch overhead for tight loops
             case QoreIROpcode::AddAssignLocalInt: {
+                QORE_IR_DISPATCH_FOLDED_DEBUG_STEP();
                 auto* fused_inst = static_cast<QoreIRAddAssignLocalIntInstruction*>(inst);
                 // Read target from slot cache (fast path) or eval (cold path)
                 int64_t target_val = 0;
@@ -13312,6 +13331,7 @@ load_local_done:
             }
 
             case QoreIROpcode::IncrementLocalInt: {
+                QORE_IR_DISPATCH_FOLDED_DEBUG_STEP();
                 auto* fused_inst = static_cast<QoreIRIncrementLocalIntInstruction*>(inst);
                 if (fused_inst->local && fused_inst->local->closureUse()) {
                     // a closure-bound variable can be changed by other threads, so it is read and written in one
@@ -16224,6 +16244,8 @@ load_local_done:
                 // the start of the exception path of a block: the exception events of the statements of the block
                 // that the exception leaves, before its handlers and the release of its locals (#5954)
                 if (static_cast<QoreIRDebugStatementInstruction*>(inst)->nest_flags & QORE_IR_DEBUG_NEST_UNWIND) {
+                    // the start of an exception path is never kept by an operation (qore_ir_fold_debug_statements())
+                    assert(!static_cast<QoreIRDebugStatementInstruction*>(inst)->folded_host);
                     if (debug_active && xsink && xsink->isException()) [[unlikely]] {
                         // the event of the statement that raised the exception, if it has none yet, as for an
                         // exception that a destructor raised at the end of a statement or of a block
@@ -16248,6 +16270,8 @@ load_local_done:
                     auto* dbg_inst = static_cast<QoreIRDebugStatementInstruction*>(inst);
                     // the end of a statement makes no event
                     if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_END) {
+                        // never kept by an operation (qore_ir_fold_debug_statements())
+                        assert(!dbg_inst->folded_host);
                         // the statement ended: the frame is in the statement that contains it, which an exception
                         // raised after it, as in a loop's condition, is reported for
                         if (dbg_state.nest_used) {
@@ -16287,7 +16311,8 @@ load_local_done:
                             fflush(stderr);
                         }
                         if (*xsink) {
-                            // an exception raised by the debugger is raised by the statement, as with CheckException
+                            // an exception raised by the debugger is raised by the statement, as with CheckException;
+                            // the operation of a folded statement does not run
                             if (inst->exception_target) {
                                 cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                                 prev_block = block;
@@ -16318,6 +16343,15 @@ load_local_done:
                             }
                         }
                     }
+                }
+                if (QoreIRInstruction* folded_host = static_cast<QoreIRDebugStatementInstruction*>(inst)->folded_host) {
+                    // the event of a statement made of one operation, which keeps it (qore_ir_folded_debug_step()):
+                    // the operation follows in the statement's location, without its event; the operation is never
+                    // the last instruction of its block, so the next instruction reads the debugger's state again
+                    assert(ip + 1 < block->instructions.size());
+                    inst = folded_host;
+                    debug_active = false;
+                    goto dispatch_folded_step_host;
                 }
                 ++ip;
                 break;

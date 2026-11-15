@@ -10193,6 +10193,160 @@ static void ut_debug_step_every_statement(UnitTestCounters& c, QoreProgram* pare
     UT_ASSERT(c, !xsink, "debug step target program cleanup succeeds");
 }
 
+//! Records the step events of the statements of a range of lines, from any thread, and raises an exception at the
+//! first step event of a line
+class FoldedStepDebugProgram : public QoreDebugProgram {
+public:
+    int first_line = 0;
+    int last_line = 0;
+    int raise_line = -1;
+
+    DLLLOCAL void onAttach(QoreProgram* pgm, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        rs = DBG_RS_STEP;
+    }
+
+    DLLLOCAL void onStep(QoreProgram* pgm, const StatementBlock* blockStatement, const AbstractStatement* statement,
+            unsigned bkptId, int& flow, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        rs = DBG_RS_STEP;
+        if (!statement || !statement->loc) {
+            return;
+        }
+        int line = statement->loc->start_line;
+        if (line < first_line || line > last_line) {
+            return;
+        }
+        bool raise = false;
+        {
+            std::lock_guard<std::mutex> lg(m);
+            step_lines.push_back(line);
+            if (line == raise_line && !raised) {
+                raised = true;
+                raise = true;
+            }
+        }
+        if (raise) {
+            xsink->raiseException("DEBUGGER-ERROR", "raised by the debugger at line %d", line);
+        }
+    }
+
+    DLLLOCAL std::vector<int> getStepLines() {
+        std::lock_guard<std::mutex> lg(m);
+        return step_lines;
+    }
+
+    DLLLOCAL bool getRaised() {
+        std::lock_guard<std::mutex> lg(m);
+        return raised;
+    }
+
+private:
+    std::mutex m;
+    std::vector<int> step_lines;
+    bool raised = false;
+};
+
+//! the step event of a statement made of a fused local int operation, which the operation makes
+//! (qore_ir_fold_debug_statements()), is made before the operation, and an exception raised by the debugger at it
+//! leaves the statement before the operation runs
+/** The debugger is attached while the function runs in a thread of its own, so that it runs in the tier of the
+    execution mode (with a debugger attached at its call, a function runs with the AST interpreter); the thread waits
+    for the attach on a queue
+*/
+static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, QoreProgram* parent, qore_exec_mode_t mode) {
+    ExceptionSink xsink;
+    QoreProgram* pgm = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER);
+    pgm->setExecMode(mode, true);
+    // the code is parsed as at the top level, with no return type of running code (see ut_self_call_without_method())
+    const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
+    pgm->parse("%modern\n"
+        "class Q {\n"                                       // 2
+        "    public { static Queue qin(); static Queue qout(); }\n" // 3
+        "}\n"
+        "string sub work() {\n"                              // 5
+        "    int a = 1;\n"                                   // 6
+        "    int b = 3;\n"                                   // 7
+        "    Q::qin.get();\n"                                 // 8
+        "    a += 2;\n"                                      // 9
+        "    ++a;\n"                                         // 10
+        "    a += b;\n"                                      // 11
+        "    try {\n"                                        // 12
+        "        a += 10;\n"                                 // 13
+        "        return \"not raised\";\n"                   // 14
+        "    } catch (hash<ExceptionInfo> ex) {\n"
+        "        return sprintf(\"%s:%d\", ex.err, a);\n"    // 16
+        "    }\n"
+        "}\n"
+        "sub start() {\n"
+        "    background Q::qout.push(work());\n"
+        "}\n"
+        "sub release() {\n"
+        "    Q::qin.push(1);\n"
+        "}\n"
+        "string sub result() {\n"
+        "    return Q::qout.get();\n"
+        "}\n",
+        "debug-step-folded-test", &xsink, nullptr, 0);
+    saveReturnTypeInfo(old_return_type);
+    UT_ASSERT(c, !xsink, "folded debug step target program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        pgm->waitForTerminationAndDeref(&xsink);
+        return;
+    }
+
+    // the thread waits for the attach in work()
+    pgm->callFunction("start", nullptr, &xsink).discard(&xsink);
+    UT_ASSERT(c, !xsink, "the thread of the folded statements starts");
+    if (xsink) {
+        // no thread pushes a result to wait for
+        xsink.handleExceptions();
+        xsink.clear();
+        pgm->waitForTerminationAndDeref(&xsink);
+        return;
+    }
+
+    FoldedStepDebugProgram dbg;
+    dbg.first_line = 9;
+    dbg.last_line = 16;
+    dbg.raise_line = 13;
+    dbg.addProgram(pgm, &xsink);
+    UT_ASSERT(c, !xsink, "debugger attaches to folded debug step target program");
+
+    pgm->callFunction("release", nullptr, &xsink).discard(&xsink);
+    QoreValue rv = pgm->callFunction("result", nullptr, &xsink);
+    UT_ASSERT(c, !xsink, "an exception raised by the debugger at a folded statement is caught by the program");
+    UT_ASSERT(c, dbg.getRaised(), "the debugger raised its exception at the folded statement");
+    // 1 + 2 + 1 + 3; the operation of the statement where the debugger raised the exception did not run
+    UT_ASSERT(c, rv.getType() == NT_STRING && !strcmp(rv.get<const QoreStringNode>()->c_str(), "DEBUGGER-ERROR:7"),
+        "the folded statements ran after their step events, and the one where the debugger raised the exception "
+        "did not");
+    rv.discard(&xsink);
+    std::vector<int> expected = {9, 10, 11, 12, 13, 16};
+    UT_ASSERT(c, dbg.getStepLines() == expected, "every folded statement has a step event, in the order they run");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+    }
+
+    dbg.removeProgram(pgm);
+    dbg.waitForTerminationAndClear(&xsink);
+    UT_ASSERT(c, !xsink, "debugger cleanup succeeds");
+    pgm->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "folded debug step target program cleanup succeeds");
+}
+
+static void ut_debug_step_folded_statements(UnitTestCounters& c, QoreProgram* parent) {
+    // the statements are folded in the IR of the IR and JIT tiers; the AST interpreter gives the same events
+    for (qore_exec_mode_t mode : {QEM_AST, QEM_IR, QEM_JIT}) {
+        ut_debug_step_folded_statements_mode(c, parent, mode);
+    }
+}
+
 static void ut_asyncio_autostop(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
@@ -18132,6 +18286,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
+    ut_debug_step_folded_statements(c, rc.getProgram());
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
@@ -18528,6 +18683,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_dgc_scan_wait_cycle(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_debug_step_every_statement(c, rc.getProgram());
+    ut_debug_step_folded_statements(c, rc.getProgram());
     ut_callback_caller_parse_options(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());

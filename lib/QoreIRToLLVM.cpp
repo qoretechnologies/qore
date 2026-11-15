@@ -19961,6 +19961,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::AddAssignLocalInt: {
             const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            // the step event of the statement, which the operation keeps (qore_ir_fold_debug_statements()), as the
+            // DebugStatement instruction that it was
+            if (const QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) {
+                emitDebugStepHook(module, llvm_func, folded_step, /*synthetic=*/false);
+            }
             auto target_key = reinterpret_cast<const void*>(fused->target);
             auto source_key = reinterpret_cast<const void*>(fused->source);
             auto target_it = local_allocas.find(target_key);
@@ -19986,6 +19991,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::IncrementLocalInt: {
             const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+            // the step event of the statement, which the operation keeps (qore_ir_fold_debug_statements()), as the
+            // DebugStatement instruction that it was
+            if (const QoreIRDebugStatementInstruction* folded_step = qore_ir_folded_debug_step(inst)) {
+                emitDebugStepHook(module, llvm_func, folded_step, /*synthetic=*/false);
+            }
             auto key = reinterpret_cast<const void*>(fused->local);
             if (fused->local && fused->local->closureUse()) {
                 llvm::Value* result;

@@ -1,0 +1,275 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The debugger's step event of a statement made of a fused local int operation, such as `total += 1;`, is made by the
+# operation itself (qore_ir_fold_debug_statements()), so that such a statement is one IR instruction, as in code that
+# cannot be debugged.
+#
+# Issue #5558 emitted a DebugStatement instruction before every statement of a function that can be debugged, which
+# made `total += 1;` two IR instructions: the IR interpreter dispatched twice the instructions for it, and the size
+# budget of native compilation (QORE_JIT_MAX_IR_INSTRUCTIONS, counted in IR instructions) kept functions half the size
+# on the IR tier.  The instruction counts are those that the budget's diagnostic reports.
+#
+# The step events of the folded statements are checked as well: a debugger attached while a function runs as native
+# code or with the IR interpreter gets the event of every statement, and a return that the debugger requests at a
+# folded statement leaves the function before the statement runs, as with the AST interpreter (ut_debug_step_folded_
+# statements() in lib/ql_debug.cpp checks an exception that the debugger raises at a folded statement, which a
+# debugger written in Qore cannot raise).
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation of the debugger's step events and of the native-compilation budget
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class FoldedDebugStepDensityTest
+
+public class FoldedDebugStepDensityTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+
+        #! the instructions of the probe function besides its statements of the form tested
+        /** The function's parameter is assigned to its local (load.local, store.local), and the local is returned
+            (load.local, ref.self, uninstantiate.local, return); a function that can be debugged also has the step
+            events of these two statements
+        */
+        const ProbeOverhead = 6;
+        const DebugStatementOverhead = 2;
+
+        #! statements that lower to one fused local int operation (a post-increment statement lowers to more, as it
+        #! keeps the value before the increment)
+        const FusedStatements = {
+            "add-constant": "total += 1;",
+            "subtract-constant": "total -= 1;",
+            "pre-increment": "++total;",
+            "pre-decrement": "--total;",
+        };
+
+        #! the child script of the step event checks; its first argument is the line whose second step event makes
+        #! the debugger return from the function, or 0
+        const StepScript = '%allow-debugger
+
+class StepRecorder inherits DebugProgram {
+    public {
+        list<int> step_lines = ();
+        int return_line;
+        int return_hits = 0;
+    }
+    constructor(int return_line) {
+        self.return_line = return_line;
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugDetach;
+    }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+        if (sid) {
+            *hash<auto> loc = pgm.getStatementIdInfo(sid);
+            if (loc.start_line) {
+                push step_lines, loc.start_line;
+                if (loc.start_line == return_line && ++return_hits == 2) {
+                    flow = DebugFlowReturn;
+                }
+            }
+        }
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {
+    }
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+}
+
+our StepRecorder dbg(int(ARGV[0]));
+our ProgramControl pc = ProgramControl::getProgram();
+
+sub attach() {
+    dbg.addProgram(pc);
+}
+
+sub detach() {
+    dbg.removeProgram(pc);                      ### remove
+}
+
+# the debugger is attached while the function runs, as native code with JIT execution
+*string sub work(int n) {
+    int total = 0;
+    int step = 2;
+    try {
+        for (int i = 0; i < n; ++i) {
+            if (i == 2) {                       ### if
+                attach();
+            }
+            total += 10;                        ### add_constant
+            total += step;                      ### add_local
+            total++;                            ### increment
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        detach();                               ### catch_detach
+        return sprintf("%d:%s", total, ex.err);
+    }
+    detach();                                   ### detach
+    return sprintf("%d", total);
+}
+
+*string r = work(4);
+printf("RESULT:<%s>\n", r ?? "none");
+printf("STEPLINES:%y\n", dbg.step_lines);
+';
+    }
+
+    constructor() : QUnit::Test("FoldedDebugStepDensity", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("a fused local int statement is one IR instruction", \testDensity());
+        addTestCase("a local int added to a local is one IR instruction", \testAddLocalDensity());
+        addTestCase("the step events of folded statements", \testStepEvents());
+        addTestCase("a debugger return at a folded statement", \testDebuggerReturn());
+        set_return_value(main());
+    }
+
+    #! returns the IR instruction count of function f() of the script that the native-compilation budget reports
+    /** The budget (10) is larger than the top-level code, which is compiled to native code and so offers f() for
+        native compilation, and smaller than f(), which is then skipped with a diagnostic giving its size
+    */
+    private int irCount(string source) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(source);
+        tmp.file.close();
+        hash<ExecModeHarness::ModeRunResult> res = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=jit %s",
+            qore_bin, tmp.path), NOTHING, "QORE_JIT_MAX_IR_INSTRUCTIONS=10 QORE_JIT_TIMING=1");
+        assertRegex("^r=", res.stdout, "the probe ran: " + res.out);
+        *list<*string> count;
+        foreach string line in (res.trace) {
+            count = line =~ x/skipped native promotion of 'f@[^']*' \(compilation budget exceeded; ([0-9]+) IR/;
+            if (count) {
+                break;
+            }
+        }
+        if (!count) {
+            throw "PROBE-ERROR", sprintf("no budget diagnostic for f(); trace: %y; output: %s", res.trace, res.out);
+        }
+        return count[0].toInt();
+    }
+
+    #! returns a probe function with \a n copies of \a statement after the declaration of its local
+    private static string probe(string statement, int n, *string decls, *bool no_debugging) {
+        list<string> source = ("%modern\n",);
+        if (no_debugging) {
+            push source, "%no-debugging\n";
+        }
+        push source, "int sub f(int value) {\n    int total = value;\n";
+        if (decls) {
+            push source, decls;
+        }
+        for (int i = 0; i < n; ++i) {
+            push source, "    " + statement + "\n";
+        }
+        push source, "    return total;\n}\nprintf(\"r=%d\\n\", f(0));\n";
+        return source.join("");
+    }
+
+    testDensity() {
+        foreach hash<auto> i in (FusedStatements.pairIterator()) {
+            foreach int n in ((10, 20, 100)) {
+                assertEq(n + ProbeOverhead + DebugStatementOverhead, irCount(probe(i.value, n)),
+                    sprintf("%s: %d statements, the step events of the other two statements", i.key, n));
+                # code that cannot be debugged has no step events
+                assertEq(n + ProbeOverhead, irCount(probe(i.value, n, NOTHING, True)),
+                    sprintf("%s: %d statements with %%no-debugging", i.key, n));
+            }
+        }
+    }
+
+    testAddLocalDensity() {
+        # the declaration of the second local is three instructions and, in code that can be debugged, a step event
+        string decl = "    int step = 2;\n";
+        foreach int n in ((10, 20, 100)) {
+            assertEq(n + ProbeOverhead + 3 + DebugStatementOverhead + 1, irCount(probe("total += step;", n, decl)),
+                sprintf("%d statements adding a local", n));
+            assertEq(n + ProbeOverhead + 3, irCount(probe("total += step;", n, decl, True)),
+                sprintf("%d statements adding a local with %%no-debugging", n));
+        }
+    }
+
+    #! returns the 1-based line numbers of the tagged statements of the step script
+    private hash<string, int> tagLines() {
+        hash<string, int> ret = {};
+        list<string> script_lines = StepScript.split("\n");
+        for (int i = 0; i < script_lines.size(); ++i) {
+            *list<*string> tag = script_lines[i] =~ x/### ([a-z_]+)/;
+            if (tag) {
+                ret{tag[0]} = i + 1;
+            }
+        }
+        return ret;
+    }
+
+    #! runs the step script in each execution mode; returns the results by mode
+    /** The debugger is attached in work(), which therefore runs as native code with JIT and tiered execution and
+        with the IR interpreter with IR execution, where the step events are made by the folded statements; the AST
+        interpreter gives the reference results
+    */
+    private hash<string, hash<auto>> runSteps(int return_line) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(StepScript);
+        tmp.file.close();
+        hash<string, hash<auto>> ret = {};
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            ret{mode} = parseSteps(ExecModeHarness::run(sprintf("%s --enable-debug --exec-mode=%s %s %d", qore_bin,
+                mode, tmp.path, return_line)));
+        }
+        return ret;
+    }
+
+    private static hash<auto> parseSteps(string out) {
+        *list<*string> steps = out =~ x/STEPLINES:\[([0-9, ]*)\]/;
+        *list<*string> result = out =~ x/RESULT:<([^>]*)>/;
+        return {
+            "out": out,
+            "result": result ? result[0] : NOTHING,
+            "step_lines": steps ? (map trim($1).toInt(), steps[0].split(","), trim($1) != "") : (),
+        };
+    }
+
+    testStepEvents() {
+        hash<string, int> tags = tagLines();
+        # the steps after the attach at i == 2: the rest of the iteration, the next one and the detach
+        list<int> expected = map tags{$1}, ("add_constant", "add_local", "increment", "if", "add_constant",
+            "add_local", "increment", "detach", "remove");
+        foreach hash<auto> i in (runSteps(0).pairIterator()) {
+            # 4 * (10 + 2 + 1)
+            assertEq("52", i.value.result, i.key + ": the function's result: " + i.value.out);
+            assertEq(expected, i.value.step_lines, i.key + ": the step event of every statement");
+        }
+    }
+
+    testDebuggerReturn() {
+        hash<string, int> tags = tagLines();
+        # the debugger returns from the function at the second step event of `total += 10;` (i == 3), which does not
+        # run; the top-level code that follows steps as well, as the function did not detach the debugger
+        list<int> expected = map tags{$1}, ("add_constant", "add_local", "increment", "if", "add_constant");
+        hash<string, hash<auto>> res = runSteps(tags.add_constant);
+        # native code does not take the flow of a step event (QoreIRToLLVM::emitDebugStepHook()), so only the
+        # interpreters are compared
+        foreach string mode in (("ast", "ir")) {
+            hash<auto> r = res{mode};
+            assertEq("none", r.result, mode + ": the function returned no value: " + r.out);
+            assertEq(expected, r.step_lines[0..expected.size() - 1], mode + ": the step events up to the return");
+            assertFalse(inlist(tags.catch_detach, r.step_lines) || inlist(tags.detach, r.step_lines),
+                mode + ": the function returned at the step event");
+        }
+        assertEq(res.ast.step_lines, res.ir.step_lines, "the IR interpreter makes the step events of the AST one");
+    }
+}
