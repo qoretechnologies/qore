@@ -807,12 +807,16 @@ protected:
         if (!val) {
             return *qv;
         }
+        QoreValue rv = val->getValue();
         // only a natively stored scalar can be returned in a new node; a node or an inline value is the lvalue's
-        return val->optimized() ? getNativeValue() : val->getValue();
+        if (val->optimized() && rv.isPointer()) {
+            keepCreatedNode(rv);
+        }
+        return rv;
     }
 
-    //! returns the value of a natively stored scalar; a node that this creates for it is kept in tvec
-    DLLLOCAL QORE_INTERN_NOINLINE QoreValue getNativeValue() const;
+    //! keeps the node that getValue() created for a natively stored scalar in tvec
+    DLLLOCAL QORE_INTERN_NOINLINE void keepCreatedNode(QoreValue rv) const;
 
     DLLLOCAL int doRecursiveException() {
         vl.xsink->raiseException("REFERENCE-ERROR", "recursive reference detected in assignment");
@@ -1438,8 +1442,8 @@ public:
     }
 
     //! returns the node stored in the lvalue, or nullptr if it holds none
-    /** unlike getValue(), this never creates a value: a large int stored natively is returned by getValue() as a
-        new heap node that the caller would have to release
+    /** unlike getValue(), this never creates a node: getValue() returns a scalar stored natively that a value holds
+        in a node (a large int or a special float) in a new node, which this helper keeps until it is destroyed
     */
     DLLLOCAL const AbstractQoreNode* getInternalNode() const {
         return val ? val->getInternalNode() : qv->getInternalNode();
@@ -1469,7 +1473,9 @@ public:
             return;
         }
         member_lvalue_modified = true;
-        QoreValue current = getValue();
+        // a container or a string: never a scalar that the lvalue stores natively, which getValue() would keep
+        QoreValue current = val ? val->getValue() : *qv;
+        assert(!val || !val->optimized());
         if (current.isShortString()) {
             char buf[7];
             current.getShortString(buf);

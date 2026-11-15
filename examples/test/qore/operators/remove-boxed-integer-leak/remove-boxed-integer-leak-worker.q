@@ -6,6 +6,7 @@
 # heap integers and floats it left behind (dbg_get_live_bigint_count(), dbg_get_live_bigfloat_count()), which
 # remove-boxed-integer-leak.qtest checks
 %modern
+%allow-weak-references
 
 class Holder {
     public {
@@ -127,6 +128,23 @@ sub writes(string kind, auto v) {
     check(kind + " r.typeCode()", kind == "int" ? NT_INT : NT_FLOAT, r.typeCode());
 }
 
+#! weak assignments from locals that hold such values: a qcc-compiled program makes the container that an untyped
+#! local holds unique first (qore_rt_unique_local_aot()), which read the value in a new node
+sub weakAssignments(int big, float f) {
+    int x = big;
+    auto w := x;
+    check("int x; w := x", big, w);
+    float y = f;
+    auto wf := y;
+    check("float y; wf := y", f, wf);
+    auto ax = big;
+    auto aw := ax;
+    check("auto ax = int; aw := ax", big, aw);
+    auto ay = f;
+    auto awf := ay;
+    check("auto ay = float; awf := ay", f, awf);
+}
+
 sub run(int offset) {
     int big = (1 << 60) + offset;
     removals("int", (big, big + 1, big + 2, big + 3));
@@ -139,6 +157,7 @@ sub run(int offset) {
     float f = -pow(2.0, 1021) * (1.0 + offset / 8.0);
     removals("float", (f, f * 1.25, f * 1.5, f * 1.75));
     writes("float", f);
+    weakAssignments(big, f);
 }
 
 # no loop: a top-level loop keeps the last values of its temporary integers in the IR tier

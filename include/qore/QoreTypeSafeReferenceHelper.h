@@ -176,7 +176,8 @@ public:
     DLLEXPORT int assign(QoreValue val);
 
     //! returns the reference's value
-    /** @return the value of the lvalue reference
+    /** @return the value of the lvalue reference, which is valid only while this helper exists and which the caller
+        does not own; a caller that keeps the value after that must take its own reference to it
     */
     DLLEXPORT const QoreValue getValue() const;
 

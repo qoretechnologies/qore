@@ -10823,11 +10823,9 @@ static void transplantClassClosureValues(
                 continue;  // fallback var not evaluated yet
             }
 
-            // Read the evaluated value from the fallback static var, with a reference of its own: a large int or a
-            // special float that the var stores natively is returned in a new node (qore#6094)
-            QoreValue fb_ref = fb_vi->val.getReferencedValue();
-            if (fb_ref.isNothing()) {
-                fb_ref.discard(nullptr);
+            // Read the evaluated value from the fallback static var
+            QoreValue fb_val = fb_vi->val.getValue();
+            if (fb_val.isNothing()) {
                 // Even if the value is NOTHING, mark as initialized to prevent
                 // re-evaluation of a missing init expression
                 vi.second->eval_init = true;
@@ -10835,6 +10833,7 @@ static void transplantClassClosureValues(
             }
 
             // Assign the evaluated value to the main static var
+            QoreValue fb_ref = fb_val.refSelf();
             retargetFallbackValueTypes(fb_ref, type_resolver, hashdecl_map);
             discard(vi.second->assignInit(fb_ref), nullptr);
             vi.second->eval_init = true;

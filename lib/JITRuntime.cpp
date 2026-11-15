@@ -2090,7 +2090,12 @@ static QoreValue qore_rt_assign_local_transfer(LocalVar* var, QoreValue value,
     if (helper.assign(value, "<lvalue>", true)) {
         return QoreValue();
     }
-    return helper.getValue();
+    // the node that the local stores, which stays valid after the helper is gone: the callers pass a copy of a hash or
+    // a list; helper.getValue() would return a scalar that the local stores natively in a node that the helper keeps
+    // and releases when it is destroyed (qore#6094)
+    QoreValue stored(helper.getInternalNode());
+    assert(stored.getType() == NT_HASH || stored.getType() == NT_LIST);
+    return stored;
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {

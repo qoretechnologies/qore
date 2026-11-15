@@ -1335,20 +1335,19 @@ void QoreLValueReferencePrograms::releaseIntern(ExceptionSink* xsink) {
     }
 }
 
-QoreValue LValueHelper::getNativeValue() const {
+void LValueHelper::keepCreatedNode(QoreValue rv) const {
     assert(val && val->optimized());
-    QoreValue rv = val->getValue();
-    if (rv.isPointer()) {
-        // a large int or a special float, which a value holds in a new node (qore#6094)
-        AbstractQoreNode* n = rv.getInternalNode();
-        try {
-            tvec.push_back(n);
-        } catch (...) {
-            n->deref(nullptr);
-            throw;
-        }
+    // a large int or a special float, which a value holds in a new node (qore#6094); a natively stored scalar is never
+    // returned as an opaque reference
+    assert(!rv.isOpaque());
+    AbstractQoreNode* n = rv.getInternalNode();
+    assert(n);
+    try {
+        tvec.push_back(n);
+    } catch (...) {
+        n->deref(nullptr);
+        throw;
     }
-    return rv;
 }
 
 void LValueHelper::saveTemp(QoreValue val) {
@@ -1642,7 +1641,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
 
         //printd(5, "LValueHelper::doListLValue() this: %p saving old value: %p '%s'\n", this, vp, get_type_name(vp));
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
-        if (!getValue()) {
+        if (isNothing()) {
             // issue #2652: assign the current runtime type based on the declared complex list type
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 // issue #3429 assign an untyped list if required
@@ -1787,7 +1786,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         }
 
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
-        if (!getValue()) {
+        if (isNothing()) {
             // issue #2652: assign the current runtime type based on the declared complex list type
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 // issue #3429 assign an untyped list if required
@@ -1911,7 +1910,7 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
         //printd(5, "LValueHelper::doHashLValue() cv: '%s' ti: %p '%s' c: %p\n", getValue().getFullTypeName(),
         //    typeInfo, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo));
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
-        if (!getValue()) {
+        if (isNothing()) {
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == hashTypeInfo
                 || typeInfo == hashOrNothingTypeInfo) {
                 // issue #3429 assign an untyped hash if required
@@ -2745,7 +2744,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                         return -1;
                     }
                     // auto-vivify: create list with appropriate type
-                    if (!getValue()) {
+                    if (isNothing()) {
                         if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
                             || typeInfo == listOrNothingTypeInfo) {
                             assignNodeIntern((l = new QoreListNode));

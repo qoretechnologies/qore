@@ -29,6 +29,8 @@
     - the writes and reads of a variable that holds such a value through LValueHelper: a member or an element that
       replaces it (<tt>x.a = 1</tt>, <tt>x[0] = 1</tt>), a cast in an lvalue, a number result converted to the
       type of the lvalue and a pseudo-method called through a reference
+    - a weak assignment from a local that holds such a value in a qcc-compiled program
+      (<tt>auto x = big; auto w := x;</tt>), which read the local's value to make a container unique
 
     LValueHelper::getValue() now keeps such a node and releases it with the helper's other temporary values.
 
