@@ -1833,6 +1833,11 @@
     - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for
       @ref Qore::date(string) "date(string)") is converted to microseconds without the error of its binary
       approximation, which could lose a microsecond (\c P0.0000001Y gave 3.153599 seconds; issue #6109)
+    - a failed non-blocking connect to a TCP or UNIX socket target
+      (@ref Qore::Socket::startPollConnect() "Socket::startPollConnect()",
+      @ref Qore::Socket::startPollConnectSsl() "Socket::startPollConnectSsl()",
+      @ref Qore::HTTPClient::startPollConnect() "HTTPClient::startPollConnect()") reports the connect's own error; on
+      macOS, a refused or timed-out connect could be reported as <tt>Broken pipe</tt> (\c EPIPE) (issue #6119)
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
