@@ -599,14 +599,6 @@ static QoreValue evalAndRef(QoreValue& val, ExceptionSink* xsink) {
 }
 
 
-// Overload for const QoreValue& (used in evalInvoke with const instruction)
-static QoreValue evalAndRef(const QoreValue& val, ExceptionSink* xsink) {
-    if (!val.hasNode()) {
-        return val;
-    }
-    return evalAndRef(const_cast<AbstractQoreNode*>(val.getInternalNode()), xsink);
-}
-
 static QoreValue getListAssignmentValue(QoreValue value, int64_t index) {
     if (value.getType() == NT_LIST) {
         const QoreListNode* l = value.get<const QoreListNode>();

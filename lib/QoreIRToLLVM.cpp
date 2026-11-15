@@ -13013,11 +13013,6 @@ static bool setExpressionFallbackError(std::string& error,
     return false;
 }
 
-static bool setExpressionFallbackError(std::string& error,
-        const QoreIRInstruction* inst, const std::string& reason) {
-    return setExpressionFallbackError(error, inst, reason.c_str());
-}
-
 void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, bool synthetic) {
     // AOT native code is program-independent: it cannot bake the program-specific

@@ -369,11 +369,6 @@ static size_t count_quotes(const char*& str, size_t& len, const char* quote, siz
     return rv;
 }
 
-// count how many consecutive quotes
-static size_t count_quotes(const char*& str, size_t& len, const QoreString& quote) {
-    return count_quotes(str, len, quote.c_str(), quote.size());
-}
-
 QoreListNode* split_with_quote(ExceptionSink* xsink, const QoreString* sep, const QoreString* str,
         const QoreString* quote, bool trim_unquoted, AbstractIteratorHelper* h, const QoreString* eol,
         bool keep_trailing_empty, const QoreString* quote_escape, QoreLineTerminatorSource* lts) {

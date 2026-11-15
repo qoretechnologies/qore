@@ -1570,13 +1570,6 @@ static void collectLocalsFromIRFunction(const QoreIRFunction& func,
 //! Collects the locals of \a func and of its handlers, each handler function once (they can be shared, #6087)
 static void collectLocalsFromIRFunction(const QoreIRFunction& func,
         std::unordered_set<const void*>& ast_locals,
-        bool& unknown_node_found) {
-    std::unordered_set<const QoreIRFunction*> visited_handlers;
-    collectLocalsFromIRFunction(func, ast_locals, unknown_node_found, visited_handlers);
-}
-
-static void collectLocalsFromIRFunction(const QoreIRFunction& func,
-        std::unordered_set<const void*>& ast_locals,
         bool& unknown_node_found, std::unordered_set<const QoreIRFunction*>& visited_handlers) {
     auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
         collectLocalsFromExpr(ctx_inst->exp, ast_locals, unknown_node_found);

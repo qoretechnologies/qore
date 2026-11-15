@@ -246,22 +246,6 @@ static void makeRuntimeDeserializedClosureIRNameUnique(QoreIRFunction& ir, const
         + "_" + std::to_string(closure_ir_counter.fetch_add(1));
 }
 
-static const AbstractQoreZoneInfo* runtimeReadAOTDateZone(const char* zone_name) {
-    if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
-        return nullptr;
-    }
-
-    ExceptionSink xsink;
-    const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
-        ? QTZM.findCreateOffsetZone(zone_name, &xsink)
-        : QTZM.findLoadRegion(zone_name, &xsink);
-    if (xsink) {
-        xsink.clear();
-        return nullptr;
-    }
-    return zone;
-}
-
 static std::string getAOTTypePathForLValue(const QoreTypeInfo* ti) {
     return qore_get_aot_serializable_type_path(ti);
 }

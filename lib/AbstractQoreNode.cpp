@@ -689,52 +689,6 @@ static QoreValue crlr_objmethref_copy(RuntimeConfig& rc, const QoreValue& n, Exc
     return *xsink ? QoreValue() : QoreValue(new ParseObjectMethodReferenceNode(*omr, exp.release()));
 }
 
-// Non-RuntimeConfig versions - delegate to RuntimeConfig versions
-static QoreListNode* crlr_list_copy(const QoreListNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_list_copy(rc, n, xsink);
-}
-
-static QoreParseListNode* crlr_list_copy(const QoreParseListNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_list_copy(rc, n, xsink);
-}
-
-static AbstractQoreNode* crlr_hash_copy(const QoreHashNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_hash_copy(rc, n, xsink);
-}
-
-static AbstractQoreNode* crlr_hash_copy(const QoreParseHashNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_hash_copy(rc, n, xsink);
-}
-
-static AbstractQoreNode* crlr_selfcall_copy(const SelfFunctionCallNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_selfcall_copy(rc, n, xsink);
-}
-
-static AbstractQoreNode* crlr_fcall_copy(const FunctionCallNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_fcall_copy(rc, n, xsink);
-}
-
-static AbstractQoreNode* crlr_mcall_copy(const MethodCallNode* m, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_mcall_copy(rc, m, xsink);
-}
-
-static AbstractQoreNode* crlr_smcall_copy(const StaticMethodCallNode* m, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_smcall_copy(rc, m, xsink);
-}
-
-static AbstractQoreNode* call_ref_call_copy(const CallReferenceCallNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return call_ref_call_copy(rc, n, xsink);
-}
-
 QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return copy_value_and_resolve_lvar_refs(rc, n, xsink);

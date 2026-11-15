@@ -249,34 +249,6 @@ static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPo
     return 0;
 }
 
-static QoreValue socket_exec_poll_output(QoreObject* self, QoreSocketObject* s, SocketPollOperationBase* poller,
-        const char* owner_name, const char* goal, ExceptionSink* xsink) {
-    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
-        xsink);
-    poller_holder->setSelf(*op_obj);
-    poller_holder.release();
-
-    if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
-    }
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    ReferenceHolder<QoreHashNode> result(
-        socket_exec_poll_operation(self, s, *op_obj, -1, owner_name, xsink), xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-    return poller->getOutput();
-}
-
 // raises an exception and returns -1 if the socket has an HTTP/2 session, on which no HTTP/1 message may be sent; the
 // session is read through its holder (H2SessionHolder), which any thread may read, so the check needs no controller
 // round trip
@@ -1069,26 +1041,6 @@ static BinaryNode* socket_exec_recv_bytes(QoreObject* self, QoreSocketObject* s,
         return nullptr;
     }
     return bin.release();
-}
-
-static BinaryNode* socket_exec_recv_some_binary(QoreObject* self, QoreSocketObject* s, size_t size,
-        int timeout_ms, ExceptionSink* xsink, const char* owner_name = "recvToOutputStream") {
-    s->ref();
-    ValueHolder result(socket_exec_recv_poll(self, s,
-        new SocketRecvSomePollOperation(xsink, static_cast<ssize_t>(size), s, false, true),
-        timeout_ms, owner_name, xsink), xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (result->isNothing()) {
-        return new BinaryNode;
-    }
-    if (result->getType() != NT_BINARY) {
-        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
-            result->getFullTypeName());
-        return nullptr;
-    }
-    return result.release().get<BinaryNode>();
 }
 
 class SocketExecOutputStreamRefGuard {
