@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - realpath and symbolic links, libqore.dylib names, DYLD_LIBRARY_PATH and SIP with env(1)
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -113,9 +114,10 @@ public class QoreBuildTreeTest inherits QUnit::Test {
         }
     }
 
-    #! copies the qore under test outside its build tree; it finds libqore in the library path
+    #! copies the qore under test outside its build tree, keeping its mode; it finds libqore in the library path
     private copyQore(string path) {
-        assertEq(0, system(sprintf("cp %s %s", quote(QoreBuildTree::qore_executable()), quote(path))));
+        copy_file(QoreBuildTree::qore_executable(), path);
+        assertTrue(is_executable(path), path);
     }
 
     #! runs the child script and returns its name=value lines
