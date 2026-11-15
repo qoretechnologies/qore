@@ -280,7 +280,7 @@ public:
     DLLLOCAL void setHeartbeat(int64 ms) {
         heartbeat_interval_ms = ms;
         if (ms > 0 && last_recv_activity_ms == 0) {
-            last_recv_activity_ms = q_clock_getmillis();
+            last_recv_activity_ms = monotonicMs();
         }
     }
 
@@ -294,7 +294,7 @@ public:
     DLLLOCAL void setIdleTimeout(int64 ms) {
         idle_timeout_ms = ms;
         if (ms > 0 && last_recv_activity_ms == 0) {
-            last_recv_activity_ms = q_clock_getmillis();
+            last_recv_activity_ms = monotonicMs();
         }
     }
 
@@ -430,10 +430,20 @@ private:
     */
     int64 heartbeat_interval_ms = 0;
 
-    //! Timestamp of last received data (milliseconds, monotonic clock)
+    //! Returns the time of the monotonic clock in milliseconds, at least 1, for the heartbeat, idle and send timers
+    /** The timers measure intervals, which a step of the system clock must not change: a step forward closed idle
+        connections at once, and a step back suppressed the heartbeat and the idle close for the size of the step.
+        Never 0, as 0 marks a timestamp that is not set.
+    */
+    DLLLOCAL static int64 monotonicMs() {
+        int64 ms = q_clock_getmicros_monotonic() / 1000;
+        return ms > 0 ? ms : 1;
+    }
+
+    //! Timestamp of last received data (milliseconds, monotonic clock; see monotonicMs())
     int64 last_recv_activity_ms = 0;
 
-    //! Timestamp of last PING frame sent (milliseconds, monotonic clock)
+    //! Timestamp of last PING frame sent (milliseconds, monotonic clock; see monotonicMs())
     /** Tracked separately from last_recv_activity_ms so outgoing PINGs do
         not mask peer silence — idle-timeout detection relies on
         last_recv_activity_ms reflecting real incoming traffic only.

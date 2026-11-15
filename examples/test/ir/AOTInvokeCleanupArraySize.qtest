@@ -155,8 +155,10 @@ class AOTInvokeCleanupArraySizeTest inherits QUnit::Test {
             int size = alloc[0].toInt();
             assertGe(BigTemps, size, "cleanup array holds at least one slot per temporary");
 
-            # every registration writes a distinct index below the array size
-            list<string> idx = body =~ x/getelementptr ptr, ptr %cleanup_slots, i32 ([0-9]+)/g;
+            # every registration writes a distinct index below the array size (the calls that release the slots
+            # of an exit that holds the value of a return take the address of a run of them with a pointer of
+            # their own, %cleanup_run_from)
+            list<string> idx = body =~ x/%cleanup_slot_ptr[0-9]* = getelementptr ptr, ptr %cleanup_slots, i32 ([0-9]+)/g;
             assertEq(size, idx.size(), "one registration per array element");
             assertEq(size, (map {$1: True}, idx).size(), "registration indexes are distinct");
             assertEq(size - 1, max(map $1.toInt(), idx), "highest registration index is the last element");

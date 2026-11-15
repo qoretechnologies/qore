@@ -32568,7 +32568,19 @@ static bool shouldSkipExprInstructionExprSlot(const QoreIRExprInstruction* ei) {
     @param slots the slot map of the function that owns the handler
 */
 static void registerHandlerOuterLocals(const QoreIRFunction& handler,
+        const std::unordered_set<const LocalVar*>& body_locals, AOTSlotMap& slots,
+        std::unordered_set<const QoreIRFunction*>& visited_handlers);
+
+static void registerHandlerOuterLocals(const QoreIRFunction& handler,
         const std::unordered_set<const LocalVar*>& body_locals, AOTSlotMap& slots) {
+    // each handler function once: they can be shared (#6087)
+    std::unordered_set<const QoreIRFunction*> visited_handlers;
+    registerHandlerOuterLocals(handler, body_locals, slots, visited_handlers);
+}
+
+static void registerHandlerOuterLocals(const QoreIRFunction& handler,
+        const std::unordered_set<const LocalVar*>& body_locals, AOTSlotMap& slots,
+        std::unordered_set<const QoreIRFunction*>& visited_handlers) {
     // register in handler slot order so that the slot table is deterministic
     std::vector<std::pair<uint32_t, const LocalVar*>> outer;
     for (const auto& [lv, slot_id] : handler.local_var_slots) {
@@ -32591,8 +32603,8 @@ static void registerHandlerOuterLocals(const QoreIRFunction& handler,
                 continue;
             }
             const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
-            if (obei->handler_ir) {
-                registerHandlerOuterLocals(*obei->handler_ir, body_locals, slots);
+            if (obei->handler_ir && visited_handlers.insert(obei->handler_ir.get()).second) {
+                registerHandlerOuterLocals(*obei->handler_ir, body_locals, slots, visited_handlers);
             }
         }
     }
@@ -33110,7 +33122,9 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                 }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
-                    if (obei->handler_ir) {
+                    // a handler function shared by handlers of this function is walked once in it (#6087)
+                    if (obei->handler_ir && slots.handler_slot_maps_built.emplace(&func,
+                            obei->handler_ir.get()).second) {
                         if (!body_locals_built) {
                             for (const LocalVar* lv : func.all_body_locals) {
                                 body_locals.insert(lv);
@@ -36676,6 +36690,7 @@ static void addAOTStaticVarRef(std::vector<AOTStaticVarRefId>& refs, std::set<st
 */
 static void collectAOTStaticVarRefs(const QoreIRFunction& func, std::vector<AOTStaticVarRefId>& refs) {
     std::set<std::string> seen;
+    std::unordered_set<const QoreIRFunction*> visited_handlers;
     // a cancelled compile fails at its next cancellation check, so what was collected before it is moot
     size_t inst_i = 0;
     bool cancelled = false;
@@ -36719,7 +36734,8 @@ static void collectAOTStaticVarRefs(const QoreIRFunction& func, std::vector<AOTS
                     }
                     case QoreIROpcode::OnBlockExit: {
                         const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
-                        if (obei->handler_ir) {
+                        // each handler function once: they can be shared (#6087)
+                        if (obei->handler_ir && visited_handlers.insert(obei->handler_ir.get()).second) {
                             walk(*obei->handler_ir);
                         }
                         break;
@@ -36795,6 +36811,8 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             }
             return true;  // never fail the enclosing IR serialization dry-run
         };
+        // each handler function once: they can be shared (#6087)
+        std::unordered_set<const QoreIRFunction*> visited_handlers;
         std::function<void(const QoreIRFunction&)> dry_run_ir =
                 [&](const QoreIRFunction& f) {
             // Recurse into any nested OnBlockExit handler IRs first so that
@@ -36804,7 +36822,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
                     if (inst_ptr->opcode == QoreIROpcode::OnBlockExit) {
                         auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(
                             inst_ptr.get());
-                        if (obei->handler_ir) {
+                        if (obei->handler_ir && visited_handlers.insert(obei->handler_ir.get()).second) {
                             dry_run_ir(*obei->handler_ir);
                         }
                     }
@@ -36822,7 +36840,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
                 if (inst_ptr->opcode == QoreIROpcode::OnBlockExit) {
                     auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(
                         inst_ptr.get());
-                    if (obei->handler_ir) {
+                    if (obei->handler_ir && visited_handlers.insert(obei->handler_ir.get()).second) {
                         dry_run_ir(*obei->handler_ir);
                     }
                 }
