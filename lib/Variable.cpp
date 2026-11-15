@@ -1349,6 +1349,22 @@ void LValueHelper::replaceEnumForWrite(const QoreValue& current) {
     saveTemp(old);
 }
 
+void LValueHelper::ensureUniqueSlow(const QoreValue& current) {
+    if (current.isEnum()) {
+        // the enum member's base value is shared and constant: the lvalue takes an owned copy to modify
+        replaceEnumForWrite(current);
+        return;
+    }
+    if (current.isShortString()) {
+        char buf[7];
+        current.getShortString(buf);
+        assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
+        return;
+    }
+    // an opaque reference
+    ensureUniqueNode();
+}
+
 void LValueHelper::saveTemp(QoreValue val) {
     if (val.isEnum()) {
         val.discard(nullptr);

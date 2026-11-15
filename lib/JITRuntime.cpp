@@ -10672,9 +10672,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
     }
 
     QoreStringValueHelper right_string(right);
-    // an enum value does not own the string node of its member's base value, whose reference count does not show
-    // the enum values that share it (see qore_enum_value_copy_for_write()): it is never appended to in place
-    QoreStringNode* left_node = left.isShortString() || left.isEnum() ? nullptr : left.get<QoreStringNode>();
+    // only a string node held as an ordinary pointer is appended to in place: not an inline short string, and not an
+    // enum value, which does not own the string node of its member's base value, whose reference count does not show
+    // the enum values that share it (see qore_enum_value_copy_for_write()); a string is never held opaquely
+    QoreStringNode* left_node = left.isPlainPointer() ? left.get<QoreStringNode>() : nullptr;
     QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
         left_node->concat(*right_string, xsink);
@@ -10717,9 +10718,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
     }
 
     QoreStringValueHelper right_string(right);
-    // an enum value does not own the string node of its member's base value, whose reference count does not show
-    // the enum values that share it (see qore_enum_value_copy_for_write()): it is never appended to in place
-    QoreStringNode* left_node = left.isShortString() || left.isEnum() ? nullptr : left.get<QoreStringNode>();
+    // only a string node held as an ordinary pointer is appended to in place: not an inline short string, and not an
+    // enum value, which does not own the string node of its member's base value, whose reference count does not show
+    // the enum values that share it (see qore_enum_value_copy_for_write()); a string is never held opaquely
+    QoreStringNode* left_node = left.isPlainPointer() ? left.get<QoreStringNode>() : nullptr;
     QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
         left_node->concat(*right_string, xsink);
