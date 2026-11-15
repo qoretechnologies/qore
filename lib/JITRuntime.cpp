@@ -13974,10 +13974,7 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
         }
         // Match SelfFunctionCallNode::evalImpl(): unqualified self calls are virtual, so unless the object's class
         // is the parse-time class (or the method's), the method is resolved by name on the object's class
-        // an abstract method is looked up by name also for an object of the parse-time class, which can inherit the
-        // implementation from another parent class (issue #3070)
-        if (target.qc && method && !target.self_is_abstract
-                && (self->getClass() == target.qc || self->getClass() == method->getClass())) {
+        if (target.qc && method && (self->getClass() == target.qc || self->getClass() == method->getClass())) {
             return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, call_ctx,
                 target.variant, nullptr, target.explicit_type_param_instantiation));
         }

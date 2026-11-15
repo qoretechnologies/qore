@@ -1085,14 +1085,8 @@ QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSema
         // list.  Binding to the parse-time variant instead silently skipped such overrides.
         // must have a class context here
         assert(class_ctx || runtime_cls);
-        if (is_abstract) {
-            // issue #3070: the method resolved at parse time is abstract, and the class of the object implements it,
-            // also when it inherits the implementation from another parent class than the one that declares the
-            // method: it is looked up by name, also for an object of the class of the call
-            QoreRcCallSiteHelper call_site(rc, loc);
-            return execByNameImpl<Lexical>(policy, self, ns.ostr, class_ctx ? class_ctx : runtime_cls, rc, xsink);
-        }
-        // exec() sets the call site
+        // exec() sets the call site; a call of an abstract method has no parse-time class (see parseInitCall()), so
+        // the method is looked up by name (issue #3070)
         return execImpl<Lexical>(policy, self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
     }
 
@@ -1251,6 +1245,13 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
         if (qore_method_private::get(*method)->isAbstract()) {
             assert(!variant);
             is_abstract = true;
+            // the class of the object implements the method, also when it inherits the implementation from another
+            // parent class than the one that declares the method, so an unqualified call has no parse-time class:
+            // AbstractMethodCallNode::exec() then looks the method up by name also for an object of the class of
+            // the call, and the call costs nothing more at run time than other virtual self calls
+            if (ns.size() == 1) {
+                qc = nullptr;
+            }
         }
     }
     return err;

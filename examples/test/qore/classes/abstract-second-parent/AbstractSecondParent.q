@@ -13,6 +13,8 @@ class Base {
 
     abstract string o(int i);
     abstract string o(string s);
+
+    abstract nothing put(Queue q, int i);
 }
 
 class Impl {
@@ -26,6 +28,10 @@ class Impl {
 
     string o(string s) {
         return "Impl::o(string) " + s;
+    }
+
+    nothing put(Queue q, int i) {
+        q.push("Impl::put " + i);
     }
 }
 
@@ -42,12 +48,44 @@ class D inherits Base, Impl {
     string callOverloads() {
         return o(3) + ", " + o("x");
     }
+
+    # a background expression that calls the method
+    string callBackground() {
+        Queue q();
+        background put(q, 7);
+        # the thread raises an exception and pushes nothing if the call fails
+        return q.get(60s);
+    }
+
+    # a call on the object after it has been deleted
+    string callDeleted() {
+        delete self;
+        return m(8);
+    }
+}
+
+# a final class, whose calls can be bound when the program is compiled
+final class H inherits Base, Impl {
+    string callM() {
+        return m(9);
+    }
+
+    string callBackground() {
+        Queue q();
+        background put(q, 10);
+        # the thread raises an exception and pushes nothing if the call fails
+        return q.get(60s);
+    }
 }
 
 # a subclass of D overrides the implementation
 class E inherits D {
     string m(int i) {
         return "E::m " + i;
+    }
+
+    nothing put(Queue q, int i) {
+        q.push("E::put " + i);
     }
 }
 
@@ -69,6 +107,10 @@ class GrandImpl {
 
     string o(string s) {
         return "GrandImpl::o(string) " + s;
+    }
+
+    nothing put(Queue q, int i) {
+        q.push("GrandImpl::put " + i);
     }
 }
 
@@ -101,4 +143,9 @@ for (int i = 0; i < 3; ++i) {
     check("subclass override, qualified", string sub () { E e(); return e.callQualified(); });
     check("implementing class first", string sub () { F f(); return f.callM(); });
     check("implementation from a grandparent", string sub () { G g(); return g.callM(); });
+    check("background self call", string sub () { D d(); return d.callBackground(); });
+    check("background self call, subclass", string sub () { E e(); return e.callBackground(); });
+    check("call on a deleted object", string sub () { D d(); return d.callDeleted(); });
+    check("final class", string sub () { H h(); return h.callM(); });
+    check("final class, background self call", string sub () { H h(); return h.callBackground(); });
 }

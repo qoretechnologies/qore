@@ -7,6 +7,11 @@ subclass override: E::m 1
 subclass override, qualified: E::m 2
 implementing class first: Impl::m 4
 implementation from a grandparent: GrandImpl::m 5
+background self call: Impl::put 7
+background self call, subclass: E::put 7
+call on a deleted object: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+final class: Impl::m 9
+final class, background self call: Impl::put 10
 round 1
 unqualified self call: Impl::m 1
 qualified self call: Impl::m 2
@@ -16,6 +21,11 @@ subclass override: E::m 1
 subclass override, qualified: E::m 2
 implementing class first: Impl::m 4
 implementation from a grandparent: GrandImpl::m 5
+background self call: Impl::put 7
+background self call, subclass: E::put 7
+call on a deleted object: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+final class: Impl::m 9
+final class, background self call: Impl::put 10
 round 2
 unqualified self call: Impl::m 1
 qualified self call: Impl::m 2
@@ -25,3 +35,8 @@ subclass override: E::m 1
 subclass override, qualified: E::m 2
 implementing class first: Impl::m 4
 implementation from a grandparent: GrandImpl::m 5
+background self call: Impl::put 7
+background self call, subclass: E::put 7
+call on a deleted object: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+final class: Impl::m 9
+final class, background self call: Impl::put 10

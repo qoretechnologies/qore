@@ -2111,6 +2111,10 @@ public:
                 const QoreClass* qc = sfcn->getClass();
                 if (qc) {
                     class_ctx = qore_class_private::get(*qc);
+                } else if (sfcn->isAbstractCall()) {
+                    // an unqualified call of an abstract method has no parse-time class (issue #3070); its class
+                    // context is the class of the call
+                    class_ctx = sfcn->getClassContext();
                 }
             }
 
