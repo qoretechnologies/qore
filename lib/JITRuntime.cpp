@@ -12559,6 +12559,9 @@ private:
     RuntimeParseOptionsOverrideHelper helper;
 };
 
+// the cross-module fast-call runtime is not used by the JITRuntimeGivenArgs unit (it makes no cross-module fast
+// calls), so like the rest of the file it is compiled only in the single compilation unit (qore#6035, #5882)
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 namespace {
 //! The state of a native call of the fast entry of a function of another module (qore#6035)
 /** What qore_rt_call_direct_aot_impl() sets up for the call of a user function in the Program that defined it, in
@@ -12691,6 +12694,7 @@ extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, in
 extern "C" DLLEXPORT void qore_rt_leave_cross_module_call(void* state_buf) {
     static_cast<QoreRtCrossModuleCallState*>(state_buf)->~QoreRtCrossModuleCallState();
 }
+#endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 //! Returns the Program that a method runs in, as for the calls made without native code
 /** \a holder keeps the source Program of the class until the thread has left it, as it can be deleted in another
