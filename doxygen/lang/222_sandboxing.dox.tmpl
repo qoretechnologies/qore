@@ -303,11 +303,12 @@ authenticate();
       host, or a function copied into an evaluation %Program
       (@ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()"), and also on a thread
       that a binary module enters the %Program with.  The sandbox's interrupts and call limits apply to that code as
-      well.  This is the whole %Program's code: a %Program of the host that sandboxed code commits code in is governed
+      well, together with the sandbox of the code that calls it.  This is the whole %Program's code: a %Program of the host that sandboxed code commits code in is governed
       by that sandbox from then on, its earlier code included, so a host gives sandboxed code a %Program that it may
       add code to only for the sandbox's own use.  A parse that is refused or rolled back, and an
-      @ref Qore::Expression "Expression" (which is governed through its object), add no code and give the %Program
-      no sandbox.  The policy that the %Program keeps is the one that governed the code that created it: a %Program
+      @ref Qore::Expression "Expression" (which is governed through its object and cannot define code), add no code
+      and give the %Program no sandbox; sandboxed code that gives a %Program a manager with
+      @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" gives it its own sandbox too.  The policy that the %Program keeps is the one that governed the code that created it: a %Program
       that trusted code creates in a system-policy capability
       (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") for a sandboxed
       caller keeps the caller's interrupts and limits but not its filesystem, network and uncontrolled-API policy, as

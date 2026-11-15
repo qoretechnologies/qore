@@ -5185,11 +5185,13 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // issue #4285: with a policy barrier active, resolution does not walk out to the callers that
     // established it; see ThreadData::sandbox_policy_barrier and ThreadData::sandbox_policy_barrier_ctx
     const bool barrier = policy && td->sandbox_policy_barrier;
-    // the first Program found with a sandbox governs alone: its managers (its own and the sandbox of the code that
-    // created it, the policy manager of that code for a policy check) are visited while their references are held,
-    // and the walk ends.  Returns true if the Program has a
-    // sandbox, with the result of the visit in \a rv
-    auto try_pgm = [pgm_id, policy, &visit](QoreProgram* p, bool& rv) -> bool {
+    // the managers of a Program (its own and the sandbox of the code that created it, the policy manager of that code
+    // for a policy check) are visited while their references are held.  The first Program found with a manager of its
+    // own governs alone, as before, and the walk ends there; the sandbox that a Program keeps of the code that created
+    // it only adds to the sandbox of its callers, so the walk goes on (a stricter caller still governs the code that
+    // it calls).  Returns true if the walk ends, with its result in \a rv
+    bool visited_any = false;
+    auto try_pgm = [pgm_id, policy, &visit, &visited_any](QoreProgram* p, bool& rv) -> bool {
         if (!p) {
             return false;
         }
@@ -5201,11 +5203,20 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
         if (!own && !creator) {
             return false;
         }
-        if (pgm_id) {
+        visited_any = true;
+        // the innermost Program that contributes a manager is reported
+        if (pgm_id && !*pgm_id) {
             *pgm_id = p->getProgramId();
         }
-        rv = (!own || visit(*own)) && (!creator || visit(*creator));
-        return true;
+        if ((own && !visit(*own)) || (creator && !visit(*creator))) {
+            rv = false;
+            return true;
+        }
+        if (own) {
+            rv = true;
+            return true;
+        }
+        return false;
     };
     bool rv;
     if (!chain_clear) {
@@ -5239,7 +5250,7 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
             }
         }
         // the whole chain was checked: none of its Programs has a manager in this generation
-        if (cacheable) {
+        if (cacheable && !visited_any) {
             cur_ctx->setSandboxChainClear(td->current_pgm, gen);
         }
     }

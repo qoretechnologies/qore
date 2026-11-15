@@ -2936,7 +2936,9 @@ pgm.setSandboxManager(sm);
     running in this program.
     @note A %Program that sandboxed code created, or committed code in, keeps the sandbox of that code (see
     @ref sandbox_program_capability): the manager set here governs the %Program's code together with that sandbox,
-    so it can only add restrictions to it, and removing the manager does not remove that sandbox
+    so it can only add restrictions to it, and removing the manager does not remove that sandbox.  Sandboxed code
+    that gives a %Program a manager makes the %Program keep its own sandbox as well, so that the manager it gives
+    never governs the code that it calls in the %Program alone
 
     @throw SANDBOX-ACCESS-ERROR the code of a sandboxed %Program, or of a %Program that restricts a functional domain,
     cannot replace the sandbox manager of a %Program that has one; it can only give one to a %Program that has none,
@@ -2956,6 +2958,23 @@ nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_ma
        if (current && *current != *sandbox_manager) {
            return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains "
                "are restricted, cannot replace the sandbox manager of a Program");
+       }
+       // the Program keeps the sandbox of the calling code as well: a Program's own manager governs its code alone
+       // (the sandbox of its callers is not looked at), so a laxer manager given to a Program that it holds would
+       // otherwise govern the calling code's own calls into it
+       try {
+           QoreSandboxManager* all;
+           QoreSandboxManager* policy;
+           qore_caller_sandbox_refs(all, policy);
+           ReferenceHolder<QoreSandboxManager> caller_sm(all, nullptr);
+           ReferenceHolder<QoreSandboxManager> caller_policy(policy, nullptr);
+           if (caller_sm || caller_policy) {
+               qore_program_private::get(*p)->addCreatorSandbox(*caller_sm, *caller_policy);
+           }
+       } catch (std::bad_alloc&) {
+           // the manager is not set without the caller's sandbox
+           xsink->outOfMemory();
+           return QoreValue();
        }
    }
    // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref

@@ -1831,29 +1831,39 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
 }
 
 int qore_program_private::pendCreatorSandbox(QoreParseCreatorSandbox& pcs, ExceptionSink* xsink) {
-    // combines a manager with a pending one; the pending managers are only accessed with the parse lock held
-    auto pend = [](QoreSandboxManager*& pending, QoreSandboxManager*& add) {
-        if (!add) {
-            return;
+    // the combination of a manager with a pending one (referenced), or nullptr if the pending one does not change;
+    // the pending managers are only accessed with the parse lock held
+    auto combine = [](QoreSandboxManager* pending, QoreSandboxManager* add) -> QoreSandboxManager* {
+        if (!add || (pending && QoreSandboxComposition::same(pending, add))) {
+            return nullptr;
         }
         if (!pending) {
-            pending = add;
-            add = nullptr;
-            return;
+            add->ref();
+            return add;
         }
-        if (QoreSandboxComposition::same(pending, add)) {
-            return;
-        }
-        QoreSandboxManager* combined = QoreSandboxComposition::combine({pending, add});
-        pending->deref(nullptr);
-        pending = combined;
+        return QoreSandboxComposition::combine({pending, add});
     };
+    // both are made before either is changed, so that a failure changes neither
+    ReferenceHolder<QoreSandboxManager> sm(nullptr, nullptr);
+    ReferenceHolder<QoreSandboxManager> policy(nullptr, nullptr);
     try {
-        pend(pending_creator_sandbox, pcs.sm);
-        pend(pending_creator_policy, pcs.policy);
+        sm = combine(pending_creator_sandbox, pcs.sm);
+        policy = combine(pending_creator_policy, pcs.policy);
     } catch (std::bad_alloc&) {
         xsink->outOfMemory();
         return -1;
+    }
+    if (sm) {
+        if (pending_creator_sandbox) {
+            pending_creator_sandbox->deref(nullptr);
+        }
+        pending_creator_sandbox = sm.release();
+    }
+    if (policy) {
+        if (pending_creator_policy) {
+            pending_creator_policy->deref(nullptr);
+        }
+        pending_creator_policy = policy.release();
     }
     return 0;
 }

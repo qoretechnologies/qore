@@ -53,12 +53,21 @@ manager:
 `QoreProgram::setSandboxManager()` (also with `nullptr`) and `Program::getSandboxManager()` act on the own manager
 only, and the two govern the Program's code together. Every lookup of a Program's sandbox resolves both:
 `getSandboxManagerRefs()` returns references to the own manager and the creator's manager (its policy manager for a
-policy check) without allocating, which the walk of the thread's sandbox stack visits as one Program
+policy check) without allocating, which the walk of the thread's sandbox stack visits
 (`visit_thread_sandbox_stack()`), so the uncontrolled-API check still allocates
 nothing; `getSandboxManagerRef()` combines them (a composition is allocated only when both are set and differ); and
 entering the Program starts the call budgets of both (`ProgramThreadCountContextHelper`). Adding it increments
 `qore_sandbox_manager_generation`, as setting a manager does, so that no thread's cached "no manager on the chain"
-result hides it. The managers are released with the own manager when the Program is cleared, or when it is
+result hides it. In the walk, only a Program's own manager ends the lookup (the nearest Program with a manager of
+its own governs alone, as before); the kept sandbox only adds to the sandbox of the callers, and the walk goes on, so
+a stricter caller still governs the code that it calls in a Program that a laxer sandbox created. Reflection
+(`QoreReflectionCaller::checkProgramAccess()`) compares the Program's own manager only: the kept sandbox gives the
+code that created it no privileges in the Program. Sandboxed code that gives a Program a manager
+(`Program::setSandboxManager()`) attaches its own sandbox too, as a Program's own manager would otherwise govern the
+calling code's own calls into it alone. An expression cannot define code: it is parsed as `return (<expression>);`,
+which code that closes the parenthesis could extend with definitions left pending for the next commit, so a
+definition in an expression is a parse error (`check_expression_definition()` in lib/parser.ypp) and the expression's
+pending code is rolled back. The managers are released with the own manager when the Program is cleared, or when it is
 destroyed without being cleared. The constructor throws `std::bad_alloc` if the creator's sandbox cannot be resolved
 (no Program is created); the parse entry points raise an out-of-memory exception and do not parse.
 

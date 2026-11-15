@@ -117,6 +117,17 @@ sub use_capability(code c) {
 Program sub mk_empty() {
     return new Program(PO_NEW_STYLE | PO_ALLOW_REPARSE);
 }
+hash<auto> sub call_probe(Program p, string path) {
+    return p.callFunction(\"probe\", path);
+}
+string sub inject_expression(Program p, string code) {
+    try {
+        Qore::Expression e(p, code, \"injected expression\");
+        return \"expression\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
 ";
 
     #! code that connects to a local port, added to ProbeSource in the Programs of otherPolicies()
@@ -161,6 +172,9 @@ sub export_net_to(Program h) {
         addTestCase("a Program that a system-policy capability creates", \systemPolicyCapability());
         addTestCase("the network and uncontrolled-API policies of the creator", \otherPolicies());
         addTestCase("the sandboxes of two creators", \twoCreators());
+        addTestCase("a stricter caller of a Program that a laxer sandbox created", \stricterCaller());
+        addTestCase("an expression cannot define code", \expressionDefinitions());
+        addTestCase("a manager that sandboxed code gives a Program", \managerGivenBySandbox());
         set_return_value(main());
     }
 
@@ -442,6 +456,59 @@ sub export_net_to(Program h) {
         # both sandboxes govern its code
         assertEq(Governed, host.callFunction("probe2", DeniedFile));
         assertEq("FILESYSTEM-ACCESS-DENIED", host.callFunction("probe2", other).fs);
+    }
+
+    stricterCaller() {
+        # a laxer sandbox that allows the filesystem
+        SandboxManager lax();
+        lax.setFilesystemDefaultPolicy(True);
+        lax.setUncontrolledApiPolicy(True);
+        Program pl(PO_NEW_STYLE);
+        pl.setSandboxManager(lax);
+        pl.parse(SandboxedSource, "lax sandbox");
+        Program child = pl.callFunction("mk", ProbeSource);
+        # the laxer sandbox's own call is not denied
+        assertEq("read:secret", child.callFunction("probe", DeniedFile).fs);
+        # the stricter sandbox's call of the same code is governed by the stricter sandbox too
+        assertEq(Governed, sandboxed.callFunction("call_probe", child, DeniedFile));
+        # also of code that the laxer sandbox parsed in a trusted Program
+        Program t(PO_NEW_STYLE);
+        pl.callFunction("parse_into", t, ProbeSource);
+        assertEq("read:secret", t.callFunction("probe", DeniedFile).fs);
+        assertEq(Governed, sandboxed.callFunction("call_probe", t, DeniedFile));
+    }
+
+    expressionDefinitions() {
+        # code that closes the expression's parenthesis cannot add a definition to the Program, which its next parse
+        # would commit
+        Program t(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        string injected = "1); hash<auto> sub evil(string path) { return {}; } #";
+        assertEq("PARSE-EXCEPTION", sandboxed.callFunction("inject_expression", t, injected));
+        # nor can trusted code
+        assertThrows("PARSE-EXCEPTION", "cannot be defined in an expression", sub () {
+            Expression e(t, "1); class Evil {} #", "trusted expression");
+        });
+        t.parse(ProbeSource, "trusted");
+        assertThrows("NO-FUNCTION", \t.callFunction(), "evil");
+        assertEq(Ungoverned, t.callFunction("probe", DeniedFile));
+        # an expression still works
+        Expression e(t, "2 + 2", "expression");
+        assertEq(4, e.eval());
+    }
+
+    managerGivenBySandbox() {
+        # sandboxed code gives a trusted Program that it holds a laxer manager than its own sandbox: its own calls
+        # into the Program are still governed by its sandbox
+        Program t(PO_NEW_STYLE);
+        t.parse(ProbeSource, "trusted");
+        SandboxManager lax();
+        lax.setFilesystemDefaultPolicy(True);
+        lax.setUncontrolledApiPolicy(True);
+        sandboxed.callFunction("set_manager", t, lax);
+        assertEq(Governed, sandboxed.callFunction("call_probe", t, DeniedFile));
+        # the Program keeps the sandbox of the code that gave it the manager, so trusted code's calls are governed by
+        # it too
+        assertEq(Governed, t.callFunction("probe", DeniedFile));
     }
 
     #! calls the reference in a thread that trusted code starts and returns its result

@@ -35,7 +35,6 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreNamespaceIntern.h"
-#include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/QoreSandboxManager.h"
@@ -849,15 +848,14 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
         }
     }
     if (privileged && sm) {
+        // the target's own manager: the sandbox that a Program keeps of the code that created it gives that code no
+        // privileges in it (a helper Program that trusted code created for a sandboxed caller stays trusted code's)
         QoreSandboxManager* target_sm = qore_program_private::get(*const_cast<QoreProgram*>(target))
-            ->getSandboxManagerRef();
+            ->getOwnSandboxManagerRef();
         // A user module Program has no manager of its own: sandbox resolution walks out of it to the code that
         // calls it, so code that runs there for this caller is governed by the caller's manager, as it is when the
         // caller calls the module directly.  Any other Program must have the governing manager as its own.
-        // the target's sandbox can be a composition of its own manager and the sandbox of the code that created it,
-        // made for this lookup: compared by its members
-        privileged = target_sm ? QoreSandboxComposition::same(target_sm, sm)
-            : tpo.hasAny(QoreParseOptions(PO_IN_MODULE));
+        privileged = target_sm ? target_sm == sm : tpo.hasAny(QoreParseOptions(PO_IN_MODULE));
         if (target_sm) {
             target_sm->deref(nullptr);
         }

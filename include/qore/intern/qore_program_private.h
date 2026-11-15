@@ -672,6 +672,8 @@ public:
         ns_const : 1,
         ns_vars : 1,
         expression_mode : 1,
+        // set when the code of an expression has a definition (see check_expression_definition() in parser.ypp)
+        expression_definition : 1,
         parsing_stub_declarations : 1
         ;
 
@@ -1211,6 +1213,7 @@ public:
             ns_const(false),
             ns_vars(false),
             expression_mode(false),
+            expression_definition(false),
             parsing_stub_declarations(false),
             pgm(n_pgm) {
         printd(QPP_DBG_LVL, "qore_program_private_base::qore_program_private_base() this: %p pgm: %p po: " QLLD "/"
@@ -2000,7 +2003,8 @@ public:
     */
     DLLLOCAL bool hasSandboxManager() const {
         return sandbox_manager.load(std::memory_order_acquire)
-            || creator_sandbox_manager.load(std::memory_order_acquire);
+            || creator_sandbox_manager.load(std::memory_order_acquire)
+            || creator_policy_manager.load(std::memory_order_acquire);
     }
 
     //! Adds the sandbox of the code that creates the Program or adds code to it (see \c creator_sandbox_manager)
@@ -3364,6 +3368,7 @@ public:
         assert(!expression_mode);
         assert(!new_expression);
         expression_mode = true;
+        expression_definition = false;
 
         QoreStringMaker exp_code("return (%s);", code);
 
@@ -3373,6 +3378,13 @@ public:
         if (!internParsePending(xsink, exp_code.c_str(), label, orig_src, offset, false)) {
             internParseCommit(false);   // finalize parsing, back out or commit all changes
         } else {
+            // definitions that the expression's code added are pending: they are rolled back, so that the Program's
+            // next commit does not commit them (with the pending code of the Program, which the failed expression
+            // was given with)
+            if (expression_definition) {
+                internParseRollback(xsink);
+                expression_definition = false;
+            }
             parsing_in_progress = false;
         }
 
