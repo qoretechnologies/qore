@@ -559,6 +559,15 @@ public:
         return tag() == TAG_POINTER || isOpaque();
     }
 
+    //! Returns true if the value holds a pointer to an AbstractQoreNode as an ordinary reference
+    /** False for an opaque reference, an enum value, an inline short string and every other inline value; a single
+        tag test for the fast path of code that handles those values separately
+    */
+    DLLLOCAL bool isPlainPointer() const {
+        // one shift and compare, as for isShortString()
+        return (bits >> 48) == TAG16_POINTER;
+    }
+
     //! Returns true if the value is a short string stored inline
     DLLLOCAL bool isShortString() const {
         return (bits >> 52) == 0xFFC;
