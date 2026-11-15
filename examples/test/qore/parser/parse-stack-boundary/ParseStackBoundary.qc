@@ -31,6 +31,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         addPartCase(2, "nested module loads", \moduleCheck());
         addPartCase(2, "nested optional module loads", \tryModuleCheck());
         addPartCase(2, "nested optional AOT module loads", \aotModuleCheck());
+        addPartCase(2, "module initialization that recurses without end", \runawayInitCheck());
+        addPartCase(2, "module initialization deeper than a small stack", \deepInitCheck());
         set_return_value(main());
     }
 
@@ -45,6 +47,50 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
 
     private static string quote(string value) {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! Returns the build tree of the qore under test, if any: that of LIBQORE_BINARY (set by run_tests.sh), else that
+    #! of the qore binary (QORE_BINARY or QORE_ARGV[0], a bare name found in the PATH, symbolic links resolved)
+    private static *string findBuildTree() {
+        list<string> candidates;
+        if (ENV.LIBQORE_BINARY && is_file(ENV.LIBQORE_BINARY)) {
+            push candidates, dirname(realpath(ENV.LIBQORE_BINARY));
+        }
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        if (qore !~ /\//) {
+            *string found;
+            foreach string dir in (ENV.PATH.split(":")) {
+                if (dir && is_executable(dir + "/" + qore)) {
+                    found = dir + "/" + qore;
+                    break;
+                }
+            }
+            qore = found ?? "";
+        }
+        if (qore && is_file(qore)) {
+            push candidates, dirname(realpath(qore));
+        }
+        foreach string dir in (candidates) {
+            if ((is_file(dir + "/libqore.so") || is_file(dir + "/libqore.dylib"))
+                    && is_file(dir + "/include/qore/qore-version.h")) {
+                return dir;
+            }
+        }
+    }
+
+    #! Returns the build tree that the fixture is built with: QORE_LIBDIR, or that of the qore under test
+    private string getLibDir() {
+        if (ENV.QORE_LIBDIR) {
+            # as in run_tests.sh, QORE_LIBDIR names the build tree
+            return realpath(ENV.QORE_LIBDIR);
+        }
+        *string dir = findBuildTree();
+        if (!dir) {
+            testSkip("the qore under test is not in a build tree (the fixture is compiled with the headers of this "
+                "checkout and of its build tree): set QORE_LIBDIR to the build tree, or run the test with the qore "
+                "of a build tree");
+        }
+        return dir;
     }
 
     #! builds the fixture in the given directory and returns the path of the executable
@@ -68,7 +114,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             testSkip("runtime built without native stack protection");
         }
         string root = realpath(get_script_dir() + "/../../../../..");
-        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string libdir = getLibDir();
         TmpDir dir("qore-parse-stack-boundary-");
         string exe = build(dir.path, root, libdir);
         int status;
@@ -89,7 +135,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             testSkip("runtime built without native stack protection");
         }
         string root = realpath(get_script_dir() + "/../../../../..");
-        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string libdir = getLibDir();
         TmpDir dir("qore-parse-stack-modules-");
         string exe = build(dir.path, root, libdir);
         string mdir = dir.path + "/modules";
@@ -101,7 +147,9 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
                 "module StackChain%d { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
                 "public namespace StackChain%d {\n"
                 "public bool sub matches(string s) { return s =~ /^a(b+)c[0-9]{2,}(x|y|z)*$/; }\n"
-                "public hash<auto> sub make(int n) { return {\"n\": n, \"l\": (n, n + 1), \"s\": sprintf(\"%%d\", n)}; }\n"
+                "public hash<auto> sub make(int n) {\n"
+                "    return {\"n\": n, \"l\": (n, n + 1), \"s\": sprintf(\"%%d\", n)};\n"
+                "}\n"
                 "}\n",
                 i + 1 < ChainLength ? sprintf("%%requires StackChain%d\n", i + 1) : "", i, i));
         }
@@ -189,7 +237,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             testSkip("runtime built without native stack protection");
         }
         string root = realpath(get_script_dir() + "/../../../../..");
-        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string libdir = getLibDir();
         TmpDir dir("qore-parse-stack-try-");
         string exe = build(dir.path, root, libdir);
         string mdir = dir.path + "/modules";
@@ -215,7 +263,8 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         runSource(exe, libdir, source, ChainLength, mdir);
 
         source = dir.path + "/load-module.q";
-        writeFile(source, "int sub run() { load_module(\"StackTry0\"); return call_function(\"StackTry0::count\"); }\n");
+        writeFile(source, "int sub run() { load_module(\"StackTry0\"); "
+            "return call_function(\"StackTry0::count\"); }\n");
         runSource(exe, libdir, source, ChainLength, mdir);
     }
 
@@ -228,7 +277,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             testSkip("runtime built without native stack protection");
         }
         string root = realpath(get_script_dir() + "/../../../../..");
-        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string libdir = getLibDir();
         TmpDir dir("qore-parse-stack-classes-");
         string exe = build(dir.path, root, libdir);
         string source = dir.path + "/class-chain.q";
@@ -264,7 +313,7 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             testSkip("runtime built without native stack protection");
         }
         string root = realpath(get_script_dir() + "/../../../../..");
-        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string libdir = getLibDir();
         TmpDir dir("qore-parse-stack-method-classes-");
         string exe = build(dir.path, root, libdir);
         string source = dir.path + "/method-class-chain.q";
@@ -295,17 +344,30 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         it is initialized, and a module that the chain cannot load within the stack of the thread is not a module that
         is not available, so the code that loads the first module fails with the stack error, and never parses its
         fallback code.  The constant of each module is initialized with a recursion when the module is loaded, which
-        runs short of the stack (\c STACK-LIMIT-EXCEEDED) at sizes where the parse does not.  The modules shipped with %Qore are not used: a constant initializer of DataProvider has a
-        compiled frame larger than the stack guard, which crashes the thread where the stack runs out in it (issue
-        #6124)
+        runs short of the stack (\c STACK-LIMIT-EXCEEDED) at sizes where the parse does not; the stack sizes are all
+        smaller than the default thread stack size, where this error depends on the thread.  The modules shipped with
+        %Qore are not used: a constant initializer of DataProvider has a compiled frame larger than the stack guard,
+        which crashes the thread where the stack runs out in it (issue #6124)
     */
     private aotModuleCheck() {
         if (!Option::HAVE_STACK_GUARD) {
             testSkip("runtime built without native stack protection");
         }
         string root = realpath(get_script_dir() + "/../../../../..");
-        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
-        string qcc = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : "qcc");
+        string libdir = getLibDir();
+        *string qcc = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : NOTHING);
+        if (!qcc) {
+            # the qcc of the PATH, if any
+            foreach string dir in (ENV.PATH.split(":")) {
+                if (dir && is_executable(dir + "/qcc")) {
+                    qcc = dir + "/qcc";
+                    break;
+                }
+            }
+        }
+        if (!qcc) {
+            testSkip("qcc is not available");
+        }
         TmpDir dir("qore-parse-stack-aot-");
         string exe = build(dir.path, root, libdir);
         string src = dir.path + "/src";
@@ -333,9 +395,9 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
             string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
                 + " QORE_MODULE_DIR=" + quote(mdir) + " " + quote(qcc) + " -m " + quote(path) + " -o " + quote(qmod)
                 + " 2>&1", \status);
-            if (status || !is_file(qmod)) {
-                testSkip("qcc is not available or cannot compile the modules: " + output);
-            }
+            # qcc is available, so a module that it cannot compile is a failure
+            assertEq(0, status, sprintf("qcc %s: %s", basename(path), output));
+            assertTrue(is_file(qmod), sprintf("qcc %s: %s", basename(path), output));
         }
         string source = dir.path + "/try-aot.q";
         writeFile(source, "%try-module StackAot0\n"
@@ -346,13 +408,140 @@ public class ParseStackBoundaryBase inherits QUnit::Test {
         runSource(exe, libdir, source, AotChainLength, mdir);
     }
 
+    #! writes a user module with a constant initialized by a recursion
+    /** @param dir the module directory
+        @param name the module's name
+        @param depth the depth of the recursion; 0 for a recursion without end
+        @param directives directives before the module's declaration
+    */
+    private static writeRecursiveModule(string dir, string name, int depth, string directives = "") {
+        writeFile(sprintf("%s/%s.qm", dir, name), sprintf("%%modern\n%s"
+            "module %s { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            "public namespace %s {\n"
+            "public int sub deep(int n) { return %s; }\n"
+            "public const Depth = deep(%d);\n"
+            "}\n", directives, name, name, depth ? "n ? deep(n - 1) + 1 : 0" : "deep(n + 1) + 1", depth));
+    }
+
+    #! runs a script with the qore under test in a process of its own; returns its output
+    private string runScript(string script, string mdir) {
+        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        int status;
+        string output = backquote("QORE_MODULE_DIR=" + quote(mdir) + " " + quote(qore) + " " + quote(script)
+            + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    #! A module whose constant initializer recurses without end fails to load in a thread with enough stack
+    /** The primary thread and a thread with the default thread stack size have enough stack: the module's
+        \c STACK-LIMIT-EXCEEDED is the module's own bug, not an error that depends on the thread, so %try-module
+        handles the module as one that cannot be loaded and parses its fallback code, and an optional child module
+        with the same bug fails (\c MODULE-CHILD-FAILED) while the module that declares it is loaded
+    */
+    private runawayInitCheck() {
+        if (!Option::HAVE_STACK_GUARD || !Option::HAVE_MANAGE_STACK) {
+            testSkip("runtime built without native stack protection");
+        }
+        TmpDir dir("qore-parse-stack-runaway-");
+        string mdir = dir.path + "/modules";
+        mkdir(mdir);
+        writeRecursiveModule(mdir, "RunawayInit", 0);
+        writeRecursiveModule(mdir, "RunawayChild", 0);
+        writeFile(mdir + "/RunawayParent.qm", "%modern\n%try-child-module RunawayChild\n"
+            "module RunawayParent { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            "public namespace RunawayParent { public const Loaded = True; }\n");
+
+        # the primary thread
+        string script = dir.path + "/try.q";
+        writeFile(script, "%new-style\n%try-module (ex) RunawayInit\n%define Missing\nprintf(\"fallback %s\\n\", "
+            "ex.err);\n%endtry\n%ifndef Missing\nprintf(\"loaded\\n\");\n%endif\n");
+        assertEq("fallback STACK-LIMIT-EXCEEDED\n", runScript(script, mdir), "primary thread");
+
+        # a thread with the default thread stack size
+        script = dir.path + "/try-thread.q";
+        writeFile(script, "%new-style\n%require-types\nQueue q();\nbackground sub () {\n"
+            "    Program p(PO_NEW_STYLE);\n"
+            "    p.parse(\"%try-module (ex) RunawayInit\\nour string err = ex.err;\\n%endtry\\n\", \"t\");\n"
+            "    p.run();\n"
+            "    q.push(p.getGlobalVariable(\"err\"));\n"
+            "}();\n"
+            "printf(\"fallback %s\\n\", q.get());\n");
+        assertEq("fallback STACK-LIMIT-EXCEEDED\n", runScript(script, mdir), "default-size thread");
+
+        # the optional child fails, and the module that declares it is loaded without it
+        script = dir.path + "/child.q";
+        writeFile(script, "%new-style\n%requires RunawayParent\nprintf(\"%y %s\\n\", RunawayParent::Loaded, "
+            "get_module_hash().RunawayParent.\"child-modules\".RunawayChild.status);\n");
+        string output = runScript(script, mdir);
+        assertRegex("True failed\n$", output);
+        assertRegex("MODULE-CHILD-FAILED", output);
+    }
+
+    #! A module whose constant initializer recurses deeply is loaded with enough stack, and never left out with less
+    /** In a thread whose stack is smaller than the default thread stack size, the module's \c STACK-LIMIT-EXCEEDED
+        depends on the thread: the code that loads it (with %try-module) fails with it and never parses its fallback
+        code, as does the code that loads a module whose optional child fails with it.  After that, a thread with the
+        default thread stack size in the same process loads the module, and attaches the child that did not fail for
+        good
+    */
+    private deepInitCheck() {
+        if (!Option::HAVE_STACK_GUARD || !Option::HAVE_MANAGE_STACK) {
+            testSkip("runtime built without native stack protection");
+        }
+        string libdir = getLibDir();
+        TmpDir dir("qore-parse-stack-deep-init-");
+        string exe = build(dir.path, realpath(get_script_dir() + "/../../../../.."), libdir);
+        string mdir = dir.path + "/modules";
+        mkdir(mdir);
+        writeRecursiveModule(mdir, "DeepInit", DeepInitDepth);
+        writeRecursiveModule(mdir, "DeepChild", DeepInitDepth);
+        writeFile(mdir + "/DeepParent.qm", "%modern\n%try-child-module DeepChild\n"
+            "module DeepParent { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            "public namespace DeepParent { public const Loaded = 1; }\n");
+        string try_source = dir.path + "/try-deep.q";
+        writeFile(try_source, "%try-module DeepInit\npublic namespace DeepInit { public const Depth = 0; }\n%endtry\n"
+            "int sub run() { return DeepInit::Depth; }\n");
+        string child_source = dir.path + "/deep-child.q";
+        writeFile(child_source, "%requires DeepParent\nint sub run() { return get_module_hash().DeepParent."
+            "\"child-modules\".DeepChild.status == \"attached\" ? DeepParent::Loaded : 0; }\n");
+        int default_kb = get_default_thread_stack_size() / 1024;
+        foreach hash<auto> i in ({"source": try_source, "expected": DeepInitDepth},
+                {"source": child_source, "expected": 1}) {
+            int stack_errors;
+            for (int kb = 96; kb <= 512; kb += 32) {
+                # a small stack, then the default size in the same process
+                int status;
+                string output = backquote("LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+                    + " QORE_MODULE_DIR=" + quote(mdir) + " " + quote(exe) + " --source " + quote(i.source) + " "
+                    + kb + " " + default_kb + " 2>&1", \status);
+                string label = sprintf("%s %dK", basename(i.source), kb);
+                assertEq(0, status, label + ": " + output);
+                # the results are the last two lines (see runSource())
+                list<string> lines = (map $1, output.split("\n"), $1 =~ /^(parsed|stack error|run stack error)/);
+                assertEq(2, lines.size(), label + ": " + output);
+                if (lines[0] == "stack error") {
+                    ++stack_errors;
+                } else {
+                    assertEq(sprintf("parsed %d", i.expected), lines[0], label + ": " + output);
+                }
+                assertEq(sprintf("parsed %d", i.expected), lines[1], label + " then the default stack size: "
+                    + output);
+            }
+            assertGt(0, stack_errors, basename(i.source) + ": the module runs short of a small stack");
+        }
+    }
+
+    #! the depth of the recursion of the constant initializer of deepInitCheck()
+    const DeepInitDepth = 1000;
+
     #! A chain of hashdecls each inheriting the previous one is parse-initialized from the last hashdecl to the first
     private hashdeclChainCheck() {
         if (!Option::HAVE_STACK_GUARD) {
             testSkip("runtime built without native stack protection");
         }
         string root = realpath(get_script_dir() + "/../../../../..");
-        string libdir = realpath(ENV.QORE_LIBDIR ?? root + "/build");
+        string libdir = getLibDir();
         TmpDir dir("qore-parse-stack-hashdecls-");
         string exe = build(dir.path, root, libdir);
         string source = dir.path + "/hashdecl-chain.q";

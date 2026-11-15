@@ -56,6 +56,50 @@
 #include <cassert>
 #include <cstring>
 
+namespace {
+//! The stack of an iterative walk of a class hierarchy (issue #6047)
+/** The first levels are kept in place, so that a walk of the common, shallow hierarchy does not allocate; deeper
+    levels go to a vector.  A reference returned by back() is only valid until the next push().
+*/
+template <typename T>
+class HierarchyWalkStack {
+public:
+    DLLLOCAL bool empty() const {
+        return !count;
+    }
+
+    DLLLOCAL T& back() {
+        assert(count);
+        return count <= InPlace ? in_place[count - 1] : overflow[count - InPlace - 1];
+    }
+
+    DLLLOCAL void push(const T& v) {
+        if (count < InPlace) {
+            in_place[count] = v;
+        } else {
+            overflow.push_back(v);
+        }
+        ++count;
+    }
+
+    DLLLOCAL void pop() {
+        assert(count);
+        if (count > InPlace) {
+            overflow.pop_back();
+        }
+        --count;
+    }
+
+private:
+    //! the number of levels kept in place
+    static constexpr size_t InPlace = 16;
+    T in_place[InPlace];
+    std::vector<T> overflow;
+    size_t count = 0;
+};
+}
+
+
 // global class ID sequence
 DLLLOCAL Sequence classIDSeq(1);
 // class IDs can be allocated in a child process created with fork() (see QoreForkHandlers.h)
@@ -2929,10 +2973,6 @@ const QoreVarInfo* BCNode::parseFindVar(const char* name, const qore_class_priva
     return vi;
 }
 
-const QoreClass* BCNode::findInHierarchy(const qore_class_private& qc) {
-   // sclass can be 0 if the class could not be found during parse initialization
-   return sclass ? sclass->priv->findInHierarchy(qc) : nullptr;
-}
 
 const QoreClass* BCNode::getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const {
     // sclass can be 0 if the class could not be found during parse initialization
@@ -3388,12 +3428,12 @@ void BCList::parseAddAncestors(QoreMethod* m) {
 
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
-    std::vector<std::pair<const BCList*, size_t>> stack;
-    stack.emplace_back(this, 0);
+    HierarchyWalkStack<std::pair<const BCList*, size_t>> stack;
+    stack.push({this, 0});
     while (!stack.empty()) {
         std::pair<const BCList*, size_t>& f = stack.back();
         if (f.second == f.first->size()) {
-            stack.pop_back();
+            stack.pop();
             continue;
         }
         const BCNode& n = *(*f.first)[f.second++];
@@ -3412,7 +3452,7 @@ void BCList::parseAddAncestors(QoreMethod* m) {
         }
 
         if (qc->priv->scl) {
-            stack.emplace_back(qc->priv->scl, 0);
+            stack.push({qc->priv->scl, 0});
         }
     }
 }
@@ -3420,12 +3460,12 @@ void BCList::parseAddAncestors(QoreMethod* m) {
 void BCList::parseAddStaticAncestors(QoreMethod* m) {
     const char* name = m->getName();
     // the hierarchy is walked iteratively, as for parseAddAncestors()
-    std::vector<std::pair<const BCList*, size_t>> stack;
-    stack.emplace_back(this, 0);
+    HierarchyWalkStack<std::pair<const BCList*, size_t>> stack;
+    stack.push({this, 0});
     while (!stack.empty()) {
         std::pair<const BCList*, size_t>& f = stack.back();
         if (f.second == f.first->size()) {
-            stack.pop_back();
+            stack.pop();
             continue;
         }
         const BCNode& n = *(*f.first)[f.second++];
@@ -3442,7 +3482,7 @@ void BCList::parseAddStaticAncestors(QoreMethod* m) {
         }
 
         if (qc->priv->scl) {
-            stack.emplace_back(qc->priv->scl, 0);
+            stack.push({qc->priv->scl, 0});
         }
     }
 }
@@ -3485,12 +3525,12 @@ QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc,
 const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
-    std::vector<std::pair<const BCList*, size_t>> stack;
-    stack.emplace_back(this, 0);
+    HierarchyWalkStack<std::pair<const BCList*, size_t>> stack;
+    stack.push({this, 0});
     while (!stack.empty()) {
         std::pair<const BCList*, size_t>& f = stack.back();
         if (f.second == f.first->size()) {
-            stack.pop_back();
+            stack.pop();
             continue;
         }
         const BCNode& n = *(*f.first)[f.second++];
@@ -3502,7 +3542,7 @@ const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
             return n.sclass->priv->cls;
         }
         if (n.sclass->priv->scl) {
-            stack.emplace_back(n.sclass->priv->scl, 0);
+            stack.push({n.sclass->priv->scl, 0});
         }
     }
     return nullptr;
@@ -5581,8 +5621,8 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
     // BCNode::addBaseClassesToSubclass() -> qore_class_private::addBaseClassesToSubclass() for each base class, then
     // the base classes of the class itself from its class list (sml)
     assert(this == thisparent->priv->scl);
-    std::vector<AddBaseClassesFrame> stack;
-    stack.push_back({thisparent, thisparent->priv, is_virtual});
+    HierarchyWalkStack<AddBaseClassesFrame> stack;
+    stack.push({thisparent, thisparent->priv, is_virtual});
     while (!stack.empty()) {
         AddBaseClassesFrame& f = stack.back();
         BCList* l = f.c->scl;
@@ -5597,7 +5637,7 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
                 return -1;
             }
             bool virt = f.is_virtual || n.is_virtual;
-            stack.push_back({n.sclass->priv->cls, n.sclass->priv, virt});
+            stack.push({n.sclass->priv->cls, n.sclass->priv, virt});
             continue;
         }
         // the base classes of the class have been added: the class list of the class, then the class itself, unless
@@ -5607,7 +5647,7 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
         }
         QoreClass* cls = f.cls;
         bool virt = f.is_virtual;
-        stack.pop_back();
+        stack.pop();
         if (!stack.empty()) {
             assert(child->priv->scl);
             if (child->priv->scl->sml.add(child, cls, virt)) {

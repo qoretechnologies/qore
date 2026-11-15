@@ -282,15 +282,18 @@ static void* load_source(void*) {
 //! parse_stack_boundary: parses the nested code with each stack size
 //! parse_stack_boundary <module> <stack KB>: parses code that requires the module with the given stack size, and
 //! prints "parsed" or "stack error" (a process can load a module once, so each size runs in a process of its own)
-//! parse_stack_boundary --source <file> <stack KB>: parses the file with the given stack size and runs its run()
-//! function (see load_source())
+//! parse_stack_boundary --source <file> <stack KB>...: parses the file in a new Program with each stack size in turn,
+//! in a thread of its own, and runs its run() function (see load_source())
 int main(int argc, char** argv) {
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
     if (argc > 3 && !strcmp(argv[1], "--source")) {
         source_path = argv[2];
-        current_size = strtoul(argv[3], nullptr, 10) * 1024;
-        if (run_in_thread(current_size, load_source)) {
-            ++failures;
+        // each size in a thread of its own, one after the other in this process, which loads each module once
+        for (int i = 3; i < argc; ++i) {
+            current_size = strtoul(argv[i], nullptr, 10) * 1024;
+            if (run_in_thread(current_size, load_source)) {
+                ++failures;
+            }
         }
         qore_cleanup();
         return failures ? 1 : 0;

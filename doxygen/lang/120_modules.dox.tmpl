@@ -1925,10 +1925,13 @@ module MyBaseExtension {
     so retrying it on every load of the parent would only repeat the cost and the diagnostic.  An extension fixed on
     disk is therefore picked up the next time the program is started.
 
-    A child that cannot be loaded within the stack of the loading thread (its parse or its initialization raises
-    \c PARSE-STACK-LIMIT-EXCEEDED or \c STACK-LIMIT-EXCEEDED; see @ref parse_nesting_limit) is not a broken child: the
-    outcome depends on the thread, not on what is installed.  The declaring module's load fails with the error, and
-    the child stays pending, so that a load in a thread with enough stack attaches it.
+    A child that cannot be loaded within the stack of the loading thread is not a broken child: the outcome depends on
+    the thread, not on what is installed.  The declaring module's load fails with the error, and the child stays
+    pending, so that a load in a thread with enough stack attaches it.  This is a child whose parse raises
+    \c PARSE-STACK-LIMIT-EXCEEDED, or whose initialization raises \c STACK-LIMIT-EXCEEDED in a thread whose stack is
+    smaller than the default thread stack size (see get_default_thread_stack_size() and @ref parse_nesting_limit).  A
+    child whose initialization exceeds the stack of the primary thread or of a thread with at least the default stack
+    size has a bug of its own, and fails as any other broken child does.
 
     Attachment status can be queried with get_module_hash(), which reports each declared child module under the
     \c "child-modules" key of the declaring module's entry:

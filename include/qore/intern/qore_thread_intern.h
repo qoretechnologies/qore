@@ -3032,6 +3032,18 @@ DLLLOCAL int check_stack(ExceptionSink* xsink);
 */
 DLLLOCAL extern constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls;
 
+//! Returns true if the current thread's stack is smaller than the default thread stack size
+/** The default thread stack size is the size that new Qore threads are created with: STACK_SIZE unless
+    set_default_thread_stack_size() changed it, read with q_thread_get_stack_size().  The stack size of the current
+    thread is the one determined when its thread data was created (ThreadData::stack_size).  The primary thread is never
+    smaller, whatever its size: its stack is the process's, which code that runs in it cannot choose.
+
+    A thread whose stack is at least the default size has enough stack for the code that %Qore runs: code that still
+    exceeds its stack (\c STACK-LIMIT-EXCEEDED) has a bug of its own, while in a smaller thread, the error depends on
+    the thread (see qore_find_thread_stack_error())
+*/
+DLLLOCAL bool q_thread_stack_smaller_than_default();
+
 //! Returns true if less than the given number of bytes remain above the current thread's stack limit
 /** For native code that recurses without an exception sink to report check_stack()'s exception, such as IR
     lowering and parse initialization: it stops before the next recursion step could exhaust the stack.  Always false

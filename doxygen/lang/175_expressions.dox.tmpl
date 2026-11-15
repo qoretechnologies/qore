@@ -41,6 +41,14 @@
     that loads it, also with @ref try-module "%try-module", and the error of
     @ref Qore::load_module() "load_module()".
 
+    The code that runs while a module is loaded, such as the initializers of its constants, can also exceed the stack
+    of the thread at run time (\c STACK-LIMIT-EXCEEDED).  This error depends on the thread only in a thread whose
+    stack is smaller than the default thread stack size (see get_default_thread_stack_size()), and is then handled as
+    the parse error above.  In the primary thread, and in a thread with at least the default stack size, the module
+    has a bug of its own, such as a recursion without end, and is handled as any other module that cannot be loaded:
+    @ref try-module "%try-module" parses its fallback code, and an optional child module
+    (@ref try-child-module "%try-child-module") fails with a \c MODULE-CHILD-FAILED warning.
+
     <hr>
     @section static_method_calls Static Method Calls
 

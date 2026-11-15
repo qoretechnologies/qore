@@ -2505,6 +2505,20 @@ void qore_sandbox_restore_stack(size_t saved) {
 #endif
 }
 
+bool q_thread_stack_smaller_than_default() {
+#ifdef QORE_MANAGE_STACK
+    ThreadData* td = thread_data.get();
+    // the primary thread's stack is the process's: it counts as enough stack, as does a thread with no stack limit
+    if (!td || td->tid == initial_thread || !td->stack_limit) {
+        return false;
+    }
+    // the size that new threads are created with; set_default_thread_stack_size() can change it
+    return td->stack_size < q_thread_get_stack_size();
+#else
+    return false;
+#endif
+}
+
 QoreElidedStackHelper::QoreElidedStackHelper(size_t elided) {
 #ifdef QORE_MANAGE_STACK
     ThreadData* td = thread_data.get();

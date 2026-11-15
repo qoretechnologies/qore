@@ -1866,6 +1866,9 @@ examples/test/qore/parser/modern-default.qtest	0.5	0.5	-	0.5	0.5	0.4	-	0.5	0.5	0
 examples/test/qore/parser/module-path-directive.qtest	0.0	0.0	-	0.0	0.0	0.1	-	0.0	0.0	0.0
 examples/test/qore/parser/module-path-env-expansion.qtest	0.0	0.0	-	0.0	0.0	0.1	-	0.0	0.0	0.0
 examples/test/qore/parser/no-summarize.qtest	0.0	0.5	-	0.0	0.5	0.1	-	0.0	0.0	0.5
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-1.qtest	84.0	84.0	84.0	84.0	84.0	26.0	-	84.0	84.0	84.0
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest	12.0	12.0	-	-	-	20.0	-	-	12.0	12.0
+examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-3.qtest	88.0	88.0	88.0	88.0	88.0	33.0	-	88.0	88.0	88.0
 examples/test/qore/parser/qore-namespace-priority.qtest	0.0	0.0	-	0.0	0.0	0.1	-	0.0	0.0	0.0
 examples/test/qore/parser/qpp_complex_code_types.qtest	0.5	0.0	-	0.5	0.0	0.1	-	0.5	0.0	0.0
 examples/test/qore/parser/try-module.qtest	0.0	0.0	-	0.0	0.0	0.1	-	0.5	0.0	0.0

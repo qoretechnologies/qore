@@ -585,10 +585,17 @@ int parse_raise_stack_error(const QoreProgramLocation* loc) {
 }
 
 const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink) {
+    // a run-time stack error depends on the thread only in a thread whose stack is smaller than the default thread
+    // stack size; with at least that much stack, the code that exceeded it has a bug of its own
+    bool small_stack = q_thread_stack_smaller_than_default();
     for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
         // the error code can be an inline short string, which has no QoreStringNode
         QoreStringDataHelper err(e->err);
-        if (err && (!strcmp(err.c_str(), QORE_PARSE_STACK_ERR) || !strcmp(err.c_str(), "STACK-LIMIT-EXCEEDED"))) {
+        if (!err) {
+            continue;
+        }
+        if (!strcmp(err.c_str(), QORE_PARSE_STACK_ERR)
+                || (small_stack && !strcmp(err.c_str(), "STACK-LIMIT-EXCEEDED"))) {
             return e;
         }
     }

@@ -846,13 +846,28 @@ Nothing is added to the caller's exception sink and the parent's load return cod
 is unaffected. A broken child is always reported, though — unlike `skipped`,
 which reflects a deliberate restriction in the container `Program`.
 
-A child that cannot be parsed within the stack of the loading thread
-(`PARSE-STACK-LIMIT-EXCEEDED`, issue #6047) is not broken: that outcome is a
-function of the thread, not of what is installed, and recording it as `failed`
-(final for the process) would make the module's extensions depend on the stack
-of the first thread that loaded it. The child stays pending and the load fails
-with the error, as the parse of a module that `%try-module` loads does (see
-`QoreModuleManager::parseLoadModule()`).
+A child that cannot be loaded within the stack of the loading thread is not
+broken (issue #6047): that outcome is a function of the thread, not of what is
+installed, and recording it as `failed` (final for the process) would make the
+module's extensions depend on the stack of the first thread that loaded it. The
+child stays pending and the load fails with the error, as the parse of a module
+that `%try-module` loads does (see `QoreModuleManager::parseLoadModule()`).
+
+Which errors depend on the thread (`qore_find_thread_stack_error()`):
+
+- `PARSE-STACK-LIMIT-EXCEEDED`, the parse error of code (or of a module) that
+  cannot be parsed within the thread's stack, always does.
+- `STACK-LIMIT-EXCEEDED`, raised by code that runs while the module is loaded
+  or initialized (its constant initializers), does only in a thread whose stack
+  is smaller than the default thread stack size
+  (`q_thread_stack_smaller_than_default()`: the thread's stack size, as
+  determined when its thread data was created, against
+  `q_thread_get_stack_size()`, the size that new threads are created with,
+  `STACK_SIZE` unless `set_default_thread_stack_size()` changed it). The primary
+  thread is never smaller. A module that exceeds a stack of at least the default
+  size has a bug of its own, such as a recursion without end: `%try-module`
+  falls back and an optional child fails with `MODULE-CHILD-FAILED`, as for any
+  module that cannot be loaded.
 
 ### Teardown, cycles, and concurrency
 
