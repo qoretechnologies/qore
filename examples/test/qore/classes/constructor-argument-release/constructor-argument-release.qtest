@@ -33,8 +33,11 @@ class ConstructorArgumentReleaseTest inherits QUnit::Test {
         hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False,
             ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
         assertEq(0, result.rc, sprintf("child exited normally: %s\n%s", command, result.out));
-        if (ir_tier) ExecModeHarness::check_ir_tier(result);
-        else if (result.mode) ExecModeHarness::check_native(result);
+        if (ir_tier) {
+            ExecModeHarness::check_ir_tier(result);
+        } else if (result.mode) {
+            ExecModeHarness::check_native(result);
+        }
         return result.out;
     }
     private matrix(string source, string expected_file, string extra_env = "") {
