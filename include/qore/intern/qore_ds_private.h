@@ -109,6 +109,17 @@ public:
         return allows_uncontrolled;
     }
 
+    //! returns true if this record and \a o always give the same results (qore#6142)
+    /** The same policy manager (the policy is read from it when a connection is made), the same captured bit and the
+        same restrictions: one of them can stand for both, so that the creators of copies of copies stay bounded by
+        the distinct code involved
+    */
+    DLLLOCAL bool isEquivalent(const qore_ds_option_setter& o) const {
+        return this == &o || (policy == o.policy && allows_uncontrolled == o.allows_uncontrolled
+            && restrictions.isSandboxed() == o.restrictions.isSandboxed()
+            && restrictions.getParseOptions() == o.restrictions.getParseOptions());
+    }
+
     //! returns a record of the code running on the current thread
     DLLLOCAL static std::shared_ptr<const qore_ds_option_setter> getCaller() {
         return std::make_shared<const qore_ds_option_setter>();
@@ -134,18 +145,20 @@ typedef std::shared_ptr<const qore_ds_option_setter> qore_ds_setter_t;
 
 //! the creators of a datasource (qore#6142)
 /** Copy-on-write: a vector is never changed once it is shared, so that a reader copies the pointer only; a change
-    builds a new vector and replaces the pointer.  It has no duplicates (by pointer) and at least one entry
+    builds a new vector and replaces the pointer.  It has at least one entry and no two equivalent entries
+    (qore_ds_option_setter::isEquivalent())
 */
 typedef std::shared_ptr<const std::vector<qore_ds_setter_t>> qore_ds_creators_t;
 
 //! returns the creators with the single entry \a creator
 DLLLOCAL qore_ds_creators_t qore_ds_make_creators(const qore_ds_setter_t& creator);
 
-//! returns the union of \a a and the creators \a b, without duplicates, \a a first
+//! returns the union of \a a and the creators \a b, \a a first, without a record equivalent to one before it
+//! (qore_ds_option_setter::isEquivalent())
 DLLLOCAL qore_ds_creators_t qore_ds_merge_creators(const qore_ds_setter_t& a, const qore_ds_creators_t& b);
 
-//! returns the union of the creators \a a and \a b, without duplicates, \a a first; \a a itself if it has every entry
-//! of \a b
+//! returns the union of the creators \a a and \a b, \a a first, without a record equivalent to one before it; \a a
+//! itself if each entry of \a b is equivalent to one of \a a
 DLLLOCAL qore_ds_creators_t qore_ds_merge_creators(const qore_ds_creators_t& a, const qore_ds_creators_t& b);
 
 //! the connection parameters of a datasource, which choose the destination and the credentials of a connection
@@ -807,6 +820,8 @@ struct qore_ds_private : public QoreDbiForkObject {
         QoreDsLock al(m, QoreDsLock::Leaf);
         qore_ds_pending_params::ConstView v(pending, al);
         const qore_ds_pending_params::Values& p = v.get();
+        // a string assignment can fail (bad_alloc) after others succeeded: the open fails then, and the next open
+        // copies every value and setter again, so a value in use is never used with the setter of another value
         dbname = p.dbname;
         username = p.username;
         password = p.password;

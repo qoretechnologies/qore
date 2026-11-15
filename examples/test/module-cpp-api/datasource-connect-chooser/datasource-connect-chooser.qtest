@@ -329,11 +329,14 @@ string sub own_barrier(code c) {
         pgms.sandboxed.callFunction("set_param", ds, "db", "y");
         copy = ds.copy();
         obs = observe(copy);
-        assertChoosers(False, obs, "R5", 5);
+        # the trusted copier is equivalent to the trusted creator: one entry for both
+        assertChoosers(False, obs, "R5", 4);
         assertEq(1, (map $1, obs.entries, !$1.allows_uncontrolled).size(), "R5: the copied setter restricts");
 
         # R6: trusted code copies a trusted datasource and pool
-        assertChoosers(True, observe(trusted.copy()), "R6: datasource", 5);
+        # this code is equivalent to the trusted creator of the datasource: the copy has the entries of the original
+        assertChoosers(True, observe(trusted.copy()), "R6: datasource", 4);
+        # the pool was created by the code of another Program (other parse options): the copier is another entry
         assertChoosers(True, tp.copy().select("choosers"), "R6: pool", 2);
     }
 
@@ -497,8 +500,9 @@ string sub own_barrier(code c) {
         # Y2: trusted code copies a datasource that sandboxed code created with default parameters only
         Datasource ds = pgms.sandboxed.callFunction("make_default");
         obs = observe(ds.copy());
-        assertChoosers(False, obs, "Y2", 2);
-        assertEntry("sandboxed", obs.entries[1], "Y2: the creator of the original");
+        # the copier, under the object's sandbox, is equivalent to the sandboxed creator: one entry for both
+        assertChoosers(False, obs, "Y2", 1);
+        assertEntry("sandboxed", obs.entries[0], "Y2: the creator of the original");
     }
 
     noManagerTest() {

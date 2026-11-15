@@ -10628,7 +10628,11 @@ bool ut_ds_read_child_result(int fd, UtDsChildResult& r) {
 */
 void ut_ds_fork_get_option(UnitTestCounters& c, ManagedDatasource& md, bool hook, const char* msg) {
     int fds[2];
-    UT_ASSERT_EQ(c, 0, pipe(fds), (std::string(msg) + ": pipe()").c_str());
+    int prc = pipe(fds);
+    UT_ASSERT_EQ(c, 0, prc, (std::string(msg) + ": pipe()").c_str());
+    if (prc) {
+        return;
+    }
     pid_t pid = fork();
     if (!pid) {
         ::close(fds[0]);
@@ -18965,17 +18969,28 @@ static void ut_datasource_connect_choosers(UnitTestCounters& c) {
         std::unique_ptr<Datasource> cp(ds.copy());
         UT_ASSERT_EQ(c, 0, cp->open(&xsink), "the copy is opened");
         UT_ASSERT_EQ(c, 0, cp->getConnectChoosers(ch, &xsink), "the record of the copy is read");
-        UT_ASSERT_EQ(c, 5, (int)ch.size(), "the copier, the creator and the three setters of the copy");
+        // the copier is equivalent to the creator (the same code, not sandboxed): one entry
+        UT_ASSERT_EQ(c, 4, (int)ch.size(), "the creator and the three setters of the copy");
         cp->close();
+
+        // a chain of copies made by the same code stays bounded: equivalent records are kept once
+        {
+            std::unique_ptr<Datasource> chain(cp->copy());
+            for (int i = 0; i < 10; ++i) {
+                chain.reset(chain->copy());
+            }
+            UT_ASSERT_EQ(c, 1, (int)qore_ds_private::get(*chain)->getCreators()->size(),
+                "a chain of copies by the same code has one creator");
+        }
 
         // setPendingConnectionValues(): the target keeps its creators and gets those of the source
         Datasource target(drv);
         qore_ds_private::get(target)->setPendingConnectionValues(qore_ds_private::get(*cp));
-        UT_ASSERT_EQ(c, 3, (int)qore_ds_private::get(target)->getCreators()->size(),
-            "the target's creator, and the copier and the creator of the source");
+        UT_ASSERT_EQ(c, 1, (int)qore_ds_private::get(target)->getCreators()->size(),
+            "the creators of the source are equivalent to the target's");
         qore_ds_private::get(target)->setPendingConnectionValues(qore_ds_private::get(*cp));
-        UT_ASSERT_EQ(c, 3, (int)qore_ds_private::get(target)->getCreators()->size(),
-            "a second merge adds no duplicates");
+        UT_ASSERT_EQ(c, 1, (int)qore_ds_private::get(target)->getCreators()->size(),
+            "a second merge adds nothing");
     }
 
     // a datasource that sandboxed code created, copied and configured by code that is not restricted: in Qore, such
@@ -19015,7 +19030,8 @@ static void ut_datasource_connect_choosers(UnitTestCounters& c) {
         sp->waitForTerminationAndDeref(&xsink);
     }
 
-    // a connection of a pool has the record of the pool, also when another thread creates it
+    // the record constructor that DatasourceConfig::get() uses: a connection has the record of the pool, also when
+    // another thread creates it (DatasourceConfig::get() itself is tested by datasource-connect-chooser.qtest)
     {
         qore_ds_setter_t pool_setter = qore_ds_option_setter::getCaller();
         qore_ds_pool_record rec{qore_ds_make_creators(pool_setter), pool_setter};

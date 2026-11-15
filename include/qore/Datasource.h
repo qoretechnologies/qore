@@ -66,9 +66,12 @@ class QoreSandboxManager;
 struct qore_ds_pool_record;
 
 //! The code that chose the connection of a datasource: its creators and the setters of the values that a connect uses
-/** Filled by Datasource::getConnectChoosers() and Datasource::addOptionChooser().  Each entry is one piece of code,
-    recorded when it created the datasource or set a value; a piece of code that did both is one entry (the
-    connections of a DatasourcePool, whose creator set all of their values, have one entry).
+/** Filled by Datasource::getConnectChoosers() and Datasource::addOptionChooser().  Each entry is the record of a
+    piece of code, made when the code created the datasource or set a value; each creation and each value set makes a
+    record of its own, so code that created a datasource and set three of its values gives four entries.  A record is
+    an entry once (the connections of a DatasourcePool, whose creator set all of their values with one record, have
+    one entry), and the creators of a copy have no two records that always give the same decision (see
+    Datasource::getConnectChoosers()).
 
     A driver that connects to a destination that sandboxed code must not choose judges the connection by these
     entries, not by the code that is running when it connects: a connection is restricted if any entry does not allow
@@ -954,7 +957,8 @@ public:
         @param xsink for an out-of-memory error
 
         @return 1 if the setter of the option is an entry of \a c now, 0 if the option has no recorded setter, -1 if
-        an exception was raised
+        an exception was raised (\a c is empty then, also of the entries that it had: an empty record is never a
+        permission)
 
         @note must not be called from the driver's statement close or free functions (see the DBI driver rules)
 

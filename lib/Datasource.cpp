@@ -552,12 +552,25 @@ qore_ds_creators_t qore_ds_merge_creators(const qore_ds_setter_t& a, const qore_
     std::vector<qore_ds_setter_t> v;
     v.reserve(b->size() + 1);
     v.push_back(a);
+    // the entries of b are not equivalent to each other
     for (const qore_ds_setter_t& i : *b) {
-        if (i != a) {
+        if (!a->isEquivalent(*i)) {
             v.push_back(i);
         }
     }
     return std::make_shared<const std::vector<qore_ds_setter_t>>(std::move(v));
+}
+
+namespace {
+//! returns true if \a v has a record equivalent to \a s
+bool qore_ds_has_equivalent(const std::vector<qore_ds_setter_t>& v, const qore_ds_setter_t& s) {
+    for (const qore_ds_setter_t& i : v) {
+        if (i->isEquivalent(*s)) {
+            return true;
+        }
+    }
+    return false;
+}
 }
 
 qore_ds_creators_t qore_ds_merge_creators(const qore_ds_creators_t& a, const qore_ds_creators_t& b) {
@@ -568,7 +581,7 @@ qore_ds_creators_t qore_ds_merge_creators(const qore_ds_creators_t& a, const qor
     }
     std::vector<qore_ds_setter_t> v;
     for (const qore_ds_setter_t& i : *b) {
-        if (std::find(a->begin(), a->end(), i) == a->end()) {
+        if (!qore_ds_has_equivalent(*a, i)) {
             if (v.empty()) {
                 v.reserve(a->size() + b->size());
                 v.insert(v.end(), a->begin(), a->end());
@@ -577,7 +590,7 @@ qore_ds_creators_t qore_ds_merge_creators(const qore_ds_creators_t& a, const qor
         }
     }
     if (v.empty()) {
-        // every entry of b is one of a
+        // every entry of b is equivalent to one of a
         return a;
     }
     return std::make_shared<const std::vector<qore_ds_setter_t>>(std::move(v));
