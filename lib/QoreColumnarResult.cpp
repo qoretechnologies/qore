@@ -705,8 +705,10 @@ static QoreValue columnar_filter_value(QoreValue value, QoreValue mask, size_t s
             return new QoreBufferNode(source->getElementType(), source->hasNullableElements(), *values, xsink);
         }
 
+        // carry the source buffer's decimal precision and scale (ignored for other element types)
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
-            source->hasNullableElements(), selected), xsink);
+            source->hasNullableElements(), selected, source->getDecimalPrecision(), source->getDecimalScale()),
+            xsink);
         size_t out = 0;
         for (size_t i = 0; i < source->size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "filtering columnar buffer column")) {
@@ -782,8 +784,10 @@ static QoreValue columnar_take_value(QoreValue value, const std::vector<size_t>&
             return new QoreBufferNode(source->getElementType(), source->hasNullableElements(), *values, xsink);
         }
 
+        // carry the source buffer's decimal precision and scale (ignored for other element types)
         ReferenceHolder<QoreBufferNode> rv(new QoreBufferNode(source->getElementType(),
-            source->hasNullableElements(), indices.size()), xsink);
+            source->hasNullableElements(), indices.size(), source->getDecimalPrecision(),
+            source->getDecimalScale()), xsink);
         for (size_t i = 0; i < indices.size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "taking columnar buffer rows")) {
                 return QoreValue();
