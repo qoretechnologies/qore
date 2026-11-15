@@ -45,7 +45,7 @@ class ExecModeHarnessTest inherits QUnit::Test {
 
     #! the warning of the module loader for an AOT module that is out of date
     const StaleWarning = "warning: AOT module '/build/qlib-qmod/QUnit.qmod' for feature 'QUnit' is out of date: its "
-        "source '/opt/lib/qore-modules/xml-api-2.1.qmod' has changed since it was compiled; loading source module "
+        "source '/opt/lib/qore-modules/xml-api-2.3.qmod' has changed since it was compiled; loading source module "
         "'/src/qlib/QUnit.qm' instead; rebuild the AOT module";
 
     #! the warning of the module loader for an AOT module that cannot be loaded
@@ -69,9 +69,11 @@ class ExecModeHarnessTest inherits QUnit::Test {
             "int sub f(int i) {\n    code<int(int)> d = int sub (int j) {\n        return j * 2;\n    };\n"
             "    return d(i);\n}\nint t = 0;\nfor (int i = 0; i < 3; ++i) {\n    t += c(i) + f(i);\n}\n"
             "printf(\"%d\\n\", t);\n");
-        # a %modern program with a function that is not %modern, as when old-style code is loaded into it
+        # a %modern program with a function that is not %modern, as when old-style code is loaded into it: %old-style for
+        # the function, then %modern again, so that the Program's code can run with tiered execution
+        # (%push-parse-options cannot be used with %modern)
         old_style = write("old-style.q", "%modern\nint t = 0;\nfor (int i = 0; i < 3; ++i) {\n    t += f(i);\n}\n"
-            "printf(\"%d\\n\", t);\n%push-parse-options\n%old-style\nint sub f(int $i) {\n    return $i + 1;\n}\n");
+            "printf(\"%d\\n\", t);\n%old-style\nint sub f(int $i) {\n    return $i + 1;\n}\n%modern\n");
         parse_error = write("parse-error.q", "%modern\nint x = ;\n");
         output = write("output.q", "%modern\nprintf(\"out\\n\");\nstderr.print(\"err\\n\");\nexit(3);\n");
         loader_warning = write("loader-warning.q", sprintf("%%modern\nprintf(\"out\\n\");\nstderr.print(%y);\n"

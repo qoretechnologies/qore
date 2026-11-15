@@ -564,15 +564,13 @@ static QoreValue make_unresolved_aot_self_method_call(const char* method_ref, Qo
 
 static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (auto* call = qore_get_self_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
-        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        const QoreClass* qc = call->getRecordedClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());
-        const AbstractQoreFunctionVariant* variant = call->getVariant();
-        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        std::string method_ref = qore_aot_encode_self_method_ref(call, true);
         // the binding of the arguments of a named call is written first (see read_expr_method_call_named())
         method_ref.insert(0, qore_aot_named_call_arg_prefix(call));
         ctx.writer.writeStringRef(method_ref.c_str());
@@ -676,7 +674,12 @@ static QoreValue read_expr_self_method_call_intern(AOTExprReadCtx& ctx, const ch
         return QoreValue(smcn);
     }
     SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(method_full_name), pln, m, qc, qcp);
-    if (resolved_variant) {
+    if (method_ref.abstract_self_call) {
+        // as SelfFunctionCallNode::parseInitCall() marked it: a call to an abstract method is resolved at run time on
+        // the object's class, with no variant (issue #5824)
+        sfcn->setAbstractCall();
+    } else if (resolved_variant && !static_cast<const MethodVariantBase*>(resolved_variant)->isAbstract()) {
+        // an abstract variant is never bound to a call: parsing binds none
         sfcn->setVariant(resolved_variant);
         if (!type_param_instantiation.type_args.empty()) {
             sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
@@ -823,7 +826,7 @@ static QoreValue make_unresolved_aot_static_method_call(const char* class_path,
 
 static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (auto* call = qore_get_static_method_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         if (method) {
@@ -2788,6 +2791,7 @@ static bool write_expr_hashdecl_new(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
     const char* hashdecl_path = ctx.reader.readStringRef(ctx.ptr);
     if (!hashdecl_path || !*hashdecl_path) {
+        ctx.error = "a hashdecl constructor has no type";
         return QoreValue();
     }
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -2800,7 +2804,11 @@ static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
                 ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 arg.discard(nullptr);
-                call_args->push(QoreValue(), nullptr);
+                // the error of an argument is the error of the expression (qore#6125); the reader is at an unknown
+                // position after it, so the remaining arguments are not read
+                call_args->deref(nullptr);
+                ctx.error = arg_err;
+                return QoreValue();
             } else {
                 call_args->push(arg, nullptr);
             }
@@ -2811,6 +2819,7 @@ static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
         if (call_args) {
             call_args->deref(nullptr);
         }
+        ctx.error = std::string("cannot resolve the hashdecl '") + hashdecl_path + "' of a hashdecl constructor";
         return QoreValue();
     }
     // Convert call_args to QoreParseListNode for NewHashDeclNode
@@ -2865,6 +2874,7 @@ static bool write_expr_complex_hash_new(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     if (!type_path || !*type_path) {
+        ctx.error = "a complex hash constructor has no type";
         return QoreValue();
     }
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -2877,7 +2887,11 @@ static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
                 ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals, ctx.local_owner_pgm);
             if (!arg_err.empty()) {
                 arg.discard(nullptr);
-                call_args->push(QoreValue(), nullptr);
+                // the error of an argument is the error of the expression (qore#6125); the reader is at an unknown
+                // position after it, so the remaining arguments are not read
+                call_args->deref(nullptr);
+                ctx.error = arg_err;
+                return QoreValue();
             } else {
                 call_args->push(arg, nullptr);
             }
@@ -2941,6 +2955,7 @@ static bool write_expr_complex_list_new(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     if (!type_path || !*type_path) {
+        ctx.error = "a complex list constructor has no type";
         return QoreValue();
     }
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -2952,6 +2967,9 @@ static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
         if (!arg_err.empty()) {
             arg_val.discard(nullptr);
             arg_val = QoreValue();
+            // the error of the argument is the error of the expression (qore#6125)
+            ctx.error = arg_err;
+            return QoreValue();
         }
     }
     std::string type_error;
@@ -2995,6 +3013,7 @@ static bool write_expr_complex_buffer_new(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     if (!type_path || !*type_path) {
+        ctx.error = "a complex buffer constructor has no type";
         return QoreValue();
     }
     QoreComplexBufferInitKind init_kind = static_cast<QoreComplexBufferInitKind>(
@@ -3008,6 +3027,9 @@ static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
         if (!arg_err.empty()) {
             arg_val.discard(nullptr);
             arg_val = QoreValue();
+            // the error of the argument is the error of the expression (qore#6125)
+            ctx.error = arg_err;
+            return QoreValue();
         }
     }
     std::string type_error;
@@ -3015,6 +3037,10 @@ static QoreValue read_expr_complex_buffer_new(AOTExprReadCtx& ctx) {
     const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
     if (!ti) {
         arg_val.discard(nullptr);
+        ctx.error = std::string("cannot resolve the type '") + type_path + "' of a complex buffer constructor";
+        if (!type_error.empty()) {
+            ctx.error += ": " + type_error;
+        }
         return QoreValue();
     }
     NewComplexBufferNode* ncb = new NewComplexBufferNode(&loc_builtin, ti, arg_val, init_kind);
@@ -3374,6 +3400,25 @@ static bool write_expr_cast_scalar(AOTExprWriteCtx& ctx) {
     return false;
 }
 
+//! Sets the error of a cast whose type cannot be read or resolved; the expression slot then fails with it (qore#6125)
+static QoreValue set_cast_type_error(AOTExprReadCtx& ctx, QoreValue& inner, const char* kind, const char* type_path,
+        const std::string& type_error, const char* detail = nullptr) {
+    inner.discard(nullptr);
+    if (!type_path || !*type_path) {
+        ctx.error = std::string(kind) + " has no target type";
+        return QoreValue();
+    }
+    ctx.error = std::string("cannot resolve the target type '") + type_path + "' of " + kind;
+    if (detail) {
+        ctx.error += ": ";
+        ctx.error += detail;
+    } else if (!type_error.empty()) {
+        ctx.error += ": ";
+        ctx.error += type_error;
+    }
+    return QoreValue();
+}
+
 static QoreValue read_expr_cast_scalar(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     uint8_t or_nothing = QoreAOTBinaryReader::readU8(ctx.ptr);
@@ -3381,16 +3426,20 @@ static QoreValue read_expr_cast_scalar(AOTExprReadCtx& ctx) {
     if (!read_expr_cast_inner(ctx, inner)) {
         return QoreValue();
     }
-    if (!type_path || !*type_path) {
-        inner.discard(nullptr);
-        return QoreValue();
-    }
     std::string type_error;
+    if (!type_path || !*type_path) {
+        return set_cast_type_error(ctx, inner, "a scalar cast", type_path, type_error);
+    }
     QoreAOTTypeResolver type_resolver(ctx.pgm);
-    const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
-    if (!ti || !QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
-        inner.discard(nullptr);
-        return QoreValue();
+    // the type can name the type parameters of the generic function that the cast is in
+    const QoreTypeInfo* ti = type_resolver.resolveForSignature(type_path, type_error,
+        qore_aot_get_type_param_owner());
+    if (!ti || !type_error.empty()) {
+        return set_cast_type_error(ctx, inner, "a scalar cast", type_path, type_error);
+    }
+    if (!QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
+        return set_cast_type_error(ctx, inner, "a scalar cast", type_path, type_error,
+            "it is not a scalar cast type");
     }
     return QoreValue(new QoreScalarCastOperatorNode(&loc_builtin, ti, inner, or_nothing != 0));
 }
@@ -3475,16 +3524,16 @@ static QoreValue read_expr_cast_complex_hash(AOTExprReadCtx& ctx) {
     if (!read_expr_cast_inner(ctx, inner)) {
         return QoreValue();
     }
-    if (!type_path || !*type_path) {
-        inner.discard(nullptr);
-        return QoreValue();
-    }
     std::string type_error;
+    if (!type_path || !*type_path) {
+        return set_cast_type_error(ctx, inner, "a hash cast", type_path, type_error);
+    }
     QoreAOTTypeResolver type_resolver(ctx.pgm);
-    const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
-    if (!ti) {
-        inner.discard(nullptr);
-        return QoreValue();
+    // the type can name the type parameters of the generic function that the cast is in
+    const QoreTypeInfo* ti = type_resolver.resolveForSignature(type_path, type_error,
+        qore_aot_get_type_param_owner());
+    if (!ti || !type_error.empty()) {
+        return set_cast_type_error(ctx, inner, "a hash cast", type_path, type_error);
     }
     auto* node = new QoreComplexHashCastOperatorNode(&loc_builtin, ti, inner, or_nothing != 0);
     return QoreValue(node);
@@ -3513,19 +3562,19 @@ static QoreValue read_expr_cast_complex_list(AOTExprReadCtx& ctx) {
     if (!read_expr_cast_inner(ctx, inner)) {
         return QoreValue();
     }
+    std::string type_error;
     if (!type_path || !*type_path) {
-        inner.discard(nullptr);
-        return QoreValue();
+        return set_cast_type_error(ctx, inner, "a list cast", type_path, type_error);
     }
     if (!strcmp(type_path, "list")) {
         return QoreValue(new QoreComplexListCastOperatorNode(&loc_builtin, nullptr, inner, or_nothing != 0));
     }
-    std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
-    const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
-    if (!ti) {
-        inner.discard(nullptr);
-        return QoreValue();
+    // the type can name the type parameters of the generic function that the cast is in
+    const QoreTypeInfo* ti = type_resolver.resolveForSignature(type_path, type_error,
+        qore_aot_get_type_param_owner());
+    if (!ti || !type_error.empty()) {
+        return set_cast_type_error(ctx, inner, "a list cast", type_path, type_error);
     }
     auto* node = new QoreComplexListCastOperatorNode(&loc_builtin, ti, inner, or_nothing != 0);
     return QoreValue(node);
@@ -3556,17 +3605,28 @@ static QoreValue read_expr_cast_class(AOTExprReadCtx& ctx) {
     if (!read_expr_cast_inner(ctx, inner)) {
         return QoreValue();
     }
+    std::string type_error;
     if (!class_path || !*class_path) {
-        inner.discard(nullptr);
-        return QoreValue();
+        return set_cast_type_error(ctx, inner, "a class cast", class_path, type_error);
     }
     if (!strcmp(class_path, "object")) {
         return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, nullptr, inner, or_nothing != 0));
     }
     const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
-        inner.discard(nullptr);
-        return QoreValue();
+        // an encoded class reference has the module that provides the class before the class path:
+        // "@qore-module:<module>\n<class path>"
+        std::string class_desc = class_path;
+        size_t nl = class_desc.find('\n');
+        if (nl != std::string::npos) {
+            std::string origin = class_desc.substr(0, nl);
+            class_desc = class_desc.substr(nl + 1);
+            if (!origin.compare(0, 13, "@qore-module:")) {
+                class_desc += " (module " + origin.substr(13) + ")";
+            }
+        }
+        return set_cast_type_error(ctx, inner, "a class cast", class_desc.c_str(), type_error,
+            "the class cannot be found");
     }
     auto* node = new QoreClassCastOperatorNode(&loc_builtin, qc, inner, or_nothing != 0);
     return QoreValue(node);
@@ -3594,21 +3654,20 @@ static QoreValue read_expr_cast_enum(AOTExprReadCtx& ctx) {
     if (!read_expr_cast_inner(ctx, inner)) {
         return QoreValue();
     }
-    if (!enum_path || !*enum_path) {
-        inner.discard(nullptr);
-        return QoreValue();
-    }
     std::string type_error;
-    QoreAOTTypeResolver type_resolver(ctx.pgm);
-    const QoreTypeInfo* ti = type_resolver.resolve(enum_path, type_error);
-    if (!ti) {
-        inner.discard(nullptr);
-        return QoreValue();
+    if (!enum_path || !*enum_path) {
+        return set_cast_type_error(ctx, inner, "an enum cast", enum_path, type_error);
     }
-    const QoreEnumDecl* ed = QoreTypeInfo::getUniqueReturnEnum(ti);
+    QoreAOTTypeResolver type_resolver(ctx.pgm);
+    const QoreTypeInfo* ti = type_resolver.resolveForSignature(enum_path, type_error,
+        qore_aot_get_type_param_owner());
+    if (!ti || !type_error.empty()) {
+        return set_cast_type_error(ctx, inner, "an enum cast", enum_path, type_error);
+    }
+    // the type of an "or nothing" cast (*Enum) is not an enum itself; as when the cast is parsed
+    const QoreEnumDecl* ed = or_nothing ? QoreTypeInfo::getReturnEnum(ti) : QoreTypeInfo::getUniqueReturnEnum(ti);
     if (!ed) {
-        inner.discard(nullptr);
-        return QoreValue();
+        return set_cast_type_error(ctx, inner, "an enum cast", enum_path, type_error, "it is not an enum type");
     }
     auto* node = new QoreEnumCastOperatorNode(&loc_builtin, ed, ti, inner, or_nothing != 0);
     return QoreValue(node);

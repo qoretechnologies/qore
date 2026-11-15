@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the native fast-entry code generation and linking of qcc executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class AnyReturnStripTest
+
+#! issue #6058: a list or hash returned through the return type `any` loses its complex type in every execution mode
+/** `any` strips complex type information, as on assignment to an `any` variable; the AST interpreter assigns a return
+    value to the return type, but the IR engines returned a value through `any` with its complex type (a list literal
+    as list<int>, a typed local as list<int> or hash<string, int>).  The script returns literals, typed locals, a
+    hashdecl, a shared value and a scalar through `any` from functions, a method and a closure, and through `auto` and
+    a typed return type, and checks the types that the caller sees and that the returned variable keeps its own.
+*/
+class AnyReturnStripTest inherits QUnit::Test {
+    public {
+        const Iteration = "literal with nothing: [null, 1] list\n"
+            "literal expression: [2, 1] list\n"
+            "literal of constants: [2, 1] list\n"
+            "list<int> local: [1, 2] list\n"
+            "hash<string, int> local: {a: 1} hash\n"
+            "hashdecl: {a: 1} hash\n"
+            "shared list<int>: [1, 2] list\n"
+            "scalar: 1 integer\n"
+            "method: {a: 1} hash\n"
+            "closure: [3, 4] list\n"
+            "auto return: [1, 2] list<int>\n"
+            "typed return: [1, 2] list<int>\n"
+            "call_function: [1, 2] list\n"
+            "call_object_method: {a: 1} hash\n"
+            "generic instantiated with any: [1, 2] list\n"
+            "caller: list<int> hash<string, int>\n";
+        const Expected = Iteration + Iteration + Iteration;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("any return strip", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        script = get_script_dir() + "/AnyReturnStrip.qr";
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("background compiles", \backgroundTest());
+        addTestCase("AOT executable -O0", \aotTest(), "-O0");
+        addTestCase("AOT executable -O3", \aotTest(), "-O3");
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode, compiled at the first call
+    private modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s "
+                "--exec-mode=%s %s", env, qore_bin, mode, script)), mode);
+        }
+    }
+
+    #! runs the script with background compiles
+    private backgroundTest() {
+        foreach string mode in (("jit", "tiered")) {
+            assertEq(Expected, backquote(sprintf("env -u QORE_JIT_SYNC_COMPILE %s QORE_IR_THRESHOLD=1 "
+                "QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, script)),
+                mode + " with background compiles");
+        }
+    }
+
+    #! compiles the script with qcc: the functions are called through their native fast entries
+    private aotTest(string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("any-return-strip-aot-");
+        string exe = dir.path + "/any-return-strip";
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, script));
+        assertTrue(is_file(exe), "qcc " + opt + " compiles the script: " + out);
+        assertEq(Expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+    }
+}

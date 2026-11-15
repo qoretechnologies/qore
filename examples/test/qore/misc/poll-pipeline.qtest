@@ -122,6 +122,8 @@ public class PollPipelineTest inherits QUnit::Test {
         addTestCase("IMAP response: tag matching", \imapTagMatching());
         addTestCase("branch on context int", \branchOnContextInt());
         addTestCase("check contains on binary values", \checkContainsBinary());
+        addTestCase("require context key", \requireContextKey());
+        addTestCase("check regex", \checkRegex());
         set_return_value(main());
     }
 
@@ -432,5 +434,82 @@ public class PollPipelineTest inherits QUnit::Test {
         p2.addSetContextBinary("data", <004e4545444c4500>);   # NUL "NEEDLE" NUL
         p2.addCheckContains("data", "NEEDLE", "found");
         assertEq(2, p2.getStepCount(), "steps added");
+    }
+
+    requireContextKey() {
+        # a step raises the given error if the context key is missing or not truthy, and the steps after it do not run
+        foreach hash<auto> i in ({"reply": "250-mock\r\n250-SMTPUTF8\r\n250 OK\r\n", "ok": True},
+                {"reply": "250-mock\r\n250 OK\r\n", "ok": False}) {
+            MockLineServer server((i.reply,));
+            server.start();
+            on_exit server.wait();
+
+            Socket sock();
+            PollPipeline p(sock);
+            p.addSetContextBinary("cmd", "EHLO x\r\n");
+            p.addConnect(server.getTarget());
+            p.addSendFromContext("cmd");
+            p.addRecvLineResponse("code", "text", "TEST-ERROR");
+            p.addCheckContains("text", "SMTPUTF8", "has_utf8");
+            assertEq(5, p.addRequireContextKey("has_utf8", "TEST-REQUIRE-ERROR", "no SMTPUTF8"));
+            p.addSetContextBool("done", True);
+            on_exit sock.close();
+            if (i.ok) {
+                drivePollOp(p);
+                assertTrue(p.getResult().extra.done);
+            } else {
+                assertThrows("TEST-REQUIRE-ERROR", "^no SMTPUTF8$", \drivePollOp(), (p,));
+            }
+        }
+    }
+
+    checkRegex() {
+        # an anchored, multi-line, case-insensitive match of a string and of a binary value
+        foreach hash<auto> i in ({"text": "250-mock\n250-smtputf8\n250 OK", "ok": True},
+                {"text": "250-mock\n250 SMTPUTF8 ", "ok": True},
+                {"text": "250-mock\n250 SMTPUTF8X", "ok": False},
+                {"text": "250-mock\n250 SMTPUTF8 EXTRA", "ok": False},
+                {"text": "250-mock\n250-XSMTPUTF8\n250 OK", "ok": False}) {
+            Socket sock();
+            PollPipeline p(sock);
+            p.addSetContextValue("text", i.text);
+            p.addSetContextBinary("bin", binary(i.text));
+            assertEq(2, p.addCheckRegex("text", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found"));
+            p.addCheckRegex("bin", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found_bin");
+            p.addCheckRegex("missing", ".*", "found_missing");
+            drivePollOp(p);
+            hash<auto> extra = p.getResult().extra;
+            assertEq(i.ok, extra.found, i.text);
+            assertEq(i.ok, extra.found_bin, i.text);
+            assertFalse(extra.found_missing);
+        }
+        # a value that is not valid UTF-8 is matched with its invalid bytes never part of a match
+        {
+            # a Latin-1 byte in the first line of the reply
+            binary bin = <3235302d6d61696c2e6578e46d706c652e636f6d0a32353020534d545055544638>;
+            Socket sock();
+            PollPipeline p(sock);
+            p.addSetContextValue("text", binary_to_string(bin, "UTF-8"));
+            p.addSetContextBinary("bin", bin);
+            p.addSetContextValue("latin1", binary_to_string(bin, "ISO-8859-1"));
+            p.addSetContextValue("bad", binary_to_string(<3235302d6d61696c2e6578e40a32353020534d54505554463858>,
+                "UTF-8"));
+            p.addCheckRegex("text", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found");
+            p.addCheckRegex("bin", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found_bin");
+            p.addCheckRegex("latin1", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found_latin1");
+            p.addCheckRegex("bad", "(?im)^[0-9]{3}[ -][ \\t]*SMTPUTF8[ \\t]*$", "found_bad");
+            drivePollOp(p);
+            hash<auto> extra = p.getResult().extra;
+            assertTrue(extra.found);
+            assertTrue(extra.found_bin);
+            assertTrue(extra.found_latin1);
+            assertFalse(extra.found_bad);
+        }
+        Socket sock();
+        PollPipeline p(sock);
+        assertThrows("REGEX-COMPILATION-ERROR", \p.addCheckRegex(), ("text", "(", "x"));
+        # a NUL character in the pattern is refused, not cut
+        assertThrows("REGEX-COMPILATION-ERROR", "NUL", \p.addCheckRegex(), ("text", "a\x00(", "x"));
+        assertThrows("REGEX-COMPILATION-ERROR", "NUL", \p.addCheckRegex(), ("text", "a\x00b", "x"));
     }
 }

@@ -1132,7 +1132,10 @@ void QoreFormatBoundsContext::scan(const QoreValue val) {
     scanIntern(val, 0, nodes);
 }
 
-void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, unsigned& nodes) {
+//! the nesting depth from which the scan of the format bounds continues without recursion (qore#6117)
+static constexpr unsigned QORE_FORMAT_SCAN_RECURSION_LIMIT = 64;
+
+bool QoreFormatBoundsContext::scanEnter(const QoreValue val, unsigned depth, unsigned& nodes) {
     const AbstractQoreNode* node;
     switch (val.getType()) {
         case NT_HASH:
@@ -1141,11 +1144,11 @@ void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, un
             node = val.getInternalNode();
             break;
         default:
-            return;
+            return false;
     }
 
     if (nodes >= max_scan_nodes) {
-        return;
+        return false;
     }
     ++nodes;
 
@@ -1154,11 +1157,103 @@ void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, un
         // the container is already known; count the reference and do not expand it again; this also terminates
         // the scan of recursive references
         ++(i->second);
-        return;
+        return false;
     }
     counts.insert(i, nmap_t::value_type(node, 1));
 
-    if (bounds.max_depth && depth >= bounds.max_depth) {
+    return !bounds.max_depth || depth < bounds.max_depth;
+}
+
+namespace {
+// releases the copy of the data of an object that the scan expands; as in the recursive scan, an exception raised
+// by the release is reported when the sink is destroyed
+struct FormatScanDataDeref {
+    void operator()(QoreHashNode* h) const {
+        ExceptionSink xs;
+        h->deref(&xs);
+    }
+};
+
+// a container whose values the scan without recursion is scanning, and the position in it
+class FormatScanFrame {
+public:
+    FormatScanFrame(const QoreValue val, unsigned depth) : depth(depth) {
+        switch (val.getType()) {
+            case NT_HASH:
+                hash_iter.reset(new ConstHashIterator(val.get<const QoreHashNode>()));
+                break;
+            case NT_LIST:
+                list = val.get<const QoreListNode>();
+                break;
+            case NT_OBJECT: {
+                // any exception here is ignored; the format pass reports it
+                ExceptionSink xs;
+                data.reset(qore_object_private::get(*val.get<const QoreObject>())->copyData(&xs, false));
+                xs.clear();
+                if (data) {
+                    hash_iter.reset(new ConstHashIterator(data.get()));
+                }
+                break;
+            }
+            default:
+                assert(false);
+                break;
+        }
+    }
+
+    // gets the next value in the container; returns false if there are no more
+    bool next(QoreValue& value) {
+        if (list) {
+            if (list_pos == list->size()) {
+                return false;
+            }
+            value = list->retrieveEntry(list_pos++);
+            return true;
+        }
+        if (!hash_iter || !hash_iter->next()) {
+            return false;
+        }
+        value = hash_iter->get();
+        return true;
+    }
+
+    unsigned depth;
+
+private:
+    const QoreListNode* list = nullptr;
+    size_t list_pos = 0;
+    std::unique_ptr<QoreHashNode, FormatScanDataDeref> data;
+    std::unique_ptr<ConstHashIterator> hash_iter;
+};
+}
+
+// cold and not inlined: it must not change how the recursive scan, which scans the values met in practice, is compiled
+__attribute__((cold, noinline)) void QoreFormatBoundsContext::scanWithoutRecursion(const QoreValue val, unsigned depth,
+        unsigned& nodes) {
+    // the values are scanned in the same order as by the recursion in scanIntern()
+    std::vector<FormatScanFrame> stack;
+    stack.emplace_back(val, depth);
+    while (!stack.empty()) {
+        QoreValue value;
+        if (!stack.back().next(value)) {
+            stack.pop_back();
+            continue;
+        }
+        unsigned child_depth = stack.back().depth + 1;
+        if (scanEnter(value, child_depth, nodes)) {
+            stack.emplace_back(value, child_depth);
+        }
+    }
+}
+
+void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, unsigned& nodes) {
+    if (!scanEnter(val, depth, nodes)) {
+        return;
+    }
+
+    // a deeply nested value is scanned without recursion, so that it cannot overflow the stack (qore#6117)
+    if (depth >= QORE_FORMAT_SCAN_RECURSION_LIMIT) {
+        scanWithoutRecursion(val, depth, nodes);
         return;
     }
 
@@ -3822,7 +3917,29 @@ void ensure_unique(AbstractQoreNode* *v, ExceptionSink* xsink) {
     }
 }
 
+QoreValue qore_enum_value_copy_for_write(const QoreValue& v) {
+    assert(v.isEnum());
+    QoreValue base = v.getEnumBaseValue();
+    if (base.isShortString()) {
+        char buf[7];
+        base.getShortString(buf);
+        return new QoreStringNode(buf, base.shortStringLen(), QCS_UTF8);
+    }
+    const AbstractQoreNode* n = base.getInternalNode();
+    if (n) {
+        return n->realCopy();
+    }
+    // a base value held inline is not shared
+    return base;
+}
+
 void ensure_unique(QoreValue& v, ExceptionSink* xsink) {
+    if (v.isEnum()) {
+        // replaces the enum value with an owned copy of its base value and releases the enum value
+        qore_value_copy_on_write(v).discard(xsink);
+        return;
+    }
+
     if (v.isShortString()) {
         char buf[7];
         v.getShortString(buf);
@@ -3863,6 +3980,12 @@ QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
 }
 
 QoreValue qore_value_copy_on_write(QoreValue& v) {
+    if (v.isEnum()) {
+        QoreValue copy = qore_enum_value_copy_for_write(v);
+        QoreValue old = v;
+        v = copy;
+        return old;
+    }
     AbstractQoreNode* n = v.getInternalNode();
     assert(n && n->getType() != NT_OBJECT);
     if (n->is_unique()) {
@@ -3900,6 +4023,119 @@ int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeIn
         return -1;
     }
     return 0;
+}
+
+int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
+    // make sure the lvalue can be assigned a string value (a softchar lvalue converts a one-character string)
+    // raise a parse exception only if parse exceptions are not suppressed
+    if (!QoreTypeInfo::parseAccepts(typeInfo, stringTypeInfo)) {
+        if (getProgram()->getParseExceptionSink()) {
+            QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
+                "assign it a string value", QoreTypeInfo::getName(typeInfo), name);
+            qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+        }
+        return -1;
+    }
+    return 0;
+}
+
+QoreStringNode* qore_plus_equals_char_string(const QoreValue v) {
+    assert(v.isChar());
+    // a char holds a valid codepoint, which UTF-8 always represents; a string that cannot be made is empty
+    QoreStringNode* rv = QoreValue::makeCharString(v.getChar(), QCS_UTF8, nullptr);
+    return rv ? rv : new QoreStringNode;
+}
+
+int64 qore_plus_equals_char_int_operand(const QoreValue v) {
+    assert(v.isChar());
+    SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(v));
+    return str->getAsBigInt();
+}
+
+double qore_plus_equals_char_float_operand(const QoreValue v) {
+    assert(v.isChar());
+    SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(v));
+    return str->getAsFloat();
+}
+
+//! the steps of QoreValue::getAsBigInt(), with a char converted as its string; \a CheckInt is false for a value that
+//! the caller knows is not an inline integer
+/** A copy of QoreValue::getAsBigInt() (lib/QoreValue.cpp), so that a non-char operand costs no more than that
+    conversion: keep both in step when a value tag is added or a step changes.
+*/
+template <bool CheckInt>
+static QORE_INTERN_ALWAYS_INLINE int64 qore_plus_equals_int_operand_steps(const QoreValue v) {
+    if constexpr (CheckInt) {
+        if (v.isInt()) {
+            return v.getInt();
+        }
+    }
+    if (v.isFloat()) {
+        return static_cast<int64>(v.getDouble());
+    }
+    if (v.isBool()) {
+        return v.getBool() ? 1 : 0;
+    }
+    if (v.isChar()) {
+        return qore_plus_equals_char_int_operand(v);
+    }
+    if (v.isEnum()) {
+        return qore_plus_equals_int_operand(v.getEnumMember()->getValue());
+    }
+    if (v.isPointer()) {
+        const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+        return n ? n->getAsBigInt() : 0;
+    }
+    if (v.isShortString()) {
+        char buf[8];
+        v.getShortString(buf);
+        return strtoll(buf, nullptr, 10);
+    }
+    if constexpr (!CheckInt) {
+        if (v.isInt()) {
+            return v.getInt();
+        }
+    }
+    return 0;
+}
+
+int64 qore_plus_equals_int_operand(const QoreValue v) {
+    return qore_plus_equals_int_operand_steps<true>(v);
+}
+
+int64 qore_plus_equals_boxed_int_operand(const QoreValue v) {
+    return qore_plus_equals_int_operand_steps<false>(v);
+}
+
+// the steps of QoreValue::getAsFloat() after its test for a float, with a char converted as its string: a copy of
+// QoreValue::getAsFloat() (lib/QoreValue.cpp), so that a non-char operand costs no more than that conversion; keep
+// both in step when a value tag is added or a step changes
+double qore_plus_equals_nonfloat_float_operand(const QoreValue v) {
+    if (v.isInt()) {
+        return static_cast<double>(v.getInt());
+    }
+    if (v.isBool()) {
+        return v.getBool() ? 1.0 : 0.0;
+    }
+    if (v.isChar()) {
+        return qore_plus_equals_char_float_operand(v);
+    }
+    if (v.isEnum()) {
+        return qore_plus_equals_float_operand(v.getEnumMember()->getValue());
+    }
+    if (v.isPointer()) {
+        const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+        return n ? n->getAsFloat() : 0.0;
+    }
+    if (v.isShortString()) {
+        char buf[8];
+        v.getShortString(buf);
+        return strtod(buf, nullptr);
+    }
+    if (v.isFloat()) {
+        return v.getDouble();
+    }
+    return 0.0;
 }
 
 int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {

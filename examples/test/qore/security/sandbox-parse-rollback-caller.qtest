@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Program::parseRollback() called by sandboxed code keeps that code the caller of the rollback in the target
+# Program, as the other parse entry points do (issue #6149); the rollback itself runs no code of the Program, so
+# these checks are of its effect, for sandboxed and trusted callers and for the caller's own Program
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class SandboxParseRollbackCallerTest
+
+class SandboxParseRollbackCallerTest inherits QUnit::Test {
+    const SandboxedSource = "
+sub pend(Program p, string src) { p.parsePending(src, \"pending\"); }
+sub rollback(Program p) { p.parseRollback(); }
+sub commit(Program p) { p.parseCommit(); }
+";
+
+    constructor() : QUnit::Test("sandbox parse rollback caller", "1.0", \ARGV) {
+        addTestCase("sandboxed code rolls back a pending parse in a trusted Program", \trustedTarget());
+        addTestCase("sandboxed code rolls back a pending parse in its own Program", \ownTarget());
+        addTestCase("trusted code rolls back a pending parse in a sandboxed Program", \trustedCaller());
+        set_return_value(main());
+    }
+
+    private Program sandboxed() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(SandboxedSource, "sandboxed");
+        return p;
+    }
+
+    trustedTarget() {
+        Program sb = sandboxed();
+        Program trusted(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        trusted.parse("int sub committed_fn() { return 1; }", "trusted");
+
+        sb.callFunction("pend", trusted, "int sub pending_fn() { return 2; }");
+        sb.callFunction("rollback", trusted);
+        assertFalse(trusted.existsFunction("pending_fn"));
+        assertEq(1, trusted.callFunction("committed_fn"));
+
+        # the Program can be parsed again after the rollback, by the sandboxed code too
+        sb.callFunction("pend", trusted, "int sub pending_fn() { return 3; }");
+        sb.callFunction("commit", trusted);
+        assertEq(3, trusted.callFunction("pending_fn"));
+    }
+
+    ownTarget() {
+        # the Program's own code runs in it, so it cannot parse there; a rollback with nothing pending leaves its
+        # committed code as it is
+        Program sb = sandboxed();
+        assertThrows("PARSE-ERROR", "threads are active", \sb.callFunction(), ("pend", sb,
+            "int sub own_pending() { return 4; }"));
+        sb.callFunction("rollback", sb);
+        assertFalse(sb.existsFunction("own_pending"));
+        assertTrue(sb.existsFunction("rollback"));
+    }
+
+    trustedCaller() {
+        Program sb = sandboxed();
+        sb.parsePending("int sub pending_fn() { return 5; }", "pending");
+        sb.parseRollback();
+        assertFalse(sb.existsFunction("pending_fn"));
+        # a parse error rolls back as well
+        assertThrows("PARSE-EXCEPTION", \sb.parse(), ("int sub broken( {", "broken"));
+        assertFalse(sb.existsFunction("broken"));
+    }
+}

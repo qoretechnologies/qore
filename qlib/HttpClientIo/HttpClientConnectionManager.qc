@@ -594,13 +594,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         hash<UrlInfo> url_info = parseRequestUrl(url);
 
         bool from_pool = False;
-        HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking);
+        bool unreserved;
+        HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking, \unreserved);
         # Exclude the connection from the pool reuse rotation for the session's lifetime.  The
         # stream reservation held by getConnection() blocks concurrent reuse until leased is set
         # (an HTTP/1.1 connection has exactly one stream slot), so there is no reuse window.
         conn.setLeased(True);
         conn.setAllowGetBody(opts.allow_get_body);
-        conn.releaseStreamReservation();
+        # a reservation that getConnection() did not take is not released (#6193)
+        if (!unreserved) {
+            conn.releaseStreamReservation();
+        }
         log(LoggerLevel::DEBUG, "leased %s connection %d to %s:%d for a persistent session",
             conn.getProtocol(), conn.getConnectionId(), url_info.host, url_info.port);
         return conn;
@@ -700,7 +704,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         hash<UrlInfo> url_info = parseRequestUrl(url);
 
         bool from_pool = False;
-        HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking);
+        # set if no stream of the connection was reserved: a new connection whose connect failed; its request raises
+        # the connection's error, and no reservation is marked or released (#6193; see getConnection())
+        bool unreserved;
+        HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking, \unreserved);
 
         # Create protocol-appropriate stream handle; release the reservation
         # if the constructor throws to avoid leaking a pending slot
@@ -717,10 +724,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     opts.connect_timeout);
             }
         } catch () {
-            conn.releaseStreamReservation();
+            if (!unreserved) {
+                conn.releaseStreamReservation();
+            }
             rethrow;
         }
-        stream.markReservationHeld();
+        if (!unreserved) {
+            stream.markReservationHeld();
+        }
         conn.setAllowGetBody(opts.allow_get_body);
         stream.setMaxResponseBodySize(opts.max_response_body_size);
         stream.setAssumedEncoding(opts.assume_encoding);
@@ -1932,7 +1943,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                         log(LoggerLevel::DEBUG, "removing closed connection to %s", key);
                         continue;
                     }
-                    if (conn.getActiveStreamCount() == 0
+                    # a leased connection is its session's, and a reserved one its request's: neither is closed
+                    # for its idle time here; the write lock excludes new reservations (#6194)
+                    if (!conn.isLeased() && conn.getOutstandingStreamCount() == 0
                             && (now_mono_us - conn.getLastActivityMonotonicUs()) > idle_limit_us) {
                         log(LoggerLevel::DEBUG, "closing idle connection to %s", key);
                         push to_close, conn;
@@ -2220,9 +2233,21 @@ printf("%d connection(s) migrated\n", migrated);
         @param non_blocking retained plumbing only (see @ref acquireStream());
         no longer alters connection establishment — the cancelable non-blocking
         happy-eyeballs path is @ref acquireConnectionAsync().
+        @param unreserved set to True if a stream of the connection was not reserved for the caller: only a new
+        connection whose connect failed, or that is draining, before its reservation (see below); the caller then
+        neither marks nor releases a reservation
+
+        @return the connection; a stream of it is reserved for the caller unless \a unreserved is set
+
+        @par Invariant of a failed reservation (#6193)
+        A new connection is added to the pool and reserved under the pool's write lock, so no other request can have
+        reserved it first; its reservation fails only if the connection is closed (its connect failed) or draining,
+        and then no request can reserve it later either.  The connection is returned anyway, so that the request
+        raises the connection's own error (a sandbox denial, a refused connect, a proxy error), and the closed
+        connection is evicted by the next pool scan.
     */
     private HttpClientConnection getConnection(hash<auto> url_info, reference<bool> from_pool,
-            *bool non_blocking) {
+            *bool non_blocking, *reference<bool> unreserved) {
         string key = getPoolKey(url_info);
 
         # Persistent-session pin: if a leased connection is pinned for this manager's remote, use it
@@ -2265,6 +2290,11 @@ printf("%d connection(s) migrated\n", migrated);
                             if (conn.isDraining()) {
                                 continue;
                             }
+                            # a connection leased for a persistent session is the session's: it is neither
+                            # reused nor evicted here (#6194)
+                            if (conn.isLeased()) {
+                                continue;
+                            }
                             if (!isConnectionAlive(conn)) {
                                 push dead_conns, conn;
                                 continue;
@@ -2282,7 +2312,9 @@ printf("%d connection(s) migrated\n", migrated);
                 # Evict dead connections outside the read lock (evictConnections
                 # acquires a write lock — doing it under the read lock would deadlock)
                 if (dead_conns) {
-                    evictConnections(key, dead_conns);
+                    # a connection that another request reserved since it was found idle for too long is kept: it
+                    # is not closed under that request (#6194)
+                    evictConnections(key, dead_conns, True);
                 }
                 if (live_conn) {
                     from_pool = True;
@@ -2487,7 +2519,12 @@ printf("%d connection(s) migrated\n", migrated);
                 # Reserve a stream slot for the creator thread under the same lock
                 # so the pool-scan path (holding only the read lock) cannot grab the
                 # sole available slot between pool insertion and reservation
-                conn.tryReserveStream();
+                if (!conn.tryReserveStream()) {
+                    # see the invariant of a failed reservation above (#6193): the connection accepts no
+                    # reservation, so no other request has or can get one
+                    @assert(conn.isClosed() || conn.isDraining());
+                    unreserved = True;
+                }
                 return conn;
             }
         }
@@ -4449,7 +4486,7 @@ printf("%d connection(s) migrated\n", migrated);
         # opts.idle_timeout / opts.max_age are `timeout` values, i.e. milliseconds, so
         # they are scaled to microseconds here to match the monotonic clock.  The
         # comparison stays strict (age > limit), as the previous date-cutoff form was.
-        if (conn.getActiveStreamCount() == 0) {
+        if (conn.getOutstandingStreamCount() == 0) {
             int now_mono_us = clock_get_monotonic_us();
             # Strict idle-age check.  maybeCleanupIdle() runs only every
             # idle_timeout/3 (clamped), so a connection slightly past
@@ -4507,10 +4544,17 @@ printf("%d connection(s) migrated\n", migrated);
     #! Internal: evicts specific connections from the pool and closes them
     /** @param key the host:port pool key
         @param conns list of connections to evict
+        @param keep_reserved True to keep a connection that is open and has a reserved or active stream: reservations
+        are taken under the read lock, which this write lock excludes, so a connection that a scan found idle and
+        another request reserved since is not closed under that request (#6194)
     */
-    private evictConnections(string key, list<HttpClientConnection> conns) {
+    private evictConnections(string key, list<HttpClientConnection> conns, *bool keep_reserved) {
         {
             AutoWriteLock al(pool_lock);
+            if (keep_reserved) {
+                conns = select conns, $1.isClosed() || $1.getPollOperation().hasError()
+                    || $1.getOutstandingStreamCount() == 0;
+            }
             if (pool.hasKey(key)) {
                 # Build a set of connection IDs to evict for O(1) lookup
                 hash<string, bool> evict_ids;

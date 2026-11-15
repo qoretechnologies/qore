@@ -1,5 +1,5 @@
 # The binary module API (include/qore/ModuleManager.h) and the hash of the installed public headers that it
 # was recorded for: tools/qore-module-api-headers.py checks them (design/module-api-version.md); after a
 # decision about a header change, record them with: tools/qore-module-api-headers.py --update
-api 2.2
-sha256 71811b3916af8c3db4e9182eda2183b5f984a0053edd7e03f7c79b489e5f78a2
+api 2.3
+sha256 bb7781a1a1d54a9491230221e3a00eed5af097b87ce3c90243a3bf377edb4e8b

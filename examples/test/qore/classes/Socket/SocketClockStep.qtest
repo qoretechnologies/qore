@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - socket stream and idle timeouts and channel waits on the monotonic clock
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketClockStepTest
+
+#! Socket and channel timeouts under a step of the system clock (#6150)
+/** The timeouts of the socket stream operations (here: Socket::recvToOutputStream()), the idle timeout of Socket::startPollIdleAndReadHttpHeader() and the
+    timeout of channel_select() were measured on the system clock: a step forward ended them at once, and a step back
+    extended them by the size of the step.  They are measured on the monotonic clock.  The system clock is stepped with
+    dbg_set_realtime_offset(), which only debug builds have.
+*/
+public class SocketClockStepTest inherits QUnit::Test {
+    public {
+        #! a step of the system clock
+        const Step = 3600 * 1000000;
+
+        #! the longest wait for an operation that is due
+        const HangGuard = 10s;
+    }
+
+    constructor() : Test("SocketClockStepTest", "1.0", \ARGV) {
+        addTestCase("a step back does not extend a Socket::recvToOutputStream() timeout", \recvStreamStepBackTest());
+        addTestCase("a step forward does not end the idle timeout of Socket::startPollIdleAndReadHttpHeader()",
+            \idleHeaderStepForwardTest());
+        addTestCase("a step back does not extend a channel_select() timeout", \selectStepBackTest());
+        set_return_value(main());
+    }
+
+    private skipIfNoClockStep() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_set_realtime_offset())");
+        }
+    }
+
+    #! returns a connected client socket and the server's socket for it
+    private list<Socket> socketPair() {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        on_exit server.close();
+        Socket client();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port);
+        Socket accepted = server.accept(5s);
+        return (client, accepted);
+    }
+
+    #! runs \a code in a background thread, steps the system clock back once it waits, and returns the exception
+    #! that it raised; \a ended is set if it ended within the hang guard
+    /** A timeout measured on the system clock does not end while the clock is stepped back, and the wait that it
+        started is not woken when the clock is set right again: \a unblock then ends the code, so that the test does
+        not hang.
+    */
+    private *hash<ExceptionInfo> runWithStepBack(code code, code unblock, reference<bool> ended) {
+        Counter done(1);
+        *hash<ExceptionInfo> rv;
+        background sub () {
+            on_exit done.dec();
+            try {
+                code();
+            } catch (hash<ExceptionInfo> ex) {
+                rv = ex;
+            }
+        }();
+        # the operation takes its deadline before the clock steps back
+        usleep(200ms);
+        {
+            call_function("dbg_set_realtime_offset", -Step);
+            on_exit call_function("dbg_set_realtime_offset", 0);
+            ended = !done.waitForZero(HangGuard);
+        }
+        if (!ended) {
+            unblock();
+        }
+        done.waitForZero();
+        return rv;
+    }
+
+    recvStreamStepBackTest() {
+        skipIfNoClockStep();
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        bool ended;
+        # the peer sends nothing: the receive times out
+        *hash<ExceptionInfo> ex = runWithStepBack(sub () {
+            sp[0].recvToOutputStream(new BinaryOutputStream(), 100, 500ms);
+        }, sub () { sp[1].close(); }, \ended);
+        assertTrue(ended, "the receive ends after its timeout");
+        assertEq("SOCKET-TIMEOUT", ex.err);
+    }
+
+    idleHeaderStepForwardTest() {
+        skipIfNoClockStep();
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        AbstractPollOperation op = sp[1].startPollIdleAndReadHttpHeader(60s);
+        on_exit op.abort();
+        op.continuePoll();
+        assertEq("idle", op.getState());
+        call_function("dbg_set_realtime_offset", Step);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        op.continuePoll();
+        assertEq("idle", op.getState(), "the idle timeout has not expired");
+        # the request arrives and is read
+        sp[0].send("GET / HTTP/1.1\r\nHost: x\r\n\r\n");
+        int deadline = clock_get_monotonic_us() + HangGuard.durationMicroseconds();
+        while (!op.goalReached() && clock_get_monotonic_us() < deadline) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (pi) {
+                Socket::poll((pi,), 50ms);
+            }
+        }
+        assertEq("header-complete", op.getState(), "the request header is read");
+    }
+
+    selectStepBackTest() {
+        skipIfNoClockStep();
+        # a buffered channel: the value that ends the wait is sent without a receiver waiting for it
+        Channel ch(1);
+        bool ended;
+        *hash<ExceptionInfo> ex = runWithStepBack(sub () {
+            auto rv = channel_select(({"channel": ch, "op": "recv"},), 500ms);
+            if (exists rv) {
+                throw "UNEXPECTED", sprintf("%y", rv);
+            }
+        }, sub () { ch.send(1); }, \ended);
+        assertTrue(ended, "channel_select() returns after its timeout");
+        assertNothing(ex);
+    }
+}

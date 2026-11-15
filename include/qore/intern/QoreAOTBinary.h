@@ -249,6 +249,9 @@ std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_
 //! Marker for method-ref payloads that carry deferred call argument type metadata.
 constexpr const char* QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER = "@qore-aot-static-call-arg-types-v1";
 constexpr const char* QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER = "@qore-aot-explicit-type-args-v1";
+//! Marker for the method-ref payload of a self call to an abstract method (SelfFunctionCallNode::isAbstractCall()),
+//! which is looked up by name at run time and has no variant (issue #5824)
+constexpr const char* QORE_AOT_ABSTRACT_SELF_CALL_MARKER = "@qore-aot-abstract-self-call-v1";
 
 //! returns the signature whose type parameters the code of the function whose AOT context is being built names
 /** (see QoreAOTTypeParamOwnerHelper); a closure read in that context names them (qore#5733)
@@ -270,6 +273,8 @@ struct QoreAOTStaticMethodRef {
     const char* variant_class_path = nullptr;
     const char* sig_text = nullptr;
     const char* arg_type_sig = nullptr;
+    //! a self call to an abstract method (QORE_AOT_ABSTRACT_SELF_CALL_MARKER)
+    bool abstract_self_call = false;
     bool explicit_type_args_present = false;
     bool explicit_type_args_valid = true;
     std::vector<std::string> explicit_type_arg_paths;
@@ -286,6 +291,13 @@ struct QoreAOTStaticMethodRef {
 */
 const AbstractQoreFunctionVariant* qore_aot_find_method_variant(QoreProgram* pgm, const QoreMethod*& method,
         const char* method_name, const char* variant_ref, bool pseudo);
+
+class SelfFunctionCallNode;
+
+//! Encodes the method reference of a self call: a call to an abstract method is marked as such and has no variant
+//! (QORE_AOT_ABSTRACT_SELF_CALL_MARKER), as parsing marks it (SelfFunctionCallNode::parseInitCall()); otherwise as
+//! qore_aot_encode_static_method_ref(), with the call's argument types if @a arg_types and it has no variant
+std::string qore_aot_encode_self_method_ref(const SelfFunctionCallNode* call, bool arg_types);
 
 //! Encodes a static method reference, optionally with an exact variant or deferred argument type signature.
 std::string qore_aot_encode_static_method_ref(const char* method_name,
@@ -344,6 +356,20 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
 
 //! Resolves a serialized hashdecl path, including parameterized hashdecl paths.
 const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char* path);
+
+//! Resolves a serialized hashdecl path in the current call
+/** The type parameters of the receiver's class and of the generic function or method running are substituted with
+    their types in the current call (hash<HD<U>> is hash<HD<int>> in a call of m<int>(), qore#5661); a type parameter
+    of a signature is resolved with the signature of the type parameter instantiation of the call.
+
+    @param pgm the Program
+    @param path the hashdecl type path
+    @param receiver_type_info the receiver's type, whose class's type parameters are substituted
+
+    @return the hashdecl, or nullptr if it cannot be resolved
+*/
+DLLLOCAL const TypedHashDecl* qore_aot_resolve_call_hashdecl_path(QoreProgram* pgm, const char* path,
+    const QoreTypeInfo* receiver_type_info);
 
 //! Magic number: "QORD" in little-endian (0x44524F51)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
@@ -473,6 +499,15 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      the reference of a default argument expression to one is (v34); the reader binds the capture to that variable
 //!      and reads the closure again when the Program has its top-level locals.  An earlier reader takes the text as
 //!      the name of a variable that does not exist (#5998).
+//! v37: a recorded `%module-cmd` directive (MODULE_COMMANDS section) has the restricting parse options that were in
+//!      force at the directive after its command (two u64: the low and the high 64 bits), so that the command is
+//!      replayed with the restrictions that the interpreted program had when it issued it (QoreModuleCommandContext).
+//!      A v9-v36 directive has none: its command is replayed with the parse options that the program is declared
+//!      with, which are a superset.
+//! v38: the flags of an AOTExprKind::DOT_EVAL_TARGET slot have the bit QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH (0x02)
+//!      for a call dispatched by name, whose slot records the class, method and variant resolved at parse time for the
+//!      check of the call's target; and the method-ref payload of a self call to an abstract method is
+//!      QORE_AOT_ABSTRACT_SELF_CALL_MARKER (#5824).  A v9-v37 image has neither.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -508,9 +543,14 @@ constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
 constexpr uint16_t QORE_AOT_NAMED_CALLREF_VERSION = 35;
 //! First format version whose closure captures can name a top-level local by its index (see v36 above).
 constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
+//! First format version whose recorded `%module-cmd` directives have the parse options in force at them (see v37
+//! above).
+constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
+//! First format version whose call targets can be dispatched by name and self calls marked abstract (see v38 above).
+constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -537,6 +577,11 @@ constexpr uint8_t QORE_AOT_COMPRESSION_NONE = 0;
 constexpr uint8_t QORE_AOT_COMPRESSION_ZLIB = 1;
 constexpr uint8_t QORE_AOT_COMPRESSION_ZSTD = 2;
 constexpr uint8_t QORE_AOT_COMPRESSION_SECTIONED_ZSTD = 3;
+
+//! The maximum size of compressed AOT metadata once decompressed: of the metadata after the header, of a section or
+//! of the string pool, and of all metadata together with sectioned compression; the reader refuses more, so the
+//! writer must not compress more (qore#6127)
+constexpr size_t QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE = 100 * 1024 * 1024;
 
 //! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
 constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
@@ -1195,6 +1240,11 @@ public:
     //! Header feature flags used by payload-level compatibility choices while
     //! section writers serialize values.
     uint64_t feature_flags = 0;
+
+    //! The function with the most slot map and debug IR metadata written by serializeSlotMaps() and the size of
+    //! that metadata, to name it when the metadata exceeds QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE (qore#6127)
+    std::string largest_func_metadata_name;
+    size_t largest_func_metadata_size = 0;
 
     //! Keep evaluated pending constants for incremental object declaration preloads.
     //! Final executables/modules run their native initializers and must not retain
@@ -2058,10 +2108,17 @@ void serializeModulePathLists(QoreAOTBinaryWriter& writer,
 struct AOTModuleCommand {
     std::string module;
     std::string command;
+    //! true if the restricting parse options in force at the directive are recorded (v37 and later)
+    bool has_options = false;
+    //! the low 64 bits of the restricting parse options in force at the directive
+    int64_t options_lo = 0;
+    //! the high 64 bits of the restricting parse options in force at the directive
+    int64_t options_hi = 0;
 };
 
 //! Serialize `%module-cmd` directives into the MODULE_COMMANDS section.
-/** Wire format: `u32 count`, then `count × (module StringRef, command StringRef)`.
+/** Wire format: `u32 count`, then `count × (module StringRef, command StringRef, u64 options_lo, u64 options_hi)`
+    (the two options words are v37; before it an entry was the two string references only).
     `feature_flags` is ORed with `QORE_AOT_FEAT_MODULE_COMMANDS` when commands are emitted.
 */
 void serializeModuleCommands(QoreAOTBinaryWriter& writer,
@@ -2257,6 +2314,12 @@ bool readEmbeddedSource(const uint8_t* data, uint32_t size, const char*& source,
 // ---- Slot Map Serialization (Phase 5) ----
 
 //! Expression identity kinds for serialized slot maps
+//! AOTExprKind::DOT_EVAL_TARGET flag: a pseudo-method call
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_PSEUDO = (1 << 0);
+//! AOTExprKind::DOT_EVAL_TARGET flag: the call is dispatched by name; the class, method and variant recorded are those
+//! resolved at parse time, used only by the check of the call's target (issue #5824)
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH = (1 << 1);
+
 enum class AOTExprKind : uint8_t {
     UNSUPPORTED        = 0,   //!< Compile-time-only invalid marker; never serialized in new AOT output
     FUNC_CALL          = 1,   //!< Regular function call: ref1=function_name
@@ -2294,7 +2357,7 @@ enum class AOTExprKind : uint8_t {
     CONST_NOTHING      = 32,  //!< Nothing constant: no data
     LIST_LITERAL       = 33,  //!< List literal: count(u8) + [value(AOTExprKind)] * N
     CONST_NULL         = 34,  //!< NULL constant: no data
-    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name[\nvariant_class\nvariant_sig], flags=is_pseudo
+    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name[\nvariant_class\nvariant_sig], flags=QORE_AOT_DOT_EVAL_TARGET_*
     FUNC_CALL_REF      = 36,  //!< Function call reference (\func): ref1=function_name
     BOUND_METHOD_REF   = 37,  //!< Bound method reference (\method): ref1=class_path, ref2=method_name
     STATIC_METHOD_REF  = 38,  //!< Static method reference (\Class::method): ref1=class_path, ref2=method_name
@@ -2641,7 +2704,7 @@ struct AOTExprSlotId {
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
     std::string ref3;        //!< kind-specific: instantiated object type path for NEW_OBJECT
-    uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: bit 0 = is_pseudo)
+    uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: QORE_AOT_DOT_EVAL_TARGET_*)
     QoreAOTCallRelocationTargetKind call_relocation_kind = QoreAOTCallRelocationTargetKind::NONE;
     std::string reloc_qore_path; //!< canonical symbol-index path for safe direct-call relocation
     QoreValue child_expr;   //!< kind-specific child expression (e.g., OBJ_METHOD_REF_EXPR target)

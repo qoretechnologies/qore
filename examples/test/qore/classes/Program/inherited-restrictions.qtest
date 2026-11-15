@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# the children of this Program inherit its options and are locked (no %no-child-restrictions); the checks of
+# Program::replaceParseOptions(), which needs a caller without child restrictions, are in
+# locked-options-replace.qtest
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class InheritedRestrictionsTest
+
+#! Tests that a Program whose parse options are locked cannot lift the restrictions locked in
+/** A child Program inherits the restrictions of its parent, and a Program locked with Program::lockOptions() keeps
+    those it had then (design/locked-parse-options.md); Program::disableParseOptions() refuses to remove them,
+    whether the options are given as an integer mask or as a ParseOptions object, also when the parent is sandboxed,
+    and code parsed into the child afterwards still cannot use what they restrict
+*/
+class InheritedRestrictionsTest inherits QUnit::Test {
+    public {
+        #! the restrictions tested: the legacy integer mask (0 for an extended option, which has none), code that
+        #! parses only without the restriction, and the error that the code raises with it
+        const Restrictions = {
+            "no-external-process": {
+                "mask": PO_NO_EXTERNAL_PROCESS,
+                "use": "auto sub f() { return system(\"true\"); }",
+                "err": "PARSE-EXCEPTION",
+            },
+            "no-process-control": {
+                "mask": PO_NO_PROCESS_CONTROL,
+                "use": "auto sub f() { exit(); return 1; }",
+                "err": "PARSE-EXCEPTION",
+            },
+            "no-thread-control": {
+                "mask": PO_NO_THREAD_CONTROL,
+                "use": "auto sub f() { return background sleep(0); }",
+                "err": "PARSE-EXCEPTION",
+            },
+            "no-network": {
+                "mask": PO_NO_NETWORK,
+                "use": "auto sub f() { return new Socket(); }",
+                "err": "ILLEGAL-CLASS-INSTANTIATION",
+            },
+            "no-filesystem": {
+                "mask": PO_NO_FILESYSTEM,
+                "use": "auto sub f() { return new File(); }",
+                "err": "ILLEGAL-CLASS-INSTANTIATION",
+            },
+            "no-new": {
+                "mask": 0,
+                "use": "auto sub f() { return new Mutex(); }",
+                "err": "PARSE-EXCEPTION",
+            },
+        };
+
+        #! runs in a parent that has the restriction: a new child inherits it and tries to remove it
+        /** The code uses no \c new operator, which the \c no-new parent cannot parse
+        */
+        const Probe = "%modern
+hash<string, auto> sub probe(string name, int mask, string use) {
+    hash<string, auto> rv = {};
+    ParseOptions opts(name);
+
+    if (mask) {
+        Program int_child();
+        rv.\"int-inherited\" = int_child.getFullParseOptions().hasAll(name);
+        try {
+            int_child.disableParseOptions(mask);
+            rv.\"int\" = \"allowed\";
+        } catch (hash<ExceptionInfo> ex) {
+            rv.\"int\" = ex.err;
+        }
+        rv.\"int-kept\" = int_child.getFullParseOptions().hasAll(name);
+        rv.\"int-use\" = tryParse(int_child, use);
+    }
+
+    Program obj_child();
+    rv.\"obj-inherited\" = obj_child.getFullParseOptions().hasAll(name);
+    try {
+        obj_child.disableParseOptions(opts);
+        rv.obj = \"allowed\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv.obj = ex.err;
+    }
+    rv.\"obj-kept\" = obj_child.getFullParseOptions().hasAll(name);
+    rv.\"obj-use\" = tryParse(obj_child, use);
+    return rv;
+}
+
+string sub tryParse(Program pgm, string use) {
+    try {
+        pgm.parse(use, \"use\");
+        return \"parsed\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("InheritedRestrictionsTest", "1.0", \ARGV) {
+        addTestCase("the code of each check parses and runs without the restriction", \controls());
+        # one case per restriction, so that each one that a child could lift is reported
+        foreach string name in (keys Restrictions) {
+            addTestCase(sprintf("a child cannot disable the %s restriction it inherited", name),
+                inheritedCase(name, False));
+            addTestCase(sprintf("a child of a sandboxed parent cannot disable the %s restriction it inherited", name),
+                inheritedCase(name, True));
+        }
+        addTestCase("a child cannot disable a locked restriction together with an option it may disable",
+            \mixedDisable());
+        addTestCase("a Program locked with lockOptions() keeps the restrictions it had then (int mask)",
+            \lockOptionsInt());
+        addTestCase("a Program locked with lockOptions() keeps the restrictions it had then (ParseOptions)",
+            \lockOptionsObject());
+        set_return_value(main());
+    }
+
+    #! without the restriction, the code of each check parses, and the probe runs in a parent without restrictions
+    controls() {
+        foreach hash<auto> i in (Restrictions.pairIterator()) {
+            Program plain();
+            plain.parse(i.value.use, "use");
+            assertTrue(plain.existsFunction("f"), i.key + ": the code parses without the restriction");
+        }
+        Program parent();
+        parent.parse(Probe, "probe");
+        hash<string, auto> rv = parent.callFunction("probe", "no-network", PO_NO_NETWORK,
+            Restrictions."no-network".use);
+        assertEq({
+            "int-inherited": False,
+            "int": "allowed",
+            "int-kept": False,
+            "int-use": "parsed",
+            "obj-inherited": False,
+            "obj": "allowed",
+            "obj-kept": False,
+            "obj-use": "parsed",
+        }, rv, "a child of a parent without the restriction neither has nor keeps it");
+    }
+
+    #! a refused disable is refused as a whole: the option that may be disabled is not disabled either
+    mixedDisable() {
+        Program parent();
+        parent.setParseOptions(PO_NO_NETWORK);
+        parent.parse("hash<string, auto> sub mixed() {
+    Program c();
+    string err;
+    try {
+        c.disableParseOptions(PO_NO_NETWORK | PO_NEW_STYLE);
+        err = \"allowed\";
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    return {
+        \"err\": err,
+        \"network\": c.getFullParseOptions().hasAll(PO_NO_NETWORK),
+        \"new-style\": c.getFullParseOptions().hasAll(PO_NEW_STYLE),
+    };
+}", "mixed");
+        assertEq({"err": "OPTIONS-LOCKED", "network": True, "new-style": True}, parent.callFunction("mixed"),
+            "the mixed disable is refused and changes nothing");
+    }
+
+    lockOptionsInt() {
+        {
+            Program pgm();
+            pgm.setParseOptions(PO_NO_NETWORK);
+            pgm.lockOptions();
+            assertThrows("OPTIONS-LOCKED", \pgm.disableParseOptions(), PO_NO_NETWORK);
+            assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_NETWORK), "the restriction is kept");
+            assertEq("ILLEGAL-CLASS-INSTANTIATION", tryParse(pgm, Restrictions."no-network".use),
+                "code that needs it does not parse");
+
+            # a restriction added after the lock may be disabled again
+            pgm.setParseOptions(PO_NO_FILESYSTEM);
+            assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_FILESYSTEM), "a restriction added after the lock");
+            pgm.disableParseOptions(PO_NO_FILESYSTEM);
+            assertFalse(pgm.getFullParseOptions().hasAll(PO_NO_FILESYSTEM), "is disabled");
+            assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_NETWORK), "the locked one is still kept");
+        }
+    }
+
+    #! a ParseOptions object with an extended option
+    lockOptionsObject() {
+        {
+            Program pgm();
+            pgm.setParseOptions(new ParseOptions("no-new"));
+            pgm.lockOptions();
+            assertThrows("OPTIONS-LOCKED", \pgm.disableParseOptions(), new ParseOptions("no-new"));
+            assertTrue(pgm.getFullParseOptions().hasAll("no-new"), "the restriction is kept");
+            assertEq("PARSE-EXCEPTION", tryParse(pgm, Restrictions."no-new".use), "code that needs it does not parse");
+
+            pgm.setParseOptions(new ParseOptions("no-class-defs"));
+            pgm.disableParseOptions(new ParseOptions("no-class-defs"));
+            assertFalse(pgm.getFullParseOptions().hasAll("no-class-defs"),
+                "a restriction added after the lock is disabled");
+            assertTrue(pgm.getFullParseOptions().hasAll("no-new"), "the locked one is still kept");
+        }
+    }
+
+    #! returns a test case that checks the restriction \a name with a plain or sandboxed parent
+    private code inheritedCase(string name, bool sandboxed) {
+        return sub () { checkInherited(name, Restrictions{name}, sandboxed); };
+    }
+
+    #! creates a parent with the restriction (optionally sandboxed) and checks that its new children keep it
+    private checkInherited(string name, hash<auto> info, bool sandboxed) {
+        string label = sprintf("%s%s", name, sandboxed ? " (sandboxed parent)" : "");
+        Program parent();
+        parent.setParseOptions(new ParseOptions(name));
+        if (sandboxed) {
+            parent.setSandboxManager(SandboxManager::createLockdown());
+            assertTrue(exists parent.getSandboxManager(), label + ": the parent is sandboxed");
+        }
+        assertTrue(parent.getFullParseOptions().hasAll(name), label + ": the parent has the restriction");
+        parent.parse(Probe, "probe");
+        hash<string, auto> rv = parent.callFunction("probe", name, info.mask, info.use);
+
+        if (info.mask) {
+            assertTrue(rv."int-inherited", label + ": the child inherits it");
+            assertEq("OPTIONS-LOCKED", rv."int", label + ": disabling it with an int mask is refused");
+            assertTrue(rv."int-kept", label + ": the child keeps it after the int mask");
+            assertEq(info.err, rv."int-use", label + ": code that needs it does not parse after the int mask");
+        }
+        assertTrue(rv."obj-inherited", label + ": the child inherits it");
+        assertEq("OPTIONS-LOCKED", rv.obj, label + ": disabling it with a ParseOptions object is refused");
+        assertTrue(rv."obj-kept", label + ": the child keeps it after the ParseOptions object");
+        assertEq(info.err, rv."obj-use", label + ": code that needs it does not parse after the ParseOptions object");
+    }
+
+    private static string tryParse(Program pgm, string use) {
+        try {
+            pgm.parse(use, "use");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}

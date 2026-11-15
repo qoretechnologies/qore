@@ -42,6 +42,28 @@
     <i>Sandboxing and execution control:</i>
     - @ref sandboxing "sandboxing" with @ref Qore::SandboxManager "SandboxManager": filesystem, network
       (including SSRF prevention), thread, wall-time, CPU-time, stack and memory limits and interrupt controls
+    - an explicit trust setting for code that a sandbox governs only for its limits or interrupts:
+      @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()" (default:
+      refuse) decides whether the code counts as restricted for the rules that keep sandboxed code from I/O that
+      %Qore does not control, such as the \c external_io apps of the data provider catalog; queried with
+      @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()",
+      @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" and
+      \c qore_sandbox_allows_uncontrolled_apis() (see @ref sandbox_uncontrolled_api)
+    - code that a sandbox governs is refused uncontrolled APIs (Java, Python, the debug hooks and the sandbox
+      methods that mask its policy) at run time with \c INVALID-FUNCTION-ACCESS, as code restricted with
+      \c PO_NO_UNCONTROLLED_APIS is, unless the sandbox allows them; a system-policy capability of trusted code is not
+      refused, a refused call evaluates none of its default arguments, and the %Qore methods of a class that inherits
+      a builtin class of the domain are not refused (only the builtin methods are); the sandbox introspection and
+      barrier methods (\c isGoverned(), \c getGoverningPolicies(), \c callWithSystemPolicy()) are judged by the
+      %Program of the code that calls them, so trusted code calls them for its sandboxed callers (see
+      @ref sandbox_uncontrolled_api)
+    - a DBI driver judges a datasource option by the code that set it, not by the code that opens the connection:
+      trusted code cannot be made to apply an option that sandboxed code set, and a trusted
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" that grows on a sandboxed caller's thread keeps its own
+      configuration (see @ref sandbox_datasource_options)
+    - a sandboxed %Program loads a compiled (\c qcc) module whose source has a \c %module-cmd directive as it loads
+      the module's source: the replayed command is the module's own, not a command that the loader issues to another
+      %Program
 
     <i>Networking and I/O:</i>
     - all I/O runs through the asynchronous I/O controller (@ref Qore::AsyncIoController "AsyncIoController"), so a
@@ -79,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Locked Program Keeps Its Restrictions
+    @ref Qore::Program::disableParseOptions() "Program::disableParseOptions()", the parse directives that disable
+    options and @ref Qore::Program::replaceParseOptions() "Program::replaceParseOptions()" can no longer remove the
+    restrictions of a locked child Program, and an independent Program of restricted code takes and locks that code's
+    restrictions; see @ref locked_parse_options.
+
     @par Completed Objects Are Released After Constructor Argument Errors
     An exception while @ref constructor_argument_cleanup "releasing a completed constructor's arguments" now releases
     the new object normally, running its destructor when no other reference remains; AST execution previously skipped
@@ -171,6 +199,12 @@
     Each frame that get_thread_call_stack() and exception call stacks give is located at its call expression, with
     its columns in new \c start_column and \c end_column keys, in every execution mode, so a call in a statement of
     more than one line gives the call's lines instead of the statement's; see @ref Qore::CallStackInfo "CallStackInfo".
+
+    @par Restricted Code Cannot Issue Commands to Modules That Do Not Declare Support
+    A module command (\c %module-cmd, @ref Qore::Program::issueModuleCmd() "Program::issueModuleCmd()") issued by
+    sandboxed code, or by code with a parse option that restricts a functional domain, is refused with
+    \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR by a module that has not set \c QoreModuleInfo::cmd_caller_aware
+    (see @ref qore_modules); unrestricted code is not affected.
 
     @par The Implicit Index Is Unset Outside the Code of Its Operator
     An @ref implicit_index "implicit index" (<tt>$#</tt>) in a function, method or closure called from the code of a
@@ -286,11 +320,12 @@
     is invalid and unlocked and must be reset before further value access, or closed, so a callback can safely
     replace its parent; see @ref native_member_callback_lvalue "native member callbacks".
 
-    @par Binary Modules Implement Module API 2.2
-    Every external binary module must be rebuilt for module API 2.2, which registers its metadata with a
-    \c {name}_qore_module_desc() function, reports initialization errors as exceptions and covers all public ABI
-    changes of %Qore 3.0; a module built for another module API is not found by its feature name, and the
-    \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
+    @par Binary Modules Implement Module API 2.3
+    Every external binary module must be rebuilt for module API 2.3, which registers its metadata with a
+    \c {name}_qore_module_desc() function, reports initialization errors as exceptions, covers all public ABI
+    changes of %Qore 3.0 and lets a module command handler judge the code that issues a command
+    (\c QoreModuleCommandContext); a module built for another module API (such as 2.0, 2.1 or 2.2) is not found by
+    its feature name, and the \c LOAD-MODULE-ERROR exception names its file.  See "Developing Qore Modules" in the C++ API documentation.
 
     @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
     @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" requires an \c owner
@@ -601,6 +636,24 @@
       reference, and the Program is destroyed once nothing depends on it, instead of at once, so a Program must first
       be cleared with \c QoreProgram::waitForTerminationAndDeref() or \c QoreProgram::deref(ExceptionSink*) (see
       \c QoreProgram::deref())
+    - date arithmetic has overloads with an \c ExceptionSink that raise \c INVALID-DATE for a result out of range:
+      \c DateTime::add(), \c subtractBy(), \c unaryMinus(), \c unaryMinusInPlace(), \c addSecondsTo(),
+      \c setRelativeDateSeconds() and \c makeRelativeFromSeconds(), the \c DateTimeNode overloads and
+      \c DateTimeValueHelper(const QoreValue&, ExceptionSink*); the overloads without an \c ExceptionSink are
+      deprecated and saturate such a result (it wrapped before; see \c QORE_DATE_UNCHECKED_DEPRECATED, issue #6103)
+    - a pointer to a \c DateTime or \c DateTimeNode given where a \c DateTime value is expected (a constructor,
+      \c DateTime::setDate(), a <tt>const DateTime&</tt> argument) is a compile error, as the deleted
+      \c DateTime(const DateTime*) shows; it was converted through \c DateTime(bool) to an empty date
+    - \c DateTime(bool) is \c explicit, so a pointer of another type (ex: <tt>const AbstractQoreNode*</tt>) is no
+      longer converted implicitly to an empty \c DateTime; write <tt>DateTime(true)</tt> for an empty relative date
+    - \c DateTime(int64) is \c explicit, so an integer, a floating-point value or a \c bool (\c true gave
+      1970-01-01 00:00:01) is no longer converted implicitly to an absolute date; construct it from an \c int64
+      (<tt>DateTime((int64)secs)</tt>, as another integer type is ambiguous with \c DateTime(bool))
+    - \c DateTimeNode(bool) and \c DateTimeNode(int64) are \c explicit like those of \c DateTime, which affects
+      only code that can create a \c DateTimeNode temporary (its destructor is protected)
+    - the <tt>const char*</tt> and <tt>struct tm*</tt> constructors of \c DateTime (and, as for
+      \c DateTimeNode(bool), of \c DateTimeNode) are \c explicit, so a string or a \c struct \c tm pointer is no
+      longer converted implicitly to a date; construct it explicitly (<tt>DateTime(str)</tt>)
     @endparblock
 
     @par qget Command-Line Changes
@@ -662,7 +715,9 @@
 
     @par Indexing a String Gives a char
     <tt>s[i]</tt> on a string returns a @ref char "char" instead of a one-character string; it converts to a string
-    wherever one is expected, but code that checks the type of the value sees \c char; see @ref char.
+    wherever one is expected, and @ref plus_operator "+" and @ref plus_equals_operator "+=" add it as one (see
+    @ref char_plus); code that checks the type of the value sees \c char, the other arithmetic operators use its
+    codepoint, and a codepoint sum takes \c int(); see @ref char.
 
     @par cast<> to a Container of auto Is a Parse Error
     <tt>cast&lt;hash&lt;auto&gt;&gt;(...)</tt>, <tt>cast&lt;hash&lt;string, auto&gt;&gt;(...)</tt> and
@@ -714,7 +769,30 @@
     a %Qore-language handler; valgrind no longer kills or hangs the process at the wake-up (see
     @ref signal_handling; <a href="https://github.com/qoretechnologies/qore/issues/5787">issue 5787</a>).
 
+    @par Date Arithmetic Out of Range Raises INVALID-DATE
+    @ref date_time_arithmetic "Date arithmetic", date(int), date(softfloat) and the conversion of a number to a
+    relative date raise \c INVALID-DATE for a result that a date cannot hold, and a relative date literal out of range
+    (ex: \c 2147483648h) is a parse error; the result wrapped to another, often negative, duration (issue #6103).
+
+    @par Multiplying a Relative Date Gives a Relative Date
+    The @ref multiplication_operator "* operator" and \c *= with a @ref relative_dates "relative date" and a number
+    give a relative date with each of its components multiplied (ex: <tt>months(1) * 2</tt> is 2 months; a float
+    factor carries fractions as \c date("P...") does); they gave an int, and \c *= assigned it.  An \c int,
+    \c float or \c number lvalue multiplied by a date with \c *= raises an exception at run time, as it cannot hold
+    the result (issue #6109).
+
+    @par Calls Through Method References on Deleted Objects Name the Method
+    The \c OBJECT-ALREADY-DELETED exception of a call through a method call reference on a deleted object names the
+    method (<tt>cannot call U::m() ...</tt>) instead of <tt>cannot call a method ...</tt>, in every execution mode
+    (see @ref call_reference_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/6083">issue
+    6083</a>).
+
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Module Commands Know the Restrictions of the Code That Issues Them
+    A binary module's command handler gets the effective restrictions of the issuing code, not those of the target
+    %Program, from the new \c QoreModuleCommandContext (module API 2.3; see @ref qore_modules), also for
+    \c %module-cmd and for commands that a compiled program replays when it is loaded.
+
     @par Strict Parse Errors
     The @ref strict-parse-errors "%strict-parse-errors" parse option, implied by @ref modern "%modern", raises the
     errors that the parser can prove as parse errors, starting with a local variable that cannot have been assigned
@@ -1019,6 +1097,23 @@
     event when the close cleans up after another error.  See @ref Qore::SQL::Datasource::close() "Datasource::close()"
     and the DBI driver page of the C++ API documentation.
 
+    @par C++ API: DBI Drivers Judge an Option by the Code That Set It
+    A datasource records the restrictions and the filesystem policy of the code that sets each option, which a driver
+    reads with the new \c Datasource::getOptionRestrictions() and \c Datasource::getOptionPolicyManagerRef(), so that
+    whoever configures a datasource decides what its options may do; see @ref sandbox_datasource_options
+    (<a href="https://github.com/qoretechnologies/qore/issues/5741">issue 5741</a>).
+
+    @par Asking Whether a Sandbox Restricts Anything
+    @ref Qore::SandboxManager::restricts() "SandboxManager::restricts()", \c networkRestricts(), \c filesystemRestricts()
+    and \c limitsRestrict() tell whether a sandbox manager restricts network access, filesystem access or resource
+    use at all; a manager that allows everything and sets no limit restricts nothing.  Binary modules use the matching
+    C++ methods of \c QoreSandboxManager (feature macro \c _QORE_HAS_SANDBOX_RESTRICTS_API) instead of testing whether
+    a sandbox manager is attached; see @ref sandbox_restricts.  The new
+    @ref Qore::SandboxManager::trustsUncontrolledApis() "SandboxManager::trustsUncontrolledApis()" and the matching C++
+    method tell whether the sandbox trusts its code to use uncontrolled APIs (for a combination of sandboxes, whether
+    every member does), so that a module refuses an operation for a sandboxed caller only if
+    <tt>!trustsUncontrolledApis() && restricts()</tt>.
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check
@@ -1284,6 +1379,13 @@
     - @ref mailmessageintro "MailMessage" module
       - the \c From header of a message created to be sent keeps the sender's display name, which was dropped
         (<a href="https://github.com/qoretechnologies/qore/issues/6019">issue 6019</a>)
+      - only the display names of the \c To, \c CC and \c BCC headers are encoded, valid addresses are kept whole,
+        and internationalized addresses are accepted, also by the @ref smtpclientintro "SmtpClient" module with
+        servers that support \c SMTPUTF8 (<a href="https://github.com/qoretechnologies/qore/issues/6066">issue 6066</a>)
+      - every address of a \c To, \c CC or \c BCC entry with several addresses or a group is a recipient, so that the
+        @ref smtpclientintro "SmtpClient" module sends the message to all of them; only the first one was, so an
+        untrusted display name must be quoted or given separately from the address
+        (<a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
       - see @ref mailmessage_v1_5_1 for all changes
 
     - @ref mapperintro "Mapper" module
@@ -1764,9 +1866,27 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the negative of an absolute date with microseconds (ex: <tt>-1970-01-01T00:00:01.5Z</tt>) is
+      \c 1969-12-31T23:59:58.5Z; the microseconds were negated as an unsigned value and gave another date (issue #6103)
+    - the decimal fraction of an ISO 8601 duration component (ex: \c P0.0000001Y for
+      @ref Qore::date(string) "date(string)") is converted to microseconds without the error of its binary
+      approximation, which could lose a microsecond (\c P0.0000001Y gave 3.153599 seconds; issue #6109)
+    - a failed non-blocking connect to a TCP or UNIX socket target
+      (@ref Qore::Socket::startPollConnect() "Socket::startPollConnect()",
+      @ref Qore::Socket::startPollConnectSsl() "Socket::startPollConnectSsl()",
+      @ref Qore::HTTPClient::startPollConnect() "HTTPClient::startPollConnect()") reports the connect's own error; on
+      macOS, a refused or timed-out connect could be reported as <tt>Broken pipe</tt> (\c EPIPE) (issue #6119)
+    - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a string when they
+      replace a range of it with a shorter string (issue #6188)
+    - the @ref splice "splice" and @ref extract "extract" operators no longer read past the end of a list, which could
+      crash, when they replace a range of it with fewer elements (issue #6192)
     - the heartbeat of @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" connections is measured on the
       monotonic clock: a step back of the system clock no longer stops the heartbeat PINGs for the size of the step
       (see @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()")
+    - a list or hash nested more deeply than the thread's stack allows no longer crashes the process when it is passed
+      to a parameter of type \c list or \c hash, removed or deleted from a container, or given to
+      @ref Qore::auto_cast() "auto_cast()", @ref Qore::get_value_byte_size() "get_value_byte_size()" or
+      @ref Qore::format_bounded() "format_bounded()" (issue #6117)
     - a @ref background "background expression" nested in another one that calls methods of the object no longer
       crashes the AST interpreter: the calls are made on the object of the code that started the outer one (issue
       #5971)
@@ -1801,6 +1921,17 @@
       module or be given to other code, and a static registration of a module that was already loaded could crash at
       exit; it is now checked as a load of the module by path and is never library code (see
       @ref sandbox_static_modules) (<a href="https://github.com/qoretechnologies/qore/issues/5986">issue 5986</a>)
+    - a call through \c self of an @ref abstract "abstract method" that another parent class implements raised
+      \c RUNTIME-OVERLOAD-ERROR instead of calling the implementation, except in programs compiled with qcc
+      (<a href="https://github.com/qoretechnologies/qore/issues/3070">issue 3070</a>)
+    - a method call whose arguments deleted the object ran the method on the deleted object in the AST interpreter
+      and raised \c OBJECT-ALREADY-DELETED without the class of the method in the compiled modes; it now raises
+      \c OBJECT-ALREADY-DELETED naming the method (<tt>cannot call C::m()</tt>) in every mode
+      (<a href="https://github.com/qoretechnologies/qore/issues/5824">issue 5824</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6057">issue 6057</a>)
+    - a program compiled with qcc called a \c private:internal method of another parent class that implements an
+      @ref abstract "abstract method" through \c self, where the interpreters raise \c METHOD-IS-PRIVATE
+      (<a href="https://github.com/qoretechnologies/qore/issues/6158">issue 6158</a>)
     - a block whose @ref on_exit "on_exit" or @ref on_success "on_success" handler raised a
       @ref thread_exit "thread_exit" ran its @ref on_error "on_error" handlers with no exception, which crashed the
       process

@@ -1731,7 +1731,9 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
             }
             const AbstractQoreFunctionVariant* resolved_variant = nullptr;
             QoreTypeParamInstantiation type_param_instantiation;
-            if (method_ref.sig_text) {
+            if (method_ref.abstract_self_call) {
+                // a call to an abstract method: looked up by name at run time, with no variant
+            } else if (method_ref.sig_text) {
                 resolved_variant = findAOTStaticMethodVariantByRef(pgm, m, method_ref, false);
             } else if (method_ref.arg_type_sig && *method_ref.arg_type_sig) {
                 MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
@@ -1762,7 +1764,12 @@ static uint64_t resolveExprSlotIntern(AOTExprKind kind, const char* ref1, const 
             // unqualified names produce ns.size() == 1 for normal virtual dispatch
             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(method_full_name), nullptr, m,
                 qc, qcp);
-            if (resolved_variant) {
+            if (method_ref.abstract_self_call) {
+                // as SelfFunctionCallNode::parseInitCall() marked it: a call to an abstract method is resolved at run
+                // time on the object's class, with no variant, also when it is qualified (Base::m())
+                sfcn->setAbstractCall();
+            } else if (resolved_variant && !static_cast<const MethodVariantBase*>(resolved_variant)->isAbstract()) {
+                // an abstract variant is never bound to a call: parsing binds none
                 sfcn->setVariant(resolved_variant);
                 if (!type_param_instantiation.type_args.empty()) {
                     sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
@@ -2116,7 +2123,9 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
                     ref1, type_error.c_str());
                 return 0;
             }
-            const QoreEnumDecl* ed = QoreTypeInfo::getUniqueReturnEnum(ti);
+            // the type of an "or nothing" cast (*Enum) is not an enum itself; as when the cast is parsed (qore#6125)
+            const QoreEnumDecl* ed = or_nothing ? QoreTypeInfo::getReturnEnum(ti)
+                : QoreTypeInfo::getUniqueReturnEnum(ti);
             if (!ed) {
                 printd(0, "AOT v2: cannot extract enum from type '%s' for cast\n", ref1);
                 return 0;
@@ -4296,15 +4305,27 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const std::string target_method_text = target_type_arg_pos == std::string::npos
                     ? encoded_target : encoded_target.substr(0, target_type_arg_pos);
                 AOTEncodedMethodRef method_ref(target_method_text.c_str());
-                uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ptr);
+                const uint8_t target_flags = QoreAOTBinaryReader::readU8(ptr);
+                const bool is_pseudo = (target_flags & QORE_AOT_DOT_EVAL_TARGET_PSEUDO) != 0;
+                // a call dispatched by name records the method resolved at parse time only for the check of its
+                // target (issue #5824)
+                const bool name_dispatch = (target_flags & QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH) != 0;
 
-                const QoreClass* qc = findAOTClassByPath(pgm, ref1, is_pseudo != 0);
+                const QoreClass* qc = findAOTClassByPath(pgm, ref1, is_pseudo);
                 const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
                 const AbstractQoreFunctionVariant* variant = findAOTMethodVariantByRef(
-                    pgm, method, method_ref, is_pseudo != 0);
+                    pgm, method, method_ref, is_pseudo);
+                ctx->call_targets[i].check_qc = qc;
+                ctx->call_targets[i].check_method = method;
+                ctx->call_targets[i].check_variant = variant;
+                if (name_dispatch) {
+                    qc = nullptr;
+                    method = nullptr;
+                    variant = nullptr;
+                }
                 ctx->call_targets[i].method = method;
                 ctx->call_targets[i].qc = qc;
-                ctx->call_targets[i].is_pseudo = is_pseudo != 0;
+                ctx->call_targets[i].is_pseudo = is_pseudo;
                 // Make an owned copy of the method name since the source buffer
                 // (decompressed metadata) may be freed after deserialization
                 if (method_ref.method_name && *method_ref.method_name) {
@@ -4343,6 +4364,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         // caller args directly to the picked variant's signature.
                         ctx->call_targets[i].variant = mfb->first();
                     }
+                }
+                if (!name_dispatch) {
+                    ctx->call_targets[i].check_variant = ctx->call_targets[i].variant;
                 }
                 // Store NOTHING in exprs — slot-based dispatch uses call_targets
                 ctx->exprs[i] = toBitsNB(QoreValue());
@@ -4575,7 +4599,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         uvb ? uvb->getUserSignature() : nullptr);
                     if (base_bits) {
                         QoreValue base_val = fromBits(base_bits);
-                        const SelfFunctionCallNode* base_sfcn = dynamic_cast<const SelfFunctionCallNode*>(
+                        const SelfFunctionCallNode* base_sfcn = qore_get_self_function_call_node(
                             base_val.getInternalNode());
                         if (base_sfcn && num_args && self_args_ok) {
                             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base_sfcn,
@@ -6457,7 +6481,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             continue;
         }
         // Static method call
-        const auto* smc = dynamic_cast<const StaticMethodCallNode*>(node);
+        const auto* smc = qore_get_static_method_call_node(node);
         if (smc && smc->getMethod()) {
             ctx->call_targets[i].method = smc->getMethod();
             ctx->call_targets[i].is_static_method = true;
@@ -6472,7 +6496,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             continue;
         }
         // Self method call
-        const auto* self_call = dynamic_cast<const SelfFunctionCallNode*>(node);
+        const auto* self_call = qore_get_self_function_call_node(node);
         if (self_call && self_call->getMethod()) {
             ctx->call_targets[i].method = self_call->getMethod();
             ctx->call_targets[i].qc = self_call->getClass();
@@ -11485,8 +11509,15 @@ static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
         ExceptionSink xsink;
         QoreString qcmd(command.command.c_str());
         // the command is the Program's own recorded `%module-cmd` directive, not one from the loading code to
-        // another Program: a sandboxed loader can load a compiled module as it can its source (issue #5905)
-        int rc = QMM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink, QoreModuleCmdOrigin::OwnDirective);
+        // another Program: a sandboxed loader can load a compiled module as it can its source (issue #5905).
+        // A command recorded from the source of the compiled program is replayed with the restrictions of the code
+        // that loads the program and the restricting parse options that were in force at the directive: the loader
+        // cannot loosen what the source was compiled under (issue #5699); an artifact that does not record them
+        // (before v37) is replayed with the parse options that the program is declared with, a superset
+        const QoreParseOptions declared_po = command.has_options
+            ? QoreParseOptions(command.options_lo, command.options_hi) : pgm->getParseOptions();
+        int rc = QMM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink, QoreModuleCommandContext::MC_REPLAY,
+            &declared_po);
         if (rc < 0 || xsink.isException()) {
             error = "AOT module command failed";
             if (label && *label) {
@@ -11869,6 +11900,9 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 if (!init_descriptors.empty()) {
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
+                        // the initializers are the program's own code: they run with its parse options, as when
+                        // the program is parsed, not with those in effect when it is loaded (qore#6189)
+                        LoadTimeParseOptionsHelper init_poh((*qpgm)->getParseOptions());
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
                             /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
@@ -13181,6 +13215,10 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     if (!init_func_contexts.empty()) {
         printd(2, "AOT ns_init '%s': executing %d init functions\n",
             mod_name.c_str(), (int)init_func_contexts.size());
+        // the initializers are the module's own code: they run with the module's parse options, as its contexts are
+        // built with them above, not with those of the code that imports it or that is being parsed when it is
+        // loaded (qore#6189)
+        LoadTimeParseOptionsHelper exec_poh(init_ctx_pgm->getParseOptions());
         int failed = executeInitFunctions(tpgm, init_func_contexts,
             pending_descriptors, mod_name.c_str(), shadow_pgm,
             mod_path.empty() ? nullptr : mod_path.c_str(),
@@ -13468,7 +13506,11 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     printd(2, "AOT v3: exec-class set to '%s'\n", exec_class_name.c_str());
                 }
             } else {
-                printd(0, "AOT v3: failed to read program metadata: %s\n", meta_error.c_str());
+                // reported in every build, as the program cannot be loaded (qore#6127)
+                fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: failed to read its "
+                    "program metadata: %s\n", (label && *label) ? label : "<unknown path>", meta_error.c_str());
+                rc = 2;
+                break;
             }
         }
 
@@ -13499,7 +13541,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             std::string cmd_error;
             if (!applyAOTModuleCommandsToProgram(*qpgm, metadata,
                     static_cast<uint32_t>(metadata_len), label, cmd_error)) {
-                printd(0, "AOT v3: %s\n", cmd_error.c_str());
+                fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: %s\n",
+                    (label && *label) ? label : "<unknown path>", cmd_error.c_str());
                 rc = 2;
                 break;
             }
@@ -13570,7 +13613,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             }
             if (!deserializer.deserializeIntoProgram(*qpgm,
                     metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
-                printd(0, "AOT: metadata deserialization failed: %s\n",
+                fprintf(stderr, "AOT-ERROR: the AOT-compiled program (%s) cannot be loaded: metadata "
+                    "deserialization failed: %s\n", (label && *label) ? label : "<unknown path>",
                     deser_error.c_str());
                 rc = 2;
                 break;
@@ -13690,6 +13734,9 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 if (!init_descriptors.empty()) {
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
+                        // the initializers are the program's own code: they run with its parse options, as when
+                        // the program is parsed, not with those in effect when it is loaded (qore#6189)
+                        LoadTimeParseOptionsHelper init_poh((*qpgm)->getParseOptions());
                         executeInitFunctions(*qpgm, init_func_contexts,
                             init_descriptors, label, nullptr, nullptr,
                             /*write_shadow=*/true, /*failure_sink=*/nullptr, /*script_load=*/true);
@@ -15495,6 +15542,9 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
         const char* old_name = set_module_context_name(rec->mod_name.empty() ? nullptr : rec->mod_name.c_str());
         const char* old_path = set_module_context_path(rec->mod_path.empty() ? nullptr : rec->mod_path.c_str());
         uint64_t raw_result = 0;
+        // a constant initialized when it is first read runs with the parse options of the code that it belongs to
+        // (the module's own Program, or the script's), not with those of the code that reads it (qore#6189)
+        LoadTimeParseOptionsHelper lazy_poh((rec->shadow_pgm ? rec->shadow_pgm : init_pgm)->getParseOptions());
         try {
             raw_result = rec->fn_ptr(rec->ctx, &init_xsink);
         } catch (const QoreJITException&) {
@@ -16413,6 +16463,132 @@ static int executeInitFunctions(
     return failed;
 }
 
+namespace {
+//! The metadata of an AOT module that registered its fast entries
+struct QoreAOTModuleMetadataRef {
+    const uint8_t* metadata = nullptr;
+    int32_t metadata_len = 0;
+};
+
+//! The registry of the native fast entries of the loaded AOT modules (qore#6035)
+/** A function-local static, so that a module loaded while the library initializes finds it constructed; its lock is a
+    leaf lock (no other lock is taken while it is held) with a fork handler.
+*/
+struct QoreAOTFastEntryRegistry {
+    QoreRWLock lock;
+    QoreForkRWLock fork_handler{lock, QFLR_LEAF, "aot_fast_entry_registry"};
+    std::unordered_map<std::string, QoreAOTModuleMetadataRef> modules;
+    std::unordered_map<AotFunctionPtr, const QoreAOTFastEntry*> entries;
+
+    static QoreAOTFastEntryRegistry& get() {
+        static QoreAOTFastEntryRegistry registry;
+        return registry;
+    }
+};
+
+//! A registration made by the init of a module whose load has not completed
+struct QoreAOTPendingFastEntries {
+    std::string mod_name;
+    const uint8_t* metadata;
+    int32_t metadata_len;
+    const QoreAOTFastEntry* entries;
+    int32_t num_entries;
+};
+
+//! The registrations of the modules whose loads this thread is making, innermost last
+/** A module is initialized in the thread that loads it, and a module that it requires is loaded and committed
+    while it is initialized, so the registrations of the loads in progress form a stack; see
+    QoreAOTPendingFastEntriesHelper.
+*/
+thread_local std::vector<QoreAOTPendingFastEntries> aot_pending_fast_entries;
+}
+
+extern "C" DLLEXPORT void qore_aot_register_module_fast_entries_v1(const char* mod_name, const uint8_t* metadata,
+        int32_t metadata_len, const QoreAOTFastEntry* entries, int32_t num_entries) {
+    // published when the module's load completes: an image whose load fails is unloaded without its delete function
+    aot_pending_fast_entries.push_back(QoreAOTPendingFastEntries{mod_name ? mod_name : "", metadata, metadata_len,
+        entries, num_entries});
+}
+
+extern "C" DLLEXPORT void qore_aot_unregister_module_fast_entries_v1(const char* mod_name,
+        const QoreAOTFastEntry* entries, int32_t num_entries) {
+    QoreAOTFastEntryRegistry& reg = QoreAOTFastEntryRegistry::get();
+    QoreAutoRWWriteLocker al(reg.lock);
+    if (mod_name) {
+        // a loaded module's name is unique; without its metadata, a module compiled later calls its functions
+        // through the runtime path
+        reg.modules.erase(mod_name);
+    }
+    for (int32_t i = 0; i < num_entries; ++i) {
+        auto it = reg.entries.find(entries[i].fn);
+        // only this module's own entry is removed: the native code of another image cannot have the same address
+        if (it != reg.entries.end() && it->second == &entries[i]) {
+            reg.entries.erase(it);
+        }
+    }
+}
+
+size_t qore_aot_pending_fast_entries_mark() {
+    return aot_pending_fast_entries.size();
+}
+
+void qore_aot_commit_pending_fast_entries(size_t mark) {
+    assert(mark <= aot_pending_fast_entries.size());
+    if (mark == aot_pending_fast_entries.size()) {
+        return;
+    }
+    {
+        QoreAOTFastEntryRegistry& reg = QoreAOTFastEntryRegistry::get();
+        QoreAutoRWWriteLocker al(reg.lock);
+        for (size_t p = mark; p < aot_pending_fast_entries.size(); ++p) {
+            const QoreAOTPendingFastEntries& pending = aot_pending_fast_entries[p];
+            if (!pending.mod_name.empty() && pending.metadata && pending.metadata_len > 0) {
+                reg.modules[pending.mod_name] = QoreAOTModuleMetadataRef{pending.metadata, pending.metadata_len};
+            }
+            for (int32_t i = 0; i < pending.num_entries; ++i) {
+                const QoreAOTFastEntry& e = pending.entries[i];
+                if (e.fn && e.fast_fn && e.fast_symbol && *e.fast_symbol) {
+                    reg.entries[e.fn] = &e;
+                }
+            }
+        }
+    }
+    aot_pending_fast_entries.resize(mark);
+}
+
+void qore_aot_discard_pending_fast_entries(size_t mark) {
+    assert(mark <= aot_pending_fast_entries.size());
+    aot_pending_fast_entries.resize(mark);
+}
+
+const void* qore_aot_find_cross_module_fast_entry(AotFunctionPtr fn, const char* fast_symbol) {
+    if (!fn || !fast_symbol) {
+        return nullptr;
+    }
+    QoreAOTFastEntryRegistry& reg = QoreAOTFastEntryRegistry::get();
+    QoreAutoRWReadLocker al(reg.lock);
+    auto it = reg.entries.find(fn);
+    if (it == reg.entries.end() || strcmp(it->second->fast_symbol, fast_symbol)) {
+        return nullptr;
+    }
+    return it->second->fast_fn;
+}
+
+bool qore_aot_get_module_metadata(const char* mod_name, const uint8_t*& metadata, int32_t& metadata_len) {
+    if (!mod_name) {
+        return false;
+    }
+    QoreAOTFastEntryRegistry& reg = QoreAOTFastEntryRegistry::get();
+    QoreAutoRWReadLocker al(reg.lock);
+    auto it = reg.modules.find(mod_name);
+    if (it == reg.modules.end()) {
+        return false;
+    }
+    metadata = it->second.metadata;
+    metadata_len = it->second.metadata_len;
+    return true;
+}
+
 //! C ABI entry point for AOT modules (v3 - full 128-bit parse options)
 extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     const uint8_t* metadata, int metadata_len,
@@ -17134,6 +17310,9 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
                     tch_xsink.handleExceptions();
                     return 6;
                 }
+                // the initializers are the script's own code: they run with its parse options, not with those of
+                // the host code that registers it (qore#6189)
+                LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
                 executeInitFunctions(tpgm, init_func_contexts,
                     init_descriptors, label ? label : "<script>",
                     /*shadow_pgm=*/nullptr, /*mod_path=*/nullptr,
@@ -17342,6 +17521,9 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                     if (tch_xsink.isException()) {
                         tch_xsink.handleExceptions();
                     } else {
+                        // the initializers are the script's own code: they run with its parse options, not with
+                        // those of the host code that registers it (qore#6189)
+                        LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
                         executeInitFunctions(tpgm, init_func_contexts,
                             init_descriptors,
                             label ? label : "<script>",
@@ -17701,6 +17883,9 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 tch_xsink.handleExceptions();
             } else {
                 uint64_t t1 = time_on ? now_us() : 0;
+                // the initializers are the script's own code: they run with its parse options, not with those of
+                // the host code that registers it (qore#6189)
+                LoadTimeParseOptionsHelper init_poh(tpgm->getParseOptions());
                 executeInitFunctions(tpgm, batch_init_contexts,
                     batch_init_descriptors, "<script-batch>",
                     /*shadow_pgm=*/nullptr,
