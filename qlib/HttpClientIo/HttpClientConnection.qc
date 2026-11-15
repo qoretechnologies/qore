@@ -315,7 +315,10 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     int getOutstandingStreamCount() {
         AutoLock al(lock);
-        return getPollOperation().getActiveStreamCount() + getPendingStreamCount();
+        # the reservations are read first: a submit counts its active stream before it releases its reservation, so
+        # a request that is being submitted shows in one of the two counts (#6194)
+        int pending = getPendingStreamCount();
+        return pending + getPollOperation().getActiveStreamCount();
     }
 
     #! Returns the connection ID
