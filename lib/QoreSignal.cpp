@@ -643,6 +643,8 @@ void QoreSignalManager::signal_handler_thread() {
                 // which releases the references the handler holds
                 ReferenceHolder<QoreProgram> pgm(handlers[sig].refProgram(), &xsink);
                 ReferenceHolder<ResolvedCallReferenceNode> callback(handlers[sig].refCallback(), &xsink);
+                // the options of the code that set the handler, copied in the lock as the handler can be replaced
+                QoreThreadRuntimeParseOptions handler_po = handlers[sig].po;
 
                 // unlock to run handler code
                 sl.unlock();
@@ -652,6 +654,8 @@ void QoreSignalManager::signal_handler_thread() {
                     // saves data
                     ProgramThreadCountContextHelper tch(&xsink, *pgm, true);
                     if (!xsink) {
+                        // the handler runs with the options of the code that set it (qore#6208)
+                        QoreThreadRuntimeParseOptionsHelper po_helper(&handler_po);
                         QoreSignalHandler::runHandler(**callback, sig, &xsink);
                     }
                     // a callback whose handler was replaced while it ran is destroyed here, in its Program's context

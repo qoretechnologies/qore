@@ -53,10 +53,14 @@ typedef qlist<ThreadPoolThread*> tplist_t;
     or work that the cleanup handed over (QoreSandboxContext::module_cleanup_delegate): the task is then part of the
     cleanup, and can enter the Programs of the modules, which the cleanup closes to other threads (see
     qore_close_module_programs()).
+
+    It also captures the run-time parse options of the submitting code, which the task's code runs with on the worker
+    thread, so that a task that is a call reference to builtin code, which sets no options of its own, runs with the
+    restrictions of the code that submitted it (qore#6208).
 */
 class ThreadTask {
 public:
-    //! Creates the task; must be called in the submitting thread, as it captures the thread's sandbox
+    //! Creates the task; must be called in the submitting thread, as it captures the thread's sandbox and options
     DLLLOCAL ThreadTask(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc) : code(c), cancelCode(cc) {
     }
 
@@ -81,8 +85,8 @@ public:
     DLLLOCAL QoreValue run(ExceptionSink* xsink) {
         // Get the program from the call reference and set up program context
         // This ensures tlpd is set up for thread pool threads
+        // a call reference to builtin code has no Program: it runs in the context of the worker
         QoreProgram* pgm = code->getProgram();
-        assert(pgm);
         // declared before the Program is entered, which can be the Program of a module
         QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
         QoreExternalProgramContextHelper pch(xsink, pgm);
@@ -90,6 +94,7 @@ public:
             return QoreValue();
         }
         SandboxScope sandbox_scope(sandbox_context);
+        QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
         return code->invoke(0, xsink);
     }
 
@@ -102,6 +107,7 @@ public:
         if (cancelCode) {
             QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
             SandboxScope sandbox_scope(sandbox_context);
+            QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
             cancelCode->invoke(0, xsink).discard(xsink);
         }
     }
@@ -111,6 +117,8 @@ protected:
     ResolvedCallReferenceNode* cancelCode;
     //! The sandbox of the submitting thread, and whether the task is part of the module cleanup
     const QoreSandboxContext sandbox_context;
+    //! The run-time parse options of the submitting code (qore#6208)
+    const QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::capture();
 
     //! Applies the sandbox of the submitting thread while the object exists, if a sandbox governed it
     /** Without one, the sandbox lookups of the worker resolve normally, so a task created by sandboxed code (a

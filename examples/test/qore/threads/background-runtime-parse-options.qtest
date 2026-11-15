@@ -19,7 +19,9 @@
     expression did not run with the options of the starting code, nor with the restrictions that apply to it.  The
     checks run in every execution mode, in a child Program with a restriction and in one without, for a background
     expression, a background closure and nested background expressions; a module (source and compiled) starts a
-    thread for a restricted caller; a script compares the options of its thread with its own, interpreted and as qcc
+    thread for a restricted and for a sandboxed caller; thread pool tasks, call_async() callbacks and signal handlers
+    that are call references to builtin code and call_async() code run with the restriction of the code that handed
+    them over; a script compares the options of its thread with its own, interpreted and as qcc
     executables.  Each case runs in a process of its own, which waits for its background threads before it exits, so
     its output is complete and in order.
 */
@@ -148,6 +150,62 @@ p.parse(\"%modern\\n%requires BgRuntimeOpts\\nnothing sub run(File f) { BgRuntim
 p.callFunction(\"run\", stdout);
 ";
 
+        #! code run for a Program in other threads: a call reference to builtin code (a thread pool task, a signal
+        #! handler) sets no options of its own, so it runs with those of the code that handed it over; ARGV[0] is the
+        #! case, ARGV[1] \"restricted\" or not
+        const CallbackScript = "%modern
+%no-child-restrictions
+Program p(ARGV[1] == \"restricted\" ? PO_NO_TERMINAL_IO : 0);
+p.parse(\"%modern
+nothing sub pool(File f, Queue q) {
+    # one worker runs the tasks in order: the second ends after the first
+    ThreadPool tp(1);
+    tp.submit(\\\\f.sync());
+    tp.submit(sub () { q.push(\\\"pool: done\\\"); });
+    tp.stopWait();
+}
+nothing sub async(File f, Queue q) {
+    # call_async() takes code with a Program: a closure, which runs with the options of its own Program
+    Future fu = call_async(sub () { f.sync(); });
+    try {
+        fu.get();
+        q.push(\\\"async: allowed\\\");
+    } catch (hash<ExceptionInfo> ex) {
+        q.push(\\\"async: \\\" + ex.err);
+    }
+}
+nothing sub signal(File f, Queue q) {
+    # the handler is called with the signal number, which File::lock() takes; it checks the terminal I/O restriction
+    set_signal_handler(SIGUSR1, \\\\f.lock());
+    set_signal_handler(SIGUSR2, sub (int sig) { q.push(\\\"signal: done\\\"); });
+}
+\", \"child\");
+Queue q();
+p.callFunction(ARGV[0], stdout, q);
+if (ARGV[0] == \"signal\") {
+    # the signal thread runs one handler at a time, and the lower signal first when both are pending
+    system(\"kill -USR1 \" + getpid());
+    system(\"kill -USR2 \" + getpid());
+}
+printf(\"%s\\n\", q.get(30000));
+";
+
+        #! a sandboxed caller of module code that the process loaded before: the module code runs with the restriction
+        #! of its caller, which the thread that it starts inherits (the override of a call of module code); without the
+        #! sandbox, the module code runs with its own options
+        const SandboxedCaller = "%modern
+%no-child-restrictions
+%requires BgRuntimeOpts
+hash<string, auto> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"tiered\": EM_TIERED, \"jit\": EM_JIT};
+Program p(PO_NO_TERMINAL_IO);
+p.setExecMode(modes{ARGV[0]});
+if (ARGV[1] == \"sandboxed\") {
+    p.setSandboxManager(new SandboxManager());
+}
+p.parse(\"%modern\\n%requires BgRuntimeOpts\\nnothing sub run(File f) { BgRuntimeOpts::bgprint(f); }\\n\", \"child\");
+p.callFunction(\"run\", stdout);
+";
+
         #! a script whose threads compare their options with the script's, for qcc executables
         const ExeSource = "%modern
 Queue q();
@@ -170,6 +228,7 @@ printf(\"%y\\n\", rv);
             \restrictedTest());
         addTestCase("child Program: background code without a restriction", \openTest());
         addTestCase("module: threads of module code", \moduleTest());
+        addTestCase("callbacks: thread pool tasks, call_async() and signal handlers", \callbackTest());
         addTestCase("script: threads of interpreted and compiled code", \exeTest());
         set_return_value(main());
     }
@@ -243,8 +302,10 @@ printf(\"%y\\n\", rv);
         TmpDir run_dir("qore-bg-runtime-po-run-");
         string modern = run_dir.path + "/modern.q";
         string restricted = run_dir.path + "/restricted.q";
+        string sandboxed = run_dir.path + "/sandboxed.q";
         write(modern, ModernImporter);
         write(restricted, RestrictedImporter);
+        write(sandboxed, SandboxedCaller);
         foreach hash<auto> dir in (("source": src.path, "qmod": aot.path).pairIterator()) {
             foreach string mode in (Modes) {
                 assertEq("[True, 3, True]\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s 2>&1",
@@ -255,7 +316,35 @@ printf(\"%y\\n\", rv);
                     mode));
                 assertFalse(out =~ /printed/, sprintf("%s module, restricted caller, mode %s: %s", dir.key, mode,
                     out));
+                out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s %s sandboxed 2>&1", env(),
+                    dir.value, qore_bin, mode, sandboxed, mode));
+                assertRegex("ILLEGAL-EXPRESSION", out, sprintf("%s module, sandboxed caller, mode %s", dir.key, mode));
+                assertFalse(out =~ /printed/, sprintf("%s module, sandboxed caller, mode %s: %s", dir.key, mode,
+                    out));
+                assertEq("module: printed\n", backquote(sprintf("%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s %s "
+                    "open 2>&1", env(), dir.value, qore_bin, mode, sandboxed, mode)), sprintf("%s module, caller "
+                    "without a sandbox, mode %s", dir.key, mode));
             }
+        }
+    }
+
+    callbackTest() {
+        TmpDir tmp("qore-bg-runtime-po-cb-");
+        string script = tmp.path + "/cb.q";
+        write(script, CallbackScript);
+        list<string> cases = ("pool", "async");
+        # signals: the order of pending signals is the lowest first on Linux
+        if (PlatformOS == "Linux") {
+            cases += "signal";
+        }
+        foreach string case_name in (cases) {
+            # signal handling is enabled: no -b
+            string out = backquote(sprintf("%s %s %s %s restricted 2>&1", env(), qore_bin, script, case_name));
+            assertRegex("ILLEGAL-EXPRESSION", out, case_name + " restricted: " + out);
+            out = backquote(sprintf("%s %s %s %s open 2>&1", env(), qore_bin, script, case_name));
+            assertRegex(case_name + ": " + (case_name == "async" ? "allowed" : "done") + "\n$", out,
+                case_name + " open: " + out);
+            assertFalse(out =~ /ILLEGAL-EXPRESSION/, case_name + " open: " + out);
         }
     }
 

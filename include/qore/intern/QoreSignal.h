@@ -37,6 +37,7 @@
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreCondition.h>
 #include <qore/QoreCounter.h>
+#include "qore/intern/qore_thread_intern.h"
 
 #include <csignal>
 #include <map>
@@ -78,6 +79,10 @@ class CodePgm {
 public:
    ResolvedCallReferenceNode* funcref;
    QoreProgram* pgm;
+   //! the run-time parse options of the code that set the handler, which the handler runs with (qore#6208)
+   /** A handler that is a call reference to builtin code sets no options of its own
+   */
+   QoreThreadRuntimeParseOptions po;
 
    DLLLOCAL void setProgram(QoreProgram* n_pgm) {
       assert(n_pgm);
@@ -99,6 +104,7 @@ public:
 
       funcref = n_funcref->refRefSelf();
       setProgram(n_pgm);
+      po = QoreThreadRuntimeParseOptions::capture();
    }
 
    // must be called in the signal lock
@@ -110,6 +116,7 @@ public:
 
       funcref = n_funcref->refRefSelf();
       setProgram(n_pgm);
+      po = QoreThreadRuntimeParseOptions::capture();
       return rv;
    }
 

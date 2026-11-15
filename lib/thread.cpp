@@ -6583,7 +6583,7 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
         return;
     }
     ThreadData* td = thread_data.get();
-    override_helper = std::make_unique<RuntimeParseOptionsOverrideHelper>();
+    override_helper.emplace();
     // saves the override and the options in effect, and sets the override
     override_helper->set(td, o->override);
     // the options were computed with the override in the starting thread

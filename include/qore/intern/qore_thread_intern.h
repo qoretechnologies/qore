@@ -42,6 +42,7 @@ class RuntimeConfig;
 #include <utility>
 #include <set>
 #include <map>
+#include <optional>
 #include <memory>
 #include <new>
 
@@ -1188,7 +1189,7 @@ public:
 private:
     //! sets the override and the options, and restores those in effect before (RuntimeParseOptionsOverrideHelper
     //! restores the run-time parse options too)
-    std::unique_ptr<RuntimeParseOptionsOverrideHelper> override_helper;
+    std::optional<RuntimeParseOptionsOverrideHelper> override_helper;
 };
 
 DLLLOCAL RootQoreNamespace* getRootNS();
