@@ -1111,8 +1111,8 @@
     a sandbox manager is attached; see @ref sandbox_restricts.  The new
     @ref Qore::SandboxManager::trustsUncontrolledApis() "SandboxManager::trustsUncontrolledApis()" and the matching C++
     method tell whether the sandbox trusts its code to use uncontrolled APIs (for a combination of sandboxes, whether
-    every member does), so that a module refuses an operation for a sandboxed caller only if
-    <tt>!trustsUncontrolledApis() && restricts()</tt>.
+    every member does), so that a module refuses an operation that only an unrestricted caller may use unless the
+    sandbox trusts its caller.
 
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's

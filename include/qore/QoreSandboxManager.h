@@ -718,10 +718,10 @@ public:
         trust).  The default is @ref false
 
         A binary module that refuses an operation that only an unrestricted caller may use (for example an
-        operation with effects outside the process) should refuse it if and only if
-        <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager resolved with
-        QoreSandboxManagerHelper::Policy: a sandbox that restricts nothing, or that trusts its code, does not make the
-        caller untrusted.
+        operation that runs code or does I/O that %Qore does not see) should refuse it unless trustsUncontrolledApis()
+        is true on the governing manager resolved with QoreSandboxManagerHelper::Policy, whatever the sandbox
+        restricts: a sandbox that allows all I/O but does not trust its code keeps that code from such operations (see
+        setUncontrolledApiPolicy()).
 
         @note there is no unreadable state in this predicate; callers that obtain the state another way must treat
         it as not trusting (fail closed)

@@ -565,8 +565,10 @@ bool SandboxManager::restricts() {
     them (the default); for a combination of the sandboxes of several callers, @ref True only if every member allows
     them
 
-    A module that refuses an operation that only an unrestricted caller may use should refuse it if and only if the
-    governing sandbox does not trust its code and restricts something; see @ref sandbox_restricts.
+    A module that refuses an operation that only an unrestricted caller may use (one that runs code or does I/O that
+    %Qore does not see) should refuse it unless the governing sandbox trusts its code, whatever the sandbox restricts:
+    a sandbox that allows all I/O but does not trust its code keeps that code from such operations, as
+    setUncontrolledApiPolicy() describes; see @ref sandbox_restricts.
 
     @par Example:
     @code{.py}

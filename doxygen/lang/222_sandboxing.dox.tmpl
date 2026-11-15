@@ -1312,11 +1312,15 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     of the sandboxes of several callers; for such a combination each predicate is true if any member's is.  The feature
     macro \c _QORE_HAS_SANDBOX_RESTRICTS_API is defined by the headers that declare them.
 
-    A module that refuses an operation that only an unrestricted caller may use refuses it if and only if
-    <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager (resolved with
-    QoreSandboxManagerHelper::Policy): a sandbox that restricts nothing, or whose host trusts its code to use
-    uncontrolled APIs, does not make the caller untrusted.  Unlike the other predicates, a combination of sandboxes
-    trusts only if every member does (the AND over the members), because one member that does not trust is enough.
+    A module that refuses an operation that only an unrestricted caller may use (one that runs code or does I/O that
+    %Qore does not see, as an uncontrolled API does) refuses it unless <tt>trustsUncontrolledApis()</tt> is true on
+    the governing manager (resolved with QoreSandboxManagerHelper::Policy): only a sandbox whose host trusts its code
+    to use uncontrolled APIs lets the code use it.  What the sandbox restricts does not matter: a sandbox that allows
+    all I/O and sets no limit but does not trust its code still keeps that code from such operations, as
+    @ref Qore::SandboxManager::setUncontrolledApiPolicy() "setUncontrolledApiPolicy()" describes; the predicates above
+    are for a module that applies the sandbox's I/O policy or limits itself.  Unlike the other predicates, a
+    combination of sandboxes trusts only if every member does (the AND over the members), because one member that does
+    not trust is enough.
 
     The predicates are a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
     synchronized (as for the other readers of the manager), and the interrupt state (requestInterrupt()) is not a
