@@ -3937,6 +3937,9 @@ double qore_plus_equals_char_float_operand(const QoreValue v) {
 
 //! the steps of QoreValue::getAsBigInt(), with a char converted as its string; \a CheckInt is false for a value that
 //! the caller knows is not an inline integer
+/** A copy of QoreValue::getAsBigInt() (lib/QoreValue.cpp), so that a non-char operand costs no more than that
+    conversion: keep both in step when a value tag is added or a step changes.
+*/
 template <bool CheckInt>
 static QORE_INTERN_ALWAYS_INLINE int64 qore_plus_equals_int_operand_steps(const QoreValue v) {
     if constexpr (CheckInt) {
@@ -3981,7 +3984,9 @@ int64 qore_plus_equals_boxed_int_operand(const QoreValue v) {
     return qore_plus_equals_int_operand_steps<false>(v);
 }
 
-// the steps of QoreValue::getAsFloat() after its test for a float, with a char converted as its string
+// the steps of QoreValue::getAsFloat() after its test for a float, with a char converted as its string: a copy of
+// QoreValue::getAsFloat() (lib/QoreValue.cpp), so that a non-char operand costs no more than that conversion; keep
+// both in step when a value tag is added or a step changes
 double qore_plus_equals_nonfloat_float_operand(const QoreValue v) {
     if (v.isInt()) {
         return static_cast<double>(v.getInt());
