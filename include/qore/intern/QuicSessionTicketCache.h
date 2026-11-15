@@ -47,7 +47,7 @@
 struct QuicCachedTicket {
     SSL_SESSION* session = nullptr;         //!< ref-counted by OpenSSL
     std::vector<uint8_t> transport_params;  //!< encoded 0-RTT transport params from ngtcp2
-    int64_t expiry_epoch = 0;               //!< time(nullptr) + SSL_SESSION_get_timeout()
+    int64_t expiry = 0;                     //!< seconds on the monotonic clock + SSL_SESSION_get_timeout() (#6166)
 
     DLLLOCAL QuicCachedTicket() = default;
 
@@ -55,7 +55,7 @@ struct QuicCachedTicket {
     DLLLOCAL QuicCachedTicket(QuicCachedTicket&& other) noexcept
         : session(other.session)
         , transport_params(std::move(other.transport_params))
-        , expiry_epoch(other.expiry_epoch) {
+        , expiry(other.expiry) {
         other.session = nullptr;
     }
 
@@ -67,7 +67,7 @@ struct QuicCachedTicket {
             }
             session = other.session;
             transport_params = std::move(other.transport_params);
-            expiry_epoch = other.expiry_epoch;
+            expiry = other.expiry;
             other.session = nullptr;
         }
         return *this;

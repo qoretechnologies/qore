@@ -1239,7 +1239,14 @@ private:
 };
 
 //! allows for external modules to set the current Program context explicitly
-/** @since %Qore 0.8.13
+/** @note this helper only replaces the current Program; it does not record the Program that it replaces for sandbox
+    resolution.  While it is active, the code that called the module is hidden from the sandbox: objects and call
+    references created under it do not get that code's sandbox as their provenance, and sandbox checks made under it
+    do not see that code.  Code that creates values for a caller that can be sandboxed in another Program must keep
+    that caller visible, for example by creating the values in a call made into the other Program (as with
+    QoreProgram::callFunction()) rather than under this helper (issue #6149).
+
+    @since %Qore 0.8.13
  */
 class QoreProgramContextHelper {
 public:

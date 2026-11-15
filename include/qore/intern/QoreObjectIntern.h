@@ -844,7 +844,30 @@ public:
 
     DLLLOCAL void fastDeref();
 
-    DLLLOCAL int startCall(const char* mname, ExceptionSink* xsink);
+    //! starts a call of the method @a mname of the class @a cls on the object
+    /** raises "cannot call <class>::<method>() on an object that has already been deleted" if the object has been
+        deleted (issue #5824), naming @a cls, or the object's class if there is none
+    */
+    DLLLOCAL int startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink);
+
+    //! checks a call of the method @a mname of the class @a cls on the current object, which takes no reference
+    /** raises the error of startCall() if the object has been deleted (by the arguments of the call: the call itself
+        checks it before them); the status changes to OS_DELETED only after the destructor has run, so the destructor's
+        calls on the object are not affected (issue #5824)
+
+        @return -1 if the error was raised, 0 if not
+    */
+    DLLLOCAL int checkCurrentObjectCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) {
+        if (status == OS_DELETED) {
+            raiseDeletedCall(cls, mname, xsink);
+            return -1;
+        }
+        return 0;
+    }
+
+    //! raises the error of a call of the method @a mname of the class @a cls on the object, which has been deleted
+    // the error path of startCall() and checkCurrentObjectCall(), kept out of the code that every call runs
+    DLLLOCAL QORE_INTERN_NOINLINE void raiseDeletedCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) const;
 
     DLLLOCAL void endCall(ExceptionSink* xsink);
 
@@ -898,8 +921,36 @@ public:
     }
 
     //! Returns true if the object has not been deleted: QoreObject::isValid(), inline for the check of a call's target
-    DLLLOCAL static bool isValidInline(const QoreObject* obj) {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool isValidInline(const QoreObject* obj) {
         return obj->priv->status.load(std::memory_order_relaxed) != OS_DELETED;
+    }
+
+    //! Returns the class of the object, inline (it does not change)
+    DLLLOCAL static const QoreClass* getClassInline(const QoreObject* obj) {
+        return obj->priv->theclass;
+    }
+
+    //! Returns true if the object has not been deleted and is of one of the classes given, which a method resolved at
+    //! parse time is called on without being looked up by name (AbstractMethodCallNode::exec(), issue #5824)
+    //! (always inlined: it is the inline part of every check of a call's target)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool isValidOfClass(const QoreObject* obj, const QoreClass* qc,
+            const QoreClass* method_qc, bool any_class = false) {
+        if (any_class) {
+            return isValidInline(obj);
+        }
+        if (!qc) {
+            return false;
+        }
+        const QoreClass* cls = obj->priv->theclass;
+        return (cls == qc || cls == method_qc) && isValidInline(obj);
+    }
+
+    //! The byte offset of the class pointer in an object's private data, for JIT code (QoreJITObjectLayout)
+    DLLLOCAL static uint32_t getClassOffset() {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        return static_cast<uint32_t>(offsetof(qore_object_private, theclass));
+#pragma GCC diagnostic pop
     }
 
     //! The byte offset of an object's private data pointer, for JIT code (QoreJITObjectLayout)

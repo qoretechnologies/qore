@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class RemoveBoxedIntegerLeakTest
+
+#! Tests that lvalue operations release the integers outside the inline range and the floats held in nodes
+/** An integer outside the inline (48-bit) range of a value is a heap QoreBigIntNode, and a float whose bits collide
+    with a value tag (such as -2^1021) is a heap QoreBigFloatNode.  An lvalue stores both natively, and reading it
+    with QoreLValue::getValue() or LValueHelper::getValue() boxes the value in a new node, which the removal code
+    treated as the lvalue's own and never released (qore#6094):
+
+    - the removal of list elements (<tt>remove l[i]</tt>, <tt>remove l[i, j]</tt>, <tt>delete l[i]</tt>) in the AST
+      tier recorded the objects in the removed value from such a node
+    - the removal of an element, a member or a range of a variable that holds such a value
+      (<tt>remove x[0]</tt>, <tt>remove x.a</tt>, <tt>remove x[0..1]</tt>) read the value in a node in every tier,
+      and the range removal raised its exception with it still held
+    - the removal of an element of such a value in the AST tier (<tt>remove x[0]</tt>, <tt>remove h.a[0]</tt>) left
+      the node that the removed value was taken from unreleased, and failed an assertion in a debug build
+    - the writes and reads of a variable that holds such a value through LValueHelper: a member or an element that
+      replaces it (<tt>x.a = 1</tt>, <tt>x[0] = 1</tt>), a cast in an lvalue, a number result converted to the
+      type of the lvalue and a pseudo-method called through a reference
+    - a weak assignment from a local that holds such a value in a qcc-compiled program
+      (<tt>auto x = big; auto w := x;</tt>), which read the local's value to make a container unique
+
+    LValueHelper::getValue() now keeps such a node and releases it with the helper's other temporary values.
+
+    The worker removes and deletes such integers and floats from lists, hashes, objects and local variables, checks
+    the results, counts the heap integers and floats that exist before and after with dbg_get_live_bigint_count()
+    and dbg_get_live_bigfloat_count(), which need library debugging, and reports how many it left behind, which must
+    be none.  It runs in every execution mode and as a qcc-compiled executable.
+*/
+class RemoveBoxedIntegerLeakTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("RemoveBoxedIntegerLeak", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "remove-boxed-integer-leak-worker.q";
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled executable", \testCompiled());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        checkDebugging();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+                libqore_dir, qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiled() {
+        checkDebugging();
+        TmpDir tmp("qore-remove-boxed-integer-leak-");
+        string exe = tmp.path + DirSep + "leak";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe, worker));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        checkOutput("executable", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe)));
+    }
+
+    #! skips the test without library debugging, which the dbg_get_live_big*_count() functions need
+    private checkDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_get_live_bigint_count() and dbg_get_live_bigfloat_count() require library debugging");
+        }
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1);
+        assertEq("mismatches: []", lines[0], label + ": results: " + out);
+        assertEq("live heap integers: 0", lines[1], label + ": heap integers left behind: " + out);
+        assertEq("live heap floats: 0", lines[2], label + ": heap floats left behind: " + out);
+    }
+}

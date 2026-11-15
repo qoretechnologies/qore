@@ -564,15 +564,13 @@ static QoreValue make_unresolved_aot_self_method_call(const char* method_ref, Qo
 
 static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+    if (auto* call = qore_get_self_function_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
-        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        const QoreClass* qc = call->getRecordedClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());
-        const AbstractQoreFunctionVariant* variant = call->getVariant();
-        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
-            variant ? nullptr : &call->getParsedArgTypeInfo(), call->getExplicitTypeParamInstantiation());
+        std::string method_ref = qore_aot_encode_self_method_ref(call, true);
         // the binding of the arguments of a named call is written first (see read_expr_method_call_named())
         method_ref.insert(0, qore_aot_named_call_arg_prefix(call));
         ctx.writer.writeStringRef(method_ref.c_str());
@@ -676,7 +674,12 @@ static QoreValue read_expr_self_method_call_intern(AOTExprReadCtx& ctx, const ch
         return QoreValue(smcn);
     }
     SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(method_full_name), pln, m, qc, qcp);
-    if (resolved_variant) {
+    if (method_ref.abstract_self_call) {
+        // as SelfFunctionCallNode::parseInitCall() marked it: a call to an abstract method is resolved at run time on
+        // the object's class, with no variant (issue #5824)
+        sfcn->setAbstractCall();
+    } else if (resolved_variant && !static_cast<const MethodVariantBase*>(resolved_variant)->isAbstract()) {
+        // an abstract variant is never bound to a call: parsing binds none
         sfcn->setVariant(resolved_variant);
         if (!type_param_instantiation.type_args.empty()) {
             sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
@@ -823,7 +826,7 @@ static QoreValue make_unresolved_aot_static_method_call(const char* class_path,
 
 static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
-    if (auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+    if (auto* call = qore_get_static_method_call_node(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         if (method) {

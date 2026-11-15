@@ -130,12 +130,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
-        int total = poll_op.getActiveStreamCount() + pending_stream_count;
+        int total = poll_op.getActiveStreamCount() + getPendingStreamCount();
         if (max_concurrent_streams && total >= max_concurrent_streams) {
             return False;
         }
         if (cs == HttpClientConnectionState::Connecting) {
-            return pending_stream_count < DefaultMaxPendingPerConnection;
+            return getPendingStreamCount() < DefaultMaxPendingPerConnection;
         }
         # Check if the underlying QUIC session is still alive after the
         # handshake has completed. During CONNECTING the session may not yet
@@ -161,14 +161,14 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
-        int total = poll_op.getActiveStreamCount() + pending_stream_count;
+        int total = poll_op.getActiveStreamCount() + getPendingStreamCount();
         if (max_concurrent_streams && total >= max_concurrent_streams) {
             return False;
         }
         if (cs == HttpClientConnectionState::Connecting) {
             # Cap pending reservations on Connecting connections to limit
             # blast radius of a handshake failure.
-            if (pending_stream_count >= DefaultMaxPendingPerConnection) {
+            if (getPendingStreamCount() >= DefaultMaxPendingPerConnection) {
                 return False;
             }
         } else {
@@ -180,8 +180,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 return False;
             }
         }
-        ++pending_stream_count;
-        return True;
+        # counted in the C++ connection, as by the base class (#6184); the limits were checked above
+        return tryReservePendingStream(poll_op.getActiveStreamCount(), 0);
     }
 
     #! Wakes the async I/O controller to flush pending QUIC writes
