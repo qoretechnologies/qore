@@ -3021,23 +3021,16 @@ DLLLOCAL extern QorePThreadAttr ta_default;
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 #endif
 
-//! The TLS model of q_thread_stack_limit_tls
-/** initial-exec where glibc keeps static TLS in reserve for the libraries that are loaded with dlopen() (as libqore is
-    by an embedding runtime), so that the read is a single instruction; the default model elsewhere: musl does not
-    support initial-exec TLS in a library loaded with dlopen()
-*/
-#if defined(__GLIBC__) && defined(__ELF__)
-#define QORE_TLS_STACK_LIMIT_MODEL __attribute__((tls_model("initial-exec")))
-#else
-#define QORE_TLS_STACK_LIMIT_MODEL
-#endif
-
 //! The stack limit of the current thread (ThreadData::stack_limit), or 0 if it has none or no thread data
-/** Set with the limit (ThreadData::setStackLimit()), so that q_thread_stack_reserve_exceeded() is a comparison inline;
-    atomic only because the primary thread's limit can be set by another thread (enforcePrimaryStackSize()), and
-    constant-initialized, so that its reads need no TLS initialization guard
+/** Set with the limit (ThreadData::setStackLimit()), so that q_thread_stack_reserve_exceeded() is a TLS read and a
+    comparison inline; atomic only because the primary thread's limit can be set by another thread
+    (enforcePrimaryStackSize()), and constant-initialized, so that its reads need no TLS initialization guard.
+
+    It has the default TLS model: an initial-exec variable marks the whole library STATIC_TLS, and glibc cannot then
+    load libqore with dlopen() (as an embedding runtime such as Python or a JVM does), as its TLS is larger than the
+    static TLS that glibc keeps in reserve for such libraries (see examples/test/qore/misc/libqore-dlopen)
 */
-DLLLOCAL extern constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls QORE_TLS_STACK_LIMIT_MODEL;
+DLLLOCAL extern constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls;
 
 //! Returns true if less than the given number of bytes remain above the current thread's stack limit
 /** For native code that recurses without an exception sink to report check_stack()'s exception, such as IR

@@ -180,7 +180,7 @@ QoreThreadLock stack_lck;
 size_t qore_thread_stack_size = 0;
 size_t qore_thread_stack_limit = 0;
 
-constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls QORE_TLS_STACK_LIMIT_MODEL{0};
+constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls{0};
 
 // default thread creation attribute
 QorePThreadAttr ta_default;
