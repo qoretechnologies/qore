@@ -940,6 +940,7 @@ static void ut_date_checked_arithmetic(UnitTestCounters& c) {
             UT_ASSERT(c, !xsink && hours(*h) == 2, "DateTimeValueHelper: an int in range");
         }
     }
+}
 
 //! QoreNumberNode::appendExactKey(): equal values at any precision have one key, different values different keys
 static void ut_number_exact_key(UnitTestCounters& c) {
