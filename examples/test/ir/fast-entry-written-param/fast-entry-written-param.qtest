@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - checks run in child processes with explicit execution modes
+# test-platform: macos - JIT fast entries and AOT code generation of written parameters
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%exec-class FastEntryWrittenParamTest
+
+#! A callee that writes a parameter filled by a value taken out of an lvalue runs as in the AST interpreter (#6148)
+class FastEntryWrittenParamTest inherits QUnit::Test {
+    public {
+        const Expected = "after write: null
+after write rm0: null
+after write sh0: null
+after write set0: set0-new
+after write: null
+after write rm1: null
+after write sh1: null
+after write set1: set1-new
+";
+    }
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string prefix;
+        string worker;
+    }
+    constructor() : QUnit::Test("FastEntryWrittenParamTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libdir + "/qcc";
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        worker = get_script_dir() + "/FastEntryWrittenParam.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": fast entry written parameter", \modeTest(), (mode,));
+        }
+        addTestCase("tiered IR: fast entry written parameter", \irTierTest());
+        foreach int opt in (0, 3) {
+            addTestCase(sprintf("qcc -O%d: fast entry written parameter", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string checked(string command, bool ir_tier = False) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False,
+            ir_tier ? ExecModeHarness::IRTierEnv : NOTHING);
+        assertEq(0, result.rc, sprintf("child exited normally: %s\n%s", command, result.out));
+        if (ir_tier) { ExecModeHarness::check_ir_tier(result); }
+        else if (result.mode) { ExecModeHarness::check_native(result); }
+        return result.out;
+    }
+    modeTest(string mode) {
+        assertEq(Expected, checked(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+            + mode + " " + quote(worker)), mode);
+    }
+    irTierTest() {
+        assertEq(Expected, checked(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=tiered "
+            + quote(worker), True), "tiered IR");
+    }
+    aotTest(int opt) {
+        TmpDir tmp("qore-fast-entry-written-param-");
+        string exe = tmp.path + DirSep + "fast-entry-written-param";
+        checked(prefix + quote(qcc_bin) + sprintf(" -O%d -o ", opt) + quote(exe) + " " + quote(worker));
+        assertTrue(is_file(exe), "qcc produced the executable");
+        assertEq(Expected, checked(prefix + quote(exe) + " -b --enable-debug"), "qcc");
+    }
+}
