@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,7 +39,8 @@ class QoreVarInfo;
 class LValueHelper;
 class LValueRemoveHelper;
 
-class StaticClassVarRefNode : public ParseNode {
+// final: qore_exact_node_cast() tests it by its exact type on the lvalue paths
+class StaticClassVarRefNode final : public ParseNode {
 public:
     const QoreClass& qc;
     QoreVarInfo& vi;
@@ -76,7 +77,8 @@ protected:
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const;
 };
 
-class DeferredStaticClassMemberRefNode : public ParseNode {
+// final: qore_exact_node_cast() tests it by its exact type on the lvalue paths
+class DeferredStaticClassMemberRefNode final : public ParseNode {
 public:
     std::string class_path;
     std::string member_name;
