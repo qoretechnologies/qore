@@ -115,6 +115,7 @@ sub detach() {
             total += 10;                        ### add_constant
             total += step;                      ### add_local
             total++;                            ### increment
+            ++total;                            ### pre_increment
         }
     } catch (hash<ExceptionInfo> ex) {
         detach();                               ### catch_detach
@@ -245,13 +246,17 @@ printf("STEPLINES:%y\n", dbg.step_lines);
 
     testStepEvents() {
         hash<string, int> tags = tagLines();
-        # the steps after the attach at i == 2: the rest of the iteration, the next one and the detach
-        list<int> expected = map tags{$1}, ("add_constant", "add_local", "increment", "if", "add_constant",
-            "add_local", "increment", "detach", "remove");
-        foreach hash<auto> i in (runSteps(0).pairIterator()) {
-            # 4 * (10 + 2 + 1)
-            assertEq("52", i.value.result, i.key + ": the function's result: " + i.value.out);
+        # the steps after the attach at i == 2: the rest of the iteration, the next one and the detach; the folded
+        # statements (+= of a constant and of a local, ++total) step as the others
+        list<int> expected = map tags{$1}, ("add_constant", "add_local", "increment", "pre_increment", "if",
+            "add_constant", "add_local", "increment", "pre_increment", "detach", "remove");
+        hash<string, hash<auto>> res = runSteps(0);
+        foreach hash<auto> i in (res.pairIterator()) {
+            # 4 * (10 + 2 + 1 + 1)
+            assertEq("56", i.value.result, i.key + ": the function's result: " + i.value.out);
             assertEq(expected, i.value.step_lines, i.key + ": the step event of every statement");
+            # the same statements in the same order as the AST interpreter
+            assertEq(res.ast.step_lines, i.value.step_lines, i.key + ": the step events of the AST interpreter");
         }
     }
 
@@ -259,7 +264,8 @@ printf("STEPLINES:%y\n", dbg.step_lines);
         hash<string, int> tags = tagLines();
         # the debugger returns from the function at the second step event of `total += 10;` (i == 3), which does not
         # run; the top-level code that follows steps as well, as the function did not detach the debugger
-        list<int> expected = map tags{$1}, ("add_constant", "add_local", "increment", "if", "add_constant");
+        list<int> expected = map tags{$1}, ("add_constant", "add_local", "increment", "pre_increment", "if",
+            "add_constant");
         hash<string, hash<auto>> res = runSteps(tags.add_constant);
         # native code does not take the flow of a step event (QoreIRToLLVM::emitDebugStepHook()), so only the
         # interpreters are compared
