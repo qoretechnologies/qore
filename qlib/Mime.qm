@@ -247,6 +247,10 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     - fixed incorrect MIME types for \c weba (now \c "audio/webm") and \c webm (now \c "video/webm")
     - fixed a bug in @ref Mime::mime_decode_transfer_data() "mime_decode_transfer_data()" where the transfer
       encoding was incorrectly used as a character encoding when decoding base64 and quoted-printable data
+    - @ref Mime::mime_decode_header() "mime_decode_header()" and
+      @ref Mime::mime_decode_quoted_printable() "mime_decode_quoted_printable()" take time proportional to the length
+      of the text; it grew with the square of the number of encoded words or codes
+      (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
     - improved type safety by adding explicit type annotations to hash declarations
     - added \c %strict-args, \c %require-types, and \c %enable-all-warnings parse directives
 
@@ -1377,22 +1381,31 @@ public namespace Mime {
             str = replace(str, "_", " ");
         }
 
-        int i = 0;
+        # the decoded text is joined from its pieces: replacing each code in the string copied the rest of it, so
+        # that decoding took time that grew with the square of the number of codes (issue #6139)
+        list<string> rv = ();
+        # the offset of the text that is not decoded yet
+        int start = 0;
         while (True) {
-            i = str.find("=", i);
-            if (i == -1)
+            int i = str.find("=", start);
+            if (i == -1) {
+                rv += str.substr(start);
                 break;
+            }
+            if (i > start) {
+                rv += str.substr(start, i - start);
+            }
 
-            string hex = toupper(extract str, i + 1, 2);
+            string hex = toupper(str.substr(i + 1, 2));
             # according to RFC 2045 sec 6.7 rule (1): we have to use upper-case characters
             if (hex !~ /[0-9A-Z][0-9A-Z]/)
                 throw "QUOTED-PRINTABLE-DECODE-ERROR", sprintf("invalid hex byte code found: %y", hex);
-            # replace the code with the given character
-            splice str, i, 1, chr(int(hex, 16), "us-ascii");
-            ++i;
+            # write the character of the code
+            rv += chr(int(hex, 16), "us-ascii");
+            start = i + 3;
         }
 
-        return force_encoding(str, encoding);
+        return force_encoding(join(force_encoding("", "us-ascii"), rv), encoding);
     }
 
     #! @cond nodoc
@@ -1467,25 +1480,59 @@ public namespace Mime {
         before every encoded word after the first, and an encoded word was decoded wherever the same word appeared
     */
     public string sub mime_decode_header(string hdr) {
-        string rv = "";
+        # one match converts the text to UTF-8 and checks it, and finds out if there is an encoded word at all
+        if (hdr !~ /=\?[^?]+\?(Q|B)\?[^?]+\?=/is) {
+            return "" + hdr;
+        }
+        # the encoded words are found by byte offsets in the text in UTF-8: matching the rest of the header for each
+        # word copied the rest, so that decoding took time that grew with the square of the number of words
+        # (issue #6139); a character offset in UTF-8 text takes time that grows with the offset, and the bytes of
+        # the delimiters of an encoded word are never part of another character in UTF-8
+        string text = force_encoding(hdr.encoding() == "UTF-8" ? hdr : convert_encoding(hdr, "UTF-8"),
+            "ISO-8859-1");
+        # the pieces of the decoded text, which are joined at the end, as appending to a string can copy it
+        list<string> rv = ();
         # True if the text decoded last was an encoded word, so that white space before the next one is dropped
         bool after_word = False;
+        # the offset of the text that is not decoded yet
+        int start = 0;
+        # the offset where the next encoded word is looked for
+        int pos = 0;
         while (True) {
-            (*string pre, *string enc, *string he, *string hw, *string rest)
-                = (hdr =~ x/^(.*?)=\?([^?]+)\?(Q|B)\?([^?]+)\?=(.*)$/is);
-            if (!exists enc) {
+            # an encoded word: "=?" charset "?" ("Q" | "B") "?" encoded text "?=", where the charset and the text are
+            # not empty and contain no "?"
+            int ws = text.find("=?", pos);
+            if (ws == -1) {
                 break;
             }
-            # the text before the word; white space between two encoded words is dropped
-            string text = pre ?? "";
-            if (!after_word || text !~ /^[ \t\r\n]*$/) {
-                rv += text;
+            int q1 = text.find("?", ws + 2);
+            if (q1 == -1) {
+                break;
             }
-            rv += he.upr() == "Q" ? mime_decode_quoted_printable(hw, enc) : mime_decode_base64_to_string(hw, enc);
+            pos = ws + 1;
+            if (q1 == ws + 2 || !inlist(text.substr(q1 + 1, 1).upr(), ("Q", "B"))
+                || text.substr(q1 + 2, 1) != "?") {
+                continue;
+            }
+            int q2 = text.find("?", q1 + 3);
+            if (q2 == -1 || q2 == q1 + 3 || text.substr(q2 + 1, 1) != "=") {
+                continue;
+            }
+            # the text before the word; white space between two encoded words is dropped
+            string pre = force_encoding(text.substr(start, ws - start), "UTF-8");
+            if (!after_word || pre !~ /^[ \t\r\n]*$/) {
+                rv += pre;
+            }
+            string enc = force_encoding(text.substr(ws + 2, q1 - ws - 2), "UTF-8");
+            string hw = force_encoding(text.substr(q1 + 3, q2 - q1 - 3), "UTF-8");
+            rv += text.substr(q1 + 1, 1).upr() == "Q"
+                ? mime_decode_quoted_printable(hw, enc)
+                : mime_decode_base64_to_string(hw, enc);
             after_word = True;
-            hdr = rest ?? "";
+            start = pos = q2 + 2;
         }
-        return rv + hdr;
+        rv += force_encoding(text.substr(start), "UTF-8");
+        return join("", rv);
     }
     #/@}
 

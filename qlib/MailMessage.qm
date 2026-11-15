@@ -126,6 +126,10 @@ msg.addTO("My Best Friend <you@friend.com>");
       @ref MailMessage::Message::serialize() "Message::serialize()" no longer change the message: a \c Content-Type
       header was removed or taken as the type of the body, and the body encoding of a message with attachments was
       changed from \c none to \c 7bit
+    - Raw message text is parsed in time proportional to its length; the time grew with the square of the number of
+      header lines, encoded words and quoted-printable codes, and a body that is not valid UTF-8 no longer makes the
+      parse fail with \c INVALID-ENCODING
+      (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
     - Enhanced attachment handling:
       - Added RFC 2231 filename encoding for non-ASCII filenames
       - Added RFC 2231 filename decoding for incoming messages
@@ -706,6 +710,14 @@ public class Message {
         @ref receiptDelivery() and is no longer returned by @ref getHeaders()
     */
     constructor(string msg) {
+        # the message is read at an offset: taking each line off the front of the rest of the message copied the
+        # rest, so that the time to parse the header grew with the square of its number of lines (issue #6139)
+        string enc = msg.encoding();
+        # a character offset in UTF-8 text takes time that grows with the offset, so text in UTF-8 is read by bytes,
+        # which gives the same lines, since the bytes of CR and LF are never part of another character in UTF-8
+        *string line_enc = enc == "UTF-8" ? enc : NOTHING;
+        string text = line_enc ? force_encoding(msg, "ISO-8859-1") : msg;
+        # the offset of the rest of the message in the text
         int pos = 0;
 
         # is this a MIME message?
@@ -717,13 +729,20 @@ public class Message {
 
         # first get the message headers
         while (True) {
-            string hdr = Message::getLine(\msg, \pos);
+            string hdr = Message::getLineAt(text, \pos, line_enc);
             if (hdr.empty())
                 break;
 
             # see if it's a long header field as defined in RFC 2822 section 2.2.3: http://tools.ietf.org/html/rfc2822#section-2.2.3
-            while (msg =~ /^[ \t]/)
-                hdr += " " + trim(Message::getLine(\msg, \pos));
+            if (Message::isFoldedLineAt(text, pos)) {
+                # the lines are joined at the end, as appending to a string can copy it; they are joined in the
+                # encoding of the first line, as they were appended to it
+                list<string> lines = (hdr,);
+                do {
+                    lines += " " + trim(Message::getLineAt(text, \pos, line_enc));
+                } while (Message::isFoldedLineAt(text, pos));
+                hdr = join(convert_encoding("", hdr.encoding()), lines);
+            }
 
             hash h = parseHeader(hdr);
             string lk = h.firstKey().lwr();
@@ -780,6 +799,12 @@ public class Message {
         }
 
         #printf("mime: %y ct: %y %d headers: %Y\n", mime, ct, headers.size(), headers);
+
+        # the rest of the message after the header is its body
+        msg = text.substr(pos);
+        if (line_enc) {
+            msg = force_encoding(msg, line_enc);
+        }
 
         # try and parse the Content-Type header; assume any multipart type is "multipart/mixed"
         # (http://tools.ietf.org/html/rfc2046#section-5.1.3)
@@ -2987,6 +3012,29 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     }
 
     #! @cond nodoc
+    # returns the line at the given offset of the message text without the "\r\n" that ends it, trimmed, and sets the
+    # offset to the start of the next line; the line is given the encoding \a enc if the text is read by bytes
+    # (issue #6139)
+    private static string getLineAt(string text, reference<int> pos, *string enc) {
+        int i = text.find("\r\n", pos);
+        if (i == -1)
+            throw "MESSAGE-PARSE-ERROR", sprintf("cannot find end of line in message at byte position %d", pos);
+
+        string hdr = text.substr(pos, i - pos);
+        if (enc) {
+            hdr = force_encoding(hdr, enc);
+        }
+        pos = i + 2;
+        trim hdr;
+        return hdr;
+    }
+
+    # returns True if the line at the given offset of the message text continues a folded header field
+    private static bool isFoldedLineAt(string text, int pos) {
+        string c = text.substr(pos, 1);
+        return c == " " || c == "\t";
+    }
+
     private list<string> getEnvelopeList() {
         list<string> env = (sprintf("Sender: '%s'", from), sprintf("Subject: '%s'", subject));
         # add To addresses

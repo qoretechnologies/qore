@@ -1386,6 +1386,9 @@
         @ref smtpclientintro "SmtpClient" module sends the message to all of them; only the first one was, so an
         untrusted display name must be quoted or given separately from the address
         (<a href="https://github.com/qoretechnologies/qore/issues/6134">issue 6134</a>)
+      - a message is parsed in time proportional to its length, also by @ref mimeintro "Mime" header and
+        quoted-printable decoding; it grew with the square of the number of header lines
+        (<a href="https://github.com/qoretechnologies/qore/issues/6139">issue 6139</a>)
       - see @ref mailmessage_v1_5_1 for all changes
 
     - @ref mapperintro "Mapper" module

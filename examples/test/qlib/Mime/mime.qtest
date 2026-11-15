@@ -1098,6 +1098,35 @@ aωb\r
         assertEq("xx", mime_decode_header("=?UTF-8?Q?x?= =?UTF-8?Q?x?="));
         assertEq("pre x y post", mime_decode_header("pre =?UTF-8?Q?x?= y post"));
 
+        # issue #6139: encoded words are found by offset; text that only looks like an encoded word is kept
+        assertEq("ö ä ü", mime_decode_header("ö =?UTF-8?Q?=C3=A4?= ü"));
+        assertEq("ö ä ü", mime_decode_header(convert_encoding("ö =?UTF-8?Q?=C3=A4?= ü", "ISO-8859-1")));
+        assertEq("ö", mime_decode_header("=?ISO-8859-1?Q?=F6?="));
+        assertEq("=?a", mime_decode_header("=?=?UTF-8?q?a?="));
+        assertEq("a?=", mime_decode_header("=?UTF-8?Q?a?=?="));
+        assertEq("==?a?UTF-8?Q?a?=", mime_decode_header("==?a?UTF-8?Q?a?="));
+        assertEq("ab", mime_decode_header("=?UTF-8?Q?a?==?UTF-8?b?Yg==?="));
+        assertEq("=??Q?a?= =?a?X?b?= =?a?Q??= =?UTF-8?Q? b", mime_decode_header("=??Q?a?= =?a?X?b?= =?a?Q??= "
+            "=?UTF-8?Q? =?UTF-8?Q?b?="));
+        assertEq("a\nb", mime_decode_header("=?UTF-8?Q?a\nb?="));
+        assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", \mime_decode_header(), "=?UTF-8?Q?=1?=");
+
+        # quoted-printable codes are decoded in one pass (issue #6139)
+        assertEq("A=41b", mime_decode_quoted_printable("=41=3D41=62", "UTF-8"));
+        assertEq("ö", mime_decode_quoted_printable("=c3=b6", "UTF-8"));
+        assertEq("ab", mime_decode_quoted_printable("a=\r\nb", "UTF-8", True));
+        assertEq("a b", mime_decode_quoted_printable("a_b", "UTF-8"));
+        assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", "\"4\"", \mime_decode_quoted_printable(), ("=4", "UTF-8"));
+        assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", "\"\"", \mime_decode_quoted_printable(), ("a=", "UTF-8"));
+        string long_qp = strmul("=C3=B6", 200000);
+        date start = now_us();
+        assertEq(strmul("ö", 200000), mime_decode_quoted_printable(long_qp, "UTF-8"));
+        assertLt(5s, now_us() - start);
+        string long_hdr = strmul(" =?UTF-8?Q?=C3=B6?= x", 50000);
+        start = now_us();
+        assertEq(strmul(" ö x", 50000), mime_decode_header(long_hdr));
+        assertLt(5s, now_us() - start);
+
         # a part header name or value with a NUL, CR or LF character is refused when the part is added
         MultiPartMixedMessage mpm();
         assertThrows("PART-ERROR", "MIME header \"X-Test\" value \"a\\\\x0d\\\\x0aX-Injected: 1\" contains a line "

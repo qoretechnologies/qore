@@ -58,6 +58,8 @@ public class Main inherits QUnit::Test {
         addTestCase("Test recipients with a separate display name (issue #6134)", \testNameAddressRecipients(),
             NOTHING);
         addTestCase("Test quoted local part duplicates (issue #6134)", \testQuotedLocalPartDuplicates(), NOTHING);
+        addTestCase("Test parsed header lines and body (issue #6139)", \testParsedHeaderLines(), NOTHING);
+        addTestCase("Test the time to parse many header lines (issue #6139)", \testParseTime(), NOTHING);
 
         set_return_value(main());
     }
@@ -2194,6 +2196,115 @@ lorem ipsum\r
             assertLt(10s, elapsed, i.key);
             if (m_options.verbose) {
                 printf("%s: %d addresses in %y\n", i.key, l.size(), elapsed);
+            }
+        }
+    }
+
+    testParsedHeaderLines() {
+        # folded lines (with a space, a tab, and only white space), separate headers, encoded words over folded
+        # lines, non-ASCII text, and a body that starts with white space and has an empty line
+        string msg = "From: \"Jörg\" <j@x.com>\r\n"
+            "To: a@x.com,\r\n b@x.com,\r\n\tö <c@x.com>\r\n"
+            "CC: d@x.com\r\n"
+            "Subject: =?UTF-8?Q?a_b?=\r\n =?UTF-8?B?w7Y=?= c\r\n"
+            "X-A:   ä  \r\n"
+            "X-B: one\r\n \r\n two\r\n"
+            "X-C: =?UTF-8?Q?x?= y =?ISO-8859-1?Q?=F6?=\r\n"
+            "\r\n"
+            "  body ö\r\n\r\nX-D: not a header\r\n";
+        Message m(msg);
+        assertEq("j@x.com", m.getFrom());
+        assertEq("\"Jörg\" <j@x.com>", m.getSender());
+        assertEq(("a@x.com, b@x.com, ö <c@x.com>",), m.getTO());
+        assertEq(("d@x.com",), m.getCC());
+        assertEq("a bö c", m.getSubject());
+        assertEq({"X-A": "ä", "X-B": "one  two", "X-C": "x y ö"}, m.getHeaders());
+        assertEq("  body ö\r\n\r\nX-D: not a header\r\n", m.getBody());
+        assertEq("UTF-8", m.getBody().encoding());
+        # the message is the same when it is serialized and parsed again
+        Message m2(m.serialize());
+        assertEq(m.getTO(), m2.getTO());
+        assertEq(m.getSubject(), m2.getSubject());
+        assertEq(m.getHeaders(), m2.getHeaders());
+        assertEq(m.getBody(), m2.getBody());
+
+        # an empty line ends the header, even if it is the first line
+        m = new Message("\r\nX-A: b\r\n");
+        assertEq(NOTHING, m.getHeaders());
+        assertEq("X-A: b\r\n", m.getBody());
+        # a header without a body
+        m = new Message("X-A: b\r\n\r\n");
+        assertEq({"X-A": "b"}, m.getHeaders());
+        assertEq(NOTHING, m.getBody());
+        # a line that has only white space other than a space or a tab ends the header
+        m = new Message("X-A: b\r\n\v\r\nX-B: c\r\n");
+        assertEq({"X-A": "b"}, m.getHeaders());
+        assertEq("X-B: c\r\n", m.getBody());
+
+        # a header line that does not end with CRLF; the position is the byte offset of the line
+        assertThrows("MESSAGE-PARSE-ERROR", "byte position 13$",
+            sub () { new Message("X-A: ö\r\n b\r\nX-B: c"); });
+        assertThrows("MESSAGE-PARSE-ERROR", "byte position 0$",
+            sub () { new Message("X-A: b\nX-B: c\n\nbody\n"); });
+        assertThrows("HEADER-ERROR", sub () { new Message("X-A b\r\n\r\nbody"); });
+
+        # a message in another encoding keeps its encoding in the body
+        string iso = convert_encoding("Subject: Jörg\r\n ä\r\nX-A: ü\r\n\r\nbödy\r\n", "ISO-8859-1");
+        m = new Message(iso);
+        assertEq("Jörg ä", m.getSubject());
+        assertEq({"X-A": "ü"}, m.getHeaders());
+        assertEq("bödy\r\n", m.getBody());
+        assertEq("ISO-8859-1", m.getBody().encoding());
+
+        # a body that is not valid UTF-8 is read as it is; matching the rest of the message for each header line
+        # raised INVALID-ENCODING
+        string bad_body = force_encoding(binary_to_string(<5375626a6563743a20780d0a0d0a62ff>, "ISO-8859-1"), "UTF-8");
+        m = new Message(bad_body);
+        assertEq("x", m.getSubject());
+        assertEq(<62ff>, binary(m.getBody()));
+
+        # a quoted-printable body
+        m = new Message("Content-Transfer-Encoding: quoted-printable\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+            "\r\nJ=C3=B6rg=3D=\r\nx =c3=a4\r\n");
+        # CRLF line breaks are decoded as LF on Unix
+        assertEq(PlatformOS == "Windows" ? "Jörg=x ä\r\n" : "Jörg=x ä\n", m.getBody());
+        assertThrows("QUOTED-PRINTABLE-DECODE-ERROR", "\"4\"",
+            sub () { new Message("Content-Transfer-Encoding: quoted-printable\r\n\r\nends with =4"); });
+    }
+
+    testParseTime() {
+        # 100000 header lines, folded and separate, ASCII and not, and encoded words; parsing them took time that
+        # grew with the square of their number (issue #6139): from 13 seconds to over a minute each
+        int lines = 100000;
+        hash<string, string> inputs = {
+            "folded": sprintf("To: z@y.com%s\r\n\r\nbody\r\n", strmul(",\r\n a@b.com", lines)),
+            "folded non-ascii": sprintf("To: z@y.com%s\r\n\r\nbody\r\n", strmul(",\r\n ö", lines)),
+            "separate": sprintf("%s\r\nbody\r\n", strmul("X-H: o\r\n", lines)),
+            "separate non-ascii": sprintf("%s\r\nbody\r\n", strmul("X-H: ö\r\n", lines)),
+            # 1 MB of encoded words
+            "encoded words": sprintf("Subject: s%s\r\n\r\nbody\r\n", strmul("\r\n =?UTF-8?Q?=C3=B6?=",
+                lines / 2)),
+            # 600 KB of quoted-printable codes
+            "quoted-printable body": "Content-Transfer-Encoding: quoted-printable\r\n"
+                "Content-Type: text/plain; charset=UTF-8\r\n\r\n" + strmul("=C3=B6", lines),
+        };
+        foreach hash<auto> i in (inputs.pairIterator()) {
+            date start = now_us();
+            Message m(i.value);
+            date elapsed = now_us() - start;
+            switch (i.key) {
+                case "folded": assertEq(lines + 1, m.getTO()[0].split(",").size(), i.key); break;
+                case "folded non-ascii": assertEq(lines + 1, m.getTO()[0].split(",").size(), i.key); break;
+                # a header that is given again replaces the value
+                case "separate": assertEq({"X-H": "o"}, m.getHeaders(), i.key); break;
+                case "separate non-ascii": assertEq({"X-H": "ö"}, m.getHeaders(), i.key); break;
+                case "encoded words": assertEq("s " + strmul("ö", lines / 2), m.getSubject(), i.key); break;
+                case "quoted-printable body": assertEq(strmul("ö", lines), m.getBody(), i.key); break;
+            }
+            # 0.5 - 2.5 seconds each on an idle machine
+            assertLt(8s, elapsed, i.key);
+            if (m_options.verbose) {
+                printf("%s: %d bytes in %y\n", i.key, i.value.size(), elapsed);
             }
         }
     }
