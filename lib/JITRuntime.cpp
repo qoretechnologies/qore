@@ -1415,33 +1415,64 @@ DLLLOCAL bool qore_jit_deopt_requested() {
     return val;
 }
 
+// the frame of native code whose return a debugger requested at a step event, while the return leaves it (see
+// qore_rt_dbg_take_return())
+static thread_local const void* tl_dbg_return_frame = nullptr;
+
+//! Takes the flow that a debugger requested at a step event of native code (qore#6200)
+/** A return (DebugFlowReturn) leaves the frame \a frame through its exits on an exception, as a thread_exit does: the
+    statement does not run, the handlers of the blocks that the return leaves run as for a return (on_exit and
+    on_success, as no exception is pending), a try statement does not catch it, and the frame's exit ends it as a return
+    without a value (qore_rt_dbg_take_return()), as the AST interpreter returns at the event with no value
+    (StatementBlock::execIntern()).  A break or a continue is not taken (see the issue).
+*/
+static void qore_rt_dbg_flow(int rc, void* frame, ExceptionSink* xsink) {
+    if (rc == RC_RETURN && xsink && !*xsink && frame) {
+        xsink->raiseThreadExit();
+        tl_dbg_return_frame = frame;
+    }
+}
+
 // Debug-step hook (issue #5352): fires a per-statement debugger step event from
 // JIT-compiled native code so single-stepping / breakpoints / LineCoverage work for
 // a function already running as native code when a debugger attaches mid-execution.
 // Mirrors the IR interpreter's DebugStatement handler (QoreIRInterpreter.cpp).
 // `statement` is the statement that follows; `statements_block` is the function's
-// top-level StatementBlock passed as the onStep `blockStatement` context.
+// top-level StatementBlock passed as the onStep `blockStatement` context; `frame` identifies the native frame (the
+// address of its storage of the thread's runtime location slots).
 //
-// Flow-control return codes from dbgStep (RC_RETURN/RC_BREAK/RC_CONTINUE) are
-// intentionally NOT honored here: a fixed native frame cannot redirect control flow
-// mid-execution.  Such commands take effect at the next function call boundary, where
-// UserVariantBase::evalTiered() deopts to the AST/IR interpreter (hasDebuggerAttached
-// downgrade).  A debugger-raised exception IS honored: the caller emits an exception
-// check immediately after this call.
+// A debugger-raised exception is honored by the exception check that the caller emits after this call; a return that
+// the debugger requests is taken as described in qore_rt_dbg_flow(), through the same check.
 extern "C" DLLEXPORT void qore_rt_dbg_step(const AbstractStatement* statement, void* statements_block,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, void* frame) {
     ThreadLocalProgramData* tlpd = get_thread_local_program_data();
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
-    tlpd->dbgStep(static_cast<const StatementBlock*>(statements_block), statement, xsink);
+    qore_rt_dbg_flow(tlpd->dbgStep(static_cast<const StatementBlock*>(statements_block), statement, xsink), frame,
+        xsink);
+}
+
+//! Ends a return that a debugger requested at a step event of the native frame \a frame as its return, at an exit of
+//! the frame on an exception (qore#6200)
+/** The thread_exit that the request raised (qore_rt_dbg_flow()) is cleared, so that the frame returns without a
+    value; an exception that a handler raised while the return left the frame stays pending, as with a return.  The
+    exits of other frames, such as the native code of a destructor that the release of a local runs, leave it pending.
+*/
+extern "C" DLLEXPORT void qore_rt_dbg_take_return(ExceptionSink* xsink, void* frame) {
+    if (tl_dbg_return_frame && tl_dbg_return_frame == frame) {
+        tl_dbg_return_frame = nullptr;
+        if (xsink) {
+            qore_es_private::get(*xsink)->thread_exit = false;
+        }
+    }
 }
 
 // Synthetic block-entry debug event from JIT native code (issue #5352): mirrors the IR
 // interpreter's DebugBlock handler firing dbgSyntheticBlockStep at block entry.  Resolves
 // the entered block from the marker's line; falls back to the function's top-level block.
 extern "C" DLLEXPORT void qore_rt_dbg_synthetic_block_step(const char* file, int64_t abs_line,
-        void* statements_block, ExceptionSink* xsink) {
+        void* statements_block, ExceptionSink* xsink, void* frame) {
     ThreadLocalProgramData* tlpd = get_thread_local_program_data();
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
@@ -1458,7 +1489,7 @@ extern "C" DLLEXPORT void qore_rt_dbg_synthetic_block_step(const char* file, int
     if (!dbg_block) {
         return;
     }
-    tlpd->dbgSyntheticBlockStep(dbg_block, xsink);
+    qore_rt_dbg_flow(tlpd->dbgSyntheticBlockStep(dbg_block, xsink), frame, xsink);
 }
 
 // --- Invoke helpers ---
