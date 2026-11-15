@@ -77,10 +77,10 @@ public:
     /** @return false if the wait timed out
     */
     DLLLOCAL bool waitHeld(size_t count, int64_t timeout_ms) {
-        int64_t deadline = q_clock_getmillis() + timeout_ms;
+        int64_t deadline = q_get_monotonic_us() / 1000 + timeout_ms;
         AutoLocker al(lock);
         while (held < count) {
-            int64_t remaining = deadline - q_clock_getmillis();
+            int64_t remaining = deadline - q_get_monotonic_us() / 1000;
             if (remaining <= 0) {
                 return false;
             }
@@ -108,10 +108,10 @@ public:
     /** @return false if the wait timed out
     */
     DLLLOCAL bool waitStreamingDelivered(int64_t timeout_ms) {
-        int64_t deadline = q_clock_getmillis() + timeout_ms;
+        int64_t deadline = q_get_monotonic_us() / 1000 + timeout_ms;
         AutoLocker al(lock);
         while (streaming_left) {
-            int64_t remaining = deadline - q_clock_getmillis();
+            int64_t remaining = deadline - q_get_monotonic_us() / 1000;
             if (remaining <= 0) {
                 return false;
             }
