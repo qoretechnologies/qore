@@ -72,19 +72,15 @@ QoreStringNode* AssertStatement::makeMessage(const QoreValue& msg_val, Exception
     }
     bool del;
     QoreString* tmp = msg_val.getAsString(del, 0, xsink);
+    // owns tmp exactly when getAsString() created it
+    TempString tmp_holder(del ? tmp : nullptr);
     if (*xsink) {
-        if (tmp && del) {
-            delete tmp;
-        }
         return nullptr;
     }
     if (!tmp) {
         return new QoreStringNode("assertion failed");
     }
     QoreStringNode* rv = new QoreStringNode(*tmp);
-    if (del) {
-        delete tmp;
-    }
     return rv;
 }
 
@@ -166,7 +162,8 @@ QORE_INTERN_ALWAYS_INLINE int AssertStatement::execCommon(QoreValue& return_valu
 }
 
 template <bool StrictBoolean>
-QORE_INTERN_ALWAYS_INLINE int AssertStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+QORE_INTERN_ALWAYS_INLINE int AssertStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value,
+        ExceptionSink* xsink) {
     // Evaluate the condition
     ValueEvalRefHolder cond_val(rc, condition, xsink);
     if (*xsink) {

@@ -19,9 +19,10 @@
     exception raised by the formatting (ENCODING-CONVERSION-ERROR for an argument that cannot be converted to the
     format's encoding) left the function instead of going to the handler of the try block around the @assert.  A
     message that is not formatted was converted with a "%s" format, which raised that error for a string that the AST
-    interpreter keeps in its own encoding; a list was formatted as one argument, and any other value was converted as a format's argument is, not as the AST
-    interpreter converts it (ex: 1 for True, nothing for a hash, NOTHING and NULL) (qore#6197).  The worker's output must
-    be that of the AST interpreter in every execution mode and as a qcc-compiled executable.
+    interpreter keeps in its own encoding; a list was formatted as one argument, and any other value was converted as
+    a format's argument is, not as the AST interpreter converts it (ex: 1 for True, nothing for a hash, NOTHING and
+    NULL) (qore#6197).  The worker's output must be that of the AST interpreter in every execution mode and as a
+    qcc-compiled executable.
 */
 class AssertMessageExceptionTest inherits QUnit::Test {
     public {

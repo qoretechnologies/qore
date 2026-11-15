@@ -12,8 +12,8 @@
 
     An lvalue with no value is left without one.  A string enum lvalue with no value is changed as a string lvalue
     is, as a string enum lvalue with a value is (qore#6195), without changing the value of an enum member; its
-    checks only require the same result in every mode.  An EI value assigned from a variable of no type is assigned as it
-    is; a plain int assigned from one is refused.
+    checks only require the same result in every mode.  An EI value assigned from a variable of no type is assigned as
+    it is; a plain int assigned from one is refused.
 
     The element of a hash<string, EI> is read with a key given at run time: the IR reads a constant key of a hash
     whose value type returns int as a plain int, also for an enum value type, which is not what these checks test.
