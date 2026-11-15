@@ -920,7 +920,7 @@ public:
     }
 
     //! Returns true if the object has not been deleted: QoreObject::isValid(), inline for the check of a call's target
-    DLLLOCAL static bool isValidInline(const QoreObject* obj) {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool isValidInline(const QoreObject* obj) {
         return obj->priv->status.load(std::memory_order_relaxed) != OS_DELETED;
     }
 
@@ -931,8 +931,9 @@ public:
 
     //! Returns true if the object has not been deleted and is of one of the classes given, which a method resolved at
     //! parse time is called on without being looked up by name (AbstractMethodCallNode::exec(), issue #5824)
-    DLLLOCAL static bool isValidOfClass(const QoreObject* obj, const QoreClass* qc, const QoreClass* method_qc,
-            bool any_class = false) {
+    //! (always inlined: it is the inline part of every check of a call's target)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool isValidOfClass(const QoreObject* obj, const QoreClass* qc,
+            const QoreClass* method_qc, bool any_class = false) {
         if (any_class) {
             return isValidInline(obj);
         }

@@ -480,10 +480,15 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      arguments (AOTExprKind::CALLREF_CALL_NAMED, 128: the CALLREF_CALL layout followed by a name string ref per
 //!      argument; its node form EN_CALLREF_CALL_NAMED, 27), so that the names are bound when the call is made (M4
 //!      phase 3); the earlier formats have no such expression, and a reader of them refuses the kind.
-//! v36: the flags of an AOTExprKind::DOT_EVAL_TARGET slot have the bit QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH (0x02)
+//! v36: the name of a capture of a closure that is the default argument of a function, and whose variable is a
+//!      top-level local of the Program, is "top:<index>:<name>" (the index in the Program's top-level local list), as
+//!      the reference of a default argument expression to one is (v34); the reader binds the capture to that variable
+//!      and reads the closure again when the Program has its top-level locals.  An earlier reader takes the text as
+//!      the name of a variable that does not exist (#5998).
+//! v37: the flags of an AOTExprKind::DOT_EVAL_TARGET slot have the bit QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH (0x02)
 //!      for a call dispatched by name, whose slot records the class, method and variant resolved at parse time for the
 //!      check of the call's target; and the method-ref payload of a self call to an abstract method is
-//!      QORE_AOT_ABSTRACT_SELF_CALL_MARKER (#5824).  A v9-v35 image has neither.
+//!      QORE_AOT_ABSTRACT_SELF_CALL_MARKER (#5824).  A v9-v36 image has neither.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -517,8 +522,10 @@ constexpr uint16_t QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION = 34;
 constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
 //! First format version with named call reference calls (see v35 above).
 constexpr uint16_t QORE_AOT_NAMED_CALLREF_VERSION = 35;
-//! First format version whose call targets can be dispatched by name and self calls marked abstract (see v36 above).
-constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 36;
+//! First format version whose closure captures can name a top-level local by its index (see v36 above).
+constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
+//! First format version whose call targets can be dispatched by name and self calls marked abstract (see v37 above).
+constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 37;
 //! The current format version: the newest feature version above (a merge with another format change takes the next
 //! version after the newest, here and in the history above)
 constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION;
@@ -3107,6 +3114,10 @@ class VarRefNode;
     and the writer allows it (a default argument); \a ref then holds the reference
 */
 bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const VarRefNode* varref, std::string& ref);
+
+//! As above for a local variable: the reference "top:<index>:<name>" of a top-level local of the Program that is
+//! serialized, written while a default argument is (see QoreAOTBinaryWriter::allow_top_level_local_ref)
+bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const LocalVar* lv, std::string& ref);
 
 class QoreAOTBinaryDeserializer {
     QoreAOTBinaryReader reader;

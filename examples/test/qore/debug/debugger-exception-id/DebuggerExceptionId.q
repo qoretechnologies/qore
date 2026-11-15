@@ -1,10 +1,10 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # The debug_id key of the exceptions that a debugger gets (#5906); see debugger-exception-id.qtest
-
 %modern
 %allow-debugger
-
+# the unassigned value is deliberate: its run-time handling is tested
+%no-strict-parse-errors
 #! records the exceptions of the functions below, each once, with the line of its first event and its ID, numbered in
 #! the order that the IDs are first seen: an exception whose events had different IDs would be recorded again
 class Recorder inherits DebugProgram {

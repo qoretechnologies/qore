@@ -125,10 +125,10 @@ QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
                 return cd.bool_data[row] ? "true" : "false";
             case ColumnType::DATE:
                 return std::to_string(cd.date_data[row]);
-            case ColumnType::AUTO: {
-                QoreStringValueHelper sh(cd.auto_data[row]);
-                return dataFrameStdString(*sh);
-            }
+            // a string is compared in UTF-8, the encoding of the string cells, so that equal strings in different
+            // encodings make the same group
+            case ColumnType::AUTO:
+                return dataFrameUtf8Key(cd.auto_data[row]);
             default:
                 return {};
         }

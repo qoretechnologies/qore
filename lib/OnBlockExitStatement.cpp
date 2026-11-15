@@ -69,7 +69,24 @@ int OnBlockExitStatement::parseInitImpl(QoreParseContext& parse_context) {
     ParseImplicitArgTypeHelper pia(type == OBE_Error ? hashdeclExceptionInfo->getTypeInfo() : nothingTypeInfo, nullptr,
         type == OBE_Error);
 
-    return code->parseInitImpl(parse_context);
+    // the block runs when the enclosing block exits, after the code parsed after it, which it can follow in a loop
+    // (qore#5937): reads in it are not proven to precede the assignments parsed after them, and its own assignments
+    // and deletions are merged into the state of the code after it as those of a branch that may not run
+    ParseDeferredScopeHelper deferred_scope;
+    NarrowedTypeHelper nth;
+    AssignedStateHelper ash;
+    nth.saveState();
+    ash.saveState();
+    int rc = code->parseInitImpl(parse_context);
+    // the block runs when the enclosing block exits, after the code after it in that block: its effects apply then
+    ash.recordChangesAsBlockExitEffects();
+    nth.recordBranchAndRestore();
+    ash.recordBranchAndRestore();
+    nth.recordSavedAsImplicitBranch();
+    ash.recordSavedAsImplicitBranch();
+    nth.mergeAndApply();
+    ash.mergeAndApply();
+    return rc;
 }
 
 void OnBlockExitStatement::parseCommit(QoreProgram* pgm) {

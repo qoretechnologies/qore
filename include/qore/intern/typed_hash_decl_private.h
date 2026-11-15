@@ -82,6 +82,7 @@ private:
 typedef QoreMemberMapBase<HashDeclMemberInfo> HashDeclMemberMap;
 
 class typed_hash_decl_private {
+    template <class> friend class QoreTypeOwnerOf;
 friend class typed_hash_decl_member_iterator;
 friend class TypedHashDecl;
 public:
@@ -103,17 +104,7 @@ public:
 
     DLLLOCAL ~typed_hash_decl_private() {
         assert(!refs.reference_count());
-        // issue #5765: no eviction may call the cache once its destruction has started
-        if (parameterized_hashdecl_registration) {
-            qore_generic_cache_unregister(parameterized_hashdecl_registration.get());
-        }
-        if (parameterized_base) {
-            qore_live_parameterized_hashdecls.fetch_sub(1, std::memory_order_relaxed);
-        }
-        releaseParentHashDecl();
-        for (auto& i : parameterized_hashdecl_cache) {
-            typed_hash_decl_private::get(*i.second)->deref();
-        }
+        releaseDependencies();
         // the next hashdecl allocated can reuse these addresses
         qore_purge_derived_types(thd, typeInfo, orNothingTypeInfo);
         // method dispatch caches keyed by these type pointers must miss from now on
@@ -121,6 +112,60 @@ public:
         delete typeInfo;
         delete orNothingTypeInfo;
         delete parse_parent;
+        // the declarations named by this hashdecl's member types are no longer kept for it (issue #5790)
+        qore_type_owner_destroyed(&type_owner);
+    }
+
+    // QoreTypeOwner (issue #5790)
+    DLLLOCAL const void* getTypeOwnerKey() const {
+        return thd;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeOwnerType() const {
+        return typeInfo;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeOwnerOrNothingType() const {
+        return orNothingTypeInfo;
+    }
+
+    DLLLOCAL int getTypeOwnerReferenceCount() const {
+        return refs.reference_count();
+    }
+
+    DLLLOCAL bool isTypeOwnerSystem() const {
+        return sys && !copied;
+    }
+
+    //! A retired hashdecl keeps its members, its parent and its source, as the type checks compare them
+    DLLLOCAL bool keepsTypeOwnerMembers() const {
+        return true;
+    }
+
+    DLLLOCAL void retireTypeOwner() {
+        releaseCaches();
+    }
+
+    DLLLOCAL void freeTypeOwner() {
+        assert(!refs.reference_count());
+        delete thd;
+    }
+
+    //! The declarations named by the member types
+    DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+        for (auto& i : members.member_list) {
+            if (i.second) {
+                qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+            }
+        }
+    }
+
+    DLLLOCAL void refTypeOwner() {
+        ref();
+    }
+
+    DLLLOCAL void derefTypeOwner() {
+        deref();
     }
 
     DLLLOCAL TypedHashDecl* newTypedHashDecl(const char* n) {
@@ -213,12 +258,17 @@ public:
             return true;
         }
         if (refs.ROdereference()) {
-            assert(thd->priv == this);
-            delete thd;
+            derefLast();
             return true;
         }
         return false;
     }
+
+    //! Releases the hashdecl after its last reference was released (see deref())
+    /** Not inline, so that the release of a reference that is not the last one costs no more than before
+        (issue #5790)
+    */
+    DLLLOCAL void derefLast();
 
     DLLLOCAL int parseInit();
 
@@ -677,6 +727,36 @@ public:
     /** The hashdecl keeps its parent, which the Program that declared the parent can have released: a non-public
         parent of a public hashdecl is not copied to a Program that inherits the child
     */
+    //! Releases the caches of the hashdecl, its parent, its source and its registration; can be called again
+    DLLLOCAL void releaseDependencies() {
+        releaseCaches();
+        releaseParentHashDecl();
+        if (copy_source) {
+            copy_source->deref();
+            copy_source = nullptr;
+        }
+    }
+
+    //! Releases the caches of the hashdecl and its registration; can be called again
+    /** Called by releaseDependencies(), and when the hashdecl is retired (see QoreTypeOwner)
+    */
+    DLLLOCAL void releaseCaches() {
+        // issue #5765: no eviction may call the cache once its destruction has started
+        if (parameterized_hashdecl_registration) {
+            qore_generic_cache_unregister(parameterized_hashdecl_registration.get());
+            parameterized_hashdecl_registration.reset();
+        }
+        // a retired concrete declaration is no longer live
+        if (parameterized_base && !parameterized_released) {
+            parameterized_released = true;
+            qore_live_parameterized_hashdecls.fetch_sub(1, std::memory_order_relaxed);
+        }
+        for (auto& i : parameterized_hashdecl_cache) {
+            typed_hash_decl_private::get(*i.second)->deref();
+        }
+        parameterized_hashdecl_cache.clear();
+    }
+
     DLLLOCAL void releaseParentHashDecl() {
         if (parentHashDecl) {
             const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->deref();
@@ -833,6 +913,19 @@ protected:
     //! destructor
     mutable std::unique_ptr<ParameterizedHashDeclCache> parameterized_hashdecl_registration;
     const TypedHashDecl* parameterized_base = nullptr;
+    //! true once a concrete declaration has been subtracted from the live count (releaseDependencies())
+    bool parameterized_released = false;
+    //! The hashdecl that this one was copied from, referenced by the copy (issue #5790)
+    /** A copy shares the types of the members of its source, which the source's Program frees with the source
+        otherwise: a copy imported into or inherited by another Program can outlive the source Program
+    */
+    typed_hash_decl_private* copy_source = nullptr;
+
+public:
+    //! the declaration's QoreTypeOwner (issue #5790); the last member, so the layout of the others is not changed
+    QoreTypeOwnerOf<typed_hash_decl_private> type_owner{this};
+
+protected:
     std::vector<const QoreTypeInfo*> type_args;
 
     // parent hashdecl (resolved after parseInit)
