@@ -1,27 +1,27 @@
 round 0
-method reference, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+method reference, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
   side effect: valid
 method reference, object valid: 1
-reference to another method, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+reference to another method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::n() on an object that has already been deleted
   side effect: closure
 closure: 2
-call in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
-call in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+call in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 round 1
-method reference, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+method reference, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
   side effect: valid
 method reference, object valid: 1
-reference to another method, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+reference to another method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::n() on an object that has already been deleted
   side effect: closure
 closure: 2
-call in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
-call in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+call in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
 round 2
-method reference, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+method reference, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
   side effect: valid
 method reference, object valid: 1
-reference to another method, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+reference to another method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::n() on an object that has already been deleted
   side effect: closure
 closure: 2
-call in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
-call in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+call in a method, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+call in a function, object deleted: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
