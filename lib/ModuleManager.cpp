@@ -335,12 +335,19 @@ static int qore_module_load_check_stack(ExceptionSink& xsink) {
         return 0;
     }
     // the error of a load made by a parse directive is located at the directive (that of the innermost load in
-    // progress: the directive of the module source that has it, for a module that loads modules in turn), as a parse
-    // error is; the run-time location during a parse is that of the code that started the parse
-    const QoreModuleLoadWarningFrame* frame = qore_module_load_warning_frame;
-    if (frame && frame->loc) {
-        xsink.raiseException(*frame->loc, QORE_PARSE_STACK_ERR, QoreValue(),
-            new QoreStringNode(QORE_PARSE_STACK_DESC));
+    // progress with a location: the directive of the module source that has it, for a module that loads modules in
+    // turn), as a parse error is; the run-time location during a parse is that of the code that started the parse.  A
+    // load made at run time (a frame without a Program) is located where it was made, also within a parse
+    const QoreProgramLocation* loc = nullptr;
+    for (const QoreModuleLoadWarningFrame* frame = qore_module_load_warning_frame; frame && frame->pgm;
+            frame = frame->parent) {
+        if (frame->loc) {
+            loc = frame->loc;
+            break;
+        }
+    }
+    if (loc) {
+        xsink.raiseException(*loc, QORE_PARSE_STACK_ERR, QoreValue(), new QoreStringNode(QORE_PARSE_STACK_DESC));
     } else {
         xsink.raiseException(QORE_PARSE_STACK_ERR, QORE_PARSE_STACK_DESC);
     }
