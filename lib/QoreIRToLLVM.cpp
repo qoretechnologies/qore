@@ -12212,22 +12212,13 @@ llvm::Value* QoreIRToLLVM::emitAOTPluginHelperCall(const QoreIRPluginInstruction
             llvm::MDBuilder(ctx).createBranchWeights(1, 999));
 
     builder->SetInsertPoint(resolve_bb);
-    // the signature that the code was compiled for: that of the instruction's reference, if it has one, or else
-    // that of the operation registered in the compiling process
-    bool have_ref = inst->operation.module_name == info.module_name
-        && inst->operation.local_operation_id == info.local_operation_id && inst->operation.signature_hash;
-    uint64_t signature_hash = have_ref ? inst->operation.signature_hash
-        : qore_plugin_compute_signature_hash_v1(info.signature);
-    uint8_t canonical_signature_version = have_ref ? inst->operation.canonical_signature_version
-        : QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1;
+    std::vector<llvm::Value*> args = getAOTPluginOperationRefArgs(inst, info);
+    args.push_back(llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(info.signature.helper_abi)));
+    args.push_back(cache);
+    args.push_back(xsink_arg);
     llvm::Value* resolved = builder->CreateCall(module.getOrInsertFunction("qore_rt_plugin_operation_helper_aot",
             llvm::FunctionType::get(ptr_type, {ptr_type, i32_type, i32_type, i64_type, i32_type, ptr_type, ptr_type},
-                false)),
-            {qore_ir_create_global_string_ptr(builder, info.module_name),
-             llvm::ConstantInt::get(i32_type, info.local_operation_id),
-             llvm::ConstantInt::get(i32_type, canonical_signature_version),
-             llvm::ConstantInt::get(i64_type, signature_hash),
-             llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(info.signature.helper_abi)), cache, xsink_arg});
+                false)), args);
     builder->CreateBr(call_bb);
 
     builder->SetInsertPoint(call_bb);
@@ -12236,9 +12227,60 @@ llvm::Value* QoreIRToLLVM::emitAOTPluginHelperCall(const QoreIRPluginInstruction
     helper->addIncoming(resolved, resolve_bb);
     std::vector<llvm::Type*> param_types(operands.size(), i64_type);
     param_types.push_back(ptr_type);
-    std::vector<llvm::Value*> args(operands.begin(), operands.end());
+    std::vector<llvm::Value*> call_args(operands.begin(), operands.end());
+    call_args.push_back(xsink_arg);
+    return builder->CreateCall(llvm::FunctionType::get(i64_type, param_types, false), helper, call_args);
+}
+
+std::vector<llvm::Value*> QoreIRToLLVM::getAOTPluginOperationRefArgs(const QoreIRPluginInstruction* inst,
+        const QorePluginLLVMCodegenInfo& info) {
+    // the signature that the code was compiled for: that of the instruction's reference, if it has one, or else
+    // that of the operation registered in the compiling process
+    bool have_ref = inst->operation.module_name == info.module_name
+        && inst->operation.local_operation_id == info.local_operation_id && inst->operation.signature_hash;
+    uint64_t signature_hash = have_ref ? inst->operation.signature_hash
+        : qore_plugin_compute_signature_hash_v1(info.signature);
+    uint8_t canonical_signature_version = have_ref ? inst->operation.canonical_signature_version
+        : QORE_PLUGIN_CANONICAL_SIGNATURE_VERSION_V1;
+    return {qore_ir_create_global_string_ptr(builder, info.module_name),
+        llvm::ConstantInt::get(i32_type, info.local_operation_id),
+        llvm::ConstantInt::get(i32_type, canonical_signature_version),
+        llvm::ConstantInt::get(i64_type, signature_hash)};
+}
+
+llvm::Value* QoreIRToLLVM::emitAOTPluginOperationId(const QoreIRPluginInstruction* inst,
+        const QorePluginLLVMCodegenInfo& info, llvm::Module& module, llvm::Function* llvm_func) {
+    assert(aot_mode);
+    // the id is resolved on the first call of the site and cached in this global; 0 is no id
+    auto* zero = llvm::ConstantInt::get(i32_type, 0);
+    auto* cache = new llvm::GlobalVariable(module, i32_type, false, llvm::GlobalValue::InternalLinkage, zero,
+            "plugin_operation_id_cache");
+    llvm::LoadInst* cached = builder->CreateAlignedLoad(i32_type, cache, llvm::Align(4));
+    cached->setAtomic(llvm::AtomicOrdering::Acquire);
+    llvm::BasicBlock* cached_bb = builder->GetInsertBlock();
+    llvm::BasicBlock* resolve_bb = llvm::BasicBlock::Create(ctx, "plugin_operation_id_resolve", llvm_func);
+    llvm::BasicBlock* id_bb = llvm::BasicBlock::Create(ctx, "plugin_operation_id", llvm_func);
+    // the block of the id is dominated by the block of the test (see dominates())
+    immediate_dominator[id_bb] = cached_bb;
+    builder->CreateCondBr(builder->CreateICmpEQ(cached, zero), resolve_bb, id_bb,
+            llvm::MDBuilder(ctx).createBranchWeights(1, 999));
+
+    builder->SetInsertPoint(resolve_bb);
+    // an operation that cannot be resolved raises an exception and gives id 0, for which the dispatch helper returns
+    // NOTHING without raising another one
+    std::vector<llvm::Value*> args = getAOTPluginOperationRefArgs(inst, info);
+    args.push_back(cache);
     args.push_back(xsink_arg);
-    return builder->CreateCall(llvm::FunctionType::get(i64_type, param_types, false), helper, args);
+    llvm::Value* resolved = builder->CreateCall(module.getOrInsertFunction("qore_rt_plugin_operation_id_aot",
+            llvm::FunctionType::get(i32_type, {ptr_type, i32_type, i32_type, i64_type, ptr_type, ptr_type}, false)),
+            args);
+    builder->CreateBr(id_bb);
+
+    builder->SetInsertPoint(id_bb);
+    llvm::PHINode* id = builder->CreatePHI(i32_type, 2, "plugin_operation_id");
+    id->addIncoming(cached, cached_bb);
+    id->addIncoming(resolved, resolve_bb);
+    return id;
 }
 
 bool QoreIRToLLVM::mayRunWithCallerContext() const {
@@ -35466,9 +35508,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            llvm::Value* gid = llvm::ConstantInt::get(i32_type, global_id);
             llvm::Value* result = nullptr;
             QorePluginLLVMCodegenInfo codegen_info;
+            bool have_info = !qore_plugin_get_llvm_codegen_info(global_id, codegen_info, nullptr);
+            // the id of the operation for its generic dispatch: process-global ids are assigned when plugin modules
+            // are loaded, so AOT code resolves the id at run time from the module-local reference (qore#6136)
+            auto get_gid = [&]() -> llvm::Value* {
+                if (!aot_mode) {
+                    return llvm::ConstantInt::get(i32_type, global_id);
+                }
+                if (!have_info) {
+                    error = "cannot resolve plugin operation id ";
+                    error += std::to_string(global_id);
+                    error += " for AOT code";
+                    return nullptr;
+                }
+                return emitAOTPluginOperationId(pinst, codegen_info, module, llvm_func);
+            };
             auto box_operands = [&](std::vector<llvm::Value*>& boxed_operands) -> bool {
                 boxed_operands.reserve(inst->operands.size());
                 for (const QoreIRValue& operand : inst->operands) {
@@ -35480,8 +35536,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 return true;
             };
-            bool have_codegen = !qore_plugin_get_llvm_codegen_info(global_id, codegen_info, nullptr)
-                && codegen_info.codegen;
+            bool have_codegen = have_info && codegen_info.codegen;
             if (have_codegen && aot_mode) {
                 // the extension's code can name a symbol of the plugin module, which AOT code cannot link
                 // (qore#6130): AOT code calls the operation's runtime helper through a pointer resolved at run time
@@ -35551,6 +35606,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* boxed = boxValue(val, inst->operands[0].id);
                 auto helper = module.getOrInsertFunction("qore_rt_plugin_unary",
                         llvm::FunctionType::get(i64_type, {i32_type, i64_type, ptr_type}, false));
+                llvm::Value* gid = get_gid();
+                if (!gid) {
+                    return false;
+                }
                 result = builder->CreateCall(helper, {gid, boxed, xsink_arg});
             } else if (!result && (inst->opcode == QoreIROpcode::PluginBinary
                     || inst->opcode == QoreIROpcode::PluginSubscript)) {
@@ -35564,6 +35623,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction(helper_name,
                         llvm::FunctionType::get(i64_type,
                             {i32_type, i64_type, i64_type, ptr_type}, false));
+                llvm::Value* gid = get_gid();
+                if (!gid) {
+                    return false;
+                }
                 result = builder->CreateCall(helper, {gid, lhs_boxed, rhs_boxed, xsink_arg});
             } else if (!result && inst->opcode == QoreIROpcode::PluginCall) {
                 auto* self = getVal(inst->operands[0].id, error);
@@ -35577,6 +35640,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_plugin_call_args",
                         llvm::FunctionType::get(i64_type,
                             {i32_type, i64_type, ptr_type, i32_type, ptr_type}, false));
+                llvm::Value* gid = get_gid();
+                if (!gid) {
+                    return false;
+                }
                 result = builder->CreateCall(helper, {gid, self_boxed, args_array,
                     llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             } else if (!result && inst->opcode == QoreIROpcode::PluginConstruct) {
@@ -35588,6 +35655,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_plugin_construct_args",
                         llvm::FunctionType::get(i64_type,
                             {i32_type, ptr_type, i32_type, ptr_type}, false));
+                llvm::Value* gid = get_gid();
+                if (!gid) {
+                    return false;
+                }
                 result = builder->CreateCall(helper, {gid, args_array,
                     llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             } else if (!result && inst->opcode == QoreIROpcode::PluginDenseBufferUnary) {
@@ -35599,6 +35670,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_plugin_dense_buffer_unary_values",
                         llvm::FunctionType::get(i64_type,
                             {i32_type, i64_type, i64_type, ptr_type}, false));
+                llvm::Value* gid = get_gid();
+                if (!gid) {
+                    return false;
+                }
                 result = builder->CreateCall(helper, {gid, result_boxed, value_boxed, xsink_arg});
             } else if (!result) {
                 auto* result_buffer = getVal(inst->operands[0].id, error);
@@ -35611,6 +35686,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_plugin_dense_buffer_binary_values",
                         llvm::FunctionType::get(i64_type,
                             {i32_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                llvm::Value* gid = get_gid();
+                if (!gid) {
+                    return false;
+                }
                 result = builder->CreateCall(helper, {gid, result_boxed, lhs_boxed, rhs_boxed, xsink_arg});
             }
             values[inst->result.id] = result;

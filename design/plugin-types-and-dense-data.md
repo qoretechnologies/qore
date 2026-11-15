@@ -322,5 +322,16 @@ Before committing changes in this area:
   or subscript value operation that has an extension through a pointer that
   the call site resolves on its first call from the operation's module-local
   reference (`qore_rt_plugin_operation_helper_aot()`) and caches, and
-  dispatches any other operation generically (which still names the operation
-  by the process-global id of the compiling process: qore#6136).
+  dispatches any other operation generically.
+- Process-global plugin operation ids are assigned when plugin modules are
+  loaded, so they depend on the load order and are never embedded in AOT code
+  (qore#6136). AOT code names an operation by its module-local reference: the
+  module name, the plugin-local operation id and the canonical signature hash
+  it was compiled for. A generic dispatch site resolves the process-global id
+  on its first call (`qore_rt_plugin_operation_id_aot()`) and caches it. A
+  module that is not loaded, a missing operation or a changed signature raises
+  an exception (`PLUGIN-REGISTRY-MODULE-NOT-LOADED`,
+  `PLUGIN-REGISTRY-OPERATION-NOT-REGISTERED` or
+  `QORD-PLUGIN-SIGNATURE-HASH-MISMATCH`) when the site is first called, and
+  the operation returns NOTHING. A qcc executable or module refuses a missing
+  plugin module already when it loads the modules that it depends on.

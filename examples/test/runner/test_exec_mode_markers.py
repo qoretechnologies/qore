@@ -210,6 +210,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   that set their own --exec-mode and in qcc executables
         # - dataframe-plugin-exception-handler (#6135): its probes run in child processes that set their own
         #   --exec-mode
+        # - plugin-order-identity (#6136): its probes run in child processes that set their own --exec-mode, in qcc
+        #   executables and with a module compiled by qcc
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -227,6 +229,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTNamedCallRefModules.qtest",
                                  "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
+                                 "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
                                  "examples/test/ir/GenericCacheRelease.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit.qtest",
