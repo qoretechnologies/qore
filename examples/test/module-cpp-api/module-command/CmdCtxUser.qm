@@ -1,0 +1,25 @@
+%modern
+
+# a user module that issues a module command from its own code: the Program of the module is the issuer's Program, and
+# the restrictions of its caller reach the command only as they reach any module code (see cmdctx-matrix.q)
+
+module CmdCtxUser {
+    version = "1.0";
+    desc = "issues a module command from module code";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+%requires cmdctxaware
+
+public namespace CmdCtxUser {
+    #! issues a module command to the Program of the module
+    public sub issue(string mod, string cmd) {
+        Program::issueModuleCmd(mod, cmd);
+    }
+
+    #! returns what the aware module's function says about the restrictions of its caller, which is module code
+    public string sub caller() {
+        return CmdCtxAware::caller();
+    }
+}

@@ -1614,6 +1614,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "pipe.addSelectContextValue(result_key: \"result\", condition_key: \"ok\", "
             "true_source_key: \"a\", false_source_key: \"b\"); "
             "pipe.addContextOr(result_key: \"either\", key_a: \"a\", key_b: \"b\"); "
+            "pipe.addRequireContextKey(context_key: \"ok\", error_code: \"ERR\", desc: \"not ok\"); "
+            "pipe.addCheckRegex(source_key: \"text\", pattern: \"^ok$\", result_key: \"is_ok\"); "
             "pipe.addGoto(target_step: 1); "
             "pipe.addPushQueue(queue_id: 1); "
             "pipe.addDrainQueueSend(queue_id: 1); "

@@ -268,4 +268,13 @@ DLLEXPORT void qore_aot_set_module_dep_sink(std::vector<std::string>* sink);
     See design/aot-linked-module-sources.md. */
 DLLEXPORT void qore_aot_set_module_closure_dep_sink(std::vector<std::string>* sink);
 
+//! Sink for the paths where the modules of the failed %try-module directives of an AOT module compile could be
+//! installed, but are not (qore#6145)
+/** qcc writes them beside the depfile of an AOT module (<depfile>.optional), so that a build rebuilds the module
+    when one of the modules becomes available: the module was compiled without it, and the module loader refuses
+    such a module as out of date (AOT-MODULE-STALE).  No-op (one thread-local load) when no sink is active. The
+    caller owns the vector and must clear the sink (pass nullptr) before it is destroyed.
+*/
+DLLEXPORT void qore_aot_set_optional_module_candidate_sink(std::vector<std::string>* sink);
+
 #endif
