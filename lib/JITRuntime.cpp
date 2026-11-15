@@ -31,6 +31,7 @@
 
 #include "qore/intern/QoreRuntimeDiagnostic.h"
 #include "qore/intern/QoreJITIncludes.h"
+#include "qore/intern/QoreHandlerRun.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreJITException.h"
 #include "qore/intern/QoreJIT.h"
@@ -15009,40 +15010,93 @@ extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
     return static_cast<int64_t>(jit_obe_handlers.size());
 }
 
-//! Gives the value that a handler run while an exception leaves its block returned to the parent (#5992)
-/** The value replaces the value of the return that the exception interrupted, as in the AST interpreter, where the
-    handler runs with the block's return value: it is kept in the parent's hold slot, which the parent releases after
-    its locals (or when a try statement of the parent catches the exception), and the value it replaces there is
-    released.  Returns true if the handler's value was taken.  A handler that ends without a return gives no value;
-    a return without a value cannot be told from it.
-*/
-static inline bool qore_rt_obe_hold_return(uint64_t* hold, bool error, uint64_t rv_bits, ExceptionSink* xsink) {
-    if (!hold || !error || fromBits(rv_bits).isNothing()) {
-        return false;
-    }
-    uint64_t replaced = *hold;
-    *hold = rv_bits;
-    fromBits(replaced).discard(xsink);
-    return true;
+// documented in QoreHandlerRun.h
+QoreHandlerRunContext*& qore_handler_run_context() {
+    static thread_local QoreHandlerRunContext* ctx = nullptr;
+    return ctx;
 }
 
+// documented in QoreHandlerRun.h
+void qore_handler_return(QoreValue value, ExceptionSink* xsink) {
+    QoreHandlerRunContext* ctx = qore_handler_run_context();
+    if (!ctx || !ctx->unwinding || !ctx->hand_over) {
+        return;
+    }
+    ctx->hand_over(ctx->data, value, xsink);
+}
+
+//! Hands the value of a return statement of a handler run out of line to the function that it runs for (#6074)
+/** The native code of QoreIROpcode::HandlerReturn; \a value_bits is borrowed.  See QoreHandlerRunContext.
+*/
+extern "C" DLLEXPORT void qore_rt_handler_return(uint64_t value_bits, ExceptionSink* xsink) {
+    qore_handler_return(fromBits(value_bits), xsink);
+}
+
+//! The values that the handlers of a native function hand over while they run out of line (#5992, #6074)
+/** The value of each hand-over replaces the value of the return that the unwind interrupted, as in the AST
+    interpreter, where a handler runs with a reference to the return value of its function: the slots of the
+    interrupted return (\a replace, if any) are released and cleared at the first one, and the value is kept in the
+    function's hold slot, which the function releases after its locals (or when a try statement of the function
+    catches the exception), replacing and releasing the value of the hand-over before it.
+*/
+struct QoreNativeHandlerHold {
+    //! the hold slot of the function
+    uint64_t* hold;
+    //! copies of the values of the function's returns that the first hand-over releases, or nullptr; the code
+    //! after the call clears their slots if a value was handed over
+    uint64_t* replace;
+    //! the number of slots in replace
+    int64_t n_replace;
+    //! true once the slots of replace have been released
+    bool replaced = false;
+    //! set to 1 when a value is handed over
+    int8_t held = 0;
+
+    static void handOver(void* data, QoreValue value, ExceptionSink* xsink) {
+        QoreNativeHandlerHold& h = *static_cast<QoreNativeHandlerHold*>(data);
+        if (!h.replaced) {
+            h.replaced = true;
+            for (int64_t i = 0; i < h.n_replace; ++i) {
+                uint64_t bits = h.replace[i];
+                h.replace[i] = toBits(QoreValue());
+                fromBits(bits).discard(xsink);
+            }
+        }
+        uint64_t prev = *h.hold;
+        *h.hold = toBits(value.refSelf());
+        fromBits(prev).discard(xsink);
+        h.held = 1;
+    }
+};
+
 static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
-        ExceptionSink* xsink, bool inline_lowered, uint64_t* hold);
+        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward = false);
 
 extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered) {
     qore_rt_exec_on_block_exit_intern(saved_count, xsink, inline_lowered, nullptr);
 }
 
-//! Runs the handlers registered since saved_count as qore_rt_exec_on_block_exit() does; the value that a handler run
-//! while an exception is pending returns is kept in \a hold (see qore_rt_obe_hold_return()); returns 1 if one was
+//! Runs the handlers of a block of a handler body as qore_rt_exec_on_block_exit() does; the values that they hand
+//! over go to the function that the handler runs for, as the AST interpreter runs them with the same reference to its
+//! return value (QoreHandlerRunContext::forwardFrom(), #6074)
+extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_forward(int64_t saved_count, ExceptionSink* xsink) {
+    qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, nullptr, true);
+}
+
+//! Runs the handlers registered since saved_count as qore_rt_exec_on_block_exit() does; the values that a handler run
+//! while an exception or a thread_exit is pending hands over (QoreIROpcode::HandlerReturn) are kept in \a hold, and
+//! the first releases the values of the \a n_replace slots of \a replace, if any (see QoreNativeHandlerHold); returns 1
+//! if a value was handed over
 extern "C" DLLEXPORT int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink,
-        uint64_t* hold) {
-    return qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, hold);
+        uint64_t* hold, uint64_t* replace, int64_t n_replace) {
+    QoreNativeHandlerHold h{hold, replace, n_replace};
+    qore_rt_exec_on_block_exit_intern(saved_count, xsink, false, &h);
+    return h.held;
 }
 
 // inlined in both entry points, so that qore_rt_exec_on_block_exit_impl() has no hold check (#5992)
 static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_intern(int64_t saved_count,
-        ExceptionSink* xsink, bool inline_lowered, uint64_t* hold) {
+        ExceptionSink* xsink, bool inline_lowered, QoreNativeHandlerHold* hold, bool forward) {
     size_t start = static_cast<size_t>(saved_count);
     if (jit_obe_handlers.size() <= start) {
         return 0;
@@ -15054,7 +15108,6 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
         return 0;
     }
 
-    int8_t held = 0;
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
 
@@ -15126,6 +15179,22 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                 }
                 // native code reports an exception by unwinding to this boundary with the exception already in
                 // the sink
+                // the values of the handler's return statements are handed over as they execute (#6074): the value
+                // that the handler function returns is not used
+                QoreHandlerRunContext run_ctx;
+                QoreHandlerRunContext* outer = forward ? qore_handler_run_context() : nullptr;
+                if (outer) {
+                    // the handlers of a block of a handler body: the values go to the function that the handler
+                    // runs for
+                    run_ctx.forwardFrom(*outer);
+                } else {
+                    run_ctx.unwinding = error || (xsink && xsink->isThreadExit());
+                    if (hold) {
+                        run_ctx.hand_over = QoreNativeHandlerHold::handOver;
+                        run_ctx.data = hold;
+                    }
+                }
+                QoreHandlerRunGuard run_guard(run_ctx);
                 if (jit_obe_handlers[i].aot_fn) {
                     // the handler runs with the AOT context of its function
                     QoreAOTContext* aot_ctx = jit_obe_handlers[i].aot_ctx;
@@ -15135,11 +15204,7 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     }
-                    if (qore_rt_obe_hold_return(hold, error, rv_bits, &obe_xsink)) {
-                        held = 1;
-                    } else {
-                        fromBits(rv_bits).discard(&obe_xsink);
-                    }
+                    fromBits(rv_bits).discard(&obe_xsink);
                 } else {
                     assert(jit_obe_handlers[i].compiled_fn);
                     const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
@@ -15155,11 +15220,7 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     }
-                    if (qore_rt_obe_hold_return(hold, error, rv_bits, &obe_xsink)) {
-                        held = 1;
-                    } else {
-                        fromBits(rv_bits).discard(&obe_xsink);
-                    }
+                    fromBits(rv_bits).discard(&obe_xsink);
                     if (hf) {
                         for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
                             hf->all_body_locals[j]->uninstantiate(&obe_xsink);
@@ -15194,7 +15255,7 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
 
     // Remove handlers for this function scope
     jit_obe_handlers.resize(start);
-    return held;
+    return hold ? hold->held : 0;
 }
 
 // Backward-compatible wrapper that calls the implementation with inline_lowered=false

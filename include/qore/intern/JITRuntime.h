@@ -883,12 +883,32 @@ int64_t qore_rt_get_on_block_exit_count();
 //! Removes executed handlers from the stack.
 void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
 
-//! Runs the handlers as qore_rt_exec_on_block_exit() does, keeping the value that a handler run while an exception
-//! is pending returns in \a hold, which replaces the value of the return that the exception interrupted (#5992)
-/** @return 1 if a handler's value was kept in \a hold, after which the parent releases the values of the
-    interrupted return
+//! Runs the handlers as qore_rt_exec_on_block_exit() does; the values that a handler run while an exception or a
+//! thread_exit is pending hands over (QoreIROpcode::HandlerReturn) replace the value of the return that the unwind
+//! interrupted and are kept in \a hold (#5992, #6074)
+/** @param saved_count the number of handlers registered before the block
+    @param xsink the exception sink of the function
+    @param hold the function's hold slot
+    @param replace copies of the values of the function's returns (or of the try block's returns of the try statement
+    of the function that catches the exception), which the first hand-over releases, or nullptr
+    @param n_replace the number of values in \a replace
+
+    @return 1 if a value was handed over: the caller then clears the slots of the values of \a replace, which were
+    released
 */
-int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold);
+int8_t qore_rt_exec_on_block_exit_hold(int64_t saved_count, ExceptionSink* xsink, uint64_t* hold,
+    uint64_t* replace, int64_t n_replace);
+
+//! Runs the handlers of a block of a handler body as qore_rt_exec_on_block_exit() does; the values that they hand over
+//! go to the function that the handler runs for (#6074)
+void qore_rt_exec_on_block_exit_forward(int64_t saved_count, ExceptionSink* xsink);
+
+//! Hands the value of a return statement of a handler run out of line to the function that it runs for
+//! (QoreIROpcode::HandlerReturn, #6074)
+/** \a value_bits is borrowed; ignored unless the handler runs while an exception or a thread_exit is pending; see
+    QoreHandlerRunContext
+*/
+void qore_rt_handler_return(uint64_t value_bits, ExceptionSink* xsink);
 
 //! Discard (without firing) on_block_exit handlers registered since saved_count,
 //! truncating the thread-local handler stack back to that mark.  Used by the JIT

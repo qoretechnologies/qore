@@ -679,25 +679,39 @@ private:
     bool holding_return_values = false;
     //! Returns true if \a alloca_ptr is the cleanup alloca of one of return_value_ids
     bool isReturnValueAlloca(llvm::Value* alloca_ptr) const;
-    //! the slot that keeps the value that a handler run out of line while an exception leaves its block returned
-    //! (#5992)
-    /** The value replaces the value of the return that the exception interrupted, as in the AST interpreter: the
-        runtime keeps it here (qore_rt_exec_on_block_exit_hold()), the code after the handlers releases the values of
-        return_value_ids when it did (see handler_return_hold_sites), and the slot is released with them, after the
-        locals of an exit on an exception or at the catch block of a try statement of the function.  Created at the
-        entry of a function with handlers.
+    //! the slot that keeps the value that a handler run out of line while an exception or a thread_exit leaves its
+    //! block hands over (QoreIROpcode::HandlerReturn, #5992, #6074)
+    /** The value replaces the value of the return that the unwind interrupted, as in the AST interpreter: the runtime
+        keeps it here (qore_rt_exec_on_block_exit_hold()) and releases the values of the interrupted return at the
+        first hand-over (see handler_return_hold_sites), and the slot is released after the locals of an exit on an
+        exception or at the catch block of a try statement of the function.  Created at the entry of a function with
+        handlers.
     */
     llvm::Value* handler_return_hold = nullptr;
-    //! the calls that run handlers out of line with handler_return_hold, after which the values of return_value_ids
-    //! are released if a handler's value replaced them (see finalizeHandlerReturnHoldSites())
-    std::vector<llvm::CallInst*> handler_return_hold_sites;
+    //! true if the function is the body of a handler compiled as a function of its own: the handlers of its blocks
+    //! run out of line with qore_rt_exec_on_block_exit_forward() (#6074)
+    bool handler_function = false;
+    //! A call that runs handlers out of line with handler_return_hold, and the returns whose values the first
+    //! hand-over of a handler replaces (see finalizeHandlerReturnHoldSites())
+    struct HandlerReturnHoldSite {
+        llvm::CallInst* call;
+        //! the values of the returns of the try block of the try statement that catches the exception
+        //! (QoreIRFunction::catch_interrupted_returns), or nullptr for those of the function (return_value_ids)
+        const std::vector<uint32_t>* try_returns;
+    };
+    //! the calls that run handlers out of line with handler_return_hold whose handlers replace the value of an
+    //! interrupted return
+    std::vector<HandlerReturnHoldSite> handler_return_hold_sites;
     //! Emits the call that runs the handlers registered since \a saved_count out of line with handler_return_hold
-    /** @param release_returns true if the values of the function's returns are released after the call when a
-        handler's value was kept: false where a try statement of the function can catch the exception
+    /** @param release_returns true if the first hand-over of a handler replaces the values of the function's returns:
+        false where a try statement of the function can catch the exception, where it replaces those of the try
+        block's returns, \a try_returns
+        @param try_returns see HandlerReturnHoldSite::try_returns
     */
-    llvm::CallInst* emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count, bool release_returns);
-    //! Releases the values of return_value_ids after each call of handler_return_hold_sites that kept a handler's
-    //! value, now that their cleanup allocas are known
+    llvm::CallInst* emitOnBlockExitHoldCall(llvm::Module& module, llvm::Value* saved_count, bool release_returns,
+            const std::vector<uint32_t>* try_returns = nullptr);
+    //! Gives each call of handler_return_hold_sites the slots of the values of the returns that the first hand-over
+    //! of its handlers replaces and releases, now that their cleanup allocas are known
     void finalizeHandlerReturnHoldSites(llvm::Module& module);
     //! the blocks at the start of the catch paths of try statements that release the values of the returns of their
     //! try blocks (QoreIRFunction::catch_interrupted_returns), filled once the function is lowered, as the catch
@@ -2425,7 +2439,7 @@ private:
         @return the native function, or nullptr if an error was raised
     */
     llvm::Function* lowerNestedFunction(const QoreIRFunction& func, const std::string& name, llvm::Module& module,
-            std::string& error);
+            std::string& error, bool handler = false);
 
     // Phase 5b: Try to emit a specialized list index access instead of qore_rt_invoke_expr.
     // Returns true if specialized code was emitted, false to fall through to generic path.
