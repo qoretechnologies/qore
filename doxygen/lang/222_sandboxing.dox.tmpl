@@ -235,7 +235,9 @@ auto result = p.callFunction("main");
     invoking the reference later also enforces its creation policy, even when trusted code makes the call and
     the method is implemented in a shared module. The nearest calling Program's policy still applies; an access
     must satisfy both it and every active creation policy. Copies, asynchronous callbacks, and bound callbacks
-    preserve this protection. A manager's interrupt and thread limits remain effective as well.
+    preserve this protection. A manager's interrupt and thread limits remain effective as well. A call reference
+    that sandboxed code gets from another Program with @ref Qore::Program::getCallReference() is created under the
+    caller's sandbox in the same way as one that it makes with the <tt>\\</tt> operator.
 
     Creation provenance does not track later changes to a shared object. When a tenant configures an existing
     handler, keep its interface Program wrapper or bind its callback while executing in that interface:

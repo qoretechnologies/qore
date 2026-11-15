@@ -3998,6 +3998,9 @@ nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES
       enables it to access any accessible private method
     - a non-static method cannot be referenced with this method, as it has no object (since %Qore 3.0); use
       <object>::getCallReference()
+    - a call reference that sandboxed code gets with this method keeps the sandbox of that code, also when trusted
+      code calls it later, as one that it makes with the <tt>\\</tt> operator (see @ref sandbox_provenance; since
+      %Qore 3.0)
 
     @see
     - @ref Qore::get_call_reference()
@@ -4006,6 +4009,13 @@ nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES
     @since %Qore 0.9.4
  */
 code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the switch to the Program below hides a sandboxed caller from sandbox resolution: the caller's sandbox is
+    // applied as the provenance of the call reference, as for a reference that the caller creates with the \
+    // operator (issue #6149)
+    QoreCallerSandboxHelper caller_sandbox(p, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     QoreProgramContextHelper pch(p);
     // the identifier is resolved in the Program, not as a method of the Program object, which is the stack object
     // of this method (issue #5863)

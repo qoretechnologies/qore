@@ -3,7 +3,9 @@
 Copyright (C) 2026 Qore Technologies, s.r.o.
 
 Objects and runtime call references retain the sandbox context in which they were created. Invoking their code
-adds that context to the governing sandbox. Filesystem and network checks must satisfy both the existing
+adds that context to the governing sandbox. A runtime call reference that sandboxed code gets from another Program
+with `Program::getCallReference()` is created under the caller's sandbox: the switch to the target Program is
+preceded by a `QoreCallerSandboxHelper`, which applies that sandbox as provenance (issue #6149). Filesystem and network checks must satisfy both the existing
 nearest-caller policy and every active provenance policy. Entering another Program, a policy barrier, or an
 asynchronous continuation cannot discard provenance. Contexts retain managers, not Programs; modifying a retained
 manager takes effect on the next check. As with existing policy APIs, configure filesystem/network rules and
