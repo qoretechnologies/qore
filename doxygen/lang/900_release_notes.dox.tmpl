@@ -645,6 +645,9 @@
       (<tt>DateTime((int64)secs)</tt>, as another integer type is ambiguous with \c DateTime(bool))
     - \c DateTimeNode(bool) and \c DateTimeNode(int64) are \c explicit like those of \c DateTime, which affects
       only code that can create a \c DateTimeNode temporary (its destructor is protected)
+    - the <tt>const char*</tt> and <tt>struct tm*</tt> constructors of \c DateTime (and, as for
+      \c DateTimeNode(bool), of \c DateTimeNode) are \c explicit, so a string or a \c struct \c tm pointer is no
+      longer converted implicitly to a date; construct it explicitly (<tt>DateTime(str)</tt>)
     @endparblock
 
     @par qget Command-Line Changes

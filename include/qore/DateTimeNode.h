@@ -85,14 +85,22 @@ protected:
     DLLEXPORT virtual ~DateTimeNode();
 
 public:
+    //! constructor for an empty absolute date/time value
+    /** Not explicit, like DateTime().
+
+        @since %Qore 3.0 as a separate constructor; before, DateTimeNode(bool) with the default argument \c false
+    */
+    DLLLOCAL DateTimeNode() : DateTimeNode(false) {
+    }
+
     //! constructor for an empty object
     /**
         @param r sets the "relative" flag for the object
 
         @note explicit since %Qore 3.0: before, any pointer converted implicitly to an empty DateTimeNode through
-        this constructor
+        this constructor; the default constructor is DateTimeNode()
     */
-    DLLEXPORT explicit DateTimeNode(bool r = false);
+    DLLEXPORT explicit DateTimeNode(bool r);
 
     //! constructor for setting all parameters
     /**
@@ -142,8 +150,11 @@ public:
 
     //! constructor for setting the date from a string with a flexible format, silently accepts invalid date strings
     /** @param date the string to use to set the date
+
+        @note explicit since %Qore 3.0: before, any \c char pointer converted implicitly to a DateTimeNode through
+        this constructor
     */
-    DLLEXPORT DateTimeNode(const char* date);
+    DLLEXPORT explicit DateTimeNode(const char* date);
 
     //! constructor for setting the date from a string with a flexible format, throws a Qore-language exception if the date string is invalid
     /** @param date the string to use to set the date
@@ -173,8 +184,11 @@ public:
     //! constructor for setting an absolute date based on a "struct tm"
     /**
         @param tms a structure giving the absolute date to set
+
+        @note explicit since %Qore 3.0: before, a \c struct \c tm pointer converted implicitly to a DateTimeNode
+        through this constructor
     */
-    DLLEXPORT DateTimeNode(struct tm* tms);
+    DLLEXPORT explicit DateTimeNode(struct tm* tms);
 
     //! copy constructor
     DLLEXPORT DateTimeNode(const DateTimeNode& dt);

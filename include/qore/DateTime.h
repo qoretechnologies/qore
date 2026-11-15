@@ -125,14 +125,23 @@ protected:
    DLLLOCAL DateTime(qore_date_private *n_priv);
 
 public:
+   //! constructor for an empty absolute date/time value
+   /** Not explicit, so that copy-list-initialization from an empty brace list (<tt>DateTime dt = {};</tt>,
+       <tt>return {};</tt>, an argument <tt>{}</tt>) gives an empty absolute date.
+
+       @since %Qore 3.0 as a separate constructor; before, DateTime(bool) with the default argument \c false
+   */
+   DLLLOCAL DateTime() : DateTime(false) {
+   }
+
    //! constructor for an empty object
    /**
       @param r sets the "relative" flag for the object
 
       @note explicit since %Qore 3.0: before, any pointer converted implicitly to an empty DateTime through this
-      constructor
+      constructor; the default constructor is DateTime()
    */
-   DLLEXPORT explicit DateTime(bool r = false);
+   DLLEXPORT explicit DateTime(bool r);
 
    //! constructor for setting all parameters
    /** note that for absolute date/time values, the local time zone will be assumed
@@ -182,8 +191,11 @@ public:
 
    //! constructor for setting the date from a string
    /** @param date the string to use to set the date in the format YYYYMMDDHHmmSS[.xxx]
+
+       @note explicit since %Qore 3.0: before, any \c char pointer converted implicitly to a DateTime through this
+       constructor
    */
-   DLLEXPORT DateTime(const char* date);
+   DLLEXPORT explicit DateTime(const char* date);
 
    //! constructor for setting the date from a string with a flexible format, throws a Qore-language exception if the date string is invalid
    /** @param date the string to use to set the date
@@ -202,8 +214,11 @@ public:
    //! constructor for setting an absolute date based on a "struct tm"
    /**
       @param tms a structure giving the absolute date to set
+
+      @note explicit since %Qore 3.0: before, a \c struct \c tm pointer converted implicitly to a DateTime through
+      this constructor
    */
-   DLLEXPORT DateTime(const struct tm *tms);
+   DLLEXPORT explicit DateTime(const struct tm *tms);
 
    //! copy constructor
    DLLEXPORT DateTime(const DateTime &dt);
