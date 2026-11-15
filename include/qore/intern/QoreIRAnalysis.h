@@ -151,9 +151,10 @@ size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func);
     exception, is removed from its block and kept by the operation (qore_ir_folded_debug_step()), which makes the event
     before the operation, as the instruction did, in both tiers.  The operation is the first instruction of the
     statement, which can have more: `i += 1;` is then one instruction, as without the debugger's events, and
-    `x = ++i;` or `if (++i > n)` have one instruction less.  The exception path of the event becomes the operation's exception target, which
-    the operation itself does not use, so that the edges of the function's blocks are unchanged.  Not run on the IR of
-    AOT code, whose debug IR is serialized with its DebugStatement instructions.  Returns the number of events moved.
+    `x = ++i;` or `if (++i > n)` have one instruction less.  The exception path of the event becomes the operation's
+    exception target, which the operation itself does not use, so that the edges of the function's blocks are
+    unchanged.  Not run on the IR of AOT code, whose debug IR is serialized with its DebugStatement instructions.
+    Returns the number of events moved.
 */
 size_t qore_ir_fold_debug_statements(QoreIRFunction& func);
 

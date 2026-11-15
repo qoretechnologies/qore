@@ -10875,7 +10875,8 @@ static int ut_folded_debug_steps(QoreProgram* pgm, const char* name) {
 static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_mode_t mode, bool allow_debugger) {
     ExceptionSink xsink;
     // a Program of its own, whose parse options are not restricted or extended by those of a parent Program; with the
-    // options of %modern from the start, which the execution modes other than AST need (qore_parse_options_support_ir())
+    // options of %modern from the start, which the execution modes other than AST need
+    // (qore_parse_options_support_ir())
     QoreProgram* pgm = new QoreProgram(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS
         | (allow_debugger ? PO_ALLOW_DEBUGGER : 0));
     UT_ASSERT_EQ(c, allow_debugger, static_cast<bool>(pgm->getParseOptions64() & PO_ALLOW_DEBUGGER),

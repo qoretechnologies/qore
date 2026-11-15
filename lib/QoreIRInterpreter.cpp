@@ -16374,8 +16374,8 @@ load_local_done:
                 }
                 if (QoreIRInstruction* folded_host = static_cast<QoreIRDebugStatementInstruction*>(inst)->folded_host) {
                     // the event of a statement whose first operation keeps it (qore_ir_folded_debug_step()): the
-                    // operation follows, without its event; the operation is never
-                    // the last instruction of its block, so the next instruction reads the debugger's state again
+                    // operation follows, without its event; the operation is never the last instruction of its
+                    // block, so the next instruction reads the debugger's state again
                     assert(ip + 1 < block->instructions.size());
                     inst = folded_host;
                     debug_active = false;
