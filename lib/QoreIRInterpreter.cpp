@@ -9663,7 +9663,11 @@ next_instruction:
             ++ip;
             goto next_instruction;
         }
-        if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
+        // the line usually does not change from one instruction to the next: that test comes first, as GCC otherwise
+        // may order the two tests either way, and the sign test first costs two more instructions per instruction
+        // executed (8-20 per iteration of the benchmark loops); no branch hint, as the line changes often enough that
+        // moving the update out of line costs more
+        if (inst->cached_start_line != last_ephemeral_line && inst->cached_start_line >= 0) {
             // Update runtime_loc for exception/callstack reporting via cached pointers; while a debugger is attached,
             // the current statement is set by the DebugStatement instruction of each statement and kept, so that the
             // call stack gives the statement of each frame (QoreThreadList::getCallStackHash())
