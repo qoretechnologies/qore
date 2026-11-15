@@ -156,6 +156,12 @@ public:
         QoreBufferElementType buffer_type, bool nullable, const char* native_type, ExceptionSink* xsink);
 
     //! Adds a column with recursive schema metadata and takes ownership of @a data.
+    /** A list column whose schema describes dense storage (a temporal or decimal kind, or a native type with a dense
+        storage type) is converted to a buffer.  The schema is then checked against the data, and completed from it
+        as described for qore_columnar_check_column_schema().
+
+        @throw COLUMNAR-SCHEMA-ERROR the schema does not match the column data
+     */
     DLLEXPORT int addColumn(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
         ExceptionSink* xsink);
 
@@ -257,7 +263,38 @@ private:
     size_t row_count = 0;
 
     DLLLOCAL int setRowCount(size_t n_rows, ExceptionSink* xsink);
+
+    //! Adds a column; @a flags select the conversion and the check of the schema, which raises @a err
+    DLLLOCAL int addColumnIntern(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
+        int flags, const char* err, ExceptionSink* xsink);
 };
+
+//! Checks a column schema against the column data and completes it from the data
+/** The kind of the schema must be one that the data can hold: for a buffer, \c bool in \c buffer<bool>, \c int in an
+    integer buffer, \c float in a floating-point buffer, \c string in \c buffer<string>, \c decimal128 in
+    \c buffer<decimal128>, \c date, \c timestamp and \c duration in \c buffer<int64>, \c dictionary in the buffer
+    of its value kind, and \c auto in any buffer; for a list, each value must be of a type of the kind (\c bool:
+    \c bool; \c int: \c int or \c number; \c float: \c float or \c int; \c number: \c number, \c int, \c float
+    or \c string; \c string: \c string; \c binary: \c binary; the list kinds: \c list; \c struct and \c map:
+    \c hash; \c auto: any), checked recursively against the child schemas.
+
+    The schema is completed from the data: a NOTHING or NULL value or a buffer with nullable elements makes it (or the
+    child schema) nullable, a buffer column gets the element type of its buffer (and the precision and scale of a
+    decimal buffer) and, without a kind, the kind of its buffer type, and a list column has no buffer type.
+
+    @param name the column name, for error messages
+    @param schema the schema to check and complete
+    @param data the column data
+    @param xsink for the exception raised if the schema does not match the data
+
+    @return 0 if the schema matches the data, -1 if an exception was raised
+
+    @throw COLUMNAR-SCHEMA-ERROR the schema does not match the column data
+
+    @since %Qore 3.0
+ */
+DLLEXPORT int qore_columnar_check_column_schema(const char* name, QoreColumnarTypeDescriptor& schema, QoreValue data,
+    ExceptionSink* xsink);
 
 //! Creates a Qore SQL::ColumnarResult object taking ownership of @a result.
 DLLEXPORT QoreObject* qore_columnar_result_to_object(QoreColumnarResult* result, ExceptionSink* xsink);
