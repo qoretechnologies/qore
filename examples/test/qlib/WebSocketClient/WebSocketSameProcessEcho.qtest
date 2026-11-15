@@ -61,6 +61,21 @@ class InvalidEchoWsHandler inherits WebSocketHandler {
     }
 }
 
+#! a client that reports its destruction
+class LifetimeWsClient inherits WebSocketClient {
+    private {
+        Queue events;
+    }
+
+    constructor(Queue events, code cb, hash<auto> opts) : WebSocketClient(cb, opts) {
+        self.events = events;
+    }
+
+    destructor() {
+        events.push({"destructor": gettid()});
+    }
+}
+
 class WebSocketSameProcessEchoTest inherits Test {
     public {
         const CertPem = TestCertificates::CertPem;
@@ -71,6 +86,8 @@ class WebSocketSameProcessEchoTest inherits Test {
     constructor() : Test("WebSocketSameProcessEchoTest", "1.0") {
         addTestCase("same-process echo (observer)", \testSameProcessEchoObserver());
         addTestCase("same-process echo (callback)", \testSameProcessEchoCallback());
+        addTestCase("a client connected without traffic is destroyed in the thread that drops it",
+            \testDropAfterConnect());
         addTestCase("same-process HTTP/3 heartbeat", \testSameProcessHttp3Heartbeat());
         addTestCase("AsyncAPI serialized validation", \testAsyncApiSerializedValidation());
         addTestCase("AsyncAPI serialized incoming validation failure",
@@ -191,6 +208,42 @@ class WebSocketSameProcessEchoTest inherits Test {
             "linfo": linfo,
             "logger": logger,
         };
+    }
+
+    #! a connect that received nothing with the handshake schedules no delivery: no callback worker holds the client,
+    #! so dropping its last reference destroys it at once in the owner's thread (issue #6154)
+    testDropAfterConnect() {
+        hash<auto> ctx = createServer();
+        on_exit {
+            HttpServer srv = ctx.server;
+            srv.stop();
+            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+            ctrl.stopClear();
+        }
+        foreach hash<auto> t in (
+                {"http_version": "1.1", "transport": "HTTP/1.1"},
+                {"http_version": "2.0", "transport": "HTTP/2"},
+                {"http_version": "3.0", "transport": "HTTP/3"},
+            ) {
+            # each connect gave the needless delivery task another chance to hold the client when it was dropped
+            for (int i = 0; i < 5; ++i) {
+                Queue events();
+                {
+                    LifetimeWsClient wsc(events, sub (*data msg) {}, {
+                        "url": sprintf("wss://localhost:%d", ctx.linfo.port),
+                        "logger": ctx.logger,
+                        "ssl_verify_cert": False,
+                        "http_version": t.http_version,
+                    });
+                    wsc.connect();
+                    assertEq(t.transport, wsc.isHttp3() ? "HTTP/3" : (wsc.isHttp2() ? "HTTP/2" : "HTTP/1.1"),
+                        t.transport + ": the transport");
+                }
+                assertEq(({"destructor": gettid()},), (map events.get(), xrange(events.size())),
+                    sprintf("%s (%d): the client was destroyed in the thread that dropped its last reference",
+                        t.transport, i));
+            }
+        }
     }
 
     testSameProcessEchoCallback() {
