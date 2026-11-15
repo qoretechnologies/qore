@@ -115,6 +115,22 @@ auto sub through_bg(code c) {
     return q.get();
 }
 
+# sets a connection value in a thread that this code starts (the thread inherits the sandbox of this code)
+nothing sub set_param_bg(Datasource ds, string p, auto v) {
+    auto rv = through_bg(auto sub () { set_param(ds, p, v); });
+    if (rv.typeCode() == NT_HASH && exists rv.err) {
+        throw rv.err, rv.desc, rv.arg;
+    }
+}
+
+# sets an option in a thread that this code starts
+nothing sub set_option_bg(Datasource ds, string opt, string val) {
+    auto rv = through_bg(auto sub () { set_option(ds, opt, val); });
+    if (rv.typeCode() == NT_HASH && exists rv.err) {
+        throw rv.err, rv.desc, rv.arg;
+    }
+}
+
 # creates a datasource in a child Program with no sandbox manager of its own
 Datasource sub child_make() {
     Program child(PO_NEW_STYLE);
@@ -155,6 +171,8 @@ string sub own_barrier(code c) {
         addTestCase("T: the policy is read when the connection is made", \livePolicyTest());
         addTestCase("D4: the last setter of a value decides; a creator is never replaced", \lastSetterTest());
         addTestCase("L: trusted code called by sandboxed code", \callerTest());
+        addTestCase("F: the reopen of an inherited connection in a child process", \forkReopenTest());
+        addTestCase("BG: a value set in a thread that sandboxed code started", \backgroundSetterTest());
         set_return_value(main());
     }
 
@@ -588,5 +606,76 @@ string sub own_barrier(code c) {
         # L3: the same trusted code inside callWithSystemPolicy()
         code barrier = auto sub () { return SandboxManager::callWithSystemPolicy(make_ds); };
         assertChoosers(True, observe(pgms.sandboxed.callFunction("through", barrier)), "L3", 4);
+    }
+
+    #! runs the code in a child process created with fork() and returns its result
+    /** The child writes the string that the code returns, or the code of the exception that it raises, to a pipe and
+        exits with exit() while it holds the write end of the pipe open, so the parent reads the result until the child
+        has exited (as in examples/test/qore/classes/Datasource/fork.qtest)
+    */
+    private string runChild(code child) {
+        hash<PipeInfo> pipe = File::getPipe();
+        # the child must not write the parent's buffered output again when it exits
+        flush();
+        int pid = fork();
+        if (!pid) {
+            pipe.read.close();
+            string result;
+            try {
+                result = child();
+            } catch (hash<ExceptionInfo> ex) {
+                result = "exception: " + ex.err;
+            }
+            pipe.write.write(result);
+            Qore::exit(0);
+        }
+        pipe.write.close();
+        assertGt(0, pid);
+        string result;
+        while (*binary data = pipe.read.readBinary(4096)) {
+            result += data.toString();
+        }
+        return result;
+    }
+
+    forkReopenTest() {
+        if (PlatformOS == "Windows") {
+            testSkip("the test uses fork()");
+        }
+        # F1: sandboxed code sets the database name of an open trusted datasource; in a child process created with
+        # fork(), getOption() gives the inherited connection up and opens a new one with the values in use, which are
+        # copied from the pending values with their setters: the new connection is restricted
+        Datasource ds("dsoptprobe:u/p@x");
+        ds.open();
+        on_exit ds.close();
+        assertChoosers(True, ds.select("choosers"), "F1: before", 4);
+        pgms.sandboxed.callFunction("set_param", ds, "db", "y");
+        string r = runChild(string sub () {
+            ds.getOption("other");
+            *hash<auto> obs = ds.select("choosers");
+            return sprintf("known=%y allows=%y n=%y restricting=%y", obs.known, obs.allows_uncontrolled, obs.n,
+                (select obs.entries, !$1.allows_uncontrolled && $1.sandboxed).size());
+        });
+        assertEq("known=True allows=False n=4 restricting=1", r, "F1: the reopen in the child is restricted");
+        # the parent's connection is the one that it opened, with the values that trusted code set
+        assertChoosers(True, ds.select("choosers"), "F1: the parent's connection", 4);
+    }
+
+    backgroundSetterTest() {
+        # BG1: a thread that sandboxed code started sets the database name of a closed trusted datasource; trusted code
+        # opens it: the setter is the sandboxed code, which the thread inherits
+        Datasource ds("dsoptprobe:u/p@x");
+        pgms.sandboxed.callFunction("set_param_bg", ds, "db", "y");
+        *hash<auto> obs = observe(ds);
+        assertChoosers(False, obs, "BG1", 4);
+        assertOneRestricting(obs, "BG1");
+
+        # BG2: the same with the destination option
+        ds = new Datasource("dsoptprobe:u/p@x");
+        pgms.sandboxed.callFunction("set_option_bg", ds, "dest", "elsewhere");
+        obs = observe(ds);
+        assertEq(1, obs.dest, "BG2: the setter of the option is an entry");
+        assertChoosers(False, obs, "BG2", 5);
+        assertOneRestricting(obs, "BG2");
     }
 }
